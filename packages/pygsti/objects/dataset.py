@@ -33,10 +33,12 @@ from . import labeldicts as _ld
 Oindex_type = _np.uint32
 Time_type = _np.float64
 Repcount_type = _np.float32
- # thought: _np.uint16 but doesn't play well with rescaling
+# thought: _np.uint16 but doesn't play well with rescaling
+
 
 class DataSet_KeyValIterator(object):
     """ Iterator class for op_string,DataSetRow pairs of a DataSet """
+
     def __init__(self, dataset):
         self.dataset = dataset
         self.gsIter = dataset.cirIndex.__iter__()
@@ -50,25 +52,26 @@ class DataSet_KeyValIterator(object):
             return dataset.cnt_cache[opstr] if dataset.bStatic else None
 
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(opstr), auxInfo[opstr])
-                             for opstr,gsi in self.dataset.cirIndex.items() )
+            self.tupIter = ((oliData[gsi], timeData[gsi], None, getcache(opstr), auxInfo[opstr])
+                            for opstr, gsi in self.dataset.cirIndex.items())
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(opstr), auxInfo[opstr])
-                             for opstr,gsi in self.dataset.cirIndex.items() )
+            self.tupIter = ((oliData[gsi], timeData[gsi], repData[gsi], getcache(opstr), auxInfo[opstr])
+                            for opstr, gsi in self.dataset.cirIndex.items())
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
     def __iter__(self):
         return self
 
-    def __next__(self): # Python 3: def __next__(self)
-        return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)) )
+    def __next__(self):  # Python 3: def __next__(self)
+        return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
 
 
 class DataSet_ValIterator(object):
     """ Iterator class for DataSetRow values of a DataSet """
+
     def __init__(self, dataset):
         self.dataset = dataset
         oliData = self.dataset.oliData
@@ -81,19 +84,19 @@ class DataSet_ValIterator(object):
             return dataset.cnt_cache[opstr] if dataset.bStatic else None
 
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(opstr), auxInfo[opstr])
-                             for opstr,gsi in self.dataset.cirIndex.items() )
+            self.tupIter = ((oliData[gsi], timeData[gsi], None, getcache(opstr), auxInfo[opstr])
+                            for opstr, gsi in self.dataset.cirIndex.items())
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(opstr), auxInfo[opstr])
-                             for opstr,gsi in self.dataset.cirIndex.items() )
+            self.tupIter = ((oliData[gsi], timeData[gsi], repData[gsi], getcache(opstr), auxInfo[opstr])
+                            for opstr, gsi in self.dataset.cirIndex.items())
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
     def __iter__(self):
         return self
 
-    def __next__(self): # Python 3: def __next__(self)
-        return DataSetRow(self.dataset, *(next(self.tupIter)) )
+    def __next__(self):  # Python 3: def __next__(self)
+        return DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
 
@@ -104,6 +107,7 @@ class DataSetRow(object):
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
     """
+
     def __init__(self, dataset, rowOliData, rowTimeData, rowRepData,
                  cached_cnts, aux):
         self.dataset = dataset
@@ -132,9 +136,9 @@ class DataSetRow(object):
         """
         if self.reps is not None:
             ol = []
-            for oli, _, nreps in zip(self.oli,self.time,self.reps):
+            for oli, _, nreps in zip(self.oli, self.time, self.reps):
                 nreps = _round_int_repcnt(nreps)
-                ol.extend( [self.dataset.ol[oli]]*nreps )
+                ol.extend([self.dataset.ol[oli]] * nreps)
             return ol
         else: return self.outcomes
 
@@ -145,9 +149,9 @@ class DataSetRow(object):
         """
         if self.reps is not None:
             inds = []
-            for oli, _, nreps in zip(self.oli,self.time,self.reps):
+            for oli, _, nreps in zip(self.oli, self.time, self.reps):
                 nreps = _round_int_repcnt(nreps)
-                inds.extend( [oli]*nreps )
+                inds.extend([oli] * nreps)
             return _np.array(inds, dtype=self.dataset.oliType)
         else: return self.oli.copy()
 
@@ -158,30 +162,30 @@ class DataSetRow(object):
         """
         if self.reps is not None:
             times = []
-            for _, time, nreps in zip(self.oli,self.time,self.reps):
+            for _, time, nreps in zip(self.oli, self.time, self.reps):
                 nreps = _round_int_repcnt(nreps)
-                times.extend( [time]*nreps )
+                times.extend([time] * nreps)
             return _np.array(times, dtype=self.dataset.timeType)
         else: return self.time.copy()
 
     def __iter__(self):
         if self.reps is not None:
-            return ( (self.dataset.ol[i],t,n) for (i,t,n) in zip(self.oli,self.time,self.reps) )
+            return ((self.dataset.ol[i], t, n) for (i, t, n) in zip(self.oli, self.time, self.reps))
         else:
-            return ( (self.dataset.ol[i],t,1) for (i,t) in zip(self.oli,self.time) )
+            return ((self.dataset.ol[i], t, 1) for (i, t) in zip(self.oli, self.time))
 
     def has_key(self, outcomeLabel):
         """ Checks whether data counts for `outcomelabel` are available."""
         return outcomeLabel in self.counts
 
-    def __getitem__(self,indexOrOutcomeLabel):
-        if isinstance(indexOrOutcomeLabel, _numbers.Integral): #raw index
+    def __getitem__(self, indexOrOutcomeLabel):
+        if isinstance(indexOrOutcomeLabel, _numbers.Integral):  # raw index
             i = indexOrOutcomeLabel
             if self.reps is not None:
-                return ( self.dataset.ol[ self.oli[i] ], self.time[i], self.reps[i] )
+                return (self.dataset.ol[self.oli[i]], self.time[i], self.reps[i])
             else:
-                return ( self.dataset.ol[ self.oli[i] ], self.time[i], 1 )
-        elif isinstance(indexOrOutcomeLabel, _numbers.Real): #timestamp
+                return (self.dataset.ol[self.oli[i]], self.time[i], 1)
+        elif isinstance(indexOrOutcomeLabel, _numbers.Real):  # timestamp
             return self.counts_at_time(indexOrOutcomeLabel)
         else:
             try:
@@ -194,32 +198,32 @@ class DataSetRow(object):
                 raise KeyError("%s is not an index, timestamp, or outcome label!"
                                % str(indexOrOutcomeLabel))
 
-    def __setitem__(self,indexOrOutcomeLabel,val):
+    def __setitem__(self, indexOrOutcomeLabel, val):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
             index = indexOrOutcomeLabel; tup = val
-            assert(len(tup) in (2,3) ), "Must set to a (<outcomeLabel>,<time>[,<repetitions>]) value"
-            ol = _ld.OutcomeLabelDict.to_outcome(tup[0]) #strings -> tuple outcome labels
-            self.oli[index] = self.dataset.olIndex[ ol ]
+            assert(len(tup) in (2, 3)), "Must set to a (<outcomeLabel>,<time>[,<repetitions>]) value"
+            ol = _ld.OutcomeLabelDict.to_outcome(tup[0])  # strings -> tuple outcome labels
+            self.oli[index] = self.dataset.olIndex[ol]
             self.time[index] = tup[1]
 
             if self.reps is not None:
                 self.reps[index] = tup[2] if len(tup) == 3 else 1
             else:
-                assert(len(tup) == 2 or tup[2] == 1),"Repetitions must == 1 (not tracking reps)"
+                assert(len(tup) == 2 or tup[2] == 1), "Repetitions must == 1 (not tracking reps)"
         else:
-            outcomeLbl = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel) #strings -> tuple outcome labels
+            outcomeLbl = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel)  # strings -> tuple outcome labels
             count = val
 
-            assert( all([t == self.time[0] for t in self.time]) ), \
+            assert(all([t == self.time[0] for t in self.time])), \
                 "Cannot set outcome counts directly on a DataSet with non-trivially timestamped data"
             assert(self.reps is not None), \
                 "Cannot set outcome counts directly on a DataSet without repetition data"
 
-            outcomeIndxToLookFor = self.dataset.olIndex.get(outcomeLbl,None)
-            for i,outcomeIndx in enumerate(self.oli):
+            outcomeIndxToLookFor = self.dataset.olIndex.get(outcomeLbl, None)
+            for i, outcomeIndx in enumerate(self.oli):
                 if outcomeIndx == outcomeIndxToLookFor:
                     self.reps[i] = count; break
-            else: # need to add a new label & entry to reps[]
+            else:  # need to add a new label & entry to reps[]
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
 
     def _get_counts(self, timestamp=None, all_outcomes=False):
@@ -233,25 +237,25 @@ class DataSetRow(object):
         # is zero)
         cntDict = _ld.OutcomeLabelDict()
         if timestamp is not None:
-            tslc = _np.where(_np.isclose(self.time,timestamp))[0]
+            tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
 
         if self.reps is None:
-            for ol,i in self.dataset.olIndex.items():
-                cnt = float(_np.count_nonzero( _np.equal(self.oli[tslc],i) ))
+            for ol, i in self.dataset.olIndex.items():
+                cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
                 if all_outcomes or cnt > 0: cntDict[ol] = cnt
         else:
-            for ol,i in self.dataset.olIndex.items():
-                inds = _np.nonzero(_np.equal(self.oli[tslc],i))[0]
+            for ol, i in self.dataset.olIndex.items():
+                inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
                 if all_outcomes or len(inds) > 0:
-                    cntDict[ol] = float( sum(self.reps[tslc][inds]))
+                    cntDict[ol] = float(sum(self.reps[tslc][inds]))
         return cntDict
 
     @property
     def counts(self):
-        if self._cntcache: return self._cntcache # if not None *and* len > 0
+        if self._cntcache: return self._cntcache  # if not None *and* len > 0
         ret = self._get_counts()
-        if self._cntcache is not None: # == and empty dict {}
+        if self._cntcache is not None:  # == and empty dict {}
             self._cntcache.update(ret)
         return ret
 
@@ -268,7 +272,7 @@ class DataSetRow(object):
         """
         cnts = self._get_counts(all_outcomes)
         total = sum(cnts.values())
-        return _OrderedDict( [(k,cnt/total) for k,cnt in cnts.items()] )
+        return _OrderedDict([(k, cnt / total) for k, cnt in cnts.items()])
 
     @property
     def total(self):
@@ -279,13 +283,13 @@ class DataSetRow(object):
             return sum(self.reps)
 
     #TODO: remove in favor of fractions property?
-    def fraction(self,outcomelabel):
+    def fraction(self, outcomelabel):
         """ Returns the fraction of total counts for `outcomelabel`."""
         d = self.counts
         if outcomelabel not in d:
-            return 0.0 # Note: similar to an "all_outcomes=True" default
+            return 0.0  # Note: similar to an "all_outcomes=True" default
         total = sum(d.values())
-        return d[outcomelabel]/total
+        return d[outcomelabel] / total
 
     def counts_at_time(self, timestamp):
         """ Returns a dictionary of counts at a particular time """
@@ -322,17 +326,17 @@ class DataSetRow(object):
         counts = []
         last_t = -1e100
         tsIndx = 0
-        for i,(t,oli) in enumerate(zip(self.time,self.oli)):
+        for i, (t, oli) in enumerate(zip(self.time, self.oli)):
 
             if timestamps is not None:
                 while tsIndx < len(timestamps) and t > timestamps[tsIndx] \
-                      and not _np.isclose(t,timestamps[tsIndx], rtol=0., atol=1e-12):
+                        and not _np.isclose(t, timestamps[tsIndx], rtol=0., atol=1e-12):
                     times.append(timestamps[tsIndx])
                     counts.append(0)
                     tsIndx += 1
 
-            if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx], rtol=0., atol=1e-12)):
-                if not _np.isclose(t,last_t, rtol=0., atol=1e-12):
+            if oli in olis and (timestamps is None or _np.isclose(t, timestamps[tsIndx], rtol=0., atol=1e-12)):
+                if not _np.isclose(t, last_t, rtol=0., atol=1e-12):
                     times.append(t); tsIndx += 1
                     counts.append(0)
                     last_t = t
@@ -347,7 +351,6 @@ class DataSetRow(object):
         return _np.array(times, self.dataset.timeType), \
             _np.array(counts, self.dataset.repType)
 
-
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
         if self.dataset.bStatic: raise ValueError("Cannot scale rows of a *static* DataSet.")
@@ -355,13 +358,12 @@ class DataSetRow(object):
             raise ValueError(("Cannot scale a DataSet without repetition "
                               "counts. Call DataSet.build_repetition_counts()"
                               " and try this again."))
-        for i,cnt in enumerate(self.reps):
-            self.reps[i] = cnt*factor
-
+        for i, cnt in enumerate(self.reps):
+            self.reps[i] = cnt * factor
 
     def as_dict(self):
         """ Returns the (outcomeLabel,count) pairs as a dictionary."""
-        return dict( self.counts )
+        return dict(self.counts)
 
     def to_str(self, mode="auto"):
         """
@@ -385,17 +387,17 @@ class DataSetRow(object):
                 mode = "time-independent"
             else: mode = "time-dependent"
 
-        assert(mode in ('time-dependent','time-independent')),"Invalid `mode` argument: %s" % mode
+        assert(mode in ('time-dependent', 'time-independent')), "Invalid `mode` argument: %s" % mode
 
         if mode == "time-dependent":
-            s  = "Outcome Label Indices = " + str(self.oli) + "\n"
+            s = "Outcome Label Indices = " + str(self.oli) + "\n"
             s += "Time stamps = " + str(self.time) + "\n"
             if self.reps is not None:
                 s += "Repetitions = " + str(self.reps) + "\n"
             else:
                 s += "( no repetitions )\n"
             return s
-        else: # time-independent
+        else:  # time-independent
             return str(self.as_dict())
 
     def __str__(self):
@@ -404,6 +406,7 @@ class DataSetRow(object):
     def __len__(self):
         return len(self.oli)
 
+
 def _round_int_repcnt(nreps):
     """ Helper function to localize warning message """
     if float(nreps).is_integer():
@@ -411,9 +414,6 @@ def _round_int_repcnt(nreps):
     else:
         _warnings.warn("Rounding fractional repetition count to next lowest whole number!")
         return int(round(nreps))
-
-
-
 
 
 class DataSet(object):
@@ -515,8 +515,8 @@ class DataSet(object):
 
         #Optionally load from a file
         if fileToLoadFrom is not None:
-            assert(oliData is None and timeData is None and repData is None \
-                   and circuits is None and circuitIndices is None \
+            assert(oliData is None and timeData is None and repData is None
+                   and circuits is None and circuitIndices is None
                    and outcomeLabels is None and outcomeLabelIndices is None)
             self.load(fileToLoadFrom)
             return
@@ -525,14 +525,14 @@ class DataSet(object):
         #   values = slices into oli, time, & rep arrays (static case) or
         #            integer list indices (non-static case)
         if circuitIndices is not None:
-            self.cirIndex = _OrderedDict( [(opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr),i)
-                                          for opstr,i in circuitIndices.items()] )
-                                         #convert keys to Circuits if necessary
+            self.cirIndex = _OrderedDict([(opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr), i)
+                                          for opstr, i in circuitIndices.items()])
+            #convert keys to Circuits if necessary
         elif not bStatic:
             if circuits is not None:
-                dictData = [ (opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr),i) \
-                             for (i,opstr) in enumerate(circuits) ] #convert to Circuits if necessary
-                self.cirIndex = _OrderedDict( dictData )
+                dictData = [(opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr), i)
+                            for (i, opstr) in enumerate(circuits)]  # convert to Circuits if necessary
+                self.cirIndex = _OrderedDict(dictData)
             else:
                 self.cirIndex = _OrderedDict()
         else: raise ValueError("Must specify circuitIndices when creating a static DataSet")
@@ -544,20 +544,20 @@ class DataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            tup_outcomeLabels = [ _ld.OutcomeLabelDict.to_outcome(ol)
-                                  for ol in outcomeLabels] #strings -> tuple outcome labels
-            self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
+            tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
+                                 for ol in outcomeLabels]  # strings -> tuple outcome labels
+            self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
         else:
-            self.olIndex = _OrderedDict() #OK, as outcome labels are added as they appear
+            self.olIndex = _OrderedDict()  # OK, as outcome labels are added as they appear
 
         # self.ol :  Ordered dictionary where keys = integer indices, values = outcome
         #            labels (strings or tuples) -- just the reverse of self.olIndex
-        self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )
+        self.ol = _OrderedDict([(i, ol) for (ol, i) in self.olIndex.items()])
 
         # sanity checks that indices are >= 0
-        if not bStatic: #otherwise values() below are slices
-            if self.cirIndex:  assert( min(self.cirIndex.values()) >= 0)
-            if self.olIndex:  assert( min(self.olIndex.values()) >= 0)
+        if not bStatic:  # otherwise values() below are slices
+            if self.cirIndex: assert(min(self.cirIndex.values()) >= 0)
+            if self.olIndex: assert(min(self.olIndex.values()) >= 0)
 
         # self.oliData : when bStatic == True a 1D numpy array containing concatenated outcome label indices.
         #                when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
@@ -583,19 +583,19 @@ class DataSet(object):
             if len(self.cirIndex) > 0:
                 maxOlIndex = max(self.olIndex.values())
                 if bStatic:
-                    assert( _np.amax(self.oliData) <= maxOlIndex )
+                    assert(_np.amax(self.oliData) <= maxOlIndex)
                     # self.oliData.shape[0] > maxIndex doesn't make sense since cirIndex holds slices
                 else:
                     maxIndex = max(self.cirIndex.values())
-                    assert( len(self.oliData) > maxIndex )
+                    assert(len(self.oliData) > maxIndex)
                     if len(self.oliData) > 0:
-                        assert( all( [ max(oliSeries) <= maxOlIndex for oliSeries in self.oliData ] ) )
+                        assert(all([max(oliSeries) <= maxOlIndex for oliSeries in self.oliData]))
             #else cirIndex has length 0 so there are no circuits in this dataset (even though oliData can contain data)
 
         elif not bStatic:
-            assert( timeData is None ), "timeData must be None when oliData is"
-            assert( repData is None ), "repData must be None when oliData is"
-            assert( len(self.cirIndex) == 0), "circuit specified without data!"
+            assert(timeData is None), "timeData must be None when oliData is"
+            assert(repData is None), "repData must be None when oliData is"
+            assert(len(self.cirIndex) == 0), "circuit specified without data!"
             self.oliData = []
             self.timeData = []
             self.repData = None
@@ -607,7 +607,7 @@ class DataSet(object):
         self.bStatic = bStatic
 
         # collision action
-        assert(collisionAction in ('aggregate','keepseparate'))
+        assert(collisionAction in ('aggregate', 'keepseparate'))
         self.collisionAction = collisionAction
 
         # comment
@@ -617,22 +617,21 @@ class DataSet(object):
         self.ffdata = {}
 
         #data types - should stay in sync with MultiDataSet
-        self.oliType  = Oindex_type
+        self.oliType = Oindex_type
         self.timeType = Time_type
-        self.repType  = Repcount_type
+        self.repType = Repcount_type
 
         #auxiliary info
-        self.auxInfo = _DefaultDict( dict )
+        self.auxInfo = _DefaultDict(dict)
 
         # count cache (only used when static; not saved/loaded from disk)
         if bStatic:
-            self.cnt_cache = { opstr:_ld.OutcomeLabelDict() for opstr in self.cirIndex }
+            self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}
         else:
             self.cnt_cache = None
 
-
     def __iter__(self):
-        return self.cirIndex.__iter__() #iterator over circuits
+        return self.cirIndex.__iter__()  # iterator over circuits
 
     def __len__(self):
         return len(self.cirIndex)
@@ -653,9 +652,9 @@ class DataSet(object):
         return self.set_row(circuit, outcomeDictOrSeries)
 
     def __delitem__(self, circuit):
-        if not isinstance(circuit,_cir.Circuit):
+        if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)
-        self._remove( [self.cirIndex[circuit]] )
+        self._remove([self.cirIndex[circuit]])
 
     def get_row(self, circuit, occurrence=0):
         """
@@ -680,18 +679,18 @@ class DataSet(object):
         #Convert to circuit - needed for occurrence > 0 case and
         # because name-only Labels still don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
-        if not isinstance(circuit,_cir.Circuit):
+        if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)
 
         if occurrence > 0:
             circuit = circuit + _cir.Circuit(("#%d" % occurrence,))
 
         #Note: cirIndex value is either an int (non-static) or a slice (static)
-        repData = self.repData[ self.cirIndex[circuit] ] \
-                  if (self.repData is not None) else None
-        return DataSetRow(self, self.oliData[ self.cirIndex[circuit] ],
-                          self.timeData[ self.cirIndex[circuit] ], repData,
-                          self.cnt_cache[ circuit ] if self.bStatic else None,
+        repData = self.repData[self.cirIndex[circuit]] \
+            if (self.repData is not None) else None
+        return DataSetRow(self, self.oliData[self.cirIndex[circuit]],
+                          self.timeData[self.cirIndex[circuit]], repData,
+                          self.cnt_cache[circuit] if self.bStatic else None,
                           self.auxInfo[circuit])
 
     def set_row(self, circuit, outcomeDictOrSeries, occurrence=0):
@@ -712,20 +711,19 @@ class DataSet(object):
             0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
         """
-        if not isinstance(circuit,_cir.Circuit):
+        if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)
 
         if occurrence > 0:
             circuit = _cir.Circuit(circuit) + _cir.Circuit(("#%d" % occurrence,))
 
-        if isinstance(outcomeDictOrSeries, dict): # a dict of counts
+        if isinstance(outcomeDictOrSeries, dict):  # a dict of counts
             self.add_count_dict(circuit, outcomeDictOrSeries)
 
-        else: # a tuple of lists
+        else:  # a tuple of lists
             assert(len(outcomeDictOrSeries) >= 2), \
                 "Must minimally set with (outcome-label-list, time-stamp-list)"
             self.add_raw_series_data(circuit, *outcomeDictOrSeries)
-
 
     def keys(self, stripOccurrenceTags=False):
         """
@@ -748,11 +746,10 @@ class DataSet(object):
         """
         if stripOccurrenceTags and self.collisionAction == "keepseparate":
             # Note: assumes keys are Circuits containing Labels
-            return [ (opstr[:-1] if (len(opstr)>0 and opstr[-1].name.startswith("#")) else opstr)
-                     for opstr in self.cirIndex.keys() ]
+            return [(opstr[:-1] if (len(opstr) > 0 and opstr[-1].name.startswith("#")) else opstr)
+                    for opstr in self.cirIndex.keys()]
         else:
             return list(self.cirIndex.keys())
-
 
     def has_key(self, circuit):
         """
@@ -769,10 +766,9 @@ class DataSet(object):
         bool
             whether circuit was found.
         """
-        if not isinstance(circuit,_cir.Circuit):
+        if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)
         return circuit in self.cirIndex
-
 
     def items(self):
         """
@@ -792,7 +788,6 @@ class DataSet(object):
         """
         return DataSet_ValIterator(self)
 
-
     def get_outcome_labels(self):
         """
         Get a list of *all* the outcome labels contained in this DataSet.
@@ -804,7 +799,6 @@ class DataSet(object):
           be a string or a tuple of strings).
         """
         return list(self.olIndex.keys())
-
 
     def get_gate_labels(self, prefix='G'):
         """
@@ -822,13 +816,12 @@ class DataSet(object):
         list of strings
             A list where each element is a operation label.
         """
-        opLabels = [ ]
+        opLabels = []
         for opLabelString in self:
             for opLabel in opLabelString:
                 if not prefix or opLabel.name.startswith(prefix):
                     if opLabel not in opLabels: opLabels.append(opLabel)
         return opLabels
-
 
     def get_degrees_of_freedom(self, circuitList=None, method="all_outcomes-1",
                                aggregate_times=True):
@@ -845,7 +838,7 @@ class DataSet(object):
         method : {'all_outcomes-1', 'present_outcomes-1'}
             How the degrees of freedom should be computed. 'all_outcomes-1' takes
             the number of circuits and multiplies this by the *total* number of outcomes
-            (the length of what is returned by `get_outcome_labels()`) minus one.  
+            (the length of what is returned by `get_outcome_labels()`) minus one.
             'present_outcomes-1' counts on a per-circuit basis the number of
             present (usually = non-zero) outcomes recorded minus one.  For timestamped
             data, see `aggreate_times` below.
@@ -853,7 +846,7 @@ class DataSet(object):
         aggregate_times : bool, optional
             Whether counts that occur at different times should be tallied separately.
             If True, then even when counts occur at different times degrees of freedom
-            are tallied on a per-circuit basis.  If False, then counts occuring at 
+            are tallied on a per-circuit basis.  If False, then counts occuring at
             distinct times are treated as independent of those an any other time, and
             are tallied separately.  So, for example, if `aggregate_times` is False and
             a data row has 0- and 1-counts of 45 & 55 at time=0 and 42 and 58 at time=1
@@ -873,29 +866,28 @@ class DataSet(object):
         for opstr in circuitList:
             dsRow = self[opstr]
             cur_t = dsRow.time[0]
-            cur_outcomes = set() # holds *distinct* outcomes at current time
-            for ol,t,rep in dsRow:
+            cur_outcomes = set()  # holds *distinct* outcomes at current time
+            for ol, t, rep in dsRow:
                 if aggregate_times or t == cur_t:
                     cur_outcomes.add(ol)
                 else:
                     #assume final outcome at each time is constrained
                     nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
-                    nDOF += nOutcomes-1; cur_outcomes = set()
+                    nDOF += nOutcomes - 1; cur_outcomes = set()
                     cur_t = t
             nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
-            nDOF += nOutcomes-1; #last time stamp
+            nDOF += nOutcomes - 1  # last time stamp
         return nDOF
-
 
     def _keepseparate_update_circuit(self, circuit):
         if not isinstance(circuit, _cir.Circuit):
-            circuit = _cir.Circuit(circuit) #make sure we have a Circuit
+            circuit = _cir.Circuit(circuit)  # make sure we have a Circuit
 
         # if "keepseparate" mode, add tag onto end of circuit
         if circuit in self.cirIndex and self.collisionAction == "keepseparate":
-            i=0; tagged_circuit = circuit
+            i = 0; tagged_circuit = circuit
             while tagged_circuit in self.cirIndex:
-                i+=1; tagged_circuit = circuit + _cir.Circuit(("#%d" % i,))
+                i += 1; tagged_circuit = circuit + _cir.Circuit(("#%d" % i,))
             #add data for a new (duplicate) circuit
             circuit = tagged_circuit
 
@@ -913,8 +905,7 @@ class DataSet(object):
             raise ValueError("Cannot build repetition counts in a static DataSet object")
         self.repData = []
         for oliAr in self.oliData:
-            self.repData.append( _np.ones(len(oliAr), self.repType) )
-
+            self.repData.append(_np.ones(len(oliAr), self.repType))
 
     def add_count_dict(self, circuit, countDict, overwriteExisting=True,
                        recordZeroCnts=False, aux=None):
@@ -952,12 +943,12 @@ class DataSet(object):
         #Convert input to an OutcomeLabelDict
         if isinstance(countDict, _ld.OutcomeLabelDict):
             outcomeCounts = countDict
-        elif isinstance(countDict, _OrderedDict): #then don't sort keys
-            outcomeCounts = _ld.OutcomeLabelDict( list(countDict.items()) )
+        elif isinstance(countDict, _OrderedDict):  # then don't sort keys
+            outcomeCounts = _ld.OutcomeLabelDict(list(countDict.items()))
         else:
             # sort key for deterministic ordering of *new* outcome labels)
-            outcomeCounts = _ld.OutcomeLabelDict( [
-                (lbl,countDict[lbl]) for lbl in sorted(list(countDict.keys()))])
+            outcomeCounts = _ld.OutcomeLabelDict([
+                (lbl, countDict[lbl]) for lbl in sorted(list(countDict.keys()))])
 
         outcomeLabelList = list(outcomeCounts.keys())
         countList = list(outcomeCounts.values())
@@ -967,15 +958,14 @@ class DataSet(object):
 
         if not overwriteExisting and circuit in self:
             iNext = int(max(self[circuit].time)) + 1 \
-                    if (len(self[circuit].time) > 0) else 0
-            timeStampList = [iNext]*len(countList)
+                if (len(self[circuit].time) > 0) else 0
+            timeStampList = [iNext] * len(countList)
         else:
-            timeStampList = [0]*len(countList)
+            timeStampList = [0] * len(countList)
 
         self.add_raw_series_data(circuit, outcomeLabelList, timeStampList,
                                  countList, overwriteExisting, recordZeroCnts,
                                  aux)
-        
 
     def add_raw_series_data(self, circuit, outcomeLabelList, timeStampList,
                             repCountList=None, overwriteExisting=True,
@@ -1028,19 +1018,19 @@ class DataSet(object):
         circuit = self._keepseparate_update_circuit(circuit)
 
         #strings -> tuple outcome labels
-        tup_outcomeLabelList = [ _ld.OutcomeLabelDict.to_outcome(ol)
-                                 for ol in outcomeLabelList]
+        tup_outcomeLabelList = [_ld.OutcomeLabelDict.to_outcome(ol)
+                                for ol in outcomeLabelList]
 
         #Add any new outcome labels
         added = False
         for ol in tup_outcomeLabelList:
             if ol not in self.olIndex:
-                iNext = max(self.olIndex.values())+1 if len(self.olIndex) > 0 else 0
-                self.olIndex[ol] = iNext; added=True
-        if added: #rebuild self.ol because olIndex has changed
-            self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
+                iNext = max(self.olIndex.values()) + 1 if len(self.olIndex) > 0 else 0
+                self.olIndex[ol] = iNext; added = True
+        if added:  # rebuild self.ol because olIndex has changed
+            self.ol = _OrderedDict([(i, sl) for (sl, i) in self.olIndex.items()])
 
-        oliArray = _np.array([ self.olIndex[ol] for ol in tup_outcomeLabelList ] , self.oliType)
+        oliArray = _np.array([self.olIndex[ol] for ol in tup_outcomeLabelList], self.oliType)
         timeArray = _np.array(timeStampList, self.timeType)
         assert(oliArray.shape == timeArray.shape), \
             "Outcome-label and time stamp lists must have the same length!"
@@ -1058,34 +1048,33 @@ class DataSet(object):
         if not recordZeroCnts:
             # Go through repArray and remove any zeros, along with
             # corresponding elements of oliArray and timeArray
-            mask = repArray != 0 # boolean array (note: == float comparison *is* desired)
-            repArray  = repArray[mask]
-            oliArray  = oliArray[mask]
+            mask = repArray != 0  # boolean array (note: == float comparison *is* desired)
+            repArray = repArray[mask]
+            oliArray = oliArray[mask]
             timeArray = timeArray[mask]
 
         if circuit in self.cirIndex:
             circuitIndx = self.cirIndex[circuit]
             if overwriteExisting:
-                self.oliData[ circuitIndx ] = oliArray #OVERWRITE existing time series
-                self.timeData[ circuitIndx ] = timeArray #OVERWRITE existing time series
-                if repArray is not None: self.repData[ circuitIndx ] = repArray
+                self.oliData[circuitIndx] = oliArray  # OVERWRITE existing time series
+                self.timeData[circuitIndx] = timeArray  # OVERWRITE existing time series
+                if repArray is not None: self.repData[circuitIndx] = repArray
             else:
-                self.oliData[ circuitIndx ] = _np.concatenate((self.oliData[circuitIndx],oliArray))
-                self.timeData[ circuitIndx ] = _np.concatenate((self.timeData[circuitIndx],timeArray))
+                self.oliData[circuitIndx] = _np.concatenate((self.oliData[circuitIndx], oliArray))
+                self.timeData[circuitIndx] = _np.concatenate((self.timeData[circuitIndx], timeArray))
                 if repArray is not None:
-                    self.repData[ circuitIndx ] = _np.concatenate((self.repData[circuitIndx],repArray))
+                    self.repData[circuitIndx] = _np.concatenate((self.repData[circuitIndx], repArray))
 
         else:
             #add data for a new circuit
-            assert( len(self.oliData) == len(self.timeData) ), "OLI and TIME data are out of sync!!"
-            circuitIndx = len(self.oliData) #index of to-be-added circuit
-            self.oliData.append( oliArray )
-            self.timeData.append( timeArray )
-            if repArray is not None: self.repData.append( repArray )
-            self.cirIndex[ circuit ] = circuitIndx
+            assert(len(self.oliData) == len(self.timeData)), "OLI and TIME data are out of sync!!"
+            circuitIndx = len(self.oliData)  # index of to-be-added circuit
+            self.oliData.append(oliArray)
+            self.timeData.append(timeArray)
+            if repArray is not None: self.repData.append(repArray)
+            self.cirIndex[circuit] = circuitIndx
 
         if aux is not None: self.add_auxiliary_info(circuit, aux)
-
 
     def add_series_data(self, circuit, countDictList, timeStampList,
                         overwriteExisting=True, aux=None):
@@ -1126,15 +1115,14 @@ class DataSet(object):
             if not isinstance(cntDict, _OrderedDict):
                 ols = sorted(list(cntDict.keys()))
             else: ols = list(cntDict.keys())
-            for ol in ols: # loop over outcome labels
+            for ol in ols:  # loop over outcome labels
                 expanded_outcomeList.append(ol)
                 expanded_timeList.append(t)
-                expanded_repList.append(cntDict[ol]) #could do this only for counts > 1
+                expanded_repList.append(cntDict[ol])  # could do this only for counts > 1
         return self.add_raw_series_data(circuit, expanded_outcomeList,
                                         expanded_timeList, expanded_repList,
                                         overwriteExisting, aux=aux)
 
-    
     def add_auxiliary_info(self, circuit, aux):
         """
         Add auxiliary meta information to `circuit`.
@@ -1152,9 +1140,8 @@ class DataSet(object):
         -------
         None
         """
-        self.auxInfo[circuit].clear() # needed? (could just update?)
-        self.auxInfo[circuit].update(aux) 
-
+        self.auxInfo[circuit].clear()  # needed? (could just update?)
+        self.auxInfo[circuit].update(aux)
 
     def add_counts_from_dataset(self, otherDataSet):
         """
@@ -1171,7 +1158,6 @@ class DataSet(object):
         """
         return self.add_series_from_dataset(otherDataSet)
 
-
     def add_series_from_dataset(self, otherDataSet):
         """
         Append another DataSet's series data to this DataSet
@@ -1186,9 +1172,8 @@ class DataSet(object):
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        for circuit,dsRow in otherDataSet.items():
+        for circuit, dsRow in otherDataSet.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
-
 
     def __str__(self):
         return self.to_str()
@@ -1215,19 +1200,18 @@ class DataSet(object):
                 mode = "time-independent"
             else: mode = "time-dependent"
 
-        assert(mode in ('time-dependent','time-independent')),"Invalid `mode` argument: %s" % mode
+        assert(mode in ('time-dependent', 'time-independent')), "Invalid `mode` argument: %s" % mode
 
         if mode == "time-dependent":
             s = "Dataset outcomes: " + str(self.olIndex) + "\n"
-            for circuit in self: # tuple-type operation label strings are keys
+            for circuit in self:  # tuple-type operation label strings are keys
                 s += "%s :\n%s\n" % (circuit.str, self[circuit].to_str(mode))
             return s + "\n"
-        else: # time-independent
+        else:  # time-independent
             s = ""
-            for circuit in self: # tuple-type operation label strings are keys
+            for circuit in self:  # tuple-type operation label strings are keys
                 s += "%s  :  %s\n" % (circuit.str, self[circuit].to_str(mode))
             return s + "\n"
-
 
     def truncate(self, listOfCircuitsToKeep, missingAction='raise'):
         """
@@ -1250,7 +1234,7 @@ class DataSet(object):
         DataSet
             The truncated data set.
         """
-        missingStrs = [] # to issue warning - only used if missingAction=="warn"
+        missingStrs = []  # to issue warning - only used if missingAction=="warn"
         if self.bStatic:
             circuitIndices = []
             circuits = []
@@ -1271,24 +1255,24 @@ class DataSet(object):
                         raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
 
                 #only keep track of circuits if they could be different from listOfCircuitsToKeep
-                if missingAction != "raise": circuits.append( circuit )
-                circuitIndices.append( self.cirIndex[circuit] )
+                if missingAction != "raise": circuits.append(circuit)
+                circuitIndices.append(self.cirIndex[circuit])
 
             if missingAction == "raise": circuits = listOfCircuitsToKeep
-            trunc_cirIndex = _OrderedDict( zip(circuits, circuitIndices) )
+            trunc_cirIndex = _OrderedDict(zip(circuits, circuitIndices))
             trunc_dataset = DataSet(self.oliData, self.timeData, self.repData,
                                     circuitIndices=trunc_cirIndex,
-                                    outcomeLabelIndices=self.olIndex, bStatic=True) #don't copy counts, just reference
-            
+                                    outcomeLabelIndices=self.olIndex, bStatic=True)  # don't copy counts, just reference
+
         else:
             trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
             for opstr in _lt.remove_duplicates(listOfCircuitsToKeep):
                 circuit = opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
                 if circuit in self.cirIndex:
                     circuitIndx = self.cirIndex[circuit]
-                    repData = self.repData[ circuitIndx ].copy() if (self.repData is not None) else None
-                    trunc_dataset.add_raw_series_data( circuit, [ self.ol[i] for i in self.oliData[ circuitIndx ] ],
-                                                   self.timeData[ circuitIndx ].copy(), repData) #Copy operation so truncated dataset can be modified
+                    repData = self.repData[circuitIndx].copy() if (self.repData is not None) else None
+                    trunc_dataset.add_raw_series_data(circuit, [self.ol[i] for i in self.oliData[circuitIndx]],
+                                                      self.timeData[circuitIndx].copy(), repData)  # Copy operation so truncated dataset can be modified
                 elif missingAction == "raise":
                     raise KeyError(("Circuit %s was not found in "
                                     "dataset being truncated and "
@@ -1299,13 +1283,12 @@ class DataSet(object):
                     raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
 
         if len(missingStrs) > 0:
-            missingStrs.append("...") # so elipses are shown when there's more strings
+            missingStrs.append("...")  # so elipses are shown when there's more strings
             _warnings.warn(("DataSet.truncate(...) was given %s strings to keep"
-                            " that weren't in the original dataset:\n%s") % 
-                           (len(missingStrs)-1, "\n".join(map(str,missingStrs[0:10]))))
+                            " that weren't in the original dataset:\n%s") %
+                           (len(missingStrs) - 1, "\n".join(map(str, missingStrs[0:10]))))
 
         return trunc_dataset
-
 
     def time_slice(self, startTime, endTime, aggregateToTime=None):
         """
@@ -1330,7 +1313,7 @@ class DataSet(object):
         """
         tot = 0
         ds = DataSet(outcomeLabelIndices=self.olIndex)
-        for opStr,dsRow in self.items():
+        for opStr, dsRow in self.items():
 
             if dsRow.reps is None:
                 reps = _np.ones(dsRow.oli.shape, self.repType)
@@ -1340,7 +1323,7 @@ class DataSet(object):
             times = []; ols = []; repCnts = []
             for oli, t, rep in zip(dsRow.oli, dsRow.time, reps):
 
-                ol = self.ol[oli] # index -> outcome label
+                ol = self.ol[oli]  # index -> outcome label
                 if startTime <= t < endTime:
                     if aggregateToTime is not None:
                         count_dict[ol] += rep
@@ -1351,9 +1334,9 @@ class DataSet(object):
                     tot += rep
 
             if aggregateToTime is not None:
-                ols = [ k for k in count_dict.keys() if count_dict[k] > 0 ]
-                repCnts = [ count_dict[k] for k in ols ]
-                times = [ aggregateToTime ]*len(repCnts)
+                ols = [k for k in count_dict.keys() if count_dict[k] > 0]
+                repCnts = [count_dict[k] for k in ols]
+                times = [aggregateToTime] * len(repCnts)
 
             ds.add_raw_series_data(opStr, ols, times, repCnts)
 
@@ -1361,7 +1344,6 @@ class DataSet(object):
             _warnings.warn("No counts in the requested time range: empty DataSet created")
         ds.done_adding_data()
         return ds
-
 
     def process_circuits(self, processor_fn, aggregate=False):
         """
@@ -1391,23 +1373,23 @@ class DataSet(object):
 
         to_delete = []
         new_cirIndex = _OrderedDict()
-        for opstr,indx in self.cirIndex.items():
+        for opstr, indx in self.cirIndex.items():
             new_gstr = processor_fn(opstr)
             if new_gstr is None:
                 to_delete.append(indx)
             elif new_gstr not in new_cirIndex or aggregate == False:
                 assert(isinstance(new_gstr, _cir.Circuit)), "`processor_fn` must return a Circuit!"
-                new_cirIndex[ new_gstr  ] = indx
-            else: # aggregate data from indx --> new_cirIndex[new_gstr]
+                new_cirIndex[new_gstr] = indx
+            else:  # aggregate data from indx --> new_cirIndex[new_gstr]
                 # A subset of what is in add_raw_series_data(...), but we
                 # don't need to do many of the checks there since the
                 # incoming data is known to have no new outcome labels, etc.
                 assert(isinstance(new_gstr, _cir.Circuit)), "`processor_fn` must return a Circuit!"
                 iSrc, iDest = indx, new_cirIndex[new_gstr]
-                self.oliData[ iDest ] = _np.concatenate((self.oliData[iDest],self.oliData[iSrc]))
-                self.timeData[ iDest ] = _np.concatenate((self.timeData[iDest],self.timeData[iSrc]))
+                self.oliData[iDest] = _np.concatenate((self.oliData[iDest], self.oliData[iSrc]))
+                self.timeData[iDest] = _np.concatenate((self.timeData[iDest], self.timeData[iSrc]))
                 if self.repData is not None:
-                    self.repData[ iDest ] = _np.concatenate((self.repData[iDest],self.repData[iSrc]))
+                    self.repData[iDest] = _np.concatenate((self.repData[iDest], self.repData[iSrc]))
                 #FUTURE: just add counts for same timestamp & same outcome
                 #  label data? (and in add_raw_series_data(...) too).
 
@@ -1421,19 +1403,17 @@ class DataSet(object):
         #Note: self.cnt_cache just remains None (a non-static DataSet)
 
         #Process self.auxInfo
-        auxInfo = _DefaultDict( dict )
+        auxInfo = _DefaultDict(dict)
         for opstr in self.auxInfo.keys():
             new_gstr = processor_fn(opstr)
             if new_gstr is None:
                 continue
             elif new_gstr not in auxInfo or aggregate == False:
                 auxInfo[new_gstr] = self.auxInfo[opstr]
-            else: # "aggregate" auxinfo by merging dictionaries
+            else:  # "aggregate" auxinfo by merging dictionaries
                 #FUTURE: better merging - do something for key collisions?
-                auxInfo[new_gstr].update( self.auxInfo[opstr] )
+                auxInfo[new_gstr].update(self.auxInfo[opstr])
         self.auxInfo = auxInfo
-
-
 
     def remove(self, circuits, missingAction="raise"):
         """
@@ -1453,14 +1433,14 @@ class DataSet(object):
         -------
         None
         """
-        missingStrs = [] # to issue warning - only used if missingAction=="warn"
+        missingStrs = []  # to issue warning - only used if missingAction=="warn"
         gstr_indices = []; auxkeys_to_remove = []
         for opstr in circuits:
-            if not isinstance(opstr,_cir.Circuit):
+            if not isinstance(opstr, _cir.Circuit):
                 opstr = _cir.Circuit(opstr)
 
             if self.has_key(opstr):
-                gstr_indices.append( self.cirIndex[opstr] )
+                gstr_indices.append(self.cirIndex[opstr])
                 if opstr in self.auxInfo:
                     auxkeys_to_remove.append(opstr)
             elif missingAction == "raise":
@@ -1473,16 +1453,15 @@ class DataSet(object):
                 raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
 
         # the actual removal operations
-        self._remove(gstr_indices) 
+        self._remove(gstr_indices)
         for ky in auxkeys_to_remove:
-             del self.auxInfo[ky]
+            del self.auxInfo[ky]
 
-        if len(missingStrs) > 0: #Print a warning with missing strings
-            missingStrs.append("...") # so elipses are shown when there's more strings
+        if len(missingStrs) > 0:  # Print a warning with missing strings
+            missingStrs.append("...")  # so elipses are shown when there's more strings
             _warnings.warn(("DataSet.remove(...) cannot remove %s strings because"
-                            " they don't exist in the original dataset:\n%s") % 
-                           (len(missingStrs)-1, "\n".join(map(str,missingStrs[0:10]))))
-            
+                            " they don't exist in the original dataset:\n%s") %
+                           (len(missingStrs) - 1, "\n".join(map(str, missingStrs[0:10]))))
 
     def _remove(self, gstr_indices):
         """ Removes the data in indices given by gstr_indices """
@@ -1495,16 +1474,16 @@ class DataSet(object):
         inds = sorted(list(gstr_indices))
 
         #remove indices from lists (high->low)
-        for i in reversed(inds): 
+        for i in reversed(inds):
             del self.oliData[i]
             del self.timeData[i]
             if self.repData:
                 del self.repData[i]
-            
+
         #remove elements of cirIndex assoc. w/deleted indices
         keys_to_delete = []; inds_set = set(inds)
-        for k,v in self.cirIndex.items():
-            if v in inds_set: 
+        for k, v in self.cirIndex.items():
+            if v in inds_set:
                 keys_to_delete.append(k)
         for k in keys_to_delete:
             del self.cirIndex[k]
@@ -1512,57 +1491,53 @@ class DataSet(object):
         #adjust remaining indices in cirIndex
         inds_ar = _np.array(inds, _np.int64)
         for k in self.cirIndex.keys():
-            cnt = _bisect.bisect(inds_ar, self.cirIndex[k]) # cnt == number of removed 
+            cnt = _bisect.bisect(inds_ar, self.cirIndex[k])  # cnt == number of removed
             self.cirIndex[k] -= cnt                         # indices < self.cirIndex[k]
 
-
-            
     def copy(self):
         """ Make a copy of this DataSet. """
         if self.bStatic:
-            return self # doesn't need to be copied since data can't change
+            return self  # doesn't need to be copied since data can't change
         else:
             copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
                                collisionAction=self.collisionAction)
             copyOfMe.cirIndex = _copy.deepcopy(self.cirIndex)
-            copyOfMe.oliData = [ el.copy() for el in self.oliData ]
-            copyOfMe.timeData = [ el.copy() for el in self.timeData ]
+            copyOfMe.oliData = [el.copy() for el in self.oliData]
+            copyOfMe.timeData = [el.copy() for el in self.timeData]
             if self.repData is not None:
-                copyOfMe.repData = [ el.copy() for el in self.repData ]
+                copyOfMe.repData = [el.copy() for el in self.repData]
             else: copyOfMe.repData = None
 
-            copyOfMe.oliType  =self.oliType
+            copyOfMe.oliType = self.oliType
             copyOfMe.timeType = self.timeType
-            copyOfMe.repType  = self.repType
+            copyOfMe.repType = self.repType
             copyOfMe.cnt_cache = None
             copyOfMe.auxInfo = self.auxInfo.copy()
             return copyOfMe
-
 
     def copy_nonstatic(self):
         """ Make a non-static copy of this DataSet. """
         if self.bStatic:
             copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
                                collisionAction=self.collisionAction)
-            copyOfMe.cirIndex = _OrderedDict([ (opstr,i) for i,opstr in enumerate(self.cirIndex.keys()) ])
+            copyOfMe.cirIndex = _OrderedDict([(opstr, i) for i, opstr in enumerate(self.cirIndex.keys())])
             copyOfMe.oliData = []
             copyOfMe.timeData = []
             copyOfMe.repData = None if (self.repData is None) else []
             for slc in self.cirIndex.values():
-                copyOfMe.oliData.append( self.oliData[slc].copy() )
-                copyOfMe.timeData.append( self.timeData[slc].copy() )
+                copyOfMe.oliData.append(self.oliData[slc].copy())
+                copyOfMe.timeData.append(self.timeData[slc].copy())
                 if self.repData is not None:
-                    copyOfMe.repData.append( self.repData[slc].copy() )
+                    copyOfMe.repData.append(self.repData[slc].copy())
 
-            copyOfMe.oliType  = self.oliType
+            copyOfMe.oliType = self.oliType
             copyOfMe.timeType = self.timeType
-            copyOfMe.repType  = self.repType
+            copyOfMe.repType = self.repType
             copyOfMe.cnt_cache = None
             copyOfMe.auxInfo = self.auxInfo.copy()
             return copyOfMe
         else:
             return self.copy()
-
 
     def done_adding_data(self):
         """
@@ -1585,63 +1560,62 @@ class DataSet(object):
             for circuit, indx in self.cirIndex.items():
                 seriesLen = len(self.oliData[indx])
 
-                to_concat_oli.append( self.oliData[indx] )   #just build up lists of
-                to_concat_time.append( self.timeData[indx] ) # reference, not copies
+                to_concat_oli.append(self.oliData[indx])  # just build up lists of
+                to_concat_time.append(self.timeData[indx])  # reference, not copies
                 assert(seriesLen == len(self.timeData[indx])), "TIME & OLI out of sync!"
 
                 if self.repData is not None:
-                    to_concat_rep.append( self.repData[indx] )
+                    to_concat_rep.append(self.repData[indx])
                     assert(seriesLen == len(self.repData[indx])), "REP & OLI out of sync!"
 
-                new_cirIndex[circuit] = slice(curIndx, curIndx+seriesLen)
+                new_cirIndex[circuit] = slice(curIndx, curIndx + seriesLen)
                 curIndx += seriesLen
 
             self.cirIndex = new_cirIndex
-            self.oliData = _np.concatenate( to_concat_oli )
-            self.timeData = _np.concatenate( to_concat_time )
+            self.oliData = _np.concatenate(to_concat_oli)
+            self.timeData = _np.concatenate(to_concat_time)
             if self.repData is not None:
-                self.repData = _np.concatenate( to_concat_rep )
+                self.repData = _np.concatenate(to_concat_rep)
 
         else:
             #leave cirIndex alone (should be empty anyway?)
-            self.oliData = _np.empty( (0,), self.oliType)
-            self.timeData = _np.empty( (0,), self.timeType)
+            self.oliData = _np.empty((0,), self.oliType)
+            self.timeData = _np.empty((0,), self.timeType)
             if self.repData is not None:
-                self.repData = _np.empty( (0,), self.repType)
+                self.repData = _np.empty((0,), self.repType)
 
-        self.cnt_cache = { opstr:_ld.OutcomeLabelDict() for opstr in self.cirIndex }
+        self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}
         self.bStatic = True
         self.uuid = _uuid.uuid4()
 
     def __getstate__(self):
-        toPickle = { 'cirIndexKeys': list(map(_cir.CompressedCircuit, self.cirIndex.keys())),
-                     'cirIndexVals': list(self.cirIndex.values()),
-                     'olIndex': self.olIndex,
-                     'ol': self.ol,
-                     'bStatic': self.bStatic,
-                     'oliData': self.oliData,
-                     'timeData': self.timeData,
-                     'repData': self.repData,
-                     'oliType': _np.dtype(self.oliType).str,
-                     'timeType': _np.dtype(self.timeType).str,
-                     'repType': _np.dtype(self.repType).str,
-                     'collisionAction': self.collisionAction,
-                     'uuid' : self.uuid,
-                     'auxInfo': self.auxInfo,
-                     'comment': self.comment}
+        toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit, self.cirIndex.keys())),
+                    'cirIndexVals': list(self.cirIndex.values()),
+                    'olIndex': self.olIndex,
+                    'ol': self.ol,
+                    'bStatic': self.bStatic,
+                    'oliData': self.oliData,
+                    'timeData': self.timeData,
+                    'repData': self.repData,
+                    'oliType': _np.dtype(self.oliType).str,
+                    'timeType': _np.dtype(self.timeType).str,
+                    'repType': _np.dtype(self.repType).str,
+                    'collisionAction': self.collisionAction,
+                    'uuid': self.uuid,
+                    'auxInfo': self.auxInfo,
+                    'comment': self.comment}
         return toPickle
 
     def __setstate__(self, state_dict):
         bStatic = state_dict['bStatic']
-        
+
         if "gsIndexKeys" in state_dict:
             _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
-            cirIndexKeys = [ cgstr.expand() for cgstr in state_dict['gsIndexKeys'] ]
-            cirIndex = _OrderedDict( list(zip( cirIndexKeys, state_dict['gsIndexVals'])) )
+            cirIndexKeys = [cgstr.expand() for cgstr in state_dict['gsIndexKeys']]
+            cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['gsIndexVals'])))
         else:
-            cirIndexKeys = [ cgstr.expand() for cgstr in state_dict['cirIndexKeys'] ]
-            cirIndex = _OrderedDict( list(zip( cirIndexKeys, state_dict['cirIndexVals'])) )
-
+            cirIndexKeys = [cgstr.expand() for cgstr in state_dict['cirIndexKeys']]
+            cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
 
         if "slIndex" in state_dict:
             #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
@@ -1649,50 +1623,48 @@ class DataSet(object):
 
             #Turn spam labels into outcome labels
             self.cirIndex = _OrderedDict()
-            self.olIndex = _OrderedDict( [ ((str(sl),),i) for sl,i in state_dict['slIndex'].items() ] )
-            self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )
+            self.olIndex = _OrderedDict([((str(sl),), i) for sl, i in state_dict['slIndex'].items()])
+            self.ol = _OrderedDict([(i, ol) for (ol, i) in self.olIndex.items()])
             self.oliData = []
             self.timeData = []
             self.repData = []
             self.comment = ''
 
-            self.oliType  = Oindex_type
+            self.oliType = Oindex_type
             self.timeType = Time_type
-            self.repType  = Repcount_type
+            self.repType = Repcount_type
 
-            self.bStatic = False # for adding data
+            self.bStatic = False  # for adding data
             for opstr, indx in cirIndex.items():
                 count_row = state_dict['counts'][indx]
-                count_dict = _OrderedDict( [(ol,count_row[i]) for ol,i in self.olIndex.items()] )
+                count_dict = _OrderedDict([(ol, count_row[i]) for ol, i in self.olIndex.items()])
                 self.add_count_dict(opstr, count_dict)
             if not self.bStatic: self.done_adding_data()
 
-        else:  #Normal case
+        else:  # Normal case
             self.bStatic = bStatic
             self.cirIndex = cirIndex
             self.olIndex = state_dict['olIndex']
             self.ol = state_dict['ol']
-            self.oliData  = state_dict['oliData']
+            self.oliData = state_dict['oliData']
             self.timeData = state_dict['timeData']
-            self.repData  = state_dict['repData']
-            self.oliType  = _np.dtype(state_dict['oliType'])
+            self.repData = state_dict['repData']
+            self.oliType = _np.dtype(state_dict['oliType'])
             self.timeType = _np.dtype(state_dict['timeType'])
-            self.repType  = _np.dtype(state_dict['repType'])
-            self.comment  = state_dict.get('comment','')
-            if bStatic: #always empty - don't save this, just init
-                self.cnt_cache = { opstr:_ld.OutcomeLabelDict() for opstr in self.cirIndex }
+            self.repType = _np.dtype(state_dict['repType'])
+            self.comment = state_dict.get('comment', '')
+            if bStatic:  # always empty - don't save this, just init
+                self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}
             else: self.cnt_cache = None
 
-        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict) )
-        if not isinstance(self.auxInfo, _DefaultDict) and isinstance(self.auxInfo,dict):
+        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict))
+        if not isinstance(self.auxInfo, _DefaultDict) and isinstance(self.auxInfo, dict):
             self.auxInfo = _DefaultDict(dict, self.auxInfo)
             # some types of serialization (e.g. JSON) just save a *normal* dict
             # so promote to a defaultdict if needed..
-            
-        self.collisionAction = state_dict.get('collisionAction','aggregate')
-        self.uuid = state_dict.get('uuid',None)
 
-
+        self.collisionAction = state_dict.get('collisionAction', 'aggregate')
+        self.uuid = state_dict.get('uuid', None)
 
     def save(self, fileOrFilename):
         """
@@ -1709,32 +1681,32 @@ class DataSet(object):
         None
         """
 
-        toPickle = { 'cirIndexKeys': list(map(_cir.CompressedCircuit, self.cirIndex.keys())) if self.cirIndex else [],
-                     'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
-                     'olIndex': self.olIndex,
-                     'ol': self.ol,
-                     'bStatic': self.bStatic,
-                     'oliType': self.oliType,
-                     'timeType': self.timeType,
-                     'repType': self.repType,
-                     'useReps': bool(self.repData is not None),
-                     'collisionAction': self.collisionAction,
-                     'uuid' : self.uuid,
-                     'auxInfo': self.auxInfo,
-                     'comment': self.comment } #Don't pickle counts numpy data b/c it's inefficient
+        toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit, self.cirIndex.keys())) if self.cirIndex else [],
+                    'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
+                    'olIndex': self.olIndex,
+                    'ol': self.ol,
+                    'bStatic': self.bStatic,
+                    'oliType': self.oliType,
+                    'timeType': self.timeType,
+                    'repType': self.repType,
+                    'useReps': bool(self.repData is not None),
+                    'collisionAction': self.collisionAction,
+                    'uuid': self.uuid,
+                    'auxInfo': self.auxInfo,
+                    'comment': self.comment}  # Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
 
         bOpen = _compat.isstr(fileOrFilename)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
-                f = _gzip.open(fileOrFilename,"wb")
+                f = _gzip.open(fileOrFilename, "wb")
             else:
-                f = open(fileOrFilename,"wb")
+                f = open(fileOrFilename, "wb")
         else:
             f = fileOrFilename
 
-        _pickle.dump(toPickle,f)
+        _pickle.dump(toPickle, f)
         if self.bStatic:
             _np.save(f, self.oliData)
             _np.save(f, self.timeData)
@@ -1765,9 +1737,9 @@ class DataSet(object):
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
-                f = _gzip.open(fileOrFilename,"rb")
+                f = _gzip.open(fileOrFilename, "rb")
             else:
-                f = open(fileOrFilename,"rb")
+                f = open(fileOrFilename, "rb")
         else:
             f = fileOrFilename
 
@@ -1781,59 +1753,60 @@ class DataSet(object):
             del state_dict['gsIndexKeys']
             del state_dict['gsIndexVals']
 
-            if _sys.version_info < (3, 0): #for backward compatibility, needed for Python2 only
-                new_aux_info = _DefaultDict(dict)  # where GateStrings don't get up-converted to Circuits b/c __new__ isn't called
-                for gstr,val in state_dict['auxInfo'].items():
-                    new_aux_info[ _cir.Circuit(gstr._tup, stringrep=gstr._str) ] = val
+            if _sys.version_info < (3, 0):  # for backward compatibility, needed for Python2 only
+                # where GateStrings don't get up-converted to Circuits b/c __new__ isn't called
+                new_aux_info = _DefaultDict(dict)
+                for gstr, val in state_dict['auxInfo'].items():
+                    new_aux_info[_cir.Circuit(gstr._tup, stringrep=gstr._str)] = val
                 state_dict['auxInfo'] = new_aux_info
-        
-        def expand(x): #to be backward compatible
+
+        def expand(x):  # to be backward compatible
             """ Expand a compressed circuit """
-            if isinstance(x,_cir.CompressedCircuit): return x.expand()
-            elif hasattr(x,'__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
+            if isinstance(x, _cir.CompressedCircuit): return x.expand()
+            elif hasattr(x, '__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
                 return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)
-                  #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
-                  # unpickling protocol=0 (the default) info.
+                #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
+                # unpickling protocol=0 (the default) info.
             else:
                 _warnings.warn("Deprecated dataset format.  Please re-save " +
                                "this dataset soon to avoid future incompatibility.")
                 return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
-        cirIndexKeys = [ expand(cgstr) for cgstr in state_dict['cirIndexKeys'] ]
+        cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
 
         #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
-        self.cirIndex = _OrderedDict( list(zip( cirIndexKeys, state_dict['cirIndexVals'])) )
+        self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
         self.olIndex = state_dict['olIndex']
-        self.ol      = state_dict['ol']
+        self.ol = state_dict['ol']
         self.bStatic = state_dict['bStatic']
         self.oliType = state_dict['oliType']
-        self.timeType= state_dict['timeType']
+        self.timeType = state_dict['timeType']
         self.repType = state_dict['repType']
         self.collisionAction = state_dict['collisionAction']
-        self.uuid    = state_dict['uuid']
-        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict)) #backward compat
-        self.comment = state_dict.get('comment', '') # backward compat
+        self.uuid = state_dict['uuid']
+        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict))  # backward compat
+        self.comment = state_dict.get('comment', '')  # backward compat
 
         useReps = state_dict['useReps']
 
         if self.bStatic:
-            self.oliData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-            self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+            self.oliData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+            self.timeData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
             if useReps:
-                self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-            self.cnt_cache = { opstr:_ld.OutcomeLabelDict() for opstr in self.cirIndex } # init cnt_cache afresh
+                self.repData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+            self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}  # init cnt_cache afresh
         else:
             self.oliData = []
             for _ in range(state_dict['nRows']):
-                self.oliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+                self.oliData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
 
             self.timeData = []
             for _ in range(state_dict['nRows']):
-                self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+                self.timeData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
 
             if useReps:
                 self.repData = []
                 for _ in range(state_dict['nRows']):
-                    self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+                    self.repData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
             else:
                 self.repData = None
             self.cnt_cache = None
@@ -1856,13 +1829,13 @@ class DataSet(object):
         None
         """
         mapdict = {}
-        for old,new in old_to_new_dict.items():
+        for old, new in old_to_new_dict.items():
             if _compat.isstr(old): old = (old,)
             if _compat.isstr(new): new = (new,)
             mapdict[old] = new
-            
+
         new_olIndex = _OrderedDict()
-        for ol,i in self.olIndex.items():
+        for ol, i in self.olIndex.items():
             if ol in mapdict:
                 new_olIndex[mapdict[ol]] = i
             else:
@@ -1870,4 +1843,4 @@ class DataSet(object):
 
         #Note: rebuild reverse-dict self.ol:
         self.olIndex = new_olIndex
-        self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )
+        self.ol = _OrderedDict([(i, ol) for (ol, i) in self.olIndex.items()])

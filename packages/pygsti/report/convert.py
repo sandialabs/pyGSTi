@@ -24,12 +24,14 @@ def functions_in(module):
     '''
     Create a dictionary of the functions in a module
     '''
-    return { name : f for name, f in module.__dict__.items() if callable(f)}
+    return {name: f for name, f in module.__dict__.items() if callable(f)}
+
 
 convertDict = {
-        'html'  : functions_in(html),
-        'latex' : functions_in(latex),
-        'python' : functions_in(python)}
+    'html': functions_in(html),
+    'latex': functions_in(latex),
+    'python': functions_in(python)}
+
 
 def calc_dim(x):
     '''
@@ -39,6 +41,7 @@ def calc_dim(x):
     for l in x.shape:
         if l > 1: d += 1
     return d
+
 
 def item_type(x):
     """
@@ -55,22 +58,23 @@ def item_type(x):
     """
     if isinstance(x, _ReportableQty):
         return 'reportable'
-    if isinstance(x,_np.ndarray) or \
-       isinstance(x,_objs.LinearOperator) or \
-       isinstance(x,_objs.SPAMVec):
+    if isinstance(x, _np.ndarray) or \
+       isinstance(x, _objs.LinearOperator) or \
+       isinstance(x, _objs.SPAMVec):
         d = calc_dim(x)
-        if d == 0: return 'value' 
-        if d == 1: return 'vector' 
-        if d == 2: return 'matrix' 
+        if d == 0: return 'value'
+        if d == 1: return 'vector'
+        if d == 2: return 'matrix'
         raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
-    elif type(x) in (float,int,complex,_np.float64,_np.int64):
+    elif type(x) in (float, int, complex, _np.float64, _np.int64):
         return 'value'
-    elif type(x) in (list,tuple):
+    elif type(x) in (list, tuple):
         return 'list'
     elif _compat.isstr(x):
         return 'escaped'
     else:
         return 'raw'
+
 
 def convert(x, specs, fmt):
     '''
@@ -78,20 +82,21 @@ def convert(x, specs, fmt):
     '''
 
     #Squeeze arrays before formatting
-    if isinstance(x,_np.ndarray) or \
-       isinstance(x,_objs.LinearOperator) or \
-       isinstance(x,_objs.SPAMVec):
+    if isinstance(x, _np.ndarray) or \
+       isinstance(x, _objs.LinearOperator) or \
+       isinstance(x, _objs.SPAMVec):
         x = _np.squeeze(x)
-    
+
     t = item_type(x)
     if t == 'raw':
         print('WARNING: {} not explicitly converted to {}'.format(x, fmt))
         return str(x)
     if t == 'reportable':
-        return x.render_with(lambda a,specz : convert(a, specz, fmt))
+        return x.render_with(lambda a, specz: convert(a, specz, fmt))
     if t == 'list':
         return convertDict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
     return convertDict[fmt][t](x, specs)
+
 
 def converter(fmt):
     '''

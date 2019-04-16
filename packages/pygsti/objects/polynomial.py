@@ -11,16 +11,16 @@ import platform as _platform
 import collections as _collections
 from . import replib
 
-assert(_platform.architecture()[0].endswith("bit")) # e.g. "64bit"
+assert(_platform.architecture()[0].endswith("bit"))  # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
 
 class Polynomial(dict):
-    """ 
+    """
     Encapsulates a polynomial as a subclass of the standard Python dict.
 
     Variables are represented by integer indices, e.g. "2" means "x_2".
-    Keys are tuples of variable indices and values are numerical 
+    Keys are tuples of variable indices and values are numerical
     coefficients (floating point or complex numbers).  To specify a variable
     to some power, its index is repeated in the key-tuple.
 
@@ -32,11 +32,11 @@ class Polynomial(dict):
         """
         Returns the number of variable indices that can be compactly fit
         into a single int when there are at most `max_num_vars` variables.
-        
+
         This quantity is needed to directly construct Polynomial representations
         and is thus useful internally for forward simulators.
         """
-        return int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars+1)))        
+        return int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
 
     @classmethod
     def fromrep(cls, rep):
@@ -46,7 +46,7 @@ class Polynomial(dict):
 
         Note: usually we only need to convert from full-featured Python objects
         to the lighter-weight "representation" objects.  Polynomials are an
-        exception, since as the results of probability computations they need 
+        exception, since as the results of probability computations they need
         to be converted back from "representation-form" to "full-form".
 
         Parameters
@@ -66,19 +66,18 @@ class Polynomial(dict):
             #DB: cnt = 0; orig = indx
             for indx in indx_tup:
                 while indx != 0:
-                    nxt = indx // (max_num_vars+1)
-                    i = indx - nxt*(max_num_vars+1)
-                    ret.append(i-1)
+                    nxt = indx // (max_num_vars + 1)
+                    i = indx - nxt * (max_num_vars + 1)
+                    ret.append(i - 1)
                     indx = nxt
                     #DB: cnt += 1
                     #DB: if cnt > 50: print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
             #assert(len(ret) <= max_order) #TODO: is this needed anymore?
             return tuple(sorted(ret))
-        
-        tup_coeff_dict = { int_to_vinds(k): val for k,val in rep.coeffs.items() }
+
+        tup_coeff_dict = {int_to_vinds(k): val for k, val in rep.coeffs.items()}
         return cls(tup_coeff_dict)
 
-    
     def __init__(self, coeffs=None):
         """
         Initializes a new Polynomial object (a subclass of dict).
@@ -93,14 +92,14 @@ class Polynomial(dict):
         Parameters
         ----------
         coeffs : dict
-            A dictionary of coefficients.  Keys are tuples of integers that 
+            A dictionary of coefficients.  Keys are tuples of integers that
             specify the polynomial term the coefficient value multiplies
             (see above). If None, the zero polynomial (no terms) is created.
         """
-        super(Polynomial,self).__init__()
+        super(Polynomial, self).__init__()
         if coeffs is not None:
             self.update(coeffs)
-            
+
     def deriv(self, wrtParam):
         """
         Take the derivative of this Polynomial with respect to a single
@@ -111,7 +110,7 @@ class Polynomial(dict):
         Parameters
         ----------
         wrtParam : int
-            The variable index to differentiate with respect to. 
+            The variable index to differentiate with respect to.
             E.g. "4" means "differentiate w.r.t. x_4".
 
         Returns
@@ -124,7 +123,7 @@ class Polynomial(dict):
             if cnt > 0:
                 l = list(ivar)
                 del l[l.index(wrtParam)]
-                dcoeffs[ tuple(l) ] = cnt * coeff
+                dcoeffs[tuple(l)] = cnt * coeff
 
         return Polynomial(dcoeffs)
 
@@ -133,10 +132,10 @@ class Polynomial(dict):
         Return the largest sum-of-exponents for any term (monomial) within this
         polynomial. E.g. for x_2^3 + x_1^2*x_0^2 has degree 4.
         """
-        return 0 if len(self)==0 else max([len(k) for k in self.keys()])
+        return 0 if len(self) == 0 else max([len(k) for k in self.keys()])
 
     def evaluate(self, variable_values):
-        """ 
+        """
         Evaluate this polynomial for a given set of variable values.
 
         Parameters
@@ -152,15 +151,15 @@ class Polynomial(dict):
         """
         #FUTURE: make this function smarter (Russian peasant)
         ret = 0
-        for ivar,coeff in self.items():
-            ret += coeff * _np.product( [variable_values[i] for i in ivar] )
+        for ivar, coeff in self.items():
+            ret += coeff * _np.product([variable_values[i] for i in ivar])
         return ret
 
     def compact(self, force_complex=False):
         """
         Generate a compact form of this polynomial designed for fast evaluation.
 
-        The resulting "tapes" can be evaluated using 
+        The resulting "tapes" can be evaluated using
         :function:`bulk_eval_compact_polys`.
 
         Parameters
@@ -178,20 +177,20 @@ class Polynomial(dict):
         if force_complex:
             iscomplex = True
         else:
-            iscomplex = any([ abs(_np.imag(x)) > 1e-12 for x in self.values() ])
-            
+            iscomplex = any([abs(_np.imag(x)) > 1e-12 for x in self.values()])
+
         nTerms = len(self)
-        nVarIndices = sum(map(len,self.keys()))
-        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
-        ctape = _np.empty(nTerms, complex if iscomplex else 'd') # "coefficient tape"
+        nVarIndices = sum(map(len, self.keys()))
+        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64)  # "variable" tape
+        ctape = _np.empty(nTerms, complex if iscomplex else 'd')  # "coefficient tape"
 
         i = 0
-        vtape[i] = nTerms; i+=1
-        for iTerm,k in enumerate(sorted(self.keys())):
+        vtape[i] = nTerms; i += 1
+        for iTerm, k in enumerate(sorted(self.keys())):
             l = len(k)
             ctape[iTerm] = self[k] if iscomplex else _np.real(self[k])
             vtape[i] = l; i += 1
-            vtape[i:i+l] = k; i += l
+            vtape[i:i + l] = k; i += l
         assert(i == len(vtape)), "Logic Error!"
         return vtape, ctape
 
@@ -212,7 +211,7 @@ class Polynomial(dict):
         Parameters
         ----------
         mapfn : function
-            A function that takes as input an "old" variable-index-tuple 
+            A function that takes as input an "old" variable-index-tuple
             (a key of this Polynomial) and returns the updated "new"
             variable-index-tuple.
 
@@ -220,9 +219,8 @@ class Polynomial(dict):
         -------
         Polynomial
         """
-        return Polynomial({ mapfn(k): v for k,v in self.items() })
+        return Polynomial({mapfn(k): v for k, v in self.items()})
 
-        
     def map_indices_inplace(self, mapfn):
         """
         Performs an in-place find & replace on this polynomial's variable indices.
@@ -234,7 +232,7 @@ class Polynomial(dict):
         Parameters
         ----------
         mapfn : function
-            A function that takes as input an "old" variable-index-tuple 
+            A function that takes as input an "old" variable-index-tuple
             (a key of this Polynomial) and returns the updated "new"
             variable-index-tuple.
 
@@ -242,13 +240,12 @@ class Polynomial(dict):
         -------
         None
         """
-        new_items = { mapfn(k): v for k,v in self.items() }
+        new_items = {mapfn(k): v for k, v in self.items()}
         self.clear()
         self.update(new_items)
 
-        
-    def mult(self,x):
-        """ 
+    def mult(self, x):
+        """
         Multiplies this polynomial by another polynomial `x`.
 
         Parameters
@@ -262,11 +259,11 @@ class Polynomial(dict):
              The polynomial representing self * x.
         """
         newpoly = Polynomial()
-        for k1,v1 in self.items():
-            for k2,v2 in x.items():
-                k = tuple(sorted(k1+k2))
-                if k in newpoly: newpoly[k] += v1*v2
-                else: newpoly[k] = v1*v2
+        for k1, v1 in self.items():
+            for k2, v2 in x.items():
+                k = tuple(sorted(k1 + k2))
+                if k in newpoly: newpoly[k] += v1 * v2
+                else: newpoly[k] = v1 * v2
         return newpoly
 
     def scale(self, x):
@@ -283,13 +280,13 @@ class Polynomial(dict):
         None
         """
         # assume a scalar that can multiply values
-        for k in tuple(self.keys()): # I think the tuple() might speed things up (why?)
+        for k in tuple(self.keys()):  # I think the tuple() might speed things up (why?)
             self[k] *= x
 
     def scalar_mult(self, x):
         """
         Multiplies this polynomial by a scalar `x`.
-        
+
         Parameters
         ----------
         x : float or complex
@@ -309,11 +306,11 @@ class Polynomial(dict):
                 if abs(_np.real(x)) > 1e-6: return "(%.3f+%.3fj)" % (x.real, x.imag)
                 else: return "(%.3fj)" % x.imag
             else: return "%.3f" % x.real
-            
+
         termstrs = []
         sorted_keys = sorted(list(self.keys()))
         for k in sorted_keys:
-            varstr = ""; last_i = None; n=1
+            varstr = ""; last_i = None; n = 1
             for i in sorted(k):
                 if i == last_i: n += 1
                 elif last_i is not None:
@@ -324,7 +321,7 @@ class Polynomial(dict):
                 varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
             #print("DB: k = ",k, " varstr = ",varstr)
             if abs(self[k]) > 1e-4:
-                termstrs.append( "%s%s" % (fmt(self[k]), varstr) )
+                termstrs.append("%s%s" % (fmt(self[k]), varstr))
         if len(termstrs) > 0:
             return " + ".join(termstrs)
         else: return "0"
@@ -332,31 +329,31 @@ class Polynomial(dict):
     def __repr__(self):
         return "Poly[ " + str(self) + " ]"
 
-    def __add__(self,x):
+    def __add__(self, x):
         newpoly = self.copy()
         if isinstance(x, Polynomial):
-            for k,v in x.items():
+            for k, v in x.items():
                 if k in newpoly: newpoly[k] += v
                 else: newpoly[k] = v
-        else: # assume a scalar that can be added to values
+        else:  # assume a scalar that can be added to values
             for k in newpoly:
                 newpoly[k] += x
         return newpoly
 
-    def __iadd__(self,x):
+    def __iadd__(self, x):
         """ Does self += x more efficiently """
         if isinstance(x, Polynomial):
-            for k,v in x.items():
+            for k, v in x.items():
                 try:
                     self[k] += v
                 except KeyError:
                     self[k] = v
-        else: # assume a scalar that can be added to values
+        else:  # assume a scalar that can be added to values
             for k in self:
                 self[k] += x
         return self
 
-    def __mul__(self,x):
+    def __mul__(self, x):
         #if isinstance(x, Polynomial):
         #    newpoly = Polynomial()
         #    for k1,v1 in self.items():
@@ -372,7 +369,7 @@ class Polynomial(dict):
         #return newpoly
         if isinstance(x, Polynomial):
             return self.mult(x)
-        else: # assume a scalar that can multiply values
+        else:  # assume a scalar that can multiply values
             return self.scalar_mult(x)
 
     def __rmul__(self, x):
@@ -381,11 +378,11 @@ class Polynomial(dict):
     def __imul__(self, x):
         if isinstance(x, Polynomial):
             newcoeffs = {}
-            for k1,v1 in self.items():
-                for k2,v2 in x.items():
-                    k = tuple(sorted(k1+k2))
-                    if k in newcoeffs: newcoeffs[k] += v1*v2
-                    else: newcoeffs[k] = v1*v2
+            for k1, v1 in self.items():
+                for k2, v2 in x.items():
+                    k = tuple(sorted(k1 + k2))
+                    if k in newcoeffs: newcoeffs[k] += v1 * v2
+                    else: newcoeffs[k] = v1 * v2
             self.clear()
             self.update(newcoeffs)
         else:
@@ -393,13 +390,13 @@ class Polynomial(dict):
         return self
 
     def __pow__(self, n):
-        ret = Polynomial({(): 1.0}) # max_order updated by mults below
+        ret = Polynomial({(): 1.0})  # max_order updated by mults below
         cur = self
-        for i in range(int(_np.floor(_np.log2(n)))+1):
-            rem = n % 2 #gets least significant bit (i-th) of n
-            if rem == 1: ret *= cur # add current power of x (2^i) if needed  
-            cur = cur*cur # current power *= 2
-            n //= 2 # shift bits of n right 
+        for i in range(int(_np.floor(_np.log2(n))) + 1):
+            rem = n % 2  # gets least significant bit (i-th) of n
+            if rem == 1: ret *= cur  # add current power of x (2^i) if needed
+            cur = cur * cur  # current power *= 2
+            n //= 2  # shift bits of n right
         return ret
 
     def __copy__(self):
@@ -413,13 +410,13 @@ class Polynomial(dict):
         the efficiency of intensely computational tasks.  Note that Polynomial
         representations must have the same `max_order` and `max_num_vars` in
         order to interact with each other (add, multiply, etc.).
-        
+
         Parameters
         ----------
         max_order : int, optional
             The maximum order (degree) terms are allowed to have.  If None,
             then it is taken as the current degree of this polynomial.
-        
+
         max_num_vars : int, optional
             The maximum number of variables the represenatation is allowed to
             have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
@@ -438,16 +435,16 @@ class Polynomial(dict):
 
         # Set max_num_vars (determines based on coeffs if necessary)
         default_max_vars = 0 if len(self) == 0 else \
-                           max([ (max(k)+1 if k else 0) for k in self.keys()])
+            max([(max(k) + 1 if k else 0) for k in self.keys()])
         if max_num_vars is None:
             max_num_vars = default_max_vars
         else:
             assert(default_max_vars <= max_num_vars)
 
-        #new.max_order = max_order            
+        #new.max_order = max_order
         #new.max_num_vars = max_num_vars
         vindices_per_int = Polynomial.get_vindices_per_int(max_num_vars)
-        
+
         def vinds_to_int(vinds):
             """ Convert tuple index of ints to single int given max_order,max_numvars """
             ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
@@ -455,22 +452,22 @@ class Polynomial(dict):
             ret_tup = []
             for k in range(ints_in_key):
                 ret = 0; m = 1
-                for i in vinds[k*vindices_per_int:(k+1)*vindices_per_int]: # last tuple index is most significant
+                for i in vinds[k * vindices_per_int:(k + 1) * vindices_per_int]:  # last tuple index is most significant
                     assert(i < max_num_vars), "Variable index exceed maximum!"
-                    ret += (i+1)*m
-                    m *= max_num_vars+1
+                    ret += (i + 1) * m
+                    m *= max_num_vars + 1
                 assert(ret >= 0), "vinds = %s -> %d!!" % (str(vinds), ret)
                 ret_tup.append(ret)
             return tuple(ret_tup)
 
-        int_coeffs = { vinds_to_int(k): v for k,v in self.items() }
+        int_coeffs = {vinds_to_int(k): v for k, v in self.items()}
 
         # (max_num_vars+1) ** vindices_per_int <= 2**PLATFORM_BITS, so:
         # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
-        vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars+1)))
+        vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
 
         return replib.PolyRep(int_coeffs, max_order, max_num_vars, vindices_per_int)
-    
+
 
 def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
     """
@@ -490,32 +487,32 @@ def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
     dest_shape : tuple
         The shape of the final array of evaluated polynomials.  The resulting
         1D array of evaluated polynomials is reshaped accordingly.
-    
+
     Returns
     -------
     numpy.ndarray
         An array of the same type as the coefficient tape, with shape given
         by `dest_shape`.
     """
-    result = _np.empty(dest_shape,ctape.dtype) # auto-determine type?
-    res = result.flat # for 1D access
-    
+    result = _np.empty(dest_shape, ctape.dtype)  # auto-determine type?
+    res = result.flat  # for 1D access
+
     c = 0; i = 0; r = 0
     while i < vtape.size:
         poly_val = 0
-        nTerms = vtape[i]; i+=1
+        nTerms = vtape[i]; i += 1
         #print("POLY w/%d terms (i=%d)" % (nTerms,i))
         for m in range(nTerms):
-            nVars = vtape[i]; i+=1 # number of variable indices in this term
-            a = ctape[c]; c+=1
+            nVars = vtape[i]; i += 1  # number of variable indices in this term
+            a = ctape[c]; c += 1
             #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a)))
             for k in range(nVars):
-                a *= paramvec[ vtape[i] ]; i+=1
+                a *= paramvec[vtape[i]]; i += 1
             poly_val += a
             #print("  -> added %s to poly_val = %s" % (str(a),str(poly_val))," i=%d, vsize=%d" % (i,vtape.size))
-        res[r] = poly_val; r+=1
-    assert(c == ctape.size),"Coeff Tape length error: %d != %d !" % (c,ctape.size)
-    assert(r == result.size),"Result/Tape size mismatch: only %d result entries filled!" % r
+        res[r] = poly_val; r += 1
+    assert(c == ctape.size), "Coeff Tape length error: %d != %d !" % (c, ctape.size)
+    assert(r == result.size), "Result/Tape size mismatch: only %d result entries filled!" % r
     return result
 
 
@@ -541,27 +538,27 @@ def bulk_load_compact_polys(vtape, ctape, keep_compact=False):
     """
     result = []
     c = 0; i = 0
-    
+
     if keep_compact:
         while i < vtape.size:
-            i2 = i # increment i2 instead of i for this poly
-            nTerms = vtape[i2]; i2+=1
+            i2 = i  # increment i2 instead of i for this poly
+            nTerms = vtape[i2]; i2 += 1
             for m in range(nTerms):
-                nVars = vtape[i2] # number of variable indices in this term
+                nVars = vtape[i2]  # number of variable indices in this term
                 i2 += nVars + 1
-            result.append( (vtape[i:i2], ctape[c:c+nTerms]) )
+            result.append((vtape[i:i2], ctape[c:c + nTerms]))
             i = i2; c += nTerms
     else:
         while i < vtape.size:
             poly_coeffs = {}
-            nTerms = vtape[i]; i+=1
+            nTerms = vtape[i]; i += 1
             #print("POLY w/%d terms (i=%d)" % (nTerms,i))
             for m in range(nTerms):
-                nVars = vtape[i]; i+=1 # number of variable indices in this term
-                a = ctape[c]; c+=1
+                nVars = vtape[i]; i += 1  # number of variable indices in this term
+                a = ctape[c]; c += 1
                 #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a)))
-                poly_coeffs[ tuple(vtape[i:i+nVars]) ] = a; i += nVars
-            result.append( Polynomial(poly_coeffs) )
+                poly_coeffs[tuple(vtape[i:i + nVars])] = a; i += nVars
+            result.append(Polynomial(poly_coeffs))
     return result
 
 
@@ -578,9 +575,9 @@ def compact_deriv(vtape, ctape, wrtParams):
         complact-polynomial tuples returned by :method:`Polynomial.compact`.
 
     wrtParams : list
-        The variable indices to differentiate with respect to.  They 
+        The variable indices to differentiate with respect to.  They
         must be sorted in ascending order. E.g. "[0,3]" means separatey
-        differentiate w.r.t x_0 and x_3 (concatenated first by wrtParam 
+        differentiate w.r.t x_0 and x_3 (concatenated first by wrtParam
         then by poly).
 
     Returns
@@ -592,39 +589,39 @@ def compact_deriv(vtape, ctape, wrtParams):
     wrt = sorted(wrtParams)
     assert(wrt == list(wrtParams)), "`wrtParams` (%s) must be in ascending order!" % wrtParams
     #print("TAPE SIZE = ",vtape.size)
-    
-    c = 0; i = 0    
+
+    c = 0; i = 0
     while i < vtape.size:
-        j = i # increment j instead of i for this poly
-        nTerms = vtape[j]; j+=1
-        dctapes = [ list() for x in range(len(wrt)) ]
-        dvtapes = [ list() for x in range(len(wrt)) ]
-        dnterms = [ 0 ]*len(wrt)
+        j = i  # increment j instead of i for this poly
+        nTerms = vtape[j]; j += 1
+        dctapes = [list() for x in range(len(wrt))]
+        dvtapes = [list() for x in range(len(wrt))]
+        dnterms = [0] * len(wrt)
         #print("POLY w/%d terms (i=%d)" % (nTerms,i))
         for m in range(nTerms):
             coeff = ctape[c]; c += 1
-            nVars = vtape[j]; j += 1 # number of variable indices in this term
+            nVars = vtape[j]; j += 1  # number of variable indices in this term
 
             #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff)))
-            cur_iWrt = 0;
-            j0 = j # the vtape index where the current term starts
+            cur_iWrt = 0
+            j0 = j  # the vtape index where the current term starts
 
             #Loop to get counts of each variable index that is also in `wrt`.
             # Once we've passed an element of `wrt` process it, since there can't
             # see it any more (the var indices are sorted).
-            while j < j0+nVars: #loop over variable indices for this term
+            while j < j0 + nVars:  # loop over variable indices for this term
                 # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
-                
+
                 #find an iVar that is also in wrt.
-                # - increment the cur_iWrt or j as needed                
-                while cur_iWrt < len(wrt) and vtape[j] > wrt[cur_iWrt]: #condition to increment cur_iWrt
-                    cur_iWrt += 1 # so wrt[cur_iWrt] >= vtape[j]
+                # - increment the cur_iWrt or j as needed
+                while cur_iWrt < len(wrt) and vtape[j] > wrt[cur_iWrt]:  # condition to increment cur_iWrt
+                    cur_iWrt += 1  # so wrt[cur_iWrt] >= vtape[j]
                 if cur_iWrt == len(wrt): break  # no more possible iVars we're interested in;
-                                                # we're done with all wrt elements
+                # we're done with all wrt elements
                 # - at this point we know wrt[cur_iWrt] is valid and wrt[cur_iWrt] >= tape[j]
-                while j < j0+nVars and vtape[j] < wrt[cur_iWrt]:
-                    j += 1 # so vtape[j] >= wrt[cur_iWrt]
-                if j == j0+nVars: break  # no more iVars - we're done
+                while j < j0 + nVars and vtape[j] < wrt[cur_iWrt]:
+                    j += 1  # so vtape[j] >= wrt[cur_iWrt]
+                if j == j0 + nVars: break  # no more iVars - we're done
 
                 #print(" check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],wrt[cur_iWrt],cur_iWrt))
                 if vtape[j] == wrt[cur_iWrt]:
@@ -632,26 +629,26 @@ def compact_deriv(vtape, ctape, wrtParams):
                     # Figure out how many there are (easy since vtape is sorted
                     # and we'll always stop on the first one)
                     cnt = 0
-                    while j < j0+nVars and vtape[j] == wrt[cur_iWrt]:
+                    while j < j0 + nVars and vtape[j] == wrt[cur_iWrt]:
                         cnt += 1; j += 1
                     #Process cur_iWrt: add a term to tape for cur_iWrt
-                    dvars = list(vtape[j0:j-1]) + list(vtape[j:j0+nVars]) # removes last wrt[cur_iWrt] var
-                    dctapes[cur_iWrt].append(coeff*cnt)
-                    dvtapes[cur_iWrt].extend( [nVars-1] + dvars )
+                    dvars = list(vtape[j0:j - 1]) + list(vtape[j:j0 + nVars])  # removes last wrt[cur_iWrt] var
+                    dctapes[cur_iWrt].append(coeff * cnt)
+                    dvtapes[cur_iWrt].extend([nVars - 1] + dvars)
                     dnterms[cur_iWrt] += 1
                     #print(" wrt=%d found cnt=%d: adding deriv term coeff=%f vars=%s" % (wrt[cur_iWrt], cnt, coeff*cnt, [nVars-1] + dvars))
 
-                    cur_iWrt += 1 # processed this wrt param - move to next one
+                    cur_iWrt += 1  # processed this wrt param - move to next one
 
             #Now term has been processed, adding derivative terms to the dctapes and dvtapes "tape-lists"
             # We continue processing terms, adding to these tape lists, until all the terms of the
             # current poly are processed.  Then we can concatenate the tapes for each wrtParams element.
-            j = j0 + nVars # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
-            
-        #Now all terms are processed - concatenate tapes for wrtParams and add to resulting tape.
-        for nTerms,dvtape,dctape in zip(dnterms, dvtapes, dctapes):
-            result_vtape.extend( [nTerms] + dvtape )
-            result_ctape.extend( dctape )
-        i = j # update location in vtape after processing poly - actually could just use i instead of j it seems??
+            j = j0 + nVars  # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
 
-    return _np.array(result_vtape,_np.int64), _np.array(result_ctape,complex)
+        #Now all terms are processed - concatenate tapes for wrtParams and add to resulting tape.
+        for nTerms, dvtape, dctape in zip(dnterms, dvtapes, dctapes):
+            result_vtape.extend([nTerms] + dvtape)
+            result_ctape.extend(dctape)
+        i = j  # update location in vtape after processing poly - actually could just use i instead of j it seems??
+
+    return _np.array(result_vtape, _np.int64), _np.array(result_ctape, complex)

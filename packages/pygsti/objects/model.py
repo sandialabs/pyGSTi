@@ -66,7 +66,7 @@ class Model(object):
             The decomposition (with labels) of (pure) state-space this model
             acts upon.  Regardless of whether the model contains operators or
             superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be 
+            and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
         """
         if isinstance(state_space_labels, _ld.StateSpaceLabels):
@@ -76,9 +76,8 @@ class Model(object):
 
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')
-        self._paramlbls = None # a placeholder for FUTURE functionality
-        self.uuid = _uuid.uuid4() # a Model's uuid is like a persistent id(), useful for hashing
-        
+        self._paramlbls = None  # a placeholder for FUTURE functionality
+        self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
 
     @property
     def state_space_labels(self):
@@ -88,7 +87,7 @@ class Model(object):
     @property
     def hyperparams(self):
         """ Dictionary of hyperparameters associated with this model """
-        return self._hyperparams # Note: no need to set this param - just set/update values
+        return self._hyperparams  # Note: no need to set this param - just set/update values
 
     def num_params(self):
         """
@@ -113,7 +112,6 @@ class Model(object):
         """
         return self._paramvec
 
-
     def from_vector(self, v, reset_basis=False):
         """
         The inverse of to_vector.  Loads values of gates and rho and E vecs from
@@ -123,9 +121,8 @@ class Model(object):
         means you should call the `from_vector` method using the same `Model`
         that was used to generate the vector `v` in the first place.
         """
-        assert( len(v) == self.num_params() )
+        assert(len(v) == self.num_params())
         self._paramvec = v.copy()
-
 
     def probs(self, circuit, clipTo=None):
         """
@@ -149,8 +146,7 @@ class Model(object):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-
-    def dprobs(self, circuit, returnPr=False,clipTo=None):
+    def dprobs(self, circuit, returnPr=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -177,8 +173,7 @@ class Model(object):
         #Finite difference default?
         raise NotImplementedError("Derived classes should implement this!")
 
-
-    def hprobs(self, circuit, returnPr=False,returnDeriv=False,clipTo=None):
+    def hprobs(self, circuit, returnPr=False, returnDeriv=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -234,20 +229,20 @@ class Model(object):
                    comm=None, memLimit=None, dataset=None, smartc=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_dprobs(self, circuit_list, returnPr=False,clipTo=None,
-                    check=False,comm=None,wrtBlockSize=None,dataset=None):
+    def bulk_dprobs(self, circuit_list, returnPr=False, clipTo=None,
+                    check=False, comm=None, wrtBlockSize=None, dataset=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_hprobs(self, circuit_list, returnPr=False,returnDeriv=False,
+    def bulk_hprobs(self, circuit_list, returnPr=False, returnDeriv=False,
                     clipTo=None, check=False, comm=None,
                     wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
         raise NotImplementedError("Derived classes should implement this!")
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         raise NotImplementedError("Derived classes should implement this!")
-    
-    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None,clipTo=None,
-                         check=False,comm=None, wrtBlockSize=None,
+
+    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None, clipTo=None,
+                         check=False, comm=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
         raise NotImplementedError("Derived classes should implement this!")
 
@@ -262,12 +257,12 @@ class Model(object):
                              bReturnDProbs12=False, comm=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def _init_copy(self,copyInto):
+    def _init_copy(self, copyInto):
         """
         Copies any "tricky" member of this model into `copyInto`, before
         deep copying everything else within a .copy() operation.
         """
-        copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
+        copyInto.uuid = _uuid.uuid4()  # new uuid for a copy (don't duplicate!)
 
     def copy(self):
         """
@@ -282,16 +277,16 @@ class Model(object):
         # essentially deepcopy this object, but give the
         # class opportunity to initialize tricky members instead
         # of letting deepcopy do it.
-        newModel = type(self).__new__(self.__class__) # empty object
+        newModel = type(self).__new__(self.__class__)  # empty object
 
         #first call _init_copy to initialize any tricky members
         # (like those that contain references to self or other members)
         self._init_copy(newModel)
-        
-        for attr,val in self.__dict__.items():
-            if not hasattr(newModel,attr):
+
+        for attr, val in self.__dict__.items():
+            if not hasattr(newModel, attr):
                 assert(attr != "uuid"), "Should not be copying UUID!"
-                setattr(newModel,attr,_copy.deepcopy(val))
+                setattr(newModel, attr, _copy.deepcopy(val))
 
         return newModel
 
@@ -305,7 +300,6 @@ class Model(object):
             raise TypeError('Use digest hash')
 
 
-
 class OpModel(Model):
     """
     A Model containing operators (i.e. "members") which are independently
@@ -317,7 +311,7 @@ class OpModel(Model):
     whereby the operators (preps, operations, povms, instruments) within
     a circuit get simplified to things corresponding to a single outcome
     probability, i.e. pseudo-circuits containing just preps, operations,
-    and POMV effects.  
+    and POMV effects.
 
     Thirdly, an `OpModel` is assumed to use a *layer-by-layer* evolution, and,
     because of circuit simplification process, the calculaton of circuit
@@ -343,7 +337,7 @@ class OpModel(Model):
             The decomposition (with labels) of (pure) state-space this model
             acts upon.  Regardless of whether the model contains operators or
             superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be 
+            and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
 
         basis : Basis
@@ -351,7 +345,7 @@ class OpModel(Model):
 
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
-            represented, allowing compatibility checks with (super)operator 
+            represented, allowing compatibility checks with (super)operator
             objects.
 
         simplifier_helper : SimplifierHelper
@@ -364,15 +358,15 @@ class OpModel(Model):
         """
         self._evotype = evotype
         self.set_state_space(state_space_labels, basis)
-          #sets self._state_space_labels, self._basis, self._dim
+        #sets self._state_space_labels, self._basis, self._dim
 
         self.set_simtype(sim_type)
-          #sets self._calcClass, self._sim_type, self._sim_args
+        #sets self._calcClass, self._sim_type, self._sim_args
 
         self._shlp = simplifier_helper
-        self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
-        self.dirty = False #indicates when objects and _paramvec may be out of sync
-        
+        self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
+        self.dirty = False  # indicates when objects and _paramvec may be out of sync
+
         super(OpModel, self).__init__(self.state_space_labels)
 
     ##########################################
@@ -400,10 +394,9 @@ class OpModel(Model):
             assert(basis.dim == self.state_space_labels.dim), \
                 "Cannot set basis w/dim=%d when sslbls dim=%d!" % (basis.dim, self.state_space_labels.dim)
             self._basis = basis
-        else: #create a basis with the proper structure & dimension
+        else:  # create a basis with the proper structure & dimension
             self._basis = _Basis.cast(basis, self.state_space_labels)
 
-            
     def set_simtype(self, sim_type, calc_cache=None, max_cache_size=None):
         """
         Reset the forward simulation type of this model.
@@ -425,9 +418,9 @@ class OpModel(Model):
         #Calculator selection based on simulation type
 
         if sim_type == "auto":
-            default_param = self.operations.default_param # assume the same for other dicts
+            default_param = self.operations.default_param  # assume the same for other dicts
             if _gt.is_valid_lindblad_paramtype(default_param) and \
-               _gt.split_lindblad_paramtype(default_param)[1] in ("svterm","cterm"):
+               _gt.split_lindblad_paramtype(default_param)[1] in ("svterm", "cterm"):
                 sim_type = "termorder:1"
             else:
                 d = self._dim if (self._dim is not None) else 0
@@ -435,9 +428,9 @@ class OpModel(Model):
 
         simtype_and_args = sim_type.split(":")
         sim_type = simtype_and_args[0]
-        if sim_type == "matrix":      c = _matrixfwdsim.MatrixForwardSimulator
-        elif sim_type == "map":       c = _mapfwdsim.MapForwardSimulator
-        elif sim_type in ("termorder","termgap","termdirect"): c = _termfwdsim.TermForwardSimulator
+        if sim_type == "matrix": c = _matrixfwdsim.MatrixForwardSimulator
+        elif sim_type == "map": c = _mapfwdsim.MapForwardSimulator
+        elif sim_type in ("termorder", "termgap", "termdirect"): c = _termfwdsim.TermForwardSimulator
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._calcClass = c
@@ -446,10 +439,10 @@ class OpModel(Model):
 
         if sim_type.startswith("term"):
             #cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
-            cache = calc_cache # allow None cache to indicate *direct* computation of terms (no polys)
-            self._sim_args.append(cache) # add calculation cache as another argument
+            cache = calc_cache  # allow None cache to indicate *direct* computation of terms (no polys)
+            self._sim_args.append(cache)  # add calculation cache as another argument
         elif sim_type == "map":
-            self._sim_args.append(max_cache_size) # add cache size as another argument
+            self._sim_args.append(max_cache_size)  # add cache size as another argument
 
     #TODO REMOVE
     #def reset_basis(self):
@@ -461,7 +454,7 @@ class OpModel(Model):
 
     def set_state_space(self, lbls, basis="pp"):
         """
-        Sets labels for the components of the Hilbert space upon which 
+        Sets labels for the components of the Hilbert space upon which
         the gates of this Model act.
 
         Parameters
@@ -474,7 +467,7 @@ class OpModel(Model):
             A :class:`Basis` object or a basis name (like `"pp"`), specifying
             the basis used to interpret the operators in this Model.  If a
             `Basis` object, then its dimensions must match those of `lbls`.
-        
+
         Returns
         -------
         None
@@ -483,11 +476,11 @@ class OpModel(Model):
             self._state_space_labels = lbls
         else:
             self._state_space_labels = _ld.StateSpaceLabels(lbls, evotype=self._evotype)
-        self.basis = basis # invokes basis setter to set self._basis
+        self.basis = basis  # invokes basis setter to set self._basis
 
         #Operator dimension of this Model
         self._dim = self.state_space_labels.dim
-          #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
+        #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
 
     @property
     def dim(self):
@@ -502,7 +495,6 @@ class OpModel(Model):
         """
         return self._dim
 
-
     def get_dimension(self):
         """
         Get the dimension of the model, which equals d when the gate
@@ -516,9 +508,6 @@ class OpModel(Model):
         """
         return self._dim
 
-
-
-            
     ####################################################
     ## Parameter vector maintenance
     ####################################################
@@ -535,7 +524,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()
         return len(self._paramvec)
-    
+
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
@@ -543,19 +532,19 @@ class OpModel(Model):
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
-        TOL=1e-8
-        for lbl,obj in self._iter_parameterized_objs():
-            if debug: print(lbl,":",obj.num_params(),obj.gpindices)
+        TOL = 1e-8
+        for lbl, obj in self._iter_parameterized_objs():
+            if debug: print(lbl, ":", obj.num_params(), obj.gpindices)
             w = obj.to_vector()
             msg = "None" if (obj.parent is None) else id(obj.parent)
-            assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl,msg)
+            assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl, msg)
             if obj.gpindices is not None and len(w) > 0:
-                if _np.linalg.norm(self._paramvec[obj.gpindices]-w) > TOL:
-                    if debug: print(lbl,".to_vector() = ",w," but Model's paramvec = ",self._paramvec[obj.gpindices])
+                if _np.linalg.norm(self._paramvec[obj.gpindices] - w) > TOL:
+                    if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
+                                    self._paramvec[obj.gpindices])
                     raise ValueError("%s is out of sync with paramvec!!!" % lbl)
-            if self.dirty==False and obj.dirty:
+            if self.dirty == False and obj.dirty:
                 raise ValueError("%s is dirty but Model.dirty=False!!" % lbl)
-
 
     def _clean_paramvec(self):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
@@ -571,65 +560,64 @@ class OpModel(Model):
             self._rebuild_paramvec()
             self._need_to_rebuild = False
 
-        if self.dirty: # if any member object is dirty (ModelMember.dirty setter should set this value)
-            TOL=1e-8
+        if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
+            TOL = 1e-8
 
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
-            def clean_single_obj(obj,lbl): # sync an object's to_vector result w/_paramvec
+            def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
                 if obj.dirty:
                     w = obj.to_vector()
-                    chk_norm = _np.linalg.norm(self._paramvec[obj.gpindices]-w)
+                    chk_norm = _np.linalg.norm(self._paramvec[obj.gpindices] - w)
                     #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         self._paramvec[obj.gpindices] = w
                     obj.dirty = False
-                        
-            def clean_obj(obj,lbl): # recursive so works with objects that have sub-members
-                for i,subm in enumerate(obj.submembers()):
-                    clean_obj(subm, _Label(lbl.name+":%d"%i,lbl.sslbls))
-                clean_single_obj(obj,lbl)
 
-            def reset_dirty(obj): # recursive so works with objects that have sub-members
-                for i,subm in enumerate(obj.submembers()): reset_dirty(subm)
+            def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
+                for i, subm in enumerate(obj.submembers()):
+                    clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
+                clean_single_obj(obj, lbl)
+
+            def reset_dirty(obj):  # recursive so works with objects that have sub-members
+                for i, subm in enumerate(obj.submembers()): reset_dirty(subm)
                 obj.dirty = False
-            
-            for lbl,obj in self._iter_parameterized_objs():
-                clean_obj(obj,lbl)
+
+            for lbl, obj in self._iter_parameterized_objs():
+                clean_obj(obj, lbl)
 
             #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
-            for _,obj in self._iter_parameterized_objs():
-                obj.from_vector( self._paramvec[obj.gpindices] )
-                reset_dirty(obj) # like "obj.dirty = False" but recursive
-                  #object is known to be consistent with _paramvec
-            
-        if OpModel._pcheck: self._check_paramvec()
+            for _, obj in self._iter_parameterized_objs():
+                obj.from_vector(self._paramvec[obj.gpindices])
+                reset_dirty(obj)  # like "obj.dirty = False" but recursive
+                #object is known to be consistent with _paramvec
 
+        if OpModel._pcheck: self._check_paramvec()
 
     def _mark_for_rebuild(self, modified_obj=None):
         #re-initialze any members that also depend on the updated parameters
         self._need_to_rebuild = True
-        for _,o in self._iter_parameterized_objs():
+        for _, o in self._iter_parameterized_objs():
             if o._obj_refcount(modified_obj) > 0:
-                o.clear_gpindices() # ~ o.gpindices = None but works w/submembers
-                                    # (so params for this obj will be rebuilt)
+                o.clear_gpindices()  # ~ o.gpindices = None but works w/submembers
+                # (so params for this obj will be rebuilt)
         self.dirty = True
-          #since it's likely we'll set at least one of our object's .dirty flags
-          # to True (and said object may have parent=None and so won't
-          # auto-propagate up to set this model's dirty flag (self.dirty)
+        #since it's likely we'll set at least one of our object's .dirty flags
+        # to True (and said object may have parent=None and so won't
+        # auto-propagate up to set this model's dirty flag (self.dirty)
 
     def _print_gpindices(self):
         print("PRINTING MODEL GPINDICES!!!")
-        for lbl,obj in self._iter_parameterized_objs():
-            print("LABEL ",lbl)
+        for lbl, obj in self._iter_parameterized_objs():
+            print("LABEL ", lbl)
             obj._print_gpindices()
 
     def _rebuild_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
-        v = self._paramvec; Np = len(self._paramvec) #NOT self.num_params() since the latter calls us!
+        v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params() since the latter calls us!
         off = 0; shift = 0
 
         #ellist = ", ".join(map(str,list(self.preps.keys()) +list(self.povms.keys()) +list(self.operations.keys())))
@@ -637,10 +625,10 @@ class OpModel(Model):
 
         #Step 1: remove any unused indices from paramvec and shift accordingly
         used_gpindices = set()
-        for _,obj in self._iter_parameterized_objs():
+        for _, obj in self._iter_parameterized_objs():
             if obj.gpindices is not None:
                 assert(obj.parent is self), "Member's parent is not set correctly (%s)!" % str(obj.parent)
-                used_gpindices.update( obj.gpindices_as_array() )
+                used_gpindices.update(obj.gpindices_as_array())
             else:
                 assert(obj.parent is self or obj.parent is None)
                 #Note: ok for objects to have parent == None if their gpindices is also None
@@ -650,11 +638,11 @@ class OpModel(Model):
         if len(indices_to_remove) > 0:
             #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             v = _np.delete(v, indices_to_remove)
-            get_shift = lambda j: _bisect.bisect_left(indices_to_remove, j)
-            memo = set() #keep track of which object's gpindices have been set
-            for _,obj in self._iter_parameterized_objs():
+            def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
+            memo = set()  # keep track of which object's gpindices have been set
+            for _, obj in self._iter_parameterized_objs():
                 if obj.gpindices is not None:
-                    if id(obj) in memo: continue #already processed
+                    if id(obj) in memo: continue  # already processed
                     if isinstance(obj.gpindices, slice):
                         new_inds = _slct.shift(obj.gpindices,
                                                -get_shift(obj.gpindices.start))
@@ -662,26 +650,25 @@ class OpModel(Model):
                         new_inds = []
                         for i in obj.gpindices:
                             new_inds.append(i - get_shift(i))
-                        new_inds = _np.array(new_inds,_np.int64)
-                    obj.set_gpindices( new_inds, self, memo)
-
+                        new_inds = _np.array(new_inds, _np.int64)
+                    obj.set_gpindices(new_inds, self, memo)
 
         # Step 2: add parameters that don't exist yet
-        memo = set() #keep track of which object's gpindices have been set
-        for lbl,obj in self._iter_parameterized_objs():
+        memo = set()  # keep track of which object's gpindices have been set
+        for lbl, obj in self._iter_parameterized_objs():
 
             if shift > 0 and obj.gpindices is not None:
                 if isinstance(obj.gpindices, slice):
                     obj.set_gpindices(_slct.shift(obj.gpindices, shift), self, memo)
                 else:
-                    obj.set_gpindices(obj.gpindices+shift, self, memo)  #works for integer arrays
+                    obj.set_gpindices(obj.gpindices + shift, self, memo)  # works for integer arrays
 
             if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
-                num_new_params = obj.allocate_gpindices( off, self )
-                objvec = obj.to_vector() #may include more than "new" indices
+                num_new_params = obj.allocate_gpindices(off, self)
+                objvec = obj.to_vector()  # may include more than "new" indices
                 if num_new_params > 0:
-                    new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off,off+num_new_params))
+                    new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
                 #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices) #," loc=",new_local_inds)
@@ -695,28 +682,28 @@ class OpModel(Model):
                 #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
-                M = max(inds) if len(inds)>0 else -1; L = len(v)
+                M = max(inds) if len(inds) > 0 else -1; L = len(v)
                 #print("DEBUG: %s: existing indices = " % (str(lbl)), obj.gpindices, " M=",M," L=",L)
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     w = obj.to_vector()
-                    v = _np.concatenate((v, _np.empty(M+1-L,'d')),axis=0) # [v.resize(M+1) doesn't work]
-                    shift += M+1-L
-                    for ii,i in enumerate(inds):
+                    v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
+                    shift += M + 1 - L
+                    for ii, i in enumerate(inds):
                         if i >= L: v[i] = w[ii]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))
-                if M >= 0: # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
-                    off = M+1
+                if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
+                    off = M + 1
 
         self._paramvec = v
         #print("DEBUG: Done rebuild: %d params" % len(v))
 
     def _init_virtual_obj(self, obj):
-        """ 
+        """
         Initializes a "virtual object" - an object (e.g. LinearOperator) that *could* be a
         member of the Model but won't be, as it's just built for temporary
         use (e.g. the parallel action of several "base" gates).  As such
-        we need to fully initialize its parent and gpindices members so it 
+        we need to fully initialize its parent and gpindices members so it
         knows it belongs to this Model BUT it's not allowed to add any new
         parameters (they'd just be temporary).  It's also assumed that virtual
         objects don't need to be to/from-vectored as there are already enough
@@ -724,16 +711,16 @@ class OpModel(Model):
         """
         if obj.gpindices is not None:
             assert(obj.parent is self), "Virtual obj has incorrect parent already set!"
-            return # if parent is already set we assume obj has already been init
+            return  # if parent is already set we assume obj has already been init
 
         #Assume all parameters of obj are new independent parameters
         num_new_params = obj.allocate_gpindices(self.num_params(), self)
-        assert(num_new_params == 0),"Virtual object is requesting %d new params!" % num_new_params
+        assert(num_new_params == 0), "Virtual object is requesting %d new params!" % num_new_params
 
     def _obj_refcount(self, obj):
         """ Number of references to `obj` contained within this Model """
         cnt = 0
-        for _,o in self._iter_parameterized_objs():
+        for _, o in self._iter_parameterized_objs():
             cnt += o._obj_refcount(obj)
         return cnt
 
@@ -746,9 +733,8 @@ class OpModel(Model):
         numpy array
             The vectorized model parameters.
         """
-        self._clean_paramvec() # will rebuild if needed
+        self._clean_paramvec()  # will rebuild if needed
         return self._paramvec
-
 
     def from_vector(self, v):
         """
@@ -759,56 +745,55 @@ class OpModel(Model):
         means you should call the `from_vector` method using the same `Model`
         that was used to generate the vector `v` in the first place.
         """
-        assert( len(v) == self.num_params() )
-        
+        assert(len(v) == self.num_params())
+
         self._paramvec = v.copy()
-        for _,obj in self._iter_parameterized_objs():
-            obj.from_vector( v[obj.gpindices] )
-            obj.dirty = False #object is known to be consistent with _paramvec
+        for _, obj in self._iter_parameterized_objs():
+            obj.from_vector(v[obj.gpindices])
+            obj.dirty = False  # object is known to be consistent with _paramvec
 
         #if reset_basis:
-        #    self.reset_basis() 
+        #    self.reset_basis()
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
         if OpModel._pcheck: self._check_paramvec()
 
-
     ######################################
     ## Compilation
     ######################################
-        
+
     def _layer_lizard(self):
         """ Return a layer lizard for this model """
         raise NotImplementedError("Derived Model classes should implement this!")
-    
+
     def _fwdsim(self):
         """ Create & return a forward-simulator ("calculator") for this model """
         self._clean_paramvec()
-        layer_lizard = self._layer_lizard() 
-        
+        layer_lizard = self._layer_lizard()
+
         kwargs = {}
         if self._sim_type == "termorder":
-            assert(len(self._sim_args) == 1+1), "termorder must have <order> arg, e.g. 'termorder:1'"
+            assert(len(self._sim_args) == 1 + 1), "termorder must have <order> arg, e.g. 'termorder:1'"
             kwargs['mode'] = "taylor-order"
             kwargs['max_order'] = int(self._sim_args[0])
-            kwargs['cache'] = self._sim_args[-1] # always the last argument
-        if self._sim_type in ("termgap","termdirect"):
-            assert(len(self._sim_args) >= 3+1), "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" % (self._sim_type,self._sim_type)
+            kwargs['cache'] = self._sim_args[-1]  # always the last argument
+        if self._sim_type in ("termgap", "termdirect"):
+            assert(len(self._sim_args) >= 3 +
+                   1), "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" % (self._sim_type, self._sim_type)
             kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['pathmag_gap'] = float(self._sim_args[1])
             kwargs['min_term_mag'] = float(self._sim_args[2])
             kwargs['opt_mode'] = bool(self._sim_args[3]) if len(self._sim_args) > 3 else False
-               # indicates fwdsim is being used within an optimization loop (only recomp paths on deriv evals)
-            kwargs['cache'] = self._sim_args[-1] # always the last argument
+            # indicates fwdsim is being used within an optimization loop (only recomp paths on deriv evals)
+            kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type == "map":
-            kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None # backward compat
+            kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None  # backward compat
 
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
-        return self._calcClass(self._dim, layer_lizard, self._paramvec, **kwargs) #fwdsim class
+        return self._calcClass(self._dim, layer_lizard, self._paramvec, **kwargs)  # fwdsim class
 
-
-    def split_circuit(self, circuit, erroron=('prep','povm')):
+    def split_circuit(self, circuit, erroron=('prep', 'povm')):
         """
         Splits a operation sequence into prepLabel + opsOnlyString + povmLabel
         components.  If `circuit` does not contain a prep label or a
@@ -856,7 +841,6 @@ class OpModel(Model):
             else: povm_lbl = None
 
         return prep_lbl, circuit, povm_lbl
-
 
     def simplify_circuits(self, circuits, dataset=None):
         """
@@ -913,8 +897,8 @@ class OpModel(Model):
         # dataset.simplify -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
         # simplify all gsplaq strs -> elementIndices[(i,j)],
 
-        circuits = [ (opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr))
-                     for opstr in circuits ] # cast to Circuits
+        circuits = [(opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr))
+                    for opstr in circuits]  # cast to Circuits
 
         #Indexed by raw operation sequence
         raw_spamTuples_dict = _collections.OrderedDict()  # final
@@ -922,19 +906,19 @@ class OpModel(Model):
         raw_offsets = _collections.OrderedDict()
 
         #Indexed by parent index (an integer)
-        elIndicesByParent = _collections.OrderedDict() # final
+        elIndicesByParent = _collections.OrderedDict()  # final
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
         # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
         def spamTupleToOutcome(spamTuple):
             if spamTuple is None:
-                return ("NONE",) #Dummy label for placeholding (see resolveSPAM below)
+                return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
             else:
                 prep_lbl, povm_and_effect_lbl = spamTuple
                 last_underscore = povm_and_effect_lbl.rindex('_')
-                effect_lbl = povm_and_effect_lbl[last_underscore+1:]
-                return (effect_lbl,) # effect label *is* the outcome
+                effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
+                return (effect_lbl,)  # effect label *is* the outcome
 
         def resolveSPAM(circuit):
             """ Determines spam tuples that correspond to circuit
@@ -942,13 +926,13 @@ class OpModel(Model):
             prep_lbl, circuit, povm_lbl = \
                 self.split_circuit(circuit)
             if prep_lbl is None or povm_lbl is None:
-                spamtups = [ None ] #put a single "dummy" spam-tuple placeholder
-                  # so that there's a single "element" for each simplified string,
-                  # which means that the usual "lookup" or "elIndices" will map
-                  # original circuit-list indices to simplified-string, i.e.,
-                  # evalTree index, which is useful when computing products
-                  # (often the case when a Model has no preps or povms,
-                  #  e.g. in germ selection)
+                spamtups = [None]  # put a single "dummy" spam-tuple placeholder
+                # so that there's a single "element" for each simplified string,
+                # which means that the usual "lookup" or "elIndices" will map
+                # original circuit-list indices to simplified-string, i.e.,
+                # evalTree index, which is useful when computing products
+                # (often the case when a Model has no preps or povms,
+                #  e.g. in germ selection)
             else:
                 if dataset is not None:
                     #Then we don't need to consider *all* possible spam tuples -
@@ -956,14 +940,14 @@ class OpModel(Model):
                     # a final element in the "full" (tuple) outcome labels that
                     # were observed.
                     observed_povm_outcomes = sorted(set(
-                        [full_out_tup[-1] for full_out_tup in dataset[circuit].outcomes] ))
-                    spamtups = [ (prep_lbl, povm_lbl + "_" + oout)
-                                 for oout in observed_povm_outcomes ]
-                      # elbl = oout[-1] -- the last element corresponds
-                      # to the POVM (earlier ones = instruments)
+                        [full_out_tup[-1] for full_out_tup in dataset[circuit].outcomes]))
+                    spamtups = [(prep_lbl, povm_lbl + "_" + oout)
+                                for oout in observed_povm_outcomes]
+                    # elbl = oout[-1] -- the last element corresponds
+                    # to the POVM (earlier ones = instruments)
                 else:
-                    spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
-                                 for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl) ]
+                    spamtups = [(prep_lbl, povm_lbl + "_" + elbl)
+                                for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
             return circuit, spamtups
 
         def process(s, spamtuples, observed_outcomes, elIndsToOutcomes,
@@ -977,11 +961,11 @@ class OpModel(Model):
                         are already build (and won't be modified anymore).
             """
             sub = s if start == 0 else s[start:]
-            for i,op_label in enumerate(sub,start=start):
+            for i, op_label in enumerate(sub, start=start):
 
                 # OLD: now allow "gate-level" labels which can contain
                 # multiple (parallel) instrument labels
-                #if op_label in self.instruments: 
+                #if op_label in self.instruments:
                 #    #we've found an instrument - recurse!
                 #    for inst_el_lbl in self.instruments[op_label]:
                 #        simplified_el_lbl = op_label + "_" + inst_el_lbl
@@ -989,45 +973,45 @@ class OpModel(Model):
                 #                spamtuples, elIndsToOutcomes, op_outcomes + (inst_el_lbl,), i+1)
                 #    break
 
-                if any([ self._shlp.is_instrument_lbl(sub_gl) for sub_gl in op_label.components]):
+                if any([self._shlp.is_instrument_lbl(sub_gl) for sub_gl in op_label.components]):
                     # we've found an instrument - recurse!
-                    sublabel_tups_to_iter = [] # one per label component (may be only 1)
+                    sublabel_tups_to_iter = []  # one per label component (may be only 1)
                     for sub_gl in op_label.components:
                         if self._shlp.is_instrument_lbl(sub_gl):
-                            sublabel_tups_to_iter.append( [ (sub_gl,inst_el_lbl)
-                                                            for inst_el_lbl in self._shlp.get_member_labels_for_instrument(sub_gl) ])
+                            sublabel_tups_to_iter.append([(sub_gl, inst_el_lbl)
+                                                          for inst_el_lbl in self._shlp.get_member_labels_for_instrument(sub_gl)])
                         else:
-                            sublabel_tups_to_iter.append( [(sub_gl,None)] ) # just a single element
-                            
+                            sublabel_tups_to_iter.append([(sub_gl, None)])  # just a single element
+
                     for sublabel_tups in _itertools.product(*sublabel_tups_to_iter):
-                        sublabels = [] # the sub-labels of the overall operation label to add
-                        outcomes = [] # the outcome tuple associated with this overall label
-                        for sub_gl,inst_el_lbl in sublabel_tups:
+                        sublabels = []  # the sub-labels of the overall operation label to add
+                        outcomes = []  # the outcome tuple associated with this overall label
+                        for sub_gl, inst_el_lbl in sublabel_tups:
                             if inst_el_lbl is not None:
                                 sublabels.append(sub_gl + "_" + inst_el_lbl)
                                 outcomes.append(inst_el_lbl)
                             else:
                                 sublabels.append(sub_gl)
-                                
+
                         simplified_el_lbl = _Label(sublabels)
                         simplified_el_outcomes = tuple(outcomes)
-                        process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i+1:],
+                        process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i + 1:],
                                 spamtuples, observed_outcomes, elIndsToOutcomes,
-                                op_outcomes + simplified_el_outcomes, i+1)
+                                op_outcomes + simplified_el_outcomes, i + 1)
                     break
-                    
-            else: #no instruments -- add "raw" operation sequence s
+
+            else:  # no instruments -- add "raw" operation sequence s
                 if s in raw_spamTuples_dict:
-                    assert(op_outcomes == raw_opOutcomes_dict[s]) #DEBUG
+                    assert(op_outcomes == raw_opOutcomes_dict[s])  # DEBUG
                     #if action == "add":
-                    od = raw_spamTuples_dict[s] # ordered dict
+                    od = raw_spamTuples_dict[s]  # ordered dict
                     for spamtup in spamtuples:
                         outcome_tup = op_outcomes + spamTupleToOutcome(spamtup)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
-                           # don't add spamtuples we don't observe
-                        
-                        spamtup_indx = od.get(spamtup,None)
+                        # don't add spamtuples we don't observe
+
+                        spamtup_indx = od.get(spamtup, None)
                         if spamtup is None:
                             # although we've seen this raw string, we haven't
                             # seen spamtup yet - add it at end
@@ -1035,41 +1019,42 @@ class OpModel(Model):
                             od[spamtup] = spamtup_indx
 
                         #Link the current iParent to this index (even if it was already going to be computed)
-                        elIndsToOutcomes[(s,spamtup_indx)] = outcome_tup
+                        elIndsToOutcomes[(s, spamtup_indx)] = outcome_tup
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples =  [ op_outcomes + spamTupleToOutcome(x) for x in spamtuples ]
-                    
+                    outcome_tuples = [op_outcomes + spamTupleToOutcome(x) for x in spamtuples]
+
                     if observed_outcomes is not None:
                         # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
                         spamtup_dict = _collections.OrderedDict(); ist = 0
-                        for spamtup,outcome_tup in zip(spamtuples, outcome_tuples):
+                        for spamtup, outcome_tup in zip(spamtuples, outcome_tuples):
                             if outcome_tup in observed_outcomes:
                                 spamtup_dict[spamtup] = ist
-                                elIndsToOutcomes[(s,ist)] = outcome_tup
+                                elIndsToOutcomes[(s, ist)] = outcome_tup
                                 ist += 1
                     else:
                         # add all els of `spamtuples` (w/indexes starting at 0)
-                        spamtup_dict = _collections.OrderedDict( [
-                            (spamtup,i) for i,spamtup in enumerate(spamtuples) ] )
+                        spamtup_dict = _collections.OrderedDict([
+                            (spamtup, i) for i, spamtup in enumerate(spamtuples)])
 
-                        for ist,out_tup in enumerate(outcome_tuples): # ist = spamtuple index
-                            elIndsToOutcomes[(s,ist)] = out_tup # element index is given by (parent_circuit, spamtuple_index) tuple
-                              # Note: works even if `i` already exists - doesn't reorder keys then
+                        for ist, out_tup in enumerate(outcome_tuples):  # ist = spamtuple index
+                            # element index is given by (parent_circuit, spamtuple_index) tuple
+                            elIndsToOutcomes[(s, ist)] = out_tup
+                            # Note: works even if `i` already exists - doesn't reorder keys then
 
                     raw_spamTuples_dict[s] = spamtup_dict
-                    raw_opOutcomes_dict[s] = op_outcomes #DEBUG
+                    raw_opOutcomes_dict[s] = op_outcomes  # DEBUG
 
         #Begin actual processing work:
 
         # Step1: recursively populate raw_spamTuples_dict,
         #        raw_opOutcomes_dict, and elIndsToOutcomesByParent
         resolved_circuits = list(map(resolveSPAM, circuits))
-        for iParent,(opstr,spamtuples) in enumerate(resolved_circuits):
+        for iParent, (opstr, spamtuples) in enumerate(resolved_circuits):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
             oouts = None if (dataset is None) else set(dataset[opstr].outcomes)
-            process(opstr,spamtuples, oouts, elIndsToOutcomesByParent[iParent])
+            process(opstr, spamtuples, oouts, elIndsToOutcomesByParent[iParent])
 
         # Step2: fill raw_offsets dictionary
         off = 0
@@ -1079,12 +1064,12 @@ class OpModel(Model):
 
         # Step3: split elIndsToOutcomesByParent into
         #        elIndicesByParent and outcomesByParent
-        for iParent,elIndsToOutcomes in elIndsToOutcomesByParent.items():
+        for iParent, elIndsToOutcomes in elIndsToOutcomesByParent.items():
             elIndicesByParent[iParent] = []
             outcomesByParent[iParent] = []
-            for (raw_str,rel_spamtup_indx),outcomes in elIndsToOutcomes.items():
-                elIndicesByParent[iParent].append( raw_offsets[raw_str]+rel_spamtup_indx )
-                outcomesByParent[iParent].append( outcomes )
+            for (raw_str, rel_spamtup_indx), outcomes in elIndsToOutcomes.items():
+                elIndicesByParent[iParent].append(raw_offsets[raw_str] + rel_spamtup_indx)
+                outcomesByParent[iParent].append(outcomes)
             elIndicesByParent[iParent] = _slct.list_to_slice(elIndicesByParent[iParent], array_ok=True)
 
         #Step3b: convert elements of raw_spamTuples_dict from OrderedDicts
@@ -1094,8 +1079,8 @@ class OpModel(Model):
 
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
-            [ (k, (v if isinstance(v,slice) else _np.array(v,_np.int64)) )
-              for k,v in elIndicesByParent.items()] )
+            [(k, (v if isinstance(v, slice) else _np.array(v, _np.int64)))
+             for k, v in elIndicesByParent.items()])
 
         ##DEBUG: SANITY CHECK
         #if len(circuits) > 1:
@@ -1115,7 +1100,6 @@ class OpModel(Model):
 
         return (raw_spamTuples_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
-
 
     def simplify_circuit(self, circuit):
         """
@@ -1144,9 +1128,9 @@ class OpModel(Model):
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
         """
-        raw_dict,_,outcomes,nEls = self.simplify_circuits([circuit])
+        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit])
         assert(len(outcomes[0]) == nEls)
-        return raw_dict,outcomes[0]
+        return raw_dict, outcomes[0]
 
     def probs(self, circuit, clipTo=None):
         """
@@ -1170,8 +1154,7 @@ class OpModel(Model):
         """
         return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo)
 
-
-    def dprobs(self, circuit, returnPr=False,clipTo=None):
+    def dprobs(self, circuit, returnPr=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -1196,10 +1179,9 @@ class OpModel(Model):
             for each spam label (string) SL.
         """
         return self._fwdsim().dprobs(self.simplify_circuit(circuit),
-                                   returnPr,clipTo)
+                                     returnPr, clipTo)
 
-
-    def hprobs(self, circuit, returnPr=False,returnDeriv=False,clipTo=None):
+    def hprobs(self, circuit, returnPr=False, returnDeriv=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -1228,9 +1210,8 @@ class OpModel(Model):
             for each spam label (string) SL.
         """
         return self._fwdsim().hprobs(self.simplify_circuit(circuit),
-                                   returnPr, returnDeriv, clipTo)
+                                     returnPr, returnDeriv, clipTo)
 
-    
     def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
                                      distributeMethod="default", subcalls=[],
                                      dataset=None, verbosity=0):
@@ -1321,8 +1302,8 @@ class OpModel(Model):
 
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
-        evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
-        C = 1.0/(1024.0**3)
+        evt_cache = {}  # cache of eval trees based on # min subtrees, to avoid re-computation
+        C = 1.0 / (1024.0**3)
         calc = self._fwdsim()
 
         bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
@@ -1332,13 +1313,13 @@ class OpModel(Model):
                 raise MemoryError("Attempted evaltree generation " +
                                   "w/memlimit = %g <= 0!" % memLimit)
             printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
-                        % (distributeMethod, memLimit*C))
+                        % (distributeMethod, memLimit * C))
 
-        def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0,cacheSize=None):
+        def memEstimate(ng, np1, np2, Ng, fastCacheSz=False, verb=0, cacheSize=None):
             """ Returns a memory estimate based on arguments """
             tm = _time.time()
 
-            nFinalStrs = int(round(len(circuit_list) / ng)) #may not need to be an int...
+            nFinalStrs = int(round(len(circuit_list) / ng))  # may not need to be an int...
 
             if cacheSize is None:
                 #Get cache size
@@ -1347,7 +1328,7 @@ class OpModel(Model):
                     if ng not in evt_cache:
                         evt_cache[ng] = self.bulk_evaltree(
                             circuit_list, minSubtrees=ng, numSubtreeComms=Ng,
-                            dataset=dataset, verbosity=printer)                        
+                            dataset=dataset, verbosity=printer)
                         # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
                         # operation sequences as input so don't have to re-simplify every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
@@ -1356,25 +1337,24 @@ class OpModel(Model):
                     #heuristic (but fast)
                     cacheSize = calc.estimate_cache_size(nFinalStrs)
 
-
-            mem = calc.estimate_mem_usage(subcalls,cacheSize,ng,Ng,np1,np2,nFinalStrs)
+            mem = calc.estimate_mem_usage(subcalls, cacheSize, ng, Ng, np1, np2, nFinalStrs)
 
             if verb == 1:
                 if (not fastCacheSz):
                     fast_estimate = calc.estimate_mem_usage(
                         subcalls, cacheSize, ng, Ng, np1, np2, nFinalStrs)
-                    fc_est_str = " (%.2fGB fc)" % (fast_estimate*C)
+                    fc_est_str = " (%.2fGB fc)" % (fast_estimate * C)
                 else: fc_est_str = ""
 
                 printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
                             % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
-                            % (_time.time()-tm, mem*C, fc_est_str))
+                            % (_time.time() - tm, mem * C, fc_est_str))
             elif verb == 2:
-                wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
-                wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
-                nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
-                printer.log(" Memory estimate = %.2fGB" % (mem*C) +
-                     " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
+                wrtLen1 = (num_params + np1 - 1) // np1  # ceiling(num_params / np1)
+                wrtLen2 = (num_params + np2 - 1) // np2  # ceiling(num_params / np2)
+                nSubtreesPerProc = (ng + Ng - 1) // Ng  # ceiling(ng / Ng)
+                printer.log(" Memory estimate = %.2fGB" % (mem * C) +
+                            " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
                             (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
                 #printer.log("  cacheSize = %d" % cacheSize)
@@ -1388,28 +1368,28 @@ class OpModel(Model):
 
         if distributeMethod == "circuits":
             Nstrs = len(circuit_list)
-            np1 = 1; np2 = 1; Ng = min(nprocs,Nstrs)
+            np1 = 1; np2 = 1; Ng = min(nprocs, Nstrs)
             ng = Ng
             if memLimit is not None:
                 #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
                 # with fast cacheSize computation then switch to slow
-                while memEstimate(ng,np1,np2,Ng,False) > memLimit:
+                while memEstimate(ng, np1, np2, Ng, False) > memLimit:
                     ng += Ng
                     if ng >= Nstrs:
                         # even "maximal" splitting (num trees == num strings)
                         # won't help - see if we can squeeze the this maximally-split tree
                         # to have zero cachesize
                         if Nstrs not in evt_cache:
-                            memEstimate(Nstrs,np1,np2,Ng,verb=1)
-                        if hasattr(evt_cache[Nstrs],"squeeze") and \
-                           memEstimate(Nstrs,np1,np2,Ng,cacheSize=0) <= memLimit:
-                            evt_cache[Nstrs].squeeze(0) #To get here, need to use higher-dim models
+                            memEstimate(Nstrs, np1, np2, Ng, verb=1)
+                        if hasattr(evt_cache[Nstrs], "squeeze") and \
+                           memEstimate(Nstrs, np1, np2, Ng, cacheSize=0) <= memLimit:
+                            evt_cache[Nstrs].squeeze(0)  # To get here, need to use higher-dim models
                         else:
                             raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
 
-                mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
+                mem_estimate = memEstimate(ng, np1, np2, Ng, verb=1)
                 while mem_estimate > memLimit:
-                    ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
+                    ng += Ng; next = memEstimate(ng, np1, np2, Ng, verb=1)
                     if(next >= mem_estimate): raise MemoryError("Not enough memory: splitting unproductive")
                     mem_estimate = next
 
@@ -1419,8 +1399,7 @@ class OpModel(Model):
                    #         reductionFactor = float(memEstimate) / float(memLimit)
                    #         maxTreeSize = int(nstrs / reductionFactor)
             else:
-                memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
-
+                memEstimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
 
         elif distributeMethod == "deriv":
 
@@ -1428,29 +1407,29 @@ class OpModel(Model):
                 """ Set Ng, the number of subTree processor groups, such
                     that Ng divides nprocs evenly or vice versa. """
                 if desired_Ng >= nprocs:
-                    return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
+                    return nprocs * int(_np.ceil(1. * desired_Ng / nprocs))
                 else:
-                    fctrs = sorted(_mt.prime_factors(nprocs)); i=1
+                    fctrs = sorted(_mt.prime_factors(nprocs)); i = 1
                     if int(_np.ceil(desired_Ng)) in fctrs:
-                        return int(_np.ceil(desired_Ng)) #we got lucky
-                    while _np.product(fctrs[0:i]) < desired_Ng: i+=1
+                        return int(_np.ceil(desired_Ng))  # we got lucky
+                    while _np.product(fctrs[0:i]) < desired_Ng: i += 1
                     return _np.product(fctrs[0:i])
 
             ng = Ng = 1
             if bNp2Matters:
                 if nprocs > num_params**2:
-                    np1 = np2 = max(num_params,1)
-                    ng = Ng = set_Ng(nprocs / max(num_params**2,1)) #Note __future__ division
+                    np1 = np2 = max(num_params, 1)
+                    ng = Ng = set_Ng(nprocs / max(num_params**2, 1))  # Note __future__ division
                 elif nprocs > num_params:
-                    np1 = max(num_params,1)
-                    np2 = int(_np.ceil(nprocs / max(num_params,1)))
+                    np1 = max(num_params, 1)
+                    np2 = int(_np.ceil(nprocs / max(num_params, 1)))
                 else:
                     np1 = nprocs; np2 = 1
             else:
                 np2 = 1
                 if nprocs > num_params:
-                    np1 = max(num_params,1)
-                    ng = Ng = set_Ng(nprocs / max(num_params,1))
+                    np1 = max(num_params, 1)
+                    ng = Ng = set_Ng(nprocs / max(num_params, 1))
                 else:
                     np1 = nprocs
 
@@ -1459,31 +1438,31 @@ class OpModel(Model):
                 ok = False
                 if (not ok) and np1 < num_params:
                     #First try to decrease mem consumption by increasing np1
-                    memEstimate(ng,np1,np2,Ng,verb=1) #initial estimate (to screen)
-                    for n in range(np1, num_params+1, nprocs):
-                        if memEstimate(ng,n,np2,Ng) < memLimit:
-                            np1 = n; ok=True; break
+                    memEstimate(ng, np1, np2, Ng, verb=1)  # initial estimate (to screen)
+                    for n in range(np1, num_params + 1, nprocs):
+                        if memEstimate(ng, n, np2, Ng) < memLimit:
+                            np1 = n; ok = True; break
                     else: np1 = num_params
 
                 if (not ok) and bNp2Matters and np2 < num_params:
                     #Next try to decrease mem consumption by increasing np2
-                    for n in range(np2, num_params+1):
-                        if memEstimate(ng,np1,n,Ng) < memLimit:
-                            np2 = n; ok=True; break
+                    for n in range(np2, num_params + 1):
+                        if memEstimate(ng, np1, n, Ng) < memLimit:
+                            np2 = n; ok = True; break
                     else: np2 = num_params
 
                 if not ok:
                     #Finally, increase ng in amounts of Ng (so ng % Ng == 0).  Start
                     # with fast cacheSize computation then switch to slow
-                    while memEstimate(ng,np1,np2,Ng,True) > memLimit: ng += Ng
-                    mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
+                    while memEstimate(ng, np1, np2, Ng, True) > memLimit: ng += Ng
+                    mem_estimate = memEstimate(ng, np1, np2, Ng, verb=1)
                     while mem_estimate > memLimit:
-                        ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
+                        ng += Ng; next = memEstimate(ng, np1, np2, Ng, verb=1)
                         if next >= mem_estimate:
                             raise MemoryError("Not enough memory: splitting unproductive")
                         mem_estimate = next
             else:
-                memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
+                memEstimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
 
         elif distributeMethod == "balanced":
             # try to minimize "unbalanced" procs
@@ -1495,51 +1474,49 @@ class OpModel(Model):
 
         # Retrieve final EvalTree (already computed from estimates above)
         assert (ng in evt_cache), "Tree Caching Error"
-        evt,lookup,outcome_lookup = evt_cache[ng]
+        evt, lookup, outcome_lookup = evt_cache[ng]
         evt.distribution['numSubtreeComms'] = Ng
 
         paramBlkSize1 = num_params / np1
-        paramBlkSize2 = num_params / np2   #the *average* param block size
-          # (in general *not* an integer), which ensures that the intended # of
-          # param blocks is communicatd to gsCalc.py routines (taking ceiling or
-          # floor can lead to inefficient MPI distribution)
+        paramBlkSize2 = num_params / np2  # the *average* param block size
+        # (in general *not* an integer), which ensures that the intended # of
+        # param blocks is communicatd to gsCalc.py routines (taking ceiling or
+        # floor can lead to inefficient MPI distribution)
 
         printer.log("Created evaluation tree with %d subtrees.  " % ng
-                    + "Will divide %d procs into %d (subtree-processing)" % (nprocs,Ng))
+                    + "Will divide %d procs into %d (subtree-processing)" % (nprocs, Ng))
         if bNp2Matters:
-            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs / Ng)
                         + "(%d,%d) params (taken as %d,%d param groups of ~%d,%d params)."
-                        % (num_params,num_params, np1,np2, paramBlkSize1,paramBlkSize2))
+                        % (num_params, num_params, np1, np2, paramBlkSize1, paramBlkSize2))
         else:
-            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs / Ng)
                         + "%d params (taken as %d param groups of ~%d params)."
                         % (num_params, np1, paramBlkSize1))
 
         if memLimit is not None:
-            memEstimate(ng,np1,np2,Ng,False,verb=2) #print mem estimate details
+            memEstimate(ng, np1, np2, Ng, False, verb=2)  # print mem estimate details
 
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
             if printer.verbosity >= 2: evt.print_analysis()
 
-        if np1 == 1: # (paramBlkSize == num_params)
-            paramBlkSize1 = None # == all parameters, and may speed logic in dprobs, etc.
+        if np1 == 1:  # (paramBlkSize == num_params)
+            paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
         else:
             if comm is not None:
-                blkSizeTest = comm.bcast(paramBlkSize1,root=0)
-                assert(abs(blkSizeTest-paramBlkSize1) < 1e-3)
-                  #all procs should have *same* paramBlkSize1
+                blkSizeTest = comm.bcast(paramBlkSize1, root=0)
+                assert(abs(blkSizeTest - paramBlkSize1) < 1e-3)
+                #all procs should have *same* paramBlkSize1
 
-        if np2 == 1: # (paramBlkSize == num_params)
-            paramBlkSize2 = None # == all parameters, and may speed logic in hprobs, etc.
+        if np2 == 1:  # (paramBlkSize == num_params)
+            paramBlkSize2 = None  # == all parameters, and may speed logic in hprobs, etc.
         else:
             if comm is not None:
-                blkSizeTest = comm.bcast(paramBlkSize2,root=0)
-                assert(abs(blkSizeTest-paramBlkSize2) < 1e-3)
-                  #all procs should have *same* paramBlkSize2
+                blkSizeTest = comm.bcast(paramBlkSize2, root=0)
+                assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
+                #all procs should have *same* paramBlkSize2
 
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
-
-
 
     def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
                       numSubtreeComms=1, dataset=None, verbosity=0):
@@ -1597,37 +1574,36 @@ class OpModel(Model):
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        toCircuit = lambda x : x if isinstance(x,_cir.Circuit) else _cir.Circuit(x)
-        circuit_list = list(map(toCircuit,circuit_list)) # make sure simplify_circuits is given Circuits
+        def toCircuit(x): return x if isinstance(x, _cir.Circuit) else _cir.Circuit(x)
+        circuit_list = list(map(toCircuit, circuit_list))  # make sure simplify_circuits is given Circuits
         simplified_circuits, elIndices, outcomes, nEls = \
-                            self.simplify_circuits(circuit_list, dataset)
+            self.simplify_circuits(circuit_list, dataset)
 
         evalTree = self._fwdsim().construct_evaltree(simplified_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
-                    (len(circuit_list),_time.time()-tm)); tm = _time.time()
+                    (len(circuit_list), _time.time() - tm)); tm = _time.time()
 
         if maxTreeSize is not None:
-            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer-1) # won't split if unnecessary
+            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer - 1)  # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
-                evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                elIndices = evalTree.split(elIndices, None, minSubtrees, printer-1)
+                evalTree.original_index_lookup = None  # reset this so we can re-split TODO: cleaner
+                elIndices = evalTree.split(elIndices, None, minSubtrees, printer - 1)
                 if maxTreeSize is not None and \
-                        any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
+                        any([len(sub) > maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
-                    evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                    elIndices = evalTree.split(elIndices, maxTreeSize, None) # fall back to split for max size
+                    evalTree.original_index_lookup = None  # reset this so we can re-split TODO: cleaner
+                    elIndices = evalTree.split(elIndices, maxTreeSize, None)  # fall back to split for max size
 
         if maxTreeSize is not None or minSubtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs"
-                        % (len(evalTree.get_sub_trees()),_time.time()-tm))
+                        % (len(evalTree.get_sub_trees()), _time.time() - tm))
 
         assert(evalTree.num_final_elements() == nEls)
         return evalTree, elIndices, outcomes
-
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):
@@ -1674,19 +1650,17 @@ class OpModel(Model):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        circuit_list = [ opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr)
-                         for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
+                        for opstr in circuit_list]  # cast to Circuits
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
             circuit_list, comm, memLimit, subcalls=['bulk_fill_probs'],
-            dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
+            dataset=dataset, verbosity=0)  # FUTURE (maybe make verbosity into an arg?)
 
         return self._fwdsim().bulk_probs(circuit_list, evalTree, elIndices,
-                                       outcomes, clipTo, check, comm, smartc)
+                                         outcomes, clipTo, check, comm, smartc)
 
-
-    def bulk_dprobs(self, circuit_list, returnPr=False,clipTo=None,
-                    check=False,comm=None,wrtBlockSize=None,dataset=None):
-
+    def bulk_dprobs(self, circuit_list, returnPr=False, clipTo=None,
+                    check=False, comm=None, wrtBlockSize=None, dataset=None):
         """
         Construct a dictionary containing the probability-derivatives
         for an entire list of operation sequences.
@@ -1738,18 +1712,16 @@ class OpModel(Model):
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
-        circuit_list = [ opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr)
-                         for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
+                        for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._fwdsim().bulk_dprobs(circuit_list, evalTree, elIndices,
-                                        outcomes, returnPr,clipTo,
-                                        check, comm, None, wrtBlockSize)
+                                          outcomes, returnPr, clipTo,
+                                          check, comm, None, wrtBlockSize)
 
-
-    def bulk_hprobs(self, circuit_list, returnPr=False,returnDeriv=False,
+    def bulk_hprobs(self, circuit_list, returnPr=False, returnDeriv=False,
                     clipTo=None, check=False, comm=None,
                     wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
-
         """
         Construct a dictionary containing the probability-Hessians
         for an entire list of operation sequences.
@@ -1804,14 +1776,13 @@ class OpModel(Model):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
-        circuit_list = [ opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr)
-                         for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
+                        for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._fwdsim().bulk_hprobs(circuit_list, evalTree, elIndices,
-                                        outcomes, returnPr, returnDeriv,
-                                        clipTo, check, comm, None, None,
-                                        wrtBlockSize1, wrtBlockSize2)
-
+                                          outcomes, returnPr, returnDeriv,
+                                          clipTo, check, comm, None, None,
+                                          wrtBlockSize1, wrtBlockSize2)
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         """
@@ -1858,11 +1829,10 @@ class OpModel(Model):
         None
         """
         return self._fwdsim().bulk_fill_probs(mxToFill,
-                                            evalTree, clipTo, check, comm)
+                                              evalTree, clipTo, check, comm)
 
-
-    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None,clipTo=None,
-                         check=False,comm=None, wrtBlockSize=None,
+    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None, clipTo=None,
+                         check=False, comm=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
         """
         Compute the outcome probability-derivatives for an entire tree of gate
@@ -1920,10 +1890,9 @@ class OpModel(Model):
         None
         """
         return self._fwdsim().bulk_fill_dprobs(mxToFill,
-                                             evalTree, prMxToFill, clipTo,
-                                             check, comm, None, wrtBlockSize,
-                                             profiler, gatherMemLimit)
-
+                                               evalTree, prMxToFill, clipTo,
+                                               check, comm, None, wrtBlockSize,
+                                               profiler, gatherMemLimit)
 
     def bulk_fill_hprobs(self, mxToFill, evalTree=None,
                          prMxToFill=None, derivMxToFill=None,
@@ -1994,13 +1963,12 @@ class OpModel(Model):
         None
         """
         return self._fwdsim().bulk_fill_hprobs(mxToFill,
-                                     evalTree, prMxToFill, derivMxToFill, None,
-                                     clipTo, check, comm, None, None,
-                                     wrtBlockSize1,wrtBlockSize2,gatherMemLimit)
-
+                                               evalTree, prMxToFill, derivMxToFill, None,
+                                               clipTo, check, comm, None, None,
+                                               wrtBlockSize1, wrtBlockSize2, gatherMemLimit)
 
     def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
-                              bReturnDProbs12=False, comm=None):
+                             bReturnDProbs12=False, comm=None):
         """
         Constructs a generator that computes the 2nd derivatives of the
         probabilities generated by a each gate sequence given by evalTree
@@ -2068,19 +2036,18 @@ class OpModel(Model):
           - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
         return self._fwdsim().bulk_hprobs_by_block(
-             evalTree, wrtSlicesList,
+            evalTree, wrtSlicesList,
             bReturnDProbs12, comm)
 
-    def _init_copy(self,copyInto):
+    def _init_copy(self, copyInto):
         """
         Copies any "tricky" member of this model into `copyInto`, before
         deep copying everything else within a .copy() operation.
         """
-        self._clean_paramvec() # make sure _paramvec is valid before copying (necessary?)
-        copyInto._shlp = None # must be set by a derived-class _init_copy() method
-        copyInto._need_to_rebuild = True # copy will have all gpindices = None, etc.
+        self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
+        copyInto._shlp = None  # must be set by a derived-class _init_copy() method
+        copyInto._need_to_rebuild = True  # copy will have all gpindices = None, etc.
         super(OpModel, self)._init_copy(copyInto)
-
 
     def copy(self):
         """
@@ -2091,10 +2058,8 @@ class OpModel(Model):
         Model
             a (deep) copy of this model.
         """
-        self._clean_paramvec() # ensure _paramvec is rebuilt if needed
+        self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
         ret = Model.copy(self)
         if OpModel._pcheck: ret._check_paramvec()
         return ret
-            
-    

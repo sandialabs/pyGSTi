@@ -6,10 +6,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-import numpy       as _np
+import numpy as _np
 import collections as _collections
-import warnings    as _warnings
-import copy        as _copy
+import warnings as _warnings
+import copy as _copy
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
@@ -17,7 +17,8 @@ from ..tools import compattools as _compat
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 
 #Class for holding confidence region factory keys
-CRFkey = _collections.namedtuple('CRFkey', ['model','circuit_list'])
+CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
+
 
 class Estimate(object):
     """
@@ -79,7 +80,6 @@ class Estimate(object):
         #Meta info
         self.meta = {}
 
-
     def get_start_model(self, goparams):
         """
         Returns the starting model for the gauge optimization given by `goparams`.
@@ -98,9 +98,8 @@ class Estimate(object):
         -------
         Model
         """
-        goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
-        return goparams_list[0].get('model',self.models['final iteration estimate'])
-
+        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+        return goparams_list[0].get('model', self.models['final iteration estimate'])
 
     def add_gaugeoptimized(self, goparams, model=None, label=None, comm=None, verbosity=None):
         """
@@ -155,33 +154,32 @@ class Estimate(object):
                 if (label not in self.goparameters) and \
                    (label not in self.models): break
 
-        goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
+        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
         ordered_goparams = []
         last_gs = None
-
 
         #Create a printer based on specified or maximum goparams
         # verbosity and default or existing comm.
         printer_comm = comm
         for gop in goparams_list:
-            if gop.get('comm',None) is not None:
+            if gop.get('comm', None) is not None:
                 printer_comm = gop['comm']; break
         max_vb = verbosity if (verbosity is not None) else \
-                 max( [ gop.get('verbosity',0) for gop in goparams_list ])
+            max([gop.get('verbosity', 0) for gop in goparams_list])
         printer = _VerbosityPrinter.build_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
 
-        for i,gop in enumerate(goparams_list):
+        for i, gop in enumerate(goparams_list):
 
             if model is not None:
-                last_gs = model #just use user-supplied result
+                last_gs = model  # just use user-supplied result
             else:
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
-                gop = gop.copy() #so we don't change the caller's dict
+                gop = gop.copy()  # so we don't change the caller's dict
 
                 printer.log("Stage %d:" % i, 2)
                 if verbosity is not None:
-                    gop['verbosity'] = printer-1 #use common printer
+                    gop['verbosity'] = printer - 1  # use common printer
 
                 if comm is not None and 'comm' not in gop:
                     gop['comm'] = comm
@@ -200,17 +198,16 @@ class Estimate(object):
 
                 gop['returnAll'] = True
                 _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
-                gop['_gaugeGroupEl'] = gaugeGroupEl # an output stored here for convenience
+                gop['_gaugeGroupEl'] = gaugeGroupEl  # an output stored here for convenience
 
             #sort the parameters by name for consistency
-            ordered_goparams.append( _collections.OrderedDict(
-                [(k,gop[k]) for k in sorted(list(gop.keys()))]) )
+            ordered_goparams.append(_collections.OrderedDict(
+                [(k, gop[k]) for k in sorted(list(gop.keys()))]))
 
         assert(last_gs is not None)
         self.models[label] = last_gs
         self.goparameters[label] = ordered_goparams if len(goparams_list) > 1 \
-                                   else ordered_goparams[0]
-
+            else ordered_goparams[0]
 
     def add_confidence_region_factory(self,
                                       model_label='final iteration estimate',
@@ -248,7 +245,6 @@ class Estimate(object):
         self.confidence_region_factories[ky] = newCRF
         return newCRF
 
-
     def has_confidence_region_factory(self, model_label='final iteration estimate',
                                       circuits_label='final'):
         """
@@ -268,8 +264,7 @@ class Estimate(object):
         -------
         bool
         """
-        return bool( CRFkey(model_label, circuits_label) in self.confidence_region_factories)
-
+        return bool(CRFkey(model_label, circuits_label) in self.confidence_region_factories)
 
     def get_confidence_region_factory(self, model_label='final iteration estimate',
                                       circuits_label='final', createIfNeeded=False):
@@ -306,7 +301,7 @@ class Estimate(object):
 
     def gauge_propagate_confidence_region_factory(
             self, to_model_label, from_model_label='final iteration estimate',
-            circuits_label = 'final', EPS=1e-3, verbosity=0):
+            circuits_label='final', EPS=1e-3, verbosity=0):
         """
         Propagates an existing "reference" confidence region for a Model
         "G0" to a new confidence region for a gauge-equivalent model "G1".
@@ -354,12 +349,12 @@ class Estimate(object):
         start_model = goparams['model'].copy()
         final_model = self.models[to_model_label].copy()
 
-        goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
+        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
         gaugeGroupEls = []
         for gop in goparams_list:
-            assert('_gaugeGroupEl' in gop),"To propagate a confidence " + \
+            assert('_gaugeGroupEl' in gop), "To propagate a confidence " + \
                 "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
-            gaugeGroupEls.append( goparams['_gaugeGroupEl'] )
+            gaugeGroupEls.append(goparams['_gaugeGroupEl'])
 
         assert(start_model.frobeniusdist(ref_model) < 1e-6), \
             "Gauge-opt starting point must be the 'from' (reference) Model"
@@ -371,7 +366,7 @@ class Estimate(object):
         assert(crf.has_hessian()), "Initial factory must contain a computed Hessian!"
 
         #Update hessian by TMx = d(diffs in current go'd model)/d(diffs in ref model)
-        TMx = _np.empty( (final_model.num_params(), ref_model.num_params()), 'd' )
+        TMx = _np.empty((final_model.num_params(), ref_model.num_params()), 'd')
         v0, w0 = ref_model.to_vector(), final_model.to_vector()
         mdl = ref_model.copy()
 
@@ -380,15 +375,15 @@ class Estimate(object):
 
         with printer.progress_logging(1):
             for iCol in range(ref_model.num_params()):
-               v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction
-               mdl.from_vector(v)
-               for gaugeGroupEl in gaugeGroupEls:
-                   mdl.transform(gaugeGroupEl)
-               w = mdl.to_vector()
-               dw = (w - w0)/EPS
-               TMx[:,iCol] = dw
-               printer.show_progress(iCol, ref_model.num_params(), prefix='Column: ')
-                 #,suffix = "; finite_diff = %g" % _np.linalg.norm(dw)
+                v = v0.copy(); v[iCol] += EPS  # dv is along iCol-th direction
+                mdl.from_vector(v)
+                for gaugeGroupEl in gaugeGroupEls:
+                    mdl.transform(gaugeGroupEl)
+                w = mdl.to_vector()
+                dw = (w - w0) / EPS
+                TMx[:, iCol] = dw
+                printer.show_progress(iCol, ref_model.num_params(), prefix='Column: ')
+                #,suffix = "; finite_diff = %g" % _np.linalg.norm(dw)
 
         #rank = _np.linalg.matrix_rank(TMx)
         #print("DEBUG: constructed TMx: rank = ", rank)
@@ -405,7 +400,6 @@ class Estimate(object):
         printer.log("   Successfully transported Hessian and ConfidenceRegionFactory.")
 
         return new_crf
-
 
     def get_effective_dataset(self, return_subMxs=False):
         """
@@ -434,8 +428,8 @@ class Estimate(object):
             scale values (see above).
         """
         p = self.parent
-        gss = p.circuit_structs['final'] #FUTURE: overrideable?
-        weights = self.parameters.get("weights",None)
+        gss = p.circuit_structs['final']  # FUTURE: overrideable?
+        weights = self.parameters.get("weights", None)
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
@@ -443,15 +437,15 @@ class Estimate(object):
 
             subMxs = []
             for y in gss.used_yvals():
-                subMxs.append( [] )
+                subMxs.append([])
                 for x in gss.used_xvals():
-                    scalingMx = _np.nan * _np.ones( (nRows,nCols), 'd')
-                    plaq = gss.get_plaquette(x,y).expand_aliases()
+                    scalingMx = _np.nan * _np.ones((nRows, nCols), 'd')
+                    plaq = gss.get_plaquette(x, y).expand_aliases()
                     if len(plaq) > 0:
-                        for i,j,opstr in plaq:
-                            scalingMx[i,j] = weights.get(opstr,1.0)
-                            if scalingMx[i,j] != 1.0:
-                                scaled_dataset[opstr].scale(scalingMx[i,j])
+                        for i, j, opstr in plaq:
+                            scalingMx[i, j] = weights.get(opstr, 1.0)
+                            if scalingMx[i, j] != 1.0:
+                                scaled_dataset[opstr].scale(scalingMx[i, j])
 
                     #build up a subMxs list-of-lists as a plotting
                     # function does, so we can easily plot the scaling
@@ -463,19 +457,19 @@ class Estimate(object):
                 return scaled_dataset, subMxs
             else: return scaled_dataset
 
-        else: #no weights specified - just return original dataset (no scaling)
+        else:  # no weights specified - just return original dataset (no scaling)
 
-            if return_subMxs: #then need to create subMxs with all 1's
+            if return_subMxs:  # then need to create subMxs with all 1's
                 subMxs = []
                 for y in gss.used_yvals():
-                    subMxs.append( [] )
+                    subMxs.append([])
                     for x in gss.used_xvals():
-                        plaq = gss.get_plaquette(x,y)
-                        scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
-                        for i,j,opstr in plaq:
-                            scalingMx[i,j] = 1.0
-                        subMxs[-1].append( scalingMx )
-                return p.dataset, subMxs #copy dataset?
+                        plaq = gss.get_plaquette(x, y)
+                        scalingMx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
+                        for i, j, opstr in plaq:
+                            scalingMx[i, j] = 1.0
+                        subMxs[-1].append(scalingMx)
+                return p.dataset, subMxs  # copy dataset?
             else:
                 return p.dataset
 
@@ -503,34 +497,33 @@ class Estimate(object):
         float
         """
         p = self.parent
-        obj = self.parameters.get('objective',None)
-        assert(obj in ('chi2','logl','lgst')),"Invalid objective!"
+        obj = self.parameters.get('objective', None)
+        assert(obj in ('chi2', 'logl', 'lgst')), "Invalid objective!"
 
-        mdl = self.models['final iteration estimate'] #FUTURE: overrideable?
-        gss = p.circuit_structs['final'] #FUTURE: overrideable?
-        mpc = self.parameters.get('minProbClipForWeighting',1e-4)
+        mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
+        gss = p.circuit_structs['final']  # FUTURE: overrideable?
+        mpc = self.parameters.get('minProbClipForWeighting', 1e-4)
         ds = self.get_effective_dataset()
 
         if obj == "chi2":
-            fitQty = _tools.chi2( mdl, ds, gss.allstrs,
-                                  minProbClipForWeighting=mpc,
-                                  opLabelAliases=gss.aliases,
-                                  evaltree_cache=evaltree_cache, comm=comm)
-        elif obj in ("logl","lgst"):
+            fitQty = _tools.chi2(mdl, ds, gss.allstrs,
+                                 minProbClipForWeighting=mpc,
+                                 opLabelAliases=gss.aliases,
+                                 evaltree_cache=evaltree_cache, comm=comm)
+        elif obj in ("logl", "lgst"):
             logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
                                               evaltree_cache=evaltree_cache)
-            logl = _tools.logl( mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
-                                evaltree_cache=evaltree_cache, comm=comm)
-            fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
+            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
+                               evaltree_cache=evaltree_cache, comm=comm)
+            fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
         ds_allstrs = _tools.find_replace_tuple_list(
             gss.allstrs, gss.aliases)
-        Ns  = ds.get_degrees_of_freedom(ds_allstrs)  #number of independent parameters in dataset
+        Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
-        k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
-        if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns,Np))
-        return (fitQty-k)/_np.sqrt(2*k)
-
+        k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
+        if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
+        return (fitQty - k) / _np.sqrt(2 * k)
 
     def view(self, gaugeopt_keys, parent=None):
         """
@@ -568,7 +561,6 @@ class Estimate(object):
 
         return view
 
-
     def copy(self):
         """ Creates a copy of this Estimate object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
@@ -580,9 +572,8 @@ class Estimate(object):
         cpy.meta = _copy.deepcopy(self.meta)
         return cpy
 
-
     def __str__(self):
-        s  = "----------------------------------------------------------\n"
+        s = "----------------------------------------------------------\n"
         s += "---------------- pyGSTi Estimate Object ------------------\n"
         s += "----------------------------------------------------------\n"
         s += "\n"
@@ -605,14 +596,14 @@ class Estimate(object):
         #Don't pickle comms in goparameters
         to_pickle = self.__dict__.copy()
         to_pickle['goparameters'] = _collections.OrderedDict()
-        for lbl,goparams in self.goparameters.items():
-            if hasattr(goparams,"keys"):
+        for lbl, goparams in self.goparameters.items():
+            if hasattr(goparams, "keys"):
                 if 'comm' in goparams:
                     goparams = goparams.copy()
                     goparams['comm'] = None
                 to_pickle['goparameters'][lbl] = goparams
-            else: #goparams is a list
-                new_goparams = [] #new list
+            else:  # goparams is a list
+                new_goparams = []  # new list
                 for goparams_dict in goparams:
                     if 'comm' in goparams_dict:
                         goparams_dict = goparams_dict.copy()
@@ -622,7 +613,7 @@ class Estimate(object):
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
-        return  to_pickle
+        return to_pickle
 
     def __setstate__(self, stateDict):
         #BACKWARDS COMPATIBILITY
@@ -637,12 +628,10 @@ class Estimate(object):
         self.__dict__.update(stateDict)
         for crf in self.confidence_region_factories.values():
             crf.set_parent(self)
-        self.parent = None # initialize to None upon unpickling
+        self.parent = None  # initialize to None upon unpickling
 
     def set_parent(self, parent):
         """
         Sets the parent Results object of this Estimate.
         """
         self.parent = parent
-
-

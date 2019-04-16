@@ -8,14 +8,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
+
 class CrosstalkResults(object):
 
     def __init__(self):
-        
+
         #--------------------------#
         # --- Input quantities --- #
         #--------------------------#
-        
+
         self.name = None
         self.data = None
         self.number_of_regions = None
@@ -39,36 +40,34 @@ class CrosstalkResults(object):
         self.edge_weights = None
         self.edge_tvds = None
 
-        
-
     def any_crosstalk_detect(self):
-        
+
         if self.crosstalk_detected:
-            print("Statistical tests set at a global confidence level of: " + str(self.confidence)) 
+            print("Statistical tests set at a global confidence level of: " + str(self.confidence))
             print("Result: The 'no crosstalk' hypothesis *is* rejected.")
         else:
             print("Statistical tests set at a global confidence level of: " + str(self.confidence))
             print("Result: The 'no crosstalk' hypothesis is *not* rejected.")
-    
-    
-    def plot_crosstalk_matrices(self, figsize=(15,3), savepath=None):
+
+    def plot_crosstalk_matrices(self, figsize=(15, 3), savepath=None):
         """
 
         """
-       
+
         try:
             import matplotlib.pyplot as _plt
         except ImportError:
             raise ValueError("plot_crosstalk_matrix(...) requires you to install matplotlib")
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        fig, (ax1, ax2) = _plt.subplots(1,2,figsize=(sum(self.settings)+self.number_of_regions+6, self.number_of_regions+4))
+        fig, (ax1, ax2) = _plt.subplots(1, 2, figsize=(sum(self.settings) +
+                                                       self.number_of_regions + 6, self.number_of_regions + 4))
         fig.subplots_adjust(wspace=2, hspace=2)
 
         if self.name is not None:
-            title = 'Crosstalk matrices for dataset '+self.name+'. Confidence level '+str(self.confidence)
+            title = 'Crosstalk matrices for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
         else:
-            title = 'Crosstalk matrices for dataset. Confidence level '+str(self.confidence)
+            title = 'Crosstalk matrices for dataset. Confidence level ' + str(self.confidence)
 
         # common arguments to imshow
         kwargs = dict(
@@ -77,7 +76,7 @@ class CrosstalkResults(object):
         settings_and_regions = _np.zeros((sum(self.settings), self.number_of_regions))
         regions_and_regions = _np.zeros((self.number_of_regions, self.number_of_regions))
 
-        for idx, edge in enumerate(self.graph.edges()) :
+        for idx, edge in enumerate(self.graph.edges()):
             source = edge[0]
             dest = edge[1]
 
@@ -88,48 +87,44 @@ class CrosstalkResults(object):
             # edge between an outcome and a setting
             if source < self.number_of_regions and dest >= self.number_of_regions:
                 if dest not in range(self.setting_indices[source], (self.setting_indices[(source + 1)] if source < (self.number_of_regions - 1) else self.number_of_columns)):
-                    settings_and_regions[dest-self.number_of_regions, source] = _np.max(self.edge_tvds[idx])
+                    settings_and_regions[dest - self.number_of_regions, source] = _np.max(self.edge_tvds[idx])
 
             # edge between an outcome and a setting
             if source >= self.number_of_regions and dest < self.number_of_regions:
                 if source not in range(self.setting_indices[dest], (self.setting_indices[(dest + 1)] if dest < (self.number_of_regions - 1) else self.number_of_columns)):
-                    settings_and_regions[source-self.number_of_regions, dest] = _np.max(self.edge_tvds[idx])
+                    settings_and_regions[source - self.number_of_regions, dest] = _np.max(self.edge_tvds[idx])
 
         ax1.imshow(settings_and_regions, **kwargs)
         _plt.setp(ax1, xticks=_np.arange(0, sum(self.settings), 1),
-                 xticklabels= [self.node_labels[k] for k in range(self.number_of_regions,self.number_of_columns)],
-                 yticks=_np.arange(0, self.number_of_regions, 1),
-                 yticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'))
+                  xticklabels=[self.node_labels[k] for k in range(self.number_of_regions, self.number_of_columns)],
+                  yticks=_np.arange(0, self.number_of_regions, 1),
+                  yticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'))
 
-
-        dividers = [sum(self.settings[:k])-0.5 for k in range(1,self.number_of_regions)]
-        for i in range(len(dividers)) :
+        dividers = [sum(self.settings[:k]) - 0.5 for k in range(1, self.number_of_regions)]
+        for i in range(len(dividers)):
             ax1.axvline(dividers[i], color='k')
 
         ax1.set_xlabel('Settings')
         ax1.set_ylabel('Region outcomes')
         ax1.set_title('Crosstalk between Region outcomes and settings')
 
-
         im = ax2.imshow(regions_and_regions, **kwargs)
         _plt.setp(ax2, xticks=_np.arange(0, self.number_of_regions, 1),
-                 xticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'),
-                 yticks=_np.arange(0, self.number_of_regions, 1),
-                 yticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'))
+                  xticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'),
+                  yticks=_np.arange(0, self.number_of_regions, 1),
+                  yticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'))
         ax2.set_xlabel('Region outcomes')
         ax2.set_ylabel('Region outcomes')
         ax2.set_title('Crosstalk between Region outcomes')
 
-
         divider = make_axes_locatable(ax2)
         cax = divider.append_axes('right', size='5%', pad=0.05)
-        fig.colorbar(im, cax=cax, orientation='vertical' )
+        fig.colorbar(im, cax=cax, orientation='vertical')
 
         if savepath is not None:
             _plt.savefig(savepath)
         else:
             _plt.show()
-
 
     def plot_crosstalk_dag(self, savepath=None):
         """
@@ -147,7 +142,7 @@ class CrosstalkResults(object):
             raise ValueError("plot_crosstalk_dag(...) requires you to install matplotlib")
  #      fig = _plt.figure(figsize=(sum(self.settings)+2,6), facecolor='white')
         fig = _plt.figure(facecolor='white')
-        ax = fig.add_subplot(1,1,1)
+        ax = fig.add_subplot(1, 1, 1)
 
         if self.name is not None:
             title = 'Crosstalk DAG for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
@@ -158,17 +153,17 @@ class CrosstalkResults(object):
         G = self.graph
         pos = {}
         # settings are distributed along y=1 line
-        pos.update( (n, (n-self.number_of_regions, 1)) for n in range(self.number_of_regions, self.number_of_columns) )
+        pos.update((n, (n - self.number_of_regions, 1)) for n in range(self.number_of_regions, self.number_of_columns))
 
         # results are distributed along y=3 line
-        for region in range(self.number_of_regions) :
+        for region in range(self.number_of_regions):
             num_settings_before = sum(self.settings[0:region])
             num_settings = self.settings[region]
 
-            if num_settings == 1 :
-                pos.update( {region: (num_settings_before, 3)} )
-            else :
-                pos.update( {region: (num_settings_before + (num_settings-1)/2, 3)} )
+            if num_settings == 1:
+                pos.update({region: (num_settings_before, 3)})
+            else:
+                pos.update({region: (num_settings_before + (num_settings - 1) / 2, 3)})
 
         # node colors
         settings_color = 'xkcd:light grey'
@@ -176,24 +171,24 @@ class CrosstalkResults(object):
 
         # draw graph nodes
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions), node_size=1000,
-                                node_color=outcomes_color, node_shape='o',alpha=0.4, ax=ax)
+                                node_color=outcomes_color, node_shape='o', alpha=0.4, ax=ax)
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
-                                node_color=settings_color, node_shape='s',alpha=0.4, ax=ax)
+                                node_color=settings_color, node_shape='s', alpha=0.4, ax=ax)
 
         label_posns = self.get_offset_label_posns(pos)
 
         _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels, ax=ax)
 
-        float_formatter = lambda x: "%.4f" % x
+        def float_formatter(x): return "%.4f" % x
 
         # draw graph edge, with ones indicating crosstalk in red
-        for idx, edge in enumerate(self.graph.edges()) :
-            if self.is_edge_ct[idx] :
+        for idx, edge in enumerate(self.graph.edges()):
+            if self.is_edge_ct[idx]:
                 _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r', ax=ax)
                 label = {}
-                label[edge] = float_formatter(_np.max(self.edge_tvds[idx]) )
-                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label,label_pos=0.2, ax=ax)
-            else :
+                label[edge] = float_formatter(_np.max(self.edge_tvds[idx]))
+                _nx.draw_networkx_edge_labels(G, pos, edge_labels=label, label_pos=0.2, ax=ax)
+            else:
                 _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b', ax=ax)
 
          # insert plot title
@@ -201,9 +196,9 @@ class CrosstalkResults(object):
 
         # expand axis limits to make sure node labels are visible
         ylims = ax.get_ylim()
-        ax.set_ylim((ylims[0]-0.2, ylims[1]+0.2))
+        ax.set_ylim((ylims[0] - 0.2, ylims[1] + 0.2))
         xlims = ax.get_xlim()
-        ax.set_xlim((xlims[0]-0.2, xlims[1]+0.2))
+        ax.set_xlim((xlims[0] - 0.2, xlims[1] + 0.2))
 
         # don't display axis
         _plt.axis('off')
@@ -229,7 +224,7 @@ class CrosstalkResults(object):
             raise ValueError("plot_crosstalk_graph(...) requires you to install matplotlib")
  #       fig = _plt.figure(figsize=(sum(self.settings)+2,6), facecolor='white')
         fig = _plt.figure(facecolor='white')
-        ax = fig.add_subplot(1,1,1)
+        ax = fig.add_subplot(1, 1, 1)
 
         if self.name is not None:
             title = 'Crosstalk graph for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
@@ -240,17 +235,17 @@ class CrosstalkResults(object):
         G = self.skel
         pos = {}
         # settings are distributed along y=1 line
-        pos.update( (n, (n-self.number_of_regions, 1)) for n in range(self.number_of_regions, self.number_of_columns) )
+        pos.update((n, (n - self.number_of_regions, 1)) for n in range(self.number_of_regions, self.number_of_columns))
 
         # results are distributed along y=3 line
-        for region in range(self.number_of_regions) :
+        for region in range(self.number_of_regions):
             num_settings_before = sum(self.settings[0:region])
             num_settings = self.settings[region]
 
-            if num_settings == 1 :
-                pos.update( {region: (num_settings_before, 3)} )
-            else :
-                pos.update( {region: (num_settings_before + (num_settings-1)/2, 3)} )
+            if num_settings == 1:
+                pos.update({region: (num_settings_before, 3)})
+            else:
+                pos.update({region: (num_settings_before + (num_settings - 1) / 2, 3)})
 
         # node colors
         settings_color = 'xkcd:light grey'
@@ -258,24 +253,24 @@ class CrosstalkResults(object):
 
         # draw graph nodes
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions), node_size=1000,
-                                node_color=outcomes_color, node_shape='o',alpha=0.4, ax=ax)
+                                node_color=outcomes_color, node_shape='o', alpha=0.4, ax=ax)
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
-                                node_color=settings_color, node_shape='s',alpha=0.4, ax=ax)
+                                node_color=settings_color, node_shape='s', alpha=0.4, ax=ax)
 
         label_posns = self.get_offset_label_posns(pos)
 
         _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels, ax=ax)
 
-        float_formatter = lambda x: "%.4f" % x
+        def float_formatter(x): return "%.4f" % x
 
         # draw graph edge, with ones indicating crosstalk in red
-        for idx, edge in enumerate(self.graph.edges()) :
-            if self.is_edge_ct[idx] :
+        for idx, edge in enumerate(self.graph.edges()):
+            if self.is_edge_ct[idx]:
                 _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r', ax=ax)
                 label = {}
-                label[edge] = float_formatter(_np.max(self.edge_tvds[idx]) )
-                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label,label_pos=0.2)
-            else :
+                label[edge] = float_formatter(_np.max(self.edge_tvds[idx]))
+                _nx.draw_networkx_edge_labels(G, pos, edge_labels=label, label_pos=0.2)
+            else:
                 _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b', ax=ax)
 
         # insert plot title
@@ -283,9 +278,9 @@ class CrosstalkResults(object):
 
         # expand axis limits to make sure node labels are visible
         ylims = ax.get_ylim()
-        ax.set_ylim((ylims[0]-0.2, ylims[1]+0.2))
+        ax.set_ylim((ylims[0] - 0.2, ylims[1] + 0.2))
         xlims = ax.get_xlim()
-        ax.set_xlim((xlims[0]-0.2, xlims[1]+0.2))
+        ax.set_xlim((xlims[0] - 0.2, xlims[1] + 0.2))
 
         # don't display axis
         _plt.axis('off')
@@ -293,7 +288,7 @@ class CrosstalkResults(object):
         if savepath is not None:
             _plt.savefig(savepath)
         else:
-            _plt.show()        
+            _plt.show()
 
     def get_offset_label_posns(self, pos):
         """

@@ -19,47 +19,47 @@ from ..baseobjs import Label as _Label
 
 
 class PrefixOrderedDict(_collections.OrderedDict):
-    """ 
+    """
     A base class for an ordered dictionary whose keys *must* be strings
     which begin with a given prefix.
     """
+
     def __init__(self, prefix, items=[]):
         """ Creates a new PrefixOrderedDict whose keys must begin
             with the string `prefix`."""
         #** Note: if change __init__ signature, update __reduce__ below
         self._prefix = prefix
-        super(PrefixOrderedDict,self).__init__(items)
+        super(PrefixOrderedDict, self).__init__(items)
 
     def __setitem__(self, key, val):
         """ Assumes key is a Label object """
         if not (self._prefix is None or key.has_prefix(self._prefix)):
             raise KeyError("All keys must be strings, " +
                            "beginning with the prefix '%s'" % self._prefix)
-        super(PrefixOrderedDict,self).__setitem__(key, val)
+        super(PrefixOrderedDict, self).__setitem__(key, val)
 
     #Handled by derived classes
     #def __reduce__(self):
     #    items = [(k,v) for k,v in self.iteritems()]
     #    return (PrefixOrderedDict, (self._prefix, items), None)
 
-
-    """ 
+    """
     An ordered dictionary whose keys must begin with a given prefix,
     and which holds LinearOperator objects.  This class ensures that every value is a
     :class:`LinearOperator`-derived object by converting any non-`LinearOperator` values into
     `LinearOperator`s upon assignment and raising an error if this is not possible.
     """
 
-    
 
 class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
-    """ 
+    """
     An ordered dictionary whose keys must begin with a given prefix.
 
     This class also ensure that every value is an object of the appropriate Model
     member type (e.g. :class:`SPAMVec`- or :class:`LinearOperator`-derived object) by converting any
     values into that type upon assignment and raising an error if this is not possible.
     """
+
     def __init__(self, parent, default_param, prefix, flags, items=[]):
         """
         Creates a new OrderedMemberDict.
@@ -69,7 +69,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         parent : Model
             The parent model, needed to obtain the dimension and handle
             updates to parameters.
-        
+
         default_param : {"TP","full",...}
             The default parameterization used when creating an
             object from a key assignment.
@@ -81,14 +81,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             A dictionary of flags adjusting the behavior of the created
             object.  Allowed keys are:
 
-            - `'cast_to_type'`: {`"operation"`,`"spamvec"`,`None`} -- whether 
+            - `'cast_to_type'`: {`"operation"`,`"spamvec"`,`None`} -- whether
               (or not) to automatically convert assigned values to a particular
               type of `ModelMember` object. (default is `None`)
             - `'auto_embed'` : bool -- whether or not to automatically embed
-              objects with a lower dimension than this `OrderedMemberDict`'s 
+              objects with a lower dimension than this `OrderedMemberDict`'s
               parent model. (default is `False`).
-            - `'match_parent_dim'` : bool -- whether or not to require that 
-              all contained objects match the parent `Model`'s dimension 
+            - `'match_parent_dim'` : bool -- whether or not to require that
+              all contained objects match the parent `Model`'s dimension
               (perhaps after embedding).  (default is `False`)
             - `'match_parent_evotype'` : bool -- whether or not to require that
               all contained objects match the parent `Model`'s evolution type.
@@ -98,33 +98,32 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
-        if _compat.isstr(flags): # for backward compatibility
-            flags = {'cast_to_type': ("operation" if flags == "gate" else flags) }
-        
+        if _compat.isstr(flags):  # for backward compatibility
+            flags = {'cast_to_type': ("operation" if flags == "gate" else flags)}
+
         # Note: we *don't* want to be calling parent's "rebuild" function here,
         # when we're creating a new list, as this behavior is only intended for
         # explicit insertions.  Since calling the base class __init__ will
         # call this class's __setitem__ we set parent to None for this step.
-        self.parent = None # so __init__ below doesn't call _rebuild_paramvec
+        self.parent = None  # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP", "full", "static", "clifford",...
-        self.flags = { 'auto_embed': flags.get('auto_embed',False),
-                       'match_parent_dim':  flags.get('match_parent_dim',False),
-                       'match_parent_evotype': flags.get('match_parent_evotype',False),
-                       'cast_to_type': flags.get('cast_to_type',None)
-                       }
+        self.flags = {'auto_embed': flags.get('auto_embed', False),
+                      'match_parent_dim': flags.get('match_parent_dim', False),
+                      'match_parent_evotype': flags.get('match_parent_evotype', False),
+                      'cast_to_type': flags.get('cast_to_type', None)
+                      }
         PrefixOrderedDict.__init__(self, prefix, items)
-        _gm.ModelChild.__init__(self, parent) # set's self.parent
+        _gm.ModelChild.__init__(self, parent)  # set's self.parent
 
         #Set parent our elements, now that the list has been initialized
         # (done for un-pickling b/c reduce => __init__ is called to construct
         #  unpickled object)
         if self.parent is not None:
             for el in self.values(): el.set_gpindices(el.gpindices, self.parent)
-              #sets parent and retains any existing indices in elements
-            
+            #sets parent and retains any existing indices in elements
 
     def _check_dim(self, obj):
-        if not self.flags['match_parent_dim']: return # no check
+        if not self.flags['match_parent_dim']: return  # no check
         if isinstance(obj, _gm.ModelMember):
             dim = obj.dim
         elif self.flags['cast_to_type'] == "spamvec":
@@ -132,7 +131,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         elif self.flags['cast_to_type'] == "operation":
             try:
                 d1 = len(obj)
-                d2 = len(obj[0]) #pylint: disable=unused-variable
+                d2 = len(obj[0])  # pylint: disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % obj)
             if any([len(row) != d1 for row in obj]):
@@ -145,31 +144,29 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         elif self.parent.dim != dim:
             raise ValueError("Cannot add object with dimension " +
                              "%s to model of dimension %d"
-                             % (dim,self.parent.dim))
-
+                             % (dim, self.parent.dim))
 
     def _check_evotype(self, evotype):
-        if not self.flags['match_parent_evotype']: return # no check
+        if not self.flags['match_parent_evotype']: return  # no check
         if self.parent is None: return
         elif self.parent._evotype != evotype:
             raise ValueError(("Cannot add an object with evolution type"
                               " '%s' to a model with one of '%s'") %
-                             (evotype,self.parent._evotype))
+                             (evotype, self.parent._evotype))
 
     def __contains__(self, key):
-        if not isinstance(key, _Label): key = _Label(key,None)
-        return super(OrderedMemberDict,self).__contains__(key)
+        if not isinstance(key, _Label): key = _Label(key, None)
+        return super(OrderedMemberDict, self).__contains__(key)
 
     def __getitem__(self, key):
         #if self.parent is not None:
         #    #print("DEBUG: cleaning paramvec before getting ", key)
         #    self.parent._clean_paramvec()
-        if not isinstance(key, _Label): key = _Label(key,None)
-        return super(OrderedMemberDict,self).__getitem__(key)
-    
+        if not isinstance(key, _Label): key = _Label(key, None)
+        return super(OrderedMemberDict, self).__getitem__(key)
 
     def _auto_embed(self, key_label, value):
-        if not self.flags['auto_embed']: return value # no auto-embedding
+        if not self.flags['auto_embed']: return value  # no auto-embedding
         if self.parent is not None and key_label.sslbls is not None:
             if self.flags['cast_to_type'] == "operation":
                 return self.parent._embedOperation(key_label.sslbls, self.cast_to_obj(value))
@@ -198,7 +195,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
                              % str(type(value)))
 
         basis = self.parent.basis if self.parent else None
-        obj = None; 
+        obj = None
         if self.flags['cast_to_type'] == "spamvec":
             obj = _sv.StaticSPAMVec(value)
             obj = _sv.convert(obj, self.default_param, basis)
@@ -207,13 +204,12 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             obj = _op.convert(obj, self.default_param, basis)
         return obj
 
-
     def __setitem__(self, key, value):
         if not isinstance(key, _Label): key = _Label(key)
-        value = self._auto_embed(key,value) # automatically create an embedded gate if needed
+        value = self._auto_embed(key, value)  # automatically create an embedded gate if needed
         self._check_dim(value)
 
-        if isinstance(value, _gm.ModelMember):  #if we're given an object, just replace
+        if isinstance(value, _gm.ModelMember):  # if we're given an object, just replace
             #When self has a valid parent (as it usually does, except when first initializing)
             # we copy and reset the gpindices & parent of ModelMember values which either:
             # 1) belong to a different parent (indices would be inapplicable if they exist)
@@ -228,17 +224,17 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
             if self.parent is not None and (wrongParent or inappInds):
                 value = value.copy()  # copy value (so we don't mess up other parent) and
-                value.set_gpindices(None, self.parent) # erase gindices don't apply to us
+                value.set_gpindices(None, self.parent)  # erase gindices don't apply to us
 
-            if not hasattr(value, "_evotype"): value._evotype = "densitymx" # for backward compatibility
+            if not hasattr(value, "_evotype"): value._evotype = "densitymx"  # for backward compatibility
             self._check_evotype(value._evotype)
 
             if self.parent is not None and key in self:
-                existing = super(OrderedMemberDict,self).__getitem__(key)
+                existing = super(OrderedMemberDict, self).__getitem__(key)
             else: existing = None
 
-            if self.parent is not None: value.set_gpindices(None, self.parent) # set parent
-            super(OrderedMemberDict,self).__setitem__(key, value)
+            if self.parent is not None: value.set_gpindices(None, self.parent)  # set parent
+            super(OrderedMemberDict, self).__setitem__(key, value)
 
             # let the now-replaced existing object know it's been
             # removed from the parent, allowing it to reset (to None)
@@ -247,9 +243,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
                 assert(existing.parent is None or existing.parent is self.parent), "Model object not setup correctly"
                 existing.unlink_parent()
 
-        elif key in self: #if a object already exists...
+        elif key in self:  # if a object already exists...
             #try to set its value
-            super(OrderedMemberDict,self).__getitem__(key).set_value(value)
+            super(OrderedMemberDict, self).__getitem__(key).set_value(value)
 
         else:
             #otherwise, we've been given a non-ModelMember-object that doesn't
@@ -257,27 +253,25 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             obj = self.cast_to_obj(value)
 
             if obj is None:
-                raise ValueError("Cannot set a value of type: ",type(value))
+                raise ValueError("Cannot set a value of type: ", type(value))
 
             self._check_evotype(obj._evotype)
             if self.parent is not None: obj.set_gpindices(None, self.parent)
-            super(OrderedMemberDict,self).__setitem__(key, obj)
+            super(OrderedMemberDict, self).__setitem__(key, obj)
 
-            
         #rebuild Model's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: marking paramvec for rebuild after inserting ", key, " : ", list(self.keys()))
-            self.parent._mark_for_rebuild(super(OrderedMemberDict,self).__getitem__(key))
-              # mark the parent's (Model's) paramvec for rebuilding
+            self.parent._mark_for_rebuild(super(OrderedMemberDict, self).__getitem__(key))
+            # mark the parent's (Model's) paramvec for rebuilding
 
     def __delitem__(self, key):
         """Implements `del self[key]`"""
-        if not isinstance(key, _Label): key = _Label(key,None)
-        super(OrderedMemberDict,self).__delitem__(key)
+        if not isinstance(key, _Label): key = _Label(key, None)
+        super(OrderedMemberDict, self).__delitem__(key)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after deleting ", key, " : ", list(self.keys()))
             self.parent._rebuild_paramvec()
-
 
     def copy(self, parent=None):
         """
@@ -295,8 +289,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         """
         return OrderedMemberDict(parent, self.default_param,
                                  self._prefix, self.flags,
-                                 [(lbl,val.copy(parent)) for lbl,val in self.items()])
-    
+                                 [(lbl, val.copy(parent)) for lbl, val in self.items()])
+
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of Models.  Must set parent separately.
@@ -305,8 +299,6 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
-
-
 
 
 class OutcomeLabelDict(_collections.OrderedDict):
@@ -322,7 +314,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
     _strict = False
 
     @classmethod
-    def to_outcome(cls,val):
+    def to_outcome(cls, val):
         """
         Converts string outcomes like "0" to proper outcome tuples, like ("0",)
         (also converts non-tuples to tuples, e.g. `["0","1"]` to `("0","1")` )
@@ -337,37 +329,36 @@ class OutcomeLabelDict(_collections.OrderedDict):
         ----------
         items : list, optional
             Used by pickle and other serializations to initialize elements.
-        """  
+        """
         #** Note: if change __init__ signature, update __reduce__ below
-        super(OutcomeLabelDict,self).__init__(items)
-        
+        super(OutcomeLabelDict, self).__init__(items)
 
     def __getitem__(self, key):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)
-        return super(OutcomeLabelDict,self).__getitem__(key)
-        
+        return super(OutcomeLabelDict, self).__getitem__(key)
+
     def __setitem__(self, key, val):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)
-        super(OutcomeLabelDict,self).__setitem__(key,val)
+        super(OutcomeLabelDict, self).__setitem__(key, val)
 
     def __contains__(self, key):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)
-        return key in super(OutcomeLabelDict,self).keys()
+        return key in super(OutcomeLabelDict, self).keys()
 
     def copy(self):
         """ Return a copy of this OutcomeLabelDict. """
-        return OutcomeLabelDict([(lbl,_copy.deepcopy(val))
-                                 for lbl,val in self.items()])
+        return OutcomeLabelDict([(lbl, _copy.deepcopy(val))
+                                 for lbl, val in self.items()])
 
     def __pygsti_reduce__(self):
-        items = [(k,v) for k,v in self.items()]
+        items = [(k, v) for k, v in self.items()]
         return (OutcomeLabelDict, (items,), None)
 
     def __reduce__(self):
-        items = [(k,v) for k,v in self.items()]
+        items = [(k, v) for k, v in self.items()]
         return (OutcomeLabelDict, (items,), None)
 
 
@@ -394,7 +385,7 @@ class StateSpaceLabels(object):
             product of the spaces asociated with the labels.  The full state
             space is the direct sum of all the tensor product blocks.
             E.g. `[('Q0','Q1'), ('Q2',)]`.
-            
+
             If just an iterable of labels is given, e.g. `('Q0','Q1')`, it is
             assumed to specify the first and only tensor product block.
 
@@ -409,7 +400,7 @@ class StateSpaceLabels(object):
             be a tuple of 2 integers).  Values specify state-space dimensions: 2
             for a qubit, 3 for a qutrit, etc.  If None, then the dimensions are
             inferred, if possible, from the following naming rules:
-        
+
             - if the label starts with 'L', dim=1 (a single Level)
             - if the label starts with 'Q' OR is an int, dim=2 (a Qubit)
             - if the label starts with 'T', dim=3 (a quTrit)
@@ -417,7 +408,7 @@ class StateSpaceLabels(object):
         types : str or iterable, optional
             A list of label types, either `'Q'` or `'C'` for "quantum" and
             "classical" respectively, indicating the type of state-space
-            associated with each label.  Like `dims`, `types` must match 
+            associated with each label.  Like `dims`, `types` must match
             the structure of `labelList`.  A quantum state space of dimension
             `d` is a `d`-by-`d` density matrix, whereas a classical state space
             of dimension d is a vector of `d` probabilities.  If `None`, then
@@ -429,71 +420,71 @@ class StateSpaceLabels(object):
         #Allow initialization via another StateSpaceLabels object
         if isinstance(labelList, StateSpaceLabels):
             assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
-            dims = [ tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
-                     for tpbLbls in labelList.labels ]
-            types = [ tuple((labelList.labeltypes[lbl] for lbl in tpbLbls))
-                     for tpbLbls in labelList.labels ]
+            dims = [tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
+                    for tpbLbls in labelList.labels]
+            types = [tuple((labelList.labeltypes[lbl] for lbl in tpbLbls))
+                     for tpbLbls in labelList.labels]
             labelList = labelList.labels
-            
 
-        #Step1: convert labelList (and dims, if given) to a list of 
+        #Step1: convert labelList (and dims, if given) to a list of
         # elements describing each "tensor product block" - each of
         # which is a tuple of string labels.
+
         def isLabel(x):
             """ Return whether x is a valid space-label """
-            return _compat.isstr(x) or isinstance(x,_numbers.Integral)
-        
+            return _compat.isstr(x) or isinstance(x, _numbers.Integral)
+
         if isLabel(labelList):
-            labelList = [ (labelList,) ]
-            if dims is not None: dims = [ (dims,) ]
-            if types is not None: types = [ (types,) ]
+            labelList = [(labelList,)]
+            if dims is not None: dims = [(dims,)]
+            if types is not None: types = [(types,)]
         else:
             #labelList must be iterable if it's not a string
             labelList = list(labelList)
-                
+
         if len(labelList) > 0 and isLabel(labelList[0]):
-            # assume we've just been give the labels for a single tensor-prod-block 
-            labelList = [ labelList ]
-            if dims is not None: dims = [ dims ]
-            if types is not None: types = [ types ]
-            
-        self.labels = tuple([ tuple(tpbLabels) for tpbLabels in labelList])
+            # assume we've just been give the labels for a single tensor-prod-block
+            labelList = [labelList]
+            if dims is not None: dims = [dims]
+            if types is not None: types = [types]
+
+        self.labels = tuple([tuple(tpbLabels) for tpbLabels in labelList])
 
         #Type check - labels must be strings or ints
-        for tpbLabels in self.labels: #loop over tensor-prod-blocks
+        for tpbLabels in self.labels:  # loop over tensor-prod-blocks
             for lbl in tpbLabels:
                 if not isLabel(lbl):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
 
         # Get the type of each labeled space
         self.labeltypes = {}
-        if types is None: # use defaults
-            for tpbLabels in self.labels: #loop over tensor-prod-blocks
+        if types is None:  # use defaults
+            for tpbLabels in self.labels:  # loop over tensor-prod-blocks
                 for lbl in tpbLabels:
-                    self.labeltypes[lbl] = 'C' if (_compat.isstr(lbl) and lbl.startswith('C')) else 'Q' #default
+                    self.labeltypes[lbl] = 'C' if (_compat.isstr(lbl) and lbl.startswith('C')) else 'Q'  # default
         else:
-            for tpbLabels,tpbTypes in zip(self.labels,types):
-                for lbl,typ in zip(tpbLabels,tpbTypes):
+            for tpbLabels, tpbTypes in zip(self.labels, types):
+                for lbl, typ in zip(tpbLabels, tpbTypes):
                     self.labeltypes[lbl] = typ
 
         # Get the dimension of each labeled space
         self.labeldims = {}
         if dims is None:
-            for tpbLabels in self.labels: #loop over tensor-prod-blocks
-                for lbl in tpbLabels:            
-                    if isinstance(lbl,_numbers.Integral): d = 2 # ints = qubits
-                    elif lbl.startswith('T'): d = 3 # qutrit
-                    elif lbl.startswith('Q'): d = 2 # qubits
-                    elif lbl.startswith('L'): d = 1 # single level
-                    elif lbl.startswith('C'): d = 2 # classical bits
+            for tpbLabels in self.labels:  # loop over tensor-prod-blocks
+                for lbl in tpbLabels:
+                    if isinstance(lbl, _numbers.Integral): d = 2  # ints = qubits
+                    elif lbl.startswith('T'): d = 3  # qutrit
+                    elif lbl.startswith('Q'): d = 2  # qubits
+                    elif lbl.startswith('L'): d = 1  # single level
+                    elif lbl.startswith('C'): d = 2  # classical bits
                     else: raise ValueError("Cannot determine state-space dimension from '%s'" % lbl)
-                    if evotype not in ('statevec','stabilizer') and self.labeltypes[lbl] == 'Q':
-                        d = d**2 # density-matrix spaces have squared dim
-                                 # ("densitymx","svterm","cterm") all use super-ops
+                    if evotype not in ('statevec', 'stabilizer') and self.labeltypes[lbl] == 'Q':
+                        d = d**2  # density-matrix spaces have squared dim
+                        # ("densitymx","svterm","cterm") all use super-ops
                     self.labeldims[lbl] = d
         else:
-            for tpbLabels,tpbDims in zip(self.labels,dims):
-                for lbl,dim in zip(tpbLabels,tpbDims):
+            for tpbLabels, tpbDims in zip(self.labels, dims):
+                for lbl, dim in zip(tpbLabels, tpbDims):
                     self.labeldims[lbl] = dim
 
         # Store the starting index (within the density matrix / state vec) of
@@ -502,8 +493,8 @@ class StateSpaceLabels(object):
 
         self.tpb_dims = []
         for iTPB, tpbLabels in enumerate(self.labels):
-            self.tpb_dims.append( int(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] )))
-            self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
+            self.tpb_dims.append(int(_np.product([self.labeldims[lbl] for lbl in tpbLabels])))
+            self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
 
         self.dim = sum(self.tpb_dims)
 
@@ -515,12 +506,11 @@ class StateSpaceLabels(object):
         #update tensor-product-block dims and overall dim too:
         self.tpb_dims = []
         for iTPB, tpbLabels in enumerate(self.labels):
-            self.tpb_dims.append( int(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] )))
-            self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
+            self.tpb_dims.append(int(_np.product([self.labeldims[lbl] for lbl in tpbLabels])))
+            self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
         self.dim = sum(self.tpb_dims)
-        
 
-    def num_tensor_prod_blocks(self): # only in modelconstruction.py
+    def num_tensor_prod_blocks(self):  # only in modelconstruction.py
         """
         Get the number of tensor-product blocks which are direct-summed
         to get the final state space.
@@ -531,7 +521,7 @@ class StateSpaceLabels(object):
         """
         return len(self.labels)
 
-    def tensor_product_block_labels(self, iTPB): # unused
+    def tensor_product_block_labels(self, iTPB):  # unused
         """
         Get the labels for the `iTBP`-th tensor-product block.
 
@@ -547,10 +537,10 @@ class StateSpaceLabels(object):
         """
         return self.labels[iTPB]
 
-    def tensor_product_block_dims(self, iTPB): # unused
+    def tensor_product_block_dims(self, iTPB):  # unused
         """
         Get the dimension corresponding to each label in the
-        `iTBP`-th tensor-product block.  The dimension of the 
+        `iTBP`-th tensor-product block.  The dimension of the
         entire block is the product of these.
 
         Parameters
@@ -565,8 +555,7 @@ class StateSpaceLabels(object):
         """
         return tuple((self.labeldims[lbl] for lbl in self.labels[iTPB]))
 
-
-    def product_dim(self, labels): # only in modelconstruction
+    def product_dim(self, labels):  # only in modelconstruction
         """
         Computes the product of the state-space dimensions associated with each
         label in `labels`.
@@ -580,13 +569,13 @@ class StateSpaceLabels(object):
         -------
         int
         """
-        return int( _np.product([self.labeldims[l] for l in labels]) )
+        return int(_np.product([self.labeldims[l] for l in labels]))
 
     def __str__(self):
         if len(self.labels) == 0: return "ZeroDimSpace"
         return ' + '.join(
-            [ '*'.join(["%s(%d%s)" % (lbl,self.labeldims[lbl],'c' if (self.labeltypes[lbl]=='C') else '')
-                        for lbl in tpb]) for tpb in self.labels ] )
+            ['*'.join(["%s(%d%s)" % (lbl, self.labeldims[lbl], 'c' if (self.labeltypes[lbl] == 'C') else '')
+                       for lbl in tpb]) for tpb in self.labels])
 
     def __repr__(self):
         return "StateSpaceLabels[" + str(self) + "]"
@@ -594,4 +583,3 @@ class StateSpaceLabels(object):
     def copy(self):
         """ Return a copy of this StateSpaceLabels. """
         return _copy.deepcopy(self)
-

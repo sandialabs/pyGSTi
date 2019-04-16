@@ -10,12 +10,14 @@ import numpy as _np
 import copy as _copy
 from ..tools import compattools as _compat
 
+
 class HypothesisTest(object):
     """
-    An object to defines, and can be used to implement, a set of statistical hypothesis 
+    An object to defines, and can be used to implement, a set of statistical hypothesis
     tests on a set of null hypotheses. This object has *not* been carefully tested.
-    """   
-    def __init__(self, hypotheses, significance=0.05, weighting='equal', 
+    """
+
+    def __init__(self, hypotheses, significance=0.05, weighting='equal',
                  passing_graph='Holms', local_corrections='Holms'):
         """
         Initializes a HypothesisTest object. This specifies the set of null hypotheses,
@@ -26,7 +28,7 @@ class HypothesisTest(object):
         ----------
         hypotheses : list or tuple
             Specifies the set of null hypotheses. This should be a list containing elements
-            that are either 
+            that are either
 
             - A "label" for a hypothesis, which is just some hashable object such
               as a string.
@@ -34,12 +36,12 @@ class HypothesisTest(object):
               null hypotheses.
 
             The elements of this list are then subject to multi-test correction of the "closed test
-            procedure" type, with the exact correction method specified by `passing_graph`. For each element that 
+            procedure" type, with the exact correction method specified by `passing_graph`. For each element that
             is itself a tuple of hypotheses, these hypotheses are then further corrected using the method
             specified by `local_corrections`.
 
         significance : float in (0,1), optional
-            The global significance level. If either there are no "nested hypotheses" or the 
+            The global significance level. If either there are no "nested hypotheses" or the
             correction used for the nested hypotheses will locally control the family-wise error rate
             (FWER) (such as if `local_correction`='Holms') then when the hypothesis test encoded by
             this object will control the FWER to `significance`.
@@ -50,13 +52,13 @@ class HypothesisTest(object):
             allocated to each element of `hypotheses` is `significance`/len(`hypotheses`). If
             not a string, a dictionary whereby each key is an element of `hypotheses` and each value
             is a non-negative integer (which will be normalized to one inside the function).
-       
+
         passing_graph : string or numpy.array
             Specifies where the local significance from each test in `hypotheses` that triggers is
             passed to. If a string, then must be 'Holms'. In this case a test that triggers passes
             it's local significance to all the remaining hypotheses that have not yet triggered, split
             evenly over these hypotheses. If it is an array then its value for [i,j] is the proportion
-            of the "local significance" that is passed from hypothesis with index i (in the tuple 
+            of the "local significance" that is passed from hypothesis with index i (in the tuple
             `hypotheses`) to the hypothesis with index j if the hypothesis with index i is rejected (and
             if j hasn't yet been rejected; otherwise that proportion is re-distributed other the other
             hypothesis that i is to pass it's significance to). The only restriction on restriction on
@@ -64,7 +66,7 @@ class HypothesisTest(object):
             than 1).
 
             Note that a nested hypothesis is not allowed to pass significance out of it, so any rows
-            that request doing this will be ignored. This is because a nested hypothesis represents a 
+            that request doing this will be ignored. This is because a nested hypothesis represents a
             set of hypotheses that are to be jointly tested using some multi-test correction, and so
             this can only pass significance out if *all* of the hypotheses in that nested hypothesis
             are rejected. As this is unlikely in most use-cases, this has not been allowed for.
@@ -77,10 +79,10 @@ class HypothesisTest(object):
 
             - 'Holms'. This implements the Holms multi-test compensation technique. This
             controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
-            combination with the "top level" corrections). This requires no assumptions about the 
+            combination with the "top level" corrections). This requires no assumptions about the
             null hypotheses.
 
-            - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation 
+            - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
             technique. This is strictly less powerful test than the Hochberg correction.
 
             Note that neither 'Holms' nor 'Bonferronni' gained any advantage from being implemented
@@ -89,23 +91,23 @@ class HypothesisTest(object):
 
             - 'Hochberg'. This implements the Hockberg multi-test compensation technique. It is
             not a "closed test procedure", so it is not something that can be implemented in the
-            top level. To be provably valid, it is necessary for the p-values of the nested 
+            top level. To be provably valid, it is necessary for the p-values of the nested
             hypotheses to be non-negatively dependent. When that is true, this is strictly better
             than the Holms and Bonferroni corrections whilst still controlling the FWER.
 
-            - 'none'. This implements no multi-test compensation. This option does *not* control the 
+            - 'none'. This implements no multi-test compensation. This option does *not* control the
             FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
 
-            -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation 
+            -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
             technique. This does *not* control the FWER of the nested hypotheses, and instead controls
-            the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is 
+            the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
             maintained in the sense that the probability of one or more tests triggering is at most `significance`.
-            But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed 
+            But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
             that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
             method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
             quantity.
 
-        Returns 
+        Returns
         -------
         A HypothesisTest object.
         """
@@ -120,10 +122,10 @@ class HypothesisTest(object):
 
         self.nested_hypotheses = {}
         for h in self.hypotheses:
-            if not (isinstance(h,tuple) or isinstance(h,list)):
-                self.nested_hypotheses[h]=False
+            if not (isinstance(h, tuple) or isinstance(h, list)):
+                self.nested_hypotheses[h] = False
             else:
-                self.nested_hypotheses[h]=True
+                self.nested_hypotheses[h] = True
 
         if _compat.isstr(passing_graph):
             assert(passing_graph == 'Holms')
@@ -133,16 +135,17 @@ class HypothesisTest(object):
         if _compat.isstr(weighting):
             assert(weighting == 'equal')
             for h in self.hypotheses:
-                self.local_significance[h] = self.significance/len(self.hypotheses)
+                self.local_significance[h] = self.significance / len(self.hypotheses)
         else:
             totalweight = 0.
             for h in self.hypotheses:
                 totalweight += weighting[h]
             for h in self.hypotheses:
-                self.local_significance[h] = significance*weighting[h]/totalweight
+                self.local_significance[h] = significance * weighting[h] / totalweight
 
-        if _compat.isstr(local_corrections): 
-            assert(local_corrections in ('Holms','Hochberg','Bonferroni','none','Benjamini-Hochberg')), "A local correction of `{}` is not a valid choice".format(local_corrections)
+        if _compat.isstr(local_corrections):
+            assert(local_corrections in ('Holms', 'Hochberg', 'Bonferroni', 'none', 'Benjamini-Hochberg')
+                   ), "A local correction of `{}` is not a valid choice".format(local_corrections)
             self.local_corrections = {}
             for h in self.hypotheses:
                 if self.nested_hypotheses[h]:
@@ -164,11 +167,11 @@ class HypothesisTest(object):
         """
         Initializes the passing graph to the weighted Holms test.
         """
-        self.passing_graph = _np.zeros((len(self.hypotheses),len(self.hypotheses)),float)
+        self.passing_graph = _np.zeros((len(self.hypotheses), len(self.hypotheses)), float)
         for hind, h in enumerate(self.hypotheses):
             if not self.nested_hypotheses[h]:
-                self.passing_graph[hind,:] = _np.ones(len(self.hypotheses),float)/(len(self.hypotheses)-1)
-                self.passing_graph[hind,hind] = 0.
+                self.passing_graph[hind, :] = _np.ones(len(self.hypotheses), float) / (len(self.hypotheses) - 1)
+                self.passing_graph[hind, hind] = 0.
 
     # def _check_permissible(self):
     #     """
@@ -190,13 +193,13 @@ class HypothesisTest(object):
         -------
         None
 
-        """      
+        """
         # Testing this is slow, so we'll just leave it out.
         #for h in self.hypotheses:
         #    if self.nested_hypotheses[h]:
         #        for hh in h:
         #            assert(hh in list(pvalues.keys())), "Some hypothese do not have a pvalue in this pvalue dictionary!"
-        #            assert(pvalues[hh] >= 0. and pvalues[hh] <= 1.), "Invalid p-value!" 
+        #            assert(pvalues[hh] >= 0. and pvalues[hh] <= 1.), "Invalid p-value!"
         #    else:
         #        assert(h in list(pvalues.keys())), "Some hypothese do not have a pvalue in this pvalue dictionary!"
         #        assert(pvalues[h] >= 0. and pvalues[h] <= 1.), "Invalid p-value!"
@@ -234,7 +237,7 @@ class HypothesisTest(object):
         # Test the non-nested hypotheses. This can potentially pass significance on
         # to the nested hypotheses, so these are tested after this (the nested
         # hypotheses never pass significance out of them so can be tested last in any
-        # order).      
+        # order).
         stop = False
         while not stop:
             stop = True
@@ -248,24 +251,26 @@ class HypothesisTest(object):
                         hind = self.hypotheses.index(h)
                         stop = False
                         self.hypothesis_rejected[h] = True
-                        del dynamic_null_hypothesis[dynamic_null_hypothesis.index(h)]  
+                        del dynamic_null_hypothesis[dynamic_null_hypothesis.index(h)]
 
                         # Update the local significance, and the significance passing graph.
-                        new_passing_passing_graph = _np.zeros(_np.shape(self.passing_graph),float)
+                        new_passing_passing_graph = _np.zeros(_np.shape(self.passing_graph), float)
                         for l in dynamic_null_hypothesis:
                             lind = self.hypotheses.index(l)
 
-                            dynamic_local_significance[l] = dynamic_local_significance[l] + dynamic_local_significance[h]*dynamic_passing_graph[hind,lind]
+                            dynamic_local_significance[l] = dynamic_local_significance[l] + \
+                                dynamic_local_significance[h] * dynamic_passing_graph[hind, lind]
                             for k in dynamic_null_hypothesis:
                                 kind = self.hypotheses.index(k)
                                 if lind != kind:
-                                    a = dynamic_passing_graph[lind,kind] + dynamic_passing_graph[lind,hind]*dynamic_passing_graph[hind,kind]
-                                    b = 1. - dynamic_passing_graph[lind,hind]*dynamic_passing_graph[hind,lind]            
-                                    new_passing_passing_graph[lind,kind] =  a/b
+                                    a = dynamic_passing_graph[lind, kind] + \
+                                        dynamic_passing_graph[lind, hind] * dynamic_passing_graph[hind, kind]
+                                    b = 1. - dynamic_passing_graph[lind, hind] * dynamic_passing_graph[hind, lind]
+                                    new_passing_passing_graph[lind, kind] = a / b
 
                         del dynamic_local_significance[h]
-                        dynamic_passing_graph =    new_passing_passing_graph.copy()
-     
+                        dynamic_passing_graph = new_passing_passing_graph.copy()
+
         # Test the nested hypotheses
         for h in self.hypotheses:
             if self.nested_hypotheses[h]:
@@ -284,10 +289,10 @@ class HypothesisTest(object):
             self.significance_tested_at[h] = 0.
 
         if correction == 'Bonferroni':
-            self.pvalue_pseudothreshold[hypotheses] = significance/len(hypotheses)
+            self.pvalue_pseudothreshold[hypotheses] = significance / len(hypotheses)
             for h in hypotheses:
-                self.significance_tested_at[h] = significance/len(hypotheses)
-                if self.pvalues[h] <= significance/len(hypotheses):
+                self.significance_tested_at[h] = significance / len(hypotheses)
+                if self.pvalues[h] <= significance / len(hypotheses):
                     self.hypothesis_rejected[h] = True
 
         elif correction == 'Holms':
@@ -296,7 +301,7 @@ class HypothesisTest(object):
             while not stop:
                 stop = True
                 for h in dynamic_hypotheses:
-                    test_significance = significance/len(dynamic_hypotheses)
+                    test_significance = significance / len(dynamic_hypotheses)
                     if self.pvalues[h] <= test_significance:
                         stop = False
                         self.hypothesis_rejected[h] = True
@@ -304,7 +309,7 @@ class HypothesisTest(object):
                     if test_significance > self.significance_tested_at[h]:
                         self.significance_tested_at[h] = test_significance
 
-            self.pvalue_pseudothreshold[hypotheses] = significance/len(dynamic_hypotheses)
+            self.pvalue_pseudothreshold[hypotheses] = significance / len(dynamic_hypotheses)
 
         elif correction == 'Hochberg':
 
@@ -315,29 +320,29 @@ class HypothesisTest(object):
             dynamic_hypotheses = list(dynamic_hypotheses)
             pvalues.reverse()
             dynamic_hypotheses.reverse()
-            
+
             #print(pvalues)
             #print(dynamic_hypotheses)
 
             num_hypotheses = len(pvalues)
             for i in range(num_hypotheses):
                 #print(dynamic_hypotheses[0],pvalues[0])
-                if pvalues[0] <= significance/(i + 1):
+                if pvalues[0] <= significance / (i + 1):
                     for h in dynamic_hypotheses:
                         #print(h)
                         self.hypothesis_rejected[h] = True
-                        self.significance_tested_at[h] = significance/(i + 1)
+                        self.significance_tested_at[h] = significance / (i + 1)
 
-                    self.pvalue_pseudothreshold[hypotheses] = significance/(i + 1)
+                    self.pvalue_pseudothreshold[hypotheses] = significance / (i + 1)
                     return
                 else:
-                    self.significance_tested_at[dynamic_hypotheses[0]] = significance/(i + 1)
+                    self.significance_tested_at[dynamic_hypotheses[0]] = significance / (i + 1)
                     del pvalues[0]
                     del dynamic_hypotheses[0]
 
             # If no nulls rejected, the threshold is the Bonferroni threshold
-            self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
-                    
+            self.pvalue_pseudothreshold[hypotheses] = significance / num_hypotheses
+
         elif correction == 'Benjamini-Hochberg':
             #print("Warning: the family-wise error rate is not being controlled! Instead the False discovery rate is being controlled")
             dynamic_hypotheses = list(_copy.copy(hypotheses))
@@ -351,21 +356,22 @@ class HypothesisTest(object):
             num_hypotheses = len(pvalues)
             for i in range(num_hypotheses):
                 #print(dynamic_hypotheses[0],pvalues[0])
-                if pvalues[0] <= significance*(num_hypotheses-i)/num_hypotheses:
+                if pvalues[0] <= significance * (num_hypotheses - i) / num_hypotheses:
                     for h in dynamic_hypotheses:
                         #print(h)
                         self.hypothesis_rejected[h] = True
-                        self.significance_tested_at[h] = significance*(num_hypotheses-i)/num_hypotheses
-                        
-                    self.pvalue_pseudothreshold[hypotheses] = significance*(num_hypotheses-i)/num_hypotheses
+                        self.significance_tested_at[h] = significance * (num_hypotheses - i) / num_hypotheses
+
+                    self.pvalue_pseudothreshold[hypotheses] = significance * (num_hypotheses - i) / num_hypotheses
                     return
                 else:
-                    self.significance_tested_at[dynamic_hypotheses[0]] = significance*(num_hypotheses-i)/num_hypotheses
+                    self.significance_tested_at[dynamic_hypotheses[0]] = significance * \
+                        (num_hypotheses - i) / num_hypotheses
                     del pvalues[0]
                     del dynamic_hypotheses[0]
 
             # If no nulls rejected, the threshold is the Bonferroni threshold
-            self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
+            self.pvalue_pseudothreshold[hypotheses] = significance / num_hypotheses
 
         elif correction == 'none':
             #print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
@@ -374,6 +380,6 @@ class HypothesisTest(object):
                 self.significance_tested_at[h] = significance
                 if self.pvalues[h] <= significance:
                     self.hypothesis_rejected[h] = True
-                   
-        else: 
+
+        else:
             raise ValueError("The choice of `{}` for the `correction` parameter is invalid.".format(correction))

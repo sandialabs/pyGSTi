@@ -16,11 +16,13 @@ from ..objects import circuit as _cir
 from ..objects import Model as _Model
 from ..baseobjs import Label as _Lbl
 
-def _runExpression(str_expression, myLocals):
-    exec( "result = " + str_expression, {"__builtins__": None}, myLocals )
-    return myLocals.get("result",None)
 
-def create_circuit_list(*args,**kwargs):
+def _runExpression(str_expression, myLocals):
+    exec("result = " + str_expression, {"__builtins__": None}, myLocals)
+    return myLocals.get("result", None)
+
+
+def create_circuit_list(*args, **kwargs):
     """
     Create a list of operation sequences using a nested loop.  Positional arguments
     specify evaluation strings, which are evaluated within the inner-loop
@@ -64,33 +66,33 @@ def create_circuit_list(*args,**kwargs):
     """
     lst = []
 
-    loopOrder = list(kwargs.pop('order',[]))
-    loopLists = {}; loopLocals = { 'True': True, 'False': False, 'str':str, 'int': int, 'float': float}
-    for key,val in kwargs.items():
-        if type(val) in (list,tuple): #key describes a variable to loop over
+    loopOrder = list(kwargs.pop('order', []))
+    loopLists = {}; loopLocals = {'True': True, 'False': False, 'str': str, 'int': int, 'float': float}
+    for key, val in kwargs.items():
+        if type(val) in (list, tuple):  # key describes a variable to loop over
             loopLists[key] = val
             if key not in loopOrder:
                 loopOrder.append(key)
-        else: # callable(val): #key describes a function or variable to pass through to exec
+        else:  # callable(val): #key describes a function or variable to pass through to exec
             loopLocals[key] = val
 
     #print "DEBUG: looplists = ",loopLists
     for str_expression in args:
         if len(str_expression) == 0:
-            lst.append( _cir.Circuit( () ) ); continue #special case
+            lst.append(_cir.Circuit(())); continue  # special case
 
-        keysToLoop = [ key for key in loopOrder if key in str_expression ]
-        loopListsToLoop = [ loopLists[key] for key in keysToLoop ] #list of lists
+        keysToLoop = [key for key in loopOrder if key in str_expression]
+        loopListsToLoop = [loopLists[key] for key in keysToLoop]  # list of lists
         for allVals in _itertools.product(*loopListsToLoop):
-            myLocals = { key:allVals[i] for i,key in enumerate(keysToLoop) }
-            myLocals.update( loopLocals )
+            myLocals = {key: allVals[i] for i, key in enumerate(keysToLoop)}
+            myLocals.update(loopLocals)
             try:
                 result = _runExpression(str_expression, myLocals)
-            except AssertionError: continue #just don't append
+            except AssertionError: continue  # just don't append
 
-            if isinstance(result,_cir.Circuit):
+            if isinstance(result, _cir.Circuit):
                 opStr = result
-            elif isinstance(result,list) or isinstance(result,tuple):
+            elif isinstance(result, list) or isinstance(result, tuple):
                 opStr = _cir.Circuit(result)
             elif _compat.isstr(result):
                 opStr = _cir.Circuit(None, stringrep=result)
@@ -99,7 +101,7 @@ def create_circuit_list(*args,**kwargs):
     return lst
 
 
-def repeat(x,nTimes,assertAtLeastOneRep=False):
+def repeat(x, nTimes, assertAtLeastOneRep=False):
     """
     Repeat x nTimes times.
 
@@ -121,10 +123,11 @@ def repeat(x,nTimes,assertAtLeastOneRep=False):
     -------
     tuple or Circuit (whichever x was)
     """
-    if assertAtLeastOneRep:  assert(nTimes > 0)
-    return x*nTimes
+    if assertAtLeastOneRep: assert(nTimes > 0)
+    return x * nTimes
 
-def repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep=False):
+
+def repeat_count_with_max_length(x, maxLength, assertAtLeastOneRep=False):
     """
     Compute the number of times a operation sequence x must be repeated such that
     the repeated string has length <= maxLength.
@@ -149,11 +152,12 @@ def repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep=False):
       the number of repetitions.
     """
     l = len(x)
-    if assertAtLeastOneRep:  assert(l <= maxLength)
-    reps = maxLength//l if l > 0 else 0
+    if assertAtLeastOneRep: assert(l <= maxLength)
+    reps = maxLength // l if l > 0 else 0
     return reps
 
-def repeat_with_max_length(x,maxLength,assertAtLeastOneRep=False):
+
+def repeat_with_max_length(x, maxLength, assertAtLeastOneRep=False):
     """
     Repeat the operation sequence x an integer number of times such that
     the repeated string has length <= maxLength.
@@ -177,13 +181,14 @@ def repeat_with_max_length(x,maxLength,assertAtLeastOneRep=False):
     tuple or Circuit (whichever x was)
         the repeated operation sequence
     """
-    return repeat(x,repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep),assertAtLeastOneRep)
+    return repeat(x, repeat_count_with_max_length(x, maxLength, assertAtLeastOneRep), assertAtLeastOneRep)
 
 #Useful for anything?
 #def repeat_empty(x,maxLength,assertAtLeastOneRep=False):
 #    return ()
 
-def repeat_and_truncate(x,N,assertAtLeastOneRep=False):
+
+def repeat_and_truncate(x, N, assertAtLeastOneRep=False):
     """
     Repeat the operation sequence x so the repeated string has length greater than N,
     then truncate the string to be exactly length N.
@@ -205,10 +210,11 @@ def repeat_and_truncate(x,N,assertAtLeastOneRep=False):
     tuple or Circuit (whichever x was)
         the repeated-then-truncated operation sequence
     """
-    reps = repeat_count_with_max_length(x,N,assertAtLeastOneRep) + 1
-    return (x*reps)[0:N]
+    reps = repeat_count_with_max_length(x, N, assertAtLeastOneRep) + 1
+    return (x * reps)[0:N]
 
-def repeat_remainder_for_truncation(x,N,assertAtLeastOneRep=False):
+
+def repeat_remainder_for_truncation(x, N, assertAtLeastOneRep=False):
     """
     Repeat the operation sequence x the fewest number of times such that the repeated
     string has length greater than or equal to N.  Return the portion of this
@@ -233,8 +239,8 @@ def repeat_remainder_for_truncation(x,N,assertAtLeastOneRep=False):
         the remainder operation sequence
 
     """
-    reps = repeat_count_with_max_length(x,N,assertAtLeastOneRep)
-    return x[0:(N - reps*len(x))]
+    reps = repeat_count_with_max_length(x, N, assertAtLeastOneRep)
+    return x[0:(N - reps * len(x))]
 
 
 def simplify_str(circuitStr):
@@ -253,13 +259,12 @@ def simplify_str(circuitStr):
     string
         the simplified string representation.
     """
-    s = circuitStr.replace("{}","")
-    s = s.replace("^1G","G")
-    s = s.replace("^1(","(")
-    s = s.replace("^1{","{")
+    s = circuitStr.replace("{}", "")
+    s = s.replace("^1G", "G")
+    s = s.replace("^1(", "(")
+    s = s.replace("^1{", "{")
     if s.endswith("^1"): s = s[:-2]
     return s if len(s) > 0 else "{}"
-
 
 
 ## gate-label-tuple function.  TODO: check if these are still needed.
@@ -285,15 +290,17 @@ def list_all_circuits(opLabels, minlength, maxlength):
         A list of Circuit objects.
     """
     opTuples = _itertools.chain(*[_itertools.product(opLabels, repeat=N)
-                                    for N in range(minlength, maxlength + 1)])
+                                  for N in range(minlength, maxlength + 1)])
     return list(map(_cir.Circuit, opTuples))
+
 
 def gen_all_circuits(opLabels, minlength, maxlength):
     """ Generator version of list_all_circuits """
     opTuples = _itertools.chain(*[_itertools.product(opLabels, repeat=N)
-                                    for N in range(minlength, maxlength + 1)])
+                                  for N in range(minlength, maxlength + 1)])
     for opTuple in opTuples:
         yield _cir.Circuit(opTuple)
+
 
 def list_all_circuits_onelen(opLabels, length):
     """
@@ -324,9 +331,9 @@ def gen_all_circuits_onelen(opLabels, length):
 
 def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
     """
-    Generate all distinct operation sequences up to a maximum length that are 
+    Generate all distinct operation sequences up to a maximum length that are
     aperiodic, i.e., that are not a shorter gate sequence raised to a power,
-    and are also distinct up to cycling (e.g. `('Gx','Gy','Gy')` and 
+    and are also distinct up to cycling (e.g. `('Gx','Gy','Gy')` and
     `('Gy','Gy','Gx')` are considered equivalent and only one would be
     included in the returned list).
 
@@ -346,36 +353,36 @@ def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
     """
 
     #Are we trying to add a germ that is a permutation of a germ we already have?  False if no, True if yes.
-    def _perm_check(testStr,strList): # works with python strings, so can use "in" to test for substring inclusion
-        return any( [ testStr in s*2 for s in strList ] )
+    def _perm_check(testStr, strList):  # works with python strings, so can use "in" to test for substring inclusion
+        return any([testStr in s * 2 for s in strList])
 
     #Are we trying to add a germ that is a power of a germ we already have?  False if no, True if yes.
-    def _pow_check(testStr,strListDict):
+    def _pow_check(testStr, strListDict):
         L = len(testStr)
         for k in list(strListDict.keys()):
             if L % k == 0:
                 rep = L // k
-                if any([testStr == s*rep for s in strListDict[k] ]):
+                if any([testStr == s * rep for s in strListDict[k]]):
                     return True
         return False
 
     outputDict = {}
-    for length in _np.arange(1,maxLength+1):
+    for length in _np.arange(1, maxLength + 1):
 
         permCheckedStrs = []
         for s in gen_all_circuits_onelen(opLabels, length):
             pys = s.to_pythonstr(opLabels)
-            if not _perm_check(pys,permCheckedStrs):#Sequence is not a cycle of anything in permCheckedStrs
+            if not _perm_check(pys, permCheckedStrs):  # Sequence is not a cycle of anything in permCheckedStrs
                 permCheckedStrs.append(pys)
 
         outputDict[length] = []
-        for pys in permCheckedStrs:#Now check to see if any elements of tempList2 are powers of elements already in output
-            if not _pow_check(pys,outputDict):#Seqeunce is not a power of anything in output
+        for pys in permCheckedStrs:  # Now check to see if any elements of tempList2 are powers of elements already in output
+            if not _pow_check(pys, outputDict):  # Seqeunce is not a power of anything in output
                 outputDict[length].append(pys)
 
     output = []
-    for length in _np.arange(1,maxLength+1):
-        output.extend( [ _cir.Circuit.from_pythonstr(pys, opLabels) for pys in outputDict[length] ] )
+    for length in _np.arange(1, maxLength + 1):
+        output.extend([_cir.Circuit.from_pythonstr(pys, opLabels) for pys in outputDict[length]])
     return output
 
 
@@ -403,13 +410,14 @@ def list_random_circuits_onelen(opLabels, length, count, seed=None):
     list of Circuits
         A list of random operation sequences as Circuit objects.
     """
-    ret = [ ]
-    rndm = _rndm.RandomState(seed) # ok if seed is None
-    opLabels = list(opLabels) # b/c we need to index it below
-    for i in range(count): #pylint: disable=unused-variable
+    ret = []
+    rndm = _rndm.RandomState(seed)  # ok if seed is None
+    opLabels = list(opLabels)  # b/c we need to index it below
+    for i in range(count):  # pylint: disable=unused-variable
         r = rndm.random_sample(length) * len(opLabels)
-        ret.append( _cir.Circuit( [opLabels[int(k)] for k in r]) )
+        ret.append(_cir.Circuit([opLabels[int(k)] for k in r]))
     return ret
+
 
 def list_partial_strings(circuit):
     """
@@ -427,10 +435,11 @@ def list_partial_strings(circuit):
     list of Circuit objects.
        The parial operation sequences.
     """
-    ret = [ ]
-    for l in range(len(circuit)+1):
-        ret.append( tuple(circuit[0:l]) )
+    ret = []
+    for l in range(len(circuit) + 1):
+        ret.append(tuple(circuit[0:l]))
     return ret
+
 
 def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
     """
@@ -451,16 +460,16 @@ def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
     list of Circuit objects
         The list of required operation sequences, without duplicates.
     """
-    tolabel = lambda x: x if isinstance(x,_Lbl) else _Lbl(x)
+    def tolabel(x): return x if isinstance(x, _Lbl) else _Lbl(x)
     if isinstance(opLabelSrc, _Model):
         opLabels = list(opLabelSrc.operations.keys()) + \
-                     list(opLabelSrc.instruments.keys())
-    else: opLabels = list(map(tolabel,opLabelSrc))
+            list(opLabelSrc.instruments.keys())
+    else: opLabels = list(map(tolabel, opLabelSrc))
 
-    singleOps = [ _cir.Circuit( (gl,), stringrep="(%s)" % str(gl) ) for gl in opLabels ]
-    ret = create_circuit_list('eStr','prepStr','prepStr+eStr','prepStr+g+eStr',
-                               eStr=effectStrs, prepStr=prepStrs, g=singleOps,
-                               order=['g','prepStr','eStr'] ) # LEXICOGRAPHICAL VS MATRIX ORDER
+    singleOps = [_cir.Circuit((gl,), stringrep="(%s)" % str(gl)) for gl in opLabels]
+    ret = create_circuit_list('eStr', 'prepStr', 'prepStr+eStr', 'prepStr+g+eStr',
+                              eStr=effectStrs, prepStr=prepStrs, g=singleOps,
+                              order=['g', 'prepStr', 'eStr'])  # LEXICOGRAPHICAL VS MATRIX ORDER
     return _lt.remove_duplicates(ret)
 
 
@@ -487,29 +496,28 @@ def list_strings_lgst_can_estimate(dataset, prepStrs, effectStrs):
 
     estimatable = []
     circuits = list(dataset.keys())
-    pre = tuple(effectStrs[0]); l0 = len(pre)   #the first effect string
-    post = tuple(prepStrs[0]); l1 = len(post)   #the first prep string
+    pre = tuple(effectStrs[0]); l0 = len(pre)  # the first effect string
+    post = tuple(prepStrs[0]); l1 = len(post)  # the first prep string
 
     def _root_is_ok(rootStr):
         for estr in effectStrs:
             for rhostr in prepStrs:
-                if tuple(rhostr) + tuple(rootStr) + tuple(estr) not in circuits: # LEXICOGRAPHICAL VS MATRIX ORDER
+                if tuple(rhostr) + tuple(rootStr) + tuple(estr) not in circuits:  # LEXICOGRAPHICAL VS MATRIX ORDER
                     return False
         return True
 
     #check if string has first fiducial at beginning & end, and if so
     # strip that first fiducial off, leaving a 'root' string that we can test
     for s in circuits:
-        if s[0:l0] == pre and s[len(s)-l1:] == post:
-            root = s[l0:len(s)-l1]
-            if _root_is_ok( root ):
-                estimatable.append( root )
+        if s[0:l0] == pre and s[len(s) - l1:] == post:
+            root = s[l0:len(s) - l1]
+            if _root_is_ok(root):
+                estimatable.append(root)
 
     return circuit_list(estimatable)
 
 
-
-def circuit_list( listOfOpLabelTuplesOrStrings, line_labels="auto"):
+def circuit_list(listOfOpLabelTuplesOrStrings, line_labels="auto"):
     """
     Converts a list of operation label tuples or strings to
      a list of Circuit objects.
@@ -522,7 +530,7 @@ def circuit_list( listOfOpLabelTuplesOrStrings, line_labels="auto"):
 
     line_labels : "auto" or tuple, optional
         The line labels to use when creating Circuit objects from *non-Circuit*
-        elements of `listOfOpLabelTuplesOrStrings`.  If `"auto"` then the 
+        elements of `listOfOpLabelTuplesOrStrings`.  If `"auto"` then the
         line labels are determined automatically based on the line-labels which
         are present in the layer labels.
 
@@ -533,12 +541,12 @@ def circuit_list( listOfOpLabelTuplesOrStrings, line_labels="auto"):
     """
     ret = []
     for x in listOfOpLabelTuplesOrStrings:
-        if isinstance(x,_cir.Circuit):
+        if isinstance(x, _cir.Circuit):
             ret.append(x)
-        elif isinstance(x,tuple) or isinstance(x,list):
-            ret.append( _cir.Circuit(x, line_labels) )
+        elif isinstance(x, tuple) or isinstance(x, list):
+            ret.append(_cir.Circuit(x, line_labels))
         elif _compat.isstr(x):
-            ret.append( _cir.Circuit(None, line_labels, stringrep=x) )
+            ret.append(_cir.Circuit(None, line_labels, stringrep=x))
         else:
             raise ValueError("Cannot convert type %s into a Circuit" % str(type(x)))
     return ret
@@ -557,7 +565,7 @@ def translate_circuit(circuit, aliasDict):
         operations.
 
     aliasDict : dict
-        A dictionary whose keys are single operation labels and whose values are 
+        A dictionary whose keys are single operation labels and whose values are
         lists or tuples of the new operation labels that should replace that key.
         If `aliasDict is None` then `circuit` is returned.
 
@@ -569,9 +577,8 @@ def translate_circuit(circuit, aliasDict):
         return circuit
     else:
         return _cir.Circuit(tuple(_itertools.chain(
-            *[aliasDict.get(lbl, (lbl,) ) for lbl in circuit])),
-                            line_labels=circuit.line_labels)
-
+            *[aliasDict.get(lbl, (lbl,)) for lbl in circuit])),
+            line_labels=circuit.line_labels)
 
 
 def translate_circuit_list(circuitList, aliasDict):
@@ -587,7 +594,7 @@ def translate_circuit_list(circuitList, aliasDict):
         operations.
 
     aliasDict : dict
-        A dictionary whose keys are single operation labels and whose values are 
+        A dictionary whose keys are single operation labels and whose values are
         lists or tuples of the new operation labels that should replace that key.
         If `aliasDict is None` then `circuitList` is returned.
 
@@ -598,23 +605,23 @@ def translate_circuit_list(circuitList, aliasDict):
     if aliasDict is None:
         return circuitList
     else:
-        new_circuits = [ _cir.Circuit(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,(lbl,)) for lbl in opstr])),
-                                      line_labels=opstr.line_labels) # line labels aren't allowed to change
-                            for opstr in circuitList ]
+        new_circuits = [_cir.Circuit(tuple(_itertools.chain(
+            *[aliasDict.get(lbl, (lbl,)) for lbl in opstr])),
+            line_labels=opstr.line_labels)  # line labels aren't allowed to change
+            for opstr in circuitList]
         return new_circuits
 
 
 def compose_alias_dicts(aliasDict1, aliasDict2):
     """
     Composes two alias dicts.
-    
+
     Assumes `aliasDict1` maps "A" labels to "B" labels and `aliasDict2` maps
     "B" labels to "C" labels.  The returned dictionary then maps "A" labels
     directly to "C" labels, and satisfies:
 
     `returned[A_label] = aliasDict2[ aliasDict1[ A_label ] ]`
-    
+
     Parameters
     ----------
     aliasDict1, aliasDict2 : dict
@@ -625,7 +632,7 @@ def compose_alias_dicts(aliasDict1, aliasDict2):
     dict
     """
     ret = {}
-    for A,Bs in aliasDict1.items():
+    for A, Bs in aliasDict1.items():
         ret[A] = tuple(_itertools.chain(*[aliasDict2[B] for B in Bs]))
     return ret
 
@@ -647,7 +654,7 @@ def manipulate_circuit(circuit, sequenceRules, line_labels="auto"):
 
     sequenceRules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
-        rules.  Both `find` and `replace` are tuples of operation labels 
+        rules.  Both `find` and `replace` are tuples of operation labels
         (or `Circuit` objects).  If `sequenceRules is None` then
         `circuit` is returned.
 
@@ -661,67 +668,66 @@ def manipulate_circuit(circuit, sequenceRules, line_labels="auto"):
     list of Circuits
     """
     if sequenceRules is None:
-        return circuit #avoids doing anything to circuit
+        return circuit  # avoids doing anything to circuit
 
     # flag labels as modified so signal they cannot be processed
     # by any further rules
-    circuit = tuple(circuit) #make sure this is a tuple
-    modified = _np.array([False]*len(circuit))
-    actions = [ [] for i in range(len(circuit)) ]
+    circuit = tuple(circuit)  # make sure this is a tuple
+    modified = _np.array([False] * len(circuit))
+    actions = [[] for i in range(len(circuit))]
 
     #Step 0: compute prefixes and postfixes of rules
     ruleInfo = []
     for rule, replacement in sequenceRules:
-        n_pre = 0 #length of shared prefix btwn rule & replacement
-        for a,b in zip(rule,replacement):
-            if a==b: n_pre += 1
+        n_pre = 0  # length of shared prefix btwn rule & replacement
+        for a, b in zip(rule, replacement):
+            if a == b: n_pre += 1
             else: break
-        n_post = 0 #length of shared prefix btwn rule & replacement (if no prefix)
+        n_post = 0  # length of shared prefix btwn rule & replacement (if no prefix)
         if n_pre == 0:
-            for a,b in zip(reversed(rule),reversed(replacement)):
-                if a==b: n_post += 1
+            for a, b in zip(reversed(rule), reversed(replacement)):
+                if a == b: n_post += 1
                 else: break
         n = len(rule)
-        ruleInfo.append( (n_pre,n_post,n) )
+        ruleInfo.append((n_pre, n_post, n))
         #print("Rule%d " % k, rule, "n_pre = ",n_pre," n_post = ",n_post) #DEBUG
 
     #print("Circuit = ",circuit) #DEBUG
-    
+
     #Step 1: figure out which actions (replacements) need to be performed at
     # which indices.  During this step, circuit is unchanged, but regions
     # of it are marked as having been modified to avoid double-modifications.
-    for i in range(len(circuit)):    
+    for i in range(len(circuit)):
         #print(" **** i = ",i) #DEBUG
-        for k,(rule,replacement) in enumerate(sequenceRules):
+        for k, (rule, replacement) in enumerate(sequenceRules):
             n_pre, n_post, n = ruleInfo[k]
-            
+
             #if there's a match that doesn't double-modify
-            if rule == circuit[i:i+n] and not any(modified[i+n_pre:i+n-n_post]):
+            if rule == circuit[i:i + n] and not any(modified[i + n_pre:i + n - n_post]):
                 # queue this replacement action
                 actions[i].append(k)
                 #print("MATCH! ==> acting rule %d at index %d" % (k,i)) #DEBUG
 
                 # and mark the modified region of the original string
-                modified[i+n_pre:i+n-n_post] = True
+                modified[i + n_pre:i + n - n_post] = True
         i += 1
-
 
     #Step 2: perform the actions (in reverse order so indices don't get messed up!)
     N = len(circuit)
-    for i in range(N-1,-1,-1):
+    for i in range(N - 1, -1, -1):
         for k in actions[i]:
             #apply rule k at index i of circuit
             rule, replacement = sequenceRules[k]
-            n_pre,n_post,n = ruleInfo[k]
+            n_pre, n_post, n = ruleInfo[k]
 
-            begin = circuit[:i+n_pre]
-            repl = replacement[n_pre:len(replacement)-n_post]
-            end   = circuit[i+n-n_post:]
+            begin = circuit[:i + n_pre]
+            repl = replacement[n_pre:len(replacement) - n_post]
+            end = circuit[i + n - n_post:]
 
             circuit = begin + repl + end
             #print("Applied rule %d at index %d: " % (k,i), begin, repl, end, " ==> ", circuit) #DEBUG
 
-    return _cir.Circuit(circuit,line_labels)
+    return _cir.Circuit(circuit, line_labels)
 
 
 def manipulate_circuit_list(circuitList, sequenceRules, line_labels="auto"):
@@ -737,10 +743,10 @@ def manipulate_circuit_list(circuitList, sequenceRules, line_labels="auto"):
 
     sequenceRules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
-        rules.  Both `find` and `replace` are tuples of operation labels 
+        rules.  Both `find` and `replace` are tuples of operation labels
         (or `Circuit` objects).  If `sequenceRules is None` then
         `circuitList` is returned.
-    
+
     line_labels : "auto" or tuple, optional
         The line labels to use when creating output Circuit objects.
         If `"auto"` then the line labels are determined automatically based on
@@ -753,41 +759,41 @@ def manipulate_circuit_list(circuitList, sequenceRules, line_labels="auto"):
     if sequenceRules is None:
         return circuitList
     else:
-        return [ manipulate_circuit(opstr, sequenceRules, line_labels) for opstr in circuitList ]
+        return [manipulate_circuit(opstr, sequenceRules, line_labels) for opstr in circuitList]
 
 
-def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=() ):
+def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=()):
     """
     Removes any labels from `circuits` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
-    (its `.sslbls`) is `None`, then the label is retained in the returned 
+    (its `.sslbls`) is `None`, then the label is retained in the returned
     string.
 
     Furthermore, by specifying `new_sslbls` one can map the state-space
     labels in `sslbls_to_keep` to new labels (useful for "re-basing" a
     set of qubit strings.
-    
+
     Parameters
     ----------
     circuits : list
         A list of operation sequences to act on.
 
     sslbls_to_keep : list
-        A list of state space labels specifying which operation labels should 
+        A list of state space labels specifying which operation labels should
         be retained.
-        
+
     new_sslbls : list, optional
         If not None, a list of the same length as `sslbls_to_keep` specifying
         a new set of state space labels to replace those in `sslbls_to_keep`.
 
     drop : bool, optional
-        If True, then non-empty operation sequences which become empty after 
+        If True, then non-empty operation sequences which become empty after
         filtering are not included in (i.e. dropped from) the returned list.
-        If False, then the returned list is always the same length as the 
+        If False, then the returned list is always the same length as the
         input list.
 
     idle : string or Label, optional
-        The operation label to be used when there are no kept components of a 
+        The operation label to be used when there are no kept components of a
         "layer" (element) of a circuit.
 
     Returns
@@ -798,39 +804,39 @@ def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=
     if drop:
         ret = []
         for s in circuits:
-            fs = filter_circuit(s,sslbls_to_keep,new_sslbls,idle)
+            fs = filter_circuit(s, sslbls_to_keep, new_sslbls, idle)
             if len(fs) > 0 or len(s) == 0: ret.append(fs)
         return ret
-    else: # drop == False (the easy case)
-        return [filter_circuit(s,sslbls_to_keep,new_sslbls,idle) for s in circuits]
-    
+    else:  # drop == False (the easy case)
+        return [filter_circuit(s, sslbls_to_keep, new_sslbls, idle) for s in circuits]
 
-def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=() ):
-    """ 
+
+def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=()):
+    """
     Removes any labels from `circuit` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
-    (its `.sslbls`) is `None`, then the label is retained in the returned 
+    (its `.sslbls`) is `None`, then the label is retained in the returned
     string.
 
     Furthermore, by specifying `new_sslbls` one can map the state-space
     labels in `sslbls_to_keep` to new labels (useful for "re-basing" a
     set of qubit strings.
-    
+
     Parameters
     ----------
     circuit : Circuit
         The operation sequence to act on.
 
     sslbls_to_keep : list
-        A list of state space labels specifying which operation labels should 
+        A list of state space labels specifying which operation labels should
         be retained.
-        
+
     new_sslbls : list, optional
         If not None, a list of the same length as `sslbls_to_keep` specifying
         a new set of state space labels to replace those in `sslbls_to_keep`.
 
     idle : string or Label, optional
-        The operation label to be used when there are no kept components of a 
+        The operation label to be used when there are no kept components of a
         "layer" (element) of `circuit`.
 
     Returns
@@ -838,25 +844,25 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=() ):
     Circuit
     """
     if new_sslbls is not None:
-        sslbl_map = { old: new for old,new in zip(sslbls_to_keep,new_sslbls) }
+        sslbl_map = {old: new for old, new in zip(sslbls_to_keep, new_sslbls)}
     else: sslbl_map = None
 
     lbls = []
     for lbl in circuit:
-        sublbls = []; pintersect = False #btwn lbl's sslbls & to-keep
+        sublbls = []; pintersect = False  # btwn lbl's sslbls & to-keep
         for sublbl in lbl.components:
             if (sublbl.sslbls is None or
-                set(sublbl.sslbls).issubset(sslbls_to_keep)): # then keep this comp
+                    set(sublbl.sslbls).issubset(sslbls_to_keep)):  # then keep this comp
 
-                if sslbl_map: # update state space labels
+                if sslbl_map:  # update state space labels
                     new_sslbls = None if (sublbl.sslbls is None) else \
                         tuple((sslbl_map[x] for x in sublbl.sslbls))
-                    sublbls.append( _Lbl(sublbl.name, new_sslbls) )
-                else: # leave labels as-is
+                    sublbls.append(_Lbl(sublbl.name, new_sslbls))
+                else:  # leave labels as-is
                     sublbls.append(sublbl)
 
             elif len(set(sublbl.sslbls).intersection(sslbls_to_keep)) > 0:
-                pintersect = True # partial intersection w/to-keep!
+                pintersect = True  # partial intersection w/to-keep!
 
         if pintersect:
             # there was partial intersection with at least one component,
@@ -865,7 +871,7 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=() ):
             return None
 
         if len(sublbls) > 0:
-            if len(sublbls) == 1: # necessary?
+            if len(sublbls) == 1:  # necessary?
                 lbls.append(sublbls[0])
             else:
                 lbls.append(sublbls)

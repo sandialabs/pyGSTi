@@ -6,8 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from functools    import partial
-from itertools    import product
+from functools import partial
+from itertools import product
 
 import numbers as _numbers
 import collections as _collections
@@ -21,12 +21,14 @@ from ..baseobjs import Basis, BuiltinBasis, DirectSumBasis
 from ..baseobjs.basisconstructors import *
 from ..baseobjs.basis import basis_matrices, basis_longname, basis_element_labels
 
+
 def is_sparse_basis(nameOrBasis):
     if isinstance(nameOrBasis, Basis):
         return nameOrBasis.sparse
-    else: #assume everything else is not sparse
+    else:  # assume everything else is not sparse
           # (could test for a sparse matrix list in the FUTURE)
         return False
+
 
 def change_basis(mx, from_basis, to_basis):
     """
@@ -53,18 +55,18 @@ def change_basis(mx, from_basis, to_basis):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
     #Build Basis objects from to_basis and from_basis as needed.
-    from_is_basis = isinstance(from_basis,Basis)
-    to_is_basis = isinstance(to_basis,Basis)
+    from_is_basis = isinstance(from_basis, Basis)
+    to_is_basis = isinstance(to_basis, Basis)
     dim = mx.shape[0]
     if from_is_basis == False and to_is_basis == False:
         #Case1: no Basis objects, so just construct builtin bases based on `mx` dim
-        if from_basis == to_basis: return mx.copy() # (shortcut)
+        if from_basis == to_basis: return mx.copy()  # (shortcut)
         from_basis = BuiltinBasis(from_basis, dim, sparse=False)
         to_basis = BuiltinBasis(to_basis, dim, sparse=False)
-        
+
     elif from_is_basis == True and to_is_basis == True:
         #Case2: both Basis objects.  Just make sure they agree :)
-        assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch: %d,%d,%d" % (from_basis.dim,to_basis.dim,dim)
+        assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch: %d,%d,%d" % (from_basis.dim, to_basis.dim, dim)
     else:
         # If one is just a string, then use the .equivalent of the
         # other basis, since there can be desired structure (in the
@@ -74,21 +76,21 @@ def change_basis(mx, from_basis, to_basis):
         if from_is_basis:
             assert(from_basis.dim == dim), "src-basis dimension mismatch: %d != %d" % (from_basis.dim, dim)
             #to_basis = from_basis.equivalent(to_basis) #Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
-            to_basis = BuiltinBasis(to_basis,dim,sparse=from_basis.sparse)
+            to_basis = BuiltinBasis(to_basis, dim, sparse=from_basis.sparse)
         else:
             assert(to_basis.dim == dim), "dest-basis dimension mismatch: %d != %d" % (to_basis.dim, dim)
             #from_basis = to_basis.equivalent(from_basis)
-            from_basis = BuiltinBasis(from_basis,dim,sparse=to_basis.sparse)
+            from_basis = BuiltinBasis(from_basis, dim, sparse=to_basis.sparse)
 
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
     if from_basis.dim != to_basis.dim:
         raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
-    
+
     if from_basis == to_basis:
         return mx.copy()
 
-    toMx   = from_basis.transform_matrix(to_basis)
+    toMx = from_basis.transform_matrix(to_basis)
     fromMx = to_basis.transform_matrix(from_basis)
 
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
@@ -96,15 +98,15 @@ def change_basis(mx, from_basis, to_basis):
         # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
         # with some/all args being sparse:
         ret = _mt.safedot(toMx, _mt.safedot(mx, fromMx))
-    else: # isVec
+    else:  # isVec
         ret = _mt.safedot(toMx, mx)
 
     if not to_basis.real:
         return ret
 
-    if _mt.safenorm(ret,'imag') > 1e-8:
+    if _mt.safenorm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
-                         (_mt.safenorm(ret,'imag'), from_basis, to_basis, ret))
+                         (_mt.safenorm(ret, 'imag'), from_basis, to_basis, ret))
     return _mt.safereal(ret)
 
 #def transform_matrix(from_basis, to_basis, dimOrBlockDims=None, sparse=False):
@@ -168,11 +170,11 @@ def build_basis_pair(mx, from_basis, to_basis):
     b = isinstance(to_basis, Basis)
     if a and b:
         pass  # no Basis creation needed
-    elif a and not b: # only from_basis is a Basis
+    elif a and not b:  # only from_basis is a Basis
         to_basis = from_basis.equivalent(to_basis)
-    elif b and not a: # only to_basis is a Basis
+    elif b and not a:  # only to_basis is a Basis
         from_basis = to_basis.equivalent(from_basis)
-    else: #neither ar Basis objects (assume they're strings)
+    else:  # neither ar Basis objects (assume they're strings)
         to_basis = BuiltinBasis(to_basis, dim)
         from_basis = BuiltinBasis(from_basis, dim)
     assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch!"
@@ -202,10 +204,10 @@ def build_basis_for_matrix(mx, basis):
     Basis
     """
     dim = mx.shape[0]
-    if isinstance(basis,Basis):
+    if isinstance(basis, Basis):
         assert(basis.dim == dim), "Supplied Basis has wrong dimension!"
         return basis
-    else: # assume basis is a string name of a builtin basis
+    else:  # assume basis is a string name of a builtin basis
         return BuiltinBasis(basis, dim)
 
 
@@ -244,22 +246,23 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     -------
     numpy.ndarray
     """
-    assert(stdBasis1.elsize == stdBasis2.elsize),'"embedded" space dimensions differ!'
+    assert(stdBasis1.elsize == stdBasis2.elsize), '"embedded" space dimensions differ!'
     if stdBasis1.dim == stdBasis2.dim:
-        return change_basis(mx, stdBasis1, stdBasis2) # don't just 'return mx' here
-         # - need to change bases if bases are different (e.g. if one is a Tensorprod of std components)
-        
+        return change_basis(mx, stdBasis1, stdBasis2)  # don't just 'return mx' here
+        # - need to change bases if bases are different (e.g. if one is a Tensorprod of std components)
+
     #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
     #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
         assert stdBasis1.dim < stdBasis2.dim
-        right = _np.dot(mx, stdBasis1.get_from_simple_std())       #  (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
-        mid   = _np.dot(stdBasis1.get_to_simple_std(), right)  #  want Ai st.   Ai * A = I(dim)
+        right = _np.dot(mx, stdBasis1.get_from_simple_std())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
+        mid = _np.dot(stdBasis1.get_to_simple_std(), right)  # want Ai st.   Ai * A = I(dim)
     elif resize == 'contract':
         assert stdBasis1.dim > stdBasis2.dim
-        right = _np.dot(mx, stdBasis2.get_to_simple_std()) #  (dim,dim) (dim,expdim) => dim,expdim
+        right = _np.dot(mx, stdBasis2.get_to_simple_std())  # (dim,dim) (dim,expdim) => dim,expdim
         mid = _np.dot(stdBasis2.get_from_simple_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
     return mid
+
 
 def flexible_change_basis(mx, startBasis, endBasis):
     """
@@ -278,7 +281,7 @@ def flexible_change_basis(mx, startBasis, endBasis):
     -------
     numpy.ndarray
     """
-    if startBasis.dim == endBasis.dim: # normal case
+    if startBasis.dim == endBasis.dim:  # normal case
         return change_basis(mx, startBasis, endBasis)
     if startBasis.dim < endBasis.dim:
         resize = 'expand'
@@ -287,9 +290,10 @@ def flexible_change_basis(mx, startBasis, endBasis):
     stdBasis1 = startBasis.equivalent('std')
     stdBasis2 = endBasis.equivalent('std')
     #start = change_basis(mx, startBasis, stdBasis1)
-    mid   = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
-    end   = change_basis(mid, stdBasis2, endBasis)
+    mid = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
+    end = change_basis(mid, stdBasis2, endBasis)
     return end
+
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None):
     """
@@ -305,7 +309,7 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
         of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
 
     dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.  Gives the *matrix* 
+        Structure of the density-matrix space.  Gives the *matrix*
         dimensions of each block.
 
     resize : {'expand','contract'}
@@ -318,9 +322,9 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
     #FUTURE: add a sparse flag?
     if dimOrBlockDims is None:
         return mx
-    blkBasis = DirectSumBasis( [ BuiltinBasis('std',d**2) for d in dimOrBlockDims ] )
+    blkBasis = DirectSumBasis([BuiltinBasis('std', d**2) for d in dimOrBlockDims])
     simpleBasis = BuiltingBasis('std', sum(dimOrBlockDims)**2)
-    
+
     if resize == 'expand':
         a = blkBasis
         b = simpleBasis
@@ -345,9 +349,9 @@ def state_to_stdmx(state_vec):
         A density matrix of shape (d,d), corresponding to the pure state
         given by the length-`d` array, `state_vec`.
     """
-    st_vec = state_vec.view(); st_vec.shape = (len(st_vec),1) #column vector
-    dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec )
-    return dm_mx #density matrix in standard (sigma-z) basis
+    st_vec = state_vec.view(); st_vec.shape = (len(st_vec), 1)  # column vector
+    dm_mx = _np.kron(_np.conjugate(_np.transpose(st_vec)), st_vec)
+    return dm_mx  # density matrix in standard (sigma-z) basis
 
 
 def state_to_pauli_density_vec(state_vec):
@@ -366,7 +370,7 @@ def state_to_pauli_density_vec(state_vec):
         The 2x2 density matrix of the pure state given by state_vec, given
         as a 4x1 column vector in the Pauli basis.
     """
-    assert( len(state_vec) == 2 )
+    assert(len(state_vec) == 2)
     return stdmx_to_ppvec(state_to_stdmx(state_vec))
 
 
@@ -385,22 +389,24 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     numpy array
         The matrix, 2x2 or 4x4 depending on nqubits
     """
-    if not isinstance(basis,Basis):
+    if not isinstance(basis, Basis):
         basis = BuiltinBasis(basis, len(v))
-    ret = _np.zeros( basis.elshape, 'complex' )
+    ret = _np.zeros(basis.elshape, 'complex')
     for i, mx in enumerate(basis.elements):
         if keep_complex:
-            ret += v[i]*mx
+            ret += v[i] * mx
         else:
-            ret += float(v[i])*mx
+            ret += float(v[i]) * mx
     return ret
 
-gmvec_to_stdmx  = partial(vec_to_stdmx, basis='gm')
-ppvec_to_stdmx  = partial(vec_to_stdmx, basis='pp')
-qtvec_to_stdmx  = partial(vec_to_stdmx, basis='qt')
+
+gmvec_to_stdmx = partial(vec_to_stdmx, basis='gm')
+ppvec_to_stdmx = partial(vec_to_stdmx, basis='pp')
+qtvec_to_stdmx = partial(vec_to_stdmx, basis='qt')
 stdvec_to_stdmx = partial(vec_to_stdmx, basis='std')
 
 from . import matrixtools as _mt
+
 
 def stdmx_to_vec(m, basis):
     """
@@ -420,16 +426,15 @@ def stdmx_to_vec(m, basis):
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     basis = Basis.cast(basis, m.shape[0]**2)
-    v = _np.empty((basis.size,1))
+    v = _np.empty((basis.size, 1))
     for i, mx in enumerate(basis.elements):
         if basis.real:
-            v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
+            v[i, 0] = _np.real(_mt.trace(_np.dot(mx, m)))
         else:
-            v[i,0] = _np.real_if_close(_mt.trace(_np.dot(mx,m)))
+            v[i, 0] = _np.real_if_close(_mt.trace(_np.dot(mx, m)))
     return v
 
-stdmx_to_ppvec  = partial(stdmx_to_vec, basis='pp')
-stdmx_to_gmvec  = partial(stdmx_to_vec, basis='gm')
+
+stdmx_to_ppvec = partial(stdmx_to_vec, basis='pp')
+stdmx_to_gmvec = partial(stdmx_to_vec, basis='gm')
 stdmx_to_stdvec = partial(stdmx_to_vec, basis='std')
-
-

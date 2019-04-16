@@ -68,7 +68,7 @@ class ImplicitOpModel(_mdl.OpModel):
             The decomposition (with labels) of (pure) state-space this model
             acts upon.  Regardless of whether the model contains operators or
             superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be 
+            and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
 
         basis : Basis
@@ -87,13 +87,13 @@ class ImplicitOpModel(_mdl.OpModel):
 
         layer_lizard_args : tuple, optional
             Additional arguments reserved for the custom layer lizard class.
-            These arguments are not passed to the `layer_lizard_class`'s 
+            These arguments are not passed to the `layer_lizard_class`'s
             constructor, but are stored in the model's `._lizardArgs` member and
-            may be accessed from within the layer lizard object (which gets a 
+            may be accessed from within the layer lizard object (which gets a
             reference to the model upon initialization).
 
         simplifier_helper_class : class, optional
-            The :class:`SimplifierHelper`-derived type used to provide the 
+            The :class:`SimplifierHelper`-derived type used to provide the
             mimial interface needed for circuit compiling.  Initalized
             using `simplifier_helper_class(self)`.
 
@@ -103,7 +103,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
-            represented, allowing compatibility checks with (super)operator 
+            represented, allowing compatibility checks with (super)operator
             objects.
         """
 
@@ -113,14 +113,14 @@ class ImplicitOpModel(_mdl.OpModel):
         self.instrument_blks = _collections.OrderedDict()
 
         if primitive_labels is None: primitive_labels = {}
-        self._primitive_prep_labels = primitive_labels.get('preps',())
-        self._primitive_povm_labels = primitive_labels.get('povms',())
-        self._primitive_op_labels = primitive_labels.get('ops',())
-        self._primitive_instrument_labels = primitive_labels.get('instruments',())
-        
+        self._primitive_prep_labels = primitive_labels.get('preps', ())
+        self._primitive_povm_labels = primitive_labels.get('povms', ())
+        self._primitive_op_labels = primitive_labels.get('ops', ())
+        self._primitive_instrument_labels = primitive_labels.get('instruments', ())
+
         self._lizardClass = layer_lizard_class
         self._lizardArgs = layer_lizard_args
-        
+
         if simplifier_helper_class is None:
             simplifier_helper_class = _sh.ImplicitModelSimplifierHelper
             # by default, assume *_blk members have keys which match the simple
@@ -129,7 +129,6 @@ class ImplicitOpModel(_mdl.OpModel):
         simplifier_helper = simplifier_helper_class(self)
         super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
                                               simplifier_helper, sim_type)
-
 
     def get_primitive_prep_labels(self):
         """ Return the primitive state preparation labels of this model"""
@@ -146,7 +145,7 @@ class ImplicitOpModel(_mdl.OpModel):
     def set_primitive_povm_labels(self, lbls):
         """ Set the primitive POVM labels of this model"""
         self._primitive_povm_labels = tuple(lbls)
-    
+
     def get_primitive_op_labels(self):
         """ Return the primitive operation labels of this model"""
         return self._primitive_op_labels
@@ -163,41 +162,40 @@ class ImplicitOpModel(_mdl.OpModel):
         """ Set the primitive instrument labels of this model"""
         self._primitive_instrument_labels = tuple(lbls)
 
-        
     #Functions required for base class functionality
 
     def _iter_parameterized_objs(self):
-        for dictlbl,objdict in _itertools.chain(self.prep_blks.items(),
-                                                self.povm_blks.items(),
-                                                self.operation_blks.items(),
-                                                self.instrument_blks.items()):
-            for lbl,obj in objdict.items():
-                yield (_Label(dictlbl+":"+lbl.name,lbl.sslbls),obj)
-    
+        for dictlbl, objdict in _itertools.chain(self.prep_blks.items(),
+                                                 self.povm_blks.items(),
+                                                 self.operation_blks.items(),
+                                                 self.instrument_blks.items()):
+            for lbl, obj in objdict.items():
+                yield (_Label(dictlbl + ":" + lbl.name, lbl.sslbls), obj)
+
     def _layer_lizard(self):
         """ (simplified op server) """
-        self._clean_paramvec() # just to be safe
-        
-        simplified_effect_blks = _collections.OrderedDict()
-        for povm_dict_lbl,povmdict in self.povm_blks.items():
-            simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
-                [(k,e) for povm_lbl,povm in povmdict.items()
-                 for k,e in povm.simplify_effects(povm_lbl).items() ])
-        
-        simplified_op_blks = self.operation_blks.copy() #no compilation needed
-        for inst_dict_lbl,instdict in self.instrument_blks.items():
-            if inst_dict_lbl not in simplified_op_blks: #only create when needed
-                simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
-            for inst_lbl,inst in instdict.items():
-                for k,g in inst.simplify_operations(inst_lbl).items():
-                    simplified_op_blks[inst_dict_lbl][k] = g            
+        self._clean_paramvec()  # just to be safe
 
-        simplified_prep_blks = self.prep_blks.copy() #no compilation needed
+        simplified_effect_blks = _collections.OrderedDict()
+        for povm_dict_lbl, povmdict in self.povm_blks.items():
+            simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
+                [(k, e) for povm_lbl, povm in povmdict.items()
+                 for k, e in povm.simplify_effects(povm_lbl).items()])
+
+        simplified_op_blks = self.operation_blks.copy()  # no compilation needed
+        for inst_dict_lbl, instdict in self.instrument_blks.items():
+            if inst_dict_lbl not in simplified_op_blks:  # only create when needed
+                simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
+            for inst_lbl, inst in instdict.items():
+                for k, g in inst.simplify_operations(inst_lbl).items():
+                    simplified_op_blks[inst_dict_lbl][k] = g
+
+        simplified_prep_blks = self.prep_blks.copy()  # no compilation needed
 
         return self._lizardClass(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)
-          # use self._lizardArgs internally?
+        # use self._lizardArgs internally?
 
-    def _init_copy(self,copyInto):
+    def _init_copy(self, copyInto):
         """
         Copies any "tricky" member of this model into `copyInto`, before
         deep copying everything else within a .copy() operation.
@@ -206,21 +204,20 @@ class ImplicitOpModel(_mdl.OpModel):
         super(ImplicitOpModel, self)._init_copy(copyInto)
 
         # Copy our "tricky" members
-        copyInto.prep_blks = _collections.OrderedDict([ (lbl,prepdict.copy(copyInto))
-                                                        for lbl,prepdict in self.prep_blks.items()])
-        copyInto.povm_blks = _collections.OrderedDict([ (lbl,povmdict.copy(copyInto))
-                                                        for lbl,povmdict in self.povm_blks.items()])
-        copyInto.operation_blks = _collections.OrderedDict([ (lbl,opdict.copy(copyInto))
-                                                        for lbl,opdict in self.operation_blks.items()])
-        copyInto.instrument_blks = _collections.OrderedDict([ (lbl,idict.copy(copyInto))
-                                                        for lbl,idict in self.instrument_blks.items()])
+        copyInto.prep_blks = _collections.OrderedDict([(lbl, prepdict.copy(copyInto))
+                                                       for lbl, prepdict in self.prep_blks.items()])
+        copyInto.povm_blks = _collections.OrderedDict([(lbl, povmdict.copy(copyInto))
+                                                       for lbl, povmdict in self.povm_blks.items()])
+        copyInto.operation_blks = _collections.OrderedDict([(lbl, opdict.copy(copyInto))
+                                                            for lbl, opdict in self.operation_blks.items()])
+        copyInto.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copyInto))
+                                                             for lbl, idict in self.instrument_blks.items()])
         copyInto._shlp = self.simplifier_helper_class(copyInto)
-
 
     def __setstate__(self, stateDict):
         self.__dict__.update(stateDict)
         if 'uuid' not in stateDict:
-            self.uuid = _uuid.uuid4() #create a new uuid
+            self.uuid = _uuid.uuid4()  # create a new uuid
 
         #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -238,7 +235,6 @@ class ImplicitOpModel(_mdl.OpModel):
         for idict in self.instrument_blks.values():
             idict.parent = self
             for o in idict.values(): o.relink_parent(self)
-
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
@@ -260,7 +256,7 @@ class ImplicitOpModel(_mdl.OpModel):
             `(symplectic_matrix, phase_vector)` tuples.
         """
         gfilter = set(oplabel_filter) if oplabel_filter is not None \
-                  else None
+            else None
 
         srep_dict = {}
 
@@ -271,12 +267,12 @@ class ImplicitOpModel(_mdl.OpModel):
             if isinstance(gate, _op.EmbeddedOp):
                 assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
                     "EmbeddedClifforGate contains a non-CliffordOp!"
-                lbl = gl.name # strip state space labels off since this is a
-                              # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix,gate.embedded_op.svector)
+                lbl = gl.name  # strip state space labels off since this is a
+                # symplectic rep for the *embedded* gate
+                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
             elif isinstance(gate, _op.CliffordOp):
-                lbl = gl.name 
-                srep = (gate.smatrix,gate.svector)
+                lbl = gl.name
+                srep = (gate.smatrix, gate.svector)
             else:
                 lbl = srep = None
 
@@ -289,24 +285,22 @@ class ImplicitOpModel(_mdl.OpModel):
 
         return srep_dict
 
-
     def __str__(self):
         s = ""
-        for dictlbl,d in self.prep_blks.items():
-            for lbl,vec in d.items():
-                s += "%s:%s = " % (str(dictlbl),str(lbl)) + str(vec) + "\n"
+        for dictlbl, d in self.prep_blks.items():
+            for lbl, vec in d.items():
+                s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(vec) + "\n"
         s += "\n"
-        for dictlbl,d in self.povm_blks.items():
-            for lbl,povm in d.items():
-                s += "%s:%s = " % (str(dictlbl),str(lbl)) + str(povm) + "\n"
+        for dictlbl, d in self.povm_blks.items():
+            for lbl, povm in d.items():
+                s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(povm) + "\n"
         s += "\n"
-        for dictlbl,d in self.operation_blks.items():
-            for lbl,gate in d.items():
-                s += "%s:%s = \n" % (str(dictlbl),str(lbl)) + str(gate) + "\n\n"
-        for dictlbl,d in self.instrument_blks.items():
-            for lbl,inst in d.items():
-                s += "%s:%s = " % (str(dictlbl),str(lbl)) + str(inst) + "\n"
+        for dictlbl, d in self.operation_blks.items():
+            for lbl, gate in d.items():
+                s += "%s:%s = \n" % (str(dictlbl), str(lbl)) + str(gate) + "\n\n"
+        for dictlbl, d in self.instrument_blks.items():
+            for lbl, inst in d.items():
+                s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(inst) + "\n"
         s += "\n"
 
         return s
-

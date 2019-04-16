@@ -12,8 +12,9 @@ from ... import construction as _cnst
 from ... import objects as _objs
 from ... import tools as _tools
 
+
 def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
-                                   gateDepol=None, withId=True,rpeconfig_inst=None):
+                                    gateDepol=None, withId=True, rpeconfig_inst=None):
     """
     Make a model for simulating RPE, paramaterized by rotation angles.  Note
     that the output model also has thetaTrue, alphaTrue, and epsilonTrue
@@ -22,7 +23,7 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
     Parameters
     ----------
     alphaTrue : float
-       Angle of rotation about "fixed axis" 
+       Angle of rotation about "fixed axis"
 
     epsilonTrue : float
        Angle of rotation about "loose axis"
@@ -64,51 +65,53 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
 
     auxiliary_axis_gate_label = rpeconfig_inst.auxiliary_axis_gate_label
     auxiliary_axis_label = rpeconfig_inst.auxiliary_axis_label
-    
+
     rhoExpressions = rpeconfig_inst.rhoExpressions
     EExpressions = rpeconfig_inst.EExpressions
     ELabels = rpeconfig_inst.ELabels
 
     if withId:
-        outputModel = _cnst.build_explicit_model( 
-            [('Q0',)],['Gi',loose_axis_gate_label,fixed_axis_gate_label], 
-            [ "I(Q0)", loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
+        outputModel = _cnst.build_explicit_model(
+            [('Q0',)], ['Gi', loose_axis_gate_label, fixed_axis_gate_label],
+            ["I(Q0)", loose_axis_label + "(%s,Q0)" % epsilonTrue, fixed_axis_label + "(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
             effectLabels=ELabels, effectExpressions=EExpressions)
     else:
-        outputModel = _cnst.build_explicit_model( 
-            [('Q0',)],[loose_axis_gate_label,fixed_axis_gate_label], 
-            [ loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
+        outputModel = _cnst.build_explicit_model(
+            [('Q0',)], [loose_axis_gate_label, fixed_axis_gate_label],
+            [loose_axis_label + "(%s,Q0)" % epsilonTrue, fixed_axis_label + "(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
             effectLabels=ELabels, effectExpressions=EExpressions)
 
     if auxRot != 0:
-        modelAux1 = _cnst.build_explicit_model( 
-            [('Q0',)],['Gi',auxiliary_axis_gate_label,fixed_axis_gate_label], 
-            [ "I(Q0)", auxiliary_axis_label+"(%s,Q0)" % auxRot, fixed_axis_label+"(pi/2,Q0)"],
+        modelAux1 = _cnst.build_explicit_model(
+            [('Q0',)], ['Gi', auxiliary_axis_gate_label, fixed_axis_gate_label],
+            ["I(Q0)", auxiliary_axis_label + "(%s,Q0)" % auxRot, fixed_axis_label + "(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
             effectLabels=ELabels, effectExpressions=EExpressions)
 
         outputModel.operations[loose_axis_gate_label] = \
-                _np.dot( _np.dot(_np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label]),
-                               outputModel.operations[loose_axis_gate_label]),modelAux1.operations[auxiliary_axis_gate_label])
+            _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label]),
+                            outputModel.operations[loose_axis_gate_label]), modelAux1.operations[auxiliary_axis_gate_label])
 
     outputModel = outputModel.depolarize(op_noise=gateDepol,
-                                             spam_noise=SPAMdepol)
-    
-    thetaTrue = _rpetools.extract_theta(outputModel,rpeconfig_inst)
+                                         spam_noise=SPAMdepol)
+
+    thetaTrue = _rpetools.extract_theta(outputModel, rpeconfig_inst)
     outputModel.thetaTrue = thetaTrue
-    
-    outputModel.alphaTrue = _rpetools.extract_alpha(outputModel,rpeconfig_inst)
+
+    outputModel.alphaTrue = _rpetools.extract_alpha(outputModel, rpeconfig_inst)
     outputModel.alphaTrue = alphaTrue
-    
-    outputModel.epsilonTrue = _rpetools.extract_epsilon(outputModel,rpeconfig_inst)
+
+    outputModel.epsilonTrue = _rpetools.extract_epsilon(outputModel, rpeconfig_inst)
     outputModel.epsilonTrue = epsilonTrue
 
     return outputModel
 
 #def make_rpe_alpha_str_lists(kList,angleStr,rpeconfig_inst):
-def make_rpe_angle_str_lists(kList,angleName,rpeconfig_inst):
+
+
+def make_rpe_angle_str_lists(kList, angleName, rpeconfig_inst):
     """
     Make cosine and sine circuit lists.  These operation sequences are used to estimate the angle specified
     by angleName ('alpha', 'epsilon', or 'theta')
@@ -116,13 +119,13 @@ def make_rpe_angle_str_lists(kList,angleName,rpeconfig_inst):
     Parameters
     ----------
     kList : list of ints
-        The list of "germ powers" to be used.  Typically successive powers of 
+        The list of "germ powers" to be used.  Typically successive powers of
         two; e.g. [1,2,4,8,16].
 
     angleName : string
         The angle to be deduced from these operation sequences.
         (Choices are 'alpha', 'epsilon', or 'theta')
-    
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
@@ -134,7 +137,7 @@ def make_rpe_angle_str_lists(kList,angleName,rpeconfig_inst):
     sinStrList : list of Circuits
         The list of "sine strings" to be used for alpha estimation.
     """
-    
+
 #    rpeconfig_inst = rpeInstanceDict[rpeconfig_inst]
 
     if angleName == 'alpha':
@@ -150,7 +153,7 @@ def make_rpe_angle_str_lists(kList,angleName,rpeconfig_inst):
         sin_germ_str = rpeconfig_inst.alpha_sin_germ_str
         sin_meas_tuple = rpeconfig_inst.alpha_sin_meas_tuple
         sin_meas_str = rpeconfig_inst.alpha_sin_meas_str
-        
+
     elif angleName == 'epsilon':
         cos_prep_tuple = rpeconfig_inst.epsilon_cos_prep_tuple
         cos_prep_str = rpeconfig_inst.epsilon_cos_prep_str
@@ -185,13 +188,14 @@ def make_rpe_angle_str_lists(kList,angleName,rpeconfig_inst):
     cosStrList = []
     sinStrList = []
     for k in kList:
-        cosStrList += [_objs.Circuit(cos_prep_tuple+cos_germ_tuple*k+cos_meas_tuple,
-                                                cos_prep_str+'('+cos_germ_str+')^'+str(k)+cos_meas_str)]
-        sinStrList += [_objs.Circuit(sin_prep_tuple+sin_germ_tuple*k+sin_meas_tuple,
-                                                sin_prep_str+'('+sin_germ_str+')^'+str(k)+sin_meas_str)]
+        cosStrList += [_objs.Circuit(cos_prep_tuple + cos_germ_tuple * k + cos_meas_tuple,
+                                     cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
+        sinStrList += [_objs.Circuit(sin_prep_tuple + sin_germ_tuple * k + sin_meas_tuple,
+                                     sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
     return cosStrList, sinStrList
 
-def make_rpe_angle_string_list_dict(log2kMaxOrkList,rpeconfig_inst):
+
+def make_rpe_angle_string_list_dict(log2kMaxOrkList, rpeconfig_inst):
     """
     Generates a dictionary that contains operation sequences for all RPE cosine and
     sine experiments for all three angles.
@@ -201,7 +205,7 @@ def make_rpe_angle_string_list_dict(log2kMaxOrkList,rpeconfig_inst):
     log2kMaxOrkList : int or list
         int - log2(Maximum number of times to repeat an RPE germ)
         list - List of maximum number of times to repeat an RPE germ
-        
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
@@ -228,27 +232,28 @@ def make_rpe_angle_string_list_dict(log2kMaxOrkList,rpeconfig_inst):
         - 'totalStrList' : All above operation sequences combined into one list;
           duplicates removed.
     """
-    if isinstance(log2kMaxOrkList,int):
-        kList = [2**k for k in range(log2kMaxOrkList+1)]
+    if isinstance(log2kMaxOrkList, int):
+        kList = [2**k for k in range(log2kMaxOrkList + 1)]
     else:
         kList = log2kMaxOrkList
-    alphaCosStrList, alphaSinStrList = make_rpe_angle_str_lists(kList,'alpha',rpeconfig_inst)
-    epsilonCosStrList, epsilonSinStrList = make_rpe_angle_str_lists(kList,'epsilon',rpeconfig_inst)
-    thetaCosStrList, thetaSinStrList = make_rpe_angle_str_lists(kList,'theta',rpeconfig_inst)
+    alphaCosStrList, alphaSinStrList = make_rpe_angle_str_lists(kList, 'alpha', rpeconfig_inst)
+    epsilonCosStrList, epsilonSinStrList = make_rpe_angle_str_lists(kList, 'epsilon', rpeconfig_inst)
+    thetaCosStrList, thetaSinStrList = make_rpe_angle_str_lists(kList, 'theta', rpeconfig_inst)
     totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
-    totalStrList = _tools.remove_duplicates(totalStrList) #probably superfluous
+    totalStrList = _tools.remove_duplicates(totalStrList)  # probably superfluous
 
     stringListD = {}
-    stringListD['alpha','cos'] = alphaCosStrList
-    stringListD['alpha','sin'] = alphaSinStrList
-    stringListD['epsilon','cos'] = epsilonCosStrList
-    stringListD['epsilon','sin'] = epsilonSinStrList
-    stringListD['theta','cos'] = thetaCosStrList
-    stringListD['theta','sin'] = thetaSinStrList
+    stringListD['alpha', 'cos'] = alphaCosStrList
+    stringListD['alpha', 'sin'] = alphaSinStrList
+    stringListD['epsilon', 'cos'] = epsilonCosStrList
+    stringListD['epsilon', 'sin'] = epsilonSinStrList
+    stringListD['theta', 'cos'] = thetaCosStrList
+    stringListD['theta', 'sin'] = thetaSinStrList
     stringListD['totalStrList'] = totalStrList
     return stringListD
 
-def make_rpe_data_set(modelOrDataset,stringListD,nSamples,sampleError='binomial',seed=None):
+
+def make_rpe_data_set(modelOrDataset, stringListD, nSamples, sampleError='binomial', seed=None):
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
     Is a thin wrapper for pygsti.construction.generate_fake_data, changing
@@ -280,7 +285,7 @@ def make_rpe_data_set(modelOrDataset,stringListD,nSamples,sampleError='binomial'
     sampleError : string, optional
         What type of sample error is included in the counts.  Can be:
 
-        - "none"  - no sample error: 
+        - "none"  - no sample error:
           counts are floating point numbers such that the exact
           probabilty can be found by the ratio of count / total.
         - "round" - same as "none", except counts are rounded to the nearest
@@ -305,4 +310,4 @@ def make_rpe_data_set(modelOrDataset,stringListD,nSamples,sampleError='binomial'
     """
     return _cnst.generate_fake_data(modelOrDataset,
                                     stringListD['totalStrList'],
-                                    nSamples,sampleError=sampleError,seed=seed)
+                                    nSamples, sampleError=sampleError, seed=seed)

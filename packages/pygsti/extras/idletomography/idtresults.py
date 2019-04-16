@@ -1,12 +1,14 @@
 """ Idle Tomography results object """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
+
 class IdleTomographyResults(object):
-    """ 
+    """
     A container for idle tomography results:  intrinsic and observable errors,
     along with supporting information.
     """
-    def __init__(self, dataset, max_lengths, max_error_weight, fit_order, 
+
+    def __init__(self, dataset, max_lengths, max_error_weight, fit_order,
                  pauli_dicts, idle_str, error_list, intrinsic_rates,
                  pauli_fidpairs, observed_rate_infos):
         """
@@ -22,10 +24,10 @@ class IdleTomographyResults(object):
 
         max_error_weight : int
             The maximum error weight.
-            
+
         fit_order : int
             The order of the polynomial fits used.
-            
+
         pauli_dicts : tuple
             A 2-tuple of `(prepDict,measDict)` Pauli basis dictionaries.
 
@@ -35,7 +37,7 @@ class IdleTomographyResults(object):
         error_list : list
             A list of :class:`NQPauliOp` objects describing the errors
             Paulis considered for each intrinsic-error type.
-            
+
         intrinsic_rates : dict
             A dictionary of the intrinsic rates.  Keys are intrinsic-rate-types,
             i.e. 'hamiltonian', 'stochastic', or 'affine'.  Values are numpy
@@ -43,15 +45,15 @@ class IdleTomographyResults(object):
 
         pauli_fidpairs : dict
             A dictionary of the pauli-state fiducial pairs.  Keys are
-            observed-rate-types, i.e. 'samebasis' or 'diffbasis', and 
+            observed-rate-types, i.e. 'samebasis' or 'diffbasis', and
             values are lists of `(prep,meas)` 2-tuples of
-            :class:`NQPauliState` objects. 
-            
+            :class:`NQPauliState` objects.
+
         observed_rate_infos : dict
             A dictionary of observed-rate information dictionaries.  Keys are
-            observed-rate-types, i.e. 'samebasis' or 'diffbasis', and 
+            observed-rate-types, i.e. 'samebasis' or 'diffbasis', and
             values are further dictionaries indexed by fiducial pair (i.e. an
-            element of `pauli_fidpairs`, then either a :class:`NQOutcome` (for 
+            element of `pauli_fidpairs`, then either a :class:`NQOutcome` (for
             the "samebasis" case) or :class:`NQPauliOp` (for "diffbasis") case.
             After these two indexes, the value is *another* dictionary of
             information about the observeable rate so defined.  So, to get to
@@ -65,14 +67,14 @@ class IdleTomographyResults(object):
         self.fit_order = fit_order
         self.prep_basis_strs, self.meas_basis_strs = pauli_dicts
         self.idle_str = idle_str
-        
-        # the intrinsic error Paulis, as a list of NQPauliOp objects.  Gives the ordering of 
+
+        # the intrinsic error Paulis, as a list of NQPauliOp objects.  Gives the ordering of
         #  each value of self.intrinsic_rates
         self.error_list = error_list[:]
 
         # the intrinsic error rates. Allowed keys are "hamiltonian", "stochastic", "affine"
         #  Values are numpy arrays whose components correspond to the error_list Paulis
-        self.intrinsic_rates = intrinsic_rates.copy() 
+        self.intrinsic_rates = intrinsic_rates.copy()
 
         # the fiducial pairs ("configurations") used to specify the observable rates.
         #  Allowed keys are "hamiltonian", "stochastic", "stochastic/affine"
@@ -92,27 +94,26 @@ class IdleTomographyResults(object):
         #    dict of info dicts whose keys are NQPauliState *outcomes*
         self.observed_rate_infos = observed_rate_infos.copy()
 
-        # can be used to store true or predicted 
-        self.predicted_obs_rates = None 
-
+        # can be used to store true or predicted
+        self.predicted_obs_rates = None
 
     def __str__(self):
         s = "Idle Tomography Results\n"
         if "stochastic" in self.intrinsic_rates:
             s += "Intrinsic stochastic rates: \n"
-            s += "\n".join("  %s: %g" % (str(err),rate) for err,rate in
+            s += "\n".join("  %s: %g" % (str(err), rate) for err, rate in
                            zip(self.error_list, self.intrinsic_rates['stochastic']))
             s += "\n"
-                
+
         if "affine" in self.intrinsic_rates:
             s += "Intrinsic affine rates: \n"
-            s += "\n".join("  %s: %g" % (str(err),rate) for err,rate in
+            s += "\n".join("  %s: %g" % (str(err), rate) for err, rate in
                            zip(self.error_list, self.intrinsic_rates['affine']))
             s += "\n"
 
         if "hamiltonian" in self.intrinsic_rates:
             s += "Intrinsic hamiltonian rates:\n"
-            s += "\n".join("  %s: %g" % (str(err),rate) for err,rate in
+            s += "\n".join("  %s: %g" % (str(err), rate) for err, rate in
                            zip(self.error_list, self.intrinsic_rates['hamiltonian']))
             s += "\n"
 

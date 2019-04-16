@@ -7,9 +7,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import collections as _collections
-import itertools   as _itertools
-import warnings    as _warnings
-import copy        as _copy
+import itertools as _itertools
+import warnings as _warnings
+import copy as _copy
 
 from .. import tools as _tools
 from ..tools import compattools as _compat
@@ -22,6 +22,7 @@ from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 #A flag to enable fast-loading of old results files (should
 # only be changed by experts)
 _SHORTCUT_OLD_RESULTS_LOAD = False
+
 
 class Results(object):
     """
@@ -50,7 +51,6 @@ class Results(object):
         self.circuit_structs = _collections.OrderedDict()
         self.estimates = _collections.OrderedDict()
 
-
     def init_dataset(self, dataset):
         """
         Initialize the (single) dataset of this `Results` object.
@@ -69,7 +69,6 @@ class Results(object):
             _warnings.warn(("Re-initializing the dataset of a Results object!"
                             "  Usually you don't want to do this."))
         self.dataset = dataset
-
 
     def init_circuits(self, structsByIter):
         """
@@ -99,10 +98,10 @@ class Results(object):
         #Set circuit structures
         self.circuit_structs['iteration'] = []
         for gss in structsByIter:
-            if isinstance(gss, (_LsGermsStructure,_LsGermsSerialStructure)):
+            if isinstance(gss, (_LsGermsStructure, _LsGermsSerialStructure)):
                 self.circuit_structs['iteration'].append(gss)
             elif isinstance(gss, list):
-                unindexed_gss = _LsGermsStructure([],[],[],[],None)
+                unindexed_gss = _LsGermsStructure([], [], [], [], None)
                 unindexed_gss.add_unindexed(gss)
                 self.circuit_structs['iteration'].append(unindexed_gss)
             else:
@@ -110,25 +109,25 @@ class Results(object):
                                  % str(type(gss)))
 
         self.circuit_structs['final'] = \
-                self.circuit_structs['iteration'][-1]
+            self.circuit_structs['iteration'][-1]
 
         #Extract raw circuit lists from structs
         self.circuit_lists['iteration'] = \
-                [ gss.allstrs for gss in self.circuit_structs['iteration'] ]
+            [gss.allstrs for gss in self.circuit_structs['iteration']]
         self.circuit_lists['final'] = self.circuit_lists['iteration'][-1]
         self.circuit_lists['all'] = _tools.remove_duplicates(
-            list(_itertools.chain(*self.circuit_lists['iteration'])) )
+            list(_itertools.chain(*self.circuit_lists['iteration'])))
 
         running_set = set(); delta_lsts = []
         for lst in self.circuit_lists['iteration']:
-            delta_lst = [ x for x in lst if (x not in running_set) ]
+            delta_lst = [x for x in lst if (x not in running_set)]
             delta_lsts.append(delta_lst); running_set.update(delta_lst)
-        self.circuit_lists['iteration delta'] = delta_lsts # *added* at each iteration
+        self.circuit_lists['iteration delta'] = delta_lsts  # *added* at each iteration
 
         #Set "Ls and germs" info: gives particular structure
         # to the circuitLists used to obtain estimates
         finalStruct = self.circuit_structs['final']
-        if isinstance(finalStruct, _LsGermsStructure): # FUTURE: do something sensible w/ LsGermsSerialStructure?
+        if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
             self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
             self.circuit_lists['effect fiducials'] = finalStruct.effectStrs
             self.circuit_lists['germs'] = finalStruct.germs
@@ -136,7 +135,6 @@ class Results(object):
             self.circuit_lists['prep fiducials'] = []
             self.circuit_lists['effect fiducials'] = []
             self.circuit_lists['germs'] = []
-
 
     def add_estimates(self, results, estimatesToAdd=None):
         """
@@ -177,7 +175,6 @@ class Results(object):
                                    + " want to do this.")
                 self.estimates[estimate_key] = results.estimates[estimate_key]
 
-
     def rename_estimate(self, old_name, new_name):
         """
         Rename an estimate in this Results object.  Ordering of estimates is
@@ -201,14 +198,14 @@ class Results(object):
         if hasattr(self.estimates, "move_to_end"):
             #Python3: use move_to_end method of OrderedDict to restore ordering:
             ordered_keys = list(self.estimates.keys())
-            self.estimates[new_name] = self.estimates[old_name] #at end
+            self.estimates[new_name] = self.estimates[old_name]  # at end
             del self.estimates[old_name]
-            keys_to_move = ordered_keys[ordered_keys.index(old_name)+1:] #everything after old_name
+            keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
             for key in keys_to_move: self.estimates.move_to_end(key)
 
         else:
             #Python2.7: Manipulate internals of OrderedDict to change a key while preserving order
-            PREV = 0; NEXT = 1 # ~enumerated
+            PREV = 0; NEXT = 1  # ~enumerated
 
             #Unneeded, since root will be manipulated by link_prev or link_next below if needed
             #root = self.estimates._OrderedDict__root # [prev,next,value] element - the
@@ -217,8 +214,8 @@ class Results(object):
             #first = root[NEXT] # first [prev,next,val] element of circularly linked list.
 
             old_element = self.estimates._OrderedDict__map[old_name]
-            link_prev, link_next, _ = old_element # ('_' == old_name)
-            new_element = [link_prev,link_next,new_name]
+            link_prev, link_next, _ = old_element  # ('_' == old_name)
+            new_element = [link_prev, link_next, new_name]
 
             #Replace element in circularly linked list (w/"root" sentinel element)
             link_prev[NEXT] = new_element
@@ -231,7 +228,6 @@ class Results(object):
             #Replace values in underlying dict
             value = dict.__getitem__(self.estimates, old_name)
             dict.__setitem__(self.estimates, new_name, value)
-
 
     def add_estimate(self, targetModel, seedModel, modeslByIter,
                      parameters, estimate_key='default'):
@@ -271,9 +267,8 @@ class Results(object):
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
-
-        la,lb = len(self.circuit_structs['iteration']), len(modeslByIter)
-        assert(la==lb), "Number of iterations (%d) must equal %d!" % (lb,la)
+        la, lb = len(self.circuit_structs['iteration']), len(modeslByIter)
+        assert(la == lb), "Number of iterations (%d) must equal %d!" % (lb, la)
 
         if estimate_key in self.estimates:
             _warnings.warn("Re-initializing the %s estimate" % estimate_key
@@ -281,11 +276,11 @@ class Results(object):
                            + " want to do this.")
 
         self.estimates[estimate_key] = _Estimate(self, targetModel, seedModel,
-                                                modeslByIter, parameters)
+                                                 modeslByIter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \
-                                        self.circuit_structs['final'].Ls
+            self.circuit_structs['final'].Ls
 
     def add_model_test(self, targetModel, themodel,
                        estimate_key='test', gauge_opt_keys="auto"):
@@ -338,8 +333,7 @@ class Results(object):
             raise ValueError("Invalid objective: %s" % parameters['objective'])
         parameters['profiler'] = None
         parameters['opLabelAliases'] = defaults['opLabelAliases']
-        parameters['weights'] = None                     #Hardcoded
-
+        parameters['weights'] = None  # Hardcoded
 
         #Set default gate group to trival group to mimic do_model_test (an to
         # be consistent with this function creating "gauge-optimized" models
@@ -347,7 +341,7 @@ class Results(object):
         themodel = themodel.copy()
         themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
 
-        self.add_estimate(targetModel, themodel, [themodel]*nIter,
+        self.add_estimate(targetModel, themodel, [themodel] * nIter,
                           parameters, estimate_key=estimate_key)
 
         #add gauge optimizations (always trivial)
@@ -363,9 +357,8 @@ class Results(object):
             trivialEl = _TrivialGaugeGroupElement(themodel.dim)
             goparams = {'model': themodel,
                         'targetModel': targetModel,
-                        '_gaugeGroupEl': trivialEl }
+                        '_gaugeGroupEl': trivialEl}
             est.add_gaugeoptimized(goparams, themodel, gokey)
-
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
@@ -395,10 +388,9 @@ class Results(object):
             estimate_keys = [estimate_keys]
         for ky in estimate_keys:
             if ky in self.estimates:
-                view.estimates[ky] = self.estimates[ky].view(gaugeopt_keys,view)
+                view.estimates[ky] = self.estimates[ky].view(gaugeopt_keys, view)
 
         return view
-
 
     def copy(self):
         """ Creates a copy of this Results object. """
@@ -407,10 +399,9 @@ class Results(object):
         cpy.dataset = self.dataset.copy()
         cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
         cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)
-        for est_key,est in self.estimates.items():
+        for est_key, est in self.estimates.items():
             cpy.estimates[est_key] = est.copy()
         return cpy
-
 
     def __setstate__(self, stateDict):
 
@@ -425,15 +416,14 @@ class Results(object):
             self.circuit_structs = stateDict['gatestring_structs']
             del stateDict['gatestring_lists']
             del stateDict['gatestring_structs']
-            
+
         #unpickle normally
         self.__dict__.update(stateDict)
         for est in self.estimates.values():
             est.set_parent(self)
 
-
     def __str__(self):
-        s  = "----------------------------------------------------------\n"
+        s = "----------------------------------------------------------\n"
         s += "---------------- pyGSTi Results Object -------------------\n"
         s += "----------------------------------------------------------\n"
         s += "\n"
@@ -453,14 +443,14 @@ class Results(object):
         s += "\n"
         return s
 
-
     #OLD Methods for generating reports which have been removed - show alert
     # message directing users to new factory functions
+
     def create_full_report_pdf(self, confidenceLevel=None, filename="auto",
                                title="auto", datasetLabel="auto", suffix="",
                                debugAidsAppendix=False, gaugeOptAppendix=False,
                                pixelPlotAppendix=False, whackamoleAppendix=False,
-                               pureDataAppendix=False,  m=0, M=10, tips=False,
+                               pureDataAppendix=False, m=0, M=10, tips=False,
                                verbosity=0, comm=None):
         """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
@@ -499,10 +489,10 @@ class Results(object):
              '  pygsti.report.create_standard_report(...)\n'))
 
     def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
-                            title="auto", datasetLabel="auto", suffix="",
-                            debugAidsAppendix=False,
-                            pixelPlotAppendix=False, whackamoleAppendix=False,
-                            m=0, M=10, verbosity=0, pptTables=False, comm=None):
+                                title="auto", datasetLabel="auto", suffix="",
+                                debugAidsAppendix=False,
+                                pixelPlotAppendix=False, whackamoleAppendix=False,
+                                m=0, M=10, verbosity=0, pptTables=False, comm=None):
         """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
             ('create_presentation_ppt(...) has been removed from pyGSTi.\n'

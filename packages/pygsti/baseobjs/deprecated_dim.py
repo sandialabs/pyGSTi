@@ -7,7 +7,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import collections as _collections
-import numbers     as _numbers
+import numbers as _numbers
+
 
 class Dim(object):
     '''
@@ -32,6 +33,7 @@ class Dim(object):
         [ dimOrBlockDims ] : if dimOrBlockDims is a single int
           dimOrBlockDims   : otherwise
     '''
+
     def __init__(self, dimOrBlockDims):
         """
         Performs basic processing on the dimensions
@@ -55,8 +57,8 @@ class Dim(object):
         """
         assert dimOrBlockDims is not None, 'Dim object requires non-None dim'
         if isinstance(dimOrBlockDims, Dim):
-            self.dmDim     = dimOrBlockDims.dmDim
-            self.opDim   = dimOrBlockDims.opDim
+            self.dmDim = dimOrBlockDims.dmDim
+            self.opDim = dimOrBlockDims.opDim
             self.blockDims = dimOrBlockDims.blockDims
         elif isinstance(dimOrBlockDims, _collections.Container):
             # *full* density matrix is dmDim x dmDim

@@ -21,94 +21,91 @@ from ..baseobjs import smart_cached
 
 TOL = 1e-20
 
+# The log(Likelihood) within the standard (non-Poisson) picture is:
+#
+# L = prod_{i,sl} p_{i,sl}^N_{i,sl}
+#
+# Where i indexes the operation sequence, and sl indexes the spam label.  N[i] is the total counts
+#  for the i-th circuit, and so sum_{sl} N_{i,sl} == N[i]. We can take the log:
+#
+# log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
+#
+#   after patching (linear extrapolation below min_p and ignore f == 0 terms ( 0*log(0) == 0 ) ):
+#
+# logl = sum_{i,sl} N_{i,sl} log(p_{i,sl})                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
+#                   N_{i,sl} log(min_p)     + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2 if p_{i,sl} < p_min and N_{i,sl} > 0
+#                   0                                                                             if N_{i,sl} == 0
+#
+# dlogL = sum_{i,sl} N_{i,sl} / p_{i,sl} * dp                    if p_{i,sl} >= min_p and N_{i,sl} > 0
+#                    (S + 2*S2*(p_{i,sl} - min_p)) * dp          if p_{i,sl} < p_min and N_{i,sl} > 0
+#                    0                                           if N_{i,sl} == 0
+#
+# hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 +  N_{i,sl} / p_{i,sl} *hp        if p_{i,sl} >= min_p and N_{i,sl} > 0
+#                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                  if p_{i,sl} < p_min and N_{i,sl} > 0
+#                    0                                                                     if N_{i,sl} == 0
+#
+#  where S = N_{i,sl} / min_p is the slope of the line tangent to logl at min_p
+#    and S2 = 0.5*( -N_{i,sl} / min_p**2 ) is 1/2 the 2nd derivative of the logl term at min_p
+#   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
 
- # The log(Likelihood) within the standard (non-Poisson) picture is:
- #
- # L = prod_{i,sl} p_{i,sl}^N_{i,sl}
- #
- # Where i indexes the operation sequence, and sl indexes the spam label.  N[i] is the total counts
- #  for the i-th circuit, and so sum_{sl} N_{i,sl} == N[i]. We can take the log:
- #
- # log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
- #
- #   after patching (linear extrapolation below min_p and ignore f == 0 terms ( 0*log(0) == 0 ) ):
- #
- # logl = sum_{i,sl} N_{i,sl} log(p_{i,sl})                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
- #                   N_{i,sl} log(min_p)     + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2 if p_{i,sl} < p_min and N_{i,sl} > 0
- #                   0                                                                             if N_{i,sl} == 0
- #
- # dlogL = sum_{i,sl} N_{i,sl} / p_{i,sl} * dp                    if p_{i,sl} >= min_p and N_{i,sl} > 0
- #                    (S + 2*S2*(p_{i,sl} - min_p)) * dp          if p_{i,sl} < p_min and N_{i,sl} > 0
- #                    0                                           if N_{i,sl} == 0
- #
- # hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 +  N_{i,sl} / p_{i,sl} *hp        if p_{i,sl} >= min_p and N_{i,sl} > 0
- #                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                  if p_{i,sl} < p_min and N_{i,sl} > 0
- #                    0                                                                     if N_{i,sl} == 0
- #
- #  where S = N_{i,sl} / min_p is the slope of the line tangent to logl at min_p
- #    and S2 = 0.5*( -N_{i,sl} / min_p**2 ) is 1/2 the 2nd derivative of the logl term at min_p
- #   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
+#Note: Poisson picture entered use when we allowed an EVec which was 1-{other EVecs} -- a
+# (0,-1) spam index -- instead of assuming all probabilities of a given gat string summed
+# to one -- a (-1,-1) spam index.  The poisson picture gives a correct log-likelihood
+# description when the probabilities (for a given operation sequence) may not sum to one, by
+# interpreting them each as rates.  In the standard picture, large circuit probabilities
+# are not penalized (each standard logL term increases monotonically with each probability,
+# and the reason this is ok when the probabilities sum to one is that for a probabilility
+# that gets close to 1, there's another that is close to zero, and logL is very negative
+# near zero.
 
-
- #Note: Poisson picture entered use when we allowed an EVec which was 1-{other EVecs} -- a
- # (0,-1) spam index -- instead of assuming all probabilities of a given gat string summed
- # to one -- a (-1,-1) spam index.  The poisson picture gives a correct log-likelihood
- # description when the probabilities (for a given operation sequence) may not sum to one, by
- # interpreting them each as rates.  In the standard picture, large circuit probabilities
- # are not penalized (each standard logL term increases monotonically with each probability,
- # and the reason this is ok when the probabilities sum to one is that for a probabilility
- # that gets close to 1, there's another that is close to zero, and logL is very negative
- # near zero.
-
- # The log(Likelihood) within the Poisson picture is:
- #
- # L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!
- #
- # Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,
- #  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and
- #  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:
- #
- # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}
- #       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)
- #
- #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubic below radius "a"):
- #
- # logl = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
- #                   N_{i,sl} log(min_p)    - N[i]*min_p    + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2  if p_{i,sl} < p_min and N_{i,sl} > 0
- #                   0                      - N[i]*p_{i,sl}                                                        if N_{i,sl} == 0 and p_{i,sl} >= a
- #                   0                      - N[i]*( -(1/(3a**2))p_{i,sl}**3 + p_{i,sl}**2/a + (1/3)*a )           if N_{i,sl} == 0 and p_{i,sl} < a
- #
- # dlogL = sum_{i,sl} [ N_{i,sl} / p_{i,sl} - N[i] ] * dp                   if p_{i,sl} >= min_p and N_{i,sl} > 0
- #                    (S + 2*S2*(p_{i,sl} - min_p)) * dp                    if p_{i,sl} < p_min and N_{i,sl} > 0
- #                    -N[i] * dp                                            if N_{i,sl} == 0 and p_{i,sl} >= a
- #                    -N[i] * ( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * dp  if N_{i,sl} == 0 and p_{i,sl} < a
- #
- # hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 + [ N_{i,sl} / p_{i,sl} - N[i] ]*hp      if p_{i,sl} >= min_p and N_{i,sl} > 0
- #                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                         if p_{i,sl} < p_min and N_{i,sl} > 0
- #                    -N[i] * hp                                                                   if N_{i,sl} == 0 and p_{i,sl} >= a
- #                    -N[i]*( (-2/a**2)p_{i,sl} + 2/a ) * dp1 * dp2
- #                        - N[i]*( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * hp                      if N_{i,sl} == 0 and p_{i,sl} < a
- #
- #  where S = N_{i,sl} / min_p - N[i] is the slope of the line tangent to logl at min_p
- #    and S2 = 0.5*( -N_{i,sl} / min_p**2 ) is 1/2 the 2nd derivative of the logl term at min_p so
- #    logL_term = logL_term(min_p) + S * (p-min_p) + S2 * (p-min_p)**2
- #   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
- #
- # For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
- #  Given a radius r << 1 (but r>0):
- #   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }
- #  OLD: quadratic that doesn't match 2nd-deriv:
- #   F(p) = piecewise{ if( p>r ) then p; else (r-p)^2/(2*r) + p }
-
+# The log(Likelihood) within the Poisson picture is:
+#
+# L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!
+#
+# Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,
+#  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and
+#  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:
+#
+# log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}
+#       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)
+#
+#   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubic below radius "a"):
+#
+# logl = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
+#                   N_{i,sl} log(min_p)    - N[i]*min_p    + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2  if p_{i,sl} < p_min and N_{i,sl} > 0
+#                   0                      - N[i]*p_{i,sl}                                                        if N_{i,sl} == 0 and p_{i,sl} >= a
+#                   0                      - N[i]*( -(1/(3a**2))p_{i,sl}**3 + p_{i,sl}**2/a + (1/3)*a )           if N_{i,sl} == 0 and p_{i,sl} < a
+#
+# dlogL = sum_{i,sl} [ N_{i,sl} / p_{i,sl} - N[i] ] * dp                   if p_{i,sl} >= min_p and N_{i,sl} > 0
+#                    (S + 2*S2*(p_{i,sl} - min_p)) * dp                    if p_{i,sl} < p_min and N_{i,sl} > 0
+#                    -N[i] * dp                                            if N_{i,sl} == 0 and p_{i,sl} >= a
+#                    -N[i] * ( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * dp  if N_{i,sl} == 0 and p_{i,sl} < a
+#
+# hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 + [ N_{i,sl} / p_{i,sl} - N[i] ]*hp      if p_{i,sl} >= min_p and N_{i,sl} > 0
+#                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                         if p_{i,sl} < p_min and N_{i,sl} > 0
+#                    -N[i] * hp                                                                   if N_{i,sl} == 0 and p_{i,sl} >= a
+#                    -N[i]*( (-2/a**2)p_{i,sl} + 2/a ) * dp1 * dp2
+#                        - N[i]*( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * hp                      if N_{i,sl} == 0 and p_{i,sl} < a
+#
+#  where S = N_{i,sl} / min_p - N[i] is the slope of the line tangent to logl at min_p
+#    and S2 = 0.5*( -N_{i,sl} / min_p**2 ) is 1/2 the 2nd derivative of the logl term at min_p so
+#    logL_term = logL_term(min_p) + S * (p-min_p) + S2 * (p-min_p)**2
+#   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
+#
+# For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
+#  Given a radius r << 1 (but r>0):
+#   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }
+#  OLD: quadratic that doesn't match 2nd-deriv:
+#   F(p) = piecewise{ if( p>r ) then p; else (r-p)^2/(2*r) + p }
 
 
 #@smart_cached
 def logl_terms(model, dataset, circuit_list=None,
-               minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+               minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                poissonPicture=True, check=False, opLabelAliases=None,
                evaltree_cache=None, comm=None, smartc=None, wildcard=None):
     """
-    The vector of log-likelihood contributions for each operation sequence, 
+    The vector of log-likelihood contributions for each operation sequence,
     aggregated over outcomes.
 
     Parameters
@@ -124,16 +121,16 @@ def logl_terms(model, dataset, circuit_list=None,
         string aggregated over outcomes.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: 
+        else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
             return fn(*args, **kwargs)
 
     if circuit_list is None:
         circuit_list = list(dataset.keys())
 
-    a = radius # parameterizes "roundness" of f == 0 terms
+    a = radius  # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
     if evaltree_cache and 'evTree' in evaltree_cache:
@@ -144,17 +141,17 @@ def logl_terms(model, dataset, circuit_list=None,
         # Note: this is != circuit_list, as the tree hold *simplified* circuits
     else:
         #OLD: evalTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuit_list, dataset=dataset)
-        evalTree,_,_,lookup,outcomes_lookup = smart(model.bulk_evaltree_from_resources,
-                                                    circuit_list, comm, dataset=dataset)
+        evalTree, _, _, lookup, outcomes_lookup = smart(model.bulk_evaltree_from_resources,
+                                                        circuit_list, comm, dataset=dataset)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
             evaltree_cache['evTree'] = evalTree
             evaltree_cache['lookup'] = lookup
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
-        
-    nEls = evalTree.num_final_elements()    
-    probs = _np.zeros( nEls, 'd' ) # _np.empty( nEls, 'd' ) - .zeros b/c of caching
+
+    nEls = evalTree.num_final_elements()
+    probs = _np.zeros(nEls, 'd')  # _np.empty( nEls, 'd' ) - .zeros b/c of caching
 
     ds_circuit_list = _lt.find_replace_tuple_list(
         circuit_list, opLabelAliases)
@@ -163,19 +160,18 @@ def logl_terms(model, dataset, circuit_list=None,
         countVecMx = evaltree_cache['cntVecMx']
         totalCntVec = evaltree_cache['totalCntVec']
     else:
-        countVecMx = _np.empty(nEls, 'd' )
-        totalCntVec = _np.empty(nEls, 'd' )
-        for (i,opStr) in enumerate(ds_circuit_list):
+        countVecMx = _np.empty(nEls, 'd')
+        totalCntVec = _np.empty(nEls, 'd')
+        for (i, opStr) in enumerate(ds_circuit_list):
             cnts = dataset[opStr].counts
-            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+            totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+            countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
         #could add to cache, but we don't have option of circuitWeights
         # here yet, so let's be conservative and not do this:
         #if evaltree_cache is not None:
         #    evaltree_cache['cntVecMx'] = countVecMx
         #    evaltree_cache['totalCntVec'] = totalCntVec
-
 
     #OLD
     #freqs = countVecMx / totalCntVec[None,:]
@@ -190,21 +186,26 @@ def logl_terms(model, dataset, circuit_list=None,
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
-        S = countVecMx / min_p - totalCntVec # slope term that is derivative of logl at min_p
+        S = countVecMx / min_p - totalCntVec  # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) - totalCntVec*pos_probs # dim KM (K = nSpamLabels, M = nCircuits)
-        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
-        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where( countVecMx == 0, -totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-           #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
+        v = countVecMx * _np.log(pos_probs) - totalCntVec * pos_probs  # dim KM (K = nSpamLabels, M = nCircuits)
+        # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
+        v = _np.minimum(v, 0)
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        v = _np.where(countVecMx == 0, -totalCntVec * _np.where(probs >= a, probs,
+                                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
+        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
 
-    else: #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+    else:  # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         S = countVecMx / min_p               # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) # dim KM (K = nSpamLabels, M = nCircuits)
-        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
-        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where( countVecMx == 0, 0.0, v)
+        v = countVecMx * _np.log(pos_probs)  # dim KM (K = nSpamLabels, M = nCircuits)
+        # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
+        v = _np.minimum(v, 0)
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        v = _np.where(countVecMx == 0, 0.0, v)
 
     #DEBUG
     #print "num clipped = ",_np.sum(probs < min_p)," of ",probs.shape
@@ -215,17 +216,17 @@ def logl_terms(model, dataset, circuit_list=None,
     #Aggregate over outcomes:
     # v[iElement] contains all logl contributions - now aggregate over outcomes
     # terms[iCircuit] wiil contain logl contributions for each original gate
-    # string (aggregated over outcomes)    
+    # string (aggregated over outcomes)
     nCircuits = len(circuit_list)
-    terms = _np.empty(nCircuits , 'd')
+    terms = _np.empty(nCircuits, 'd')
     for i in range(nCircuits):
-        terms[i] = _np.sum( v[lookup[i]], axis=0 )
+        terms[i] = _np.sum(v[lookup[i]], axis=0)
     return terms
 
 
 #@smart_cached
 def logl(model, dataset, circuit_list=None,
-         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+         minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
          poissonPicture=True, check=False, opLabelAliases=None,
          evaltree_cache=None, comm=None, smartc=None, wildcard=None):
     """
@@ -302,11 +303,11 @@ def logl(model, dataset, circuit_list=None,
                    minProbClip, probClipInterval, radius,
                    poissonPicture, check, opLabelAliases,
                    evaltree_cache, comm, smartc, wildcard)
-    return _np.sum(v) # sum over *all* dimensions
+    return _np.sum(v)  # sum over *all* dimensions
 
 
 def logl_jacobian(model, dataset, circuit_list=None,
-                  minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                  minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                   poissonPicture=True, check=False, comm=None,
                   memLimit=None, opLabelAliases=None, smartc=None,
                   verbosity=0):
@@ -379,7 +380,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
       array of shape (M,), where M is the length of the vectorized model.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
         else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
@@ -388,41 +389,41 @@ def logl_jacobian(model, dataset, circuit_list=None,
     if circuit_list is None:
         circuit_list = list(dataset.keys())
 
-    C = 1.0/1024.0**3; nP = model.num_params()
-    persistentMem = 8*nP + 8*len(circuit_list)*(nP+1) # in bytes
+    C = 1.0 / 1024.0**3; nP = model.num_params()
+    persistentMem = 8 * nP + 8 * len(circuit_list) * (nP + 1)  # in bytes
 
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
-
+                          % (persistentMem * C))
 
     #OLD: evalTree,lookup,outcomes_lookup = model.bulk_evaltree(circuit_list)
-    mlim = None if (memLimit is None) else memLimit-persistentMem
-    dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
+    mlim = None if (memLimit is None) else memLimit - persistentMem
+    # Note: simplify_circuits doesn't support aliased dataset (yet)
+    dstree = dataset if (opLabelAliases is None) else None
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
-            circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
-            dstree, verbosity)
+              circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
+              dstree, verbosity)
 
-    a = radius # parameterizes "roundness" of f == 0 terms
+    a = radius  # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
     #  Allocate persistent memory
-    jac = _np.zeros([1,nP])
+    jac = _np.zeros([1, nP])
     nEls = evalTree.num_final_elements()
-    probs = _np.empty( nEls, 'd' )
-    dprobs = _np.empty( (nEls,nP), 'd' )
+    probs = _np.empty(nEls, 'd')
+    dprobs = _np.empty((nEls, nP), 'd')
 
     ds_circuit_list = _lt.find_replace_tuple_list(
         circuit_list, opLabelAliases)
 
-    countVecMx = _np.empty(nEls, 'd' )
-    totalCntVec = _np.empty(nEls, 'd' )
-    for (i,opStr) in enumerate(ds_circuit_list):
+    countVecMx = _np.empty(nEls, 'd')
+    totalCntVec = _np.empty(nEls, 'd')
+    for (i, opStr) in enumerate(ds_circuit_list):
         cnts = dataset[opStr].counts
-        totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-        countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+        totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+        countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
     #OLD
     #freqs = cntVecMx / totalCntVec[None,:]
@@ -431,51 +432,53 @@ def logl_jacobian(model, dataset, circuit_list=None,
     #freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
     #minusCntVecMx = -1.0 * cntVecMx
 
-
     smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
           clipTo=probClipInterval, check=check, comm=comm,
-          wrtBlockSize=blkSize, _filledarrays=(0,'prMxToFill')) # FUTURE: set gatherMemLimit=?
-
+          wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
         S = countVecMx / min_p - totalCntVec         # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) - totalCntVec*pos_probs # dim KM (K = nSpamLabels, M = nCircuits)
-        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
-        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where( countVecMx == 0, -totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-           #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
+        v = countVecMx * _np.log(pos_probs) - totalCntVec * pos_probs  # dim KM (K = nSpamLabels, M = nCircuits)
+        # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
+        v = _np.minimum(v, 0)
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        v = _np.where(countVecMx == 0, -totalCntVec * _np.where(probs >= a, probs,
+                                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
+        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
 
         dprobs_factor_pos = (countVecMx / pos_probs - totalCntVec)
-        dprobs_factor_neg = S + 2*S2*(probs - min_p)
-        dprobs_factor_zerofreq = -totalCntVec * _np.where( probs >= a, 1.0, (-1.0/a**2)*probs**2 + 2*probs/a)
-        dprobs_factor = _np.where( probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
-        dprobs_factor = _np.where( countVecMx == 0, dprobs_factor_zerofreq, dprobs_factor )
-        jac = dprobs * dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        dprobs_factor_neg = S + 2 * S2 * (probs - min_p)
+        dprobs_factor_zerofreq = -totalCntVec * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
+        dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
+        dprobs_factor = _np.where(countVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
+        jac = dprobs * dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
 
-
-    else: #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+    else:  # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         S = countVecMx / min_p              # slope term that is derivative of logl at min_p
-        S2 = -0.5 * countVecMx / (min_p**2) # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) # dims K x M (K = nSpamLabels, M = nCircuits)
-        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
-        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where( countVecMx == 0, 0.0, v)
+        S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
+        v = countVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
+        v = _np.minimum(v, 0)
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        v = _np.where(countVecMx == 0, 0.0, v)
 
         dprobs_factor_pos = countVecMx / pos_probs
-        dprobs_factor_neg = S + 2*S2*(probs - min_p)
-        dprobs_factor = _np.where( probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
-        dprobs_factor = _np.where( countVecMx == 0, 0.0, dprobs_factor )
-        jac = dprobs * dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        dprobs_factor_neg = S + 2 * S2 * (probs - min_p)
+        dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
+        dprobs_factor = _np.where(countVecMx == 0, 0.0, dprobs_factor)
+        jac = dprobs * dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
 
     # jac[iSpamLabel,iCircuit,iModelParam] contains all d(logl)/d(modelParam) contributions
-    return _np.sum(jac, axis=0) # sum over spam label and operation sequence dimensions
+    return _np.sum(jac, axis=0)  # sum over spam label and operation sequence dimensions
 
 
 def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
-                 probClipInterval=(-1e6,1e6), radius=1e-4, poissonPicture=True,
+                 probClipInterval=(-1e6, 1e6), radius=1e-4, poissonPicture=True,
                  check=False, comm=None, memLimit=None,
                  opLabelAliases=None, smartc=None, verbosity=0):
     """
@@ -544,7 +547,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
       array of shape (M,M), where M is the length of the vectorized model.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
         else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
@@ -554,32 +557,33 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
 
     if circuit_list is None:
         circuit_list = list(dataset.keys())
-    
+
     #  Estimate & check persistent memory (from allocs directly below)
-    C = 1.0/1024.0**3; nP = model.num_params()
-    persistentMem = 8*nP**2 # in bytes
+    C = 1.0 / 1024.0**3; nP = model.num_params()
+    persistentMem = 8 * nP**2  # in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
+                          % (persistentMem * C))
 
     #  Allocate persistent memory
-    final_hessian = _np.zeros( (nP,nP), 'd')
+    final_hessian = _np.zeros((nP, nP), 'd')
 
     #  Estimate & check intermediate memory
     #  - figure out how many row & column partitions are needed
     #    to fit computation within available memory (and use all cpus)
-    mlim = None if (memLimit is None) else memLimit-persistentMem
-    dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
+    mlim = None if (memLimit is None) else memLimit - persistentMem
+    # Note: simplify_circuits doesn't support aliased dataset (yet)
+    dstree = dataset if (opLabelAliases is None) else None
     evalTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
-            circuit_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
-            dstree, verbosity)
-    
+              circuit_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
+              dstree, verbosity)
+
     rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
     colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
 
-    a = radius # parameterizes "roundness" of f == 0 terms
+    a = radius  # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
     if poissonPicture:
@@ -587,8 +591,8 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
             """ Factored-out computation of hessian from raw components """
             # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
-            totCnts = totalCntVec  #shorthand
-            S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
+            totCnts = totalCntVec  # shorthand
+            S = cntVecMx / min_p - totCnts  # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
             #hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
@@ -600,33 +604,32 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] * hprobs )
             #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
-            
-            #Accomplish the same thing as the above commented-out lines, 
+
+            #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
-                _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
-            zfc = _np.where(probs >= a, 0.0, -totCnts*((-2.0/a**2)*probs+2.0/a))
+                _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
+            zfc = _np.where(probs >= a, 0.0, -totCnts * ((-2.0 / a**2) * probs + 2.0 / a))
             dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
 
             hprobs_coeffs = \
-                _np.where(probs < min_p, S + 2*S2*(probs - min_p),
+                _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
                           cntVecMx / pos_probs - totCnts)
-            zfc = _np.where(probs >= a, -totCnts, 
-                            -totCnts * ((-1.0/a**2)*probs**2 + 2*probs/a))
+            zfc = _np.where(probs >= a, -totCnts,
+                            -totCnts * ((-1.0 / a**2) * probs**2 + 2 * probs / a))
             hprobs_coeffs = _np.where(cntVecMx == 0, zfc, hprobs_coeffs)
 
-              # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
-              #  but re-using dprobs12 and hprobs memory (which is overwritten!)
-            hprobs *= hprobs_coeffs[:,None,None]
-            dprobs12 *= dprobs12_coeffs[:,None,None]
+            # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
+            #  but re-using dprobs12 and hprobs memory (which is overwritten!)
+            hprobs *= hprobs_coeffs[:, None, None]
+            dprobs12 *= dprobs12_coeffs[:, None, None]
             hessian = dprobs12; hessian += hprobs
 
             # hessian[iSpamLabel,iCircuit,iModelParam1,iModelParams2] contains all
             #  d2(logl)/d(modelParam1)d(modelParam2) contributions
             return _np.sum(hessian, axis=0)
-              # sum over spam label and operation sequence dimensions (operation sequences in evalSubTree)
-              # adds current subtree contribution for (N,N')-sized block of Hessian
-
+            # sum over spam label and operation sequence dimensions (operation sequences in evalSubTree)
+            # adds current subtree contribution for (N,N')-sized block of Hessian
 
     else:
 
@@ -634,8 +637,8 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
             """ Factored-out computation of hessian from raw components """
-            S = cntVecMx / min_p # slope term that is derivative of logl at min_p
-            S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
+            S = cntVecMx / min_p  # slope term that is derivative of logl at min_p
+            S2 = -0.5 * cntVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
 
             #hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
             #hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
@@ -643,25 +646,24 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian) # (K,M,N,N')
 
-            #Accomplish the same thing as the above commented-out lines, 
+            #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
-                _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+                _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
             dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
 
             hprobs_coeffs = \
-                _np.where(probs < min_p, S + 2*S2*(probs - min_p),
+                _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
                           cntVecMx / pos_probs)
             hprobs_coeffs = _np.where(cntVecMx == 0, 0.0, hprobs_coeffs)
 
-              # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
-              #  but re-using dprobs12 and hprobs memory (which is overwritten!)
-            hprobs *= hprobs_coeffs[:,None,None]
-            dprobs12 *= dprobs12_coeffs[:,None,None]
+            # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
+            #  but re-using dprobs12 and hprobs memory (which is overwritten!)
+            hprobs *= hprobs_coeffs[:, None, None]
+            dprobs12 *= dprobs12_coeffs[:, None, None]
             hessian = dprobs12; hessian += hprobs
 
-            return _np.sum(hessian, axis=0) #see comments as above
-
+            return _np.sum(hessian, axis=0)  # see comments as above
 
     #Note - we could in the future use comm to distribute over
     # subtrees here.  We currently don't because we parallelize
@@ -676,19 +678,19 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
 
     #  Allocate memory (alloc max required & take views)
     max_nEls = max([subtrees[i].num_final_elements() for i in mySubTreeIndices])
-    probs_mem  = _np.empty( max_nEls, 'd' )
+    probs_mem = _np.empty(max_nEls, 'd')
 
     # Fill cntVecMx, totalCntVec for all elements (all subtrees)
     nEls = evalTree.num_final_elements()
-    cntVecMx_all = _np.empty( nEls,'d')
+    cntVecMx_all = _np.empty(nEls, 'd')
     totalCntVec_all = _np.empty(nEls, 'd')
 
     ds_subtree_circuit_list = _lt.find_replace_tuple_list(
         circuit_list, opLabelAliases)
-    for (i,opStr) in enumerate(ds_subtree_circuit_list):
+    for (i, opStr) in enumerate(ds_subtree_circuit_list):
         cnts = dataset[opStr].counts
-        totalCntVec_all[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-        cntVecMx_all[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+        totalCntVec_all[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+        cntVecMx_all[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
     tStart = _time.time()
 
@@ -706,11 +708,11 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             evalSubTree.recompute_spamtuple_indices(bLocal=True)
 
         # Create views into pre-allocated memory
-        probs  =  probs_mem[0:sub_nEls]
+        probs = probs_mem[0:sub_nEls]
 
         # Take portions of count arrays for this subtree
-        cntVecMx = cntVecMx_all[ evalSubTree.final_element_indices(evalTree) ]
-        totalCntVec = totalCntVec_all[ evalSubTree.final_element_indices(evalTree) ]
+        cntVecMx = cntVecMx_all[evalSubTree.final_element_indices(evalTree)]
+        totalCntVec = totalCntVec_all[evalSubTree.final_element_indices(evalTree)]
         assert(len(cntVecMx) == len(probs))
 
         #compute pos_probs separately
@@ -722,57 +724,57 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         nCols = model.num_params()
         blocks1 = _mpit.slice_up_range(nCols, rowParts)
         blocks2 = _mpit.slice_up_range(nCols, colParts)
-        sliceTupList_all = list(_itertools.product(blocks1,blocks2))
+        sliceTupList_all = list(_itertools.product(blocks1, blocks2))
         #cull out lower triangle blocks, which have no overlap with
         # the upper triangle of the hessian
-        sliceTupList = [ (slc1,slc2) for slc1,slc2 in sliceTupList_all
-                         if slc1.start <= slc2.stop ]
+        sliceTupList = [(slc1, slc2) for slc1, slc2 in sliceTupList_all
+                        if slc1.start <= slc2.stop]
 
         loc_iBlks, blkOwners, blkComm = \
             _mpit.distribute_indices(list(range(len(sliceTupList))), mySubComm)
-        mySliceTupList = [ sliceTupList[i] for i in loc_iBlks ]
-       
-        subtree_hessian = _np.zeros( (nP,nP), 'd')
+        mySliceTupList = [sliceTupList[i] for i in loc_iBlks]
 
-        k,kmax = 0,len(mySliceTupList)
-        for (slice1,slice2,hprobs,dprobs12) in model.bulk_hprobs_by_block(
-            evalSubTree, mySliceTupList, True, blkComm):
+        subtree_hessian = _np.zeros((nP, nP), 'd')
+
+        k, kmax = 0, len(mySliceTupList)
+        for (slice1, slice2, hprobs, dprobs12) in model.bulk_hprobs_by_block(
+                evalSubTree, mySliceTupList, True, blkComm):
             rank = comm.Get_rank() if (comm is not None) else 0
 
             if verbosity > 3 or (verbosity == 3 and rank == 0):
                 iSub = mySubTreeIndices.index(iSubTree)
                 print("rank %d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
-                      % (rank,_time.time()-tStart,k,kmax,iSub,
-                         len(mySubTreeIndices), len(evalSubTree)))            
+                      % (rank, _time.time() - tStart, k, kmax, iSub,
+                         len(mySubTreeIndices), len(evalSubTree)))
                 _sys.stdout.flush(); k += 1
 
-            subtree_hessian[slice1,slice2] = \
+            subtree_hessian[slice1, slice2] = \
                 hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
-                                        totalCntVec, pos_probs)
-                #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12
+                                    totalCntVec, pos_probs)
+            #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12
 
         #Gather columns from different procs and add to running final hessian
         #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian,[], (0,1), mySubComm)
-        _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian,[], (0,1), mySubComm)
+        _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, [], (0, 1), mySubComm)
         final_hessian += subtree_hessian
 
     #gather (add together) final_hessians from different processors
     if comm is not None and len(set(subTreeOwners.values())) > 1:
-        if comm.Get_rank() not in subTreeOwners.values(): 
+        if comm.Get_rank() not in subTreeOwners.values():
             # this proc is not the "owner" of its subtrees and should not send a contribution to the sum
-            final_hessian[:,:] = 0.0 #zero out hessian so it won't contribute
+            final_hessian[:, :] = 0.0  # zero out hessian so it won't contribute
         final_hessian = comm.allreduce(final_hessian)
-        
+
     #copy upper triangle to lower triangle (we only compute upper)
     for i in range(final_hessian.shape[0]):
-        for j in range(i+1,final_hessian.shape[1]):
-            final_hessian[j,i] = final_hessian[i,j]
+        for j in range(i + 1, final_hessian.shape[1]):
+            final_hessian[j, i] = final_hessian[i, j]
 
-    return final_hessian # (N,N)
+    return final_hessian  # (N,N)
 
 
 def logl_approximate_hessian(model, dataset, circuit_list=None,
-                             minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                             minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                              poissonPicture=True, check=False, comm=None,
                              memLimit=None, opLabelAliases=None, smartc=None,
                              verbosity=0):
@@ -858,7 +860,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
       array of shape (M,M), where M is the length of the vectorized model.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
         else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
@@ -867,45 +869,45 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     if circuit_list is None:
         circuit_list = list(dataset.keys())
 
-    C = 1.0/1024.0**3; nP = model.num_params()
-    persistentMem = 8*nP**2 + 8*len(circuit_list)*(nP+1) # in bytes
+    C = 1.0 / 1024.0**3; nP = model.num_params()
+    persistentMem = 8 * nP**2 + 8 * len(circuit_list) * (nP + 1)  # in bytes
 
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
-
+                          % (persistentMem * C))
 
     #OLD: evalTree,lookup,outcomes_lookup = model.bulk_evaltree(circuit_list)
-    mlim = None if (memLimit is None) else memLimit-persistentMem
-    dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
+    mlim = None if (memLimit is None) else memLimit - persistentMem
+    # Note: simplify_circuits doesn't support aliased dataset (yet)
+    dstree = dataset if (opLabelAliases is None) else None
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
               circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
               dstree, verbosity)
 
-    a = radius # parameterizes "roundness" of f == 0 terms
+    a = radius  # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
     #  Allocate persistent memory
     #hessian = _np.zeros( (nP,nP), 'd') # allocated below by assignment
     nEls = evalTree.num_final_elements()
-    probs = _np.empty( nEls, 'd' )
-    dprobs = _np.empty( (nEls,nP), 'd' )
+    probs = _np.empty(nEls, 'd')
+    dprobs = _np.empty((nEls, nP), 'd')
 
     ds_circuit_list = _lt.find_replace_tuple_list(
         circuit_list, opLabelAliases)
 
-    cntVecMx = _np.empty(nEls, 'd' )
-    totalCntVec = _np.empty(nEls, 'd' )
-    for (i,opStr) in enumerate(ds_circuit_list):
+    cntVecMx = _np.empty(nEls, 'd')
+    totalCntVec = _np.empty(nEls, 'd')
+    for (i, opStr) in enumerate(ds_circuit_list):
         cnts = dataset[opStr].counts
-        totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-        cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+        totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+        cntVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
     smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
           clipTo=probClipInterval, check=check, comm=comm,
-          wrtBlockSize=blkSize, _filledarrays=(0,'prMxToFill')) # FUTURE: set gatherMemLimit=?
+          wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
@@ -918,36 +920,36 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     # themselves) - so only the X*dp1*dp2 terms survive the general expressions
     # found above.
     if poissonPicture:
-        totCnts = totalCntVec  #shorthand
-        S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
+        totCnts = totalCntVec  # shorthand
+        S = cntVecMx / min_p - totCnts  # slope term that is derivative of logl at min_p
         S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
         dprobs12_coeffs = \
-            _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
-        zfc = _np.where(probs >= a, 0.0, -totCnts*((-2.0/a**2)*probs+2.0/a))
+            _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
+        zfc = _np.where(probs >= a, 0.0, -totCnts * ((-2.0 / a**2) * probs + 2.0 / a))
         dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
-          # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+        # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
 
     else:
-        S = cntVecMx / min_p # slope term that is derivative of logl at min_p
-        S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
+        S = cntVecMx / min_p  # slope term that is derivative of logl at min_p
+        S2 = -0.5 * cntVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
         dprobs12_coeffs = \
-            _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+            _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
         dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
-            # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+        # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
 
     # In notation in docstring:
     # J = dprobs.T (shape nEls,nP)
     # diagonal of d2(logl)/dprobs2 = dprobs12_coeffs (var name kept to preserve
     #                similarity w/functions in logl_hessian)
     # So H = J * d2(logl)/dprobs2 * J.T becomes:
-    hessian = _np.dot( dprobs.T, dprobs12_coeffs[:,None]*dprobs )
+    hessian = _np.dot(dprobs.T, dprobs12_coeffs[:, None] * dprobs)
     return hessian
 
 
 #@smart_cached
 def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
-             check=False, opLabelAliases=None, evaltree_cache=None, 
+             check=False, opLabelAliases=None, evaltree_cache=None,
              smartc=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
@@ -997,29 +999,31 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
     maxLogLTerms = logl_max_terms(model, dataset, circuit_list,
                                   poissonPicture, opLabelAliases,
                                   evaltree_cache, smartc)
-    
+
     # maxLogLTerms[iSpamLabel,iCircuit] contains all logl-upper-bound contributions
-    maxLogL = _np.sum(maxLogLTerms) # sum over *all* dimensions
+    maxLogL = _np.sum(maxLogLTerms)  # sum over *all* dimensions
 
     if check:
         L = 0
         for circuit in circuit_list:
             dsRow = dataset[circuit]
-            N = dsRow.total #sum of counts for all outcomes (all spam labels)
+            N = dsRow.total  # sum of counts for all outcomes (all spam labels)
             for n in dsRow.counts.values():
                 f = n / N
-                if f < TOL and n == 0: continue # 0 * log(0) == 0
+                if f < TOL and n == 0: continue  # 0 * log(0) == 0
                 if poissonPicture:
                     L += n * _np.log(f) - N * f
                 else:
                     L += n * _np.log(f)
-        if not _np.isclose(maxLogL,L):
-            _warnings.warn("Log-likelihood upper bound mismatch: %g != %g (diff=%g)" % \
-                               (maxLogL, L, maxLogL-L))
+        if not _np.isclose(maxLogL, L):
+            _warnings.warn("Log-likelihood upper bound mismatch: %g != %g (diff=%g)" %
+                           (maxLogL, L, maxLogL - L))
 
     return maxLogL
 
 #@smart_cached
+
+
 def logl_max_terms(model, dataset, circuit_list=None,
                    poissonPicture=True, opLabelAliases=None,
                    evaltree_cache=None, smartc=None):
@@ -1040,7 +1044,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
         operation sequence aggregated over outcomes.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
         else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
@@ -1066,7 +1070,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
         #Note: we don't actually need an evaltree, so we
         # won't make one here and so won't fill an empty
         # evaltree_cache.
-        
+
     circuit_list = _lt.find_replace_tuple_list(
         circuit_list, opLabelAliases)
 
@@ -1074,12 +1078,12 @@ def logl_max_terms(model, dataset, circuit_list=None,
         countVecMx = evaltree_cache['cntVecMx']
         totalCntVec = evaltree_cache['totalCntVec']
     else:
-        countVecMx = _np.empty(nEls, 'd' )
-        totalCntVec = _np.empty(nEls, 'd' )
-        for (i,opStr) in enumerate(circuit_list):
+        countVecMx = _np.empty(nEls, 'd')
+        totalCntVec = _np.empty(nEls, 'd')
+        for (i, opStr) in enumerate(circuit_list):
             cnts = dataset[opStr].counts
-            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+            totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+            countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
         #could add to cache, but we don't have option of circuitWeights
         # here yet, so let's be conservative and not do this:
@@ -1087,35 +1091,36 @@ def logl_max_terms(model, dataset, circuit_list=None,
         #    evaltree_cache['cntVecMx'] = countVecMx
         #    evaltree_cache['totalCntVec'] = totalCntVec
 
-    countVecMx = countVecMx.clip(min=0.0) # fix roundoff errors giving small negative counts ~ -1e-16, etc.
+    countVecMx = countVecMx.clip(min=0.0)  # fix roundoff errors giving small negative counts ~ -1e-16, etc.
     freqs = countVecMx / totalCntVec
-    freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+    freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs)  # set zero freqs to 1.0 so np.log doesn't complain
 
     if poissonPicture:
-        maxLogLTerms = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
+        maxLogLTerms = countVecMx * (_np.log(freqs_nozeros) - 1.0)
     else:
         maxLogLTerms = countVecMx * _np.log(freqs_nozeros)
 
-    maxLogLTerms[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+    # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+    maxLogLTerms[countVecMx == 0] = 0.0
 
     #Aggregate over outcomes:
     # maxLogLTerms[iElement] contains all logl-upper-bound contributions
     # terms[iCircuit] wiil contain contributions for each original gate
-    # string (aggregated over outcomes)    
+    # string (aggregated over outcomes)
     nCircuits = len(circuit_list)
-    terms = _np.empty(nCircuits , 'd')
+    terms = _np.empty(nCircuits, 'd')
     for i in range(nCircuits):
-        terms[i] = _np.sum( maxLogLTerms[lookup[i]], axis=0 )
+        terms[i] = _np.sum(maxLogLTerms[lookup[i]], axis=0)
     return terms
 
 
 def two_delta_logl(model, dataset, circuit_list=None,
-                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                   minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                    poissonPicture=True, check=False, opLabelAliases=None,
                    evaltree_cache=None, comm=None, dof_calc_method=None,
                    smartc=None, wildcard=None):
     """
-    Twice the difference between the maximum and actual log-likelihood, 
+    Twice the difference between the maximum and actual log-likelihood,
     optionally along with Nsigma (# std deviations from mean) and p-value
     relative to expected chi^2 distribution (when `dof_calc_method` is
     not None).
@@ -1204,12 +1209,12 @@ def two_delta_logl(model, dataset, circuit_list=None,
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
-    twoDeltaLogL =  2*(logl_max(model, dataset, circuit_list, poissonPicture,
-                                check, opLabelAliases, evaltree_cache, smartc) - 
-                       logl(model, dataset, circuit_list,
-                            minProbClip, probClipInterval, radius,
-                            poissonPicture, check, opLabelAliases,
-                            evaltree_cache, comm, smartc, wildcard))
+    twoDeltaLogL = 2 * (logl_max(model, dataset, circuit_list, poissonPicture,
+                                 check, opLabelAliases, evaltree_cache, smartc) -
+                        logl(model, dataset, circuit_list,
+                             minProbClip, probClipInterval, radius,
+                             poissonPicture, check, opLabelAliases,
+                             evaltree_cache, comm, smartc, wildcard))
 
     if dof_calc_method is None: return twoDeltaLogL
     elif dof_calc_method == "all": mdl_dof = model.num_params()
@@ -1226,18 +1231,15 @@ def two_delta_logl(model, dataset, circuit_list=None,
 
     Ns = dataset.get_degrees_of_freedom(ds_strs)
     k = max(Ns - mdl_dof, 1)
-    if Ns <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns,mdl_dof))
+    if Ns <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, mdl_dof))
 
-    Nsigma = (twoDeltaLogL-k)/_np.sqrt(2*k)
-    pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k)
+    Nsigma = (twoDeltaLogL - k) / _np.sqrt(2 * k)
+    pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL, k)
     return twoDeltaLogL, Nsigma, pvalue
 
 
-
-
-
 def two_delta_logl_terms(model, dataset, circuit_list=None,
-                         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                         minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                          poissonPicture=True, check=False, opLabelAliases=None,
                          evaltree_cache=None, comm=None, dof_calc_method=None,
                          smartc=None, wildcard=None):
@@ -1250,13 +1252,12 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """
-    twoDeltaLogL_terms =  2*(logl_max_terms(model, dataset, circuit_list, poissonPicture,
-                                            opLabelAliases, evaltree_cache, smartc) - 
-                             logl_terms(model, dataset, circuit_list,
-                                        minProbClip, probClipInterval, radius,
-                                        poissonPicture, check, opLabelAliases,
-                                        evaltree_cache, comm, smartc, wildcard))
-
+    twoDeltaLogL_terms = 2 * (logl_max_terms(model, dataset, circuit_list, poissonPicture,
+                                             opLabelAliases, evaltree_cache, smartc) -
+                              logl_terms(model, dataset, circuit_list,
+                                         minProbClip, probClipInterval, radius,
+                                         poissonPicture, check, opLabelAliases,
+                                         evaltree_cache, comm, smartc, wildcard))
 
     if dof_calc_method is None: return twoDeltaLogL_terms
     elif dof_calc_method == "all": mdl_dof = model.num_params()
@@ -1273,14 +1274,12 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
 
     Ns = dataset.get_degrees_of_freedom(ds_strs)
     k = max(Ns - mdl_dof, 1)
-    k = int(_np.ceil(k / (1.0*len(circuit_list)))) # HACK - just take a single average #dof per circuit to use as chi_k distribution!
+    # HACK - just take a single average #dof per circuit to use as chi_k distribution!
+    k = int(_np.ceil(k / (1.0 * len(circuit_list))))
 
-    Nsigma = (twoDeltaLogL_terms-k)/_np.sqrt(2*k)
-    pvalue = _np.array([1.0 - _stats.chi2.cdf(x,k) for x in twoDeltaLogL_terms],'d')
+    Nsigma = (twoDeltaLogL_terms - k) / _np.sqrt(2 * k)
+    pvalue = _np.array([1.0 - _stats.chi2.cdf(x, k) for x in twoDeltaLogL_terms], 'd')
     return twoDeltaLogL_terms, Nsigma, pvalue
-
-
-
 
 
 #                        min_p = advancedOptions.get('minProbClip',1e-4)
@@ -1306,7 +1305,6 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
 #                            assert(v.ndim == 1)#v.shape = [KM] #reshape ensuring no copy is needed
 #                            return 2*v #Note: no test for whether probs is in [0,1] so no guarantee that
 
-                        
 
 def forbidden_prob(model, dataset):
     """
@@ -1333,18 +1331,18 @@ def forbidden_prob(model, dataset):
     """
     forbidden_prob = 0
 
-    for mdl,dsRow in dataset.items():
+    for mdl, dsRow in dataset.items():
         probs = model.probs(mdl)
-        for (spamLabel,p) in probs.items():
+        for (spamLabel, p) in probs.items():
             if p < TOL:
-                if round(dsRow[spamLabel]) == 0: continue #contributes zero to the sum
-                else: forbidden_prob += abs(TOL-p) + TOL
-            elif p > 1-TOL:
-                if round(dsRow[spamLabel]) == dsRow.total: continue #contributes zero to the sum
-                else: forbidden_prob += abs(p-(1-TOL)) + TOL
-
+                if round(dsRow[spamLabel]) == 0: continue  # contributes zero to the sum
+                else: forbidden_prob += abs(TOL - p) + TOL
+            elif p > 1 - TOL:
+                if round(dsRow[spamLabel]) == dsRow.total: continue  # contributes zero to the sum
+                else: forbidden_prob += abs(p - (1 - TOL)) + TOL
 
     return forbidden_prob
+
 
 def prep_penalty(rhoVec, basis):
     """
@@ -1368,14 +1366,15 @@ def prep_penalty(rhoVec, basis):
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec),basis)
-    evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
-    sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
-    tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(rhoMx.shape[0])))
-      # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
+    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec), basis)
+    evals = _np.linalg.eigvals(rhoMx)  # could use eigvalsh, but wary of this since eigh can be wrong...
+    sumOfNeg = sum([-ev.real for ev in evals if ev.real < 0])
+    tracePenalty = abs(rhoVec[0, 0] - (1.0 / _np.sqrt(rhoMx.shape[0])))
+    # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
-    #print "Trace Penalty = ",tracePenalty  #DEBUG    
-    return sumOfNeg +  tracePenalty
+    #print "Trace Penalty = ",tracePenalty  #DEBUG
+    return sumOfNeg + tracePenalty
+
 
 def effect_penalty(EVec, basis):
     """
@@ -1399,13 +1398,14 @@ def effect_penalty(EVec, basis):
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.vec_to_stdmx(_np.asarray(EVec),basis)
-    evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
+    EMx = _bt.vec_to_stdmx(_np.asarray(EVec), basis)
+    evals = _np.linalg.eigvals(EMx)  # could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
         if ev.real < 0: sumOfPen += -ev.real
-        if ev.real > 1: sumOfPen += ev.real-1.0
+        if ev.real > 1: sumOfPen += ev.real - 1.0
     return sumOfPen
+
 
 def cptp_penalty(model, include_spam_penalty=True):
     """
@@ -1433,12 +1433,14 @@ def cptp_penalty(model, include_spam_penalty=True):
     ret = _jam.sum_of_negative_choi_evals(model)
     if include_spam_penalty:
         b = model.basis
-        ret += sum([ prep_penalty(r,b) for r in model.preps.values() ])
-        ret += sum([ effect_penalty(e,b) for povm in model.povms.values()
-                     for e in povm.values() ])
+        ret += sum([prep_penalty(r, b) for r in model.preps.values()])
+        ret += sum([effect_penalty(e, b) for povm in model.povms.values()
+                    for e in povm.values()])
     return ret
 
 #@smart_cached
+
+
 def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
@@ -1470,37 +1472,35 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     #TODO: change this function to handle nan's in the inputs without warnings, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
-    cp  = _np.clip(p,minProbClip,1e10) #effectively no upper bound
-    
-    nan_indices = _np.isnan(f) # get indices of invalid entries
-    if not _np.isscalar(f): f[nan_indices] = 0.0 
-      #set nan's to zero to avoid RuntimeWarnings (invalid value)
+    cp = _np.clip(p, minProbClip, 1e10)  # effectively no upper bound
 
-    zf  = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
-    nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together
-                                       # w/above line makes 0 * log(0) == 0    
-    if not _np.isscalar(f): 
-        zf[nan_indices] = _np.nan  #set nan indices back to nan
-        nzf[nan_indices] = _np.nan #set nan indices back to nan
+    nan_indices = _np.isnan(f)  # get indices of invalid entries
+    if not _np.isscalar(f): f[nan_indices] = 0.0
+    #set nan's to zero to avoid RuntimeWarnings (invalid value)
+
+    zf = _np.where(f < 1e-10, 0.0, f)  # set zero-freqs to zero
+    nzf = _np.where(f < 1e-10, 1.0, f)  # set zero-freqs to one -- together
+    # w/above line makes 0 * log(0) == 0
+    if not _np.isscalar(f):
+        zf[nan_indices] = _np.nan  # set nan indices back to nan
+        nzf[nan_indices] = _np.nan  # set nan indices back to nan
 
     if poissonPicture:
-        return 2 * (N * zf * _np.log(nzf/cp) - N * (f-cp))
+        return 2 * (N * zf * _np.log(nzf / cp) - N * (f - cp))
     else:
-        return 2 * N * zf * _np.log(nzf/cp)
+        return 2 * N * zf * _np.log(nzf / cp)
 
 
-def _patched_logl_fn(N,p,min_p):
+def _patched_logl_fn(N, p, min_p):
     """ N * log(p) with min-prob-clip patching """
     if N == 0: return 0.0
     S = N / min_p               # slope term that is derivative of logl at min_p
     S2 = -0.5 * N / (min_p**2)  # 2nd derivative of logl term at min_p
-    pos_p = max(min_p,p)
+    pos_p = max(min_p, p)
     v = N * _np.log(pos_p)
     if p < min_p:
-        v += S*(p - min_p) + S2*(p - min_p)**2 #quadratic extrapolation of logl at min_p for p < min_p
+        v += S * (p - min_p) + S2 * (p - min_p)**2  # quadratic extrapolation of logl at min_p for p < min_p
     return v
-
-
 
 
 ##############################################################################################

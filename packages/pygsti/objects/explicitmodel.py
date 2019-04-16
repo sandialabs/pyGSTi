@@ -48,7 +48,6 @@ from ..baseobjs import DirectSumBasis as _DirectSumBasis
 from ..baseobjs import Label as _Label
 
 
-
 class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -74,7 +73,7 @@ class ExplicitOpModel(_mdl.OpModel):
             The decomposition (with labels) of (pure) state-space this model
             acts upon.  Regardless of whether the model contains operators or
             superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be 
+            and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
 
         basis : {"auto","pp","gm","qt","std","sv"} or Basis
@@ -111,30 +110,29 @@ class ExplicitOpModel(_mdl.OpModel):
 
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
-            represented, allowing compatibility checks with (super)operator 
+            represented, allowing compatibility checks with (super)operator
             objects.
-        """        
+        """
         #More options now (TODO enumerate?)
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
         #                         'H+S terms','clifford','H+S clifford terms'))
-        flagfn = lambda typ : { 'auto_embed': True, 'match_parent_dim': True,
-                                'match_parent_evotype': True, 'cast_to_type': typ }
-        
+        def flagfn(typ): return {'auto_embed': True, 'match_parent_dim': True,
+                                 'match_parent_evotype': True, 'cast_to_type': typ}
+
         self.preps = _ld.OrderedMemberDict(self, default_param, prep_prefix, flagfn("spamvec"))
         self.povms = _ld.OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
         self.operations = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
         self.effects_prefix = effect_prefix
-        
+
         self._default_gauge_group = None
 
         if basis == "auto":
-            basis = "pp" if evotype in ("densitymx","svterm","cterm") \
-                else "sv" # ( if evotype in ("statevec","stabilizer") )
-            
+            basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
+                else "sv"  # ( if evotype in ("statevec","stabilizer") )
+
         chelper = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments)
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, chelper, sim_type)
-
 
     def get_primitive_prep_labels(self):
         """ Return the primitive state preparation labels of this model"""
@@ -153,7 +151,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """ Set the primitive POVM labels of this model"""
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.povms dict)."))
-    
+
     def get_primitive_op_labels(self):
         """ Return the primitive operation labels of this model"""
         return tuple(self.operations.keys())
@@ -172,29 +170,28 @@ class ExplicitOpModel(_mdl.OpModel):
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.instrument dict)."))
 
-
     #Functions required for base class functionality
-    
+
     def _iter_parameterized_objs(self):
-        for lbl,obj in _itertools.chain(self.preps.items(),
-                                        self.povms.items(),
-                                        self.operations.items(),
-                                        self.instruments.items()):
-            yield (lbl,obj)
-    
+        for lbl, obj in _itertools.chain(self.preps.items(),
+                                         self.povms.items(),
+                                         self.operations.items(),
+                                         self.instruments.items()):
+            yield (lbl, obj)
+
     def _layer_lizard(self):
         """ Return a layer lizard for this model """
-        self._clean_paramvec() # just to be safe
+        self._clean_paramvec()  # just to be safe
 
         simplified_effects = _collections.OrderedDict()
-        for povm_lbl,povm in self.povms.items():
-            for k,e in povm.simplify_effects(povm_lbl).items():
+        for povm_lbl, povm in self.povms.items():
+            for k, e in povm.simplify_effects(povm_lbl).items():
                 simplified_effects[k] = e
-        
+
         simplified_ops = _collections.OrderedDict()
-        for k,g in self.operations.items(): simplified_ops[k] = g
-        for inst_lbl,inst in self.instruments.items():
-            for k,g in inst.simplify_operations(inst_lbl).items():
+        for k, g in self.operations.items(): simplified_ops[k] = g
+        for inst_lbl, inst in self.instruments.items():
+            for k, g in inst.simplify_operations(inst_lbl).items():
                 simplified_ops[k] = g
         simplified_preps = self.preps
 
@@ -203,16 +200,16 @@ class ExplicitOpModel(_mdl.OpModel):
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """
 
-        self._clean_paramvec() #ensures paramvec is rebuild if needed
+        self._clean_paramvec()  # ensures paramvec is rebuild if needed
         simplified_effects = _collections.OrderedDict()
-        for povm_lbl,povm in self.povms.items():
-            for k,e in povm.simplify_effects(povm_lbl).items():
+        for povm_lbl, povm in self.povms.items():
+            for k, e in povm.simplify_effects(povm_lbl).items():
                 simplified_effects[k] = e
-        
+
         simplified_ops = _collections.OrderedDict()
-        for k,g in self.operations.items(): simplified_ops[k] = g
-        for inst_lbl,inst in self.instruments.items():
-            for k,g in inst.simplify_operations(inst_lbl).items():
+        for k, g in self.operations.items(): simplified_ops[k] = g
+        for inst_lbl, inst in self.instruments.items():
+            for k, g in inst.simplify_operations(inst_lbl).items():
                 simplified_ops[k] = g
         simplified_preps = self.preps
 
@@ -228,7 +225,6 @@ class ExplicitOpModel(_mdl.OpModel):
     #                if simplified_spamTuple == (prep_lbl, povm_lbl + "_" + elbl):
     #                    return (elbl,) # outcome "label" (a tuple)
     #    raise ValueError("No outcome label found for simplified spamTuple: ", simplified_spamTuple)
-
 
     def _embedOperation(self, opTargetLabels, opVal, force=False):
         """
@@ -260,15 +256,14 @@ class ExplicitOpModel(_mdl.OpModel):
             raise ValueError("Must set model.state_space_labels before adding auto-embedded gates.")
 
         if opVal.dim == self.dim and not force:
-            return opVal # if gate operates on full dimension, no need to embed.
+            return opVal  # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
             return _op.EmbeddedDenseOp(self.state_space_labels, opTargetLabels, opVal)
-        elif self._sim_type in ("map","termorder"):
+        elif self._sim_type in ("map", "termorder"):
             return _op.EmbeddedOp(self.state_space_labels, opTargetLabels, opVal)
         else:
             assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
-
 
     @property
     def default_gauge_group(self):
@@ -282,7 +277,6 @@ class ExplicitOpModel(_mdl.OpModel):
     def default_gauge_group(self, value):
         self._default_gauge_group = value
 
-
     @property
     def prep(self):
         """
@@ -295,7 +289,6 @@ class ExplicitOpModel(_mdl.OpModel):
                              " %d state preps!" % len(self.preps))
         return list(self.preps.values())[0]
 
-
     @property
     def effects(self):
         """
@@ -307,7 +300,6 @@ class ExplicitOpModel(_mdl.OpModel):
                              " with a *single* POVM.  This Model has" +
                              " %d POVMS!" % len(self.povms))
         return list(self.povms.values())[0]
-
 
     def __setitem__(self, label, value):
         """
@@ -364,7 +356,6 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
-
     def set_all_parameterizations(self, parameterization_type, extra=None):
         """
         Convert all gates and SPAM vectors to a specific parameterization
@@ -411,14 +402,14 @@ class ExplicitOpModel(_mdl.OpModel):
         #Update dim and evolution type so that setting converted elements works correctly
         orig_dim = self.dim
         orig_evotype = self._evotype
-        baseType = typ # the default - only updated if a lindblad param type
-                
+        baseType = typ  # the default - only updated if a lindblad param type
+
         if typ == 'static unitary':
             assert(self._evotype == "densitymx"), \
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
             self._evotype = "statevec"
-            self._dim = int(round(_np.sqrt(self.dim))) # reduce dimension d -> sqrt(d)
-            if self._sim_type not in ("matrix","map"):
+            self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
+            if self._sim_type not in ("matrix", "map"):
                 self.set_simtype("matrix" if self.dim <= 4 else "map")
 
         elif typ == 'clifford':
@@ -426,41 +417,41 @@ class ExplicitOpModel(_mdl.OpModel):
             self.set_simtype("map")
 
         elif _gt.is_valid_lindblad_paramtype(typ):
-            baseType,evotype = _gt.split_lindblad_paramtype(typ)
+            baseType, evotype = _gt.split_lindblad_paramtype(typ)
             self._evotype = evotype
             if evotype == "densitymx":
-                if self._sim_type not in ("matrix","map"):
+                if self._sim_type not in ("matrix", "map"):
                     self.set_simtype("matrix" if self.dim <= 16 else "map")
-            elif evotype in ("svterm","cterm"):
+            elif evotype in ("svterm", "cterm"):
                 if self._sim_type != "termorder":
                     self.set_simtype("termorder:1")
 
-        else: # assume all other parameterizations are densitymx type
+        else:  # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"
-            if self._sim_type not in ("matrix","map"):
+            if self._sim_type not in ("matrix", "map"):
                 self.set_simtype("matrix" if self.dim <= 16 else "map")
 
         basis = self.basis
         if extra is None: extra = {}
 
-        povmtyp = rtyp = typ #assume spam types are available to all objects
+        povmtyp = rtyp = typ  # assume spam types are available to all objects
         ityp = "TP" if _gt.is_valid_lindblad_paramtype(typ) else typ
 
-        for lbl,gate in self.operations.items():
+        for lbl, gate in self.operations.items():
             self.operations[lbl] = _op.convert(gate, typ, basis,
-                                            extra.get(lbl,None))
+                                               extra.get(lbl, None))
 
-        for lbl,inst in self.instruments.items():
+        for lbl, inst in self.instruments.items():
             self.instruments[lbl] = _instrument.convert(inst, ityp, basis,
-                                                        extra.get(lbl,None))
+                                                        extra.get(lbl, None))
 
-        for lbl,vec in self.preps.items():
+        for lbl, vec in self.preps.items():
             self.preps[lbl] = _sv.convert(vec, rtyp, basis,
-                                          extra.get(lbl,None))
+                                          extra.get(lbl, None))
 
-        for lbl,povm in self.povms.items():
+        for lbl, povm in self.povms.items():
             self.povms[lbl] = _povm.convert(povm, povmtyp, basis,
-                                            extra.get(lbl,None))
+                                            extra.get(lbl, None))
 
         if typ == 'full':
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
@@ -468,22 +459,22 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
-        else: # typ in ('static','H+S','S', 'H+S terms', ...)
+        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
-            
     #def __getstate__(self):
     #    #Returns self.__dict__ by default, which is fine
 
     def __setstate__(self, stateDict):
-        
+
         if "gates" in stateDict:
             #Unpickling an OLD-version Model (or GateSet)
             _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
             self.operations = stateDict['gates']
             self._state_space_labels = stateDict['stateSpaceLabels']
             self._paramlbls = None
-            self._shlp = _sh.MemberDictSimplifierHelper(stateDict['preps'], stateDict['povms'], stateDict['instruments'])
+            self._shlp = _sh.MemberDictSimplifierHelper(
+                stateDict['preps'], stateDict['povms'], stateDict['instruments'])
             del stateDict['gates']
             del stateDict['_autogator']
             del stateDict['auto_idle_gatename']
@@ -544,7 +535,7 @@ class ExplicitOpModel(_mdl.OpModel):
         self.__dict__.update(stateDict)
 
         if 'uuid' not in stateDict:
-            self.uuid = _uuid.uuid4() #create a new uuid
+            self.uuid = _uuid.uuid4()  # create a new uuid
 
         #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -556,11 +547,10 @@ class ExplicitOpModel(_mdl.OpModel):
         self.operations.parent = self
         self.instruments.parent = self
         for o in self.preps.values(): o.relink_parent(self)
-        for o in self.povms.values(): o.relink_parent( self)
+        for o in self.povms.values(): o.relink_parent(self)
         #for o in self.effects.values(): o.relink_parent(self)
         for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
-
 
     def num_elements(self):
         """
@@ -575,12 +565,11 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of model elements.
         """
-        rhoSize = [ rho.size for rho in self.preps.values() ]
-        povmSize = [ povm.num_elements() for povm in self.povms.values() ]
-        opSize = [ gate.size for gate in self.operations.values() ]
-        instSize = [ i.num_elements() for i in self.instruments.values() ]
+        rhoSize = [rho.size for rho in self.preps.values()]
+        povmSize = [povm.num_elements() for povm in self.povms.values()]
+        opSize = [gate.size for gate in self.operations.values()]
+        instSize = [i.num_elements() for i in self.instruments.values()]
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
-
 
     def num_nongauge_params(self):
         """
@@ -594,7 +583,6 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self.num_params() - self.num_gauge_params()
 
-
     def num_gauge_params(self):
         """
         Return the number of gauge parameters when vectorizing
@@ -606,9 +594,8 @@ class ExplicitOpModel(_mdl.OpModel):
             the number of gauge model parameters.
         """
         dPG = self._excalc()._buildup_dPG()
-        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
-        return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
-
+        gaugeDirs = _mt.nullspace_qr(dPG)  # cols are gauge directions
+        return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(), :])
 
     def deriv_wrt_params(self):
         """
@@ -628,7 +615,6 @@ class ExplicitOpModel(_mdl.OpModel):
             2D array of derivatives.
         """
         return self._excalc().deriv_wrt_params()
-
 
     def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
         """
@@ -665,7 +651,6 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().get_nongauge_projector(itemWeights, nonGaugeMixMx)
 
-
     def transform(self, S):
         """
         Update each of the operation matrices G in this model with inv(S) * G * S,
@@ -678,7 +663,7 @@ class ExplicitOpModel(_mdl.OpModel):
             (and it's inverse) used in the above similarity transform.
         """
         for rhoVec in self.preps.values():
-            rhoVec.transform(S,'prep')
+            rhoVec.transform(S, 'prep')
 
         for povm in self.povms.values():
             povm.transform(S)
@@ -689,10 +674,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for instrument in self.instruments.values():
             instrument.transform(S)
 
-        self._clean_paramvec() #transform may leave dirty members
-
-
-
+        self._clean_paramvec()  # transform may leave dirty members
 
     def product(self, circuit, bScale=False):
         """
@@ -721,9 +703,8 @@ class ExplicitOpModel(_mdl.OpModel):
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
-        circuit = _cir.Circuit(circuit) # cast to Circuit
+        circuit = _cir.Circuit(circuit)  # cast to Circuit
         return self._fwdsim().product(circuit, bScale)
-
 
     def dproduct(self, circuit, flat=False):
         """
@@ -756,9 +737,8 @@ class ExplicitOpModel(_mdl.OpModel):
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
               product with respect to the j-th model parameter.
         """
-        circuit = _cir.Circuit(circuit) # cast to Circuit
+        circuit = _cir.Circuit(circuit)  # cast to Circuit
         return self._fwdsim().dproduct(circuit, flat)
-
 
     def hproduct(self, circuit, flat=False):
         """
@@ -791,9 +771,8 @@ class ExplicitOpModel(_mdl.OpModel):
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
               product with respect to the k-th then k-th model parameters.
         """
-        circuit = _cir.Circuit(circuit) # cast to Circuit
+        circuit = _cir.Circuit(circuit)  # cast to Circuit
         return self._fwdsim().hproduct(circuit, flat)
-
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
@@ -828,7 +807,6 @@ class ExplicitOpModel(_mdl.OpModel):
             (final_product[i] = scaleValues[i] * prods[i]).
         """
         return self._fwdsim().bulk_product(evalTree, bScale, comm)
-
 
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None):
@@ -892,8 +870,7 @@ class ExplicitOpModel(_mdl.OpModel):
           the derivatives and/or products for the i-th operation sequence.
         """
         return self._fwdsim().bulk_dproduct(evalTree, flat, bReturnProds,
-                                          bScale, comm)
-
+                                            bScale, comm)
 
     def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
                       bScale=False, comm=None):
@@ -982,10 +959,9 @@ class ExplicitOpModel(_mdl.OpModel):
         ret = self._fwdsim().bulk_hproduct(
             evalTree, flat, bReturnDProdsAndProds, bScale, comm)
         if bReturnDProdsAndProds:
-            return ret[0:2] + ret[3:] #remove ret[2] == deriv wrt filter2,
-                         # which isn't an input param for Model version
+            return ret[0:2] + ret[3:]  # remove ret[2] == deriv wrt filter2,
+            # which isn't an input param for Model version
         else: return ret
-
 
     def frobeniusdist(self, otherModel, transformMx=None,
                       itemWeights=None, normalize=True):
@@ -1068,7 +1044,6 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().residuals(otherModel._excalc(), transformMx, itemWeights)
 
-
     def jtracedist(self, otherModel, transformMx=None, include_spam=True):
         """
         Compute the Jamiolkowski trace distance between this
@@ -1097,7 +1072,6 @@ class ExplicitOpModel(_mdl.OpModel):
         float
         """
         return self._excalc().jtracedist(otherModel._excalc(), transformMx, include_spam)
-
 
     def diamonddist(self, otherModel, transformMx=None, include_spam=True):
         """
@@ -1129,7 +1103,6 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().diamonddist(otherModel._excalc(), transformMx, include_spam)
 
-
     def tpdist(self):
         """
         Compute the "distance" between this model and the space of
@@ -1139,17 +1112,16 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         penalty = 0.0
         for operationMx in list(self.operations.values()):
-            penalty += abs(operationMx[0,0] - 1.0)**2
-            for k in range(1,operationMx.shape[1]):
-                penalty += abs(operationMx[0,k])**2
+            penalty += abs(operationMx[0, 0] - 1.0)**2
+            for k in range(1, operationMx.shape[1]):
+                penalty += abs(operationMx[0, k])**2
 
         op_dim = self.get_dimension()
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
-            penalty += abs(rhoVec[0,0] - firstEl)**2
+            penalty += abs(rhoVec[0, 0] - firstEl)**2
 
         return _np.sqrt(penalty)
-
 
     def strdiff(self, otherModel):
         """
@@ -1167,43 +1139,43 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         str
         """
-        s =  "Model Difference:\n"
+        s = "Model Difference:\n"
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.preps[lbl].todense()-otherModel.preps[lbl].todense()))
+                (lbl, _np.linalg.norm(self.preps[lbl].todense() - otherModel.preps[lbl].todense()))
 
         s += " POVMs:\n"
-        for povm_lbl,povm in self.povms.items():
+        for povm_lbl, povm in self.povms.items():
             s += "  %s: " % povm_lbl
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, _np.linalg.norm(povm[lbl].todense()-otherModel.povms[povm_lbl][lbl].todense()))
+                     (lbl, _np.linalg.norm(povm[lbl].todense() - otherModel.povms[povm_lbl][lbl].todense()))
 
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.operations[lbl].todense()-otherModel.operations[lbl].todense()))
+                (lbl, _np.linalg.norm(self.operations[lbl].todense() - otherModel.operations[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
-            for inst_lbl,inst in self.instruments.items():
+            for inst_lbl, inst in self.instruments.items():
                 s += "  %s: " % inst_lbl
                 for lbl in inst:
                     s += "    %s = %g\n" % \
-                         (lbl, _np.linalg.norm(inst[lbl].todense()-otherModel.instruments[inst_lbl][lbl].todense()))
+                         (lbl, _np.linalg.norm(inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
 
         return s
 
-    def _init_copy(self,copyInto):
+    def _init_copy(self, copyInto):
         """
         Copies any "tricky" member of this model into `copyInto`, before
         deep copying everything else within a .copy() operation.
         """
-        
+
         # Copy special base class members first
         super(ExplicitOpModel, self)._init_copy(copyInto)
-        
+
         # Copy our "tricky" members
         copyInto.preps = self.preps.copy(copyInto)
         copyInto.povms = self.povms.copy(copyInto)
@@ -1211,37 +1183,37 @@ class ExplicitOpModel(_mdl.OpModel):
         copyInto.instruments = self.instruments.copy(copyInto)
         copyInto._shlp = _sh.MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments)
 
-        copyInto._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
-
+        copyInto._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 
     def __str__(self):
         s = ""
-        for lbl,vec in self.preps.items():
+        for lbl, vec in self.preps.items():
             s += "%s = " % str(lbl) + str(vec) + "\n"
         s += "\n"
-        for lbl,povm in self.povms.items():
+        for lbl, povm in self.povms.items():
             s += "%s = " % str(lbl) + str(povm) + "\n"
         s += "\n"
-        for lbl,gate in self.operations.items():
+        for lbl, gate in self.operations.items():
             s += "%s = \n" % str(lbl) + str(gate) + "\n\n"
-        for lbl,inst in self.instruments.items():
+        for lbl, inst in self.instruments.items():
             s += "%s = " % str(lbl) + str(inst) + "\n"
         s += "\n"
 
         return s
 
-
     def iter_objs(self):
-        for lbl,obj in _itertools.chain(self.preps.items(),
-                                        self.povms.items(),
-                                        self.operations.items(),
-                                        self.instruments.items()):
-            yield (lbl,obj)
+        for lbl, obj in _itertools.chain(self.preps.items(),
+                                         self.povms.items(),
+                                         self.operations.items(),
+                                         self.instruments.items()):
+            yield (lbl, obj)
 
 
 #TODO: how to handle these given possibility of different parameterizations...
 #  -- maybe only allow these methods to be called when using a "full" parameterization?
 #  -- or perhaps better to *move* them to the parameterization class
+
+
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
@@ -1285,7 +1257,7 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the depolarized Model
         """
-        newModel = self.copy() # start by just copying the current model
+        newModel = self.copy()  # start by just copying the current model
         opDim = self.get_dimension()
         rndm = _np.random.RandomState(seed)
 
@@ -1295,10 +1267,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
             #Apply random depolarization to each gate
             r = max_op_noise * rndm.random_sample(len(self.operations))
-            for i,label in enumerate(self.operations):
+            for i, label in enumerate(self.operations):
                 newModel.operations[label].depolarize(r[i])
             r = max_op_noise * rndm.random_sample(len(self.instruments))
-            for i,label in enumerate(self.instruments):
+            for i, label in enumerate(self.instruments):
                 newModel.instruments[label].depolarize(r[i])
 
         elif op_noise is not None:
@@ -1313,16 +1285,16 @@ class ExplicitOpModel(_mdl.OpModel):
                 raise ValueError("Must specify at most  one of 'noise' and 'max_noise' NOT both")
 
             #Apply random depolarization to each rho and E vector
-            r = max_spam_noise * rndm.random_sample( len(self.preps) )
-            for (i,lbl) in enumerate(self.preps):
+            r = max_spam_noise * rndm.random_sample(len(self.preps))
+            for (i, lbl) in enumerate(self.preps):
                 newModel.preps[lbl].depolarize(r[i])
-            r = max_spam_noise * rndm.random_sample( len(self.povms) )
+            r = max_spam_noise * rndm.random_sample(len(self.povms))
             for label in self.povms:
                 newModel.povms[label].depolarize(r[i])
 
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
-            D = _np.diag( [1]+[1-spam_noise]*(opDim-1) )
+            D = _np.diag([1] + [1 - spam_noise] * (opDim - 1))
             for lbl in self.preps:
                 newModel.preps[lbl].depolarize(spam_noise)
 
@@ -1330,9 +1302,8 @@ class ExplicitOpModel(_mdl.OpModel):
             #for label in self.povms:
             #    newModel.povms[label].depolarize(spam_noise)
 
-        newModel._clean_paramvec() #depolarize may leave dirty members
+        newModel._clean_paramvec()  # depolarize may leave dirty members
         return newModel
-
 
     def rotate(self, rotate=None, max_rotate=None, seed=None):
         """
@@ -1370,7 +1341,7 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the rotated Model
         """
-        newModel = self.copy() # start by just copying model
+        newModel = self.copy()  # start by just copying model
         dim = self.get_dimension()
         myBasis = self.basis
 
@@ -1380,19 +1351,18 @@ class ExplicitOpModel(_mdl.OpModel):
 
             #Apply random rotation to each gate
             rndm = _np.random.RandomState(seed)
-            r = max_rotate * rndm.random_sample( len(self.operations) * (dim-1) )
-            for i,label in enumerate(self.operations):
-                rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])
+            r = max_rotate * rndm.random_sample(len(self.operations) * (dim - 1))
+            for i, label in enumerate(self.operations):
+                rot = _np.array(r[(dim - 1) * i:(dim - 1) * (i + 1)])
                 newModel.operations[label].rotate(rot, myBasis)
-            r = max_rotate * rndm.random_sample( len(self.instruments) * (dim-1) )
-            for i,label in enumerate(self.instruments):
-                rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])
+            r = max_rotate * rndm.random_sample(len(self.instruments) * (dim - 1))
+            for i, label in enumerate(self.instruments):
+                rot = _np.array(r[(dim - 1) * i:(dim - 1) * (i + 1)])
                 newModel.instruments[label].rotate(rot, myBasis)
 
-
         elif rotate is not None:
-            assert(len(rotate) == dim-1), \
-                "Invalid 'rotate' argument. You must supply a tuple of length %d" % (dim-1)
+            assert(len(rotate) == dim - 1), \
+                "Invalid 'rotate' argument. You must supply a tuple of length %d" % (dim - 1)
             for label in self.operations:
                 newModel.operations[label].rotate(rotate, myBasis)
             for label in self.instruments:
@@ -1401,9 +1371,8 @@ class ExplicitOpModel(_mdl.OpModel):
         else: raise ValueError("Must specify either 'rotate' or 'max_rotate' "
                                + "-- neither was non-None")
 
-        newModel._clean_paramvec() #rotate may leave dirty members
+        newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
-
 
     def randomize_with_unitary(self, scale, seed=None, randState=None):
         """
@@ -1441,28 +1410,27 @@ class ExplicitOpModel(_mdl.OpModel):
 
         op_dim = self.get_dimension()
         unitary_dim = int(round(_np.sqrt(op_dim)))
-        assert( unitary_dim**2 == op_dim ), \
+        assert(unitary_dim**2 == op_dim), \
             "Model dimension must be a perfect square, %d is not" % op_dim
 
         mdl_randomized = self.copy()
 
-        for opLabel,gate in self.operations.items():
-            randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
-                                   + 1j * rndm.randn(unitary_dim,unitary_dim))
+        for opLabel, gate in self.operations.items():
+            randMat = scale * (rndm.randn(unitary_dim, unitary_dim)
+                               + 1j * rndm.randn(unitary_dim, unitary_dim))
             randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-                  # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randUnitary   = _scipy.linalg.expm(-1j*randMat)
+            # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
+            randUnitary = _scipy.linalg.expm(-1j * randMat)
 
-            randOp = _gt.unitary_to_process_mx(randUnitary) #in std basis
+            randOp = _gt.unitary_to_process_mx(randUnitary)  # in std basis
             randOp = _bt.change_basis(randOp, "std", self.basis)
 
             mdl_randomized.operations[opLabel] = _op.FullDenseOp(
-                            _np.dot(randOp,gate))
+                _np.dot(randOp, gate))
 
         #Note: this function does NOT randomize instruments
 
         return mdl_randomized
-
 
     def increase_dimension(self, newDimension):
         """
@@ -1489,52 +1457,52 @@ class ExplicitOpModel(_mdl.OpModel):
         assert(newDimension > curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
-        sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
-        dumb_basis = _DirectSumBasis( [_BuiltinBasis('gm',1)]*newDimension, name="Unknown") # - just act on diagonal density mx
+        sslbls = [('L%d' % i,) for i in range(newDimension)]  # interpret as independent classical levels
+        dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * newDimension,
+                                     name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
-                              self.operations._prefix, self.povms._prefix,
-                              self.instruments._prefix, self._sim_type)
+                                    self.operations._prefix, self.povms._prefix,
+                                    self.instruments._prefix, self._sim_type)
         #new_model._dim = newDimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
-        addedDim = newDimension-curDim
-        vec_zeroPad = _np.zeros( (addedDim,1), 'd')
+        addedDim = newDimension - curDim
+        vec_zeroPad = _np.zeros((addedDim, 1), 'd')
 
         #Increase dimension of rhoVecs and EVecs by zero-padding
-        for lbl,rhoVec in self.preps.items():
-            assert( len(rhoVec) == curDim )
+        for lbl, rhoVec in self.preps.items():
+            assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _sv.FullSPAMVec(_np.concatenate( (rhoVec, vec_zeroPad) ))
+                _sv.FullSPAMVec(_np.concatenate((rhoVec, vec_zeroPad)))
 
-        for lbl,povm in self.povms.items():
-            assert( povm.dim == curDim )
-            effects = [ (elbl,_np.concatenate( (EVec, vec_zeroPad) ))
-                        for elbl,EVec in povm.items() ]
+        for lbl, povm in self.povms.items():
+            assert(povm.dim == curDim)
+            effects = [(elbl, _np.concatenate((EVec, vec_zeroPad)))
+                       for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_model.povms[lbl] = _povm.TPPOVM(effects)
             else:
-                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
+                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects)  # everything else
 
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
-        for opLabel,gate in self.operations.items():
-            assert( gate.shape == (curDim,curDim) )
-            newOp = _np.zeros( (newDimension,newDimension) )
-            newOp[ 0:curDim, 0:curDim ] = gate[:,:]
-            for i in range(curDim,newDimension): newOp[i,i] = 1.0
+        for opLabel, gate in self.operations.items():
+            assert(gate.shape == (curDim, curDim))
+            newOp = _np.zeros((newDimension, newDimension))
+            newOp[0:curDim, 0:curDim] = gate[:, :]
+            for i in range(curDim, newDimension): newOp[i, i] = 1.0
             new_model.operations[opLabel] = _op.FullDenseOp(newOp)
 
-        for instLabel,inst in self.instruments.items():
+        for instLabel, inst in self.instruments.items():
             inst_ops = []
-            for outcomeLbl,gate in inst.items():
-                newOp = _np.zeros( (newDimension,newDimension) )
-                newOp[ 0:curDim, 0:curDim ] = gate[:,:]
-                for i in range(curDim,newDimension): newOp[i,i] = 1.0
-                inst_ops.append( (outcomeLbl,_op.FullDenseOp(newOp)) )
+            for outcomeLbl, gate in inst.items():
+                newOp = _np.zeros((newDimension, newDimension))
+                newOp[0:curDim, 0:curDim] = gate[:, :]
+                for i in range(curDim, newDimension): newOp[i, i] = 1.0
+                inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         return new_model
-
 
     def decrease_dimension(self, newDimension):
         """
@@ -1558,43 +1526,43 @@ class ExplicitOpModel(_mdl.OpModel):
         assert(newDimension < curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
-        sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
-        dumb_basis = _DirectSumBasis( [_BuiltinBasis('gm',1)]*newDimension, name="Unknown") # - just act on diagonal density mx
+        sslbls = [('L%d' % i,) for i in range(newDimension)]  # interpret as independent classical levels
+        dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * newDimension,
+                                     name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
-                              self.operations._prefix, self.povms._prefix,
-                              self.instruments._prefix, self._sim_type)
+                                    self.operations._prefix, self.povms._prefix,
+                                    self.instruments._prefix, self._sim_type)
         #new_model._dim = newDimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
         #Decrease dimension of rhoVecs and EVecs by truncation
-        for lbl,rhoVec in self.preps.items():
-            assert( len(rhoVec) == curDim )
+        for lbl, rhoVec in self.preps.items():
+            assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _sv.FullSPAMVec(rhoVec[0:newDimension,:])
+                _sv.FullSPAMVec(rhoVec[0:newDimension, :])
 
-        for lbl,povm in self.povms.items():
-            assert( povm.dim == curDim )
-            effects = [ (elbl,EVec[0:newDimension,:]) for elbl,EVec in povm.items()]
+        for lbl, povm in self.povms.items():
+            assert(povm.dim == curDim)
+            effects = [(elbl, EVec[0:newDimension, :]) for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_model.povms[lbl] = _povm.TPPOVM(effects)
             else:
-                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
-
+                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects)  # everything else
 
         #Decrease dimension of gates by truncation
-        for opLabel,gate in self.operations.items():
-            assert( gate.shape == (curDim,curDim) )
-            newOp = _np.zeros( (newDimension,newDimension) )
-            newOp[ :, : ] = gate[0:newDimension,0:newDimension]
+        for opLabel, gate in self.operations.items():
+            assert(gate.shape == (curDim, curDim))
+            newOp = _np.zeros((newDimension, newDimension))
+            newOp[:, :] = gate[0:newDimension, 0:newDimension]
             new_model.operations[opLabel] = _op.FullDenseOp(newOp)
 
-        for instLabel,inst in self.instruments.items():
+        for instLabel, inst in self.instruments.items():
             inst_ops = []
-            for outcomeLbl,gate in inst.items():
-                newOp = _np.zeros( (newDimension,newDimension) )
-                newOp[ :, : ] = gate[0:newDimension,0:newDimension]
-                inst_ops.append( (outcomeLbl,_op.FullDenseOp(newOp)) )
+            for outcomeLbl, gate in inst.items():
+                newOp = _np.zeros((newDimension, newDimension))
+                newOp[:, :] = gate[0:newDimension, 0:newDimension]
+                inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         return new_model
@@ -1625,14 +1593,13 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         kicked_gs = self.copy()
         rndm = _np.random.RandomState(seed)
-        for opLabel,gate in self.operations.items():
-            delta = absmag * 2.0*(rndm.random_sample(gate.shape)-0.5) + bias
+        for opLabel, gate in self.operations.items():
+            delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
             kicked_gs.operations[opLabel] = _op.FullDenseOp(
-                                            kicked_gs.operations[opLabel] + delta )
+                kicked_gs.operations[opLabel] + delta)
 
         #Note: does not alter intruments!
         return kicked_gs
-
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
@@ -1654,22 +1621,22 @@ class ExplicitOpModel(_mdl.OpModel):
             `(symplectic_matrix, phase_vector)` tuples.
         """
         gfilter = set(oplabel_filter) if oplabel_filter is not None \
-                  else None
+            else None
 
         srep_dict = {}
 
-        for gl,gate in self.operations.items():
+        for gl, gate in self.operations.items():
             if (gfilter is not None) and (gl not in gfilter): continue
 
             if isinstance(gate, _op.EmbeddedOp):
                 assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
                     "EmbeddedClifforGate contains a non-CliffordOp!"
-                lbl = gl.name # strip state space labels off since this is a
-                              # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix,gate.embedded_op.svector)
+                lbl = gl.name  # strip state space labels off since this is a
+                # symplectic rep for the *embedded* gate
+                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
             elif isinstance(gate, _op.CliffordOp):
-                lbl = gl.name 
-                srep = (gate.smatrix,gate.svector)
+                lbl = gl.name
+                srep = (gate.smatrix, gate.svector)
             else:
                 lbl = srep = None
 
@@ -1681,7 +1648,6 @@ class ExplicitOpModel(_mdl.OpModel):
                     srep_dict[lbl] = srep
 
         return srep_dict
-
 
     def print_info(self):
         """
@@ -1698,12 +1664,12 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         print(self)
         print("\n")
-        print("Basis = ",self.basis.name)
+        print("Basis = ", self.basis.name)
         print("Choi Matrices:")
-        for (label,gate) in self.operations.items():
+        for (label, gate) in self.operations.items():
             print(("Choi(%s) in pauli basis = \n" % label,
-            _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
+                   _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
             print(("  --eigenvals = ", sorted(
                 [ev.real for ev in _np.linalg.eigvals(
-                        _jt.jamiolkowski_iso(gate))] ),"\n"))
+                    _jt.jamiolkowski_iso(gate))]), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))

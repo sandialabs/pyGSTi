@@ -17,8 +17,8 @@ real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
 reflbl  :: (alpha | digit | '_')+
 
 nop       :: '{}'
-opname    :: 'G' [ lowercase | digit | '_' ]+ 
-instrmtnm :: 'I' [ lowercase | digit | '_' ]+ 
+opname    :: 'G' [ lowercase | digit | '_' ]+
+instrmtnm :: 'I' [ lowercase | digit | '_' ]+
 povmnm    :: 'M' [ lowercase | digit | '_' ]+
 prepnm    :: 'rho' [ lowercase | digit | '_' ]+
 gate      :: opname [':' integer ]*
@@ -41,9 +41,10 @@ from ply import lex, yacc
 from .label import Label as _Label
 from .label import CircuitLabel as _CircuitLabel
 
+
 class CircuitLexer:
     """ Lexer for matching and interpreting text-format operation sequences """
-    
+
     # List of token names.   This is always required
     tokens = (
         'EXPOP',
@@ -69,17 +70,17 @@ class CircuitLexer:
         #Note: Q is only capital letter allowed in qubit label
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
-        t.value = lbl, # make it a tuple
-        return t 
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        t.value = lbl,  # make it a tuple
+        return t
 
     @staticmethod
     def t_INSTRMT(t):
         r'I[a-z0-9_]+'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
-        t.value = lbl, # make it a tuple
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
@@ -87,8 +88,8 @@ class CircuitLexer:
         r'rho[a-z0-9_]+'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
-        t.value = lbl, # make it a tuple
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
@@ -96,8 +97,8 @@ class CircuitLexer:
         r'M[a-z0-9_]+'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
-        t.value = lbl, # make it a tuple
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
@@ -133,14 +134,15 @@ class CircuitLexer:
         return t
 
     # A string containing ignored characters (spaces and tabs)
-    t_ignore  = ' \t'
+    t_ignore = ' \t'
 
     # Error handling rule
     @staticmethod
     def t_error(t):
         if t is not None:
-            raise ValueError("Illegal character '{}' at position {} of string '{}'".format(t.value[0], t.lexpos, t.lexer.lexdata))
-        raise ValueError("Lexer error") # pragma: no cover
+            raise ValueError("Illegal character '{}' at position {} of string '{}'".format(
+                t.value[0], t.lexpos, t.lexer.lexdata))
+        raise ValueError("Lexer error")  # pragma: no cover
 
 
 class CircuitParser(object):
@@ -152,7 +154,7 @@ class CircuitParser(object):
         self._lexer = lex.lex(object=lexer_object if lexer_object else CircuitLexer())
         self._parser = yacc.yacc(module=self, start="ppstring", debug=False,
                                  tabmodule='pygsti.baseobjs.parsetab_string')
-        
+
     @property
     def lookup(self):
         """ The lookup dictionary for expanding references """
@@ -184,7 +186,7 @@ class CircuitParser(object):
     @staticmethod
     def p_subcircuit_singlelayer(p):
         '''subcircuit : OPENBR layer CLOSEBR'''
-        p[0] = p[2], # subcircuit should be a tuple of layers - and p[2] is a *single* layer
+        p[0] = p[2],  # subcircuit should be a tuple of layers - and p[2] is a *single* layer
 
     @staticmethod
     def p_subcircuit_string(p):
@@ -200,14 +202,14 @@ class CircuitParser(object):
     @staticmethod
     def p_layerable_subcircuit(p):
         '''layerable : subcircuit '''
-        plbl = _Label( (p[1],) ) # just for total sslbls
-        p[0] = _CircuitLabel('',p[1],plbl.sslbls,1),
+        plbl = _Label((p[1],))  # just for total sslbls
+        p[0] = _CircuitLabel('', p[1], plbl.sslbls, 1),
 
     @staticmethod
     def p_layerable_subcircuit_expop(p):
         '''layerable : subcircuit EXPOP INTEGER'''
-        plbl = _Label(p[1]) # just for total sslbls
-        p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
+        plbl = _Label(p[1])  # just for total sslbls
+        p[0] = _CircuitLabel('', p[1], plbl.sslbls, p[3]),
 
     @staticmethod
     def p_layer_layerable(p):
@@ -232,13 +234,13 @@ class CircuitParser(object):
     @staticmethod
     def p_expable_layer(p):
         '''expable : OPENBR layer CLOSEBR'''
-        p[0] = p[2], # -> tuple
+        p[0] = p[2],  # -> tuple
 
     @staticmethod
     def p_expable_empty_layer(p):
         '''expable : OPENBR CLOSEBR'''
-        p[0] = ((),) # -> empty layer tuple
-        
+        p[0] = ((),)  # -> empty layer tuple
+
     @staticmethod
     def p_expable_single(p):
         '''expable : GATE
@@ -254,11 +256,11 @@ class CircuitParser(object):
     @staticmethod
     def p_expdstr_expop(p):
         '''expdstr : expable EXPOP INTEGER'''
-        plbl = _Label(p[1]) # just for total sslbls
+        plbl = _Label(p[1])  # just for total sslbls
         if len(p[1]) > 0:
-            p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
+            p[0] = _CircuitLabel('', p[1], plbl.sslbls, p[3]),
         else:
-            p[0] = () # special case of {}^power => remain empty
+            p[0] = ()  # special case of {}^power => remain empty
         #OLD (before subcircuits) p[0] = p[1] * p[3]  # tuple repetition
 
     @staticmethod
@@ -301,7 +303,6 @@ class CircuitParser(object):
         '''ppstring : pstring POVM'''
         p[0] = p[1] + p[2]
 
-        
     @staticmethod
     def p_error(p):
         message = "Syntax error"
@@ -311,13 +312,13 @@ class CircuitParser(object):
 
     def parse(self, code):
         """
-        Perform lexing and parsing of `code`.  
-        
+        Perform lexing and parsing of `code`.
+
         Parameters
         ----------
         code : str
             A circuit encoded as a single-line string
-        
+
         Returns
         -------
         layer_labels : tuple
@@ -325,15 +326,14 @@ class CircuitParser(object):
         line_labels : tuple
             A tuple of the line labels of the circuit.
         """
-        if '@' in code: # format:  <string>@<line_labels>
-            code,labels = code.split('@')
-            labels = labels.strip("( )") #remove opening and closing parenthesis
-            process = lambda x: int(x) if x.strip().isdigit() else x.strip()
-            labels = tuple(map(process,labels.split(',')))
+        if '@' in code:  # format:  <string>@<line_labels>
+            code, labels = code.split('@')
+            labels = labels.strip("( )")  # remove opening and closing parenthesis
+            def process(x): return int(x) if x.strip().isdigit() else x.strip()
+            labels = tuple(map(process, labels.split(',')))
         else:
             labels = None
-            
+
         self._lexer.input(code)
         result = self._parser.parse(lexer=self._lexer)
-        return result,labels
-
+        return result, labels

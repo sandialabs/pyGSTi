@@ -11,6 +11,7 @@ import numpy as _np
 
 from ..baseobjs.label import Label as _Label
 
+
 class ReportableQty(object):
     """
     Encapsulates a computed quantity and possibly its error bars,
@@ -33,37 +34,37 @@ class ReportableQty(object):
         nonMarkovianEBs : bool
             boolean indicating if non markovian error bars should be used
         """
-        self.value   = value
-        self.errbar  = errbar
+        self.value = value
+        self.errbar = errbar
 
         self.nonMarkovianEBs = nonMarkovianEBs
 
     def __str__(self):
-        f = lambda x,y : (str(x) + " +/- " + str(y)) if y else str(x)
+        def f(x, y): return (str(x) + " +/- " + str(y)) if y else str(x)
         return self.render_with(f)
 
     def __repr__(self):
         return 'ReportableQty({})'.format(str(self))
 
-    def __add__(self,x):
+    def __add__(self, x):
         if self.has_eb():
             return ReportableQty(self.value + x, self.errbar, self.nonMarkovianEBs)
         else:
             return ReportableQty(self.value + x)
 
-    def __mul__(self,x):
+    def __mul__(self, x):
         if self.has_eb():
             return ReportableQty(self.value * x, self.errbar * x, self.nonMarkovianEBs)
         else:
             return ReportableQty(self.value * x)
 
-    def __truediv__(self,x):
+    def __truediv__(self, x):
         if self.has_eb():
             return ReportableQty(self.value / x, self.errbar / x, self.nonMarkovianEBs)
         else:
             return ReportableQty(self.value / x)
 
-    def __div__(self,x): #for python 2.7
+    def __div__(self, x):  # for python 2.7
         if self.has_eb():
             return ReportableQty(self.value / x, self.errbar / x, self.nonMarkovianEBs)
         else:
@@ -71,7 +72,7 @@ class ReportableQty(object):
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
-        return state_dict 
+        return state_dict
 
     def __setstate__(self, d):
         self.__dict__.update(d)
@@ -89,57 +90,57 @@ class ReportableQty(object):
     def log(self):
         """ Returns a ReportableQty that is the logarithm of this one."""
         # log(1 + x) ~ x
-        # x + dx        
+        # x + dx
         # log(x + dx) = log(x(1 + dx/x)) = log x + log(1+dx/x) = log x + dx/x
         v = self.value
         if _np.any(_np.isreal(v)) and _np.any(v < 0):
-            v = v.astype(complex) # so logarithm can be complex
+            v = v.astype(complex)  # so logarithm can be complex
 
         if self.has_eb():
-            return ReportableQty( _np.log(v), _np.log(v + self.errbar) - _np.log(v),
-                                  self.nonMarkovianEBs)
+            return ReportableQty(_np.log(v), _np.log(v + self.errbar) - _np.log(v),
+                                 self.nonMarkovianEBs)
         else:
-            return ReportableQty( _np.log(v) )
+            return ReportableQty(_np.log(v))
 
     def real(self):
         """ Returns a ReportableQty that is the real part of this one."""
         if self.has_eb():
-            return ReportableQty( _np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
+            return ReportableQty(_np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
         else:
-            return ReportableQty( _np.real(self.value) )
-        
+            return ReportableQty(_np.real(self.value))
+
     def imag(self):
         """ Returns a ReportableQty that is the imaginary part of this one."""
         if self.has_eb():
-            return ReportableQty( _np.imag(self.value), _np.imag(self.errbar), self.nonMarkovianEBs)
+            return ReportableQty(_np.imag(self.value), _np.imag(self.errbar), self.nonMarkovianEBs)
         else:
-            return ReportableQty( _np.imag(self.value) )
+            return ReportableQty(_np.imag(self.value))
 
     def absdiff(self, constant_value, separate_re_im=False):
-        """ 
+        """
         Returns a ReportableQty that is the (element-wise in the vector case)
         difference between `constant_value` and this one given by:
 
         `abs(self - constant_value)`.
         """
         if separate_re_im:
-            re_v = _np.fabs( _np.real(self.value) - _np.real(constant_value) )
-            im_v = _np.fabs( _np.imag(self.value) - _np.imag(constant_value) )
+            re_v = _np.fabs(_np.real(self.value) - _np.real(constant_value))
+            im_v = _np.fabs(_np.imag(self.value) - _np.imag(constant_value))
             if self.has_eb():
-                return (ReportableQty( re_v, _np.fabs(_np.real(self.errbar)), self.nonMarkovianEBs),
-                        ReportableQty( im_v, _np.fabs(_np.imag(self.errbar)), self.nonMarkovianEBs) )
+                return (ReportableQty(re_v, _np.fabs(_np.real(self.errbar)), self.nonMarkovianEBs),
+                        ReportableQty(im_v, _np.fabs(_np.imag(self.errbar)), self.nonMarkovianEBs))
             else:
-                return ReportableQty( re_v ), ReportableQty( im_v )
+                return ReportableQty(re_v), ReportableQty(im_v)
 
         else:
-            v = _np.absolute( self.value - constant_value )
+            v = _np.absolute(self.value - constant_value)
             if self.has_eb():
-                return ReportableQty( v, _np.absolute(self.errbar), self.nonMarkovianEBs)
+                return ReportableQty(v, _np.absolute(self.errbar), self.nonMarkovianEBs)
             else:
-                return ReportableQty( v )
+                return ReportableQty(v)
 
     def infidelity_diff(self, constant_value):
-        """ 
+        """
         Returns a ReportableQty that is the (element-wise in the vector case)
         difference between `constant_value` and this one given by:
 
@@ -149,13 +150,13 @@ class ReportableQty(object):
         # so d(diff)/dx.re = -const.re, d(diff)/dx.im = -const.im
         # diff(x + dx) = diff(x) + d(diff)/dx * dx
         # diff(x + dx) - diff(x) =  - (const.re * dx.re + const.im * dx.im)
-        v = 1.0 -_np.real( _np.conjugate(constant_value) * self.value )
+        v = 1.0 - _np.real(_np.conjugate(constant_value) * self.value)
         if self.has_eb():
-            eb = abs( _np.real(constant_value) * _np.real(self.errbar) +
-                      _np.imag(constant_value) * _np.real(self.errbar) )
-            return ReportableQty( v, eb, self.nonMarkovianEBs)
+            eb = abs(_np.real(constant_value) * _np.real(self.errbar) +
+                     _np.imag(constant_value) * _np.real(self.errbar))
+            return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:
-            return ReportableQty( v )
+            return ReportableQty(v)
 
     def mod(self, x):
         """
@@ -165,17 +166,16 @@ class ReportableQty(object):
         v = self.value % x
         if self.has_eb():
             eb = self.errbar % x
-            return ReportableQty( v, eb, self.nonMarkovianEBs)
+            return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:
-            return ReportableQty( v )
-        
+            return ReportableQty(v)
 
     def hermitian_to_real(self):
         """
         Returns a ReportableQty that holds the real matrix
         whose upper/lower triangle contains the real/imaginary parts
-        of the corresponding off-diagonal matrix elements of the 
-        *Hermitian* matrix stored in this ReportableQty.  
+        of the corresponding off-diagonal matrix elements of the
+        *Hermitian* matrix stored in this ReportableQty.
 
         This is used for display purposes.  If this object doesn't
         contain a Hermitian matrix, `ValueError` is raised.
@@ -184,37 +184,32 @@ class ReportableQty(object):
             raise ValueError("Contained value must be Hermitian!")
 
         def _convert(A):
-            ret = _np.empty(A.shape,'d')
+            ret = _np.empty(A.shape, 'd')
             for i in range(A.shape[0]):
-                ret[i,i] = A[i,i].real
-                for j in range(i+1, A.shape[1]):
-                    ret[i,j] = A[i,j].real
-                    ret[j,i] = A[i,j].imag
+                ret[i, i] = A[i, i].real
+                for j in range(i + 1, A.shape[1]):
+                    ret[i, j] = A[i, j].real
+                    ret[j, i] = A[i, j].imag
             return ret
 
         v = _convert(self.value)
         if self.has_eb():
             eb = _convert(self.errbar)
-            return ReportableQty( v, eb, self.nonMarkovianEBs)
+            return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:
-            return ReportableQty( v )
-            
-        
+            return ReportableQty(v)
+
     def reshape(self, *args):
         """ Returns a ReportableQty whose underlying values are reshaped."""
         if self.has_eb():
-            return ReportableQty( self.value.reshape(*args), self.errbar.reshape(*args), self.nonMarkovianEBs)
+            return ReportableQty(self.value.reshape(*args), self.errbar.reshape(*args), self.nonMarkovianEBs)
         else:
-            return ReportableQty( self.value.reshape(*args) )
+            return ReportableQty(self.value.reshape(*args))
 
     @property
     def size(self):
         """ Returns the size of this ReportableQty's value. """
         return self.value.size
-        
-        
-
-        
 
     @staticmethod
     def from_val(value, nonMarkovianEBs=False):
@@ -224,18 +219,18 @@ class ReportableQty(object):
             strings
             figures
             ReportableQtys
-        A tuple will be converted to a ReportableQty 
+        A tuple will be converted to a ReportableQty
           holding the first field as a value and second field as an error bar
         Anything else will be converted to a ReportableQty with no error bars
         '''
         if isinstance(value, ReportableQty):
             return value
-        if isinstance(value, _Label): # distinguish b/c Label is also a *tuple*
+        if isinstance(value, _Label):  # distinguish b/c Label is also a *tuple*
             return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
                                     'or has too many fields: len = {}'.format(
-                                            len(value))
+                len(value))
             return ReportableQty(value[0], value[1], nonMarkovianEBs=nonMarkovianEBs)
         else:
             return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
@@ -290,7 +285,7 @@ class ReportableQty(object):
 
         ebstring, nmebstring : str, optional
             The formatting strings used to format the values returned from `f`
-            for normal and non-Markovian error bars, respectively.  If 
+            for normal and non-Markovian error bars, respectively.  If
             `nmebstring` is None then `ebstring` is used for both types of
             error bars.
 
@@ -303,12 +298,12 @@ class ReportableQty(object):
         if specs is None:
             specs = dict()
         if self.errbar is not None:
-            specs['formatstring'] = '%s' # Don't recursively apply format strings to inside error bars
+            specs['formatstring'] = '%s'  # Don't recursively apply format strings to inside error bars
             if self.nonMarkovianEBs:
-                rendered = nmebstring % (f(self.value,  specs), 
+                rendered = nmebstring % (f(self.value, specs),
                                          f(self.errbar, specs))
             else:
-                rendered = ebstring % (f(self.value,  specs), 
+                rendered = ebstring % (f(self.value, specs),
                                        f(self.errbar, specs))
         else:
             rendered = f(self.value, specs)

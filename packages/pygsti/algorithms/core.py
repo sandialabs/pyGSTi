@@ -7,23 +7,23 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 
-import numpy          as _np
+import numpy as _np
 import scipy.optimize as _spo
-import scipy.stats    as _stats
-import warnings       as _warnings
-import time           as _time
+import scipy.stats as _stats
+import warnings as _warnings
+import time as _time
 
-from .. import optimize     as _opt
-from .. import tools        as _tools
-from .. import objects      as _objs
-from .. import baseobjs     as _baseobjs
+from .. import optimize as _opt
+from .. import tools as _tools
+from .. import objects as _objs
+from .. import baseobjs as _baseobjs
 from .. import construction as _pc
 from ..baseobjs import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 
 
 CUSTOMLM = True
-FLOATSIZE = 8 #TODO: better way?
+FLOATSIZE = 8  # TODO: better way?
 #from .track_allocations import AllocationTracker
 
 #Note on where 4x4 or possibly other integral-qubit dimensions are needed:
@@ -35,6 +35,7 @@ FLOATSIZE = 8 #TODO: better way?
 ###################################################################################
 #                 Linear Inversion GST (LGST)
 ###################################################################################
+
 
 def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases={},
             guessModelForGauge=None, svdTruncateTo=None, verbosity=0):
@@ -98,13 +99,13 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     # We would like to get X or it's gauge equivalent.
     #  We do:       1)  (I^-1)*AXB ~= B^-1 X B := Xhat -- we solve Ii*A*B = identity for Ii
     #               2) B * Xhat * B^-1 ==> X  (but what if B is non-invertible -- say rectangular) Want B*(something) ~ identity ??
-       # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model
-       # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)
-       #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)
-       #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)
-       # similarly, can get want "A^-1" such that "A^-1"(gsDim,nESpecs) A(nESpecs,gsDim) ~ Identity(gsDim)
-       # or do we want not Ii*A*B = I but B*Ii*A = I(gsDim), so something like Ii = (B^-1)(A^-1) using pseudoinversese above.
-       #   (but we can't do this, since we only have AB, not A and B separately)
+    # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model
+    # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)
+    #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)
+    #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)
+    # similarly, can get want "A^-1" such that "A^-1"(gsDim,nESpecs) A(nESpecs,gsDim) ~ Identity(gsDim)
+    # or do we want not Ii*A*B = I but B*Ii*A = I(gsDim), so something like Ii = (B^-1)(A^-1) using pseudoinversese above.
+    #   (but we can't do this, since we only have AB, not A and B separately)
     # A is (trunc, gsDim)
     # B is (gsDim, trunc)
 
@@ -126,7 +127,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         opLabelsToEstimate = opLabels
     else:
         opLabelsToEstimate = list(targetModel.operations.keys()) + \
-                               list(targetModel.instruments.keys())
+            list(targetModel.instruments.keys())
 
     rhoLabelsToEstimate = list(targetModel.preps.keys())
     povmLabelsToEstimate = list(targetModel.povms.keys())
@@ -146,19 +147,20 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if svdTruncateTo is None: svdTruncateTo = targetModel.dim
     trunc = svdTruncateTo if svdTruncateTo > 0 else K
     assert(trunc <= K)
-    Pj = _np.zeros( (K,trunc), 'd') # shape = (K, trunc) projector with only trunc columns
-    for i in range(trunc): Pj[i,i] = 1.0
+    Pj = _np.zeros((K, trunc), 'd')  # shape = (K, trunc) projector with only trunc columns
+    for i in range(trunc): Pj[i, i] = 1.0
     Pjt = _np.transpose(Pj)         # shape = (trunc, K)
 
     ABMat = _constructAB(prepStrs, effectStrs, targetModel, dataset, opLabelAliases)  # shape = (nESpecs, nRhoSpecs)
 
-    U,s,V = _np.linalg.svd(ABMat, full_matrices=False)
-    printer.log("Singular values of I_tilde (truncating to first %d of %d) = " % (trunc,len(s)), 2)
-    for sval in s: printer.log(sval,2)
-    printer.log('',2)
+    U, s, V = _np.linalg.svd(ABMat, full_matrices=False)
+    printer.log("Singular values of I_tilde (truncating to first %d of %d) = " % (trunc, len(s)), 2)
+    for sval in s: printer.log(sval, 2)
+    printer.log('', 2)
 
-    Ud,Vd = _np.transpose(_np.conjugate(U)), _np.transpose(_np.conjugate(V))  # Udagger, Vdagger
-    ABMat_p = _np.dot(Pjt, _np.dot(_np.diag(s), Pj)) #truncate ABMat => ABMat' (note diag(s) = Ud*ABMat*Vd), shape = (trunc, trunc)
+    Ud, Vd = _np.transpose(_np.conjugate(U)), _np.transpose(_np.conjugate(V))  # Udagger, Vdagger
+    # truncate ABMat => ABMat' (note diag(s) = Ud*ABMat*Vd), shape = (trunc, trunc)
+    ABMat_p = _np.dot(Pjt, _np.dot(_np.diag(s), Pj))
     # U shape = (nESpecs, K)
     # V shape = (K, nRhoSpecs)
     # Ud shape = (K, nESpecs)
@@ -169,44 +171,46 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     #print "DEBUG: Evals(ABmat) = \n",_np.linalg.eigvals(ABMat)
     rankAB = _np.linalg.matrix_rank(ABMat_p)
     if rankAB < ABMat_p.shape[0]:
-        raise ValueError("LGST AB matrix is rank %d < %d. Choose better prepStrs and/or effectStrs, or decrease svdTruncateTo" \
-                              % (rankAB, ABMat_p.shape[0]))
+        raise ValueError("LGST AB matrix is rank %d < %d. Choose better prepStrs and/or effectStrs, or decrease svdTruncateTo"
+                         % (rankAB, ABMat_p.shape[0]))
 
-    invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0/s), Pj)) # (trunc,trunc)
-    assert( _np.linalg.norm( _np.linalg.inv(ABMat_p) - invABMat_p ) < 1e-8 ) #check inverse is correct (TODO: comment out later)
-    assert( len( (_np.isnan(invABMat_p)).nonzero()[0] ) == 0 )
+    invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0 / s), Pj))  # (trunc,trunc)
+    # check inverse is correct (TODO: comment out later)
+    assert(_np.linalg.norm(_np.linalg.inv(ABMat_p) - invABMat_p) < 1e-8)
+    assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
-    if svdTruncateTo is None or svdTruncateTo == targetModel.dim: #use target sslbls and basis
+    if svdTruncateTo is None or svdTruncateTo == targetModel.dim:  # use target sslbls and basis
         lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
-    else: # construct a default basis for the requested dimension 
-        dumb_basis = _objs.DirectSumBasis( [_objs.BuiltinBasis('gm',1)]*svdTruncateTo) # - just act on diagonal density mx
-        lgstModel = _objs.ExplicitOpModel([('L%d'%i,) for i in range(svdTruncateTo)], dumb_basis)
-        
+    else:  # construct a default basis for the requested dimension
+        dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] *
+                                          svdTruncateTo)  # - just act on diagonal density mx
+        lgstModel = _objs.ExplicitOpModel([('L%d' % i,) for i in range(svdTruncateTo)], dumb_basis)
+
     for opLabel in opLabelsToEstimate:
         Xs = _constructXMatrix(prepStrs, effectStrs, targetModel, (opLabel,),
-                              dataset, opLabelAliases)  # shape (nVariants, nESpecs, nRhoSpecs)
+                               dataset, opLabelAliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
         X_ps = []
         for X in Xs:
-            X2 = _np.dot(Ud, _np.dot(X, Vd)) # shape (K,K) this should be close to rank "svdTruncateTo" (which is <= K) -- TODO: check this
+            # shape (K,K) this should be close to rank "svdTruncateTo" (which is <= K) -- TODO: check this
+            X2 = _np.dot(Ud, _np.dot(X, Vd))
 
             #if svdTruncateTo > 0:
             #    printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (opLabel,svdTruncateTo), 3)
             #    if printer.verbosity >= 3:
             #        _tools.print_mx(X2)
-            X_p = _np.dot(Pjt, _np.dot(X2, Pj)) #truncate X => X', shape (trunc, trunc)
+            X_p = _np.dot(Pjt, _np.dot(X2, Pj))  # truncate X => X', shape (trunc, trunc)
             X_ps.append(X_p)
 
         if opLabel in targetModel.instruments:
             #Note: we assume leading dim of X matches instrument element ordering
             lgstModel.instruments[opLabel] = _objs.Instrument(
-                [(lbl, _np.dot(invABMat_p,X_ps[i]))
-                 for i,lbl in enumerate(targetModel.instruments[opLabel])] )
+                [(lbl, _np.dot(invABMat_p, X_ps[i]))
+                 for i, lbl in enumerate(targetModel.instruments[opLabel])])
         else:
             #Just a normal gae
-            assert(len(X_ps) == 1); X_p = X_ps[0] # shape (nESpecs, nRhoSpecs)
-            lgstModel.operations[opLabel] = _objs.FullDenseOp(_np.dot(invABMat_p,X_p)) # shape (trunc,trunc)
-
+            assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
+            lgstModel.operations[opLabel] = _objs.FullDenseOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
         #print "DEBUG: X(%s) = \n" % opLabel,X
         #print "DEBUG: Evals(X) = \n",_np.linalg.eigvals(X)
@@ -216,57 +220,59 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     for povmLabel in povmLabelsToEstimate:
         povm_effects = []
         for effectLabel in targetModel.povms[povmLabel]:
-            EVec = _np.zeros( (1,nRhoSpecs) )
-            for i,rhostr in enumerate(prepStrs):
+            EVec = _np.zeros((1, nRhoSpecs))
+            for i, rhostr in enumerate(prepStrs):
                 circuit = rhostr + _objs.Circuit((povmLabel,))
                 if circuit not in dataset and len(targetModel.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
-                dsRow = dataset[ circuit ]
-                EVec[0,i] = dsRow.fraction( (effectLabel,) ) #outcome labels should just be effect labels (no instruments!)
-            EVec_p = _np.dot( _np.dot(EVec, Vd), Pj ) #truncate Evec => Evec', shape (1,trunc)
-            povm_effects.append( (effectLabel, _np.transpose(EVec_p)) )
-        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM( povm_effects )
-          # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
+                dsRow = dataset[circuit]
+                # outcome labels should just be effect labels (no instruments!)
+                EVec[0, i] = dsRow.fraction((effectLabel,))
+            EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
+            povm_effects.append((effectLabel, _np.transpose(EVec_p)))
+        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(povm_effects)
+        # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
     for prepLabel in rhoLabelsToEstimate:
-        rhoVec = _np.zeros((nESpecs,1)); eoff = 0
-        for i,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
-            circuit = _objs.Circuit((prepLabel,)) + estr  #; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
+        rhoVec = _np.zeros((nESpecs, 1)); eoff = 0
+        for i, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
+            circuit = _objs.Circuit((prepLabel,)) + estr  # ; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
             if circuit not in dataset and len(targetModel.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
-            dsRow = dataset[ circuit ]
-            rhoVec[eoff:eoff+povmLen,0] = [ dsRow.fraction((ol,)) for ol in targetModel.povms[povmLbl] ]
+            dsRow = dataset[circuit]
+            rhoVec[eoff:eoff + povmLen, 0] = [dsRow.fraction((ol,)) for ol in targetModel.povms[povmLbl]]
             eoff += povmLen
-        rhoVec_p = _np.dot( Pjt, _np.dot(Ud, rhoVec) ) #truncate rhoVec => rhoVec', shape (trunc, 1)
-        rhoVec_p = _np.dot(invABMat_p,rhoVec_p)
+        rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
+        rhoVec_p = _np.dot(invABMat_p, rhoVec_p)
         lgstModel.preps[prepLabel] = rhoVec_p
 
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the model
     if guessModelForGauge is not None:
-        guessTrunc = guessModelForGauge.get_dimension() # the truncation to apply to it's B matrix
-        assert(guessTrunc <= trunc)  # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
+        guessTrunc = guessModelForGauge.get_dimension()  # the truncation to apply to it's B matrix
+        # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
+        assert(guessTrunc <= trunc)
 
-        guessPj = _np.zeros( (K,guessTrunc), 'd') # shape = (K, guessTrunc) projector with only trunc columns
-        for i in range(guessTrunc): guessPj[i,i] = 1.0
+        guessPj = _np.zeros((K, guessTrunc), 'd')  # shape = (K, guessTrunc) projector with only trunc columns
+        for i in range(guessTrunc): guessPj[i, i] = 1.0
         # guessPjt = _np.transpose(guessPj)         # shape = (guessTrunc, K)
 
         AMat = _constructA(effectStrs, guessModelForGauge)    # shape = (nESpecs, gsDim)
         # AMat_p = _np.dot( guessPjt, _np.dot(Ud, AMat)) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
 
         BMat = _constructB(prepStrs, guessModelForGauge)  # shape = (gsDim, nRhoSpecs)
-        BMat_p = _np.dot( _np.dot(BMat, Vd), guessPj ) #truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
+        BMat_p = _np.dot(_np.dot(BMat, Vd), guessPj)  # truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
 
-        guess_ABMat = _np.dot(AMat,BMat)
+        guess_ABMat = _np.dot(AMat, BMat)
         _, guess_s, _ = _np.linalg.svd(guess_ABMat, full_matrices=False)
 
         printer.log("Singular values of target I_tilde (truncating to first %d of %d) = "
-                    % (guessTrunc,len(guess_s)), 2)
-        for sval in guess_s: printer.log(sval,2)
-        printer.log('',2)
+                    % (guessTrunc, len(guess_s)), 2)
+        for sval in guess_s: printer.log(sval, 2)
+        printer.log('', 2)
 
         if guessTrunc < trunc:  # if the dimension of the gauge-guess model is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
@@ -274,8 +280,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
 
             BMat_p_padded = _np.identity(trunc, 'd')
             BMat_p_padded[0:guessTrunc, 0:guessTrunc] = BMat_p
-            for i in range(guessTrunc,trunc):
-                BMat_p_padded[i,i] = _np.sqrt( s[i] ) #set diagonal as sqrt of actual AB matrix's singular values
+            for i in range(guessTrunc, trunc):
+                BMat_p_padded[i, i] = _np.sqrt(s[i])  # set diagonal as sqrt of actual AB matrix's singular values
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
             lgstModel.transform(ggEl)
         else:
@@ -290,26 +296,26 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             for opLabel in opLabelsToEstimate:
                 if opLabel in guessModelForGauge.operations:
                     new_op = guessModelForGauge.operations[opLabel].copy()
-                    _objs.operation.optimize_operation( new_op, lgstModel.operations[opLabel])
-                    lgstModel.operations[ opLabel ] = new_op
+                    _objs.operation.optimize_operation(new_op, lgstModel.operations[opLabel])
+                    lgstModel.operations[opLabel] = new_op
 
             for prepLabel in rhoLabelsToEstimate:
                 if prepLabel in guessModelForGauge.preps:
                     new_vec = guessModelForGauge.preps[prepLabel].copy()
-                    _objs.spamvec.optimize_spamvec( new_vec, lgstModel.preps[prepLabel])
-                    lgstModel.preps[ prepLabel ] = new_vec
+                    _objs.spamvec.optimize_spamvec(new_vec, lgstModel.preps[prepLabel])
+                    lgstModel.preps[prepLabel] = new_vec
 
             for povmLabel in povmLabelsToEstimate:
                 if povmLabel in guessModelForGauge.povms:
                     povm = guessModelForGauge.povms[povmLabel]
                     new_effects = []
 
-                    if isinstance(povm, _objs.TPPOVM): #preserve *identity* of guess
-                        for effectLabel,EVec in povm.items():
+                    if isinstance(povm, _objs.TPPOVM):  # preserve *identity* of guess
+                        for effectLabel, EVec in povm.items():
                             if effectLabel == povm.complement_label: continue
                             new_vec = EVec.copy()
-                            _objs.spamvec.optimize_spamvec( new_vec, lgstModel.povms[povmLabel][effectLabel])
-                            new_effects.append( (effectLabel,new_vec) )
+                            _objs.spamvec.optimize_spamvec(new_vec, lgstModel.povms[povmLabel][effectLabel])
+                            new_effects.append((effectLabel, new_vec))
 
                         # Construct identity vector for complement effect vector
                         #  Pad with zeros if needed (ROBIN - is this correct?)
@@ -317,65 +323,66 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                         Idim = identity.shape[0]
                         assert(Idim <= trunc)
                         if Idim < trunc:
-                            padded_identityVec = _np.concatenate( (identity, _np.zeros( (trunc-Idim,1), 'd')) )
+                            padded_identityVec = _np.concatenate((identity, _np.zeros((trunc - Idim, 1), 'd')))
                         else:
                             padded_identityVec = identity
-                        comp_effect = padded_identityVec - sum([v for k,v in new_effects])
-                        new_effects.append( (povm.complement_label, comp_effect) ) #add complement
-                        lgstModel.povms[povmLabel] = _objs.TPPOVM( new_effects )
+                        comp_effect = padded_identityVec - sum([v for k, v in new_effects])
+                        new_effects.append((povm.complement_label, comp_effect))  # add complement
+                        lgstModel.povms[povmLabel] = _objs.TPPOVM(new_effects)
 
-                    else: #just create an unconstrained POVM
-                        for effectLabel,EVec in povm.items():
+                    else:  # just create an unconstrained POVM
+                        for effectLabel, EVec in povm.items():
                             new_vec = EVec.copy()
-                            _objs.spamvec.optimize_spamvec( new_vec, lgstModel.povms[povmLabel][effectLabel])
-                            new_effects.append( (effectLabel,new_vec) )
-                        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM( new_effects )
-
+                            _objs.spamvec.optimize_spamvec(new_vec, lgstModel.povms[povmLabel][effectLabel])
+                            new_effects.append((effectLabel, new_vec))
+                        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(new_effects)
 
             #Also convey default gauge group & calc class from guessModelForGauge
             lgstModel.default_gauge_group = \
                 guessModelForGauge.default_gauge_group
             lgstModel._calcClass = guessModelForGauge._calcClass
 
-
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         #lgstModel.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstModel had dim trunc, so after transform is has dim gsDim
 
     printer.log("Resulting model:\n", 3)
-    printer.log(lgstModel,3)
+    printer.log(lgstModel, 3)
     #    for line in str(lgstModel).split('\n'):
     #       printer.log(line, 3)
     return lgstModel
 
+
 def _lgst_matrix_dims(mdl, prepStrs, effectStrs):
     assert(mdl is not None), "LGST matrix construction requires a non-None Model!"
-    nRhoSpecs = len(prepStrs) # no instruments allowed in prepStrs
-    povmLbls = [ mdl.split_circuit(s,('povm',))[2] #povm_label
-                 for s in effectStrs]
-    povmLens = ([ len(mdl.povms[l]) for l in povmLbls ])
+    nRhoSpecs = len(prepStrs)  # no instruments allowed in prepStrs
+    povmLbls = [mdl.split_circuit(s, ('povm',))[2]  # povm_label
+                for s in effectStrs]
+    povmLens = ([len(mdl.povms[l]) for l in povmLbls])
     nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
+
 
 def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
         model, prepStrs, effectStrs)
 
-    AB = _np.empty( (nESpecs, nRhoSpecs) )
+    AB = _np.empty((nESpecs, nRhoSpecs))
     eoff = 0
-    for i,(estr,povmLen) in enumerate(zip(effectStrs,povmLens)):
-        for j,rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + estr # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = _tools.find_replace_tuple(opLabelString,opLabelAliases)
+    for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
+        for j, rhostr in enumerate(prepStrs):
+            opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
+            dsStr = _tools.find_replace_tuple(opLabelString, opLabelAliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
             assert(len(raw_dict[unique_key]) == povmLen)
 
             dsRow = dataset[dsStr]
-            AB[eoff:eoff+povmLen,j] = [ dsRow.fraction(ol) for ol in outcomes ]
+            AB[eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
         eoff += povmLen
 
     return AB
+
 
 def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabelAliases=None):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
@@ -386,71 +393,73 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
         if g in model.instruments:
             nVariants *= len(model.instruments[g])
 
-    X = _np.empty( (nVariants, nESpecs, nRhoSpecs) ) # multiple "X" matrix variants b/c of instruments
+    X = _np.empty((nVariants, nESpecs, nRhoSpecs))  # multiple "X" matrix variants b/c of instruments
 
-    eoff = 0 # effect-dimension offset
-    for i,(estr,povmLen) in enumerate(zip(effectStrs,povmLens)):
-        for j,rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = _tools.find_replace_tuple(tuple(opLabelString),opLabelAliases)
+    eoff = 0  # effect-dimension offset
+    for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
+        for j, rhostr in enumerate(prepStrs):
+            opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
+            dsStr = _tools.find_replace_tuple(tuple(opLabelString), opLabelAliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
 
-            ooff = 0 # outcome offset
-            for k,(raw_str,spamtups) in enumerate(raw_dict.items()):
+            ooff = 0  # outcome offset
+            for k, (raw_str, spamtups) in enumerate(raw_dict.items()):
                 assert(len(spamtups) == povmLen)
-                X[k,eoff:eoff+povmLen,j] = [
-                    dsRow.fraction(ol) for ol in outcomes[ooff:ooff+len(spamtups)] ]
+                X[k, eoff:eoff + povmLen, j] = [
+                    dsRow.fraction(ol) for ol in outcomes[ooff:ooff + len(spamtups)]]
                 ooff += len(spamtups)
         eoff += povmLen
 
     return X
+
 
 def _constructA(effectStrs, mdl):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
         mdl, [], effectStrs)
 
     dim = mdl.get_dimension()
-    A = _np.empty( (n,dim) )
-    st = _np.empty( dim, 'd')
+    A = _np.empty((n, dim))
+    st = _np.empty(dim, 'd')
 
-    basis_st = _np.zeros( (dim,1), 'd'); eoff = 0
-    for k,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
+    basis_st = _np.zeros((dim, 1), 'd'); eoff = 0
+    for k, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
         #Build fiducial < E_k | := < EVec[ effectSpec[0] ] | Circuit(effectSpec[1:])
         #st = dot(Ek.T, Estr) = ( dot(Estr.T,Ek)  ).T
         #A[k,:] = st[0,:] # E_k == kth row of A
-        for i in range(dim): # propagate each basis initial state
+        for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
             mdl.preps['rho_LGST_tmp'] = basis_st
-            probs = mdl.probs( _objs.Circuit(('rho_LGST_tmp',)) + estr )
-            A[eoff:eoff+povmLen, i] = [ probs[(ol,)] for ol in mdl.povms[povmLbl] ] #CHECK will this work?
+            probs = mdl.probs(_objs.Circuit(('rho_LGST_tmp',)) + estr)
+            A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in mdl.povms[povmLbl]]  # CHECK will this work?
             del mdl.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
 
         eoff += povmLen
     return A
 
+
 def _constructB(prepStrs, mdl):
     n = len(prepStrs)
     dim = mdl.get_dimension()
-    B = _np.empty( (dim,n) )
-    st = _np.empty( dim, 'd')
+    B = _np.empty((dim, n))
+    st = _np.empty(dim, 'd')
 
     #Create POVM of vector units
     basis_Es = []
-    for i in range(dim): # propagate each basis initial state
-        basis_E = _np.zeros( (dim,1), 'd')
+    for i in range(dim):  # propagate each basis initial state
+        basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
     mdl.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
-        [("E%d"%i,E) for i,E in enumerate(basis_Es)] )
+        [("E%d" % i, E) for i, E in enumerate(basis_Es)])
 
-    for k,rhostr in enumerate(prepStrs):
+    for k, rhostr in enumerate(prepStrs):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = mdl.probs( rhostr + _objs.Circuit(('M_LGST_tmp_povm',)) )
-        B[:, k] = [ probs[("E%d" % i,)] for i in range(dim) ] #CHECK will this work?
+        probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',)))
+        B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del mdl.povms['M_LGST_tmp_povm']
     return B
@@ -460,16 +469,16 @@ def _constructTargetAB(prepStrs, effectStrs, targetModel):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
         targetModel, prepStrs, effectStrs)
 
-    AB = _np.empty( (nESpecs, nRhoSpecs) )
+    AB = _np.empty((nESpecs, nRhoSpecs))
     eoff = 0
-    for i,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
-        for j,rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + estr # LEXICOGRAPHICAL VS MATRIX ORDER
-            probs = targetModel.probs( opLabelString )
-            AB[eoff:eoff+povmLen,j] = \
-                [ probs[(ol,)] for ol in targetModel.povms[povmLbl] ]
-                # outcomes (keys of probs) should just be povm effect labels
-                # since no instruments are allowed in fiducial strings.
+    for i, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
+        for j, rhostr in enumerate(prepStrs):
+            opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
+            probs = targetModel.probs(opLabelString)
+            AB[eoff:eoff + povmLen, j] = \
+                [probs[(ol,)] for ol in targetModel.povms[povmLbl]]
+            # outcomes (keys of probs) should just be povm effect labels
+            # since no instruments are allowed in fiducial strings.
         eoff += povmLen
 
     return AB
@@ -508,8 +517,7 @@ def gram_rank_and_evals(dataset, prepStrs, effectStrs, targetModel):
     ABMat_tgt = _constructTargetAB(prepStrs, effectStrs, targetModel)
     _, s_tgt, _ = _np.linalg.svd(ABMat_tgt)
 
-    return _np.linalg.matrix_rank(ABMat), s, s_tgt #_np.linalg.eigvals(ABMat)
-
+    return _np.linalg.matrix_rank(ABMat), s, s_tgt  # _np.linalg.eigvals(ABMat)
 
 
 ###################################################################################
@@ -607,18 +615,18 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     # optimized in exLGST so don't paramterize them.  Note that this
     # assumes a "local" Model where parameters are attributed to
     # individual SPAM vecs and gates.
-    for prepLabel,rhoVec in mdl.preps.items():
+    for prepLabel, rhoVec in mdl.preps.items():
         mdl.preps[prepLabel] = _objs.StaticSPAMVec(rhoVec)
-    for povmLabel,povm in mdl.povms.items():
+    for povmLabel, povm in mdl.povms.items():
         mdl.povms[povmLabel] = _objs.UnconstrainedPOVM(
-            [ (lbl, _objs.StaticSPAMVec(E))
-              for lbl,E in povm.items() ] )
+            [(lbl, _objs.StaticSPAMVec(E))
+             for lbl, E in povm.items()])
 
     printer.log("--- eLGST (least squares) ---", 1)
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUseInEstimation) > 0 and isinstance(circuitsToUseInEstimation[0],_objs.Circuit):
-        circuitsToUseInEstimation = [ opstr.tup for opstr in circuitsToUseInEstimation ]
+    if len(circuitsToUseInEstimation) > 0 and isinstance(circuitsToUseInEstimation[0], _objs.Circuit):
+        circuitsToUseInEstimation = [opstr.tup for opstr in circuitsToUseInEstimation]
 
     #Setup and solve a least-squares problem where each element of each
     # (lgst_estimated_process - process_estimate_using_current_model)  difference is a least-squares
@@ -627,21 +635,21 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     #   process_estimate_using_current_model = process mx you get from multiplying together the operation matrices of the current model
 
     #Step 1: get the lgst estimates for each of the "operation sequences to use in estimation" list
-    evTree,_,_ = mdl.bulk_evaltree(circuitsToUseInEstimation)
+    evTree, _, _ = mdl.bulk_evaltree(circuitsToUseInEstimation)
     circuitsToUseInEstimation = evTree.generate_circuit_list(permute=False)
-      # length of this list == that of raw "simplify" dict == dim of bulk_product, etc.
+    # length of this list == that of raw "simplify" dict == dim of bulk_product, etc.
 
     opLabelAliases = {}
-    for i,opStrTuple in enumerate(circuitsToUseInEstimation):
+    for i, opStrTuple in enumerate(circuitsToUseInEstimation):
         opLabelAliases["Gestimator%d" % i] = opStrTuple
 
-    lgstEstimates = do_lgst(dataset, prepStrs, effectStrs,  targetModel, list(opLabelAliases.keys()),
-                           opLabelAliases, guessModelForGauge, svdTruncateTo,
-                           verbosity=0) #override verbosity
+    lgstEstimates = do_lgst(dataset, prepStrs, effectStrs, targetModel, list(opLabelAliases.keys()),
+                            opLabelAliases, guessModelForGauge, svdTruncateTo,
+                            verbosity=0)  # override verbosity
 
-    estimates = _np.empty( (len(circuitsToUseInEstimation), op_dim, op_dim), 'd')
+    estimates = _np.empty((len(circuitsToUseInEstimation), op_dim, op_dim), 'd')
     for i in range(len(circuitsToUseInEstimation)):
-        estimates[i] = lgstEstimates.operations[ "Gestimator%d" % i ]
+        estimates[i] = lgstEstimates.operations["Gestimator%d" % i]
 
     maxCircuitLength = max([len(x) for x in circuitsToUseInEstimation])
 
@@ -659,8 +667,8 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
             def _objective_func(vectorGS):
                 mdl.from_vector(vectorGS)
                 prods = mdl.bulk_product(evTree, comm=comm)
-                gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-                ret = _np.concatenate( ((prods - estimates).flatten(), gsVecNorm) )
+                gsVecNorm = regularizeFactor * _np.array([max(0, absx - 1.0) for absx in map(abs, vectorGS)], 'd')
+                ret = _np.concatenate(((prods - estimates).flatten(), gsVecNorm))
                 #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
                 return ret
 
@@ -686,31 +694,30 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
             #  raise ValueError("Check failed with diff = %g" % _np.linalg.norm( ret - ret_chk ))
 
             if regularizeFactor > 0:
-                gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-                ret = _np.concatenate( (ret, gsVecNorm) )
+                gsVecNorm = regularizeFactor * _np.array([max(0, absx - 1.0) for absx in map(abs, vectorGS)], 'd')
+                ret = _np.concatenate((ret, gsVecNorm))
 
-            retSq = sum(ret*ret)
-            printer.log(("%g: objfn vec in (%g,%g),  mdl in (%g,%g), maxLen = %d" % \
-                  (retSq, _np.min(ret), _np.max(ret), _np.min(vectorGS), _np.max(vectorGS), maxCircuitLength)), 3)
+            retSq = sum(ret * ret)
+            printer.log(("%g: objfn vec in (%g,%g),  mdl in (%g,%g), maxLen = %d" %
+                         (retSq, _np.min(ret), _np.max(ret), _np.min(vectorGS), _np.max(vectorGS), maxCircuitLength)), 3)
             #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
             return ret
-
 
     if printer.verbosity < 3:
         if regularizeFactor == 0:
             def _jacobian(vectorGS):
                 mdl.from_vector(vectorGS)
                 jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
-                    # shape == nCircuits*nFlatOp, nDerivCols
+                # shape == nCircuits*nFlatOp, nDerivCols
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 return jac
         else:
             def _jacobian(vectorGS):
                 mdl.from_vector(vectorGS)
-                gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
+                gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
                 jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
-                    # shape == nCircuits*nFlatOp, nDerivCols
-                jac = _np.concatenate( (jac, gsVecGrad), axis=0 )  # shape == nCircuits*nFlatOp+nDerivCols, nDerivCols
+                # shape == nCircuits*nFlatOp, nDerivCols
+                jac = _np.concatenate((jac, gsVecGrad), axis=0)  # shape == nCircuits*nFlatOp+nDerivCols, nDerivCols
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 return jac
 
@@ -718,23 +725,23 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
         def _jacobian(vectorGS):
             mdl.from_vector(vectorGS)
             jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
-                # shape == nCircuits*nFlatOp, nDerivCols
+            # shape == nCircuits*nFlatOp, nDerivCols
             if regularizeFactor > 0:
-                gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
-                jac = _np.concatenate( (jac, gsVecGrad), axis=0 )
+                gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
+                jac = _np.concatenate((jac, gsVecGrad), axis=0)
 
             if check_jacobian:
                 errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-                printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]), 3)
+                printer.log("Jacobian has error %g and %d of %d indices with error > tol" %
+                            (errSum, len(errs), jac.shape[0]), 3)
                 if len(errs) > 0:
-                    i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))                        # pragma: no cover
+                    i, j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))                        # pragma: no cover
                     printer.log(" ==> Worst index = %d,%d. Analytic jac = %g, Fwd Diff = %g"  # pragma: no cover
-                                % (i,j, jac[i,j], fd_jac[i,j]), 3)                            # pragma: no cover
+                                % (i, j, jac[i, j], fd_jac[i, j]), 3)                            # pragma: no cover
                     printer.log(" ==> max err = ", errs[0][2], 3)                             # pragma: no cover
-                    printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3) # pragma: no cover
+                    printer.log(" ==> max err/max = ", max([x[2] / maxabs for x in errs]), 3)  # pragma: no cover
 
             return jac
-
 
     #def checked_jacobian(vectorGS):
     #  def obj_i(x, i): return _objective_func(x)[i]
@@ -749,10 +756,11 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     #Step 3: solve least squares minimization problem
     x0 = mdl.to_vector()
     opt_x, _, _, _, _ = \
-        _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
-                 maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian)
+        _spo.leastsq(_objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+                     maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=_jacobian)
     full_minErrVec = _objective_func(opt_x)
-    minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
+    # don't include regularization terms
+    minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)]
 
     #DEBUG: check without using our jacobian
     #opt_x_chk, opt_jac_chk, info_chk, msg_chk, flag_chk = \
@@ -764,16 +772,16 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     #mdl.log("ExLGST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
 
     printer.log(("Sum of minimum least squares error (w/out reg terms) = %g" % sum([x**2 for x in minErrVec])), 2)
-            #try: print "   log(likelihood) = ", _tools.logl(mdl, dataset)
-            #except: pass
+    #try: print "   log(likelihood) = ", _tools.logl(mdl, dataset)
+    #except: pass
     if targetModel.get_dimension() == mdl.get_dimension():
         printer.log("frobenius distance to target = %s" % mdl.frobeniusdist(targetModel), 2)
 
-            #DEBUG
-            #print "  Sum of minimum least squares error check = %g" % sum([x**2 for x in minErrVec_chk])
-            #print "DEBUG : opt_x diff = ", _np.linalg.norm( opt_x - opt_x_chk )
-            #print "DEBUG : opt_jac diff = ", _np.linalg.norm( opt_jac - opt_jac_chk )
-            #print "DEBUG : flags (1,2,3,4=OK) = %d, check = %d" % (flag, flag_chk)
+        #DEBUG
+        #print "  Sum of minimum least squares error check = %g" % sum([x**2 for x in minErrVec_chk])
+        #print "DEBUG : opt_x diff = ", _np.linalg.norm( opt_x - opt_x_chk )
+        #print "DEBUG : opt_jac diff = ", _np.linalg.norm( opt_jac - opt_jac_chk )
+        #print "DEBUG : flags (1,2,3,4=OK) = %d, check = %d" % (flag, flag_chk)
 
     #TODO: perhaps permute minErrVec using evTree to restore original circuit ordering
     #  but currently minErrVec isn't in such an intuitive format anyway (list of flattened gates)
@@ -782,11 +790,11 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
 
 
 def do_iterative_exlgst(
-  dataset, startModel, prepStrs, effectStrs, circuitSetsToUseInEstimation,
-  targetModel, guessModelForGauge=None, svdTruncateTo=None, maxiter=100000,
-  maxfev=None, tol=1e-6, regularizeFactor=0, returnErrorVec=False,
-  returnAll=False, circuitSetLabels=None, verbosity=0, comm=None,
-  check_jacobian=False):
+        dataset, startModel, prepStrs, effectStrs, circuitSetsToUseInEstimation,
+        targetModel, guessModelForGauge=None, svdTruncateTo=None, maxiter=100000,
+        maxfev=None, tol=1e-6, regularizeFactor=0, returnErrorVec=False,
+        returnAll=False, circuitSetLabels=None, verbosity=0, comm=None,
+        check_jacobian=False):
     """
     Performs Iterated Extended Linear-inversion Gate Set Tomography on the dataset.
 
@@ -886,15 +894,15 @@ def do_iterative_exlgst(
 #          'ignore' - skip string silently and proceed
 
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation ) > 0 and \
+    if len(circuitSetsToUseInEstimation) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
-        circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
+       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
     else:
         circuitLists = circuitSetsToUseInEstimation
 
     #Run extended eLGST iteratively on given sets of estimatable strings
-    elgstModels = [ ]; minErrs = [ ] #for returnAll == True case
+    elgstModels = []; minErrs = []  # for returnAll == True case
     elgstModel = startModel.copy(); nIters = len(circuitLists)
 
     with printer.progress_logging(1):
@@ -903,13 +911,13 @@ def do_iterative_exlgst(
 
         #printer.log('', 2) #newline if we have more info to print
         extraMessages = ["(%s)" % circuitSetLabels[i]] if circuitSetLabels else []
-        printer.show_progress(i, nIters, prefix='--- Iterative eLGST: ', suffix = '; %s operation sequences ---' % len(stringsToEstimate),
-                  verboseMessages=extraMessages)
+        printer.show_progress(i, nIters, prefix='--- Iterative eLGST: ', suffix='; %s operation sequences ---' % len(stringsToEstimate),
+                              verboseMessages=extraMessages)
 
         minErr, elgstModel = do_exlgst(
             dataset, elgstModel, stringsToEstimate, prepStrs, effectStrs,
             targetModel, guessModelForGauge, svdTruncateTo, maxiter, maxfev,
-            tol, regularizeFactor, printer-2, comm, check_jacobian )
+            tol, regularizeFactor, printer - 2, comm, check_jacobian)
 
         if returnAll:
             elgstModels.append(elgstModel)
@@ -929,11 +937,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
               maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
               cptp_penalty_factor=0, spam_penalty_factor=0,
               minProbClipForWeighting=1e-4,
-              probClipInterval=(-1e6,1e6), useFreqWeightedChiSq=False,
+              probClipInterval=(-1e6, 1e6), useFreqWeightedChiSq=False,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, circuitWeights=None,
               opLabelAliases=None, memLimit=None, comm=None,
-              distributeMethod = "deriv", profiler=None,
+              distributeMethod="deriv", profiler=None,
               evaltree_cache=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
@@ -962,7 +970,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
     fditer : int, optional
         The number of iterations to perform with a finite-difference-Jacobian,
-        as opposed to the more precise "analytic" Jacobian.  Useful if the 
+        as opposed to the more precise "analytic" Jacobian.  Useful if the
         optimization's starting point is special/singular.
 
     tol : float or dict, optional
@@ -1065,39 +1073,39 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     if comm is not None:
         #assume all models at least have same parameters - so just compare vecs
         v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
-        if _np.linalg.norm(mdl.to_vector()-v_cmp) > 1e-6:
-                raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
+        if _np.linalg.norm(mdl.to_vector() - v_cmp) > 1e-6:
+            raise ValueError("MPI ERROR: *different* MC2GST start models" +  # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
     if len(circuitsToUse) > 0 and \
-          isinstance(circuitsToUse[0],_objs.Circuit):
-        circuitsToUse = [ opstr.tup for opstr in circuitsToUse ]
+            isinstance(circuitsToUse[0], _objs.Circuit):
+        circuitsToUse = [opstr.tup for opstr in circuitsToUse]
 
     vec_gs_len = mdl.num_params()
 
     #Memory allocation
-    ns = int(round(_np.sqrt(mdl.dim))); # estimate avg number of spamtuples per string
+    ns = int(round(_np.sqrt(mdl.dim)))  # estimate avg number of spamtuples per string
     ng = len(circuitsToUse)
     ne = mdl.num_params()
-    C = 1.0/1024.0**3
+    C = 1.0 / 1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8* (ng*(ns + ns*ne + 1 + 3*ns)) # final results in bytes
+    persistentMem = 8 * (ng * (ns + ns * ne + 1 + 3 * ns))  # final results in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
+                          % (persistentMem * C))
 
     #Create evaluation tree (split into subtrees if needed)
     tm = _time.time()
     if (memLimit is not None):
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
-        gthrMem = int(0.1*(memLimit-persistentMem))
-        mlim = memLimit-persistentMem-gthrMem-curMem
-        printer.log("Memory limit = %.2fGB" % (memLimit*C))
+        gthrMem = int(0.1 * (memLimit - persistentMem))
+        mlim = memLimit - persistentMem - gthrMem - curMem
+        printer.log("Memory limit = %.2fGB" % (memLimit * C))
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
-                    (curMem*C, persistentMem*C, gthrMem*C))
+                    (curMem * C, persistentMem * C, gthrMem * C))
         assert mlim > 0, 'Not enough memory, exiting..'
     else: gthrMem = mlim = None
 
@@ -1107,11 +1115,12 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         wrtBlkSize = evaltree_cache['wrtBlkSize']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
-    else:        
-        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
-        evTree, wrtBlkSize,_, lookup, outcomes_lookup = mdl.bulk_evaltree_from_resources(
+    else:
+        # Note: simplify_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None
+        evTree, wrtBlkSize, _, lookup, outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
+            ["bulk_fill_probs", "bulk_fill_dprobs"], dstree, printer - 1)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -1120,9 +1129,9 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['lookup'] = lookup
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
-    profiler.add_time("do_mc2gst: pre-opt treegen",tStart)
+    profiler.add_time("do_mc2gst: pre-opt treegen", tStart)
 
-    KM = evTree.num_final_elements() #shorthand for combined spam+circuit dimension
+    KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
 
     #Expand operation label aliases used in DataSet lookups
     dsCircuitsToUse = _tools.find_replace_tuple_list(
@@ -1139,19 +1148,19 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     #  Allocate peristent memory
     #  (must be AFTER possible operation sequence permutation by
     #   tree and initialization of dsCircuitsToUse)
-    probs  = _np.empty( KM, 'd' )
-    jac    = _np.empty( (KM+ex,vec_gs_len), 'd')
-    z = _np.zeros( KM, 'd') # for deriv below
-    
+    probs = _np.empty(KM, 'd')
+    jac = _np.empty((KM + ex, vec_gs_len), 'd')
+    z = _np.zeros(KM, 'd')  # for deriv below
+
     if evaltree_cache and 'cntVecMx' in evaltree_cache \
-       and useFreqWeightedChiSq == False: # b/c we don't cache fweights
+       and useFreqWeightedChiSq == False:  # b/c we don't cache fweights
         cntVecMx = evaltree_cache['cntVecMx']
         N = evaltree_cache['totalCntVec']
         fweights = None
     else:
-        N =_np.empty( KM, 'd') # totalCntVec
-        cntVecMx =_np.empty( KM, 'd')
-        fweights = _np.empty( KM, 'd') if useFreqWeightedChiSq else None # usually not used
+        N = _np.empty(KM, 'd')  # totalCntVec
+        cntVecMx = _np.empty(KM, 'd')
+        fweights = _np.empty(KM, 'd') if useFreqWeightedChiSq else None  # usually not used
 
         #NOTE on chi^2 expressions:
         #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -1160,23 +1169,23 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         #                         = (p - f)^2 * (1/p + 1/(1-p))
         #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
         #                         = 1/(p*(1-p)) * (p - f)^2
-    
-        for (i,opStr) in enumerate(dsCircuitsToUse):
+
+        for (i, opStr) in enumerate(dsCircuitsToUse):
             cnts = dataset[opStr].counts
-            N[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-            cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+            N[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+            cntVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
             if useFreqWeightedChiSq:
                 wts = []
                 for x in outcomes_lookup[i]:
                     Nx = dataset[opStr].total
-                    f1 = dataset[opStr].fraction(x); f2 = (f1+1)/(Nx+2)
-                    wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
-                fweights[ lookup[i] ] = wts    
-    
+                    f1 = dataset[opStr].fraction(x); f2 = (f1 + 1) / (Nx + 2)
+                    wts.append(_np.sqrt(Nx / (f2 * (1 - f2))))
+                fweights[lookup[i]] = wts
+
         if circuitWeights is not None:
             for i in range(len(circuitsToUse)):
-                cntVecMx[ lookup[i] ] *= circuitWeights[i] # dim KM (K = nSpamLabels, M = nCircuits )
-                N[ lookup[i] ] *= circuitWeights[i] #multiply N's by weights
+                cntVecMx[lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = nCircuits )
+                N[lookup[i]] *= circuitWeights[i]  # multiply N's by weights
 
         if evaltree_cache is not None:
             evaltree_cache['cntVecMx'] = cntVecMx
@@ -1188,16 +1197,18 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     if useFreqWeightedChiSq:
         def _get_weights(p):
             return fweights
-        def _get_dweights(p,wts):
+
+        def _get_dweights(p, wts):
             return z
     else:
         def _get_weights(p):
-            cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
+            cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
             return _np.sqrt(N / cp)  # nSpamLabels x nCircuits array (K x M)
-        def _get_dweights(p,wts):  #derivative of weights w.r.t. p
-            cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
+
+        def _get_dweights(p, wts):  # derivative of weights w.r.t. p
+            cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
             dw = -0.5 * wts / cp   # nSpamLabels x nCircuits array (K x M)
-            dw[ _np.logical_or(p < minProbClipForWeighting, p>(1-minProbClipForWeighting)) ] = 0.0
+            dw[_np.logical_or(p < minProbClipForWeighting, p > (1 - minProbClipForWeighting))] = 0.0
             return dw
 
     #Objective Function
@@ -1207,42 +1218,44 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                 tm = _time.time()
                 mdl.from_vector(vectorGS)
                 mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-                v = (probs-f)*_get_weights(probs) # dims K x M (K = nSpamLabels, M = nCircuits)
-                profiler.add_time("do_mc2gst: OBJECTIVE",tm)
-                assert(v.shape == (KM,)) #reshape ensuring no copy is needed
+                v = (probs - f) * _get_weights(probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+                profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+                assert(v.shape == (KM,))  # reshape ensuring no copy is needed
                 return v
 
         elif regularizeFactor != 0:
             assert(cptp_penalty_factor == 0), "Cannot have regularizeFactor and cptp_penalty_factor != 0"
             assert(spam_penalty_factor == 0), "Cannot have regularizeFactor and spam_penalty_factor != 0"
-            def _objective_func(vectorGS):
-                tm = _time.time()
-                mdl.from_vector(vectorGS)
-                mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-                weights = _get_weights(probs)
-                v = (probs-f)*weights # dim KM (K = nSpamLabels, M = nCircuits)
-                gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-                profiler.add_time("do_mc2gst: OBJECTIVE",tm)
-                return _np.concatenate( (v.reshape([KM]), gsVecNorm) )
 
-        else: #cptp_pentalty_factor != 0 and/or spam_pentalty_factor != 0
-            assert(regularizeFactor == 0), "Cannot have regularizeFactor and other penalty factors > 0"
             def _objective_func(vectorGS):
                 tm = _time.time()
                 mdl.from_vector(vectorGS)
                 mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
                 weights = _get_weights(probs)
-                v = (probs-f)*weights # dims K x M (K = nSpamLabels, M = nCircuits)
+                v = (probs - f) * weights  # dim KM (K = nSpamLabels, M = nCircuits)
+                gsVecNorm = regularizeFactor * _np.array([max(0, absx - 1.0) for absx in map(abs, vectorGS)], 'd')
+                profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+                return _np.concatenate((v.reshape([KM]), gsVecNorm))
+
+        else:  # cptp_pentalty_factor != 0 and/or spam_pentalty_factor != 0
+            assert(regularizeFactor == 0), "Cannot have regularizeFactor and other penalty factors > 0"
+
+            def _objective_func(vectorGS):
+                tm = _time.time()
+                mdl.from_vector(vectorGS)
+                mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
+                weights = _get_weights(probs)
+                v = (probs - f) * weights  # dims K x M (K = nSpamLabels, M = nCircuits)
                 if cptp_penalty_factor > 0:
-                    cpPenaltyVec = _cptp_penalty(mdl,cptp_penalty_factor,opBasis)
-                else: cpPenaltyVec = [] # so concatenate ignores
+                    cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
+                else: cpPenaltyVec = []  # so concatenate ignores
 
                 if spam_penalty_factor > 0:
-                    spamPenaltyVec = _spam_penalty(mdl,spam_penalty_factor,opBasis)
-                else: spamPenaltyVec = [] # so concatenate ignores
+                    spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, opBasis)
+                else: spamPenaltyVec = []  # so concatenate ignores
 
-                profiler.add_time("do_mc2gst: OBJECTIVE",tm)
-                return _np.concatenate( (v, cpPenaltyVec, spamPenaltyVec) )
+                profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+                return _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
 
     else:  # Verbose (DEBUG) version of objective_func
 
@@ -1252,144 +1265,142 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
             weights = _get_weights(probs)
 
-            v = (probs - f) * weights;  chisq = _np.sum(v*v)
+            v = (probs - f) * weights; chisq = _np.sum(v * v)
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
-                                           probs > (1-minProbClipForWeighting))).nonzero()[0])
+                                           probs > (1 - minProbClipForWeighting))).nonzero()[0])
             printer.log("MC2-OBJ: chi2=%g\n" % chisq +
                         "         p in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
                         "         weights in (%g,%g)\n" % (_np.min(weights), _np.max(weights)) +
-                        "         mdl in (%g,%g)\n" % (_np.min(vectorGS),_np.max(vectorGS)) +
+                        "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) +
                         "         maxLen = %d, nClipped=%d" % (maxCircuitLength, nClipped), 4)
 
             assert((cptp_penalty_factor == 0 and spam_penalty_factor == 0) or regularizeFactor == 0), \
                 "Cannot have regularizeFactor and other penalty factors != 0"
             if regularizeFactor != 0:
-                gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-                profiler.add_time("do_mc2gst: OBJECTIVE",tm)
-                return _np.concatenate( (v, gsVecNorm) )
+                gsVecNorm = regularizeFactor * _np.array([max(0, absx - 1.0) for absx in map(abs, vectorGS)], 'd')
+                profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+                return _np.concatenate((v, gsVecNorm))
             elif cptp_penalty_factor != 0 or spam_penalty_factor != 0:
                 if cptp_penalty_factor != 0:
-                    cpPenaltyVec = _cptp_penalty(mdl,cptp_penalty_factor,opBasis)
+                    cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
                 else: cpPenaltyVec = []
 
                 if spam_penalty_factor != 0:
-                    spamPenaltyVec = _spam_penalty(mdl,spam_penalty_factor,opBasis)
+                    spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, opBasis)
                 else: spamPenaltyVec = []
-                profiler.add_time("do_mc2gst: OBJECTIVE",tm)
-                return _np.concatenate( (v, cpPenaltyVec, spamPenaltyVec) )
+                profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+                return _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
             else:
-                profiler.add_time("do_mc2gst: OBJECTIVE",tm)
+                profiler.add_time("do_mc2gst: OBJECTIVE", tm)
                 assert(v.shape == (KM,))
                 return v
 
-
-
     # Jacobian function
-    if printer.verbosity < 4: # Fast versions of functions
-        if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0: # Fast un-regularized version
+    if printer.verbosity < 4:  # Fast versions of functions
+        if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:  # Fast un-regularized version
             def _jacobian(vectorGS):
                 tm = _time.time()
-                dprobs = jac.view() #avoid mem copying: use jac mem for dprobs
-                dprobs.shape = (KM,vec_gs_len)
+                dprobs = jac.view()  # avoid mem copying: use jac mem for dprobs
+                dprobs.shape = (KM, vec_gs_len)
                 mdl.from_vector(vectorGS)
                 mdl.bulk_fill_dprobs(dprobs, evTree,
-                                    prMxToFill=probs, clipTo=probClipInterval,
-                                    check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                    profiler=profiler, gatherMemLimit=gthrMem)
-                weights  = _get_weights( probs )
-                dprobs *= (weights+(probs-f)*_get_dweights(probs, weights ))[:,None]
-                  # (KM,N) * (KM,1)   (N = dim of vectorized model)
-                  # this multiply also computes jac, which is just dprobs
-                  # with a different shape (jac.shape == [KM,vec_gs_len])
+                                     prMxToFill=probs, clipTo=probClipInterval,
+                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                     profiler=profiler, gatherMemLimit=gthrMem)
+                weights = _get_weights(probs)
+                dprobs *= (weights + (probs - f) * _get_dweights(probs, weights))[:, None]
+                # (KM,N) * (KM,1)   (N = dim of vectorized model)
+                # this multiply also computes jac, which is just dprobs
+                # with a different shape (jac.shape == [KM,vec_gs_len])
 
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
                 # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
                 # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-                profiler.add_time("do_mc2gst: JACOBIAN",tm)
+                profiler.add_time("do_mc2gst: JACOBIAN", tm)
                 return jac
 
         elif regularizeFactor != 0:
-            def _jacobian(vectorGS): # Fast regularized version
+            def _jacobian(vectorGS):  # Fast regularized version
                 tm = _time.time()
-                dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
-                dprobs.shape = (KM,vec_gs_len)
+                dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
+                dprobs.shape = (KM, vec_gs_len)
                 mdl.from_vector(vectorGS)
                 mdl.bulk_fill_dprobs(dprobs, evTree,
-                                    prMxToFill=probs, clipTo=probClipInterval,
-                                    check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                    profiler=profiler, gatherMemLimit=gthrMem)
-                weights  = _get_weights( probs )
-                dprobs *= (weights+(probs-f)*_get_dweights( probs, weights ))[:,None]
-                  # (KM,N) * (KM,1)   (N = dim of vectorized model)
-                  # Note: this also computes jac[0:KM,:]
-                gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] ) # (N,N)
-                jac[KM:,:] = gsVecGrad # jac.shape == (KM+N,N)
+                                     prMxToFill=probs, clipTo=probClipInterval,
+                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                     profiler=profiler, gatherMemLimit=gthrMem)
+                weights = _get_weights(probs)
+                dprobs *= (weights + (probs - f) * _get_dweights(probs, weights))[:, None]
+                # (KM,N) * (KM,1)   (N = dim of vectorized model)
+                # Note: this also computes jac[0:KM,:]
+                gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0)
+                                      for x in vectorGS])  # (N,N)
+                jac[KM:, :] = gsVecGrad  # jac.shape == (KM+N,N)
 
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
                 # dpr has shape == (nCircuits, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
                 # return shape == (nCircuits+nDerivCols, nDerivCols)
-                profiler.add_time("do_mc2gst: JACOBIAN",tm)
+                profiler.add_time("do_mc2gst: JACOBIAN", tm)
                 return jac
 
-        else: #cptp_pentalty_factor != 0 and/or spam_penalty_factor != 0
-            def _jacobian(vectorGS): # Fast cptp-penalty version
+        else:  # cptp_pentalty_factor != 0 and/or spam_penalty_factor != 0
+            def _jacobian(vectorGS):  # Fast cptp-penalty version
                 tm = _time.time()
-                dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
-                dprobs.shape = (KM,vec_gs_len)
+                dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
+                dprobs.shape = (KM, vec_gs_len)
                 mdl.from_vector(vectorGS)
                 mdl.bulk_fill_dprobs(dprobs, evTree,
-                                    prMxToFill=probs, clipTo=probClipInterval,
-                                    check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                    profiler=profiler, gatherMemLimit=gthrMem)
-                weights  = _get_weights( probs )
-                dprobs *= (weights+(probs-f)*_get_dweights( probs, weights ))[:,None]
-                  # (KM,N) * (KM,1)   (N = dim of vectorized model)
-                  # Note: this also computes jac[0:KM,:]
+                                     prMxToFill=probs, clipTo=probClipInterval,
+                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                     profiler=profiler, gatherMemLimit=gthrMem)
+                weights = _get_weights(probs)
+                dprobs *= (weights + (probs - f) * _get_dweights(probs, weights))[:, None]
+                # (KM,N) * (KM,1)   (N = dim of vectorized model)
+                # Note: this also computes jac[0:KM,:]
                 off = 0
                 if cptp_penalty_factor > 0:
                     off += _cptp_penalty_jac_fill(
-                        jac[KM+off:,:], mdl, cptp_penalty_factor, opBasis)
+                        jac[KM + off:, :], mdl, cptp_penalty_factor, opBasis)
                 if spam_penalty_factor > 0:
                     off += _spam_penalty_jac_fill(
-                        jac[KM+off:,:], mdl, spam_penalty_factor, opBasis)
+                        jac[KM + off:, :], mdl, spam_penalty_factor, opBasis)
 
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-                profiler.add_time("do_mc2gst: JACOBIAN",tm)
+                profiler.add_time("do_mc2gst: JACOBIAN", tm)
                 return jac
 
-
-    else: # Verbose (DEBUG) version
+    else:  # Verbose (DEBUG) version
         def _jacobian(vectorGS):
             tm = _time.time()
-            dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
-            dprobs.shape = (KM,vec_gs_len)
+            dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
+            dprobs.shape = (KM, vec_gs_len)
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_dprobs(dprobs, evTree,
-                                prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                profiler=profiler, gatherMemLimit=gthrMem)
-            weights  = _get_weights( probs )
+                                 prMxToFill=probs, clipTo=probClipInterval,
+                                 check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                 profiler=profiler, gatherMemLimit=gthrMem)
+            weights = _get_weights(probs)
 
             #Attempt to control leastsq by zeroing clipped weights -- this doesn't seem to help (nor should it)
             #weights[ _np.logical_or(pr < minProbClipForWeighting, pr > (1-minProbClipForWeighting)) ] = 0.0
 
-            dPr_prefactor = (weights+(probs-f)*_get_dweights( probs, weights )) # (KM)
-            dprobs *= dPr_prefactor[:,None]  #  (KM,N) * (KM,1) = (KM,N)  (N = dim of vectorized model)
+            dPr_prefactor = (weights + (probs - f) * _get_dweights(probs, weights))  # (KM)
+            dprobs *= dPr_prefactor[:, None]  # (KM,N) * (KM,1) = (KM,N)  (N = dim of vectorized model)
 
             if regularizeFactor != 0:
-                gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
-                jac[KM:,:] = gsVecGrad # jac.shape == (KM+N,N)
+                gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
+                jac[KM:, :] = gsVecGrad  # jac.shape == (KM+N,N)
 
             else:
                 off = 0
                 if cptp_penalty_factor != 0:
-                    off += _cptp_penalty_jac_fill(jac[KM+off:,:], mdl, cptp_penalty_factor,
+                    off += _cptp_penalty_jac_fill(jac[KM + off:, :], mdl, cptp_penalty_factor,
                                                   opBasis)
 
                 if spam_penalty_factor != 0:
-                    off += _spam_penalty_jac_fill(jac[KM+off:,:], mdl, spam_penalty_factor,
+                    off += _spam_penalty_jac_fill(jac[KM + off:, :], mdl, spam_penalty_factor,
                                                   opBasis)
 
             #Zero-out insignificant entries in jacobian -- seemed to help some, but leaving this out, thinking less complicated == better
@@ -1405,7 +1416,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             #print "DEBUG: s-vals of jac %s = " % (str(jac.shape)), s
 
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
-                                           probs > (1-minProbClipForWeighting))).nonzero()[0])
+                                           probs > (1 - minProbClipForWeighting))).nonzero()[0])
             printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac)) +
                         "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
                         "         dpr in (%g,%g)\n" % (_np.min(dprobs), _np.max(dprobs)) +
@@ -1415,43 +1426,42 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
             if check_jacobian:
                 errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-                printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]*jac.shape[1]), 4)
+                printer.log("Jacobian has error %g and %d of %d indices with error > tol" %
+                            (errSum, len(errs), jac.shape[0] * jac.shape[1]), 4)
                 if len(errs) > 0:
-                    i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))
-                    printer.log(" ==> Worst index = %d,%d. p=%g,  Analytic jac = %g, Fwd Diff = %g" % (i,j, probs[i], jac[i,j], fd_jac[i,j]), 4)
+                    i, j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))
+                    printer.log(" ==> Worst index = %d,%d. p=%g,  Analytic jac = %g, Fwd Diff = %g" %
+                                (i, j, probs[i], jac[i, j], fd_jac[i, j]), 4)
                     printer.log(" ==> max err = ", errs[0][2], 4)
-                    printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 4)
+                    printer.log(" ==> max err/max = ", max([x[2] / maxabs for x in errs]), 4)
 
-            profiler.add_time("do_mc2gst: JACOBIAN",tm)
+            profiler.add_time("do_mc2gst: JACOBIAN", tm)
             return jac
 
-
-    profiler.add_time("do_mc2gst: pre-opt",tStart)
-
+    profiler.add_time("do_mc2gst: pre-opt", tStart)
 
     #Step 3: solve least squares minimization problem
     tm = _time.time()
     x0 = mdl.to_vector()
-    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }
+    if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
     if CUSTOMLM:
-        opt_x,converged,msg = _opt.custom_leastsq(
+        opt_x, converged, msg = _opt.custom_leastsq(
             _objective_func, _jacobian, x0, f_norm2_tol=tol['f'],
             jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
             max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
-            comm=comm, verbosity=printer-1, profiler=profiler)
-        printer.log("Least squares message = %s" % msg,2)
+            comm=comm, verbosity=printer - 1, profiler=profiler)
+        printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
-            _spo.leastsq( _objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian ) # pragma: no cover
+            _spo.leastsq(_objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
+                         maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=_jacobian)  # pragma: no cover
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
 
-
-    full_minErrVec = _objective_func(opt_x)  #note: calls mdl.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
+    full_minErrVec = _objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
+    minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  # don't include "extra" regularization terms
     soln_gs = mdl.copy()
-    profiler.add_time("do_mc2gst: leastsq",tm)
+    profiler.add_time("do_mc2gst: leastsq", tm)
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
     #print "*** leastSQ TIME = ",(_time.time()-tm)
@@ -1463,48 +1473,50 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
     if printer.verbosity > 0:
         nCircuits = len(circuitsToUse)
-        nDataParams  = dataset.get_degrees_of_freedom(dsCircuitsToUse) #number of independent parameters
-                                                                          # in dataset (max. model # of params)
+        nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse)  # number of independent parameters
+        # in dataset (max. model # of params)
 
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
-        if hasattr(mdl,'num_elements'):
-            memForNumGaugeParams = mdl.num_elements() * (mdl.num_params()+mdl.dim**2) \
-                * FLOATSIZE # see Model._buildup_dPG (this is mem for dPG)
+        if hasattr(mdl, 'num_elements'):
+            memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
+                * FLOATSIZE  # see Model._buildup_dPG (this is mem for dPG)
 
-            if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
+            if memLimit is None or 0.1 * memLimit < memForNumGaugeParams:
                 try:
-                    nModelParams = mdl.num_nongauge_params() #len(x0)
-                except: #numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+                    nModelParams = mdl.num_nongauge_params()  # len(x0)
+                except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
                     printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
                     nModelParams = mdl.num_params()
             else:
                 printer.log("Finding num_nongauge_params is too expensive: using total params.")
-                nModelParams = mdl.num_params() #just use total number of params
+                nModelParams = mdl.num_params()  # just use total number of params
         else:
-            nModelParams = mdl.num_params() #just use total number of params
+            nModelParams = mdl.num_params()  # just use total number of params
 
         totChi2 = sum([x**2 for x in minErrVec])
-        pvalue = 1.0 - _stats.chi2.cdf(totChi2,nDataParams-nModelParams) # reject GST model if p-value < threshold (~0.05?)
-        printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
-            (totChi2, nDataParams,  nModelParams, nDataParams-nModelParams, pvalue), 1)
-        printer.log("Completed in %.1fs" % (_time.time()-tStart), 1)
+        # reject GST model if p-value < threshold (~0.05?)
+        pvalue = 1.0 - _stats.chi2.cdf(totChi2, nDataParams - nModelParams)
+        printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
+                    (totChi2, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
+        printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
     #if targetModel is not None:
     #  target_vec = targetModel.to_vector()
     #  targetErrVec = _objective_func(target_vec)
     #  return minErrVec, soln_gs, targetErrVec
-    profiler.add_time("do_mc2gst: post-opt", tm) #all in num_nongauge_params
+    profiler.add_time("do_mc2gst: post-opt", tm)  # all in num_nongauge_params
     profiler.add_time("do_mc2gst: total time", tStart)
     #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
     # but maybe best to just remove minErrVec from return value since this isn't very useful
     # anyway?
     return minErrVec, soln_gs
 
+
 def do_mc2gst_with_model_selection(
         dataset, startModel, dimDelta, circuitsToUse,
         maxiter=100000, maxfev=None, tol=1e-6,
         cptp_penalty_factor=0, spam_penalty_factor=0,
-        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
+        minProbClipForWeighting=1e-4, probClipInterval=(-1e6, 1e6),
         useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
         check=False, check_jacobian=False, circuitWeights=None,
         opLabelAliases=None, memLimit=None, comm=None):
@@ -1622,29 +1634,28 @@ def do_mc2gst_with_model_selection(
     printer.log("--- Minimum Chi^2 GST with model selection (starting dim = %d) ---" % dim, 1)
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0],_objs.Circuit):
-        circuitsToUse = [ opstr.tup for opstr in circuitsToUse ]
+    if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0], _objs.Circuit):
+        circuitsToUse = [opstr.tup for opstr in circuitsToUse]
 
     minErr, mdl = do_mc2gst(dataset, startModel, circuitsToUse, maxiter,
-                           maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
-                           minProbClipForWeighting, probClipInterval,
-                           useFreqWeightedChiSq, regularizeFactor, printer-1,
-                           check, check_jacobian, circuitWeights, opLabelAliases,
-                           memLimit, comm)
-    chiSqBest = sum([x**2 for x in minErr]) #using only circuitsToUse
+                            maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                            minProbClipForWeighting, probClipInterval,
+                            useFreqWeightedChiSq, regularizeFactor, printer - 1,
+                            check, check_jacobian, circuitWeights, opLabelAliases,
+                            memLimit, comm)
+    chiSqBest = sum([x**2 for x in minErr])  # using only circuitsToUse
     nParamsBest = len(startModel.to_vector())
     origMDL = bestGS = mdl
     bestMinErr = minErr
 
-    printer.log("Dim %d: chi^2 = %g, nCircuits=%d, nParams=%d (so expected mean = %d)" % \
-        (dim, chiSqBest, nStrings, nParamsBest, nStrings-nParamsBest))
+    printer.log("Dim %d: chi^2 = %g, nCircuits=%d, nParams=%d (so expected mean = %d)" %
+                (dim, chiSqBest, nStrings, nParamsBest, nStrings - nParamsBest))
 
-        #Notes on Model selection test:
-        # compare chi2 - 2*(nStrings-nParams) for each model -- select lower one
-        # So compare:  chi2_A - 2*nStrings + 2*nParams_A <> chi2_B - 2*nStrings + 2*nParamsB
-        #              chi2_A + 2*nParams_A <> chi2_B + 2*nParams_B
-        #              chi2_A - chi2_B <> 2*(nParams_B - nParams_A)
-
+    #Notes on Model selection test:
+    # compare chi2 - 2*(nStrings-nParams) for each model -- select lower one
+    # So compare:  chi2_A - 2*nStrings + 2*nParams_A <> chi2_B - 2*nStrings + 2*nParamsB
+    #              chi2_A + 2*nParams_A <> chi2_B + 2*nParams_B
+    #              chi2_A - chi2_B <> 2*(nParams_B - nParams_A)
 
     #try decreasing the dimension
     curDim = dim
@@ -1656,37 +1667,36 @@ def do_mc2gst_with_model_selection(
         nParams = curStartModel.num_params()
 
         minErr, mdl = do_mc2gst(dataset, curStartModel, circuitsToUse, maxiter,
-                               maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
-                               minProbClipForWeighting, probClipInterval,
-                               useFreqWeightedChiSq, regularizeFactor, printer-1,
-                               check, check_jacobian, circuitWeights, opLabelAliases,
-                               memLimit, comm)
+                                maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                                minProbClipForWeighting, probClipInterval,
+                                useFreqWeightedChiSq, regularizeFactor, printer - 1,
+                                check, check_jacobian, circuitWeights, opLabelAliases,
+                                memLimit, comm)
 
-        chiSq = sum([x**2 for x in minErr]) #using only circuitsToUse
+        chiSq = sum([x**2 for x in minErr])  # using only circuitsToUse
 
         #Model selection test
         chi2diff = chiSq - chiSqBest
         paramDiff = nParams - nParamsBest
-        if (chiSqBest - chiSq) > 2*(nParams - nParamsBest): # equivaletly: -chi2diff > 2*paramDiff
+        if (chiSqBest - chiSq) > 2 * (nParams - nParamsBest):  # equivaletly: -chi2diff > 2*paramDiff
             bestGS, bestMinErr, chiSqBest, nParamsBest = mdl, minErr, chiSq, nParams
             msResult = "Selected"
         else:
             msResult = "Rejected"
             tryDecreasedDim = False
 
-        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)" % \
-            (msResult, curDim, chiSq, chiSq-(nStrings-nParams), nStrings, nParams, nStrings-nParams, chi2diff, 2*paramDiff))
-
+        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)" %
+                    (msResult, curDim, chiSq, chiSq - (nStrings - nParams), nStrings, nParams, nStrings - nParams, chi2diff, 2 * paramDiff))
 
     #try increasing the dimension
     curDim = dim
-    tryIncreasedDim = bool( curDim == dim ) # if we didn't decrease the dimension
+    tryIncreasedDim = bool(curDim == dim)  # if we didn't decrease the dimension
     curStartModel = origMDL
 
     while tryIncreasedDim:
         curDim += dimDelta
         curStartModel = curStartModel.increase_dimension(curDim)
-        curStartModel = curStartModel.kick(0.01) #give random kick here??
+        curStartModel = curStartModel.kick(0.01)  # give random kick here??
         nParams = curStartModel.num_params()
         if nParams > nStrings:
             #Future: do "MC2GST" for underconstrained nonlinear problems -- or just double up?
@@ -1694,43 +1704,41 @@ def do_mc2gst_with_model_selection(
             continue
 
         minErr, mdl = do_mc2gst(dataset, curStartModel, circuitsToUse, maxiter,
-                               maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
-                               minProbClipForWeighting, probClipInterval,
-                               useFreqWeightedChiSq, regularizeFactor, printer-1,
-                               check, check_jacobian, circuitWeights, opLabelAliases,
-                               memLimit, comm)
+                                maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                                minProbClipForWeighting, probClipInterval,
+                                useFreqWeightedChiSq, regularizeFactor, printer - 1,
+                                check, check_jacobian, circuitWeights, opLabelAliases,
+                                memLimit, comm)
 
-        chiSq = sum([x**2 for x in minErr]) #using only circuitsToUse
+        chiSq = sum([x**2 for x in minErr])  # using only circuitsToUse
 
         #Model selection test
         chi2diff = chiSq - chiSqBest
         paramDiff = nParams - nParamsBest
-        if (chiSqBest - chiSq) > 2*(nParams - nParamsBest): # equivaletly: -chi2diff > 2*paramDiff
+        if (chiSqBest - chiSq) > 2 * (nParams - nParamsBest):  # equivaletly: -chi2diff > 2*paramDiff
             bestGS, bestMinErr, chiSqBest, nParamsBest = mdl, minErr, chiSq, nParams
             msResult = "Selected"
         else:
             msResult = "Rejected"
             tryIncreasedDim = False
 
-        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)" % \
-            (msResult, curDim, chiSq, chiSq-(nStrings-nParams), nStrings, nParams, nStrings-nParams, chi2diff, 2*paramDiff))
+        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)" %
+                    (msResult, curDim, chiSq, chiSq - (nStrings - nParams), nStrings, nParams, nStrings - nParams, chi2diff, 2 * paramDiff))
 
     return bestMinErr, bestGS
-
-
 
 
 def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
                         maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
                         cptp_penalty_factor=0, spam_penalty_factor=0,
                         minProbClipForWeighting=1e-4,
-                        probClipInterval=(-1e6,1e6), useFreqWeightedChiSq=False,
+                        probClipInterval=(-1e6, 1e6), useFreqWeightedChiSq=False,
                         regularizeFactor=0, returnErrorVec=False,
                         returnAll=False, circuitSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
                         circuitWeightsDict=None, opLabelAliases=None,
                         memLimit=None, profiler=None, comm=None,
-                        distributeMethod = "deriv", evaltree_cache=None):
+                        distributeMethod="deriv", evaltree_cache=None):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
@@ -1757,7 +1765,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         Maximum number of function evaluations for the chi^2 optimization.
 
     fditer : int, optional
-        The number of initial (step 0) iterations to perform with a 
+        The number of initial (step 0) iterations to perform with a
         finite-difference-Jacobian, as opposed to the more precise "analytic"
         Jacobian.  Useful if the optimization's starting point is special/singular.
 
@@ -1865,15 +1873,15 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
     if profiler is None: profiler = _dummy_profiler
 
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation ) > 0 and \
+    if len(circuitSetsToUseInEstimation) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
-        circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
+       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
     else:
         circuitLists = circuitSetsToUseInEstimation
 
     #Run MC2GST iteratively on given sets of estimatable strings
-    lsgstModels = [ ]; minErrs = [ ] #for returnAll == True case
+    lsgstModels = []; minErrs = []  # for returnAll == True case
     lsgstModel = startModel.copy(); nIters = len(circuitLists)
     tStart = _time.time()
     tRef = tStart
@@ -1882,43 +1890,44 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         for (i, stringsToEstimate) in enumerate(circuitLists):
             #printer.log('', 2)
             extraMessages = ["(%s)" % circuitSetLabels[i]] if circuitSetLabels else []
-            printer.show_progress(i, nIters, verboseMessages=extraMessages, prefix= "--- Iterative MC2GST:", suffix=" %d operation sequences ---" % len(stringsToEstimate))
+            printer.show_progress(i, nIters, verboseMessages=extraMessages, prefix="--- Iterative MC2GST:",
+                                  suffix=" %d operation sequences ---" % len(stringsToEstimate))
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
             if circuitWeightsDict is not None:
-                circuitWeights = _np.ones( len(stringsToEstimate), 'd')
+                circuitWeights = _np.ones(len(stringsToEstimate), 'd')
                 for opstr, weight in circuitWeightsDict.items():
                     if opstr in stringsToEstimate:
-                        circuitWeights[ stringsToEstimate.index(opstr) ] = weight
+                        circuitWeights[stringsToEstimate.index(opstr)] = weight
             else: circuitWeights = None
             lsgstModel.basis = startModel.basis
-            num_fd = fditer if (i==0) else 0
+            num_fd = fditer if (i == 0) else 0
 
-            evt_cache = {} # get the eval tree that's created so we can reuse it
+            evt_cache = {}  # get the eval tree that's created so we can reuse it
             minErr, lsgstModel = \
-                do_mc2gst( dataset, lsgstModel, stringsToEstimate,
-                           maxiter, maxfev, num_fd, tol,
-                           cptp_penalty_factor, spam_penalty_factor,
-                           minProbClipForWeighting, probClipInterval,
-                           useFreqWeightedChiSq, regularizeFactor,
-                           printer-1, check, check_jacobian,
-                           circuitWeights, opLabelAliases, memLimit, comm,
-                           distributeMethod, profiler, evt_cache)
+                do_mc2gst(dataset, lsgstModel, stringsToEstimate,
+                          maxiter, maxfev, num_fd, tol,
+                          cptp_penalty_factor, spam_penalty_factor,
+                          minProbClipForWeighting, probClipInterval,
+                          useFreqWeightedChiSq, regularizeFactor,
+                          printer - 1, check, check_jacobian,
+                          circuitWeights, opLabelAliases, memLimit, comm,
+                          distributeMethod, profiler, evt_cache)
             if returnAll:
                 lsgstModels.append(lsgstModel)
                 minErrs.append(minErr)
 
             if evaltree_cache is not None:
-                evaltree_cache.update(evt_cache) # final evaltree cache
+                evaltree_cache.update(evt_cache)  # final evaltree cache
 
-            tNxt = _time.time();
-            profiler.add_time('do_iterative_mc2gst: iter %d chi2-opt'%(i+1),tRef)
-            printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
-            printer.log('',2) #extra newline
-            tRef=tNxt
+            tNxt = _time.time()
+            profiler.add_time('do_iterative_mc2gst: iter %d chi2-opt' % (i + 1), tRef)
+            printer.log("    Iteration %d took %.1fs" % (i + 1, tNxt - tRef), 2)
+            printer.log('', 2)  # extra newline
+            tRef = tNxt
 
-    printer.log('Iterative MC2GST Total Time: %.1fs' % (_time.time()-tStart))
+    printer.log('Iterative MC2GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('do_iterative_mc2gst: total time', tStart)
 
     if returnErrorVec:
@@ -1927,12 +1936,11 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         return lsgstModels if returnAll else lsgstModel
 
 
-
 def do_iterative_mc2gst_with_model_selection(
         dataset, startModel, dimDelta, circuitSetsToUseInEstimation,
         maxiter=100000, maxfev=None, tol=1e-6,
         cptp_penalty_factor=0, spam_penalty_factor=0,
-        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
+        minProbClipForWeighting=1e-4, probClipInterval=(-1e6, 1e6),
         useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False,
         returnAll=False, circuitSetLabels=None, verbosity=0, check=False,
         check_jacobian=False, circuitWeightsDict=None,
@@ -2059,39 +2067,40 @@ def do_iterative_mc2gst_with_model_selection(
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation ) > 0 and \
+    if len(circuitSetsToUseInEstimation) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
-        circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
+       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
     else:
         circuitLists = circuitSetsToUseInEstimation
 
     #Run MC2GST iteratively on given sets of estimatable strings
-    lsgstModels = [ ]; minErrs = [ ] #for returnAll == True case
+    lsgstModels = []; minErrs = []  # for returnAll == True case
     lsgstModel = startModel.copy(); nIters = len(circuitLists)
     with printer.progress_logging(1):
-        for (i,stringsToEstimate) in enumerate(circuitLists):
+        for (i, stringsToEstimate) in enumerate(circuitLists):
             #printer.log('', 2)
             extraMessages = (["(%s) "] % circuitSetLabels[i]) if circuitSetLabels else []
-            printer.show_progress(i, nIters, prefix="--- Iterative MC2GST:", suffix= "%d operation sequences ---"  % (len(stringsToEstimate)), verboseMessages=extraMessages)
+            printer.show_progress(i, nIters, prefix="--- Iterative MC2GST:", suffix="%d operation sequences ---" %
+                                  (len(stringsToEstimate)), verboseMessages=extraMessages)
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
             if circuitWeightsDict is not None:
-                circuitWeights = _np.ones( len(stringsToEstimate), 'd')
-                for opstr,weight in circuitWeightsDict.items():
+                circuitWeights = _np.ones(len(stringsToEstimate), 'd')
+                for opstr, weight in circuitWeightsDict.items():
                     if opstr in stringsToEstimate:
-                        circuitWeights[ stringsToEstimate.index(opstr) ] = weight
+                        circuitWeights[stringsToEstimate.index(opstr)] = weight
             else: circuitWeights = None
 
             minErr, lsgstModel = do_mc2gst_with_model_selection(
-              dataset, lsgstModel, dimDelta, stringsToEstimate,
-              maxiter, maxfev, tol,
-              cptp_penalty_factor, spam_penalty_factor,
-              minProbClipForWeighting, probClipInterval,
-              useFreqWeightedChiSq, regularizeFactor, printer-1,
-              check, check_jacobian, circuitWeights,
-              opLabelAliases, memLimit, comm)
+                dataset, lsgstModel, dimDelta, stringsToEstimate,
+                maxiter, maxfev, tol,
+                cptp_penalty_factor, spam_penalty_factor,
+                minProbClipForWeighting, probClipInterval,
+                useFreqWeightedChiSq, regularizeFactor, printer - 1,
+                check, check_jacobian, circuitWeights,
+                opLabelAliases, memLimit, comm)
 
             if returnAll:
                 lsgstModels.append(lsgstModel)
@@ -2103,8 +2112,6 @@ def do_iterative_mc2gst_with_model_selection(
         return lsgstModels if returnAll else lsgstModel
 
 
-
-
 ###################################################################################
 #                 Maximum Likelihood Estimation GST (MLGST)
 ##################################################################################
@@ -2112,13 +2119,12 @@ def do_iterative_mc2gst_with_model_selection(
 def do_mlgst(dataset, startModel, circuitsToUse,
              maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
              cptp_penalty_factor=0, spam_penalty_factor=0,
-             minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
+             minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
              circuitWeights=None, opLabelAliases=None,
              memLimit=None, comm=None,
-             distributeMethod = "deriv", profiler=None,
+             distributeMethod="deriv", profiler=None,
              evaltree_cache=None):
-
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -2139,7 +2145,7 @@ def do_mlgst(dataset, startModel, circuitsToUse,
 
     fditer : int, optional
         The number of iterations to perform with a finite-difference-Jacobian,
-        as opposed to the more precise "analytic" Jacobian.  Useful if the 
+        as opposed to the more precise "analytic" Jacobian.  Useful if the
         optimization's starting point is special/singular.
 
     tol : float or dict, optional
@@ -2224,7 +2230,7 @@ def do_mlgst(dataset, startModel, circuitsToUse,
         The model that maximized the log-likelihood.
     """
     return _do_mlgst_base(dataset, startModel, circuitsToUse, maxiter, maxfev,
-                          fditer, tol,cptp_penalty_factor, spam_penalty_factor, minProbClip,
+                          fditer, tol, cptp_penalty_factor, spam_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
                           check, circuitWeights, opLabelAliases, memLimit,
                           comm, distributeMethod, profiler, evaltree_cache, None)
@@ -2233,11 +2239,11 @@ def do_mlgst(dataset, startModel, circuitsToUse,
 def _do_mlgst_base(dataset, startModel, circuitsToUse,
                    maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
                    cptp_penalty_factor=0, spam_penalty_factor=0,
-                   minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
+                   minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
                    poissonPicture=True, verbosity=0, check=False,
                    circuitWeights=None, opLabelAliases=None,
                    memLimit=None, comm=None,
-                   distributeMethod = "deriv", profiler=None,
+                   distributeMethod="deriv", profiler=None,
                    evaltree_cache=None, forcefn_grad=None, shiftFctr=100):
     """
     Same args and behavior as do_mlgst, but with additional:
@@ -2280,8 +2286,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     if comm is not None:
         #assume all models at least have same parameters - so just compare vecs
         v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
-        if _np.linalg.norm(mdl.to_vector()-v_cmp) > 1e-6:
-                raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
+        if _np.linalg.norm(mdl.to_vector() - v_cmp) > 1e-6:
+            raise ValueError("MPI ERROR: *different* MC2GST start models" +  # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
 
         if forcefn_grad is not None:
@@ -2289,34 +2295,35 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             normdiff = _np.linalg.norm(forcefn_cmp - forcefn_grad)
             if normdiff > 1e-6:
                 #printer.warning("forcefn_grad norm mismatch = ",normdiff) #only prints on rank0
-                _warnings.warn("Rank %d: forcefn_grad norm mismatch = %g" % (comm.Get_rank(),normdiff)) # pragma: no cover
+                _warnings.warn("Rank %d: forcefn_grad norm mismatch = %g" %
+                               (comm.Get_rank(), normdiff))  # pragma: no cover
             #assert(normdiff <= 1e-6)
-            forcefn_grad = forcefn_cmp #use broadcast value to make certain each proc has *exactly* the same input
+            forcefn_grad = forcefn_cmp  # use broadcast value to make certain each proc has *exactly* the same input
 
     vec_gs_len = mdl.num_params()
 
     #Memory allocation
-    ns = int(round(_np.sqrt(mdl.dim))); # estimate avg number of spamtuples per string
+    ns = int(round(_np.sqrt(mdl.dim)))  # estimate avg number of spamtuples per string
     ng = len(circuitsToUse)
     ne = mdl.num_params()
-    C = 1.0/1024.0**3
+    C = 1.0 / 1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8* (ng*(ns + ns*ne + 1*ns)) # final results in bytes
+    persistentMem = 8 * (ng * (ns + ns * ne + 1 * ns))  # final results in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
+                          % (persistentMem * C))
 
     #Get evaluation tree (split into subtrees if needed)
     if (memLimit is not None):
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
-        gthrMem = int(0.1*(memLimit-persistentMem))
-        mlim = memLimit-persistentMem-gthrMem-curMem
+        gthrMem = int(0.1 * (memLimit - persistentMem))
+        mlim = memLimit - persistentMem - gthrMem - curMem
         assert mlim > 0, 'Not enough memory, exiting..'
-        printer.log("Memory: limit = %.2fGB" % (memLimit*C) +
+        printer.log("Memory: limit = %.2fGB" % (memLimit * C) +
                     "(cur, persist, gthr = %.2f, %.2f, %.2f GB)" %
-                    (curMem*C, persistentMem*C, gthrMem*C))
+                    (curMem * C, persistentMem * C, gthrMem * C))
     else: gthrMem = mlim = None
 
     if evaltree_cache and 'evTree' in evaltree_cache \
@@ -2328,10 +2335,11 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
-        evTree, wrtBlkSize,_,lookup,outcomes_lookup = mdl.bulk_evaltree_from_resources(
+        # Note: simplify_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None
+        evTree, wrtBlkSize, _, lookup, outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
+            ["bulk_fill_probs", "bulk_fill_dprobs"], dstree, printer - 1)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -2340,8 +2348,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             evaltree_cache['lookup'] = lookup
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
-
-    KM = evTree.num_final_elements() #shorthand for combined spam+circuit dimension
+    KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
 
     #Expand operation label aliases used in DataSet lookups
     dsCircuitsToUse = _tools.find_replace_tuple_list(
@@ -2354,19 +2361,19 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     if forcefn_grad is not None: ex += forcefn_grad.shape[0]
 
     #Allocate peristent memory
-    probs = _np.empty( KM, 'd' )
-    jac    = _np.empty( (KM+ex,vec_gs_len), 'd' )
+    probs = _np.empty(KM, 'd')
+    jac = _np.empty((KM + ex, vec_gs_len), 'd')
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         cntVecMx = evaltree_cache['cntVecMx']
         totalCntVec = evaltree_cache['totalCntVec']
     else:
-        cntVecMx = _np.empty(KM, 'd' )
-        totalCntVec = _np.empty(KM, 'd' )
-        for (i,opStr) in enumerate(dsCircuitsToUse):
+        cntVecMx = _np.empty(KM, 'd')
+        totalCntVec = _np.empty(KM, 'd')
+        for (i, opStr) in enumerate(dsCircuitsToUse):
             cnts = dataset[opStr].counts
-            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
-            cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+            totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+            cntVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
             # OLD: totalCntVec[ lookup[i] ] = dataset[opStr].total
             # OLD: cntVecMx[ lookup[i] ] = [ dataset[opStr][x] for x in outcomes_lookup[i] ]
 
@@ -2374,41 +2381,40 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             #From this point downward, scaling cntVecMx, totalCntVec and
             # minusCntVecMx will scale the corresponding logL terms, as desired.
             for i in range(len(circuitsToUse)):
-                cntVecMx[ lookup[i] ] *= circuitWeights[i] # dim KM (K = nSpamLabels, M = nCircuits )
-                totalCntVec[ lookup[i] ] *= circuitWeights[i] #multiply N's by weights
+                cntVecMx[lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = nCircuits )
+                totalCntVec[lookup[i]] *= circuitWeights[i]  # multiply N's by weights
 
         if evaltree_cache is not None:
             evaltree_cache['cntVecMx'] = cntVecMx
             evaltree_cache['totalCntVec'] = totalCntVec
 
-            
     logL_upperbound = _tools.logl_max(mdl, dataset, dsCircuitsToUse,
-                                      poissonPicture, check, opLabelAliases, evaltree_cache) # The theoretical upper bound on the log(likelihood)
+                                      poissonPicture, check, opLabelAliases, evaltree_cache)  # The theoretical upper bound on the log(likelihood)
     minusCntVecMx = -1.0 * cntVecMx
 
     freqs = cntVecMx / totalCntVec
-    freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+    freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs)  # set zero freqs to 1.0 so np.log doesn't complain
 
     if poissonPicture:
-        freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
+        freqTerm = cntVecMx * (_np.log(freqs_nozeros) - 1.0)
     else:
         freqTerm = cntVecMx * _np.log(freqs_nozeros)
-    freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+    # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+    freqTerm[cntVecMx == 0] = 0.0
 
     min_p = minProbClip
-    a = radius # parameterizes "roundness" of f == 0 terms
+    a = radius  # parameterizes "roundness" of f == 0 terms
 
     if forcefn_grad is not None:
         ffg_norm = _np.linalg.norm(forcefn_grad)
         start_norm = _np.linalg.norm(startModel.to_vector())
         forceShift = ffg_norm * (ffg_norm + start_norm) * shiftFctr
-          #used to keep forceShift - _np.dot(forcefn_grad,vectorGS) positive
-          # Note -- not analytic, just a heuristic!
+        #used to keep forceShift - _np.dot(forcefn_grad,vectorGS) positive
+        # Note -- not analytic, just a heuristic!
         forceOffset = KM
         if cptp_penalty_factor != 0: forceOffset += _cptp_penalty_size(mdl)
         if spam_penalty_factor != 0: forceOffset += _spam_penalty_size(mdl)
-          #index to jacobian row of first forcing term
-
+        #index to jacobian row of first forcing term
 
     if poissonPicture:
 
@@ -2433,36 +2439,40 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval,
                                 check, comm)
-            
+
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
-            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-            v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-                    #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec * \
+                pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+            v = _np.maximum(v, 0)
+            # quadratic extrapolation of logl at min_p for probabilities < min_p
+            v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+            v = _np.where(minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs,
+                                                                      (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
+            #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
             #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
-            v = _np.sqrt( v )
-            v.shape = [KM] #reshape ensuring no copy is needed
+            v = _np.sqrt(v)
+            v.shape = [KM]  # reshape ensuring no copy is needed
             if cptp_penalty_factor != 0:
-                cpPenaltyVec = _cptp_penalty(mdl,cptp_penalty_factor,opBasis)
+                cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
             else: cpPenaltyVec = []
 
             if spam_penalty_factor != 0:
-                spamPenaltyVec = _spam_penalty(mdl,spam_penalty_factor,opBasis)
+                spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, opBasis)
             else: spamPenaltyVec = []
 
-            v = _np.concatenate( (v, cpPenaltyVec, spamPenaltyVec) )
+            v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
 
             if forcefn_grad is not None:
-                forceVec = forceShift - _np.dot(forcefn_grad,vectorGS)
+                forceVec = forceShift - _np.dot(forcefn_grad, vectorGS)
                 assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
-                v = _np.concatenate( (v, _np.sqrt(forceVec)) )
+                v = _np.concatenate((v, _np.sqrt(forceVec)))
 
-            profiler.add_time("do_mlgst: OBJECTIVE",tm)
-            return v #Note: no test for whether probs is in [0,1] so no guarantee that
-                     #      sqrt is well defined unless probClipInterval is set within [0,1].
+            profiler.add_time("do_mlgst: OBJECTIVE", tm)
+            return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+            #      sqrt is well defined unless probClipInterval is set within [0,1].
 
         #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
         #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -2471,48 +2481,54 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
         def _jacobian(vectorGS):
             tm = _time.time()
-            dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
-            dprobs.shape = (KM,vec_gs_len)
+            dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
+            dprobs.shape = (KM, vec_gs_len)
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_dprobs(dprobs, evTree,
-                                prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                profiler=profiler, gatherMemLimit=gthrMem)
+                                 prMxToFill=probs, clipTo=probClipInterval,
+                                 check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                 profiler=profiler, gatherMemLimit=gthrMem)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
-            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-            v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
+            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec * \
+                pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+            v = _np.maximum(v, 0)
+            # quadratic extrapolation of logl at min_p for probabilities < min_p
+            v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+            v = _np.where(minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs,
+                                                                      (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
 
-            v = _np.sqrt( v )
-            v = _np.maximum(v,1e-100) #derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero below
+            v = _np.sqrt(v)
+            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero below
+            v = _np.maximum(v, 1e-100)
             dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs + totalCntVec)
-            dprobs_factor_neg = (0.5 / v) * (S + 2*S2*(probs - min_p))
-            dprobs_factor_zerofreq = (0.5 / v) * totalCntVec * _np.where( probs >= a, 1.0, (-1.0/a**2)*probs**2 + 2*probs/a )
-            dprobs_factor = _np.where( probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
-            dprobs_factor = _np.where( minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor )
-            dprobs *= dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized model)
-              #Note: this also sets jac[0:KM,:]
+            dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (probs - min_p))
+            dprobs_factor_zerofreq = (0.5 / v) * totalCntVec * _np.where(probs >= a,
+                                                                         1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
+            dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
+            dprobs_factor = _np.where(minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
+            dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+            #Note: this also sets jac[0:KM,:]
 
             off = 0
             if cptp_penalty_factor != 0:
-                off += _cptp_penalty_jac_fill(jac[KM+off:,:], mdl, cptp_penalty_factor,
+                off += _cptp_penalty_jac_fill(jac[KM + off:, :], mdl, cptp_penalty_factor,
                                               opBasis)
             if spam_penalty_factor != 0:
-                off += _spam_penalty_jac_fill(jac[KM+off:,:], mdl, spam_penalty_factor,
+                off += _spam_penalty_jac_fill(jac[KM + off:, :], mdl, spam_penalty_factor,
                                               opBasis)
 
             if forcefn_grad is not None:
-                jac[forceOffset:,:] = -forcefn_grad
+                jac[forceOffset:, :] = -forcefn_grad
 
             if check: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-            profiler.add_time("do_mlgst: JACOBIAN",tm)
+            profiler.add_time("do_mlgst: JACOBIAN", tm)
             return jac
 
-    else: # standard (non-Poisson-picture) logl
+    else:  # standard (non-Poisson-picture) logl
 
         # The log(Likelihood) within the standard picture is:
         #
@@ -2533,36 +2549,38 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             tm = _time.time()
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-            
+
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
             S2 = -0.5 * minusCntVecMx / (min_p**2)
             v = freqTerm + minusCntVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
-            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-            v = _np.where( minusCntVecMx == 0, 0.0, v)
+            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+            v = _np.maximum(v, 0)
+            # quadratic extrapolation of logl at min_p for probabilities < min_p
+            v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+            v = _np.where(minusCntVecMx == 0, 0.0, v)
             #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
-            v = _np.sqrt( v )
-            assert(v.shape == (KM,)) #reshape ensuring no copy is needed
+            v = _np.sqrt(v)
+            assert(v.shape == (KM,))  # reshape ensuring no copy is needed
 
             if cptp_penalty_factor != 0:
-                cpPenaltyVec = _cptp_penalty(mdl,cptp_penalty_factor,opBasis)
+                cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
             else: cpPenaltyVec = []
 
             if spam_penalty_factor != 0:
-                spamPenaltyVec = _spam_penalty(mdl,spam_penalty_factor,opBasis)
+                spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, opBasis)
             else: spamPenaltyVec = []
 
-            v = _np.concatenate( (v, cpPenaltyVec, spamPenaltyVec) )
+            v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
 
             if forcefn_grad is not None:
-                forceVec = forceShift - _np.dot(forcefn_grad,vectorGS)
+                forceVec = forceShift - _np.dot(forcefn_grad, vectorGS)
                 assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
-                v = _np.concatenate( (v, _np.sqrt(forceVec)) )
+                v = _np.concatenate((v, _np.sqrt(forceVec)))
 
-            profiler.add_time("do_mlgst: OBJECTIVE",tm)
-            return v  #Note: no test for whether probs is in [0,1] so no guarantee that
-                      #      sqrt is well defined unless probClipInterval is set within [0,1].
+            profiler.add_time("do_mlgst: OBJECTIVE", tm)
+            return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+            #      sqrt is well defined unless probClipInterval is set within [0,1].
 
         #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
         #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -2571,76 +2589,79 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
         def _jacobian(vectorGS):
             tm = _time.time()
-            dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
-            dprobs.shape = (KM,vec_gs_len)
+            dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
+            dprobs.shape = (KM, vec_gs_len)
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_dprobs(dprobs, evTree,
-                                prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                profiler=profiler, gatherMemLimit=gthrMem)
+                                 prMxToFill=probs, clipTo=probClipInterval,
+                                 check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                 profiler=profiler, gatherMemLimit=gthrMem)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
             S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs) # dim KM (K = nSpamLabels, M = nCircuits)
-            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-            v = _np.where( minusCntVecMx == 0, 0.0, v)
-            v = _np.sqrt( v )
+            v = freqTerm + minusCntVecMx * _np.log(pos_probs)  # dim KM (K = nSpamLabels, M = nCircuits)
+            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+            v = _np.maximum(v, 0)
+            # quadratic extrapolation of logl at min_p for probabilities < min_p
+            v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+            v = _np.where(minusCntVecMx == 0, 0.0, v)
+            v = _np.sqrt(v)
 
-            v = _np.maximum(v,1e-100) #derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero below
+            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero below
+            v = _np.maximum(v, 1e-100)
             dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs)
-            dprobs_factor_neg = (0.5 / v) * (S + 2*S2*(probs - min_p))
-            dprobs_factor = _np.where( probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
-            dprobs_factor = _np.where( minusCntVecMx == 0, 0.0, dprobs_factor )
-            dprobs *= dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized model)
-              #Note: this also sets jac[0:KM,:]
+            dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (probs - min_p))
+            dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
+            dprobs_factor = _np.where(minusCntVecMx == 0, 0.0, dprobs_factor)
+            dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+            #Note: this also sets jac[0:KM,:]
 
             off = 0
             if cptp_penalty_factor != 0:
-                off += _cptp_penalty_jac_fill(jac[KM+off:,:], mdl, cptp_penalty_factor,
-                                       opBasis)
+                off += _cptp_penalty_jac_fill(jac[KM + off:, :], mdl, cptp_penalty_factor,
+                                              opBasis)
 
             if spam_penalty_factor != 0:
-                off += _spam_penalty_jac_fill(jac[KM+off:,:], mdl, spam_penalty_factor,
-                                       opBasis)
+                off += _spam_penalty_jac_fill(jac[KM + off:, :], mdl, spam_penalty_factor,
+                                              opBasis)
 
             if forcefn_grad is not None:
-                jac[forceOffset:,:] = -forcefn_grad
+                jac[forceOffset:, :] = -forcefn_grad
 
             if check: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-            profiler.add_time("do_mlgst: JACOBIAN",tm)
+            profiler.add_time("do_mlgst: JACOBIAN", tm)
             return jac
 
-    profiler.add_time("do_mlgst: pre-opt",tStart)
+    profiler.add_time("do_mlgst: pre-opt", tStart)
 
     #Run optimization (use leastsq)
     tm = _time.time()
     x0 = mdl.to_vector()
-    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }
-    
+    if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+
     if CUSTOMLM:
-        opt_x,converged,msg = _opt.custom_leastsq(
+        opt_x, converged, msg = _opt.custom_leastsq(
             _objective_func, _jacobian, x0, f_norm2_tol=tol['f'],
             jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
             max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
-            comm=comm, verbosity=printer-1, profiler=profiler)
-        printer.log("Least squares message = %s" % msg,2)
+            comm=comm, verbosity=printer - 1, profiler=profiler)
+        printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
-            _spo.leastsq( _objective_func, x0, xtol=tol['relx'], ftol=tol['relx'], gtol=0,
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian ) # pragma: no cover
+            _spo.leastsq(_objective_func, x0, xtol=tol['relx'], ftol=tol['relx'], gtol=0,
+                         maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=_jacobian)  # pragma: no cover
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
-    profiler.add_time("do_mlgst: leastsq",tm)
+    profiler.add_time("do_mlgst: leastsq", tm)
 
     tm = _time.time()
     mdl.from_vector(opt_x)
     #mdl.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
-    full_minErrVec = _objective_func(opt_x)  #note: calls mdl.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
-    deltaLogL = sum(minErrVec**2) # upperBoundLogL - logl (a positive number)
+    full_minErrVec = _objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
+    minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  # don't include "extra" regularization terms
+    deltaLogL = sum(minErrVec**2)  # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':
     #    if cpPenalty != 0: d,mdl = _contractToCP_direct(mdl,verbosity=0,TPalso=not opt_G0,maxiter=100)
@@ -2649,52 +2670,52 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     if printer.verbosity > 0:
         if _np.isfinite(deltaLogL):
             nCircuits = len(circuitsToUse)
-            nDataParams  = dataset.get_degrees_of_freedom(dsCircuitsToUse) #number of independent parameters
-                                                                              # in dataset (max. model # of params)
+            nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse)  # number of independent parameters
+            # in dataset (max. model # of params)
 
             #Don't compute num gauge params if it's expensive (>10% of mem limit)
-            if hasattr(mdl,'num_elements'):
-                memForNumGaugeParams = mdl.num_elements() * (mdl.num_params()+mdl.dim**2) \
-                    * FLOATSIZE # see Model._buildup_dPG (this is mem for dPG)
-                if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
+            if hasattr(mdl, 'num_elements'):
+                memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
+                    * FLOATSIZE  # see Model._buildup_dPG (this is mem for dPG)
+                if memLimit is None or 0.1 * memLimit < memForNumGaugeParams:
                     try:
-                        nModelParams = mdl.num_nongauge_params() #len(x0)
-                    except: #numpy can throw a LinAlgError
+                        nModelParams = mdl.num_nongauge_params()  # len(x0)
+                    except:  # numpy can throw a LinAlgError
                         printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
                         nModelParams = mdl.num_params()
                 else:
                     printer.log("Finding num_nongauge_params is too expensive: using total params.")
-                    nModelParams = mdl.num_params() #just use total number of params
+                    nModelParams = mdl.num_params()  # just use total number of params
             else:
-                nModelParams = mdl.num_params() #just use total number of params
+                nModelParams = mdl.num_params()  # just use total number of params
 
-            pvalue = 1.0 - _stats.chi2.cdf(2*deltaLogL,nDataParams-nModelParams) # reject GST if p-value < threshold (~0.05?)
+            # reject GST if p-value < threshold (~0.05?)
+            pvalue = 1.0 - _stats.chi2.cdf(2 * deltaLogL, nDataParams - nModelParams)
 
             printer.log("  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound), 1)
-            printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
-                (2*deltaLogL, nDataParams,  nModelParams, nDataParams-nModelParams, pvalue), 1)
-            printer.log("  Completed in %.1fs" % (_time.time()-tStart), 1)
+            printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
+                        (2 * deltaLogL, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
+            printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 
             #print " DEBUG LOGL = ", _tools.logl(mdl, dataset, circuitsToUse),
             #  " DELTA = ",(logL_upperbound-_tools.logl(mdl, dataset, circuitsToUse))
         else:
-            printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1) # pragma: no cover
+            printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)  # pragma: no cover
 
-    profiler.add_time("do_mlgst: post-opt",tm)
-    profiler.add_time("do_mlgst: total time",tStart)
+    profiler.add_time("do_mlgst: post-opt", tm)
+    profiler.add_time("do_mlgst: total time", tStart)
     return (logL_upperbound - deltaLogL), mdl
-
 
 
 def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                        maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
-                       minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
-                       poissonPicture=True,returnMaxLogL=False,returnAll=False,
+                       minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
+                       poissonPicture=True, returnMaxLogL=False, returnAll=False,
                        circuitSetLabels=None, useFreqWeightedChiSq=False,
                        verbosity=0, check=False, circuitWeightsDict=None,
                        opLabelAliases=None, memLimit=None,
-                       profiler=None, comm=None, distributeMethod = "deriv",
+                       profiler=None, comm=None, distributeMethod="deriv",
                        alwaysPerformMLE=False, onlyPerformMLE=False, evaltree_cache=None):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -2722,7 +2743,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         Maximum number of function evaluations for the logL optimization.
 
     fditer : int, optional
-        The number of initial (step 0) iterations to perform with a 
+        The number of initial (step 0) iterations to perform with a
         finite-difference-Jacobian, as opposed to the more precise "analytic"
         Jacobian.  Useful if the optimization's starting point is special/singular.
 
@@ -2815,7 +2836,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         except the final iteration (for improved numerical stability).
 
     onlyPerformMLE : bool, optional
-        When True, `alwaysPerformMLE` must also be true, and in this case only 
+        When True, `alwaysPerformMLE` must also be true, and in this case only
         a ML optimization is performed for each iteration.
 
     evaltree_cache : dict, optional
@@ -2837,27 +2858,26 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 
     if onlyPerformMLE:
         assert(alwaysPerformMLE), "Must set `alwaysPerformMLE` to True whenever `onlyPerformMLE` is True."
-        
+
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
 
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation ) > 0 and \
+    if len(circuitSetsToUseInEstimation) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
-        circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
+       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
     else:
         circuitLists = circuitSetsToUseInEstimation
 
-
     #Run extended MLGST iteratively on given sets of estimatable strings
-    mleModels = [ ]; maxLogLs = [ ] #for returnAll == True case
+    mleModels = []; maxLogLs = []  # for returnAll == True case
     mleModel = startModel.copy(); nIters = len(circuitLists)
     tStart = _time.time()
     tRef = tStart
 
     with printer.progress_logging(1):
-        for (i,stringsToEstimate) in enumerate(circuitLists):
+        for (i, stringsToEstimate) in enumerate(circuitLists):
             #printer.log('', 2)
             extraMessages = [("(%s) " % circuitSetLabels[i])] if circuitSetLabels else []
             printer.show_progress(i, nIters, verboseMessages=extraMessages,
@@ -2867,84 +2887,84 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
             if circuitWeightsDict is not None:
-                circuitWeights = _np.ones( len(stringsToEstimate), 'd')
+                circuitWeights = _np.ones(len(stringsToEstimate), 'd')
                 for opstr, weight in circuitWeightsDict.items():
                     if opstr in stringsToEstimate:
-                        circuitWeights[ stringsToEstimate.index(opstr) ] = weight
+                        circuitWeights[stringsToEstimate.index(opstr)] = weight
             else: circuitWeights = None
 
             mleModel.basis = startModel.basis
-              #set basis in case of CPTP constraints
+            #set basis in case of CPTP constraints
 
             num_fd = fditer if (i == 0) else 0
 
-            evt_cache = {} # get the eval tree that's created so we can reuse it
+            evt_cache = {}  # get the eval tree that's created so we can reuse it
             if not onlyPerformMLE:
                 _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
                                         maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
                                         spam_penalty_factor, minProbClip, probClipInterval,
-                                        useFreqWeightedChiSq, 0,printer-1, check,
+                                        useFreqWeightedChiSq, 0, printer - 1, check,
                                         check, circuitWeights, opLabelAliases,
                                         memLimit, comm, distributeMethod, profiler, evt_cache)
 
             if alwaysPerformMLE:
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
-                                         maxiter, maxfev, num_fd, tol,
-                                         cptp_penalty_factor, spam_penalty_factor,
-                                         minProbClip, probClipInterval, radius,
-                                         poissonPicture, printer-1, check, circuitWeights,
-                                         opLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
+                                       maxiter, maxfev, num_fd, tol,
+                                       cptp_penalty_factor, spam_penalty_factor,
+                                       minProbClip, probClipInterval, radius,
+                                       poissonPicture, printer - 1, check, circuitWeights,
+                                       opLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
 
+            tNxt = _time.time()
+            profiler.add_time('do_iterative_mlgst: iter %d chi2-opt' % (i + 1), tRef)
+            tRef2 = tNxt
 
-            tNxt = _time.time();
-            profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
-            tRef2=tNxt
-
-            logL_ub = _tools.logl_max(mleModel, dataset, stringsToEstimate, poissonPicture, check, opLabelAliases, evt_cache)
+            logL_ub = _tools.logl_max(mleModel, dataset, stringsToEstimate,
+                                      poissonPicture, check, opLabelAliases, evt_cache)
             maxLogL = _tools.logl(mleModel, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, opLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
+                                  radius, poissonPicture, check, opLabelAliases, evt_cache, comm)  # get maxLogL from chi2 estimate
 
-            printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+            printer.log("2*Delta(log(L)) = %g" % (2 * (logL_ub - maxLogL)), 2)
 
-            tNxt = _time.time();
-            profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
-            printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
-            printer.log('',2) #extra newline
-            tRef=tNxt
+            tNxt = _time.time()
+            profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i + 1), tRef2)
+            printer.log("Iteration %d took %.1fs" % (i + 1, tNxt - tRef), 2)
+            printer.log('', 2)  # extra newline
+            tRef = tNxt
 
-            if i == len(circuitLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
-                printer.log("Switching to ML objective (last iteration)",2)
+            if i == len(circuitLists) - 1 and not alwaysPerformMLE:  # on the last iteration, do ML
+                printer.log("Switching to ML objective (last iteration)", 2)
 
                 mleModel.basis = startModel.basis
 
                 maxLogL_p, mleModel_p = do_mlgst(
                     dataset, mleModel, stringsToEstimate, maxiter, maxfev, 0, tol,
                     cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
-                    poissonPicture, printer-1, check, circuitWeights, opLabelAliases,
+                    poissonPicture, printer - 1, check, circuitWeights, opLabelAliases,
                     memLimit, comm, distributeMethod, profiler, evt_cache)
 
-                printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+                printer.log("2*Delta(log(L)) = %g" % (2 * (logL_ub - maxLogL_p)), 2)
 
-                if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
+                if maxLogL_p > maxLogL:  # if do_mlgst improved the maximum log-likelihood
                     maxLogL = maxLogL_p
                     mleModel = mleModel_p
                 else:
                     printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
 
-                tNxt = _time.time();
-                profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i+1),tRef)
-                printer.log("Final MLGST took %.1fs" % (tNxt-tRef),2)
-                printer.log('',2) #extra newline
-                tRef=tNxt
+                tNxt = _time.time()
+                profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i + 1), tRef)
+                printer.log("Final MLGST took %.1fs" % (tNxt - tRef), 2)
+                printer.log('', 2)  # extra newline
+                tRef = tNxt
 
                 if evaltree_cache is not None:
-                    evaltree_cache.update(evt_cache) # final evaltree cache
+                    evaltree_cache.update(evt_cache)  # final evaltree cache
 
             if returnAll:
                 mleModels.append(mleModel)
                 maxLogLs.append(maxLogL)
 
-    printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
+    printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('do_iterative_mlgst: total time', tStart)
 
     if returnMaxLogL:
@@ -2956,13 +2976,16 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 #                 Other Tools
 ###################################################################################
 
+
 def _cptp_penalty_size(mdl):
     return len(mdl.operations)
+
 
 def _spam_penalty_size(mdl):
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
-def _cptp_penalty(mdl,prefactor,opBasis):
+
+def _cptp_penalty(mdl, prefactor, opBasis):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
     which in least squares optimization means returning an array
@@ -2973,12 +2996,12 @@ def _cptp_penalty(mdl,prefactor,opBasis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    return prefactor*_np.sqrt( _np.array( [_tools.tracenorm(
-                    _tools.fast_jamiolkowski_iso_std(gate, opBasis)
-                    ) for gate in mdl.operations.values()], 'd') )
+    return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
+        _tools.fast_jamiolkowski_iso_std(gate, opBasis)
+    ) for gate in mdl.operations.values()], 'd'))
 
 
-def _spam_penalty(mdl,prefactor,opBasis):
+def _spam_penalty(mdl, prefactor, opBasis):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
     which in least squares optimization means returning an array
@@ -2989,17 +3012,16 @@ def _spam_penalty(mdl,prefactor,opBasis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    return prefactor* ( _np.sqrt(
-        _np.array( [
+    return prefactor * (_np.sqrt(
+        _np.array([
             _tools.tracenorm(
                 _tools.vec_to_stdmx(prepvec.todense(), opBasis)
             ) for prepvec in mdl.preps.values()
         ] + [
             _tools.tracenorm(
                 _tools.vec_to_stdmx(mdl.povms[plbl][elbl].todense(), opBasis)
-            ) for plbl in mdl.povms for elbl in mdl.povms[plbl] ], 'd')
+            ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
-
 
 
 def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, mdl, prefactor, opBasis):
@@ -3009,7 +3031,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, mdl, prefactor, opBasis):
     """
 
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
-    for i,gate in enumerate(mdl.operations.values()):
+    for i, gate in enumerate(mdl.operations.values()):
         nP = gate.num_params()
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
@@ -3033,36 +3055,36 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
         # get d(gate)/dp in opBasis [shape == (nP,dim,dim)]
         #OLD: dGdp = mdl.dproduct((gl,)) but wasteful
-        dGdp = gate.deriv_wrt_params() #shape (dim**2, nP)
-        dGdp = _np.swapaxes(dGdp,0,1)  #shape (nP, dim**2, )
-        dGdp.shape = (nP,mdl.dim,mdl.dim)
+        dGdp = gate.deriv_wrt_params()  # shape (dim**2, nP)
+        dGdp = _np.swapaxes(dGdp, 0, 1)  # shape (nP, dim**2, )
+        dGdp.shape = (nP, mdl.dim, mdl.dim)
 
         # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
         # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
         # transform).  This shuffle op commutes with the derivative, so that
         # dchi_std/dp := d(M(G))/dp = M(dG/dp), which we call "MdGdp_std" (the choi
         # mapping of dGdp in the std basis)
-        MdGdp_std = _np.empty((nP,mdl.dim,mdl.dim), 'complex')
-        for p in range(nP): #p indexes param
-            MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], opBasis) #now "M(dGdp_std)"
-            assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8) #check hermitian
+        MdGdp_std = _np.empty((nP, mdl.dim, mdl.dim), 'complex')
+        for p in range(nP):  # p indexes param
+            MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], opBasis)  # now "M(dGdp_std)"
+            assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8)  # check hermitian
 
-        MdGdp_std = _np.conjugate(MdGdp_std) # so element-wise multiply
-          # of complex number (einsum below) results in separately adding
-          # Re and Im parts (also see NOTE in spam_penalty_jac_fill below)
+        MdGdp_std = _np.conjugate(MdGdp_std)  # so element-wise multiply
+        # of complex number (einsum below) results in separately adding
+        # Re and Im parts (also see NOTE in spam_penalty_jac_fill below)
 
         #contract to get (note contract along both mx indices b/c treat like a
         # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
         #v =  _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
-        v =  _np.tensordot(sgnchi,MdGdp_std,((0,1),(1,2)))
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi))) #add 0.5/|chi|_Tr factor
+        v = _np.tensordot(sgnchi, MdGdp_std, ((0, 1), (1, 2)))
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi)))  # add 0.5/|chi|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
-        cpPenaltyVecGradToFill[i,:] = 0.0
-        cpPenaltyVecGradToFill[i,gate.gpindices] = v.real #indexing w/array OR
-                                         #slice works as expected in this case
-        chi = sgnchi = dGdp = MdGdp_std = v = None #free mem
+        cpPenaltyVecGradToFill[i, :] = 0.0
+        cpPenaltyVecGradToFill[i, gate.gpindices] = v.real  # indexing w/array OR
+        #slice works as expected in this case
+        chi = sgnchi = dGdp = MdGdp_std = v = None  # free mem
 
-    return len(mdl.operations) #the number of leading-dim indicies we filled in
+    return len(mdl.operations)  # the number of leading-dim indicies we filled in
 
 
 def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
@@ -3070,20 +3092,19 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape ( _spam_penalty_size(mdl), nParams).
     """
-    BMxs = opBasis.elements #shape [mdl.dim, dmDim, dmDim]
-    ddenMxdV = dEMxdV = BMxs.conjugate() # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
-      #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
-      # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed
-      # in order to gather the different components of the total derivative of the trace-norm
-      # wrt some spam-vector change dV.  If left un-conjugated, we'd get A*B + A.C*B.C (just
-      # taking the (i,j) and (j,i) elements of the sum, say) which would give us
-      # 2*Re(A*B) = A.r*B.r - B.i*A.i when we *want* (b/c Re and Im parts are thought of as
-      # separate, independent degrees of freedom) A.r*B.r + A.i*B.i = 2*Re(A*B.C) -- so
-      # we need to conjugate the "B" matrix, which is ddenMxdV or dEMxdV below.
-
+    BMxs = opBasis.elements  # shape [mdl.dim, dmDim, dmDim]
+    ddenMxdV = dEMxdV = BMxs.conjugate()  # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
+    #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
+    # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed
+    # in order to gather the different components of the total derivative of the trace-norm
+    # wrt some spam-vector change dV.  If left un-conjugated, we'd get A*B + A.C*B.C (just
+    # taking the (i,j) and (j,i) elements of the sum, say) which would give us
+    # 2*Re(A*B) = A.r*B.r - B.i*A.i when we *want* (b/c Re and Im parts are thought of as
+    # separate, independent degrees of freedom) A.r*B.r + A.i*B.i = 2*Re(A*B.C) -- so
+    # we need to conjugate the "B" matrix, which is ddenMxdV or dEMxdV below.
 
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
-    for i,prepvec in enumerate(mdl.preps.values()):
+    for i, prepvec in enumerate(mdl.preps.values()):
         nP = prepvec.num_params()
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
@@ -3097,8 +3118,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
             "sgndm should be Hermitian!"
 
         # get d(prepvec)/dp in opBasis [shape == (nP,dim)]
-        dVdp = prepvec.deriv_wrt_params() #shape (dim, nP)
-        assert(dVdp.shape == (mdl.dim,nP))
+        dVdp = prepvec.deriv_wrt_params()  # shape (dim, nP)
+        assert(dVdp.shape == (mdl.dim, nP))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
 
@@ -3106,20 +3127,19 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
         # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
         # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
         #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
-        v =  _np.tensordot( _np.tensordot(sgndm,ddenMxdV,((0,1),(1,2))),dVdp, (0,0) )
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx))) #add 0.5/|denMx|_Tr factor
+        v = _np.tensordot(_np.tensordot(sgndm, ddenMxdV, ((0, 1), (1, 2))), dVdp, (0, 0))
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx)))  # add 0.5/|denMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
-        spamPenaltyVecGradToFill[i,:] = 0.0
-        spamPenaltyVecGradToFill[i,prepvec.gpindices] = v.real # slice or array index works!
-        denMx = sgndm = dVdp = v = None #free mem
-
+        spamPenaltyVecGradToFill[i, :] = 0.0
+        spamPenaltyVecGradToFill[i, prepvec.gpindices] = v.real  # slice or array index works!
+        denMx = sgndm = dVdp = v = None  # free mem
 
     #Compute derivatives for effect terms
     i = len(mdl.preps)
-    for povmlbl,povm in mdl.povms.items():
+    for povmlbl, povm in mdl.povms.items():
         #Simplify effects of povm so we can take their derivatives
         # directly wrt parent Model parameters
-        for _,effectvec in povm.simplify_effects(povmlbl).items():
+        for _, effectvec in povm.simplify_effects(povmlbl).items():
             nP = effectvec.num_params()
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
@@ -3133,8 +3153,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
                 "sgnE should be Hermitian!"
 
             # get d(prepvec)/dp in opBasis [shape == (nP,dim)]
-            dVdp = effectvec.deriv_wrt_params() #shape (dim, nP)
-            assert(dVdp.shape == (mdl.dim,nP))
+            dVdp = effectvec.deriv_wrt_params()  # shape (dim, nP)
+            assert(dVdp.shape == (mdl.dim, nP))
 
             # EMx = sum( spamvec[i] * Bmx[i] )
 
@@ -3142,17 +3162,17 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
             # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
             # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
             #v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
-            v =  _np.tensordot( _np.tensordot(sgnE,dEMxdV,((0,1),(1,2))),dVdp, (0,0) )
-            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
+            v = _np.tensordot(_np.tensordot(sgnE, dEMxdV, ((0, 1), (1, 2))), dVdp, (0, 0))
+            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx)))  # add 0.5/|EMx|_Tr factor
             assert(_np.linalg.norm(v.imag) < 1e-4)
 
-            spamPenaltyVecGradToFill[i,:] = 0.0
-            spamPenaltyVecGradToFill[i,effectvec.gpindices] = v.real
+            spamPenaltyVecGradToFill[i, :] = 0.0
+            spamPenaltyVecGradToFill[i, effectvec.gpindices] = v.real
 
-            sgnE = dVdp = v = None #free mem
+            sgnE = dVdp = v = None  # free mem
 
     #return the number of leading-dim indicies we filled in
-    return len(mdl.preps) + sum([ len(povm) for povm in mdl.povms.values()])
+    return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
 
 def find_closest_unitary_opmx(operationMx):
@@ -3171,7 +3191,7 @@ def find_closest_unitary_opmx(operationMx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso( operationMx, choiMxBasis="std" )
+    gate_JMx = _tools.jamiolkowski_iso(operationMx, choiMxBasis="std")
     # d = _np.sqrt(operationMx.shape[0])
     # I = _np.identity(d)
 
@@ -3179,13 +3199,12 @@ def find_closest_unitary_opmx(operationMx):
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
     def _get_gate_mx_1q(basisVec):  # 1 qubit version
         return _pc.single_qubit_gate(basisVec[0],
-                                        basisVec[1],
-                                        basisVec[2])
-
+                                     basisVec[1],
+                                     basisVec[2])
 
     if operationMx.shape[0] == 4:
-    #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)
-        initialBasisVec = [ 0, 0, 0]  #start with I until we figure out how to extract target unitary
+        #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)
+        initialBasisVec = [0, 0, 0]  # start with I until we figure out how to extract target unitary
         #getU = getu_1q
         getGateMx = _get_gate_mx_1q
     #Note: seems like for 2 qubits bell = [1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 ]/sqrt(4) (4 zeros between 1's since state dimension is 4 ( == sqrt(gate dimension))
@@ -3194,7 +3213,7 @@ def find_closest_unitary_opmx(operationMx):
 
     def _objective_func(basisVec):
         operationMx = getGateMx(basisVec)
-        JU = _tools.jamiolkowski_iso( operationMx, choiMxBasis="std" )
+        JU = _tools.jamiolkowski_iso(operationMx, choiMxBasis="std")
         # OLD: but computes JU in Pauli basis (I think) -> wrong matrix to fidelity check with gate_JMx
         #U = getU(basisVec)
         #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
@@ -3202,8 +3221,8 @@ def find_closest_unitary_opmx(operationMx):
         return -_tools.fidelity(gate_JMx, JU)
 
     # print_obj_func = _opt.create_obj_func_printer(_objective_func)
-    solution = _spo.minimize(_objective_func, initialBasisVec,  options={'maxiter': 10000},
-                             method='Nelder-Mead',callback=None, tol=1e-8) # if verbosity > 2 else None
+    solution = _spo.minimize(_objective_func, initialBasisVec, options={'maxiter': 10000},
+                             method='Nelder-Mead', callback=None, tol=1e-8)  # if verbosity > 2 else None
     operationMx = getGateMx(solution.x)
 
     #print "DEBUG: Best fidelity = ",-solution.fun

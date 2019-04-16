@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import pickle as _pickle
-import os  as _os
+import os as _os
 import time as _time
 import collections as _collections
 import warnings as _warnings
@@ -16,7 +16,7 @@ import numpy as _np
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
-from ..tools   import timed_block as _timed_block
+from ..tools import timed_block as _timed_block
 
 from ..tools.mpitools import distribute_indices as _distribute_indices
 
@@ -35,17 +35,18 @@ from ..baseobjs.label import Label as _Lbl
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
+
 def _errgen_formula(errgen_type, typ):
-    assert(typ in ('html','latex'))
+    assert(typ in ('html', 'latex'))
 
     notDuringTxt = """This is <em>not</em> the Lindblad-type generator that would produce this noise if it acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that generates the ideal gate).  This choice is explicit; the authors of pyGSTi are concerned that reporting the continuous-time-generator would encourage a false sense of understanding the physics behind the noise, which is explicitly invalid if the gates were produced by anything other than a simple pulse."""
 
-    if errgen_type == "logTiG": # G = T*exp(L) (pre-error)
+    if errgen_type == "logTiG":  # G = T*exp(L) (pre-error)
         gen = '<span class="math">G = G_0 e^{\mathbb{L}}</span>'
         desc = ('<em>pre-gate</em> generator, so it answers the question '
                 '"If all the noise occurred <em>before</em> the ideal gate,'
                 ' what Lindbladian would generate it?" ') + notDuringTxt
-    elif errgen_type == "logGTi": # G = exp(L)*T (post-error)
+    elif errgen_type == "logGTi":  # G = exp(L)*T (post-error)
         gen = '<span class="math">G = e^{\mathbb{L}} G_0</span>'
         desc = ('<em>post-gate</em> generator, so it answers the question '
                 '"If all the noise occurred <em>after</em> the ideal gate,'
@@ -60,13 +61,14 @@ def _errgen_formula(errgen_type, typ):
     else:
         gen = desc = "???"
 
-    if typ == "latex": #minor modifications for latex version
-        gen = gen.replace('<span class="math">','$')
-        gen = gen.replace('</span>','$')
-        desc = desc.replace('<em>','\\emph{')
-        desc = desc.replace('</em>','}')
+    if typ == "latex":  # minor modifications for latex version
+        gen = gen.replace('<span class="math">', '$')
+        gen = gen.replace('</span>', '$')
+        desc = desc.replace('<em>', '\\emph{')
+        desc = desc.replace('</em>', '}')
 
     return gen, desc
+
 
 def _add_new_labels(running_lbls, current_lbls):
     """
@@ -75,12 +77,13 @@ def _add_new_labels(running_lbls, current_lbls):
     preserving order as best we can.
     """
     if running_lbls is None:
-        return current_lbls[:] #copy!
+        return current_lbls[:]  # copy!
     elif running_lbls != current_lbls:
         for lbl in current_lbls:
             if lbl not in running_lbls:
                 running_lbls.append(lbl)
     return running_lbls
+
 
 def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     """
@@ -92,10 +95,10 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     current_lbls = list(estimates.keys())
 
     def _add_lbl(lst, lbl):
-        if combine_robust and any([(lbl+suffix in current_lbls)
+        if combine_robust and any([(lbl + suffix in current_lbls)
                                    for suffix in ROBUST_SUFFIX_LIST]):
-            return #don't add label
-        lst.append(lbl) #add label
+            return  # don't add label
+        lst.append(lbl)  # add label
 
     if running_lbls is None:
         running_lbls = []
@@ -127,7 +130,7 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     printer = _VerbosityPrinter.build_printer(verbosity)
 
     if est.has_confidence_region_factory(mdl_lbl, 'final'):
-        crf = est.get_confidence_region_factory(mdl_lbl,'final')
+        crf = est.get_confidence_region_factory(mdl_lbl, 'final')
         if crf.can_construct_views():
             return crf
         else:
@@ -135,15 +138,14 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
                 ("Note: Confidence interval factory for {estlbl}.{gslbl} "
                  "model exists but cannot create views.  This could be "
                  "because you forgot to create a Hessian *projection*"
-                ).format(estlbl=est_lbl,gslbl=mdl_lbl))
+                 ).format(estlbl=est_lbl, gslbl=mdl_lbl))
     else:
         printer.log(
             ("Note: no factory to compute confidence "
              "intervals for the '{estlbl}.{gslbl}' model."
-            ).format(estlbl=est_lbl,gslbl=mdl_lbl))
+             ).format(estlbl=est_lbl, gslbl=mdl_lbl))
 
     return None
-
 
 
 def create_offline_zip(outputDir="."):
@@ -169,30 +171,31 @@ def create_offline_zip(outputDir="."):
     None
     """
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                "templates")
+                                 "templates")
 
     zipFName = _os.path.join(outputDir, "offline.zip")
     zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)
-    for root, _, files in _os.walk(_os.path.join(templatePath,"offline")):
+    for root, _, files in _os.walk(_os.path.join(templatePath, "offline")):
         for f in files:
             fullPath = _os.path.join(root, f)
-            zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
+            zipHandle.write(fullPath, _os.path.relpath(fullPath, templatePath))
     zipHandle.close()
+
 
 def _set_toggles(results_dict, brevity, combine_robust):
     #Determine when to get circuit weight (scaling) values and show via
     # ColorBoxPlots below by checking whether any estimate has "weights"
     # parameter (a dict) with > 0 entries.
-    toggles = { }
+    toggles = {}
 
     toggles["ShowScaling"] = False
     toggles["ShowUnmodeledError"] = False
     for res in results_dict.values():
         for est in res.estimates.values():
-            weights = est.parameters.get("weights",None)
+            weights = est.parameters.get("weights", None)
             if (weights is not None and len(weights) > 0):
                 toggles["ShowScaling"] = True
-            if est.parameters.get("unmodeled_error",None):
+            if est.parameters.get("unmodeled_error", None):
                 toggles["ShowUnmodeledError"] = True
 
     toggles['BrevityLT1'] = bool(brevity < 1)
@@ -202,6 +205,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
 
     toggles['CombineRobust'] = bool(combine_robust)
     return toggles
+
 
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                nmthreshold, printer, fmt,
@@ -227,12 +231,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
                                                list(est.goparameters.keys()))
 
-    Ls = list(sorted(Ls)) #make sure Ls are sorted in increasing order
+    Ls = list(sorted(Ls))  # make sure Ls are sorted in increasing order
     if fmt == "latex" and len(Ls) > 0:
-        swLs = [ Ls[-1] ] # "switched Ls" = just take the single largest L
+        swLs = [Ls[-1]]  # "switched Ls" = just take the single largest L
     else:
-        swLs = Ls #switch over all Ls
-
+        swLs = Ls  # switch over all Ls
 
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
@@ -240,55 +243,55 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     #multiL = bool(len(swLs) > 1)
 
     switchBd = ws.Switchboard(
-        ["Dataset","Estimate","Gauge-Opt","max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str,swLs))],
-        ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(swLs)-1],
-        show=[multidataset,multiest,multiGO,False] # "global" switches only + gauge-opt (OK if doesn't apply)
+        ["Dataset", "Estimate", "Gauge-Opt", "max(L)"],
+        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
+        ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
+        show=[multidataset, multiest, multiGO, False]  # "global" switches only + gauge-opt (OK if doesn't apply)
     )
 
-    switchBd.add("ds",(0,))
-    switchBd.add("prepStrs",(0,))
-    switchBd.add("effectStrs",(0,))
-    switchBd.add("strs",(0,))
-    switchBd.add("germs",(0,))
+    switchBd.add("ds", (0,))
+    switchBd.add("prepStrs", (0,))
+    switchBd.add("effectStrs", (0,))
+    switchBd.add("strs", (0,))
+    switchBd.add("germs", (0,))
 
-    switchBd.add("eff_ds",(0,1))
-    switchBd.add("modvi_ds",(0,1))
-    switchBd.add("wildcardBudget",(0,1))
-    switchBd.add("scaledSubMxsDict",(0,1))
-    switchBd.add("gsTarget",(0,1))
-    switchBd.add("params",(0,1))
-    switchBd.add("objective",(0,1))
-    switchBd.add("objective_tvd_tuple",(0,1))
-    switchBd.add("objective_modvi",(0,1))
-    switchBd.add("mpc",(0,1))
-    switchBd.add("mpc_modvi",(0,1))
-    switchBd.add("clifford_compilation",(0,1))
-    switchBd.add("meta_stdout",(0,1))
-    switchBd.add("profiler",(0,1))
+    switchBd.add("eff_ds", (0, 1))
+    switchBd.add("modvi_ds", (0, 1))
+    switchBd.add("wildcardBudget", (0, 1))
+    switchBd.add("scaledSubMxsDict", (0, 1))
+    switchBd.add("gsTarget", (0, 1))
+    switchBd.add("params", (0, 1))
+    switchBd.add("objective", (0, 1))
+    switchBd.add("objective_tvd_tuple", (0, 1))
+    switchBd.add("objective_modvi", (0, 1))
+    switchBd.add("mpc", (0, 1))
+    switchBd.add("mpc_modvi", (0, 1))
+    switchBd.add("clifford_compilation", (0, 1))
+    switchBd.add("meta_stdout", (0, 1))
+    switchBd.add("profiler", (0, 1))
 
-    switchBd.add("gsGIRep",(0,1))
-    switchBd.add("gsGIRepEP",(0,1))
-    switchBd.add("gsFinal",(0,1,2))
-    switchBd.add("gsEvalProjected",(0,1,2))
-    switchBd.add("gsTargetAndFinal",(0,1,2)) #general only!
-    switchBd.add("goparams",(0,1,2))
-    switchBd.add("gsL",(0,1,3))
-    switchBd.add("gsL_modvi",(0,1,3))
-    switchBd.add("gss",(0,3))
-    switchBd.add("gssFinal",(0,))
-    switchBd.add("gsAllL",(0,1))
-    switchBd.add("gsAllL_modvi",(0,1))
-    switchBd.add("gssAllL",(0,))
-    switchBd.add("gsFinalGrid",(2,))
+    switchBd.add("gsGIRep", (0, 1))
+    switchBd.add("gsGIRepEP", (0, 1))
+    switchBd.add("gsFinal", (0, 1, 2))
+    switchBd.add("gsEvalProjected", (0, 1, 2))
+    switchBd.add("gsTargetAndFinal", (0, 1, 2))  # general only!
+    switchBd.add("goparams", (0, 1, 2))
+    switchBd.add("gsL", (0, 1, 3))
+    switchBd.add("gsL_modvi", (0, 1, 3))
+    switchBd.add("gss", (0, 3))
+    switchBd.add("gssFinal", (0,))
+    switchBd.add("gsAllL", (0, 1))
+    switchBd.add("gsAllL_modvi", (0, 1))
+    switchBd.add("gssAllL", (0,))
+    switchBd.add("gsFinalGrid", (2,))
 
-    switchBd.add("idtresults",(0,))
+    switchBd.add("idtresults", (0,))
 
     if confidenceLevel is not None:
-        switchBd.add("cri",(0,1,2))
-        switchBd.add("criGIRep",(0,1))
+        switchBd.add("cri", (0, 1, 2))
+        switchBd.add("criGIRep", (0, 1))
 
-    for d,dslbl in enumerate(dataset_labels):
+    for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
 
         switchBd.ds[d] = results.dataset
@@ -299,22 +302,22 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         switchBd.germs[d] = results.circuit_lists['germs']
 
         switchBd.gssFinal[d] = results.circuit_structs['final']
-        for iL,L in enumerate(swLs): #allow different results to have different Ls
+        for iL, L in enumerate(swLs):  # allow different results to have different Ls
             if L in results.circuit_structs['final'].Ls:
                 k = results.circuit_structs['final'].Ls.index(L)
-                switchBd.gss[d,iL] = results.circuit_structs['iteration'][k]
+                switchBd.gss[d, iL] = results.circuit_structs['iteration'][k]
         switchBd.gssAllL[d] = results.circuit_structs['iteration']
 
         if idt_results_dict is not None:
-            switchBd.idtresults[d] = idt_results_dict.get(dslbl,None)
+            switchBd.idtresults[d] = idt_results_dict.get(dslbl, None)
 
-        for i,lbl in enumerate(est_labels):
-            est = results.estimates.get(lbl,None)
+        for i, lbl in enumerate(est_labels):
+            est = results.estimates.get(lbl, None)
             if est is None: continue
 
             for suffix in ROBUST_SUFFIX_LIST:
                 if combine_robust and lbl.endswith(suffix):
-                    est_modvi = results.estimates.get(lbl[:-len(suffix)],est)
+                    est_modvi = results.estimates.get(lbl[:-len(suffix)], est)
                     break
             else:
                 est_modvi = est
@@ -324,28 +327,28 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 if opt_objective == "lgst": return "logl"
                 else: return opt_objective
 
-            switchBd.params[d,i] = est.parameters
-            switchBd.objective[d,i] = rpt_objective(est.parameters['objective'])
-            switchBd.objective_tvd_tuple[d,i] = (rpt_objective(est.parameters['objective']),'tvd')
-            switchBd.objective_modvi[d,i] = rpt_objective(est_modvi.parameters['objective'])
+            switchBd.params[d, i] = est.parameters
+            switchBd.objective[d, i] = rpt_objective(est.parameters['objective'])
+            switchBd.objective_tvd_tuple[d, i] = (rpt_objective(est.parameters['objective']), 'tvd')
+            switchBd.objective_modvi[d, i] = rpt_objective(est_modvi.parameters['objective'])
             if est.parameters['objective'] == "logl":
-                switchBd.mpc[d,i] = est.parameters['minProbClip']
-                switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClip']
+                switchBd.mpc[d, i] = est.parameters['minProbClip']
+                switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClip']
             elif est.parameters['objective'] == "chi2":
-                switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
-                switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClipForWeighting']
-            else: # "lgst" - just use defaults for logl
-                switchBd.mpc[d,i] = 1e-4
-                switchBd.mpc_modvi[d,i] = 1e-4
-            switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",'auto')
-            if switchBd.clifford_compilation[d,i] == 'auto':
-                switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(
-                    est.models['target'],printer)
+                switchBd.mpc[d, i] = est.parameters['minProbClipForWeighting']
+                switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClipForWeighting']
+            else:  # "lgst" - just use defaults for logl
+                switchBd.mpc[d, i] = 1e-4
+                switchBd.mpc_modvi[d, i] = 1e-4
+            switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
+            if switchBd.clifford_compilation[d, i] == 'auto':
+                switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
+                    est.models['target'], printer)
 
-            switchBd.profiler[d,i] = est_modvi.parameters.get('profiler',None)
-            switchBd.meta_stdout[d,i] = est_modvi.meta.get('stdout',[('LOG',1,"No standard output recorded")])
+            switchBd.profiler[d, i] = est_modvi.parameters.get('profiler', None)
+            switchBd.meta_stdout[d, i] = est_modvi.meta.get('stdout', [('LOG', 1, "No standard output recorded")])
 
-            GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
+            GIRepLbl = 'final iteration estimate'  # replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
                 if _get_viewable_crf(est, lbl, GIRepLbl) is None:
                     for l in gauge_opt_labels:
@@ -359,50 +362,50 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             #if this estimate uses robust scaling or wildcard budget
             NA = ws.NotApplicable()
-            if est.parameters.get("weights",None):
+            if est.parameters.get("weights", None):
                 effds, scale_subMxs = est.get_effective_dataset(True)
-                switchBd.eff_ds[d,i] = effds
-                switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
-                switchBd.modvi_ds[d,i] = results.dataset if combine_robust else effds
+                switchBd.eff_ds[d, i] = effds
+                switchBd.scaledSubMxsDict[d, i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
+                switchBd.modvi_ds[d, i] = results.dataset if combine_robust else effds
             else:
-                switchBd.modvi_ds[d,i] = results.dataset
-                switchBd.eff_ds[d,i] = NA
-                switchBd.scaledSubMxsDict[d,i] = NA
+                switchBd.modvi_ds[d, i] = results.dataset
+                switchBd.eff_ds[d, i] = NA
+                switchBd.scaledSubMxsDict[d, i] = NA
 
-            if est.parameters.get("unmodeled_error",None):
-                switchBd.wildcardBudget[d,i] = est.parameters['unmodeled_error']
+            if est.parameters.get("unmodeled_error", None):
+                switchBd.wildcardBudget[d, i] = est.parameters['unmodeled_error']
             else:
-                switchBd.wildcardBudget[d,i] = NA
+                switchBd.wildcardBudget[d, i] = NA
 
-            switchBd.gsTarget[d,i] = est.models['target']
-            switchBd.gsGIRep[d,i] = est.models[GIRepLbl]
+            switchBd.gsTarget[d, i] = est.models['target']
+            switchBd.gsGIRep[d, i] = est.models[GIRepLbl]
             try:
-                switchBd.gsGIRepEP[d,i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
-                                                                              est.models['target'])
-            except AttributeError: # Implicit models don't support everything, like set_all_parameterizations
-                switchBd.gsGIRepEP[d,i] = None
+                switchBd.gsGIRepEP[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
+                                                                               est.models['target'])
+            except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
+                switchBd.gsGIRepEP[d, i] = None
 
-            switchBd.gsFinal[d,i,:] = [ est.models.get(l,NA) for l in gauge_opt_labels ]
-            switchBd.gsTargetAndFinal[d,i,:] = \
-                        [ [est.models['target'], est.models[l]] if (l in est.models) else NA
-                          for l in gauge_opt_labels ]
-            switchBd.goparams[d,i,:] = [ est.goparameters.get(l,NA) for l in gauge_opt_labels]
+            switchBd.gsFinal[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
+            switchBd.gsTargetAndFinal[d, i, :] = \
+                [[est.models['target'], est.models[l]] if (l in est.models) else NA
+                 for l in gauge_opt_labels]
+            switchBd.goparams[d, i, :] = [est.goparameters.get(l, NA) for l in gauge_opt_labels]
 
-            for iL,L in enumerate(swLs): #allow different results to have different Ls
+            for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in results.circuit_structs['final'].Ls:
                     k = results.circuit_structs['final'].Ls.index(L)
-                    switchBd.gsL[d,i,iL] = est.models['iteration estimates'][k]
-                    switchBd.gsL_modvi[d,i,iL] = est_modvi.models['iteration estimates'][k]
-            switchBd.gsAllL[d,i] = est.models['iteration estimates']
-            switchBd.gsAllL_modvi[d,i] = est_modvi.models['iteration estimates']
+                    switchBd.gsL[d, i, iL] = est.models['iteration estimates'][k]
+                    switchBd.gsL_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
+            switchBd.gsAllL[d, i] = est.models['iteration estimates']
+            switchBd.gsAllL_modvi[d, i] = est_modvi.models['iteration estimates']
 
             if confidenceLevel is not None:
                 misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
 
-                for il,l in enumerate(gauge_opt_labels):
+                for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
-                        switchBd.cri[d,i,il] = None #default
-                        crf = _get_viewable_crf(est, lbl, l, printer-2)
+                        switchBd.cri[d, i, il] = None  # default
+                        crf = _get_viewable_crf(est, lbl, l, printer - 2)
 
                         if crf is not None:
                             #Check whether we should use non-Markovian error bars:
@@ -411,50 +414,51 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                             # experimental non-markovian error bars.
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
-                            switchBd.cri[d,i,il] = crf.view(confidenceLevel, region_type)
+                            switchBd.cri[d, i, il] = crf.view(confidenceLevel, region_type)
 
-                    else: switchBd.cri[d,i,il] = NA
+                    else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
                 #  relevant warnings/notes should have been given above.
-                switchBd.criGIRep[d,i] = None #default
+                switchBd.criGIRep[d, i] = None  # default
                 crf = _get_viewable_crf(est, lbl, GIRepLbl)
                 if crf is not None:
                     region_type = "normal" if misfit_sigma <= nmthreshold \
                                   else "non-markovian"
-                    switchBd.criGIRep[d,i] = crf.view(confidenceLevel, region_type)
+                    switchBd.criGIRep[d, i] = crf.view(confidenceLevel, region_type)
 
     results_list = [results_dict[dslbl] for dslbl in dataset_labels]
-    for i,gokey in enumerate(gauge_opt_labels):
+    for i, gokey in enumerate(gauge_opt_labels):
         if multidataset:
             switchBd.gsFinalGrid[i] = [
-                [ (res.estimates[el].models.get(gokey,None)
-                   if el in res.estimates else None) for el in est_labels ]
-                for res in results_list ]
+                [(res.estimates[el].models.get(gokey, None)
+                  if el in res.estimates else None) for el in est_labels]
+                for res in results_list]
         else:
             switchBd.gsFinalGrid[i] = [
-                (results_list[0].estimates[el].models.get(gokey,None)
-                   if el in results_list[0].estimates else None) for el in est_labels ]
+                (results_list[0].estimates[el].models.get(gokey, None)
+                 if el in results_list[0].estimates else None) for el in est_labels]
 
     if multidataset:
         switchBd.add_unswitched('gsTargetGrid', [
-            [ (res.estimates[el].models.get('target',None)
-               if el in res.estimates else None) for el in est_labels ]
-            for res in results_list ])
+            [(res.estimates[el].models.get('target', None)
+              if el in res.estimates else None) for el in est_labels]
+            for res in results_list])
     else:
         switchBd.add_unswitched('gsTargetGrid', [
-            (results_list[0].estimates[el].models.get('target',None)
+            (results_list[0].estimates[el].models.get('target', None)
              if el in results_list[0].estimates else None) for el in est_labels])
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
+
 def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
-    """ 
+    """
     Constructs a dictionary of idle tomography results, parallel
     to the GST results in `gst_results_dict`, where possible.
     """
-    if idtPauliDicts is None: 
+    if idtPauliDicts is None:
         return {}
 
     idt_results_dict = {}
@@ -462,38 +466,39 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
 
     from ..extras import idletomography as _idt
     autodict = bool(idtPauliDicts == "auto")
-    for ky,results in gst_results_dict.items():
+    for ky, results in gst_results_dict.items():
 
         if autodict:
             for est in results.estimates.values():
                 if 'target' in est.models:
                     idt_target = est.models['target']
                     break
-            else: continue # can't find any target models
+            else: continue  # can't find any target models
             idtPauliDicts = _idt.determine_paulidicts(idt_target)
-            if idtPauliDicts is None: 
-                continue # automatic creation failed -> skip
+            if idtPauliDicts is None:
+                continue  # automatic creation failed -> skip
 
         gss = results.circuit_structs['final']
         if GiStr not in gss.germs: continue
-        
-        try: # to get a dimension -> nQubits
+
+        try:  # to get a dimension -> nQubits
             estLabels = list(results.estimates.keys())
             estimate0 = results.estimates[estLabels[0]]
             dim = estimate0.models['target'].dim
-            nQubits = int(round(_np.log2(dim)//2))
+            nQubits = int(round(_np.log2(dim) // 2))
             idStr = ('Gi',) if 'Gi' in estimate0.models['target'].get_primitive_op_labels() else ((),)
         except:
             printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
-            continue # skip if we can't get dimension
+            continue  # skip if we can't get dimension
 
         maxLengths = gss.Ls
-        plaq = gss.get_plaquette(maxLengths[0], GiStr) # just use "L0" (first maxLength) - all should have same fidpairs
+        # just use "L0" (first maxLength) - all should have same fidpairs
+        plaq = gss.get_plaquette(maxLengths[0], GiStr)
         pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
         idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
-                                             maxweight=2, #HARDCODED for now (FUTURE)
+                                             maxweight=2,  # HARDCODED for now (FUTURE)
                                              idle_string=idStr, advancedOptions=idt_advanced)
         idt_results_dict[ky] = idtresults
 
@@ -507,41 +512,40 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
         for est in results.estimates.values():
             if 'target' in est.models:
                 op_labels = _add_new_labels(op_labels,
-                                              list(est.models['target'].operations.keys()))
+                                            list(est.models['target'].operations.keys()))
 
     if bGaugeInv:
-        metric_abbrevs = ["evinf", "evagi","evnuinf","evnuagi","evdiamond",
+        metric_abbrevs = ["evinf", "evagi", "evnuinf", "evnuagi", "evdiamond",
                           "evnudiamond"]
     else:
-        metric_abbrevs = ["inf","agi","trace","diamond","nuinf","nuagi",
+        metric_abbrevs = ["inf", "agi", "trace", "diamond", "nuinf", "nuagi",
                           "frob"]
-    metric_names = [ _reportables.info_of_opfn_by_name(abbrev)[0].replace('|',' ')
-                     for abbrev in metric_abbrevs ]
+    metric_names = [_reportables.info_of_opfn_by_name(abbrev)[0].replace('|', ' ')
+                    for abbrev in metric_abbrevs]
 
-    if len(dataset_labels) > 1: # multidataset
+    if len(dataset_labels) > 1:  # multidataset
         metric_switchBd = ws.Switchboard(
             ["Metric", "Operation"], [metric_names, op_labels],
-            ["dropdown", "dropdown"], [0,0], show=[True,True] )
-        metric_switchBd.add("opLabel",(1,))
-        metric_switchBd.add("metric",(0,))
-        metric_switchBd.add("cmpTableTitle",(0,1))
+            ["dropdown", "dropdown"], [0, 0], show=[True, True])
+        metric_switchBd.add("opLabel", (1,))
+        metric_switchBd.add("metric", (0,))
+        metric_switchBd.add("cmpTableTitle", (0, 1))
 
         metric_switchBd.opLabel[:] = op_labels
-        for i,gl in enumerate(op_labels):
-            metric_switchBd.cmpTableTitle[:,i] = ["%s %s" % (gl,nm) for nm in metric_names]
+        for i, gl in enumerate(op_labels):
+            metric_switchBd.cmpTableTitle[:, i] = ["%s %s" % (gl, nm) for nm in metric_names]
 
     else:
         metric_switchBd = ws.Switchboard(
             ["Metric"], [metric_names],
-            ["dropdown"], [0], show=[True] )
-        metric_switchBd.add("metric",(0,))
-        metric_switchBd.add("cmpTableTitle",(0,))
+            ["dropdown"], [0], show=[True])
+        metric_switchBd.add("metric", (0,))
+        metric_switchBd.add("cmpTableTitle", (0,))
         metric_switchBd.cmpTableTitle[:] = metric_names
 
     metric_switchBd.metric[:] = metric_abbrevs
 
     return metric_switchBd
-
 
 
 def create_general_report(results, filename, title="auto",
@@ -554,16 +558,16 @@ def create_general_report(results, filename, title="auto",
                           verbosity=1):
     """ DEPRECATED: use pygsti.report.create_standard_report(...) """
     _warnings.warn(
-            ('create_general_report(...) will be removed from pyGSTi.\n'
-             '  This function only ever existed in beta versions and will\n'
-             '  be removed completely soon.  Please update this call with:\n'
-             '  pygsti.report.create_standard_report(...)\n'))
+        ('create_general_report(...) will be removed from pyGSTi.\n'
+         '  This function only ever existed in beta versions and will\n'
+         '  be removed completely soon.  Please update this call with:\n'
+         '  pygsti.report.create_standard_report(...)\n'))
 
 
 def create_standard_report(results, filename, title="auto",
-                            confidenceLevel=None, comm=None, ws=None,
-                            auto_open=False, link_to=None, brevity=0,
-                            advancedOptions=None, verbosity=1):
+                           confidenceLevel=None, comm=None, ws=None,
+                           auto_open=False, link_to=None, brevity=0,
+                           advancedOptions=None, verbosity=1):
     """
     Create a "standard" GST report, containing details about each estimate
     in `results` individually.
@@ -722,28 +726,28 @@ def create_standard_report(results, filename, title="auto",
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
 
     if advancedOptions is None: advancedOptions = {}
-    linlogPercentile = advancedOptions.get('linlog percentile',5)
+    linlogPercentile = advancedOptions.get('linlog percentile', 5)
     errgen_type = advancedOptions.get('error generator type', "logGTi")
-    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD)
+    nmthreshold = advancedOptions.get('nm threshold', DEFAULT_BAD_FIT_THRESHOLD)
     precision = advancedOptions.get('precision', None)
-    cachefile = advancedOptions.get('cachefile',None)
-    connected = advancedOptions.get('connected',False)
-    resizable = advancedOptions.get('resizable',True)
-    autosize = advancedOptions.get('autosize','initial')
-    combine_robust = advancedOptions.get('combine_robust',True)
-    ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
-    idtIdleOp = advancedOptions.get('idt_idle_oplabel',_Lbl('Gi'))
+    cachefile = advancedOptions.get('cachefile', None)
+    connected = advancedOptions.get('connected', False)
+    resizable = advancedOptions.get('resizable', True)
+    autosize = advancedOptions.get('autosize', 'initial')
+    combine_robust = advancedOptions.get('combine_robust', True)
+    ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
+    idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
     else:
         fmt = "html"
-        
+
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
 
-    if isinstance(title,int): #to catch backward compatibility issues
+    if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
                           " specifying an int here because in older versions of pyGSTi"
                           " the third argument to create_general_report was the"
@@ -753,12 +757,12 @@ def create_standard_report(results, filename, title="auto",
         if filename is not None:
             autoname = _autotitle.generate_name()
             title = "GST Report for " + autoname
-            _warnings.warn( ("You should really specify `title=` when generating reports,"
-                             " as this makes it much easier to identify them later on.  "
-                             "Since you didn't, pyGSTi has generated a random one"
-                             " for you: '{}'.").format(autoname))
+            _warnings.warn(("You should really specify `title=` when generating reports,"
+                            " as this makes it much easier to identify them later on.  "
+                            "Since you didn't, pyGSTi has generated a random one"
+                            " for you: '{}'.").format(autoname))
         else:
-            title = "N/A" # No title - but it doesn't matter since filename is None
+            title = "N/A"  # No title - but it doesn't matter since filename is None
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     toggles = _set_toggles(results_dict, brevity, combine_robust)
@@ -768,7 +772,8 @@ def create_standard_report(results, filename, title="auto",
     #_ws.WorkspaceOutput.default_render_options['click_to_display'] = True #don't render any plots until they're clicked
     #_ws.WorkspaceOutput.default_render_options['render_math'] = renderMath #don't render any math
 
-    qtys = {} # stores strings to be inserted into report template
+    qtys = {}  # stores strings to be inserted into report template
+
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
@@ -779,12 +784,12 @@ def create_standard_report(results, filename, title="auto",
     qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
-    qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
+    qtys['linlg_pcntle'] = "%d" % round(linlogPercentile)  # to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
     qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
 
-    pdfInfo = [('Author','pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
+    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     # Perform idle tomography on datasets if desired (need to do
@@ -794,7 +799,7 @@ def create_standard_report(results, filename, title="auto",
                                                  results_dict, printer)
     except Exception as e:
         _warnings.warn("Idle tomography failed:\n" + str(e))
-        idt_results_dict = {}        
+        idt_results_dict = {}
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
 
     # Generate Switchboard
@@ -802,11 +807,11 @@ def create_standard_report(results, filename, title="auto",
 
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-            _create_master_switchboard(ws, results_dict, confidenceLevel,
-                                       nmthreshold, printer, fmt,
-                                       combine_robust, idt_results_dict)
+        _create_master_switchboard(ws, results_dict, confidenceLevel,
+                                   nmthreshold, printer, fmt,
+                                   combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
-                         len(gauge_opt_labels) > 1 or len(swLs) > 1):
+                           len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
                          " estimate, and gauge optimization.")
 
@@ -821,7 +826,7 @@ def create_standard_report(results, filename, title="auto",
 
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
-        for some_cri in switchBd.cri.flat: #can have only some confidence regions
+        for some_cri in switchBd.cri.flat:  # can have only some confidence regions
             if some_cri is not None and not isinstance(some_cri, _ws.NotApplicable):
                 qtys['confidenceIntervalScaleFctr'] = "%.3g" % some_cri.intervalScaling
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
@@ -834,13 +839,13 @@ def create_standard_report(results, filename, title="auto",
     ##goView = [multidataset,multiest,multiGO,False]
     ##maxLView = [multidataset,multiest,False,multiL]
     #goView = [False,False,multiGO,False]
-    maxLView = [False,False,False,multiL]
+    maxLView = [False, False, False, multiL]
 
     if fmt == "html":
         qtys['topSwitchboard'] = switchBd
         #qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
         #qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
-        qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
+        qtys['maxLSwitchboard1'] = switchBd.view(maxLView, "v6")
 
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
@@ -851,7 +856,7 @@ def create_standard_report(results, filename, title="auto",
     germs = switchBd.germs
     strs = switchBd.strs
     cliffcomp = switchBd.clifford_compilation
-    A = None # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
+    A = None  # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
 
     #Brevity key:
     # 1: Plots involving quantities for individual sequences disappear at brevity=1
@@ -859,82 +864,82 @@ def create_standard_report(results, filename, title="auto",
     # 3: Germ estimate tables disappear at brevity=3
     # 4: Everything but summary figs disappear at brevity=4
 
-    addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
-    addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
-    addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
+    addqty(2, 'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
+    addqty(2, 'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
+    addqty(2, 'datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
     gsFinal = switchBd.gsFinal
     gsGIRep = switchBd.gsGIRep
     gsEP = switchBd.gsGIRepEP
     cri_base = switchBd.cri if (confidenceLevel is not None) else None
     criGIRep_base = switchBd.criGIRep if (confidenceLevel is not None) else None
-    cri      = lambda l: cri_base if ci_brevity <= l else None
-    criGIRep = lambda l: criGIRep_base if ci_brevity <= l else None
+    def cri(l): return cri_base if ci_brevity <= l else None
+    def criGIRep(l): return criGIRep_base if ci_brevity <= l else None
 
     # Non-summary gate estimates
     # Germ
-    addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], cri(1) )
-    addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], 'boxes', cri(1), includeHSVec=False)
-    addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri(1))
-    addqty(A,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
-    addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
-                                                     ['Target','Estimated'], "boxes", cri(1))
-    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri(1), display=("boxplot","barplot"))
-    addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri(0))
-    addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep(1),
-           display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
-    addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep(1),
-           display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
+    addqty(4, 'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
+           ['Target', 'Estimated'], cri(1))
+    addqty(4, 'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
+           ['Target', 'Estimated'], 'boxes', cri(1), includeHSVec=False)
+    addqty(4, 'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri(1))
+    addqty(A, 'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+    addqty(4, 'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
+           ['Target', 'Estimated'], "boxes", cri(1))
+    addqty(4, 'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri(1), display=("boxplot", "barplot"))
+    addqty(4, 'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri(0))
+    addqty(4, 'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep(1),
+           display=('evals', 'target', 'absdiff-evals', 'infdiff-evals', 'log-evals', 'absdiff-log-evals'))
+    addqty(3, 'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep(1),
+           display=('evals', 'target', 'absdiff-evals', 'infdiff-evals', 'log-evals', 'absdiff-log-evals'),
            virtual_ops=germs)
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
-    addqty(4,'bestGatesetVsTargetTable', ws.ModelVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
-    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
-                                        display=('inf','agi','trace','diamond','nuinf','nuagi'))
-    addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
-                                        display=('inf','trace','nuinf'), virtual_ops=germs)
-    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1),
-                                        display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
-    addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
-                                        display=('evdiamond','evnudiamond'), virtual_ops=germs)
+    addqty(4, 'bestGatesetVsTargetTable', ws.ModelVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    addqty(4, 'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
+           display=('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi'))
+    addqty(3, 'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
+           display=('inf', 'trace', 'nuinf'), virtual_ops=germs)
+    addqty(4, 'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1),
+           display=('evinf', 'evagi', 'evnuinf', 'evnuagi', 'evdiamond', 'evnudiamond'))
+    addqty(3, 'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
+           display=('evdiamond', 'evnudiamond'), virtual_ops=germs)
 
-    summary_display = ('inf','trace','diamond','evinf','evdiamond'); wildcardBudget = None
+    summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond'); wildcardBudget = None
     if toggles["ShowUnmodeledError"]:
         summary_display += ('unmodeled',)
         wildcardBudget = switchBd.wildcardBudget
-    addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
+    addqty(A, 'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
            display=summary_display, wildcard=wildcardBudget)
 
-    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
-                                                           "boxes", errgen_type)
-    addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
-    addqty(2,'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
-    addqty(2,'profilerTable', ws.ProfilerTable, switchBd.profiler)
-    addqty(2,'softwareEnvTable', ws.SoftwareEnvTable)
-    addqty(A,'exampleTable', ws.ExampleTable)
+    addqty(4, 'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen", "H", "S", "A"),
+           "boxes", errgen_type)
+    addqty(2, 'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
+    addqty(2, 'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
+    addqty(2, 'profilerTable', ws.ProfilerTable, switchBd.profiler)
+    addqty(2, 'softwareEnvTable', ws.SoftwareEnvTable)
+    addqty(A, 'exampleTable', ws.ExampleTable)
     qtys['exampleTable'].set_render_options(click_to_display=True)
 
-      # single-metric comparison tables
+    # single-metric comparison tables
     gvmetric_switchBd = _create_single_metric_switchboard(ws, results_dict, False,
-                                                        dataset_labels, est_labels)
+                                                          dataset_labels, est_labels)
     gimetric_switchBd = _create_single_metric_switchboard(ws, results_dict, True,
-                                                        dataset_labels, est_labels)
+                                                          dataset_labels, est_labels)
     qtys['metricSwitchboard_gv'] = gvmetric_switchBd
     qtys['metricSwitchboard_gi'] = gimetric_switchBd
     if multidataset:
-        addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
+        addqty(4, 'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
                gvmetric_switchBd.cmpTableTitle, gvmetric_switchBd.opLabel, confidenceRegionInfo=None)
-        addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
+        addqty(4, 'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
                gimetric_switchBd.cmpTableTitle, gimetric_switchBd.opLabel, confidenceRegionInfo=None)
 
     else:
-        addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
+        addqty(4, 'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
                gvmetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
-        addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
+        addqty(4, 'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
                gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
 
@@ -942,188 +947,182 @@ def create_standard_report(results, filename, title="auto",
         #Plots & tables for idle tomography tab
         #idt_switchBd = _create_idle_tomography_switchboard(ws, idt_results_dict)
         #qtys['idtSwitchboard'] = idt_switchBd
-        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
-        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
-               20, gsGIRep) # HARDCODED - show only top 20 rates
+        addqty(A, 'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3, 'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep)  # HARDCODED - show only top 20 rates
 
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gsL_modvi = switchBd.gsL_modvi
     gssAllL = switchBd.gssAllL
-    addqty(2,'fiducialListTable', ws.CircuitTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
-    addqty(2,'prepStrListTable', ws.CircuitTable, prepStrs,"Preparation Fiducials")
-    addqty(2,'effectStrListTable', ws.CircuitTable, effectStrs,"Measurement Fiducials")
-    addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty(2,'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
-    addqty(4,'progressTable', ws.FitComparisonTable,
+    addqty(2, 'fiducialListTable', ws.CircuitTable, strs, ["Prep.", "Measure"], commonTitle="Fiducials")
+    addqty(2, 'prepStrListTable', ws.CircuitTable, prepStrs, "Preparation Fiducials")
+    addqty(2, 'effectStrListTable', ws.CircuitTable, effectStrs, "Measurement Fiducials")
+    addqty(1, 'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
+    addqty(2, 'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
+    addqty(4, 'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Generate plots
     printer.log("*** Generating plots ***")
 
-    addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+    addqty(4, 'gramBarPlot', ws.GramMatrixBarPlot, ds, gsTgt, 10, strs)
 
-
-    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot,
+    addqty(4, 'progressBarPlot', ws.FitComparisonBarPlot,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
-    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm) #just duplicate for now
+    addqty(A, 'progressBarPlot_sum', ws.FitComparisonBarPlot,
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)  # just duplicate for now
 
     # Don't display "Target" in model violation summary, as it's often
     # huge and messes up the plot scale.
-    est_inds_mt = [ i for i,l in enumerate(est_labels) if l != "Target" ]
-    est_lbls_mt = [ est_labels[i] for i in est_inds_mt ] # "minus target"
+    est_inds_mt = [i for i, l in enumerate(est_labels) if l != "Target"]
+    est_lbls_mt = [est_labels[i] for i in est_inds_mt]  # "minus target"
     Nd = len(dataset_labels)
     Ne = len(est_inds_mt)
-    grid_objective = switchBd.objective_modvi[0,0] #just take first one for now
+    grid_objective = switchBd.objective_modvi[0, 0]  # just take first one for now
+
     def na_to_none(x):
         return None if isinstance(x, _ws.NotApplicable) else x
 
     if multidataset:
-        dsGrid = [ [ na_to_none(switchBd.modvi_ds[d,i]) for i in est_inds_mt]
-                   for d in range(Nd)]
-        gssGrid = [ [na_to_none(switchBd.gssFinal[i])]*Ne for i in range(Nd) ]
-        gsGrid = [ [ na_to_none(switchBd.gsL_modvi[d,i,-1]) for i in est_inds_mt]
-                   for d in range(Nd)]
-        addqty(A,'finalFitComparePlot', ws.FitComparisonBoxPlot,
+        dsGrid = [[na_to_none(switchBd.modvi_ds[d, i]) for i in est_inds_mt]
+                  for d in range(Nd)]
+        gssGrid = [[na_to_none(switchBd.gssFinal[i])] * Ne for i in range(Nd)]
+        gsGrid = [[na_to_none(switchBd.gsL_modvi[d, i, -1]) for i in est_inds_mt]
+                  for d in range(Nd)]
+        addqty(A, 'finalFitComparePlot', ws.FitComparisonBoxPlot,
                est_lbls_mt, dataset_labels,
                gssGrid, gsGrid, dsGrid, grid_objective, comm=comm)
     else:
-        dsGrid = [ na_to_none(switchBd.modvi_ds[0,i]) for i in est_inds_mt ]
-        gssGrid =[ na_to_none(switchBd.gssFinal[0])]*Ne
-        gsGrid = [ na_to_none(switchBd.gsL_modvi[0,i,-1]) for i in est_inds_mt]
-        addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot,
+        dsGrid = [na_to_none(switchBd.modvi_ds[0, i]) for i in est_inds_mt]
+        gssGrid = [na_to_none(switchBd.gssFinal[0])] * Ne
+        gsGrid = [na_to_none(switchBd.gsL_modvi[0, i, -1]) for i in est_inds_mt]
+        addqty(A, 'finalFitComparePlot', ws.FitComparisonBarPlot,
                est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate', comm=comm)
 
-    addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
+    addqty(1, 'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
-            click_to_display=False, valign='bottom')
+        click_to_display=False, valign='bottom')
 
-    addqty(1,'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
+    addqty(1, 'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
            'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
-            click_to_display=False, valign='bottom')
+        click_to_display=False, valign='bottom')
 
-    addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
-        switchBd.objective, gss, modvi_ds, gsL_modvi,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm)
-          #TODO: L-switchboard on modvi overview page?
+    addqty(1, 'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
+           switchBd.objective, gss, modvi_ds, gsL_modvi,
+           linlg_pcntle=float(linlogPercentile) / 100,
+           minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm)
+    #TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
-    addqty(A,'bestEstimateColorHistogram', ws.ColorBoxPlot,
-        switchBd.objective, gss, modvi_ds, gsL_modvi,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi,
-        typ="histogram", comm=comm) #TODO: L-switchboard on summary page?
-
+    addqty(A, 'bestEstimateColorHistogram', ws.ColorBoxPlot,
+           switchBd.objective, gss, modvi_ds, gsL_modvi,
+           linlg_pcntle=float(linlogPercentile) / 100,
+           minProbClipForWeighting=switchBd.mpc_modvi,
+           typ="histogram", comm=comm)  # TODO: L-switchboard on summary page?
 
     if combine_robust:
-        
+
         # plots for robust data-scaling tab
-        
+
         # model-violation (using _modvi variables) plots show pre-scaling
         # violation, so we create# additional _scl plots to separately show
         # post-scaling violation (using eff_ds and non-_modvi variables).
         # Note that 'eff_ds' is NA for estimates that have no scaling, so that
         # duplicate plots (for estiamtes without scaling) are avoided.
 
-        addqty(4,'progressTable_scl', ws.FitComparisonTable,
+        addqty(4, 'progressTable_scl', ws.FitComparisonTable,
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
-        addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot,
+        addqty(4, 'progressBarPlot_scl', ws.FitComparisonBarPlot,
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
         #Not pagniated currently... just set to same full plot
-        addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
-            switchBd.objective, gss, eff_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, comm=comm)
+        addqty(1, 'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
+               switchBd.objective, gss, eff_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, comm=comm)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
-                click_to_display=False, valign='bottom')
+            click_to_display=False, valign='bottom')
 
-        addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
+        addqty(1, 'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm)
 
-        addqty(A,'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
+        addqty(A, 'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm)
 
         #Plots for unmodeled error tab
-        addqty(4,'progressTable_ume', ws.FitComparisonTable,
+        addqty(4, 'progressTable_ume', ws.FitComparisonTable,
                Ls, gssAllL, switchBd.gsAllL, modvi_ds, switchBd.objective, 'L', comm=comm,
                wildcard=switchBd.wildcardBudget)
 
-        addqty(4,'progressBarPlot_ume', ws.FitComparisonBarPlot,
-               Ls, gssAllL, switchBd.gsAllL, modvi_ds, switchBd.objective, 'L', comm=comm, # robust-scaled version
+        addqty(4, 'progressBarPlot_ume', ws.FitComparisonBarPlot,
+               Ls, gssAllL, switchBd.gsAllL, modvi_ds, switchBd.objective, 'L', comm=comm,  # robust-scaled version
                wildcard=switchBd.wildcardBudget)
 
         #Not pagniated currently... just set to same full plot
-        addqty(1,'bestEstimateColorBoxPlot_ume', ws.ColorBoxPlot,
-            switchBd.objective, gss, modvi_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, comm=comm,
-            wildcard=switchBd.wildcardBudget)
+        addqty(1, 'bestEstimateColorBoxPlot_ume', ws.ColorBoxPlot,
+               switchBd.objective, gss, modvi_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, comm=comm,
+               wildcard=switchBd.wildcardBudget)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_ume'].set_render_options(
-                click_to_display=False, valign='bottom')
+            click_to_display=False, valign='bottom')
 
-        addqty(1,'bestEstimateColorScatterPlot_ume', ws.ColorBoxPlot,
+        addqty(1, 'bestEstimateColorScatterPlot_ume', ws.ColorBoxPlot,
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm,
                wildcard=switchBd.wildcardBudget)
 
-        addqty(A,'bestEstimateColorHistogram_ume', ws.ColorBoxPlot,
+        addqty(A, 'bestEstimateColorHistogram_ume', ws.ColorBoxPlot,
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm,
                wildcard=switchBd.wildcardBudget)
 
-
-
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
-    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot,
+    addqty(1, 'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
            submatrices=switchBd.scaledSubMxsDict, comm=comm)
 
-    addqty(1,'unmodeledErrorBudgetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, None,
+    addqty(1, 'unmodeledErrorBudgetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, None,
            display=('unmodeled',), wildcard=switchBd.wildcardBudget)
-
-
-
 
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
         comparable = True
-        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use circuit_lists['final']??
+        gstrCmpList = list(results_dict[dataset_labels[0]].dataset.keys())  # maybe use circuit_lists['final']??
         for dslbl in dataset_labels:
             if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
                 _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
-                comparable=False; break
+                comparable = False; break
 
         if comparable:
             #initialize a new "dataset comparison switchboard"
             dscmp_switchBd = ws.Switchboard(
-                ["Dataset1","Dataset2"],
+                ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons","buttons"], [0,1]
+                ["buttons", "buttons"], [0, 1]
             )
-            dscmp_switchBd.add("dscmp",(0,1))
-            dscmp_switchBd.add("dscmp_gss",(0,))
-            dscmp_switchBd.add("refds",(0,))
+            dscmp_switchBd.add("dscmp", (0, 1))
+            dscmp_switchBd.add("dscmp_gss", (0,))
+            dscmp_switchBd.add("refds", (0,))
 
             for d1, dslbl1 in enumerate(dataset_labels):
                 dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
-                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
+                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset  # only used for #of spam labels below
 
             dsComp = dict()
             all_dsComps = dict()
@@ -1144,7 +1143,7 @@ def create_standard_report(results, filename, title="auto",
                         ds2 = results_dict[dslbl2].dataset
                         dsc = _DataComparator(
                             [ds1, ds2], DS_names=[dslbl1, dslbl2])
-                        dsc.implement() # to perform processing
+                        dsc.implement()  # to perform processing
                         dsComp[(d1, d2)] = dsc
                 dicts = comm.gather(dsComp, root=0)
                 if rank == 0:
@@ -1152,32 +1151,31 @@ def create_standard_report(results, filename, title="auto",
                         for k, v in d.items():
                             d1, d2 = k
                             dscmp_switchBd.dscmp[d1, d2] = v
-                            all_dsComps[(d1,d2)] = v
+                            all_dsComps[(d1, d2)] = v
             else:
                 for d1, d2 in indices:
                     dslbl1 = dataset_labels[d1]
                     dslbl2 = dataset_labels[d2]
                     ds1 = results_dict[dslbl1].dataset
                     ds2 = results_dict[dslbl2].dataset
-                    dsc = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
-                    dsc.implement() # to perform processing
-                    all_dsComps[(d1,d2)] = dsc
-                    dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
+                    dsc = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                    dsc.implement()  # to perform processing
+                    all_dsComps[(d1, d2)] = dsc
+                    dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 
             qtys['dscmpSwitchboard'] = dscmp_switchBd
-            addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+            addqty(4, 'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
-            addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
+            addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
-            addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+            addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
             toggles['CompareDatasets'] = True
         else:
-            toggles['CompareDatasets'] = False # not comparable!
+            toggles['CompareDatasets'] = False  # not comparable!
     else:
         toggles['CompareDatasets'] = False
-
 
     if filename is not None:
         if comm is None or comm.Get_rank() == 0:
@@ -1193,13 +1191,13 @@ def create_standard_report(results, filename, title="auto",
 
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"
-                base = _os.path.splitext(filename)[0] # no extension
-                _merge.merge_latex_template(qtys, templateFile, base+".tex", toggles,
+                base = _os.path.splitext(filename)[0]  # no extension
+                _merge.merge_latex_template(qtys, templateFile, base + ".tex", toggles,
                                             precision, printer)
 
                 # compile report latex file into PDF
-                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd',None)
-                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags',[])
+                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd', None)
+                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags', [])
                 assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
                 printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
                 _merge.compile_latex_report(base, [cmd] + flags, printer, auto_open)
@@ -1209,7 +1207,7 @@ def create_standard_report(results, filename, title="auto",
             #SmartCache.global_status(printer)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
-    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time()-tStart))
+    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart))
 
     return ws
 
@@ -1350,28 +1348,28 @@ def create_nqnoise_report(results, filename, title="auto",
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
 
     if advancedOptions is None: advancedOptions = {}
-    linlogPercentile = advancedOptions.get('linlog percentile',5)
-    errgen_type = advancedOptions.get('error generator type', "logGTi") # REMOVE - also in docstring?
-    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD) # REMOVE - also in docstring?
+    linlogPercentile = advancedOptions.get('linlog percentile', 5)
+    errgen_type = advancedOptions.get('error generator type', "logGTi")  # REMOVE - also in docstring?
+    nmthreshold = advancedOptions.get('nm threshold', DEFAULT_BAD_FIT_THRESHOLD)  # REMOVE - also in docstring?
     precision = advancedOptions.get('precision', None)
-    cachefile = advancedOptions.get('cachefile',None)
-    connected = advancedOptions.get('connected',False)
-    resizable = advancedOptions.get('resizable',True)
-    autosize = advancedOptions.get('autosize','initial')
-    combine_robust = advancedOptions.get('combine_robust',True) # REMOVE - also in docstring?
-    ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
-    idtIdleOp = advancedOptions.get('idt_idle_oplabel',_Lbl('Gi'))
+    cachefile = advancedOptions.get('cachefile', None)
+    connected = advancedOptions.get('connected', False)
+    resizable = advancedOptions.get('resizable', True)
+    autosize = advancedOptions.get('autosize', 'initial')
+    combine_robust = advancedOptions.get('combine_robust', True)  # REMOVE - also in docstring?
+    ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
+    idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
     else:
         fmt = "html"
-        
+
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
 
-    if isinstance(title,int): #to catch backward compatibility issues
+    if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
                           " specifying an int here because in older versions of pyGSTi"
                           " the third argument to create_general_report was the"
@@ -1381,12 +1379,12 @@ def create_nqnoise_report(results, filename, title="auto",
         if filename is not None:
             autoname = _autotitle.generate_name()
             title = "GST Report for " + autoname
-            _warnings.warn( ("You should really specify `title=` when generating reports,"
-                             " as this makes it much easier to identify them later on.  "
-                             "Since you didn't, pyGSTi has generated a random one"
-                             " for you: '{}'.").format(autoname))
+            _warnings.warn(("You should really specify `title=` when generating reports,"
+                            " as this makes it much easier to identify them later on.  "
+                            "Since you didn't, pyGSTi has generated a random one"
+                            " for you: '{}'.").format(autoname))
         else:
-            title = "N/A" # No title - but it doesn't matter since filename is None
+            title = "N/A"  # No title - but it doesn't matter since filename is None
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     toggles = _set_toggles(results_dict, brevity, combine_robust)
@@ -1396,7 +1394,8 @@ def create_nqnoise_report(results, filename, title="auto",
     #_ws.WorkspaceOutput.default_render_options['click_to_display'] = True #don't render any plots until they're clicked
     #_ws.WorkspaceOutput.default_render_options['render_math'] = renderMath #don't render any math
 
-    qtys = {} # stores strings to be inserted into report template
+    qtys = {}  # stores strings to be inserted into report template
+
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
@@ -1407,12 +1406,12 @@ def create_nqnoise_report(results, filename, title="auto",
     qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
-    qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
+    qtys['linlg_pcntle'] = "%d" % round(linlogPercentile)  # to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
     qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
 
-    pdfInfo = [('Author','pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
+    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     # Perform idle tomography on datasets if desired (need to do
@@ -1422,7 +1421,7 @@ def create_nqnoise_report(results, filename, title="auto",
                                                  results_dict, printer)
     except Exception as e:
         _warnings.warn("Idle tomography failed:\n" + str(e))
-        idt_results_dict = {}        
+        idt_results_dict = {}
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
 
     # Generate Switchboard
@@ -1430,11 +1429,11 @@ def create_nqnoise_report(results, filename, title="auto",
 
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-            _create_master_switchboard(ws, results_dict, confidenceLevel,
-                                       nmthreshold, printer, fmt,
-                                       combine_robust, idt_results_dict)
+        _create_master_switchboard(ws, results_dict, confidenceLevel,
+                                   nmthreshold, printer, fmt,
+                                   combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
-                         len(gauge_opt_labels) > 1 or len(swLs) > 1):
+                           len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
                          " estimate, and gauge optimization.")
 
@@ -1449,7 +1448,7 @@ def create_nqnoise_report(results, filename, title="auto",
 
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
-        for some_cri in switchBd.cri.flat: #can have only some confidence regions
+        for some_cri in switchBd.cri.flat:  # can have only some confidence regions
             if some_cri is not None and not isinstance(some_cri, _ws.NotApplicable):
                 qtys['confidenceIntervalScaleFctr'] = "%.3g" % some_cri.intervalScaling
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
@@ -1457,11 +1456,11 @@ def create_nqnoise_report(results, filename, title="auto",
     multidataset = bool(len(dataset_labels) > 1)
     multiL = bool(len(swLs) > 1)
 
-    maxLView = [False,False,False,multiL]
+    maxLView = [False, False, False, multiL]
 
     if fmt == "html":
         qtys['topSwitchboard'] = switchBd
-        qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
+        qtys['maxLSwitchboard1'] = switchBd.view(maxLView, "v6")
 
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
@@ -1472,7 +1471,7 @@ def create_nqnoise_report(results, filename, title="auto",
     germs = switchBd.germs
     strs = switchBd.strs
     cliffcomp = switchBd.clifford_compilation
-    A = None # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
+    A = None  # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
 
     #Brevity key:
     # 1: Plots involving quantities for individual sequences disappear at brevity=1
@@ -1482,15 +1481,15 @@ def create_nqnoise_report(results, filename, title="auto",
 
     #X addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
     #X addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
-    addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
+    addqty(2, 'datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
     gsFinal = switchBd.gsFinal
     gsGIRep = switchBd.gsGIRep
     gsEP = switchBd.gsGIRepEP
     cri_base = switchBd.cri if (confidenceLevel is not None) else None
     criGIRep_base = switchBd.criGIRep if (confidenceLevel is not None) else None
-    cri      = lambda l: cri_base if ci_brevity <= l else None
-    criGIRep = lambda l: criGIRep_base if ci_brevity <= l else None
+    def cri(l): return cri_base if ci_brevity <= l else None
+    def criGIRep(l): return criGIRep_base if ci_brevity <= l else None
 
     # Non-summary gate estimates
     # Germ
@@ -1499,7 +1498,7 @@ def create_nqnoise_report(results, filename, title="auto",
     #X addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
     #X        ['Target','Estimated'], 'boxes', cri(1), includeHSVec=False)
     #X addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri(1))
-    addqty(A,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+    addqty(A, 'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     #X addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
     #X                                                  ['Target','Estimated'], "boxes", cri(1))
     #X addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri(1), display=("boxplot","barplot"))
@@ -1524,14 +1523,14 @@ def create_nqnoise_report(results, filename, title="auto",
 
     #addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
     #                                                       "boxes", errgen_type)
-    addqty(4,'bestGatesetErrGenBoxTable', ws.NQubitErrgenTable, gsGIRep, cri(1),
-           ("H","S"), "boxes")
+    addqty(4, 'bestGatesetErrGenBoxTable', ws.NQubitErrgenTable, gsGIRep, cri(1),
+           ("H", "S"), "boxes")
 
-    addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
-    addqty(2,'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
-    addqty(2,'profilerTable', ws.ProfilerTable, switchBd.profiler)
-    addqty(2,'softwareEnvTable', ws.SoftwareEnvTable)
-    addqty(A,'exampleTable', ws.ExampleTable)
+    addqty(2, 'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
+    addqty(2, 'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
+    addqty(2, 'profilerTable', ws.ProfilerTable, switchBd.profiler)
+    addqty(2, 'softwareEnvTable', ws.SoftwareEnvTable)
+    addqty(A, 'exampleTable', ws.ExampleTable)
     qtys['exampleTable'].set_render_options(click_to_display=True)
 
     #X  # single-metric comparison tables
@@ -1548,7 +1547,7 @@ def create_nqnoise_report(results, filename, title="auto",
     #X     addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
     #X            gimetric_switchBd.cmpTableTitle, gimetric_switchBd.opLabel, confidenceRegionInfo=None)
-    #X 
+    #X
     #X else:
     #X     addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
@@ -1559,9 +1558,9 @@ def create_nqnoise_report(results, filename, title="auto",
 
     if len(idt_results_dict) > 0:
         #Plots & tables for idle tomography tab
-        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
-        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
-               20, gsGIRep) # HARDCODED - show only top 20 rates
+        addqty(A, 'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3, 'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep)  # HARDCODED - show only top 20 rates
 
     #Ls and Germs specific
     gss = switchBd.gss
@@ -1572,76 +1571,75 @@ def create_nqnoise_report(results, filename, title="auto",
     #X addqty(2,'prepStrListTable', ws.CircuitTable, prepStrs,"Preparation Fiducials")
     #X addqty(2,'effectStrListTable', ws.CircuitTable, effectStrs,"Measurement Fiducials")
     #X addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty(2,'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
-    addqty(4,'progressTable', ws.FitComparisonTable,
+    addqty(2, 'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
+    addqty(4, 'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Generate plots
     printer.log("*** Generating plots ***")
 
-    addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+    addqty(4, 'gramBarPlot', ws.GramMatrixBarPlot, ds, gsTgt, 10, strs)
 
-
-    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot,
+    addqty(4, 'progressBarPlot', ws.FitComparisonBarPlot,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
-    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm) #just duplicate for now
+    addqty(A, 'progressBarPlot_sum', ws.FitComparisonBarPlot,
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)  # just duplicate for now
 
     # Don't display "Target" in model violation summary, as it's often
     # huge and messes up the plot scale.
-    est_inds_mt = [ i for i,l in enumerate(est_labels) if l != "Target" ]
-    est_lbls_mt = [ est_labels[i] for i in est_inds_mt ] # "minus target"
+    est_inds_mt = [i for i, l in enumerate(est_labels) if l != "Target"]
+    est_lbls_mt = [est_labels[i] for i in est_inds_mt]  # "minus target"
     Nd = len(dataset_labels)
     Ne = len(est_inds_mt)
-    grid_objective = switchBd.objective_modvi[0,0] #just take first one for now
+    grid_objective = switchBd.objective_modvi[0, 0]  # just take first one for now
+
     def na_to_none(x):
         return None if isinstance(x, _ws.NotApplicable) else x
 
     if multidataset:
-        dsGrid = [ [ na_to_none(switchBd.modvi_ds[d,i]) for i in est_inds_mt]
-                   for d in range(Nd)]
-        gssGrid = [ [na_to_none(switchBd.gssFinal[i])]*Ne for i in range(Nd) ]
-        gsGrid = [ [ na_to_none(switchBd.gsL_modvi[d,i,-1]) for i in est_inds_mt]
-                   for d in range(Nd)]
-        addqty(A,'finalFitComparePlot', ws.FitComparisonBoxPlot,
+        dsGrid = [[na_to_none(switchBd.modvi_ds[d, i]) for i in est_inds_mt]
+                  for d in range(Nd)]
+        gssGrid = [[na_to_none(switchBd.gssFinal[i])] * Ne for i in range(Nd)]
+        gsGrid = [[na_to_none(switchBd.gsL_modvi[d, i, -1]) for i in est_inds_mt]
+                  for d in range(Nd)]
+        addqty(A, 'finalFitComparePlot', ws.FitComparisonBoxPlot,
                est_lbls_mt, dataset_labels,
                gssGrid, gsGrid, dsGrid, grid_objective, comm=comm)
     else:
-        dsGrid = [ na_to_none(switchBd.modvi_ds[0,i]) for i in est_inds_mt ]
-        gssGrid =[ na_to_none(switchBd.gssFinal[0])]*Ne
-        if switchBd.gsL_modvi.shape[2] == 0: # can't use -1 index on length-0 array
-            gsGrid = [ None for i in est_inds_mt]
-        else: # the usual case:
-            gsGrid = [ na_to_none(switchBd.gsL_modvi[0,i,-1]) for i in est_inds_mt]
-        addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot,
+        dsGrid = [na_to_none(switchBd.modvi_ds[0, i]) for i in est_inds_mt]
+        gssGrid = [na_to_none(switchBd.gssFinal[0])] * Ne
+        if switchBd.gsL_modvi.shape[2] == 0:  # can't use -1 index on length-0 array
+            gsGrid = [None for i in est_inds_mt]
+        else:  # the usual case:
+            gsGrid = [na_to_none(switchBd.gsL_modvi[0, i, -1]) for i in est_inds_mt]
+        addqty(A, 'finalFitComparePlot', ws.FitComparisonBarPlot,
                est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate', comm=comm)
 
-    addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
+    addqty(1, 'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
-            click_to_display=False, valign='bottom')
+        click_to_display=False, valign='bottom')
 
-    addqty(1,'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
+    addqty(1, 'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
            'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
-            click_to_display=False, valign='bottom')
+        click_to_display=False, valign='bottom')
 
-    addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
-        switchBd.objective, gss, modvi_ds, gsL_modvi,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi,
-        typ="scatter", comm=comm) #TODO: L-switchboard on modvi overview page?
+    addqty(1, 'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
+           switchBd.objective, gss, modvi_ds, gsL_modvi,
+           linlg_pcntle=float(linlogPercentile) / 100,
+           minProbClipForWeighting=switchBd.mpc_modvi,
+           typ="scatter", comm=comm)  # TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
-    addqty(A,'bestEstimateColorHistogram', ws.ColorBoxPlot,
-        switchBd.objective, gss, modvi_ds, gsL_modvi,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi,
-        typ="histogram", comm=comm) #TODO: L-switchboard on summary page?
-
+    addqty(A, 'bestEstimateColorHistogram', ws.ColorBoxPlot,
+           switchBd.objective, gss, modvi_ds, gsL_modvi,
+           linlg_pcntle=float(linlogPercentile) / 100,
+           minProbClipForWeighting=switchBd.mpc_modvi,
+           typ="histogram", comm=comm)  # TODO: L-switchboard on summary page?
 
     if combine_robust:
         # model-violation (using _modvi variables) plots show pre-scaling
@@ -1650,63 +1648,61 @@ def create_nqnoise_report(results, filename, title="auto",
         # Note that 'eff_ds' is NA for estimates that have no scaling, so that
         # duplicate plots (for estiamtes without scaling) are avoided.
 
-        addqty(4,'progressTable_scl', ws.FitComparisonTable,
+        addqty(4, 'progressTable_scl', ws.FitComparisonTable,
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
-        addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot,
-               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm) # robust-scaled version
+        addqty(4, 'progressBarPlot_scl', ws.FitComparisonBarPlot,
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)  # robust-scaled version
 
         #Not pagniated currently... just set to same full plot
-        addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
-            switchBd.objective, gss, eff_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, comm=comm)
+        addqty(1, 'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
+               switchBd.objective, gss, eff_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, comm=comm)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
-                click_to_display=False, valign='bottom')
+            click_to_display=False, valign='bottom')
 
-        addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
+        addqty(1, 'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc,
                typ="scatter", comm=comm)
 
-        addqty(A,'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
+        addqty(A, 'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc,
                typ="histogram", comm=comm)
 
-
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
-    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot,
+    addqty(1, 'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
            submatrices=switchBd.scaledSubMxsDict, comm=comm)
-
 
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
         comparable = True
-        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use circuit_lists['final']??
+        gstrCmpList = list(results_dict[dataset_labels[0]].dataset.keys())  # maybe use circuit_lists['final']??
         for dslbl in dataset_labels:
             if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
                 _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
-                comparable=False; break
+                comparable = False; break
 
         if comparable:
             #initialize a new "dataset comparison switchboard"
             dscmp_switchBd = ws.Switchboard(
-                ["Dataset1","Dataset2"],
+                ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons","buttons"], [0,1]
+                ["buttons", "buttons"], [0, 1]
             )
-            dscmp_switchBd.add("dscmp",(0,1))
-            dscmp_switchBd.add("dscmp_gss",(0,))
-            dscmp_switchBd.add("refds",(0,))
+            dscmp_switchBd.add("dscmp", (0, 1))
+            dscmp_switchBd.add("dscmp_gss", (0,))
+            dscmp_switchBd.add("refds", (0,))
 
             for d1, dslbl1 in enumerate(dataset_labels):
                 dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
-                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
+                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset  # only used for #of spam labels below
 
             dsComp = dict()
             all_dsComps = dict()
@@ -1733,30 +1729,29 @@ def create_nqnoise_report(results, filename, title="auto",
                         for k, v in d.items():
                             d1, d2 = k
                             dscmp_switchBd.dscmp[d1, d2] = v
-                            all_dsComps[(d1,d2)] = v
+                            all_dsComps[(d1, d2)] = v
             else:
                 for d1, d2 in indices:
                     dslbl1 = dataset_labels[d1]
                     dslbl2 = dataset_labels[d2]
                     ds1 = results_dict[dslbl1].dataset
                     ds2 = results_dict[dslbl2].dataset
-                    all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
-                    dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
+                    all_dsComps[(d1, d2)] = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                    dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 
             qtys['dscmpSwitchboard'] = dscmp_switchBd
-            addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+            addqty(4, 'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
-            addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
+            addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
-            addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+            addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
             toggles['CompareDatasets'] = True
         else:
-            toggles['CompareDatasets'] = False # not comparable!
+            toggles['CompareDatasets'] = False  # not comparable!
     else:
         toggles['CompareDatasets'] = False
-
 
     if filename is not None:
         if comm is None or comm.Get_rank() == 0:
@@ -1772,13 +1767,13 @@ def create_nqnoise_report(results, filename, title="auto",
 
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"
-                base = _os.path.splitext(filename)[0] # no extension
-                _merge.merge_latex_template(qtys, templateFile, base+".tex", toggles,
+                base = _os.path.splitext(filename)[0]  # no extension
+                _merge.merge_latex_template(qtys, templateFile, base + ".tex", toggles,
                                             precision, printer)
 
                 # compile report latex file into PDF
-                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd',None)
-                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags',[])
+                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd', None)
+                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags', [])
                 assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
                 printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
                 _merge.compile_latex_report(base, [cmd] + flags, printer, auto_open)
@@ -1788,7 +1783,7 @@ def create_nqnoise_report(results, filename, title="auto",
             #SmartCache.global_status(printer)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
-    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time()-tStart))
+    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart))
 
     return ws
 
@@ -1850,7 +1845,7 @@ def create_report_notebook(results, filename, title="auto",
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                 "templates","report_notebook")
+                                 "templates", "report_notebook")
     assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
     outputDir = _os.path.dirname(filename)
 
@@ -1862,16 +1857,16 @@ def create_report_notebook(results, filename, title="auto",
     basename = _os.path.splitext(_os.path.basename(filename))[0]
     results_file_base = basename + '_results.pkl'
     results_file = _os.path.join(outputDir, results_file_base)
-    with open(results_file,'wb') as f:
+    with open(results_file, 'wb') as f:
         _pickle.dump(results, f)
 
     if title is None or title == "auto":
         autoname = _autotitle.generate_name()
         title = "GST Report for " + autoname
-        _warnings.warn( ("You should really specify `title=` when generating reports,"
-                         "as this makes it much easier to identify them later on.  "
-                         "Since you didn't, pyGSTi will has generated a random one"
-                         " for you: '{}'.").format(autoname))
+        _warnings.warn(("You should really specify `title=` when generating reports,"
+                        "as this makes it much easier to identify them later on.  "
+                        "Since you didn't, pyGSTi will has generated a random one"
+                        " for you: '{}'.").format(autoname))
 
     nb = _Notebook()
     nb.add_markdown('# {title}\n(Created on {date})'.format(
@@ -1885,14 +1880,14 @@ def create_report_notebook(results, filename, title="auto",
     if isinstance(results, dict):
         dsKeys = list(results.keys())
         results = results[dsKeys[0]]
-          #Note: `results` is always a single Results obj from here down
+        #Note: `results` is always a single Results obj from here down
 
         nb.add_code("""\
         #Load results dictionary
         with open('{infile}', 'rb') as infile:
             results_dict = pickle.load(infile)
         print("Available dataset keys: ", ', '.join(results_dict.keys()))\
-        """.format(infile = results_file_base))
+        """.format(infile=results_file_base))
 
         nb.add_code("""\
         #Set which dataset should be used below
@@ -1907,7 +1902,7 @@ def create_report_notebook(results, filename, title="auto",
         with open('{infile}', 'rb') as infile:
             results = pickle.load(infile)
         print("Available estimates: ", ', '.join(results.estimates.keys()))\
-        """.format(infile = results_file_base))
+        """.format(infile=results_file_base))
 
     estLabels = list(results.estimates.keys())
     estimate = results.estimates[estLabels[0]]
@@ -1968,16 +1963,16 @@ def create_report_notebook(results, filename, title="auto",
         """.format(conn=str(connected)))
 
     nb.add_notebook_text_files([
-        _os.path.join(templatePath,'summary.txt'),
-        _os.path.join(templatePath,'goodness.txt'),
-        _os.path.join(templatePath,'gauge_invariant.txt'),
-        _os.path.join(templatePath,'gauge_variant.txt')])
+        _os.path.join(templatePath, 'summary.txt'),
+        _os.path.join(templatePath, 'goodness.txt'),
+        _os.path.join(templatePath, 'gauge_invariant.txt'),
+        _os.path.join(templatePath, 'gauge_variant.txt')])
 
     #Insert multi-dataset specific analysis
     if len(dsKeys) > 1:
-        nb.add_markdown( ('# Dataset comparisons\n'
-                          'This report contains information for more than one data set.'
-                          'This page shows comparisons between different data sets.') )
+        nb.add_markdown(('# Dataset comparisons\n'
+                         'This report contains information for more than one data set.'
+                         'This page shows comparisons between different data sets.'))
 
         nb.add_code("""\
         dslbl1 = '{dsLbl1}'
@@ -1988,12 +1983,12 @@ def create_report_notebook(results, filename, title="auto",
         dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
         """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
         nb.add_notebook_text_files([
-            _os.path.join(templatePath,'data_comparison.txt')])
+            _os.path.join(templatePath, 'data_comparison.txt')])
 
     #Add reference material
     nb.add_notebook_text_files([
-        _os.path.join(templatePath,'input.txt'),
-        _os.path.join(templatePath,'meta.txt')])
+        _os.path.join(templatePath, 'input.txt'),
+        _os.path.join(templatePath, 'meta.txt')])
 
     printer.log("Report Notebook created as %s" % filename)
 
@@ -2023,9 +2018,9 @@ def find_std_clifford_compilation(model, verbosity=0):
         The Clifford compilation dictionary (if one can be found).
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
-    if not isinstance(model,_objs.ExplicitOpModel):
-        return None # only match explicit models
-    
+    if not isinstance(model, _objs.ExplicitOpModel):
+        return None  # only match explicit models
+
     std_modules = ("std1Q_XY",
                    "std1Q_XYI",
                    "std1Q_XYZI",
@@ -2052,7 +2047,7 @@ def find_std_clifford_compilation(model, verbosity=0):
            set(target_model.preps.keys()) == set(model.preps.keys()) and \
            set(target_model.povms.keys()) == set(model.povms.keys()):
             if target_model.frobeniusdist(model) < 1e-6:
-                if hasattr(mod,"clifford_compilation"):
+                if hasattr(mod, "clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation
     return None
@@ -2144,5 +2139,3 @@ def find_std_clifford_compilation(model, verbosity=0):
 #        models = (model, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
 #        modelTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
 #        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
-
-

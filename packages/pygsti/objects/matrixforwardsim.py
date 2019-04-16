@@ -29,6 +29,7 @@ PSMALL = 1e-100
 DSMALL = 1e-100
 HSMALL = 1e-100
 
+
 class MatrixForwardSimulator(ForwardSimulator):
     """
     Encapsulates a calculation tool used by model objects to perform product
@@ -64,14 +65,13 @@ class MatrixForwardSimulator(ForwardSimulator):
         """
         super(MatrixForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
-        if self.evotype not in ("statevec","densitymx"):
+        if self.evotype not in ("statevec", "densitymx"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "matrix-based calculations" % self.evotype))
 
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
         return MatrixForwardSimulator(self.dim, self.sos, self.paramvec)
-        
 
     def product(self, circuit, bScale=False):
         """
@@ -101,21 +101,21 @@ class MatrixForwardSimulator(ForwardSimulator):
             prior to the scaling.
         """
         if bScale:
-            scaledGatesAndExps = {};
+            scaledGatesAndExps = {}
             scale_exp = 0
-            G = _np.identity( self.dim )
+            G = _np.identity(self.dim)
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
                     opmx = self.sos.get_operation(lOp).base
-                    ng = max(_nla.norm(opmx),1.0)
+                    ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
-                
+
                 gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate,G)   # product of gates, starting with identity
+                H = _np.dot(gate, G)   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
                 if H.max() < PSMALL and H.min() > -PSMALL:
                     nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate,G/nG); scale_exp += _np.log(nG) # LEXICOGRAPHICAL VS MATRIX ORDER
+                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
                 else: G = H
 
             old_err = _np.seterr(over='ignore')
@@ -125,50 +125,48 @@ class MatrixForwardSimulator(ForwardSimulator):
             return G, scale
 
         else:
-            G = _np.identity( self.dim )
+            G = _np.identity(self.dim)
             for lOp in circuit:
-                G = _np.dot(self.sos.get_operation(lOp).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.sos.get_operation(lOp).base, G)  # product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
-        
     def _process_wrtFilter(self, wrtFilter, obj):
         """ Helper function for doperation and hoperation below: pulls out pieces of
             a wrtFilter argument relevant for a single object (gate or spam vec) """
-        
+
         #Create per-gate with-respect-to parameter filters, used to
         # select a subset of all the derivative columns, essentially taking
         # a derivative of only a *subset* of all the gate's parameters
 
-        if isinstance(wrtFilter,slice):
+        if isinstance(wrtFilter, slice):
             wrtFilter = _slct.indices(wrtFilter)
-        
+
         if wrtFilter is not None:
-            obj_wrtFilter = [] # values = object-local param indices
-            relevant_gpindices = [] # indices into original wrtFilter'd indices
+            obj_wrtFilter = []  # values = object-local param indices
+            relevant_gpindices = []  # indices into original wrtFilter'd indices
 
             gpindices = obj.gpindices_as_array()
 
-            for ii,i in enumerate(wrtFilter):
+            for ii, i in enumerate(wrtFilter):
                 if i in gpindices:
                     relevant_gpindices.append(ii)
                     obj_wrtFilter.append(list(gpindices).index(i))
-            relevant_gpindices = _np.array(relevant_gpindices,_np.int64)
+            relevant_gpindices = _np.array(relevant_gpindices, _np.int64)
             if len(relevant_gpindices) == 1:
                 #Don't return a length-1 list, as this doesn't index numpy arrays
                 # like length>1 lists do... ugh.
                 relevant_gpindices = slice(relevant_gpindices[0],
-                                           relevant_gpindices[0]+1)
+                                           relevant_gpindices[0] + 1)
             elif len(relevant_gpindices) == 0:
                 #Don't return a length-0 list, as this doesn't index numpy arrays
                 # like length>1 lists do... ugh.
-                relevant_gpindices = slice(0,0) #slice that results in a zero dimension
+                relevant_gpindices = slice(0, 0)  # slice that results in a zero dimension
 
         else:
             obj_wrtFilter = None
             relevant_gpindices = obj.gpindices
-            
-        return obj_wrtFilter, relevant_gpindices
 
+        return obj_wrtFilter, relevant_gpindices
 
     #Vectorizing Identities. (Vectorization)
     # Note when vectorizing op uses numpy.flatten rows are kept contiguous, so the first identity below is valid.
@@ -189,23 +187,24 @@ class MatrixForwardSimulator(ForwardSimulator):
         op_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
-        flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
+        num_deriv_cols = self.Np if (wrtFilter is None) else len(wrtFilter)
+        flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
 
-        _fas(flattened_dprod, [None,gpindices], 
-             gate.deriv_wrt_params(op_wrtFilter)) # (dim**2, nParams[opLabel])
+        _fas(flattened_dprod, [None, gpindices],
+             gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, nParams[opLabel])
 
-        if _slct.length(gpindices) > 0: #works for arrays too
-            # Compute the derivative of the entire operation sequence with respect to the 
+        if _slct.length(gpindices) > 0:  # works for arrays too
+            # Compute the derivative of the entire operation sequence with respect to the
             # gate's parameters and fill appropriate columns of flattened_dprod.
             #gate = self.sos.get_operation[opLabel] UNNEEDED (I think)
-            _fas(flattened_dprod,[None,gpindices],
-                gate.deriv_wrt_params(op_wrtFilter)) # (dim**2, nParams in wrtFilter for opLabel)
-                
+            _fas(flattened_dprod, [None, gpindices],
+                 gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, nParams in wrtFilter for opLabel)
+
         if flat:
             return flattened_dprod
         else:
-            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
+            # axes = (gate_ij, prod_row, prod_col)
+            return _np.swapaxes(flattened_dprod, 0, 1).reshape((num_deriv_cols, dim, dim))
 
     def hoperation(self, opLabel, flat=False, wrtFilter1=None, wrtFilter2=None):
         """ Return the hessian of a length-1 (single-gate) sequence """
@@ -216,23 +215,21 @@ class MatrixForwardSimulator(ForwardSimulator):
         op_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols1 =  self.Np if (wrtFilter1 is None) else len(wrtFilter1)
-        num_deriv_cols2 =  self.Np if (wrtFilter2 is None) else len(wrtFilter2)
-        flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2),'d')
+        num_deriv_cols1 = self.Np if (wrtFilter1 is None) else len(wrtFilter1)
+        num_deriv_cols2 = self.Np if (wrtFilter2 is None) else len(wrtFilter2)
+        flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
-        if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0: #works for arrays too
-            # Compute the derivative of the entire operation sequence with respect to the 
+        if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
+            # Compute the derivative of the entire operation sequence with respect to the
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            _fas(flattened_hprod, [None,gpindices1,gpindices2],
-                gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
-                
+            _fas(flattened_hprod, [None, gpindices1, gpindices2],
+                 gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
+
         if flat:
             return flattened_hprod
         else:
-            return _np.transpose( flattened_hprod, (1,2,0) ).reshape(
-                (num_deriv_cols1, num_deriv_cols2, dim, dim) ) # axes = (gate_ij1, gateij2, prod_row, prod_col)
-
-        
+            return _np.transpose(flattened_hprod, (1, 2, 0)).reshape(
+                (num_deriv_cols1, num_deriv_cols2, dim, dim))  # axes = (gate_ij1, gateij2, prod_row, prod_col)
 
     def dproduct(self, circuit, flat=False, wrtFilter=None):
         """
@@ -275,8 +272,9 @@ class MatrixForwardSimulator(ForwardSimulator):
         """
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
-        revOpLabelList = tuple(reversed(tuple(circuit))) # we do matrix multiplication in this order (easier to think about)
-        N = len(revOpLabelList) # length of operation sequence
+        # we do matrix multiplication in this order (easier to think about)
+        revOpLabelList = tuple(reversed(tuple(circuit)))
+        N = len(revOpLabelList)  # length of operation sequence
 
         #  prod = G1 * G2 * .... * GN , a matrix
         #  dprod/d(opLabel)_ij   = sum_{L s.t. G(L) == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
@@ -294,22 +292,22 @@ class MatrixForwardSimulator(ForwardSimulator):
         dim = self.dim
 
         #Cache partial products (relatively little mem required)
-        leftProds = [ ]
-        G = _np.identity( dim ); leftProds.append(G)
+        leftProds = []
+        G = _np.identity(dim); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G,self.sos.get_operation(opLabel).base)
+            G = _np.dot(G, self.sos.get_operation(opLabel).base)
             leftProds.append(G)
 
-        rightProdsT = [ ]
-        G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
+        rightProdsT = []
+        G = _np.identity(dim); rightProdsT.append(_np.transpose(G))
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self.sos.get_operation(opLabel).base,G)
-            rightProdsT.append( _np.transpose(G) )
+            G = _np.dot(self.sos.get_operation(opLabel).base, G)
+            rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
-        num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
-        flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
-        
+        num_deriv_cols = self.Np if (wrtFilter is None) else len(wrtFilter)
+        flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
+
         # For each operation label, compute the derivative of the entire operation sequence
         #  with respect to only that gate's parameters and fill the appropriate
         #  columns of flattened_dprod.
@@ -319,17 +317,17 @@ class MatrixForwardSimulator(ForwardSimulator):
             op_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
             dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
 
-            for (i,gl) in enumerate(revOpLabelList):
-                if gl != opLabel: continue # loop over locations of opLabel
-                LRproduct = _np.kron( leftProds[i], rightProdsT[N-1-i] )  # (dim**2, dim**2)
-                _fas(flattened_dprod, [None,gpindices],
-                     _np.dot( LRproduct, dop_dopLabel ), add=True) # (dim**2, nParams[opLabel])
+            for (i, gl) in enumerate(revOpLabelList):
+                if gl != opLabel: continue  # loop over locations of opLabel
+                LRproduct = _np.kron(leftProds[i], rightProdsT[N - 1 - i])  # (dim**2, dim**2)
+                _fas(flattened_dprod, [None, gpindices],
+                     _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, nParams[opLabel])
 
         if flat:
             return flattened_dprod
         else:
-            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
-
+            # axes = (gate_ij, prod_row, prod_col)
+            return _np.swapaxes(flattened_dprod, 0, 1).reshape((num_deriv_cols, dim, dim))
 
     def hproduct(self, circuit, flat=False, wrtFilter1=None, wrtFilter2=None):
         """
@@ -373,7 +371,8 @@ class MatrixForwardSimulator(ForwardSimulator):
         """
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
-        revOpLabelList = tuple(reversed(tuple(circuit))) # we do matrix multiplication in this order (easier to think about)
+        # we do matrix multiplication in this order (easier to think about)
+        revOpLabelList = tuple(reversed(tuple(circuit)))
 
         #  prod = G1 * G2 * .... * GN , a matrix
         #  dprod/d(opLabel)_ij   = sum_{L s.t. GL == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
@@ -405,103 +404,103 @@ class MatrixForwardSimulator(ForwardSimulator):
             used_operations[l] = self.sos.get_operation(l)
             gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, used_operations[l])
             gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, used_operations[l])
-        
+
         #Cache partial products (relatively little mem required)
         prods = {}
-        ident = _np.identity( dim )
-        for (i,opLabel1) in enumerate(revOpLabelList): #loop over "starting" gate
-            prods[ (i,i-1) ] = ident #product of no gates
+        ident = _np.identity(dim)
+        for (i, opLabel1) in enumerate(revOpLabelList):  # loop over "starting" gate
+            prods[(i, i - 1)] = ident  # product of no gates
             G = ident
-            for (j,opLabel2) in enumerate(revOpLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,self.sos.get_operation(opLabel2).base)
-                prods[ (i,j) ] = G
-        prods[ (len(revOpLabelList),len(revOpLabelList)-1) ] = ident #product of no gates
+            for (j, opLabel2) in enumerate(revOpLabelList[i:], start=i):  # loop over "ending" gate (>= starting gate)
+                G = _np.dot(G, self.sos.get_operation(opLabel2).base)
+                prods[(i, j)] = G
+        prods[(len(revOpLabelList), len(revOpLabelList) - 1)] = ident  # product of no gates
 
         #Also Cache gate jacobians (still relatively little mem required)
         dop_dopLabel1 = {
-            opLabel: gate.deriv_wrt_params( gate_wrtFilters1[opLabel] )
-            for opLabel,gate in used_operations.items() }
-        
+            opLabel: gate.deriv_wrt_params(gate_wrtFilters1[opLabel])
+            for opLabel, gate in used_operations.items()}
+
         if wrtFilter1 == wrtFilter2:
             dop_dopLabel2 = dop_dopLabel1
         else:
             dop_dopLabel2 = {
-                opLabel: gate.deriv_wrt_params( gate_wrtFilters2[opLabel] )
-                for opLabel,gate in used_operations.items() }
+                opLabel: gate.deriv_wrt_params(gate_wrtFilters2[opLabel])
+                for opLabel, gate in used_operations.items()}
 
         #Finally, cache any nonzero gate hessians (memory?)
         hop_dopLabels = {}
-        for opLabel,gate in used_operations.items():
+        for opLabel, gate in used_operations.items():
             if gate.has_nonzero_hessian():
                 hop_dopLabels[opLabel] = gate.hessian_wrt_params(
                     gate_wrtFilters1[opLabel], gate_wrtFilters2[opLabel])
 
-                
         # Allocate memory for the final result
         num_deriv_cols1 = self.Np if (wrtFilter1 is None) else len(wrtFilter1)
         num_deriv_cols2 = self.Np if (wrtFilter2 is None) else len(wrtFilter2)
-        flattened_d2prod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2),'d')
+        flattened_d2prod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         # For each pair of gates in the string, compute the hessian of the entire
         #  operation sequence with respect to only those two gates' parameters and fill
         #  add the result to the appropriate block of flattened_d2prod.
-        
+
         #NOTE: if we needed to perform a hessian calculation (i.e. for l==m) then
         # it could make sense to iterate through the self.operations.keys() as in
         # dproduct(...) and find the labels in the string which match the current
         # gate (so we only need to compute this gate hessian once).  But since we're
         # assuming that the gates are at most linear in their parameters, this
         # isn't currently needed.
-        
+
         N = len(revOpLabelList)
-        for m,opLabel1 in enumerate(revOpLabelList):
+        for m, opLabel1 in enumerate(revOpLabelList):
             inds1 = gpindices1[opLabel1]
             nDerivCols1 = dop_dopLabel1[opLabel1].shape[1]
             if nDerivCols1 == 0: continue
-            
-            for l,opLabel2 in enumerate(revOpLabelList):
+
+            for l, opLabel2 in enumerate(revOpLabelList):
                 inds2 = gpindices1[opLabel2]
                 #nDerivCols2 = dop_dopLabel2[opLabel2].shape[1]
-                
+
                 # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
                 # if gl1 and gl2 are both in opsToVectorize1 and opsToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
                 # and not d2(prod)/d(gl2)d(gl1) ...
-                
-                if m < l:
-                    x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,l-1)])  # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
-                    xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
-                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dop_dopLabel2[opLabel2] )
-                      # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
-                    flattened_d2prod[:,inds1,inds2] += _np.swapaxes(y,0,1)
-                      # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
-                elif l < m:
-                    x0 = _np.kron(_np.transpose(prods[(l+1,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
-                    xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
-                    xv = _np.swapaxes(xv,1,2) # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
-                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dop_dopLabel2[opLabel2] )
-                    # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
-                    
-                    flattened_d2prod[:,inds1,inds2] += _np.swapaxes(y,0,1)
-                      # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
 
-                else: # l==m, which we *used* to assume gave no contribution since we assume all gate elements are at most linear in the parameters
+                if m < l:
+                    x0 = _np.kron(_np.transpose(prods[(0, m - 1)]), prods[(m + 1, l - 1)])  # (dim**2, dim**2)
+                    x = _np.dot(_np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view()  # (nDerivCols1,dim**2)
+                    xv.shape = (nDerivCols1, dim, dim)  # (reshape without copying - throws error if copy is needed)
+                    y = _np.dot(_np.kron(xv, _np.transpose(prods[(l + 1, N - 1)])), dop_dopLabel2[opLabel2])
+                    # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
+                    flattened_d2prod[:, inds1, inds2] += _np.swapaxes(y, 0, 1)
+                    # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+                elif l < m:
+                    x0 = _np.kron(_np.transpose(prods[(l + 1, m - 1)]), prods[(m + 1, N - 1)])  # (dim**2, dim**2)
+                    x = _np.dot(_np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view()  # (nDerivCols1,dim**2)
+                    xv.shape = (nDerivCols1, dim, dim)  # (reshape without copying - throws error if copy is needed)
+                    # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
+                    xv = _np.swapaxes(xv, 1, 2)
+                    y = _np.dot(_np.kron(prods[(0, l - 1)], xv), dop_dopLabel2[opLabel2])
+                    # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
+
+                    flattened_d2prod[:, inds1, inds2] += _np.swapaxes(y, 0, 1)
+                    # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+
+                else:  # l==m, which we *used* to assume gave no contribution since we assume all gate elements are at most linear in the parameters
                     assert(opLabel1 == opLabel2)
-                    if opLabel1 in hop_dopLabels: #indicates a non-zero hessian
-                        x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-                        x  = _np.dot( _np.transpose(hop_dopLabels[opLabel1], axes=(1,2,0)), x0); xv = x.view() # (nDerivCols1,nDerivCols2,dim**2)
-                        xv = _np.transpose(xv, axes=(2,0,1)) # (dim2, nDerivCols1, nDerivCols2)
-                        flattened_d2prod[:,inds1,inds2] += xv
+                    if opLabel1 in hop_dopLabels:  # indicates a non-zero hessian
+                        x0 = _np.kron(_np.transpose(prods[(0, m - 1)]), prods[(m + 1, N - 1)])  # (dim**2, dim**2)
+                        # (nDerivCols1,nDerivCols2,dim**2)
+                        x = _np.dot(_np.transpose(hop_dopLabels[opLabel1], axes=(1, 2, 0)), x0); xv = x.view()
+                        xv = _np.transpose(xv, axes=(2, 0, 1))  # (dim2, nDerivCols1, nDerivCols2)
+                        flattened_d2prod[:, inds1, inds2] += xv
 
         if flat:
-            return flattened_d2prod # axes = (vectorized_op_el_index, model_parameter1, model_parameter2)
+            return flattened_d2prod  # axes = (vectorized_op_el_index, model_parameter1, model_parameter2)
         else:
-            vec_kl_size, vec_ij_size = flattened_d2prod.shape[1:3] # == num_deriv_cols1, num_deriv_cols2
-            return _np.rollaxis( flattened_d2prod, 0, 3 ).reshape( (vec_kl_size, vec_ij_size, dim, dim) )
+            vec_kl_size, vec_ij_size = flattened_d2prod.shape[1:3]  # == num_deriv_cols1, num_deriv_cols2
+            return _np.rollaxis(flattened_d2prod, 0, 3).reshape((vec_kl_size, vec_ij_size, dim, dim))
             # axes = (model_parameter1, model_parameter2, model_element_row, model_element_col)
 
-        
     def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
@@ -512,7 +511,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         ----------
         rholabel : Label
             The state preparation label.
-        
+
         elabels : list
             A list of :class:`Label` objects giving the *simplified* effect labels.
 
@@ -536,23 +535,24 @@ class MatrixForwardSimulator(ForwardSimulator):
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
-        rho,Es = self._rhoEs_from_spamTuples(rholabel, elabels)
-          #shapes: rho = (N,1), Es = (len(elabels),N)
+        rho, Es = self._rhoEs_from_spamTuples(rholabel, elabels)
+        #shapes: rho = (N,1), Es = (len(elabels),N)
 
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
-            G,scale = self.product(circuit, True)
+            G, scale = self.product(circuit, True)
             if self.evotype == "statevec":
                 ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
-            else: # evotype == "densitymx"
-                ps = _np.real(_np.dot(Es, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
+            else:  # evotype == "densitymx"
+                # probability, with scaling applied (may generate overflow, but OK)
+                ps = _np.real(_np.dot(Es, _np.dot(G, rho)) * scale)
             _np.seterr(**old_err)
 
-        else: #no scaling -- faster but susceptible to overflow
+        else:  # no scaling -- faster but susceptible to overflow
             G = self.product(circuit, False)
             if self.evotype == "statevec":
                 ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
-            else: # evotype == "densitymx"
+            else:  # evotype == "densitymx"
                 ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
         ps = ps.flatten()
 
@@ -574,14 +574,13 @@ class MatrixForwardSimulator(ForwardSimulator):
             #    if _np.isnan(p): raise ValueError("STOP")
 
         if clipTo is not None:
-            ret = _np.clip(ps,clipTo[0],clipTo[1])
+            ret = _np.clip(ps, clipTo[0], clipTo[1])
         else: ret = ps
 
         #DEBUG CHECK
         #check_ps = _np.array( [ self.pr( (rholabel,elabel), circuit, clipTo, bScale) for elabel in elabels ])
         #assert(_np.linalg.norm(ps-check_ps) < 1e-8)
         return ps
-
 
     def dpr(self, spamTuple, circuit, returnPr, clipTo):
         """
@@ -615,46 +614,45 @@ class MatrixForwardSimulator(ForwardSimulator):
             only returned if returnPr == True.
         """
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-          # To support unitary evolution we need to:
-          # - alter product, dproduct, etc. to allow for *complex* derivatives, since matrices can be complex
-          # - update probability-derivative computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
-          #    = 2 Re(dpr/dx*pr.C) , where dpr/dx is the usual density-matrix-mode probability
-          # (TODO in FUTURE)
-          
-        
+        # To support unitary evolution we need to:
+        # - alter product, dproduct, etc. to allow for *complex* derivatives, since matrices can be complex
+        # - update probability-derivative computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
+        #    = 2 Re(dpr/dx*pr.C) , where dpr/dx is the usual density-matrix-mode probability
+        # (TODO in FUTURE)
+
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
         #  dpr/d(opLabel)_ij = sum E_k [dprod/d(opLabel)_ij]_kl rho_l
         #  dpr/d(rho)_i = sum E_k prod_ki
         #  dpr/d(E)_i   = sum prod_il rho_l
 
-        rholabel,elabel = spamTuple #can't deal w/"custom" spam label...
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
-        rhoVec = self.sos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+        rholabel, elabel = spamTuple  # can't deal w/"custom" spam label...
+        rho, E = self._rhoE_from_spamTuple(spamTuple)
+        rhoVec = self.sos.get_prep(rholabel)  # distinct from rho,E b/c rho,E are
         EVec = self.sos.get_effect(elabel)   # arrays, these are SPAMVecs
 
         #Derivs wrt Gates
         old_err = _np.seterr(over='ignore')
-        prod,scale = self.product(circuit, True)
+        prod, scale = self.product(circuit, True)
         dprod_dOps = self.dproduct(circuit)
-        dpr_dOps = _np.empty( (1, self.Np) )
+        dpr_dOps = _np.empty((1, self.Np))
         for i in range(self.Np):
-            dpr_dOps[0,i] = float(_np.dot(E, _np.dot( dprod_dOps[i], rho)))
+            dpr_dOps[0, i] = float(_np.dot(E, _np.dot(dprod_dOps[i], rho)))
 
         if returnPr:
-            p = _np.dot(E, _np.dot(prod, rho)) * scale  #may generate overflow, but OK
-            if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
+            p = _np.dot(E, _np.dot(prod, rho)) * scale  # may generate overflow, but OK
+            if clipTo is not None: p = _np.clip(p, clipTo[0], clipTo[1])
 
         #Derivs wrt SPAM
-        derivWrtAnyRhovec = scale * _np.dot(E,prod)
-        dpr_drhos = _np.zeros( (1, self.Np) )
-        _fas(dpr_drhos, [0,self.sos.get_prep(rholabel).gpindices],
-            _np.dot( derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  #may overflow, but OK
+        derivWrtAnyRhovec = scale * _np.dot(E, prod)
+        dpr_drhos = _np.zeros((1, self.Np))
+        _fas(dpr_drhos, [0, self.sos.get_prep(rholabel).gpindices],
+             _np.dot(derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  # may overflow, but OK
 
-        dpr_dEs = _np.zeros( (1, self.Np) );
-        derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
-           # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
-        _fas(dpr_dEs, [0,EVec.gpindices],
-               _np.dot( derivWrtAnyEvec, EVec.deriv_wrt_params() ))
+        dpr_dEs = _np.zeros((1, self.Np))
+        derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
+        # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
+        _fas(dpr_dEs, [0, EVec.gpindices],
+             _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
 
         _np.seterr(**old_err)
 
@@ -662,7 +660,6 @@ class MatrixForwardSimulator(ForwardSimulator):
             return dpr_drhos + dpr_dEs + dpr_dOps, p
         else: return dpr_drhos + dpr_dEs + dpr_dOps
 
-        
     def hpr(self, spamTuple, circuit, returnPr, returnDeriv, clipTo):
         """
         Compute the Hessian of a probability generated by a operation sequence and
@@ -704,7 +701,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             only returned if returnPr == True.
         """
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-        
+
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
         #  d2pr/d(opLabel1)_mn d(opLabel2)_ij = sum E_k [dprod/d(opLabel1)_mn d(opLabel2)_ij]_kl rho_l
         #  d2pr/d(rho)_i d(opLabel)_mn = sum E_k [dprod/d(opLabel)_mn]_ki     (and same for other diff order)
@@ -713,107 +710,106 @@ class MatrixForwardSimulator(ForwardSimulator):
         #  d2pr/d(E)_i d(E)_j            = 0
         #  d2pr/d(rho)_i d(rho)_j        = 0
 
-        rholabel,elabel = spamTuple
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
-        rhoVec = self.sos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+        rholabel, elabel = spamTuple
+        rho, E = self._rhoE_from_spamTuple(spamTuple)
+        rhoVec = self.sos.get_prep(rholabel)  # distinct from rho,E b/c rho,E are
         EVec = self.sos.get_effect(elabel)   # arrays, these are SPAMVecs
 
         d2prod_dGates = self.hproduct(circuit)
-        assert( d2prod_dGates.shape[0] == d2prod_dGates.shape[1] )
+        assert(d2prod_dGates.shape[0] == d2prod_dGates.shape[1])
 
-        d2pr_dOps2 = _np.empty( (1, self.Np, self.Np) )
+        d2pr_dOps2 = _np.empty((1, self.Np, self.Np))
         for i in range(self.Np):
             for j in range(self.Np):
-                d2pr_dOps2[0,i,j] = float(_np.dot(E, _np.dot( d2prod_dGates[i,j], rho)))
+                d2pr_dOps2[0, i, j] = float(_np.dot(E, _np.dot(d2prod_dGates[i, j], rho)))
 
         old_err = _np.seterr(over='ignore')
 
-        prod,scale = self.product(circuit, True)
+        prod, scale = self.product(circuit, True)
         if returnPr:
-            p = _np.dot(E, _np.dot(prod, rho)) * scale  #may generate overflow, but OK
-            if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
+            p = _np.dot(E, _np.dot(prod, rho)) * scale  # may generate overflow, but OK
+            if clipTo is not None: p = _np.clip(p, clipTo[0], clipTo[1])
 
-        dprod_dOps  = self.dproduct(circuit)
-        assert( dprod_dOps.shape[0] == self.Np )
-        if returnDeriv: # same as in dpr(...)
-            dpr_dOps = _np.empty( (1, self.Np) )
+        dprod_dOps = self.dproduct(circuit)
+        assert(dprod_dOps.shape[0] == self.Np)
+        if returnDeriv:  # same as in dpr(...)
+            dpr_dOps = _np.empty((1, self.Np))
             for i in range(self.Np):
-                dpr_dOps[0,i] = float(_np.dot(E, _np.dot( dprod_dOps[i], rho)))
-
+                dpr_dOps[0, i] = float(_np.dot(E, _np.dot(dprod_dOps[i], rho)))
 
         #Derivs wrt SPAM
-        if returnDeriv:  #same as in dpr(...)
-            dpr_drhos = _np.zeros( (1, self.Np) ) 
-            derivWrtAnyRhovec = scale * _np.dot(E,prod)
-            _fas(dpr_drhos, [0,self.sos.get_prep(rholabel).gpindices],
-                _np.dot( derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  #may overflow, but OK
+        if returnDeriv:  # same as in dpr(...)
+            dpr_drhos = _np.zeros((1, self.Np))
+            derivWrtAnyRhovec = scale * _np.dot(E, prod)
+            _fas(dpr_drhos, [0, self.sos.get_prep(rholabel).gpindices],
+                 _np.dot(derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  # may overflow, but OK
 
-            dpr_dEs = _np.zeros( (1, self.Np) )
-            derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
-            _fas(dpr_dEs, [0,EVec.gpindices],
-               _np.dot( derivWrtAnyEvec, EVec.deriv_wrt_params() ))
+            dpr_dEs = _np.zeros((1, self.Np))
+            derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
+            _fas(dpr_dEs, [0, EVec.gpindices],
+                 _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
 
             dpr = dpr_drhos + dpr_dEs + dpr_dOps
 
-        d2pr_drhos = _np.zeros( (1, self.Np, self.Np) )
-        _fas(d2pr_drhos, [0,None, self.sos.get_prep(rholabel).gpindices],
-             _np.dot( _np.dot(E,dprod_dOps), rhoVec.deriv_wrt_params())[0]) # (= [0,:,:])
+        d2pr_drhos = _np.zeros((1, self.Np, self.Np))
+        _fas(d2pr_drhos, [0, None, self.sos.get_prep(rholabel).gpindices],
+             _np.dot(_np.dot(E, dprod_dOps), rhoVec.deriv_wrt_params())[0])  # (= [0,:,:])
 
-        d2pr_dEs = _np.zeros( (1, self.Np, self.Np) )
-        derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dOps,rho), axis=(2,))
-        _fas(d2pr_dEs,[0,None,EVec.gpindices],
+        d2pr_dEs = _np.zeros((1, self.Np, self.Np))
+        derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dOps, rho), axis=(2,))
+        _fas(d2pr_dEs, [0, None, EVec.gpindices],
              _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
 
-        d2pr_dErhos = _np.zeros( (1, self.Np, self.Np) )
-        derivWrtAnyEvec = scale * _np.dot(prod, rhoVec.deriv_wrt_params()) #may generate overflow, but OK
-        _fas(d2pr_dErhos,[0,EVec.gpindices,self.sos.get_prep(rholabel).gpindices],
-             _np.dot( _np.transpose(EVec.deriv_wrt_params()),derivWrtAnyEvec))
+        d2pr_dErhos = _np.zeros((1, self.Np, self.Np))
+        derivWrtAnyEvec = scale * _np.dot(prod, rhoVec.deriv_wrt_params())  # may generate overflow, but OK
+        _fas(d2pr_dErhos, [0, EVec.gpindices, self.sos.get_prep(rholabel).gpindices],
+             _np.dot(_np.transpose(EVec.deriv_wrt_params()), derivWrtAnyEvec))
 
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.sos.get_prep(rholabel).has_nonzero_hessian():
-            derivWrtAnyRhovec = scale * _np.dot(E,prod) # may overflow, but OK
-            d2pr_d2rhos = _np.zeros( (1, self.Np, self.Np) )
-            _fas(d2pr_d2rhos,[0,self.sos.get_prep(rholabel).gpindices,self.sos.get_prep(rholabel).gpindices],
-                 _np.tensordot(derivWrtAnyRhovec, self.sos.get_prep(rholabel).hessian_wrt_params(), (1,0)))
-                 # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.sos.get_prep(rholabel).hessian_wrt_params())
+            derivWrtAnyRhovec = scale * _np.dot(E, prod)  # may overflow, but OK
+            d2pr_d2rhos = _np.zeros((1, self.Np, self.Np))
+            _fas(d2pr_d2rhos, [0, self.sos.get_prep(rholabel).gpindices, self.sos.get_prep(rholabel).gpindices],
+                 _np.tensordot(derivWrtAnyRhovec, self.sos.get_prep(rholabel).hessian_wrt_params(), (1, 0)))
+            # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.sos.get_prep(rholabel).hessian_wrt_params())
         else:
             d2pr_d2rhos = 0
 
         if self.sos.get_effect(elabel).has_nonzero_hessian():
-            derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
-            d2pr_d2Es   = _np.zeros( (1, self.Np, self.Np) )
-            _fas(d2pr_d2Es,[0,self.sos.get_effect(elabel).gpindices,self.sos.get_effect(elabel).gpindices],
-                 _np.tensordot(derivWrtAnyEvec,self.sos.get_effect(elabel).hessian_wrt_params(), (1,0)))
-                 # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.sos.get_effect(elabel).hessian_wrt_params())
+            derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
+            d2pr_d2Es = _np.zeros((1, self.Np, self.Np))
+            _fas(d2pr_d2Es, [0, self.sos.get_effect(elabel).gpindices, self.sos.get_effect(elabel).gpindices],
+                 _np.tensordot(derivWrtAnyEvec, self.sos.get_effect(elabel).hessian_wrt_params(), (1, 0)))
+            # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.sos.get_effect(elabel).hessian_wrt_params())
         else:
             d2pr_d2Es = 0
 
-        ret = d2pr_dErhos + _np.transpose(d2pr_dErhos,(0,2,1)) + \
-              d2pr_drhos + _np.transpose(d2pr_drhos,(0,2,1)) + \
-              d2pr_dEs + _np.transpose(d2pr_dEs,(0,2,1)) + \
-              d2pr_d2rhos + d2pr_d2Es + d2pr_dOps2
+        ret = d2pr_dErhos + _np.transpose(d2pr_dErhos, (0, 2, 1)) + \
+            d2pr_drhos + _np.transpose(d2pr_drhos, (0, 2, 1)) + \
+            d2pr_dEs + _np.transpose(d2pr_dEs, (0, 2, 1)) + \
+            d2pr_d2rhos + d2pr_d2Es + d2pr_dOps2
         # Note: add transposes b/c spam terms only compute one triangle of hessian
         # Note: d2pr_d2rhos and d2pr_d2Es terms are always zero
-        
+
         _np.seterr(**old_err)
 
         if returnDeriv:
             if returnPr: return ret, dpr, p
-            else:        return ret, dpr
+            else: return ret, dpr
         else:
             if returnPr: return ret, p
-            else:        return ret
-
+            else: return ret
 
 
 ## BEGIN CACHE FUNCTIONS
+
 
     def _compute_product_cache(self, evalTree, comm=None):
         """
         Computes a tree of products in a linear cache space. Will *not*
         parallelize computation, even if given a split tree (since there's
-        no good way to reconstruct the parent tree's *non-final* elements from 
+        no good way to reconstruct the parent tree's *non-final* elements from
         those of the sub-trees).  Note also that there would be no memory savings
         from using a split tree.  In short, parallelization should be done at a
         higher level.
@@ -822,12 +818,12 @@ class MatrixForwardSimulator(ForwardSimulator):
         dim = self.dim
 
         #Note: previously, we tried to allow for parallelization of
-        # _compute_product_cache when the tree was split, but this is was 
+        # _compute_product_cache when the tree was split, but this is was
         # incorrect (and luckily never used) - so it's been removed.
-        
-        if comm is not None: #ignoring comm since can't do anything with it!
+
+        if comm is not None:  # ignoring comm since can't do anything with it!
             #_warnings.warn("More processors than can be used for product computation")
-            pass #this is a fairly common occurrence, and doesn't merit a warning
+            pass  # this is a fairly common occurrence, and doesn't merit a warning
 
         # ------------------------------------------------------------------
 
@@ -835,13 +831,13 @@ class MatrixForwardSimulator(ForwardSimulator):
             _warnings.warn("Ignoring tree splitting in product cache calc.")
 
         cacheSize = len(evalTree)
-        prodCache = _np.zeros( (cacheSize, dim, dim) )
-        scaleCache = _np.zeros( cacheSize, 'd' )
+        prodCache = _np.zeros((cacheSize, dim, dim))
+        scaleCache = _np.zeros(cacheSize, 'd')
 
         #First element of cache are given by evalTree's initial single- or zero-operation labels
-        for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            if opLabel == "": #special case of empty label == no gate
-                prodCache[i] = _np.identity( dim )
+        for i, opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if opLabel == "":  # special case of empty label == no gate
+                prodCache[i] = _np.identity(dim)
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
                 gate = self.sos.get_operation(opLabel).base
@@ -855,23 +851,25 @@ class MatrixForwardSimulator(ForwardSimulator):
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
-            (iRight,iLeft) = evalTree[i]   # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
-            L,R = prodCache[iLeft], prodCache[iRight]
-            prodCache[i] = _np.dot(L,R)
+            # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
+            (iRight, iLeft) = evalTree[i]
+            L, R = prodCache[iLeft], prodCache[iRight]
+            prodCache[i] = _np.dot(L, R)
             scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
 
             if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
-                nL,nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
-                sL, sR = L/nL, R/nR
-                prodCache[i] = _np.dot(sL,sR); scaleCache[i] += _np.log(nL) + _np.log(nR)
+                nL, nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),
+                             1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
+                sL, sR = L / nL, R / nR
+                prodCache[i] = _np.dot(sL, sR); scaleCache[i] += _np.log(nL) + _np.log(nR)
 
         #print "bulk_product DEBUG: %d rescalings out of %d products" % (cnt, len(evalTree))
 
-        nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0]  #may be duplicates (a list, not a set)
-        assert( len(nanOrInfCacheIndices) == 0 ) # since all scaled gates start with norm <= 1, products should all have norm <= 1
+        nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0]  # may be duplicates (a list, not a set)
+        # since all scaled gates start with norm <= 1, products should all have norm <= 1
+        assert(len(nanOrInfCacheIndices) == 0)
 
         return prodCache, scaleCache
-
 
     def _compute_dproduct_cache(self, evalTree, prodCache, scaleCache,
                                 comm=None, wrtSlice=None, profiler=None):
@@ -885,7 +883,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         if profiler is None: profiler = _dummy_profiler
         dim = self.dim
         nDerivCols = self.Np if (wrtSlice is None) \
-                           else _slct.length(wrtSlice)
+            else _slct.length(wrtSlice)
         deriv_shape = (nDerivCols, dim, dim)
         cacheSize = len(evalTree)
 
@@ -905,11 +903,11 @@ class MatrixForwardSimulator(ForwardSimulator):
                 _warnings.warn("Increased speed could be obtained" +
                                " by giving dproduct cache computation" +
                                " *fewer* processors and *smaller* (sub-)tree" +
-                               " (e.g. by splitting tree beforehand), as there"+
+                               " (e.g. by splitting tree beforehand), as there" +
                                " are more cpus than derivative columns.")
 
             # Use comm to distribute columns
-            allDerivColSlice = slice(0,nDerivCols) if (wrtSlice is None) else wrtSlice
+            allDerivColSlice = slice(0, nDerivCols) if (wrtSlice is None) else wrtSlice
             _, myDerivColSlice, _, mySubComm = \
                 _mpit.distribute_slice(allDerivColSlice, comm)
             #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
@@ -917,18 +915,18 @@ class MatrixForwardSimulator(ForwardSimulator):
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
                                " _compute_dproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0,0)
-                  #don't compute anything on "extra", i.e. rank != 0, cpus
+                if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
+                #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_dproduct_cache(
                 evalTree, prodCache, scaleCache, None, myDerivColSlice, profiler)
-                # pass None as comm, *not* mySubComm, since we can't do any
-                #  further parallelization
+            # pass None as comm, *not* mySubComm, since we can't do any
+            #  further parallelization
 
             tm = _time.time()
             all_results = comm.allgather(my_results)
             profiler.add_time("MPI IPC", tm)
-            return _np.concatenate(all_results, axis=1) #TODO: remove this concat w/better gather?
+            return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
 
         # ------------------------------------------------------------------
         tSerialStart = _time.time()
@@ -936,15 +934,15 @@ class MatrixForwardSimulator(ForwardSimulator):
         if evalTree.is_split():
             _warnings.warn("Ignoring tree splitting in dproduct cache calc.")
 
-        dProdCache = _np.zeros( (cacheSize,) + deriv_shape )
+        dProdCache = _np.zeros((cacheSize,) + deriv_shape)
 
         # This iteration **must** match that in bulk_evaltree
         #   in order to associate the right single-gate-strings w/indices
         wrtIndices = _slct.indices(wrtSlice) if (wrtSlice is not None) else None
-        for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            if opLabel == "": #special case of empty label == no gate
-                dProdCache[i] = _np.zeros( deriv_shape )
-            else:                
+        for i, opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if opLabel == "":  # special case of empty label == no gate
+                dProdCache[i] = _np.zeros(deriv_shape)
+            else:
                 #doperation = self.dproduct( (opLabel,) , wrtFilter=wrtIndices)
                 doperation = self.doperation(opLabel, wrtFilter=wrtIndices)
                 dProdCache[i] = doperation / _np.exp(scaleCache[i])
@@ -957,16 +955,17 @@ class MatrixForwardSimulator(ForwardSimulator):
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
-            (iRight,iLeft) = evalTree[i]   # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
-            L,R = prodCache[iLeft], prodCache[iRight]
-            dL,dR = dProdCache[iLeft], dProdCache[iRight]
+            # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
+            (iRight, iLeft) = evalTree[i]
+            L, R = prodCache[iLeft], prodCache[iRight]
+            dL, dR = dProdCache[iLeft], dProdCache[iRight]
             dProdCache[i] = _np.dot(dL, R) + \
-                _np.swapaxes(_np.dot(L, dR),0,1) #dot(dS, T) + dot(S, dT)
+                _np.swapaxes(_np.dot(L, dR), 0, 1)  # dot(dS, T) + dot(S, dT)
             profiler.add_time("compute_dproduct_cache: dots", tm)
             profiler.add_count("compute_dproduct_cache: dots")
 
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
-            if abs(scale) > 1e-8: # _np.isclose(scale,0) is SLOW!
+            if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 dProdCache[i] /= _np.exp(scale)
                 if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
@@ -979,7 +978,6 @@ class MatrixForwardSimulator(ForwardSimulator):
         profiler.add_count("compute_dproduct_cache: num columns", nDerivCols)
 
         return dProdCache
-
 
     def _compute_hproduct_cache(self, evalTree, prodCache, dProdCache1,
                                 dProdCache2, scaleCache, comm=None,
@@ -1006,7 +1004,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         if comm is not None and comm.Get_size() > 1:
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
-            if comm.Get_size() > nDerivCols1*nDerivCols2:
+            if comm.Get_size() > nDerivCols1 * nDerivCols2:
                 #If there are more processors than deriv cells, give a
                 # warning -- note that we *cannot* make use of a tree being
                 # split because there's no good way to reconstruct the
@@ -1014,18 +1012,18 @@ class MatrixForwardSimulator(ForwardSimulator):
                 _warnings.warn("Increased speed could be obtained" +
                                " by giving hproduct cache computation" +
                                " *fewer* processors and *smaller* (sub-)tree" +
-                               " (e.g. by splitting tree beforehand), as there"+
-                               " are more cpus than hessian elements.") # pragma: no cover
+                               " (e.g. by splitting tree beforehand), as there" +
+                               " are more cpus than hessian elements.")  # pragma: no cover
 
             # allocate final result memory
-            hProdCache = _np.zeros( (cacheSize,) + hessn_shape )            
+            hProdCache = _np.zeros((cacheSize,) + hessn_shape)
 
             # Use comm to distribute columns
-            allDeriv1ColSlice = slice(0,nDerivCols1)
-            allDeriv2ColSlice = slice(0,nDerivCols2)
+            allDeriv1ColSlice = slice(0, nDerivCols1)
+            allDeriv2ColSlice = slice(0, nDerivCols2)
             deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
                 _mpit.distribute_slice(allDeriv1ColSlice, comm)
- 
+
             # Get slice into entire range of model params so that
             #  per-gate hessians can be computed properly
             if wrtSlice1 is not None and wrtSlice1.start is not None:
@@ -1051,26 +1049,26 @@ class MatrixForwardSimulator(ForwardSimulator):
                     #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
                     #  #don't compute anything on "extra", i.e. rank != 0, cpus
 
-                hProdCache[:,myDeriv1ColSlice,myDeriv2ColSlice] = self._compute_hproduct_cache(
-                    evalTree, prodCache, dProdCache1[:,myDeriv1ColSlice], dProdCache2[:,myDeriv2ColSlice],
+                hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
+                    evalTree, prodCache, dProdCache1[:, myDeriv1ColSlice], dProdCache2[:, myDeriv2ColSlice],
                     scaleCache, None, myHessianSlice1, myHessianSlice2)
-                    # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
+                # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
 
-                _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None,myDeriv1ColSlice],
-                                    2, mySubComm) #, gatherMemLimit) #gather over col-distribution (Deriv2)
-                  #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
-                  #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
+                _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
+                                    2, mySubComm)  # , gatherMemLimit) #gather over col-distribution (Deriv2)
+                #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
+                #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
             else:
                 #compute "Deriv1" row-derivatives distribution only; don't use column distribution
-                hProdCache[:,myDeriv1ColSlice] = self._compute_hproduct_cache(
-                    evalTree, prodCache, dProdCache1[:,myDeriv1ColSlice], dProdCache2,
+                hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
+                    evalTree, prodCache, dProdCache1[:, myDeriv1ColSlice], dProdCache2,
                     scaleCache, None, myHessianSlice1, wrtSlice2)
-                    # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
+                # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
 
-            _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache,[], 1, comm)
-                        #, gatherMemLimit) #gather over row-distribution (Deriv1)
-              #note: gathering axis 1 of hProdCache,
-              #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
+            _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, [], 1, comm)
+            #, gatherMemLimit) #gather over row-distribution (Deriv1)
+            #note: gathering axis 1 of hProdCache,
+            #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
 
             return hProdCache
 
@@ -1079,23 +1077,23 @@ class MatrixForwardSimulator(ForwardSimulator):
         if evalTree.is_split():
             _warnings.warn("Ignoring tree splitting in hproduct cache calc.")
 
-        hProdCache = _np.zeros( (cacheSize,) + hessn_shape )
+        hProdCache = _np.zeros((cacheSize,) + hessn_shape)
 
         #First element of cache are given by evalTree's initial single- or zero-operation labels
         wrtIndices1 = _slct.indices(wrtSlice1) if (wrtSlice1 is not None) else None
         wrtIndices2 = _slct.indices(wrtSlice2) if (wrtSlice2 is not None) else None
-        for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            if opLabel == "": #special case of empty label == no gate
-                hProdCache[i] = _np.zeros( hessn_shape )
+        for i, opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if opLabel == "":  # special case of empty label == no gate
+                hProdCache[i] = _np.zeros(hessn_shape)
             elif not self.sos.get_operation(opLabel).has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
                 # all hessians for single- or zero-operation sequences are zero.
-                hProdCache[i] = _np.zeros( hessn_shape )
+                hProdCache[i] = _np.zeros(hessn_shape)
             else:
                 hoperation = self.hoperation(opLabel,
-                                   wrtFilter1=wrtIndices1,
-                                   wrtFilter2=wrtIndices2)
-                hProdCache[i] = hoperation / _np.exp(scaleCache[i])            
+                                             wrtFilter1=wrtIndices1,
+                                             wrtFilter2=wrtIndices2)
+                hProdCache[i] = hoperation / _np.exp(scaleCache[i])
 
         #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
         for i in evalTree.get_evaluation_order():
@@ -1103,21 +1101,22 @@ class MatrixForwardSimulator(ForwardSimulator):
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
-            (iRight,iLeft) = evalTree[i]   # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
-            L,R = prodCache[iLeft], prodCache[iRight]
-            dL1,dR1 = dProdCache1[iLeft], dProdCache1[iRight]
-            dL2,dR2 = dProdCache2[iLeft], dProdCache2[iRight]
-            hL,hR = hProdCache[iLeft], hProdCache[iRight]
-              # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
+            # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
+            (iRight, iLeft) = evalTree[i]
+            L, R = prodCache[iLeft], prodCache[iRight]
+            dL1, dR1 = dProdCache1[iLeft], dProdCache1[iRight]
+            dL2, dR2 = dProdCache2[iLeft], dProdCache2[iRight]
+            hL, hR = hProdCache[iLeft], hProdCache[iRight]
+            # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
 
-            dLdRa = _np.swapaxes(_np.dot(dL1,dR2),1,2)
-            dLdRb = _np.swapaxes(_np.dot(dL2,dR1),1,2)
-            dLdR_sym = dLdRa + _np.swapaxes(dLdRb,0,1) 
+            dLdRa = _np.swapaxes(_np.dot(dL1, dR2), 1, 2)
+            dLdRb = _np.swapaxes(_np.dot(dL2, dR1), 1, 2)
+            dLdR_sym = dLdRa + _np.swapaxes(dLdRb, 0, 1)
 
-            hProdCache[i] = _np.dot(hL, R) + dLdR_sym + _np.transpose(_np.dot(L,hR),(1,2,0,3))
+            hProdCache[i] = _np.dot(hL, R) + dLdR_sym + _np.transpose(_np.dot(L, hR), (1, 2, 0, 3))
 
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
-            if abs(scale) > 1e-8: # _np.isclose(scale,0) is SLOW!
+            if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 hProdCache[i] /= _np.exp(scale)
                 if hProdCache[i].max() < HSMALL and hProdCache[i].min() > -HSMALL:
                     _warnings.warn("Scaled hProd small in order to keep prod managable.")
@@ -1129,23 +1128,23 @@ class MatrixForwardSimulator(ForwardSimulator):
 
 ## END CACHE FUNCTIONS
 
+
     def default_distribute_method(self):
-        """ 
+        """
         Return the preferred MPI distribution mode for this calculator.
         """
         return "deriv"
 
     def estimate_cache_size(self, nCircuits):
         """
-        Return an estimate of the ideal/desired cache size given a number of 
+        Return an estimate of the ideal/desired cache size given a number of
         operation sequences.
 
         Returns
         -------
         int
         """
-        return int( 1.3 * nCircuits )
-    
+        return int(1.3 * nCircuits)
 
     def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
@@ -1156,8 +1155,6 @@ class MatrixForwardSimulator(ForwardSimulator):
         evTree.initialize(simplified_circuits, numSubtreeComms)
         return evTree
 
-
-    
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
                            num_subtree_proc_groups, num_param1_groups,
                            num_param2_groups, num_final_strs):
@@ -1181,7 +1178,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             the subtrees.  It can often be useful to have fewer processor groups
             then subtrees (even == 1) in order to perform the parallelization
             over the parameter groups.
-        
+
         num_param1_groups : int
             The number of groups to divide the first-derivative parameters into.
             Computation will be automatically parallelized over these groups.
@@ -1194,7 +1191,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             The number of final strings (may be less than or greater than
             `cacheSize`) the tree will hold.
 
-        
+
         Returns
         -------
         int
@@ -1202,44 +1199,44 @@ class MatrixForwardSimulator(ForwardSimulator):
         """
         #Note: num_final_strs is irrelevant here b/c cachesize is always >= num_final_strs
         # and this dictates how large all the storage arrays are.
-        np1,np2 = num_param1_groups, num_param2_groups
-        FLOATSIZE = 8 # in bytes: TODO: a better way
+        np1, np2 = num_param1_groups, num_param2_groups
+        FLOATSIZE = 8  # in bytes: TODO: a better way
 
         dim = self.dim
-        nspam = int(round(_np.sqrt(self.dim))) #an estimate - could compute?
-        wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
-        wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
+        nspam = int(round(_np.sqrt(self.dim)))  # an estimate - could compute?
+        wrtLen1 = (self.Np + np1 - 1) // np1  # ceiling(num_params / np1)
+        wrtLen2 = (self.Np + np2 - 1) // np2  # ceiling(num_params / np2)
 
         mem = 0
         for fnName in subcalls:
             if fnName == "bulk_fill_probs":
-                mem += cache_size * dim * dim # product cache
-                mem += cache_size # scale cache (exps)
-                mem += cache_size # scale vals
+                mem += cache_size * dim * dim  # product cache
+                mem += cache_size  # scale cache (exps)
+                mem += cache_size  # scale vals
 
             elif fnName == "bulk_fill_dprobs":
-                mem += cache_size * wrtLen1 * dim * dim # dproduct cache
-                mem += cache_size * dim * dim # product cache
-                mem += cache_size # scale cache
-                mem += cache_size # scale vals
+                mem += cache_size * wrtLen1 * dim * dim  # dproduct cache
+                mem += cache_size * dim * dim  # product cache
+                mem += cache_size  # scale cache
+                mem += cache_size  # scale vals
 
             elif fnName == "bulk_fill_hprobs":
-                mem += cache_size * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
-                mem += cache_size * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                mem += cache_size * dim * dim # product cache
-                mem += cache_size # scale cache
-                mem += cache_size # scale vals
+                mem += cache_size * wrtLen1 * wrtLen2 * dim * dim  # hproduct cache
+                mem += cache_size * (wrtLen1 + wrtLen2) * dim * dim  # dproduct cache
+                mem += cache_size * dim * dim  # product cache
+                mem += cache_size  # scale cache
+                mem += cache_size  # scale vals
 
             elif fnName == "bulk_hprobs_by_block":
                 #Note: includes "results" memory since this is allocated within
                 # the generator and yielded, *not* allocated by the user.
-                mem += 2 * cache_size * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
-                mem += cache_size * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
-                mem += cache_size * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
-                mem += cache_size * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                mem += cache_size * dim * dim # product cache
-                mem += cache_size # scale cache
-                mem += cache_size # scale vals
+                mem += 2 * cache_size * nspam * wrtLen1 * wrtLen2  # hprobs & dprobs12 results
+                mem += cache_size * nspam * (wrtLen1 + wrtLen2)  # dprobs1 & dprobs2
+                mem += cache_size * wrtLen1 * wrtLen2 * dim * dim  # hproduct cache
+                mem += cache_size * (wrtLen1 + wrtLen2) * dim * dim  # dproduct cache
+                mem += cache_size * dim * dim  # product cache
+                mem += cache_size  # scale cache
+                mem += cache_size  # scale vals
 
             ## It doesn't make sense to include these since their required memory is fixed
             ## (and dominated) by the output array size. Could throw more informative error?
@@ -1263,10 +1260,8 @@ class MatrixForwardSimulator(ForwardSimulator):
 
             else:
                 raise ValueError("Unknown subcall name: %s" % fnName)
-        
+
         return mem * FLOATSIZE
-
-
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
@@ -1299,26 +1294,24 @@ class MatrixForwardSimulator(ForwardSimulator):
             the scaling that needs to be applied to the resulting products
             (final_product[i] = scaleValues[i] * prods[i]).
         """
-        prodCache, scaleCache = self._compute_product_cache(evalTree,comm)
+        prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
 
         #use cached data to construct return values
         Gs = evalTree.final_view(prodCache, axis=0)
-           #shape == ( len(circuit_list), dim, dim ), Gs[i] is product for i-th operation sequence
+        #shape == ( len(circuit_list), dim, dim ), Gs[i] is product for i-th operation sequence
         scaleExps = evalTree.final_view(scaleCache)
 
         old_err = _np.seterr(over='ignore')
-        scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
+        scaleVals = _np.exp(scaleExps)  # may overflow, but OK if infs occur here
         _np.seterr(**old_err)
 
         if bScale:
             return Gs, scaleVals
         else:
             old_err = _np.seterr(over='ignore')
-            Gs = _np.swapaxes( _np.swapaxes(Gs,0,2) * scaleVals, 0,2)  #may overflow, but ok
+            Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
             _np.seterr(**old_err)
             return Gs
-
-
 
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None, wrtFilter=None):
@@ -1393,64 +1386,65 @@ class MatrixForwardSimulator(ForwardSimulator):
         dim = self.dim
 
         wrtSlice = _slct.list_to_slice(wrtFilter) if (wrtFilter is not None) else None
-          #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
+        #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                                   comm, wrtSlice)
 
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
-        scaleExps = evalTree.final_view( scaleCache )
-        scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
+        scaleExps = evalTree.final_view(scaleCache)
+        scaleVals = _np.exp(scaleExps)  # may overflow, but OK if infs occur here
         _np.seterr(**old_err)
 
         if bReturnProds:
-            Gs  = evalTree.final_view(prodCache, axis=0)
-              #shape == ( len(circuit_list), dim, dim ), 
-              # Gs[i] is product for i-th operation sequence
+            Gs = evalTree.final_view(prodCache, axis=0)
+            #shape == ( len(circuit_list), dim, dim ),
+            # Gs[i] is product for i-th operation sequence
 
-            dGs = evalTree.final_view(dProdCache, axis=0) 
-              #shape == ( len(circuit_list), nDerivCols, dim, dim ),
-              # dGs[i] is dprod_dOps for ith string
+            dGs = evalTree.final_view(dProdCache, axis=0)
+            #shape == ( len(circuit_list), nDerivCols, dim, dim ),
+            # dGs[i] is dprod_dOps for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
-                Gs  = _np.swapaxes( _np.swapaxes(Gs,0,2) * scaleVals, 0,2)  #may overflow, but ok
-                dGs = _np.swapaxes( _np.swapaxes(dGs,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
-                dGs[_np.isnan(dGs)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
+                # may overflow or get nans (invalid), but ok
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 3) * scaleVals, 0, 3)
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                dGs[_np.isnan(dGs)] = 0
                 _np.seterr(**old_err)
 
             if flat:
-                dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape(
-                    (nDerivCols, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(
+                    (nDerivCols, nCircuits * dim**2)), 0, 1)  # cols = deriv cols, rows = flattened everything else
 
             return (dGs, Gs, scaleVals) if bScale else (dGs, Gs)
 
         else:
-            dGs = evalTree.final_view(dProdCache, axis=0) 
-              #shape == ( len(circuit_list), nDerivCols, dim, dim ),
-              # dGs[i] is dprod_dOps for ith string
+            dGs = evalTree.final_view(dProdCache, axis=0)
+            #shape == ( len(circuit_list), nDerivCols, dim, dim ),
+            # dGs[i] is dprod_dOps for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
-                dGs = _np.swapaxes( _np.swapaxes(dGs,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
-                dGs[_np.isnan(dGs)] =  0 #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we
-                                        # assume the zero deriv value trumps since we've renormed to keep all the products within decent bounds
+                # may overflow or get nans (invalid), but ok
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 3) * scaleVals, 0, 3)
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we
+                dGs[_np.isnan(dGs)] = 0
+                # assume the zero deriv value trumps since we've renormed to keep all the products within decent bounds
                 #assert( len( (_np.isnan(dGs)).nonzero()[0] ) == 0 )
                 #assert( len( (_np.isinf(dGs)).nonzero()[0] ) == 0 )
                 #dGs = clip(dGs,-1e300,1e300)
                 _np.seterr(**old_err)
 
             if flat:
-                dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape(
-                    (nDerivCols, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(
+                    (nDerivCols, nCircuits * dim**2)), 0, 1)  # cols = deriv cols, rows = flattened everything else
             return (dGs, scaleVals) if bScale else dGs
-
-
 
     def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
                       bScale=False, comm=None, wrtFilter1=None, wrtFilter2=None):
-
         """
         Return the Hessian of many operation sequence products at once.
 
@@ -1545,14 +1539,14 @@ class MatrixForwardSimulator(ForwardSimulator):
         dim = self.dim
         nDerivCols1 = self.Np if (wrtFilter1 is None) else _slct.length(wrtFilter1)
         nDerivCols2 = self.Np if (wrtFilter2 is None) else _slct.length(wrtFilter2)
-        nCircuits = evalTree.num_final_strings() #len(circuit_list)
+        nCircuits = evalTree.num_final_strings()  # len(circuit_list)
         wrtSlice1 = _slct.list_to_slice(wrtFilter1) if (wrtFilter1 is not None) else None
         wrtSlice2 = _slct.list_to_slice(wrtFilter2) if (wrtFilter2 is not None) else None
-          #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
+        #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
 
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache1 = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
-                                                  comm, wrtSlice1)        
+                                                   comm, wrtSlice1)
         dProdCache2 = dProdCache1 if (wrtSlice1 == wrtSlice2) else \
             self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                          comm, wrtSlice2)
@@ -1563,116 +1557,126 @@ class MatrixForwardSimulator(ForwardSimulator):
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
         scaleExps = evalTree.final_view(scaleCache)
-        scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
+        scaleVals = _np.exp(scaleExps)  # may overflow, but OK if infs occur here
         _np.seterr(**old_err)
 
         if bReturnDProdsAndProds:
-            Gs  = evalTree.final_view( prodCache, axis=0)
-              #shape == ( len(circuit_list), dim, dim ), 
-              # Gs[i] is product for i-th operation sequence
+            Gs = evalTree.final_view(prodCache, axis=0)
+            #shape == ( len(circuit_list), dim, dim ),
+            # Gs[i] is product for i-th operation sequence
 
             dGs1 = evalTree.final_view(dProdCache1, axis=0)
             dGs2 = evalTree.final_view(dProdCache2, axis=0)
-              #shape == ( len(circuit_list), nDerivColsX, dim, dim ),
-              # dGs[i] is dprod_dOps for ith string
+            #shape == ( len(circuit_list), nDerivColsX, dim, dim ),
+            # dGs[i] is dprod_dOps for ith string
 
             hGs = evalTree.final_view(hProdCache, axis=0)
-              #shape == ( len(circuit_list), nDerivCols1, nDerivCols2, dim, dim ),
-              # hGs[i] is hprod_dGates for ith string
+            #shape == ( len(circuit_list), nDerivCols1, nDerivCols2, dim, dim ),
+            # hGs[i] is hprod_dGates for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
-                Gs  = _np.swapaxes( _np.swapaxes(Gs,0,2) * scaleVals, 0,2)  #may overflow, but ok
-                dGs1 = _np.swapaxes( _np.swapaxes(dGs1,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
-                dGs2 = _np.swapaxes( _np.swapaxes(dGs2,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
-                hGs = _np.swapaxes( _np.swapaxes(hGs,0,4) * scaleVals, 0,4) #may overflow or get nans (invalid), but ok
-                dGs1[_np.isnan(dGs1)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
-                dGs2[_np.isnan(dGs2)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
-                hGs[_np.isnan(hGs)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value (see below)
+                Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
+                # may overflow or get nans (invalid), but ok
+                dGs1 = _np.swapaxes(_np.swapaxes(dGs1, 0, 3) * scaleVals, 0, 3)
+                # may overflow or get nans (invalid), but ok
+                dGs2 = _np.swapaxes(_np.swapaxes(dGs2, 0, 3) * scaleVals, 0, 3)
+                # may overflow or get nans (invalid), but ok
+                hGs = _np.swapaxes(_np.swapaxes(hGs, 0, 4) * scaleVals, 0, 4)
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                dGs1[_np.isnan(dGs1)] = 0
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                dGs2[_np.isnan(dGs2)] = 0
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value (see below)
+                hGs[_np.isnan(hGs)] = 0
                 _np.seterr(**old_err)
 
             if flat:
-                dGs1 = _np.swapaxes( _np.swapaxes(dGs1,0,1).reshape( (nDerivCols1, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
-                dGs2 = _np.swapaxes( _np.swapaxes(dGs2,0,1).reshape( (nDerivCols2, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
-                hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nDerivCols1, nDerivCols2, nCircuits*dim**2) ), 2) # cols = deriv cols, rows = all else
+                # cols = deriv cols, rows = flattened all else
+                dGs1 = _np.swapaxes(_np.swapaxes(dGs1, 0, 1).reshape((nDerivCols1, nCircuits * dim**2)), 0, 1)
+                # cols = deriv cols, rows = flattened all else
+                dGs2 = _np.swapaxes(_np.swapaxes(dGs2, 0, 1).reshape((nDerivCols2, nCircuits * dim**2)), 0, 1)
+                hGs = _np.rollaxis(_np.rollaxis(hGs, 0, 3).reshape(
+                    (nDerivCols1, nDerivCols2, nCircuits * dim**2)), 2)  # cols = deriv cols, rows = all else
 
             return (hGs, dGs1, dGs2, Gs, scaleVals) if bScale else (hGs, dGs1, dGs2, Gs)
 
         else:
-            hGs = evalTree.final_view(hProdCache, axis=0) 
-              #shape == ( len(circuit_list), nDerivCols, nDerivCols, dim, dim )
+            hGs = evalTree.final_view(hProdCache, axis=0)
+            #shape == ( len(circuit_list), nDerivCols, nDerivCols, dim, dim )
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
-                hGs = _np.swapaxes( _np.swapaxes(hGs,0,4) * scaleVals, 0,4) #may overflow or get nans (invalid), but ok
-                hGs[_np.isnan(hGs)] =  0 #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value, and we
-                                         # assume the zero hessian value trumps since we've renormed to keep all the products within decent bounds
+                # may overflow or get nans (invalid), but ok
+                hGs = _np.swapaxes(_np.swapaxes(hGs, 0, 4) * scaleVals, 0, 4)
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value, and we
+                hGs[_np.isnan(hGs)] = 0
+                # assume the zero hessian value trumps since we've renormed to keep all the products within decent bounds
                 #assert( len( (_np.isnan(hGs)).nonzero()[0] ) == 0 )
                 #assert( len( (_np.isinf(hGs)).nonzero()[0] ) == 0 )
                 #hGs = clip(hGs,-1e300,1e300)
                 _np.seterr(**old_err)
 
-            if flat: hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nDerivCols1, nDerivCols2, nCircuits*dim**2) ), 2) # as above
+            if flat: hGs = _np.rollaxis(_np.rollaxis(hGs, 0, 3).reshape(
+                (nDerivCols1, nDerivCols2, nCircuits * dim**2)), 2)  # as above
 
             return (hGs, scaleVals) if bScale else hGs
 
-
     def _scaleExp(self, scaleExps):
         old_err = _np.seterr(over='ignore')
-        scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
+        scaleVals = _np.exp(scaleExps)  # may overflow, but OK if infs occur here
         _np.seterr(**old_err)
         return scaleVals
 
-
     def _rhoE_from_spamTuple(self, spamTuple):
-        assert( len(spamTuple) == 2 )
-        if isinstance(spamTuple[0],_Label):
-            rholabel,elabel = spamTuple
-            rho = self.sos.get_prep(rholabel).todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
-            E   = _np.conjugate(_np.transpose(self.sos.get_effect(elabel).todense()[:,None])) # convention: E has shape (1,N)
+        assert(len(spamTuple) == 2)
+        if isinstance(spamTuple[0], _Label):
+            rholabel, elabel = spamTuple
+            # This calculator uses the convention that rho has shape (N,1)
+            rho = self.sos.get_prep(rholabel).todense()[:, None]
+            E = _np.conjugate(_np.transpose(self.sos.get_effect(elabel).todense()
+                                            [:, None]))  # convention: E has shape (1,N)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
             rho, Eraw = spamTuple
-            E   = _np.conjugate(_np.transpose(Eraw))
-        return rho,E
+            E = _np.conjugate(_np.transpose(Eraw))
+        return rho, E
 
     def _rhoEs_from_spamTuples(self, rholabel, elabels):
         #Note: no support for "custom" spamlabels...
-        rho = self.sos.get_prep(rholabel).todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
-        Es =  [self.sos.get_effect(elabel).todense()[:,None] for elabel in elabels]
-        Es = _np.conjugate(_np.transpose( _np.concatenate( Es, axis=1 ))) # convention: Es has shape (len(elabels),N)
-        return rho,Es
-
+        # This calculator uses the convention that rho has shape (N,1)
+        rho = self.sos.get_prep(rholabel).todense()[:, None]
+        Es = [self.sos.get_effect(elabel).todense()[:, None] for elabel in elabels]
+        Es = _np.conjugate(_np.transpose(_np.concatenate(Es, axis=1)))  # convention: Es has shape (len(elabels),N)
+        return rho, Es
 
     def _probs_from_rhoE(self, rho, E, Gs, scaleVals):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-        
+
         #Compute probability and save in return array
         # want vp[iFinal] = float(dot(E, dot(G, rho)))
         #  vp[i] = sum_k,l E[0,k] Gs[i,k,l] rho[l,0] * scaleVals[i]
         #  vp[i] = sum_k E[0,k] dot(Gs, rho)[i,k,0]  * scaleVals[i]
         #  vp[i] = dot( E, dot(Gs, rho))[0,i,0]      * scaleVals[i]
         #  vp    = squeeze( dot( E, dot(Gs, rho)), axis=(0,2) ) * scaleVals
-        return _np.squeeze( _np.dot(E, _np.dot(Gs, rho)), axis=(0,2) ) * scaleVals
-          # shape == (len(circuit_list),) ; may overflow but OK
-
+        return _np.squeeze(_np.dot(E, _np.dot(Gs, rho)), axis=(0, 2)) * scaleVals
+        # shape == (len(circuit_list),) ; may overflow but OK
 
     def _dprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs, scaleVals, wrtSlice=None):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-        
-        rholabel,elabel = spamTuple
-        rhoVec = self.sos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+
+        rholabel, elabel = spamTuple
+        rhoVec = self.sos.get_prep(rholabel)  # distinct from rho,E b/c rho,E are
         EVec = self.sos.get_effect(elabel)   # arrays, these are SPAMVecs
         nCircuits = Gs.shape[0]
         rho_wrtFilter, rho_gpindices = self._process_wrtFilter(wrtSlice, self.sos.get_prep(rholabel))
         E_wrtFilter, E_gpindices = self._process_wrtFilter(wrtSlice, self.sos.get_effect(elabel))
         nDerivCols = self.Np if wrtSlice is None else _slct.length(wrtSlice)
 
-
         # GATE DERIVS (assume dGs is already sized/filtered) -------------------
-        assert( dGs.shape[1] == nDerivCols ), "dGs must be pre-filtered!"
-        
+        assert(dGs.shape[1] == nDerivCols), "dGs must be pre-filtered!"
+
         #Compute d(probability)/dOps and save in return list (now have G,dG => product, dprod_dOps)
         #  prod, dprod_dOps = G,dG
         # dp_dOps[i,j] = sum_k,l E[0,k] dGs[i,j,k,l] rho[l,0]
@@ -1680,12 +1684,12 @@ class MatrixForwardSimulator(ForwardSimulator):
         # dp_dOps[i,j] = dot( E, dot( dGs, rho ) )[0,i,j,0]
         # dp_dOps      = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        dp_dOps = _np.squeeze( _np.dot( E, _np.dot( dGs, rho ) ), axis=(0,3) ) * scaleVals[:,None]
+        dp_dOps = _np.squeeze(_np.dot(E, _np.dot(dGs, rho)), axis=(0, 3)) * scaleVals[:, None]
         _np.seterr(**old_err2)
-           # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
-           # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
-           #  this case set to zero since we can't tell whether it's + or - inf anyway...
-        dp_dOps[ _np.isnan(dp_dOps) ] = 0
+        # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
+        # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
+        #  this case set to zero since we can't tell whether it's + or - inf anyway...
+        dp_dOps[_np.isnan(dp_dOps)] = 0
 
         #SPAM -------------
 
@@ -1694,11 +1698,11 @@ class MatrixForwardSimulator(ForwardSimulator):
         # dp_drhos[i,J0+J] = dot(E, Gs, drhoP)[0,i,J]
         # dp_drhos[:,J0+J] = squeeze(dot(E, Gs, drhoP),axis=(0,))[:,J]
 
-        dp_drhos = _np.zeros( (nCircuits, nDerivCols ) )
-        _fas(dp_drhos, [None,rho_gpindices],
+        dp_drhos = _np.zeros((nCircuits, nDerivCols))
+        _fas(dp_drhos, [None, rho_gpindices],
              _np.squeeze(_np.dot(_np.dot(E, Gs),
                                  rhoVec.deriv_wrt_params(rho_wrtFilter)),
-                         axis=(0,)) * scaleVals[:,None]) # may overflow, but OK
+                         axis=(0,)) * scaleVals[:, None])  # may overflow, but OK
 
         # Get: dp_dEs[i, E_gpindices] = dot(transpose(dE/dEP),Gs[i],rho))
         # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] Gs[i,j,l] rho[l,0]
@@ -1706,43 +1710,43 @@ class MatrixForwardSimulator(ForwardSimulator):
         # dp_dEs[i,J0+J] = sum_j dot(Gs, rho)[i,j,0] dEP[j,J]
         # dp_dEs[i,J0+J] = dot(squeeze(dot(Gs, rho),2), dEP)[i,J]
         # dp_dEs[:,J0+J] = dot(squeeze(dot(Gs, rho),axis=(2,)), dEP)[:,J]
-        dp_dEs = _np.zeros( (nCircuits, nDerivCols) )
-        dp_dAnyE = _np.squeeze(_np.dot(Gs, rho),axis=(2,)) * scaleVals[:,None] #may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
-        _fas(dp_dEs, [None,E_gpindices],
+        dp_dEs = _np.zeros((nCircuits, nDerivCols))
+        # may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
+        dp_dAnyE = _np.squeeze(_np.dot(Gs, rho), axis=(2,)) * scaleVals[:, None]
+        _fas(dp_dEs, [None, E_gpindices],
              _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
 
         sub_vdp = dp_drhos + dp_dEs + dp_dOps
         return sub_vdp
 
-
     #def _get_filter_info(self, wrtSlices):
-    #    """ 
+    #    """
     #    Returns a "filter" object containing info about the mapping
     #    of prep and effect parameters onto a final "filtered" set.
     #    """
     #    PrepEffectFilter = _collections.namedtuple(
     #        'PrepEffectFilter', 'rho_local_slices rho_global_slices ' +
     #        'e_local_slices e_global_slices num_rho_params num_e_params')
-    #  
+    #
     #    if wrtSlices is not None:
-    #        loc_rho_slices = [ 
+    #        loc_rho_slices = [
     #            _slct.shift(_slct.intersect(
     #                    wrtSlices['preps'],
     #                    slice(self.rho_offset[i],self.rho_offset[i+1])),
     #                        -self.rho_offset[i]) for i in range(len(self.preps))]
     #        tmp_num_params = [_slct.length(s) for s in loc_rho_slices]
     #        tmp_offsets = [ sum(tmp_num_params[0:i]) for i in range(len(self.preps)+1) ]
-    #        global_rho_slices = [ slice(tmp_offsets[i],tmp_offsets[i+1]) 
+    #        global_rho_slices = [ slice(tmp_offsets[i],tmp_offsets[i+1])
     #                              for i in range(len(self.preps)) ]
     #
-    #        loc_e_slices = [ 
+    #        loc_e_slices = [
     #            _slct.shift(_slct.intersect(
     #                    wrtSlices['effects'],
     #                    slice(self.e_offset[i],self.e_offset[i+1])),
     #                        -self.e_offset[i]) for i in range(len(self.effects))]
     #        tmp_num_params = [_slct.length(s) for s in loc_e_slices]
     #        tmp_offsets = [ sum(tmp_num_params[0:i]) for i in range(len(self.effects)+1) ]
-    #        global_e_slices = [ slice(tmp_offsets[i],tmp_offsets[i+1]) 
+    #        global_e_slices = [ slice(tmp_offsets[i],tmp_offsets[i+1])
     #                              for i in range(len(self.effects)) ]
     #
     #        return PrepEffectFilter(rho_local_slices=loc_rho_slices,
@@ -1762,15 +1766,13 @@ class MatrixForwardSimulator(ForwardSimulator):
     #                                e_global_slices=global_e_slices,
     #                                num_rho_params=self.tot_rho_params,
     #                                num_e_params=self.tot_e_params)
-                               
-
 
     def _hprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs1, dGs2, hGs, scaleVals,
                           wrtSlice1=None, wrtSlice2=None):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-        
-        rholabel,elabel = spamTuple
-        rhoVec = self.sos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+
+        rholabel, elabel = spamTuple
+        rhoVec = self.sos.get_prep(rholabel)  # distinct from rho,E b/c rho,E are
         EVec = self.sos.get_effect(elabel)   # arrays, these are SPAMVecs
         nCircuits = Gs.shape[0]
 
@@ -1778,16 +1780,16 @@ class MatrixForwardSimulator(ForwardSimulator):
         rho_wrtFilter2, rho_gpindices2 = self._process_wrtFilter(wrtSlice2, self.sos.get_prep(rholabel))
         E_wrtFilter1, E_gpindices1 = self._process_wrtFilter(wrtSlice1, self.sos.get_effect(elabel))
         E_wrtFilter2, E_gpindices2 = self._process_wrtFilter(wrtSlice2, self.sos.get_effect(elabel))
-        
+
         nDerivCols1 = self.Np if wrtSlice1 is None else _slct.length(wrtSlice1)
         nDerivCols2 = self.Np if wrtSlice2 is None else _slct.length(wrtSlice2)
-        
+
         #flt1 = self._get_filter_info(wrtSlices1)
         #flt2 = self._get_filter_info(wrtSlices2)
 
         # GATE DERIVS (assume hGs is already sized/filtered) -------------------
-        assert( hGs.shape[1] == nDerivCols1 ), "hGs must be pre-filtered!"
-        assert( hGs.shape[2] == nDerivCols2 ), "hGs must be pre-filtered!"
+        assert(hGs.shape[1] == nDerivCols1), "hGs must be pre-filtered!"
+        assert(hGs.shape[2] == nDerivCols2), "hGs must be pre-filtered!"
 
         #Compute d2(probability)/dGates2 and save in return list
         # d2pr_dOps2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0]
@@ -1795,64 +1797,61 @@ class MatrixForwardSimulator(ForwardSimulator):
         # d2pr_dOps2[i,j,k] = dot( E, dot( dGs, rho ) )[0,i,j,k,0]
         # d2pr_dOps2        = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,4))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        d2pr_dOps2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
+        d2pr_dOps2 = _np.squeeze(_np.dot(E, _np.dot(hGs, rho)), axis=(0, 4)) * scaleVals[:, None, None]
         _np.seterr(**old_err2)
 
         # may overflow, but OK ; shape == (len(circuit_list), nDerivCols, nDerivCols)
         # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
         #  this case set to zero since we can't tell whether it's + or - inf anyway...
-        d2pr_dOps2[ _np.isnan(d2pr_dOps2) ] = 0
-
+        d2pr_dOps2[_np.isnan(d2pr_dOps2)] = 0
 
         # SPAM DERIVS (assume dGs1 and dGs2 are already sized/filtered) --------
-        assert( dGs1.shape[1] == nDerivCols1 ), "dGs1 must be pre-filtered!"
-        assert( dGs2.shape[1] == nDerivCols2 ), "dGs1 must be pre-filtered!"
+        assert(dGs1.shape[1] == nDerivCols1), "dGs1 must be pre-filtered!"
+        assert(dGs2.shape[1] == nDerivCols2), "dGs1 must be pre-filtered!"
 
         # Get: d2pr_drhos[i, j, rho_gpindices] = dot(E,dGs[i,j],drho/drhoP))
         # d2pr_drhos[i,j,J0+J] = sum_kl E[0,k] dGs[i,j,k,l] drhoP[l,J]
         # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
         # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]
         drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
-        d2pr_drhos1 = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
-        _fas(d2pr_drhos1,[None, None, rho_gpindices2],
-             _np.squeeze( _np.dot(_np.dot(E,dGs1),drho), axis=(0,)) \
-             * scaleVals[:,None,None]) #overflow OK
+        d2pr_drhos1 = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
+        _fas(d2pr_drhos1, [None, None, rho_gpindices2],
+             _np.squeeze(_np.dot(_np.dot(E, dGs1), drho), axis=(0,))
+             * scaleVals[:, None, None])  # overflow OK
 
         # get d2pr_drhos where gate derivatives are wrt the 2nd set of gate parameters
-        if dGs1 is dGs2 and wrtSlice1 == wrtSlice2: #TODO: better check for equivalence: maybe let dGs2 be None?
+        if dGs1 is dGs2 and wrtSlice1 == wrtSlice2:  # TODO: better check for equivalence: maybe let dGs2 be None?
             assert(nDerivCols1 == nDerivCols2)
-            d2pr_drhos2 = _np.transpose(d2pr_drhos1,(0,2,1))
+            d2pr_drhos2 = _np.transpose(d2pr_drhos1, (0, 2, 1))
         else:
             drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
-            d2pr_drhos2 = _np.zeros( (nCircuits, nDerivCols2, nDerivCols1) )
-            _fas(d2pr_drhos2,[None,None,rho_gpindices1],
-                 _np.squeeze( _np.dot(_np.dot(E,dGs2),drho), axis=(0,))
-                 * scaleVals[:,None,None]) #overflow OK
-            d2pr_drhos2 = _np.transpose(d2pr_drhos2,(0,2,1))
-
+            d2pr_drhos2 = _np.zeros((nCircuits, nDerivCols2, nDerivCols1))
+            _fas(d2pr_drhos2, [None, None, rho_gpindices1],
+                 _np.squeeze(_np.dot(_np.dot(E, dGs2), drho), axis=(0,))
+                 * scaleVals[:, None, None])  # overflow OK
+            d2pr_drhos2 = _np.transpose(d2pr_drhos2, (0, 2, 1))
 
         # Get: d2pr_dEs[i, j, E_gpindices] = dot(transpose(dE/dEP),dGs[i,j],rho)
         # d2pr_dEs[i,j,J0+J] = sum_kl dEPT[J,k] dGs[i,j,k,l] rho[l,0]
         # d2pr_dEs[i,j,J0+J] = sum_k dEP[k,J] dot(dGs, rho)[i,j,k,0]
         # d2pr_dEs[i,j,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[i,j,J]
         # d2pr_dEs[:,:,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[:,:,J]
-        d2pr_dEs1 = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
-        dp_dAnyE = _np.squeeze(_np.dot(dGs1,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
+        d2pr_dEs1 = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
+        dp_dAnyE = _np.squeeze(_np.dot(dGs1, rho), axis=(3,)) * scaleVals[:, None, None]  # overflow OK
         devec = EVec.deriv_wrt_params(E_wrtFilter2)
-        _fas(d2pr_dEs1,[None,None,E_gpindices2],
+        _fas(d2pr_dEs1, [None, None, E_gpindices2],
              _np.dot(dp_dAnyE, devec))
 
         # get d2pr_dEs where gate derivatives are wrt the 2nd set of gate parameters
-        if dGs1 is dGs2 and wrtSlice1 == wrtSlice2: #TODO: better check for equivalence: maybe let dGs2 be None?
+        if dGs1 is dGs2 and wrtSlice1 == wrtSlice2:  # TODO: better check for equivalence: maybe let dGs2 be None?
             assert(nDerivCols1 == nDerivCols2)
-            d2pr_dEs2 = _np.transpose(d2pr_dEs1,(0,2,1))
+            d2pr_dEs2 = _np.transpose(d2pr_dEs1, (0, 2, 1))
         else:
-            d2pr_dEs2 = _np.zeros( (nCircuits, nDerivCols2, nDerivCols1) )
-            dp_dAnyE = _np.squeeze(_np.dot(dGs2,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
+            d2pr_dEs2 = _np.zeros((nCircuits, nDerivCols2, nDerivCols1))
+            dp_dAnyE = _np.squeeze(_np.dot(dGs2, rho), axis=(3,)) * scaleVals[:, None, None]  # overflow OK
             devec = EVec.deriv_wrt_params(E_wrtFilter1)
-            _fas(d2pr_dEs2,[None,None,E_gpindices1], _np.dot(dp_dAnyE, devec))
-            d2pr_dEs2 = _np.transpose(d2pr_dEs2,(0,2,1))
-
+            _fas(d2pr_dEs2, [None, None, E_gpindices1], _np.dot(dp_dAnyE, devec))
+            d2pr_dEs2 = _np.transpose(d2pr_dEs2, (0, 2, 1))
 
         # Get: d2pr_dErhos[i, e_offset[eIndex]:e_offset[eIndex+1], e_offset[rhoIndex]:e_offset[rhoIndex+1]] =
         #    dEP^T * prod[i,:,:] * drhoP
@@ -1861,99 +1860,95 @@ class MatrixForwardSimulator(ForwardSimulator):
         # d2pr_dErhos[i,J0+J,K0+K] = dot(dEPT,prod,drhoP)[J,i,K]
         # d2pr_dErhos[i,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[i,J,K]
         # d2pr_dErhos[:,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[:,J,K]
-        d2pr_dErhos1 = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
+        d2pr_dErhos1 = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
         drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
-        dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
+        dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:, None, None]  # overflow OK
         devec = EVec.deriv_wrt_params(E_wrtFilter1)
         _fas(d2pr_dErhos1, (None, E_gpindices1, rho_gpindices2),
-            _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1))
+             _np.swapaxes(_np.dot(_np.transpose(devec), dp_dAnyE), 0, 1))
 
         # get d2pr_dEs where E derivatives are wrt the 2nd set of gate parameters
-        if wrtSlice1 == wrtSlice2: #Note: this doesn't involve gate derivatives
-            d2pr_dErhos2 = _np.transpose(d2pr_dErhos1,(0,2,1))
+        if wrtSlice1 == wrtSlice2:  # Note: this doesn't involve gate derivatives
+            d2pr_dErhos2 = _np.transpose(d2pr_dErhos1, (0, 2, 1))
         else:
-            d2pr_dErhos2 = _np.zeros( (nCircuits, nDerivCols2, nDerivCols1) )
+            d2pr_dErhos2 = _np.zeros((nCircuits, nDerivCols2, nDerivCols1))
             drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
-            dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
+            dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:, None, None]  # overflow OK
             devec = EVec.deriv_wrt_params(E_wrtFilter2)
             _fas(d2pr_dErhos2, [None, E_gpindices2, rho_gpindices1],
-                 _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1))
-            d2pr_dErhos2 = _np.transpose(d2pr_dErhos2,(0,2,1))
+                 _np.swapaxes(_np.dot(_np.transpose(devec), dp_dAnyE), 0, 1))
+            d2pr_dErhos2 = _np.transpose(d2pr_dErhos2, (0, 2, 1))
 
-                
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.sos.get_prep(rholabel).has_nonzero_hessian():
-            dp_dAnyRho = _np.dot(E, Gs).squeeze(0) * scaleVals[:,None] #overflow OK
-            d2pr_d2rhos = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
-            _fas(d2pr_d2rhos,[None, rho_gpindices1, rho_gpindices2],
+            dp_dAnyRho = _np.dot(E, Gs).squeeze(0) * scaleVals[:, None]  # overflow OK
+            d2pr_d2rhos = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
+            _fas(d2pr_d2rhos, [None, rho_gpindices1, rho_gpindices2],
                  _np.tensordot(dp_dAnyRho, self.sos.get_prep(rholabel).hessian_wrt_params(
-                        rho_wrtFilter1, rho_wrtFilter2), (1,0)))
-                 # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.sos.get_prep(rholabel).hessian_wrt_params(
-                 #    rho_wrtFilter1, rho_wrtFilter2))
+                     rho_wrtFilter1, rho_wrtFilter2), (1, 0)))
+            # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.sos.get_prep(rholabel).hessian_wrt_params(
+            #    rho_wrtFilter1, rho_wrtFilter2))
         else:
             d2pr_d2rhos = 0
 
         if self.sos.get_effect(elabel).has_nonzero_hessian():
-            dp_dAnyE = _np.dot(Gs, rho).squeeze(2) * scaleVals[:,None] #overflow OK
-            d2pr_d2Es   = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
-            _fas(d2pr_d2Es,[None, E_gpindices1, E_gpindices2],
+            dp_dAnyE = _np.dot(Gs, rho).squeeze(2) * scaleVals[:, None]  # overflow OK
+            d2pr_d2Es = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
+            _fas(d2pr_d2Es, [None, E_gpindices1, E_gpindices2],
                  _np.tensordot(dp_dAnyE, self.sos.get_effect(elabel).hessian_wrt_params(
-                        E_wrtFilter1, E_wrtFilter2), (1,0)))
-                 # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.sos.get_effect(elabel).hessian_wrt_params(
-                 #    E_wrtFilter1, E_wrtFilter2))
+                     E_wrtFilter1, E_wrtFilter2), (1, 0)))
+            # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.sos.get_effect(elabel).hessian_wrt_params(
+            #    E_wrtFilter1, E_wrtFilter2))
         else:
             d2pr_d2Es = 0
 
-
         # END SPAM DERIVS -----------------------
 
-        ret  = d2pr_d2rhos + d2pr_dErhos2 + d2pr_drhos2    # wrt rho
-        ret += d2pr_dErhos1+ d2pr_d2Es    + d2pr_dEs2      # wrt E
-        ret += d2pr_drhos1 + d2pr_dEs1    + d2pr_dOps2   # wrt gates
-    
-        return ret
+        ret = d2pr_d2rhos + d2pr_dErhos2 + d2pr_drhos2    # wrt rho
+        ret += d2pr_dErhos1 + d2pr_d2Es + d2pr_dEs2      # wrt E
+        ret += d2pr_drhos1 + d2pr_dEs1 + d2pr_dOps2   # wrt gates
 
+        return ret
 
     def _check(self, evalTree, prMxToFill=None, dprMxToFill=None, hprMxToFill=None, clipTo=None):
         # compare with older slower version that should do the same thing (for debugging)
-        master_circuit_list = evalTree.generate_circuit_list(permute=False) #raw operation sequences
-        
-        for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
+        master_circuit_list = evalTree.generate_circuit_list(permute=False)  # raw operation sequences
+
+        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
             circuit_list = master_circuit_list[gInds]
 
             if prMxToFill is not None:
-                check_vp = _np.array( [ self.prs(spamTuple[0], [spamTuple[1]], circuit, clipTo, False)[0] for circuit in circuit_list ] )
+                check_vp = _np.array([self.prs(spamTuple[0], [spamTuple[1]], circuit, clipTo, False)[0]
+                                      for circuit in circuit_list])
                 if _nla.norm(prMxToFill[fInds] - check_vp) > 1e-6:
-                    _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
-                               (_nla.norm(prMxToFill[fInds]),
-                                _nla.norm(check_vp),
-                                _nla.norm(prMxToFill[fInds] - check_vp))) # pragma: no cover
+                    _warnings.warn("norm(vp-check_vp) = %g - %g = %g" %
+                                   (_nla.norm(prMxToFill[fInds]),
+                                    _nla.norm(check_vp),
+                                    _nla.norm(prMxToFill[fInds] - check_vp)))  # pragma: no cover
                     #for i,mdl in enumerate(circuit_list):
                     #    if abs(vp[i] - check_vp[i]) > 1e-7:
                     #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(mdl),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
-            
+
             if dprMxToFill is not None:
                 check_vdp = _np.concatenate(
-                    [ self.dpr(spamTuple, circuit, False,clipTo)
-                      for circuit in circuit_list ], axis=0 )
+                    [self.dpr(spamTuple, circuit, False, clipTo)
+                     for circuit in circuit_list], axis=0)
                 if _nla.norm(dprMxToFill[fInds] - check_vdp) > 1e-6:
                     _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" %
-                          (_nla.norm(dprMxToFill[fInds]),
-                           _nla.norm(check_vdp),
-                           _nla.norm(dprMxToFill[fInds] - check_vdp) )) # pragma: no cover
+                                   (_nla.norm(dprMxToFill[fInds]),
+                                    _nla.norm(check_vdp),
+                                    _nla.norm(dprMxToFill[fInds] - check_vdp)))  # pragma: no cover
 
             if hprMxToFill is not None:
                 check_vhp = _np.concatenate(
-                    [ self.hpr(spamTuple, circuit, False,False,clipTo)
-                      for circuit in circuit_list ], axis=0 )
+                    [self.hpr(spamTuple, circuit, False, False, clipTo)
+                     for circuit in circuit_list], axis=0)
                 if _nla.norm(hprMxToFill[fInds][0] - check_vhp[0]) > 1e-6:
                     _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" %
-                             (_nla.norm(hprMxToFill[fInds]),
-                              _nla.norm(check_vhp),
-                              _nla.norm(hprMxToFill[fInds] - check_vhp))) # pragma: no cover
-
-
+                                   (_nla.norm(hprMxToFill[fInds]),
+                                    _nla.norm(check_vhp),
+                                    _nla.norm(hprMxToFill[fInds] - check_vhp)))  # pragma: no cover
 
     def bulk_fill_probs(self, mxToFill, evalTree,
                         clipTo=None, check=False, comm=None):
@@ -1967,9 +1962,9 @@ class MatrixForwardSimulator(ForwardSimulator):
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
         compute the gate-only sequences.  This routine fills in `mxToFill`, which
-        must have length equal to the number of final elements (this can be 
+        must have length equal to the number of final elements (this can be
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
-        correspond to which strings and outcomes, you'll need the mappings 
+        correspond to which strings and outcomes, you'll need the mappings
         generated when the original list of `Circuits` was simplified.
 
         Parameters
@@ -2016,35 +2011,34 @@ class MatrixForwardSimulator(ForwardSimulator):
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
 
             #use cached data to final values
-            scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache) )
-            Gs  = evalSubTree.final_view( prodCache, axis=0)
-              # ( nCircuits, dim, dim )
+            scaleVals = self._scaleExp(evalSubTree.final_view(scaleCache))
+            Gs = evalSubTree.final_view(prodCache, axis=0)
+            # ( nCircuits, dim, dim )
 
             def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 old_err = _np.seterr(over='ignore')
-                rho,E = self._rhoE_from_spamTuple(spamTuple)
+                rho, E = self._rhoE_from_spamTuple(spamTuple)
                 _fas(mxToFill, [fInds], self._probs_from_rhoE(rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
                 _np.seterr(**old_err)
 
-            self._fill_result_tuple( (mxToFill,), evalSubTree,
-                                     slice(None), slice(None), calc_and_fill )
+            self._fill_result_tuple((mxToFill,), evalSubTree,
+                                    slice(None), slice(None), calc_and_fill)
 
         #collect/gather results
-        subtreeElementIndices = [ t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill,[], 0, comm)
+                             mxToFill, [], 0, comm)
         #note: pass mxToFill, dim=(KS), so gather mxToFill[felslc] (axis=0)
 
         if clipTo is not None:
-            _np.clip( mxToFill, clipTo[0], clipTo[1], out=mxToFill ) # in-place clip
+            _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
 
         if check:
             self._check(evalTree, mxToFill, clipTo=clipTo)
 
-
     def bulk_fill_dprobs(self, mxToFill, evalTree,
-                         prMxToFill=None,clipTo=None,check=False,
+                         prMxToFill=None, clipTo=None, check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
         """
@@ -2058,7 +2052,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         ----------
         mxToFill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M is the 
+          computed elements (i.e. evalTree.num_final_elements()) and M is the
           number of model parameters.
 
         evalTree : EvalTree
@@ -2115,25 +2109,25 @@ class MatrixForwardSimulator(ForwardSimulator):
         if profiler is None: profiler = _dummy_profiler
 
         if wrtFilter is not None:
-            assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
+            assert(wrtBlockSize is None)  # Cannot specify both wrtFilter and wrtBlockSize
             wrtSlice = _slct.list_to_slice(wrtFilter)
         else:
             wrtSlice = None
 
-        profiler.mem_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)" 
-                           % (mxToFill.nbytes/(1024.0**3)) )
+        profiler.mem_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
+                           % (mxToFill.nbytes / (1024.0**3)))
 
         ## memory profiling of python objects (never seemed very useful
         ##  since numpy does all the major allocation/deallocation).
         #if comm is None or comm.Get_rank() == 0:
-        #    import objgraph 
-        #    objgraph.show_growth(limit=50) 
+        #    import objgraph
+        #    objgraph.show_growth(limit=50)
 
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-        #if comm is not None: 
-        #    print("MPI DEBUG: Rank%d subtee sizes = %s" % 
+        #if comm is not None:
+        #    print("MPI DEBUG: Rank%d subtee sizes = %s" %
         #          (comm.Get_rank(),",".join([str(len(subtrees[i]))
         #                                     for i in mySubTreeIndices])))
 
@@ -2153,37 +2147,36 @@ class MatrixForwardSimulator(ForwardSimulator):
             profiler.add_time("bulk_fill_dprobs: compute_product_cache", tm)
 
             #use cached data to final values
-            scaleVals = self._scaleExp( evalSubTree.final_view( scaleCache ))
-            Gs  = evalSubTree.final_view( prodCache, axis=0 )
-              #( nCircuits, dim, dim )
+            scaleVals = self._scaleExp(evalSubTree.final_view(scaleCache))
+            Gs = evalSubTree.final_view(prodCache, axis=0)
+            #( nCircuits, dim, dim )
             profiler.mem_check("bulk_fill_dprobs: post compute product")
 
             def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
                 old_err = _np.seterr(over='ignore')
-                rho,E = self._rhoE_from_spamTuple(spamTuple)
+                rho, E = self._rhoE_from_spamTuple(spamTuple)
 
                 if prMxToFill is not None:
                     _fas(prMxToFill, [fInds], self._probs_from_rhoE(
                         rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
-                _fas(mxToFill, [fInds,pslc1], self._dprobs_from_rhoE(
+                _fas(mxToFill, [fInds, pslc1], self._dprobs_from_rhoE(
                     spamTuple, rho, E, Gs[gInds], dGs[gInds], scaleVals[gInds], wrtSlice),
-                     add=sumInto)
+                    add=sumInto)
 
                 _np.seterr(**old_err)
                 profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter is None:
-                blkSize = wrtBlockSize #could be None
+                blkSize = wrtBlockSize  # could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
                     comm_blkSize = self.Np / mySubComm.Get_size()
                     blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
+                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
             else:
-                blkSize = None # wrtFilter dictates block
-
+                blkSize = None  # wrtFilter dictates block
 
             if blkSize is None:
                 #Fill derivative cache info
@@ -2191,31 +2184,31 @@ class MatrixForwardSimulator(ForwardSimulator):
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                           mySubComm, wrtSlice, profiler)
                 dGs = evalSubTree.final_view(dProdCache, axis=0)
-                  #( nCircuits, nDerivCols, dim, dim )
+                #( nCircuits, nDerivCols, dim, dim )
                 profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                 profiler.mem_check("bulk_fill_dprobs: post compute dproduct")
 
                 #Compute all requested derivative columns at once
-                self._fill_result_tuple( (prMxToFill, mxToFill), evalSubTree,
-                                         slice(None), slice(None), calc_and_fill )
+                self._fill_result_tuple((prMxToFill, mxToFill), evalSubTree,
+                                        slice(None), slice(None), calc_and_fill)
                 profiler.mem_check("bulk_fill_dprobs: post fill")
-                dProdCache = dGs = None #free mem
+                dProdCache = dGs = None  # free mem
 
-            else: # Divide columns into blocks of at most blkSize
-                assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
+            else:  # Divide columns into blocks of at most blkSize
+                assert(wrtFilter is None)  # cannot specify both wrtFilter and blkSize
                 nBlks = int(_np.ceil(self.Np / blkSize))
-                  # num blocks required to achieve desired average size == blkSize
+                # num blocks required to achieve desired average size == blkSize
                 blocks = _mpit.slice_up_range(self.Np, nBlks, start=0)
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
-                dGs = _np.empty( (Gs.shape[0],0,self.dim,self.dim), 'd')
+                dGs = _np.empty((Gs.shape[0], 0, self.dim, self.dim), 'd')
 
                 def calc_and_fill_p(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                     """ Compute and fill result quantities for given arguments """
                     tm = _time.time()
                     old_err = _np.seterr(over='ignore')
-                    rho,E = self._rhoE_from_spamTuple(spamTuple)
+                    rho, E = self._rhoE_from_spamTuple(spamTuple)
 
                     _fas(prMxToFill, [fInds],
                          self._probs_from_rhoE(rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
@@ -2227,7 +2220,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 #  computed for each block of derivative columns
                 if prMxToFill is not None:
                     self._fill_result_tuple((prMxToFill,), evalSubTree,
-                                  slice(None), slice(None), calc_and_fill_p )
+                                            slice(None), slice(None), calc_and_fill_p)
                 profiler.mem_check("bulk_fill_dprobs: post fill probs")
 
                 #distribute derivative computation across blocks
@@ -2235,19 +2228,19 @@ class MatrixForwardSimulator(ForwardSimulator):
                     _mpit.distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than derivative columns(%d)!" % self.Np 
-                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks)) # pragma: no cover
+                                   + " than derivative columns(%d)!" % self.Np
+                                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
 
                 def calc_and_fill_blk(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                     """ Compute and fill result quantities blocks for given arguments """
                     tm = _time.time()
                     old_err = _np.seterr(over='ignore')
-                    rho,E = self._rhoE_from_spamTuple(spamTuple)
+                    rho, E = self._rhoE_from_spamTuple(spamTuple)
                     block_wrtSlice = pslc1
 
-                    _fas(mxToFill, [fInds,pslc1], self._dprobs_from_rhoE(
+                    _fas(mxToFill, [fInds, pslc1], self._dprobs_from_rhoE(
                         spamTuple, rho, E, Gs[gInds], dGs[gInds], scaleVals[gInds], block_wrtSlice),
-                         add=sumInto)
+                        add=sumInto)
 
                     _np.seterr(**old_err)
                     profiler.add_time("bulk_fill_dprobs: calc_and_fill_blk", tm)
@@ -2259,22 +2252,22 @@ class MatrixForwardSimulator(ForwardSimulator):
                                                               blkComm, block_wrtSlice, profiler)
                     profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                     profiler.mem_check(
-                        "bulk_fill_dprobs: post compute dproduct blk (expect "+
-                        " +%.2fGB, shape=%s)" % (dProdCache.nbytes/(1024.0**3),
-                                                 str(dProdCache.shape)) )
+                        "bulk_fill_dprobs: post compute dproduct blk (expect " +
+                        " +%.2fGB, shape=%s)" % (dProdCache.nbytes / (1024.0**3),
+                                                 str(dProdCache.shape)))
 
                     dGs = evalSubTree.final_view(dProdCache, axis=0)
-                      #( nCircuits, nDerivCols, dim, dim )
-                    self._fill_result_tuple( 
+                    #( nCircuits, nDerivCols, dim, dim )
+                    self._fill_result_tuple(
                         (mxToFill,), evalSubTree,
-                        blocks[iBlk], slice(None), calc_and_fill_blk )                    
+                        blocks[iBlk], slice(None), calc_and_fill_blk)
 
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
-                    dProdCache = dGs = None #free mem
+                    dProdCache = dGs = None  # free mem
 
                 #gather results
-                tm = _time.time()                
-                _mpit.gather_slices(blocks, blkOwners, mxToFill,[felInds],
+                tm = _time.time()
+                _mpit.gather_slices(blocks, blkOwners, mxToFill, [felInds],
                                     1, mySubComm, gatherMemLimit)
                 #note: gathering axis 1 of mxToFill[felInds], dim=(ks,M)
                 profiler.add_time("MPI IPC", tm)
@@ -2282,21 +2275,21 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         #collect/gather results
         tm = _time.time()
-        subtreeElementIndices = [ t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill,[], 0, comm, gatherMemLimit)
+                             mxToFill, [], 0, comm, gatherMemLimit)
         #note: pass mxToFill, dim=(KS,M), so gather mxToFill[felInds] (axis=0)
 
         if prMxToFill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 prMxToFill,[], 0, comm)
+                                 prMxToFill, [], 0, comm)
             #note: pass prMxToFill, dim=(KS,), so gather prMxToFill[felInds] (axis=0)
 
         profiler.add_time("MPI IPC", tm)
         profiler.mem_check("bulk_fill_dprobs: post gather subtrees")
 
         if clipTo is not None and prMxToFill is not None:
-            _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
+            _np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)  # in-place clip
 
         if check:
             self._check(evalTree, prMxToFill, mxToFill, clipTo=clipTo)
@@ -2304,11 +2297,9 @@ class MatrixForwardSimulator(ForwardSimulator):
         profiler.add_count("bulk_fill_dprobs count")
         profiler.mem_check("bulk_fill_dprobs: end")
 
-
-
     def bulk_fill_hprobs(self, mxToFill, evalTree,
-                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None, 
-                         clipTo=None, check=False,comm=None, wrtFilter1=None, wrtFilter2=None,
+                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
+                         clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
                          wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
         """
         Compute the outcome probability-Hessians for an entire tree of gate
@@ -2378,19 +2369,18 @@ class MatrixForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        
+
         if wrtFilter1 is not None:
-            assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
+            assert(wrtBlockSize1 is None and wrtBlockSize2 is None)  # Cannot specify both wrtFilter and wrtBlockSize
             wrtSlice1 = _slct.list_to_slice(wrtFilter1)
         else:
             wrtSlice1 = None
 
         if wrtFilter2 is not None:
-            assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
+            assert(wrtBlockSize1 is None and wrtBlockSize2 is None)  # Cannot specify both wrtFilter and wrtBlockSize
             wrtSlice2 = _slct.list_to_slice(wrtFilter2)
         else:
             wrtSlice2 = None
-
 
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
@@ -2407,27 +2397,27 @@ class MatrixForwardSimulator(ForwardSimulator):
 
             #Fill product cache info (not requiring row or column distribution)
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
-            scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache))
-            Gs  = evalSubTree.final_view(prodCache, axis=0)
-              #( nCircuits, dim, dim )
+            scaleVals = self._scaleExp(evalSubTree.final_view(scaleCache))
+            Gs = evalSubTree.final_view(prodCache, axis=0)
+            #( nCircuits, dim, dim )
 
             def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 old_err = _np.seterr(over='ignore')
-                rho,E = self._rhoE_from_spamTuple(spamTuple)
-                
+                rho, E = self._rhoE_from_spamTuple(spamTuple)
+
                 if prMxToFill is not None:
                     _fas(prMxToFill, [fInds], self._probs_from_rhoE(rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
 
                 if deriv1MxToFill is not None:
-                    _fas(deriv1MxToFill, [fInds,pslc1], self._dprobs_from_rhoE(
+                    _fas(deriv1MxToFill, [fInds, pslc1], self._dprobs_from_rhoE(
                         spamTuple, rho, E, Gs[gInds], dGs1[gInds], scaleVals[gInds], wrtSlice1), add=sumInto)
 
                 if deriv2MxToFill is not None:
-                    _fas(deriv2MxToFill, [fInds,pslc2], self._dprobs_from_rhoE( 
-                            spamTuple, rho, E, Gs[gInds], dGs2[gInds], scaleVals[gInds], wrtSlice2), add=sumInto)
+                    _fas(deriv2MxToFill, [fInds, pslc2], self._dprobs_from_rhoE(
+                        spamTuple, rho, E, Gs[gInds], dGs2[gInds], scaleVals[gInds], wrtSlice2), add=sumInto)
 
-                _fas(mxToFill, [fInds,pslc1,pslc2], self._hprobs_from_rhoE( 
+                _fas(mxToFill, [fInds, pslc1, pslc2], self._hprobs_from_rhoE(
                     spamTuple, rho, E, Gs[gInds], dGs1[gInds], dGs2[gInds],
                     hGs[gInds], scaleVals[gInds], wrtSlice1, wrtSlice2), add=sumInto)
 
@@ -2435,17 +2425,16 @@ class MatrixForwardSimulator(ForwardSimulator):
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter1 is None and wrtFilter2 is None:
-                blkSize1 = wrtBlockSize1 #could be None
-                blkSize2 = wrtBlockSize2 #could be None
+                blkSize1 = wrtBlockSize1  # could be None
+                blkSize2 = wrtBlockSize2  # could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
                     comm_blkSize = self.Np / mySubComm.Get_size()
                     blkSize1 = comm_blkSize if (blkSize1 is None) \
-                        else min(comm_blkSize, blkSize1) #override with smaller comm_blkSize
+                        else min(comm_blkSize, blkSize1)  # override with smaller comm_blkSize
                     blkSize2 = comm_blkSize if (blkSize2 is None) \
-                        else min(comm_blkSize, blkSize2) #override with smaller comm_blkSize
+                        else min(comm_blkSize, blkSize2)  # override with smaller comm_blkSize
             else:
-                blkSize1 = blkSize2 = None # wrtFilter1 & wrtFilter2 dictates block
-
+                blkSize1 = blkSize2 = None  # wrtFilter1 & wrtFilter2 dictates block
 
             if blkSize1 is None and blkSize2 is None:
                 #Fill hessian cache info
@@ -2455,25 +2444,25 @@ class MatrixForwardSimulator(ForwardSimulator):
                     self._compute_dproduct_cache(evalSubTree, prodCache,
                                                  scaleCache, mySubComm, wrtSlice2)
 
-                dGs1 = evalSubTree.final_view(dProdCache1, axis=0) 
-                dGs2 = evalSubTree.final_view(dProdCache2, axis=0) 
-                  #( nCircuits, nDerivColsX, dim, dim )
+                dGs1 = evalSubTree.final_view(dProdCache1, axis=0)
+                dGs2 = evalSubTree.final_view(dProdCache2, axis=0)
+                #( nCircuits, nDerivColsX, dim, dim )
 
                 hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache1,
                                                           dProdCache2, scaleCache, mySubComm,
                                                           wrtSlice1, wrtSlice2)
                 hGs = evalSubTree.final_view(hProdCache, axis=0)
-                   #( nCircuits, len(wrtFilter1), len(wrtFilter2), dim, dim )
+                #( nCircuits, len(wrtFilter1), len(wrtFilter2), dim, dim )
 
                 #Compute all requested derivative columns at once
                 self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
                                         evalSubTree, slice(None), slice(None), calc_and_fill)
 
-            else: # Divide columns into blocks of at most blkSize
-                assert(wrtFilter1 is None and wrtFilter2 is None) #cannot specify both wrtFilter and blkSize
+            else:  # Divide columns into blocks of at most blkSize
+                assert(wrtFilter1 is None and wrtFilter2 is None)  # cannot specify both wrtFilter and blkSize
                 nBlks1 = int(_np.ceil(self.Np / blkSize1))
                 nBlks2 = int(_np.ceil(self.Np / blkSize2))
-                  # num blocks required to achieve desired average size == blkSize1 or blkSize2
+                # num blocks required to achieve desired average size == blkSize1 or blkSize2
                 blocks1 = _mpit.slice_up_range(self.Np, nBlks1)
                 blocks2 = _mpit.slice_up_range(self.Np, nBlks2)
 
@@ -2486,24 +2475,24 @@ class MatrixForwardSimulator(ForwardSimulator):
 
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than hessian elements(%d)!" % (self.Np**2)
-                       +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2)) # pragma: no cover
+                                   + " than hessian elements(%d)!" % (self.Np**2)
+                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover
 
                 for iBlk1 in myBlk1Indices:
                     blk_wrtSlice1 = blocks1[iBlk1]
                     dProdCache1 = self._compute_dproduct_cache(
                         evalSubTree, prodCache, scaleCache, blk1Comm, blk_wrtSlice1)
-                    dGs1 = evalSubTree.final_view(dProdCache1, axis=0) 
+                    dGs1 = evalSubTree.final_view(dProdCache1, axis=0)
 
                     for iBlk2 in myBlk2Indices:
                         blk_wrtSlice2 = blocks2[iBlk2]
 
                         if blk_wrtSlice1 == blk_wrtSlice2:
-                            dProdCache2 = dProdCache1 ; dGs2 = dGs1
+                            dProdCache2 = dProdCache1; dGs2 = dGs1
                         else:
-                            dProdCache2 =self._compute_dproduct_cache(
+                            dProdCache2 = self._compute_dproduct_cache(
                                 evalSubTree, prodCache, scaleCache, blk2Comm, blk_wrtSlice2)
-                            dGs2 = evalSubTree.final_view(dProdCache2, axis=0) 
+                            dGs2 = evalSubTree.final_view(dProdCache2, axis=0)
 
                         hProdCache = self._compute_hproduct_cache(
                             evalSubTree, prodCache, dProdCache1, dProdCache2,
@@ -2516,53 +2505,50 @@ class MatrixForwardSimulator(ForwardSimulator):
 
                         self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
                                                 evalSubTree, blocks1[iBlk1], blocks2[iBlk2], calc_and_fill)
-    
-                        hProdCache = hGs = dProdCache2 = dGs2 =  None # free mem
-                    dProdCache1 = dGs1 = None #free mem
+
+                        hProdCache = hGs = dProdCache2 = dGs2 = None  # free mem
+                    dProdCache1 = dGs1 = None  # free mem
 
                     #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
-                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds,blocks1[iBlk1]],
+                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds, blocks1[iBlk1]],
                                         2, blk1Comm, gatherMemLimit)
 
                 #gather row results; gather axis 1 of mxToFill[felInds], dim=(ks,M,M)
-                _mpit.gather_slices(blocks1, blk1Owners, mxToFill,[felInds],
+                _mpit.gather_slices(blocks1, blk1Owners, mxToFill, [felInds],
                                     1, mySubComm, gatherMemLimit)
                 if deriv1MxToFill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill,[felInds],
+                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill, [felInds],
                                         1, mySubComm, gatherMemLimit)
                 if deriv2MxToFill is not None:
-                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill,[felInds],
-                                        1, blk1Comm, gatherMemLimit) 
+                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill, [felInds],
+                                        1, blk1Comm, gatherMemLimit)
                    #Note: deriv2MxToFill gets computed on every inner loop completion
                    # (to save mem) but isn't gathered until now (but using blk1Comm).
                    # (just as prMxToFill is computed fully on each inner loop *iteration*!)
-            
+
         #collect/gather results
-        subtreeElementIndices = [ t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill,[], 0, comm, gatherMemLimit)
+                             mxToFill, [], 0, comm, gatherMemLimit)
 
         if deriv1MxToFill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 deriv1MxToFill,[], 0, comm, gatherMemLimit)
+                                 deriv1MxToFill, [], 0, comm, gatherMemLimit)
         if deriv2MxToFill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 deriv2MxToFill,[], 0, comm, gatherMemLimit)
+                                 deriv2MxToFill, [], 0, comm, gatherMemLimit)
         if prMxToFill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 prMxToFill,[], 0, comm)
-
+                                 prMxToFill, [], 0, comm)
 
         if clipTo is not None and prMxToFill is not None:
-            _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
+            _np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)  # in-place clip
 
         if check:
             self._check(evalTree, prMxToFill, deriv1MxToFill, mxToFill, clipTo)
 
-
     def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
                              bReturnDProbs12=False, comm=None):
-                             
         """
         Constructs a generator that computes the 2nd derivatives of the
         probabilities generated by a each gate sequence given by evalTree
@@ -2612,7 +2598,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         Returns
         -------
         block_generator
-          A generator which, when iterated, yields the 3-tuple 
+          A generator which, when iterated, yields the 3-tuple
           `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
           (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
           are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
@@ -2634,9 +2620,9 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         #Fill product cache info (not distributed)
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
-        scaleVals = self._scaleExp( evalTree.final_view(scaleCache))
-        Gs  = evalTree.final_view(prodCache, axis=0)
-          #( nCircuits, dim, dim )
+        scaleVals = self._scaleExp(evalTree.final_view(scaleCache))
+        Gs = evalTree.final_view(prodCache, axis=0)
+        #( nCircuits, dim, dim )
 
         #Same as in bulk_fill_hprobs (TODO consolidate?)
         #NOTE: filtering is done via the yet-to-be-defined local variables
@@ -2645,61 +2631,60 @@ class MatrixForwardSimulator(ForwardSimulator):
         def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
             """ Compute and fill result quantities for given arguments """
             old_err = _np.seterr(over='ignore')
-            rho,E = self._rhoE_from_spamTuple(spamTuple)
-            
+            rho, E = self._rhoE_from_spamTuple(spamTuple)
+
             #if prMxToFill is not None:
             #    _fas(prMxToFill, [fInds],
             #         self._probs_from_rhoE(rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
             if deriv1MxToFill is not None:
-                _fas(deriv1MxToFill, [fInds,pslc1], self._dprobs_from_rhoE( 
+                _fas(deriv1MxToFill, [fInds, pslc1], self._dprobs_from_rhoE(
                     spamTuple, rho, E, Gs[gInds], dGs1[gInds], scaleVals[gInds], wrtSlice1), add=sumInto)
             if deriv2MxToFill is not None:
-                _fas(deriv2MxToFill, [fInds,pslc2], self._dprobs_from_rhoE( 
+                _fas(deriv2MxToFill, [fInds, pslc2], self._dprobs_from_rhoE(
                     spamTuple, rho, E, Gs[gInds], dGs2[gInds], scaleVals[gInds], wrtSlice2), add=sumInto)
 
-            _fas(mxToFill, [fInds,pslc1,pslc2], self._hprobs_from_rhoE( 
+            _fas(mxToFill, [fInds, pslc1, pslc2], self._hprobs_from_rhoE(
                 spamTuple, rho, E, Gs[gInds], dGs1[gInds], dGs2[gInds],
                 hGs[gInds], scaleVals[gInds], wrtSlice1, wrtSlice2), add=sumInto)
 
             _np.seterr(**old_err)
 
-
         #NOTE: don't distribute wrtSlicesList across comm procs,
         # as we assume the user has already done any such distribution
         # and has given each processor a list appropriate for it.
-        # Use comm only for speeding up the calcs of the given 
+        # Use comm only for speeding up the calcs of the given
         # wrtSlicesList
 
-        last_wrtSlice1 = None #keep last dProdCache1
+        last_wrtSlice1 = None  # keep last dProdCache1
 
-        for wrtSlice1,wrtSlice2 in wrtSlicesList:
-                        
+        for wrtSlice1, wrtSlice2 in wrtSlicesList:
+
             if wrtSlice1 != last_wrtSlice1:
-                dProdCache1 = dGs1 = None #free Mem
+                dProdCache1 = dGs1 = None  # free Mem
                 dProdCache1 = self._compute_dproduct_cache(
                     evalTree, prodCache, scaleCache, comm, wrtSlice1)
-                dGs1 = evalTree.final_view(dProdCache1, axis=0) 
+                dGs1 = evalTree.final_view(dProdCache1, axis=0)
                 last_wrtSlice1 = wrtSlice1
-            
+
             if (wrtSlice1 == wrtSlice2):
-                dProdCache2 = dProdCache1 ; dGs2 = dGs1
+                dProdCache2 = dProdCache1; dGs2 = dGs1
             else:
-                dProdCache2 =self._compute_dproduct_cache(
+                dProdCache2 = self._compute_dproduct_cache(
                     evalTree, prodCache, scaleCache, comm, wrtSlice2)
-                dGs2 = evalTree.final_view(dProdCache2, axis=0) 
-            
+                dGs2 = evalTree.final_view(dProdCache2, axis=0)
+
             hProdCache = self._compute_hproduct_cache(
                 evalTree, prodCache, dProdCache1, dProdCache2,
                 scaleCache, comm, wrtSlice1, wrtSlice2)
             hGs = evalTree.final_view(hProdCache, axis=0)
-                
+
             if bReturnDProbs12:
-                dprobs1 = _np.zeros( (nElements,_slct.length(wrtSlice1)), 'd' )
-                dprobs2 = _np.zeros( (nElements,_slct.length(wrtSlice2)), 'd' )
+                dprobs1 = _np.zeros((nElements, _slct.length(wrtSlice1)), 'd')
+                dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
             else:
-                dprobs1 = dprobs2 = None            
-            hprobs = _np.zeros( (nElements, _slct.length(wrtSlice1),
-                                 _slct.length(wrtSlice2)), 'd' )
+                dprobs1 = dprobs2 = None
+            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1),
+                                _slct.length(wrtSlice2)), 'd')
 
             #prMxToFill = None
             deriv1MxToFill = dprobs1
@@ -2709,12 +2694,11 @@ class MatrixForwardSimulator(ForwardSimulator):
             #Fill arrays
             self._fill_result_tuple((None, dprobs1, dprobs2, hprobs), evalTree,
                                     slice(None), slice(None), calc_and_fill)
-            hProdCache = hGs = dProdCache2 = dGs2 =  None # free mem
+            hProdCache = hGs = dProdCache2 = dGs2 = None  # free mem
             if bReturnDProbs12:
-                dprobs12 = dprobs1[:,:,None] * dprobs2[:,None,:] # (KM,N,1) * (KM,1,N') = (KM,N,N')
+                dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')
                 yield wrtSlice1, wrtSlice2, hprobs, dprobs12
             else:
                 yield wrtSlice1, wrtSlice2, hprobs
 
-        dProdCache1 = dGs1 = None #free mem
-
+        dProdCache1 = dGs1 = None  # free mem

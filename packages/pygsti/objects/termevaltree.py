@@ -25,17 +25,19 @@ try:
     #     assert(_np.linalg.norm(v1-v2) < 1e-6)
     #     assert(_np.linalg.norm(c1-c2) < 1e-6)
     #     return v1,c1
-    
+
 except ImportError:
     from .polynomial import compact_deriv as _compact_deriv
 
 
-import time as _time #DEBUG TIMERS
+import time as _time  # DEBUG TIMERS
+
 
 class TermEvalTree(EvalTree):
     """
     An Evaluation Tree for term-based calcualtions.
     """
+
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
         super(TermEvalTree, self).__init__(items)
@@ -75,14 +77,14 @@ class TermEvalTree(EvalTree):
         self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
+        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
         #  information about evaluating a particular operation sequence:
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
-        del self[:] #clear self (a list)
+        del self[:]  # clear self (a list)
 
         #Final Indices
         # The first len(circuit_list) elements of the tree correspond
@@ -93,13 +95,13 @@ class TermEvalTree(EvalTree):
 
         #initialize self as a list of Nones
         self.num_final_strs = len(circuit_list)
-        self[:] = [None]*self.num_final_strs
+        self[:] = [None] * self.num_final_strs
 
         #Sort the operation sequences "alphabetically" - not needed now, but may
         # be useful later for prefixing...
-        sorted_strs = sorted(list(enumerate(circuit_list)),key=lambda x: x[1])
+        sorted_strs = sorted(list(enumerate(circuit_list)), key=lambda x: x[1])
 
-        for k,(iStr,circuit) in enumerate(sorted_strs):
+        for k, (iStr, circuit) in enumerate(sorted_strs):
             #Add info for this string
             self[iStr] = circuit
             self.eval_order.append(iStr)
@@ -112,11 +114,11 @@ class TermEvalTree(EvalTree):
         self.hp_polys = {}
         self.repcache = {}
 
-        self.myFinalToParentFinalMap = None #this tree has no "children",
-        self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
+        self.myFinalToParentFinalMap = None  # this tree has no "children",
+        self.myFinalElsToParentFinalElsMap = None  # i.e. has not been created by a 'split'
         self.parentIndexMap = None
         self.original_index_lookup = None
-        self.subTrees = [] #no subtrees yet
+        self.subTrees = []  # no subtrees yet
         assert(self.generate_circuit_list() == circuit_list)
         assert(None not in circuit_list)
 
@@ -133,12 +135,12 @@ class TermEvalTree(EvalTree):
         Parameters
         ----------
         permute : bool, optional
-           Whether to permute the returned list of strings into the 
+           Whether to permute the returned list of strings into the
            same order as the original list passed to initialize(...).
-           When False, the computed order of the operation sequences is 
+           When False, the computed order of the operation sequences is
            given, which is matches the order of the results from calls
            to `Model` bulk operations.  Non-trivial permutation
-           occurs only when the tree is split (in order to keep 
+           occurs only when the tree is split (in order to keep
            each sub-tree result a contiguous slice within the parent
            result).
 
@@ -148,17 +150,17 @@ class TermEvalTree(EvalTree):
             A list of the operation sequences evaluated by this tree, each
             specified as a tuple of operation labels.
         """
-        circuits = [None]*len(self)
+        circuits = [None] * len(self)
 
         #Build rest of strings
         for i in self.get_evaluation_order():
             circuits[i] = self[i]
-            
+
         #Permute to get final list:
         nFinal = self.num_final_strings()
         if self.original_index_lookup is not None and permute == True:
-            finalCircuits = [None]*nFinal
-            for iorig,icur in self.original_index_lookup.items():
+            finalCircuits = [None] * nFinal
+            for iorig, icur in self.original_index_lookup.items():
                 if iorig < nFinal: finalCircuits[iorig] = circuits[icur]
             assert(None not in finalCircuits)
             return finalCircuits
@@ -166,7 +168,6 @@ class TermEvalTree(EvalTree):
             assert(None not in circuits[0:nFinal])
             return circuits[0:nFinal]
 
-        
     def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
@@ -180,7 +181,7 @@ class TermEvalTree(EvalTree):
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`Model.simplify_circuits`).  Since splitting a 
+            :method:`Model.simplify_circuits`).  Since splitting a
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -219,33 +220,33 @@ class TermEvalTree(EvalTree):
         self.subTrees = []
         evalOrder = self.get_evaluation_order()
         printer.log("EvalTree.split done initial prep in %.0fs" %
-                    (_time.time()-tm)); tm = _time.time()
+                    (_time.time() - tm)); tm = _time.time()
 
         def create_subtrees(maxCost, maxCostRate=0, costMetric="size"):
-            """ 
+            """
             Find a set of subtrees by iterating through the tree
             and placing "break" points when the cost of evaluating the
             subtree exceeds some 'maxCost'.  This ensure ~ equal cost
             trees, but doesn't ensure any particular number of them.
-            
+
             maxCostRate can be set to implement a varying maxCost
             over the course of the iteration.
             """
 
             if costMetric == "applys":
-                cost_fn = lambda rem: len(rem) #length of remainder = #-apply ops needed
+                def cost_fn(rem): return len(rem)  # length of remainder = #-apply ops needed
             elif costMetric == "size":
-                cost_fn = lambda rem: 1 # everything costs 1 in size of tree
+                def cost_fn(rem): return 1  # everything costs 1 in size of tree
             else: raise ValueError("Uknown cost metric: %s" % costMetric)
 
             subTrees = []
             curSubTree = set([evalOrder[0]])
-            curTreeCost = cost_fn(self[evalOrder[0]][1]) #remainder length of 0th evaluant
+            curTreeCost = cost_fn(self[evalOrder[0]][1])  # remainder length of 0th evaluant
             totalCost = 0
-            cacheIndices = [None]*self.cache_size()
+            cacheIndices = [None] * self.cache_size()
 
             for k in evalOrder:
-                iStart,remainder,iCache = self[k]
+                iStart, remainder, iCache = self[k]
 
                 if iCache is not None:
                     cacheIndices[iCache] = k
@@ -258,14 +259,13 @@ class TermEvalTree(EvalTree):
                 if iStart is not None and cacheIndices[iStart] not in curSubTree:
                     #we need to add the tree elements traversed by
                     #following iStart
-                    j = iStart #index into cache
+                    j = iStart  # index into cache
                     while j is not None:
-                        iStr = cacheIndices[j] # cacheIndices[ iStart ]
+                        iStr = cacheIndices[j]  # cacheIndices[ iStart ]
                         inds.add(iStr)
-                        cost += cost_fn(self[iStr][1]) # remainder
-                        j = self[iStr][0] # iStart
+                        cost += cost_fn(self[iStr][1])  # remainder
+                        j = self[iStr][0]  # iStart
 
-                        
                 if curTreeCost + cost < maxCost:
                     #Just add current string to current tree
                     curTreeCost += cost
@@ -275,23 +275,22 @@ class TermEvalTree(EvalTree):
                     #print("cost %d+%d exceeds %d" % (curTreeCost,cost,maxCost))
                     subTrees.append(curSubTree)
                     curSubTree = set([k])
-                    
+
                     cost = cost_fn(remainder); j = iStart
-                    while j is not None: # always traverse back iStart
+                    while j is not None:  # always traverse back iStart
                         iStr = cacheIndices[j]
                         curSubTree.add(iStr)
-                        cost += cost_fn(self[iStr][1]) #remainder
-                        j = self[iStr][0] # iStart
+                        cost += cost_fn(self[iStr][1])  # remainder
+                        j = self[iStr][0]  # iStart
                     totalCost += curTreeCost
                     curTreeCost = cost
                     #print("Added new tree w/initial cost %d" % (cost))
-                    
+
                 maxCost += maxCostRate
 
             subTrees.append(curSubTree)
             totalCost += curTreeCost
             return subTrees, totalCost
-
 
         ##################################################################
         # Part I: find a list of where the current tree should be broken #
@@ -302,34 +301,33 @@ class TermEvalTree(EvalTree):
 
             subTreeSize = len(self) // numSubTrees
             for i in range(numSubTrees):
-                end = (i+1)*subTreeSize if (i < numSubTrees-1) else len(self)
-                subTreeSetList.append( set(range(i*subTreeSize,end)) )
+                end = (i + 1) * subTreeSize if (i < numSubTrees - 1) else len(self)
+                subTreeSetList.append(set(range(i * subTreeSize, end)))
 
-        else: # maxSubTreeSize is not None
+        else:  # maxSubTreeSize is not None
             k = 0
             while k < len(self):
-                end = min(k+maxSubTreeSize,len(self))
-                subTreeSetList.append( set(range(k,end)) )
+                end = min(k + maxSubTreeSize, len(self))
+                subTreeSetList.append(set(range(k, end)))
                 k = end
 
-                
         ##########################################################
         # Part II: create subtrees from index sets
         ##########################################################
         # (common logic provided by base class up to providing a few helper fns)
-        
+
         def permute_parent_element(perm, el):
             """Applies a permutation to an element of the tree """
             # perm[oldIndex] = newIndex
-            return el # no need to permute operation sequence
-    
+            return el  # no need to permute operation sequence
+
         def create_subtree(parentIndices, numFinal, fullEvalOrder, sliceIntoParentsFinalArray, parentTree):
-            """ 
+            """
             Creates a subtree given requisite information:
 
             Parameters
             ----------
-            parentIndices : list 
+            parentIndices : list
                 The ordered list of (parent-tree) indices to be included in
                 the created subtree.
 
@@ -355,52 +353,52 @@ class TermEvalTree(EvalTree):
             subTree = TermEvalTree()
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
-            subTree[:] = [None]*len(parentIndices)
+            subTree[:] = [None] * len(parentIndices)
             subTree.p_polys = {}
             subTree.dp_polys = {}
             subTree.hp_polys = {}
 
-            mapParentIndxToSubTreeIndx = { k: ik for ik,k in enumerate(parentIndices) }
+            mapParentIndxToSubTreeIndx = {k: ik for ik, k in enumerate(parentIndices)}
             curCacheSize = 0
             subTreeCacheIndices = {}
-    
-            for ik in fullEvalOrder: #includes any initial indices
-                k = parentIndices[ik] #original tree index
-                circuit = self[k] #original tree data
+
+            for ik in fullEvalOrder:  # includes any initial indices
+                k = parentIndices[ik]  # original tree index
+                circuit = self[k]  # original tree data
                 subTree.eval_order.append(ik)
                 assert(subTree[ik] is None)
                 subTree[ik] = circuit
 
-            subTree.parentIndexMap = parentIndices #parent index of each subtree index
-            subTree.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[k]
-                                                       for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
+            subTree.parentIndexMap = parentIndices  # parent index of each subtree index
+            subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[k]
+                                                     for k in _slct.indices(subTree.myFinalToParentFinalMap)]
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-            
-            final_el_startstops = []; i=0
+
+            final_el_startstops = []; i = 0
             for spamTuples in parentTree.simplified_circuit_spamTuples:
-                final_el_startstops.append( (i,i+len(spamTuples)) )
+                final_el_startstops.append((i, i + len(spamTuples)))
                 i += len(spamTuples)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
-                [ _np.arange(*final_el_startstops[k])
-                  for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
+                [_np.arange(*final_el_startstops[k])
+                 for k in _slct.indices(subTree.myFinalToParentFinalMap)])
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in simplified_circuit_spamTuples)
-            
+
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
 
-            subTree.opLabels = self._get_opLabels( subTree.generate_circuit_list(permute=False) )
+            subTree.opLabels = self._get_opLabels(subTree.generate_circuit_list(permute=False))
 
             return subTree
-    
+
         updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
                                                permute_parent_element, create_subtree)
         printer.log("EvalTree.split done second pass in %.0fs" %
-                    (_time.time()-tm)); tm = _time.time()
+                    (_time.time() - tm)); tm = _time.time()
         return updated_elIndices
 
     def cache_size(self):
-        """ 
+        """
         Returns the size of the persistent "cache" of partial results
         used during the computation of all the strings in this tree.
         """
@@ -408,36 +406,36 @@ class TermEvalTree(EvalTree):
 
     def copy(self):
         """ Create a copy of this evaluation tree. """
-        cpy = self._copyBase( TermEvalTree(self[:]) )
+        cpy = self._copyBase(TermEvalTree(self[:]))
         return cpy
 
     def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag, recalc_threshold=True):
 
-        elabels = tuple(elabels) #make sure this is hashable
+        elabels = tuple(elabels)  # make sure this is hashable
         circuit_list = self.generate_circuit_list(permute=False)
-        
+
         polys = []
         tot_npaths = 0
-        tot_target_sopm = 0; tot_achieved_sopm = 0 # "sum of path magnitudes"
+        tot_target_sopm = 0; tot_achieved_sopm = 0  # "sum of path magnitudes"
         #repcache = {}
         for opstr in circuit_list:
-            if (rholabel,elabels,opstr) in self.p_polys:
-                current_threshold, current_polys = self.p_polys[(rholabel,elabels,opstr)]
+            if (rholabel, elabels, opstr) in self.p_polys:
+                current_threshold, current_polys = self.p_polys[(rholabel, elabels, opstr)]
             else:
                 current_threshold, current_polys = None, None
 
             if current_threshold is None or recalc_threshold:
                 raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
-                    calc.prs_as_pruned_polyreps(rholabel,elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
+                    calc.prs_as_pruned_polyreps(rholabel, elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
                                                 min_term_mag, current_threshold)
             else:
                 #Could just recompute sopm and npaths?
                 raw_polyreps = None
-                npaths = 0 # punt for now...
+                npaths = 0  # punt for now...
                 target_sopm = 0
                 achieved_sopm = 0
-                
-            if raw_polyreps is None: # signal to use existing current_cache
+
+            if raw_polyreps is None:  # signal to use existing current_cache
                 compact_polys = current_polys
             else:
                 compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
@@ -448,23 +446,21 @@ class TermEvalTree(EvalTree):
             tot_achieved_sopm += achieved_sopm
 
         ret = []
-        for i,elabel in enumerate(elabels):
-            tapes = [ p[i] for p in polys ]
-            vtape = _np.concatenate( [ t[0] for t in tapes ] )
-            ctape = _np.concatenate( [ t[1] for t in tapes ] )
-            ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
-
+        for i, elabel in enumerate(elabels):
+            tapes = [p[i] for p in polys]
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+            ret.append((vtape, ctape))  # Note: ctape should always be complex here
 
         if tot_npaths > 0:
             #if comm is None or comm.Get_rank() == 0:
             rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
             nC = len(circuit_list)
             print("%sPruned path-integral: kept %d paths w/magnitude %.2g (target=%.2g, #circuits=%d)" %
-                  (rankStr,tot_npaths,tot_achieved_sopm,tot_target_sopm,nC))
+                  (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC))
             print("%s  (avg per circuit paths=%d, magnitude=%.3g, target=%.3g)" %
-                  (rankStr,tot_npaths//nC,tot_target_sopm/nC,tot_achieved_sopm/nC))
+                  (rankStr, tot_npaths // nC, tot_target_sopm / nC, tot_achieved_sopm / nC))
         return ret
-
 
     def get_p_polys(self, calc, rholabel, elabels, comm):
         """
@@ -497,23 +493,23 @@ class TermEvalTree(EvalTree):
             of operation sequences in this tree.
         """
         #Check if everything is computed already
-        if all([ ((rholabel,elabel) in self.p_polys) for elabel in elabels]):
-            return [self.p_polys[(rholabel,elabel)] for elabel in elabels]
+        if all([((rholabel, elabel) in self.p_polys) for elabel in elabels]):
+            return [self.p_polys[(rholabel, elabel)] for elabel in elabels]
 
         #Otherwise compute poly
-        polys = [ calc.prs_as_compact_polys(rholabel,elabels, opstr, comm)
-                  for opstr in self.generate_circuit_list(permute=False) ]
+        polys = [calc.prs_as_compact_polys(rholabel, elabels, opstr, comm)
+                 for opstr in self.generate_circuit_list(permute=False)]
 
         ret = []
-        for i,elabel in enumerate(elabels):
-            if (rholabel,elabel) not in self.p_polys:
-                tapes = [ p[i] for p in polys ]
-                vtape = _np.concatenate( [ t[0] for t in tapes ] )
-                ctape = _np.concatenate( [ t[1] for t in tapes ] )
-                self.p_polys[ (rholabel,elabel) ] = (vtape, _np.asarray(ctape,complex))
-                  # create ctape *complex* so they're all the same type?
-            ret.append( self.p_polys[ (rholabel,elabel) ] )
-        
+        for i, elabel in enumerate(elabels):
+            if (rholabel, elabel) not in self.p_polys:
+                tapes = [p[i] for p in polys]
+                vtape = _np.concatenate([t[0] for t in tapes])
+                ctape = _np.concatenate([t[1] for t in tapes])
+                self.p_polys[(rholabel, elabel)] = (vtape, _np.asarray(ctape, complex))
+                # create ctape *complex* so they're all the same type?
+            ret.append(self.p_polys[(rholabel, elabel)])
+
         #OLD - using raw polys via get_raw_polys
         #ret = []
         #polys = self.get_raw_polys(calc, rholabel, elabels, comm)
@@ -524,9 +520,8 @@ class TermEvalTree(EvalTree):
         #        ctape = _np.concatenate( [ t[1] for t in tapes ] )
         #        self.p_polys[ (rholabel,elabel) ] = (vtape, ctape)
         #    ret.append( self.p_polys[ (rholabel,elabel) ] )
-        
-        return ret
 
+        return ret
 
     def get_dp_polys(self, calc, rholabel, elabels, wrtSlice, comm):
         """
@@ -559,28 +554,28 @@ class TermEvalTree(EvalTree):
             A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
             2-tuple containing the concatenated compact-form tapes of all N*K
             polynomials for that (rholabel,elabel) pair, where N is the number
-            of operation sequences in this tree and K is the number of parameters 
+            of operation sequences in this tree and K is the number of parameters
             we've differentiated with respect to (~`len(wrtSlice)`).
         """
-        slcTup = (wrtSlice.start,wrtSlice.stop,wrtSlice.step) \
-                 if (wrtSlice is not None) else (None,None,None)
-        slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0,calc.Np))
-        slcInds = _np.ascontiguousarray(slcInds, _np.int64) # for Cython arg mapping
-            
+        slcTup = (wrtSlice.start, wrtSlice.stop, wrtSlice.step) \
+            if (wrtSlice is not None) else (None, None, None)
+        slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0, calc.Np))
+        slcInds = _np.ascontiguousarray(slcInds, _np.int64)  # for Cython arg mapping
+
         #Check if everything is computed already
-        if all([ ((rholabel,elabel,slcTup) in self.dp_polys) for elabel in elabels]):
-            return [self.dp_polys[(rholabel,elabel,slcTup)] for elabel in elabels]
+        if all([((rholabel, elabel, slcTup) in self.dp_polys) for elabel in elabels]):
+            return [self.dp_polys[(rholabel, elabel, slcTup)] for elabel in elabels]
 
         #print("*** getDP POLYS ***"); t0= _time.time()
 
         #Otherwise compute poly
         ret = []
         compact_polys = self.get_p_polys(calc, rholabel, elabels, comm)
-        for i,elabel in enumerate(elabels):
-            if (rholabel,elabel,slcTup) not in self.dp_polys:
-                vtape,ctape = _compact_deriv(compact_polys[i][0], compact_polys[i][1], slcInds) 
-                self.dp_polys[ (rholabel,elabel,slcTup) ] = (vtape, ctape)
-            ret.append( self.dp_polys[ (rholabel,elabel,slcTup) ] )
+        for i, elabel in enumerate(elabels):
+            if (rholabel, elabel, slcTup) not in self.dp_polys:
+                vtape, ctape = _compact_deriv(compact_polys[i][0], compact_polys[i][1], slcInds)
+                self.dp_polys[(rholabel, elabel, slcTup)] = (vtape, ctape)
+            ret.append(self.dp_polys[(rholabel, elabel, slcTup)])
 
         #OLD - using raw polys
         #polys = self.get_raw_polys(calc, rholabel, elabels, comm)
@@ -629,29 +624,29 @@ class TermEvalTree(EvalTree):
             of operation sequences in this tree and K1,K2 are the number of parameters
             we've differentiated with respect to.
         """
-        slcTup1 = (wrtSlice1.start,wrtSlice1.stop,wrtSlice1.step) \
-                 if (wrtSlice1 is not None) else (None,None,None)
-        slcTup2 = (wrtSlice2.start,wrtSlice2.stop,wrtSlice2.step) \
-                 if (wrtSlice2 is not None) else (None,None,None)
-        slcInds1 = _slct.indices(wrtSlice1 if (wrtSlice1 is not None) else slice(0,calc.Np))
-        slcInds2 = _slct.indices(wrtSlice2 if (wrtSlice2 is not None) else slice(0,calc.Np))
-            
+        slcTup1 = (wrtSlice1.start, wrtSlice1.stop, wrtSlice1.step) \
+            if (wrtSlice1 is not None) else (None, None, None)
+        slcTup2 = (wrtSlice2.start, wrtSlice2.stop, wrtSlice2.step) \
+            if (wrtSlice2 is not None) else (None, None, None)
+        slcInds1 = _slct.indices(wrtSlice1 if (wrtSlice1 is not None) else slice(0, calc.Np))
+        slcInds2 = _slct.indices(wrtSlice2 if (wrtSlice2 is not None) else slice(0, calc.Np))
+
         #Check if everything is computed already
-        if all([ ((rholabel,elabel,slcTup1,slcTup2) in self.hp_polys) for elabel in elabels]):
-            return [self.hp_polys[(rholabel,elabel,slcTup1,slcTup2)] for elabel in elabels]
+        if all([((rholabel, elabel, slcTup1, slcTup2) in self.hp_polys) for elabel in elabels]):
+            return [self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] for elabel in elabels]
 
         #Otherwise compute poly -- FUTURE: do this faster w/
         # some self.prs_as_polys(rholabel, elabels, circuit, ...) function
         #TODO: add use of caches & compact polys here -- this fn is OUTDATED
         ret = []
         for elabel in elabels:
-            if (rholabel,elabel,slcTup1,slcTup2) not in self.hp_polys:
-                polys = [ calc.pr_as_poly((rholabel,elabel), opstr, comm)
-                          for opstr in self.generate_circuit_list(permute=False) ]
-                dpolys = [ p.deriv(k) for p in polys for k in slcInds2 ]
-                tapes = [ p.deriv(k).compact() for p in dpolys for k in slcInds1 ]
-                vtape = _np.concatenate( [ t[0] for t in tapes ] )
-                ctape = _np.concatenate( [ t[1] for t in tapes ] )
-                self.hp_polys[ (rholabel,elabel,slcTup1,slcTup2) ] = (vtape, ctape)
-            ret.append( self.hp_polys[ (rholabel,elabel,slcTup1,slcTup2) ] )
+            if (rholabel, elabel, slcTup1, slcTup2) not in self.hp_polys:
+                polys = [calc.pr_as_poly((rholabel, elabel), opstr, comm)
+                         for opstr in self.generate_circuit_list(permute=False)]
+                dpolys = [p.deriv(k) for p in polys for k in slcInds2]
+                tapes = [p.deriv(k).compact() for p in dpolys for k in slcInds1]
+                vtape = _np.concatenate([t[0] for t in tapes])
+                ctape = _np.concatenate([t[1] for t in tapes])
+                self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] = (vtape, ctape)
+            ret.append(self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)])
         return ret

@@ -149,29 +149,28 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
     lgst_list = _gsc.list_lgst_circuits(prepStrs, effectStrs, opLabels)
 
     if keepFraction < 1.0:
-        rndm = _rndm.RandomState(keepSeed) # ok if seed is None
-        nPairs = len(prepStrs)*len(effectStrs)
+        rndm = _rndm.RandomState(keepSeed)  # ok if seed is None
+        nPairs = len(prepStrs) * len(effectStrs)
         nPairsToKeep = int(round(float(keepFraction) * nPairs))
     else: rndm = None
 
     if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
-        fiducialPairs = { germ: [ (prepStrs[i],effectStrs[j])
-                                  for (i,j) in fidPairs[germ] ]
-                          for germ in germList }
+        fiducialPairs = {germ: [(prepStrs[i], effectStrs[j])
+                                for (i, j) in fidPairs[germ]]
+                         for germ in germList}
         fidPairDict = fidPairs
     else:
-        if fidPairs is not None:   #assume fidPairs is a list
-            fidPairDict = { germ:fidPairs for germ in germList }
-            lst = [ (prepStrs[i],effectStrs[j]) for (i,j) in fidPairs ]
+        if fidPairs is not None:  # assume fidPairs is a list
+            fidPairDict = {germ: fidPairs for germ in germList}
+            lst = [(prepStrs[i], effectStrs[j]) for (i, j) in fidPairs]
         else:
             fidPairDict = None
             lst = list(_itertools.product(prepStrs, effectStrs))
-        fiducialPairs = { germ:lst for germ in germList }
-
+        fiducialPairs = {germ: lst for germ in germList}
 
     #running list of all strings so far (LGST strings or empty)
-    lsgst_list = lgst_list[:] if includeLGST else _gsc.circuit_list([ () ])
-    lsgst_listOfLists = [ ] # list of lists to return
+    lsgst_list = lgst_list[:] if includeLGST else _gsc.circuit_list([()])
+    lsgst_listOfLists = []  # list of lists to return
 
     Rfn = _getTruncFunction(truncScheme)
 
@@ -184,43 +183,43 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
         else:
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
-                if maxLen > germLengthLimits.get(germ,1e100): continue
+                if maxLen > germLengthLimits.get(germ, 1e100): continue
 
                 if rndm is None:
                     fiducialPairsThisIter = fiducialPairs[germ]
 
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict[germ]
-                    remainingPairs = [ (prepStrs[i],effectStrs[j])
-                                       for i in range(len(prepStrs))
-                                       for j in range(len(effectStrs))
-                                       if (i,j) not in pair_indx_tups ]
+                    remainingPairs = [(prepStrs[i], effectStrs[j])
+                                      for i in range(len(prepStrs))
+                                      for j in range(len(effectStrs))
+                                      if (i, j) not in pair_indx_tups]
                     nPairsRemaining = len(remainingPairs)
-                    nPairsToChoose = nPairsToKeep-len(pair_indx_tups)
-                    nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
+                    nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
+                    nPairsToChoose = max(0, min(nPairsToChoose, nPairsRemaining))
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
 
                     fiducialPairsThisIter = fiducialPairs[germ] + \
-                        [ remainingPairs[k] for k in
-                          sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
-                                             replace=False))]
+                        [remainingPairs[k] for k in
+                         sorted(rndm.choice(nPairsRemaining, nPairsToChoose,
+                                            replace=False))]
 
-                else: # rndm is not None and fidPairDict is None
-                    assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
+                else:  # rndm is not None and fidPairDict is None
+                    assert(nPairsToKeep <= nPairs)  # keepFraction must be <= 1.0
                     fiducialPairsThisIter = \
-                        [ fiducialPairs[germ][k] for k in
-                          sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
+                        [fiducialPairs[germ][k] for k in
+                         sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
                 lst += _gsc.create_circuit_list("f[0]+R(germ,N)+f[1]",
-                                                  f=fiducialPairsThisIter,
-                                                  germ=germ, N=maxLen,
-                                                  R=Rfn, order=('f',))
+                                                f=fiducialPairsThisIter,
+                                                germ=germ, N=maxLen,
+                                                R=Rfn, order=('f',))
         if nest:
-            lsgst_list += lst #add new strings to running list
-            lsgst_listOfLists.append( _lt.remove_duplicates(lsgst_list) )
+            lsgst_list += lst  # add new strings to running list
+            lsgst_listOfLists.append(_lt.remove_duplicates(lsgst_list))
         else:
-            lsgst_listOfLists.append( _lt.remove_duplicates(lst) )
+            lsgst_listOfLists.append(_lt.remove_duplicates(lst))
 
     #print "%d LSGST sets w/lengths" % len(lsgst_listOfLists),map(len,lsgst_listOfLists)
     return lsgst_listOfLists
@@ -392,28 +391,28 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                                                range(len(effectStrs))))
 
     if keepFraction < 1.0:
-        rndm = _rndm.RandomState(keepSeed) # ok if seed is None
-        nPairs = len(prepStrs)*len(effectStrs)
+        rndm = _rndm.RandomState(keepSeed)  # ok if seed is None
+        nPairs = len(prepStrs) * len(effectStrs)
         nPairsToKeep = int(round(float(keepFraction) * nPairs))
     else: rndm = None
 
     if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
-        fidPairDict = fidPairs #assume a dict of per-germ pairs
+        fidPairDict = fidPairs  # assume a dict of per-germ pairs
     else:
-        if fidPairs is not None:   #assume fidPairs is a list
-            fidPairDict = { germ:fidPairs for germ in germList }
+        if fidPairs is not None:  # assume fidPairs is a list
+            fidPairDict = {germ: fidPairs for germ in germList}
         else:
             fidPairDict = None
 
     truncFn = _getTruncFunction(truncScheme)
 
     #TODO: if an empty germ list, base line_labels off of fiducials?
-    empty_germ = _Circuit( (), germList[0].line_labels, stringrep="{}" )
+    empty_germ = _Circuit((), germList[0].line_labels, stringrep="{}")
     if includeLGST: germList = [empty_germ] + germList
 
     #running structure of all strings so far (LGST strings or empty)
-    running_gss = _LsGermsStructure([],germList,prepStrs,
-                                    effectStrs,opLabelAliases,
+    running_gss = _LsGermsStructure([], germList, prepStrs,
+                                    effectStrs, opLabelAliases,
                                     sequenceRules)
 
     missing_lgst = []
@@ -422,93 +421,92 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         #Add *all* LGST sequences as unstructured if we don't add them below
         missing_lgst = running_gss.add_unindexed(lgst_list, dscheck)
 
-    lsgst_listOfStructs = [ ] # list of operation sequence structures to return
+    lsgst_listOfStructs = []  # list of operation sequence structures to return
     missing_list = []
     totStrs = len(running_gss.allstrs)
     #import time as _time; t0=_time.time() # DEBUG
 
-    for i,maxLen in enumerate(maxLengthList):
+    for i, maxLen in enumerate(maxLengthList):
         #print("Maxlen = ",maxLen, " %.2fs" % (_time.time()-t0)) # DEBUG - and remove import time above
-        if nest: #add to running_gss and copy at end
-            gss = running_gss #don't copy (yet)
+        if nest:  # add to running_gss and copy at end
+            gss = running_gss  # don't copy (yet)
             gss.Ls.append(maxLen)
-        else: #create a new gss for just this maxLen
-            gss = _LsGermsStructure([maxLen],germList,prepStrs,
-                                    effectStrs,opLabelAliases,
+        else:  # create a new gss for just this maxLen
+            gss = _LsGermsStructure([maxLen], germList, prepStrs,
+                                    effectStrs, opLabelAliases,
                                     sequenceRules)
         if maxLen == 0:
             #Special LGST case
             missing_lgst = gss.add_unindexed(lgst_list, dscheck)
         else:
-            if includeLGST and i == 0: #first maxlen, so add LGST seqs as empty germ
+            if includeLGST and i == 0:  # first maxlen, so add LGST seqs as empty germ
                 #Note: no FPR on LGST strings
-                missing_list.extend( gss.add_plaquette(empty_germ, maxLen, empty_germ,
-                                                       allPossiblePairs, dscheck) )
-                missing_lgst = gss.add_unindexed(lgst_list, dscheck) # only adds those not already present
+                missing_list.extend(gss.add_plaquette(empty_germ, maxLen, empty_germ,
+                                                      allPossiblePairs, dscheck))
+                missing_lgst = gss.add_unindexed(lgst_list, dscheck)  # only adds those not already present
                 #assert(('Gx','Gi0','Gi0') not in gss.allstrs) # DEBUG
 
             #Typical case of germs repeated to maxLen using Rfn
-            for ii,germ in enumerate(germList):
-                #if ii % 100 == 0: print("germ %d of %d: %.2fs" % (ii,len(germList),_time.time()-t0)) DEBUG - and remove ii 
-                if germ == empty_germ: continue #handled specially above
-                if maxLen > germLengthLimits.get(germ,1e100): continue
-                germ_power = truncFn(germ,maxLen)
+            for ii, germ in enumerate(germList):
+                #if ii % 100 == 0: print("germ %d of %d: %.2fs" % (ii,len(germList),_time.time()-t0)) DEBUG - and remove ii
+                if germ == empty_germ: continue  # handled specially above
+                if maxLen > germLengthLimits.get(germ, 1e100): continue
+                germ_power = truncFn(germ, maxLen)
 
                 if rndm is None:
                     if fidPairDict is not None:
                         fiducialPairsThisIter = fidPairDict.get(
-                            germ,allPossiblePairs)
+                            germ, allPossiblePairs)
                     else:
                         fiducialPairsThisIter = allPossiblePairs
 
                 elif fidPairDict is not None:
-                    pair_indx_tups = fidPairDict.get(germ,allPossiblePairs)
-                    remainingPairs = [ (i,j)
-                                       for i in range(len(prepStrs))
-                                       for j in range(len(effectStrs))
-                                       if (i,j) not in pair_indx_tups ]
+                    pair_indx_tups = fidPairDict.get(germ, allPossiblePairs)
+                    remainingPairs = [(i, j)
+                                      for i in range(len(prepStrs))
+                                      for j in range(len(effectStrs))
+                                      if (i, j) not in pair_indx_tups]
                     nPairsRemaining = len(remainingPairs)
-                    nPairsToChoose = nPairsToKeep-len(pair_indx_tups)
-                    nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
+                    nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
+                    nPairsToChoose = max(0, min(nPairsToChoose, nPairsRemaining))
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
 
                     fiducialPairsThisIter = fidPairDict[germ] + \
-                        [ remainingPairs[k] for k in
-                          sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
-                                             replace=False))]
+                        [remainingPairs[k] for k in
+                         sorted(rndm.choice(nPairsRemaining, nPairsToChoose,
+                                            replace=False))]
 
-                else: # rndm is not None and fidPairDict is None
-                    assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
+                else:  # rndm is not None and fidPairDict is None
+                    assert(nPairsToKeep <= nPairs)  # keepFraction must be <= 1.0
                     fiducialPairsThisIter = \
-                        [ allPossiblePairs[k] for k in
-                          sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
+                        [allPossiblePairs[k] for k in
+                         sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
-                missing_list.extend( gss.add_plaquette(germ_power, maxLen, germ,
-                                                       fiducialPairsThisIter, dscheck) )
+                missing_list.extend(gss.add_plaquette(germ_power, maxLen, germ,
+                                                      fiducialPairsThisIter, dscheck))
 
-        if nest: gss = gss.copy() #pinch off a copy of running_gss
+        if nest: gss = gss.copy()  # pinch off a copy of running_gss
         gss.done_adding_strings()
-        lsgst_listOfStructs.append( gss )
-        totStrs += len(gss.allstrs) #only relevant for non-nested case
+        lsgst_listOfStructs.append(gss)
+        totStrs += len(gss.allstrs)  # only relevant for non-nested case
 
-        
-    if nest: #then totStrs computation about overcounts -- just take string count of final stage
+    if nest:  # then totStrs computation about overcounts -- just take string count of final stage
         totStrs = len(running_gss.allstrs)
 
     printer.log("--- Circuit Creation ---", 1)
-    printer.log(" %d sequences created" % totStrs,2)
+    printer.log(" %d sequences created" % totStrs, 2)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
                     % (len(dscheck), totStrs, len(missing_list)), 2)
     if len(missing_list) > 0 or len(missing_lgst) > 0:
-        MAX = 10 #Maximum missing-seq messages to display
+        MAX = 10  # Maximum missing-seq messages to display
         missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
-                        for tup in missing_list[0:MAX+1] ] + \
-                       ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX+1] ]
+                        for tup in missing_list[0:MAX + 1]] + \
+                       ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX + 1]]
         if len(missing_list) > MAX or len(missing_lgst) > MAX:
             missing_msgs.append(" ... (more missing sequences not show) ... ")
-        printer.log("The following sequences were missing from the dataset:",4)
+        printer.log("The following sequences were missing from the dataset:", 4)
         printer.log("\n".join(missing_msgs), 4)
         if actionIfMissing == "raise":
             raise ValueError("Missing data! %d missing operation sequences" % len(missing_msgs))
@@ -517,12 +515,11 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         else:
             raise ValueError("Invalid `actionIfMissing` argument: %s" % actionIfMissing)
 
-
-    for i,struct in enumerate(lsgst_listOfStructs):
+    for i, struct in enumerate(lsgst_listOfStructs):
         if nest:
-            assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!
+            assert(struct.Ls == maxLengthList[0:i + 1])  # Make sure lengths are correct!
         else:
-            assert(struct.Ls == maxLengthList[i:i+1]) #Make sure lengths are correct!
+            assert(struct.Ls == maxLengthList[i:i + 1])  # Make sure lengths are correct!
     return lsgst_listOfStructs
 
 
@@ -607,11 +604,10 @@ def make_lsgst_experiment_list(opLabelSrc, prepStrs, effectStrs, germList,
     -------
     list of Circuits
     """
-    nest = True # => the final list contains all of the strings
+    nest = True  # => the final list contains all of the strings
     return make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList,
                             maxLengthList, fidPairs, truncScheme, nest,
                             keepFraction, keepSeed, includeLGST)[-1]
-
 
 
 def make_elgst_lists(opLabelSrc, germList, maxLengthList,
@@ -699,7 +695,7 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
 
     #running list of all strings so far (length-1 strs or empty)
     elgst_list = singleOps[:] if includeLGST else _gsc.circuit_list([()])
-    elgst_listOfLists = [ ] # list of lists to return
+    elgst_listOfLists = []  # list of lists to return
 
     Rfn = _getTruncFunction(truncScheme)
 
@@ -712,10 +708,10 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
             lst = _gsc.create_circuit_list("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
 
         if nest:
-            elgst_list += lst #add new strings to running list
-            elgst_listOfLists.append( _lt.remove_duplicates(singleOps + elgst_list) )
+            elgst_list += lst  # add new strings to running list
+            elgst_listOfLists.append(_lt.remove_duplicates(singleOps + elgst_list))
         else:
-            elgst_listOfLists.append( _lt.remove_duplicates(lst) )
+            elgst_listOfLists.append(_lt.remove_duplicates(lst))
 
     #print "%d eLGST sets w/lengths" % len(elgst_listOfLists),map(len,elgst_listOfLists)
     return elgst_listOfLists
@@ -778,14 +774,13 @@ def make_elgst_experiment_list(opLabelSrc, germList, maxLengthList,
                             includeLGST)[-1]
 
 
-
 def _getTruncFunction(truncScheme):
     if truncScheme == "whole germ powers":
         Rfn = _gsc.repeat_with_max_length
     elif truncScheme == "truncated germ powers":
         Rfn = _gsc.repeat_and_truncate
     elif truncScheme == "length as exponent":
-        Rfn = lambda germ,N : germ*N
+        def Rfn(germ, N): return germ * N
     else:
         raise ValueError("Invalid truncation scheme: %s" % truncScheme)
     return Rfn

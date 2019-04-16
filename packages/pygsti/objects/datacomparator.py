@@ -14,7 +14,8 @@ import collections as _collections
 from .multidataset import MultiDataSet as _MultiDataSet
 from .hypothesistest import HypothesisTest as _HypothesisTest
 
-def xlogy(x,y):
+
+def xlogy(x, y):
     """
     Returns x*log(y).
     """
@@ -23,30 +24,33 @@ def xlogy(x,y):
     else:
         return x * _np.log(y)
 
-def likelihood(pList,nList):
+
+def likelihood(pList, nList):
     """
     The likelihood for probabilities `pList` of a die,
-    given `nList` counts for each outcome. 
+    given `nList` counts for each outcome.
     """
     output = 1.
     for i, pVal in enumerate(pList):
         output *= pVal**nList[i]
     return output
 
-def loglikelihood(pList,nList):
+
+def loglikelihood(pList, nList):
     """
     The log of the likelihood for probabilities `pList` of a die,
     given `nList` counts for each outcome.
     """
     output = 0.
     for i, pVal in enumerate(pList):
-        output += xlogy(nList[i],pVal)
+        output += xlogy(nList[i], pVal)
     return output
 
 # Only used by the rectify datasets function, which is commented out,
 # so this is also commented out.
 # def loglikelihoodRatioObj(alpha,nListList,dof):
 #     return _np.abs(dof - loglikelihoodRatio(alpha*nListList))
+
 
 def loglikelihoodRatio(nListList):
     """
@@ -65,20 +69,21 @@ def loglikelihoodRatio(nListList):
     float
         The log-likehood ratio for this model comparison.
     """
-    nListC = _np.sum(nListList,axis=0)
+    nListC = _np.sum(nListList, axis=0)
     pListC = nListC / _np.float(_np.sum(nListC))
-    lC = loglikelihood(pListC,nListC)
+    lC = loglikelihood(pListC, nListC)
     li_list = []
     for nList in nListList:
         pList = _np.array(nList) / _np.float(_np.sum(nList))
-        li_list.append(loglikelihood(pList,nList))
+        li_list.append(loglikelihood(pList, nList))
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
+
 
 def JensenShannonDivergence(nListList):
     """
     Calculates the Jensen-Shannon divergence (JSD) between between different
-    observed frequencies, obtained in different "contexts", for the different 
+    observed frequencies, obtained in different "contexts", for the different
     outcomes of a "die" (i.e., coin with more than two outcomes).
 
     Parameters
@@ -93,11 +98,12 @@ def JensenShannonDivergence(nListList):
         The observed JSD for this data.
     """
     total_counts = _np.sum(_np.array(nListList))
-    return loglikelihoodRatio(nListList)/(2*total_counts)
+    return loglikelihoodRatio(nListList) / (2 * total_counts)
+
 
 def pval(llrval, dof):
     """
-    The p-value of a log-likelihood ratio (LLR), comparing a 
+    The p-value of a log-likelihood ratio (LLR), comparing a
     nested null hypothsis and a larger alternative hypothesis.
 
     Parameters
@@ -122,6 +128,7 @@ def pval(llrval, dof):
         is due to Wilks' theorem.
     """
     return 1 - _stats.chi2.cdf(llrval, dof)
+
 
 def llr_to_signed_nsigma(llrval, dof):
     """
@@ -151,7 +158,8 @@ def llr_to_signed_nsigma(llrval, dof):
     float
         The signed standard deviations.
     """
-    return (llrval - dof) / _np.sqrt(2*dof)
+    return (llrval - dof) / _np.sqrt(2 * dof)
+
 
 def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     """
@@ -163,25 +171,27 @@ def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
             return False
     return True
 
-def is_circuit_allowed_by_inclusion(op_inclusions,circuit):
+
+def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     """
     Returns True if `circuit` contains *any* of the gates from `op_inclusions`.
-    Otherwise, returns False. The exception is the empty circuit, which always 
+    Otherwise, returns False. The exception is the empty circuit, which always
     returns True.
     """
-    if len(circuit) == 0: return True # always include the empty string
+    if len(circuit) == 0: return True  # always include the empty string
     for gate in op_inclusions:
         if gate in circuit:
             return True
     return False
 
+
 def compute_llr_threshold(significance, dof):
     """
     Given a p-value threshold, *below* which a pvalue
-    is considered statistically significant, it returns 
-    the corresponding log-likelihood ratio threshold, *above* 
+    is considered statistically significant, it returns
+    the corresponding log-likelihood ratio threshold, *above*
     which a LLR is considered statically significant. For a single
-    hypothesis test, the input pvalue should be the desired "significance" 
+    hypothesis test, the input pvalue should be the desired "significance"
     level of the test (as a value between 0 and 1). For multiple hypothesis
     tests, this will normally be smaller than the desired global significance.
 
@@ -196,22 +206,23 @@ def compute_llr_threshold(significance, dof):
         of the full model space (the alternative hypothesis)
         minus the number of degrees of freedom of the restricted
         model space (the null hypothesis space), in the hypothesis
-        test.   
+        test.
 
     Returns
     -------
     float
         The significance threshold for the LLR, given by
-        1 - F^{-1}(pVal,dof) where F(x,k) is the cumulative distribution 
+        1 - F^{-1}(pVal,dof) where F(x,k) is the cumulative distribution
         function, evaluated at x, for the chi^2_k distribution. This
-        formula is based on Wilks' theorem.   
+        formula is based on Wilks' theorem.
     """
-    return _scipy.stats.chi2.isf(significance,dof)
+    return _scipy.stats.chi2.isf(significance, dof)
+
 
 def tvd(nListList):
     """
     Calculates the total variation distance (TVD) between between different
-    observed frequencies, obtained in different "contexts", for the *two* set of 
+    observed frequencies, obtained in different "contexts", for the *two* set of
     outcomes for roles of a "die".
 
     Parameters
@@ -232,11 +243,12 @@ def tvd(nListList):
     N0 = _np.sum(nListList[0])
     N1 = _np.sum(nListList[1])
 
-    return 0.5 * _np.sum(_np.abs(nListList[0][i]/N0 - nListList[1][i]/N1) for i in range(num_outcomes))
+    return 0.5 * _np.sum(_np.abs(nListList[0][i] / N0 - nListList[1][i] / N1) for i in range(num_outcomes))
+
 
 class DataComparator():
     """
-    This object can be used to implement all of the "context dependence detection" methods described 
+    This object can be used to implement all of the "context dependence detection" methods described
     in "Probing context-dependent errors in quantum processors", by Rudinger et al.
     (See that paper's supplemental material for explicit demonstrations of this object.)
 
@@ -245,13 +257,14 @@ class DataComparator():
 
         - Perform a hypothesis test to decide which sequences contain statistically significant variation.
         - Plot p-value histograms and log-likelihood ratio box plots.
-        - Extract (1) the "statistically significant total variation distance" for a circuit, 
-          (2) various other quantifications of the "amount" of context dependence, and (3) 
+        - Extract (1) the "statistically significant total variation distance" for a circuit,
+          (2) various other quantifications of the "amount" of context dependence, and (3)
           the level of statistical significance at which any context dependence is detected.
 
     """
-    def __init__(self, dataset_list_or_multidataset, circuits = 'all',
-                 op_exclusions = None, op_inclusions = None, DS_names = None):
+
+    def __init__(self, dataset_list_or_multidataset, circuits='all',
+                 op_exclusions=None, op_inclusions=None, DS_names=None):
         """
         Initializes a DataComparator object.
 
@@ -262,8 +275,8 @@ class DataComparator():
             or a MultiDataSet object, containing two or more sets of data to compare. Note
             that these DataSets should contain data for the same set of Circuits (although
             if there are additional Circuits these can be ignored using the parameters below).
-            This object is then intended to be used test to see if the results are indicative 
-            that the outcome probabilities for these Circuits has changed between the "contexts" that 
+            This object is then intended to be used test to see if the results are indicative
+            that the outcome probabilities for these Circuits has changed between the "contexts" that
             the data was obtained in.
 
         circuits : 'all' or list of Circuits, optional (default is 'all')
@@ -278,39 +291,40 @@ class DataComparator():
 
         op_exclusions : None or list of gates, optional (default is None)
             If not None, a Circuit will be dropped from the list to implement the comparisons for
-            if it doesn't include *some* gate from this list (or is the empty circuit). 
+            if it doesn't include *some* gate from this list (or is the empty circuit).
 
         DS_names : None or list, optional (default is None)
             If `dataset_list_multidataset` is a list of DataSets, this can be used to specify names
             for the DataSets in the list. E.g., ["Time 0", "Time 1", "Time 3"] or ["Driving","NoDriving"].
-        
+
         Returns
         -------
         A DataComparator object.
 
-        """      
+        """
         if DS_names is not None:
             if len(DS_names) != len(dataset_list_or_multidataset):
                 raise ValueError('Length of provided DS_names list must equal length of dataset_list_or_multidataset.')
-        
-        if isinstance(circuits,str):
+
+        if isinstance(circuits, str):
             assert(circuits == 'all'), "If circuits is a string it must be 'all'!"
 
-        if isinstance(dataset_list_or_multidataset,list):
-            dsList = dataset_list_or_multidataset    
+        if isinstance(dataset_list_or_multidataset, list):
+            dsList = dataset_list_or_multidataset
             olIndex = dsList[0].olIndex
-            olIndexListBool = [ds.olIndex==(olIndex) for ds in dsList]
+            olIndexListBool = [ds.olIndex == (olIndex) for ds in dsList]
             DS_names = list(range(len(dataset_list_or_multidataset)))
             if not _np.all(olIndexListBool):
                 raise ValueError('Outcomes labels and order must be the same across datasets.')
             if circuits == 'all':
                 circuitList = dsList[0].keys()
-                circuitsListBool = [ds.keys()==circuitList for ds in dsList]
+                circuitsListBool = [ds.keys() == circuitList for ds in dsList]
                 if not _np.all(circuitsListBool):
-                    raise ValueError('If circuits="all" is used, then datasets must contain identical circuits. (They do not.)')
+                    raise ValueError(
+                        'If circuits="all" is used, then datasets must contain identical circuits. (They do not.)')
                 circuits = circuitList
 
-        elif isinstance(dataset_list_or_multidataset,_MultiDataSet):
+        elif isinstance(dataset_list_or_multidataset, _MultiDataSet):
             dsList = [dataset_list_or_multidataset[key] for key in dataset_list_or_multidataset.keys()]
             if circuits == 'all':
                 circuits = dsList[0].keys()
@@ -319,21 +333,21 @@ class DataComparator():
 
         else:
             raise ValueError("The `dataset_list_or_multidataset` must be a list of DataSets of a MultiDataSet!")
-                
+
         if op_exclusions is not None:
             circuits_exc_temp = []
             for circuit in circuits:
-                if is_circuit_allowed_by_exclusion(op_exclusions,circuit):
+                if is_circuit_allowed_by_exclusion(op_exclusions, circuit):
                     circuits_exc_temp.append(circuit)
             circuits = list(circuits_exc_temp)
-            
+
         if op_inclusions is not None:
             circuits_inc_temp = []
             for circuit in circuits:
-                if is_circuit_allowed_by_inclusion(op_inclusions,circuit):
+                if is_circuit_allowed_by_inclusion(op_inclusions, circuit):
                     circuits_inc_temp.append(circuit)
             circuits = list(circuits_inc_temp)
-            
+
         llrs = {}
         pVals = {}
         jsds = {}
@@ -342,16 +356,16 @@ class DataComparator():
 
         if len(dataset_list_or_multidataset) == 2:
             tvds = {}
-        
+
         for circuit in circuits:
             datalineList = [ds[circuit] for ds in dsList]
             nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList])
             total_counts.append(_np.sum(nListList))
             llrs[circuit] = loglikelihoodRatio(nListList)
             jsds[circuit] = JensenShannonDivergence(nListList)
-            pVals[circuit] =  pval(llrs[circuit],dof)
+            pVals[circuit] = pval(llrs[circuit], dof)
             if len(dataset_list_or_multidataset) == 2:
-                tvds[circuit] = tvd(nListList) 
+                tvds[circuit] = tvd(nListList)
 
         self.dataset_list_or_multidataset = dataset_list_or_multidataset
         self.pVals = pVals
@@ -363,7 +377,7 @@ class DataComparator():
             self.tvds = tvds
         self.op_exclusions = op_exclusions
         self.op_inclusions = op_inclusions
-        self.pVals0 = str(len(self.pVals)-_np.count_nonzero(list(self.pVals.values())))
+        self.pVals0 = str(len(self.pVals) - _np.count_nonzero(list(self.pVals.values())))
         self.dof = dof
         self.num_strs = len(self.pVals)
         self.DS_names = DS_names
@@ -375,15 +389,15 @@ class DataComparator():
             self.fixed_totalcount_data = True
             self.counts_per_sequence = int(total_counts[0])
 
-        self.aggregate_llr = _np.sum(list(self.llrs.values())) 
-        self.aggregate_llr_threshold = None    
-        self.aggregate_pVal = pval(self.aggregate_llr, self.num_strs*self.dof) 
-        self.aggregate_pVal_threshold = None 
+        self.aggregate_llr = _np.sum(list(self.llrs.values()))
+        self.aggregate_llr_threshold = None
+        self.aggregate_pVal = pval(self.aggregate_llr, self.num_strs * self.dof)
+        self.aggregate_pVal_threshold = None
 
         # Convert the aggregate LLR to a signed standard deviations.
-        self.aggregate_nsigma = llr_to_signed_nsigma(self.aggregate_llr,self.num_strs*self.dof)
-        self.aggregate_nsigma_threshold = None 
-        
+        self.aggregate_nsigma = llr_to_signed_nsigma(self.aggregate_llr, self.num_strs * self.dof)
+        self.aggregate_nsigma_threshold = None
+
         # All attributes to be populated in methods that can be called from .get methods, so
         # we can raise a meaningful warning if they haven't been calculated yet.
         self.sstvds = None
@@ -396,8 +410,8 @@ class DataComparator():
         self.aggregate_nsigma_threshold = None
         self.aggregate_pVal_threshold = None
 
-    def implement(self, significance=0.05, per_sequence_correction='Hochberg', 
-                  aggregate_test_weighting=0.5,  pass_alpha=True, verbosity=1):
+    def implement(self, significance=0.05, per_sequence_correction='Hochberg',
+                  aggregate_test_weighting=0.5, pass_alpha=True, verbosity=1):
         """
         Implements statistical hypothesis testing, to detect whether there is statistically
         significant variation between the DateSets in this DataComparator. This performs
@@ -406,7 +420,7 @@ class DataComparator():
         in "Probing context-dependent errors in quantum processors", by Rudinger et al. With
         non-default settings, this is some minor variation on that method.
 
-        Note that the default values of all the parameters are likely sufficient for most 
+        Note that the default values of all the parameters are likely sufficient for most
         purposes.
 
         Parameters
@@ -417,70 +431,70 @@ class DataComparator():
             the probability that a sequence that has been flagged up as context dependent
             is actually from a context-independent circuit is no more than `significance`.
             Precisely, `significance` is what the "family-wise error rate" (FWER) of the full set
-            of hypothesis tests (1 "aggregate test", and 1 test per sequence) is controlled to, 
-            as long as `per_sequence_correction` is set to the default value, or another option 
+            of hypothesis tests (1 "aggregate test", and 1 test per sequence) is controlled to,
+            as long as `per_sequence_correction` is set to the default value, or another option
             that controls the FWER of the per-sequence comparion (see below).
-        
+
         per_sequence_correction : string, optional (default is 'Hochberg')
             The multi-hypothesis test correction used for the per-circuit/sequence comparisons.
             (See "Probing context-dependent errors in quantum processors", by Rudinger et al. for
-            the details of what the per-circuit comparison is). This can be any string that is an allowed 
+            the details of what the per-circuit comparison is). This can be any string that is an allowed
             value for the `localcorrections` input parameter of the HypothesisTest object. This includes:
 
                 - 'Hochberg'. This implements the Hochberg multi-test compensation technique. This
-                is strictly the best method available in the code, if you wish to control the FWER, 
-                and it is the method described in "Probing context-dependent errors in quantum processors", 
+                is strictly the best method available in the code, if you wish to control the FWER,
+                and it is the method described in "Probing context-dependent errors in quantum processors",
                 by Rudinger et al.
 
                 - 'Holms'. This implements the Holms multi-test compensation technique. This
-                controls the FWER, and it results in a strictly less powerful test than the Hochberg 
+                controls the FWER, and it results in a strictly less powerful test than the Hochberg
                 correction.
 
-                - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation 
-                technique. This controls the FWER, and it results in a strictly less powerful test than 
+                - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
+                technique. This controls the FWER, and it results in a strictly less powerful test than
                 the Hochberg correction.
 
                 - 'none'. This implements no multi-test compensation for the per-sequence comparsions,
                 so they are all implemented at a "local" signifincance level that is altered from `significance`
                 only by the (inbuilt) Bonferroni-like correction between the "aggregate" test and the per-sequence
-                tests. This option does *not* control the FWER, and many sequences may be flagged up as context 
+                tests. This option does *not* control the FWER, and many sequences may be flagged up as context
                 dependent even if none are.
 
-                -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation 
+                -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
                 technique. This does *not* control the FWER, and instead controls the "False Detection Rate"
-                (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that 
-                the global significance is maintained for the test of "Is there any context dependence?". I.e., 
-                one or more tests will trigger when there is no context 
-                dependence with at most a probability of `significance`. But, if one or more per-sequence tests 
-                trigger then we are only guaranteed that (in expectation) no more than a fraction of 
-                "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't. 
-                Here, "local-significance" is the  significance at which the per-sequence tests are, together, 
-                implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't 
+                (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that
+                the global significance is maintained for the test of "Is there any context dependence?". I.e.,
+                one or more tests will trigger when there is no context
+                dependence with at most a probability of `significance`. But, if one or more per-sequence tests
+                trigger then we are only guaranteed that (in expectation) no more than a fraction of
+                "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't.
+                Here, "local-significance" is the  significance at which the per-sequence tests are, together,
+                implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't
                 detect context dependence and `significance` if it does (as long as `pass_alpha` is True). This
                 method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
                 quantity.
-        
+
         aggregate_test_weighting : float in [0,1], optional (default is 0.5)
             The weighting, in a generalized Bonferroni correction, to put on the "aggregate test", that jointly
-            tests all of the data for context dependence (in contrast to the per-sequence tests). If this is 0 then 
-            the aggreate test is not implemented, and if it is 1 only the aggregate test is implemented (unless it 
+            tests all of the data for context dependence (in contrast to the per-sequence tests). If this is 0 then
+            the aggreate test is not implemented, and if it is 1 only the aggregate test is implemented (unless it
             triggers and `pass_alpha` is True).
 
         pass_alpha : Bool, optional (default is True)
 
             The aggregate test is implemented first, at the "local" significance defined by `aggregate_test_weighting`
-            and `significance` (see above). If `pass_alpha` is True, then when the aggregate test triggers all the 
-            local significance for this test is passed on to the per-sequence tests (which are then jointly implemented 
+            and `significance` (see above). If `pass_alpha` is True, then when the aggregate test triggers all the
+            local significance for this test is passed on to the per-sequence tests (which are then jointly implemented
             with significance `significance`, that is then locally corrected for the multi-test correction as specified
-            above), and when the aggregate test doesn't trigger this local significance isn't passed on. If `pass_alpha` 
-            is False then local significance of the aggregate test is never passed on from the aggregate test. See 
-            "Probing context-dependent errors in quantum processors", by Rudinger et al. (or hypothesis testing literature) 
+            above), and when the aggregate test doesn't trigger this local significance isn't passed on. If `pass_alpha`
+            is False then local significance of the aggregate test is never passed on from the aggregate test. See
+            "Probing context-dependent errors in quantum processors", by Rudinger et al. (or hypothesis testing literature)
             for discussions of why this "significance passing" still maintains a (global) FWER of `significance`.
             Note that The default value of True always results in a strictly more powerful test.
 
         verbosity : int, optional (default is 1)
             If > 0 then a summary of the results of the tests is printed to screen. Otherwise, the
-            various .get_...() methods need to be queried to obtain the results of the 
+            various .get_...() methods need to be queried to obtain the results of the
             hypothesis tests.
 
         Returns
@@ -489,21 +503,23 @@ class DataComparator():
 
         """
         self.significance = significance
-        assert(aggregate_test_weighting <= 1. or aggregate_test_weighting >= 0.), "The weighting on the aggregate test must be between 0 and 1!"
-        
+        assert(aggregate_test_weighting <= 1. or aggregate_test_weighting >=
+               0.), "The weighting on the aggregate test must be between 0 and 1!"
+
         if verbosity >= 2:
-            print("Implementing {0:.2f}% significance statistical hypothesis testing...".format(self.significance*100),end='')
+            print("Implementing {0:.2f}% significance statistical hypothesis testing...".format(
+                self.significance * 100), end='')
 
         circuits = tuple(self.pVals.keys())
         hypotheses = ('aggregate', circuits)
         weighting = {}
         weighting['aggregate'] = aggregate_test_weighting
         weighting[circuits] = 1 - aggregate_test_weighting
-        
+
         if pass_alpha: passing_graph = 'Holms'
         else: passing_graph = 'none'
 
-        hypotest = _HypothesisTest(hypotheses, significance=significance, weighting=weighting, 
+        hypotest = _HypothesisTest(hypotheses, significance=significance, weighting=weighting,
                                    passing_graph=passing_graph, local_corrections=per_sequence_correction)
         extended_pVals_dict = _copy.copy(self.pVals)
         extended_pVals_dict['aggregate'] = self.aggregate_pVal
@@ -516,25 +532,27 @@ class DataComparator():
             self.aggregate_nsigma_threshold = _np.inf
             self.aggregate_pVal_threshold = 0.
         else:
-            self.aggregate_llr_threshold = compute_llr_threshold(aggregate_test_weighting*significance, self.num_strs*self.dof)
-            self.aggregate_nsigma_threshold = llr_to_signed_nsigma(self.aggregate_llr_threshold, self.num_strs*self.dof)
-            self.aggregate_pVal_threshold = aggregate_test_weighting*significance
+            self.aggregate_llr_threshold = compute_llr_threshold(
+                aggregate_test_weighting * significance, self.num_strs * self.dof)
+            self.aggregate_nsigma_threshold = llr_to_signed_nsigma(
+                self.aggregate_llr_threshold, self.num_strs * self.dof)
+            self.aggregate_pVal_threshold = aggregate_test_weighting * significance
 
         self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[circuits]
-        self.llr_pseudothreshold = compute_llr_threshold(self.pVal_pseudothreshold,self.dof)
+        self.llr_pseudothreshold = compute_llr_threshold(self.pVal_pseudothreshold, self.dof)
 
         if self.fixed_totalcount_data:
-            self.jsd_pseudothreshold = self.llr_pseudothreshold/self.counts_per_sequence
+            self.jsd_pseudothreshold = self.llr_pseudothreshold / self.counts_per_sequence
 
         temp_hypothesis_rejected_dict = _copy.copy(hypotest.hypothesis_rejected)
         self.inconsistent_datasets_detected = any(list(temp_hypothesis_rejected_dict.values()))
-        del temp_hypothesis_rejected_dict['aggregate']            
+        del temp_hypothesis_rejected_dict['aggregate']
         self.number_of_significant_sequences = _np.sum(list(temp_hypothesis_rejected_dict.values()))
 
         if len(self.dataset_list_or_multidataset) == 2:
             sstvds = {}
             for opstr in list(self.llrs.keys()):
-                if self.results.hypothesis_rejected[opstr]:               
+                if self.results.hypothesis_rejected[opstr]:
                     sstvds[opstr] = self.tvds[opstr]
             self.sstvds = sstvds
 
@@ -546,25 +564,29 @@ class DataComparator():
 
         if verbosity >= 1:
             if self.inconsistent_datasets_detected:
-                print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance*100))
+                print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
-                print("    - The aggregate log-likelihood ratio test is significant at {0:.2f} standard deviations.".format(self.aggregate_nsigma))
-                print("    - The aggregate log-likelihood ratio test standard deviations signficance threshold is {0:.2f}".format(self.aggregate_nsigma_threshold)) 
-                print("    - The number of sequences with data that is inconsistent is {0}".format(self.number_of_significant_sequences))
-                if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences>0:
+                print(
+                    "    - The aggregate log-likelihood ratio test is significant at {0:.2f} standard deviations.".format(self.aggregate_nsigma))
+                print("    - The aggregate log-likelihood ratio test standard deviations signficance threshold is {0:.2f}".format(
+                    self.aggregate_nsigma_threshold))
+                print(
+                    "    - The number of sequences with data that is inconsistent is {0}".format(self.number_of_significant_sequences))
+                if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences > 0:
                     max_SSTVD_gs, max_SSTVD = self.get_maximum_SSTVD()
-                    print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD)) 
-                    print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))                    
+                    print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD))
+                    print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
             else:
-                print("Statistical hypothesis tests did NOT find inconsistency between the datasets at {0:.2f}% significance.".format(self.significance*100))           
-        
+                print("Statistical hypothesis tests did NOT find inconsistency between the datasets at {0:.2f}% significance.".format(
+                    self.significance * 100))
+
         return
 
     def get_TVD(self, circuit):
         """
         Returns the observed total variation distacnce (TVD) for the specified circuit.
-        This is only possible if the comparison is between two sets of data. See Eq. (19) 
-        in "Probing context-dependent errors in quantum processors", by Rudinger et al. for the 
+        This is only possible if the comparison is between two sets of data. See Eq. (19)
+        in "Probing context-dependent errors in quantum processors", by Rudinger et al. for the
         definition of this observed TVD.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
@@ -581,18 +603,18 @@ class DataComparator():
             The TVD for the specified circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("The TVD is only defined for comparisons between two datasets!")  
+        except: raise ValueError("The TVD is only defined for comparisons between two datasets!")
 
         return self.tvds[circuit]
 
     def get_SSTVD(self, circuit):
         """
-        Returns the "statistically significant total variation distacnce" (SSTVD) for the specified 
+        Returns the "statistically significant total variation distacnce" (SSTVD) for the specified
         circuit. This is only possible if the comparison is between two sets of data. The SSTVD
         is None if the circuit has not been found to have statistically significant variation.
-        Otherwise it is equal to the observed TVD. See Eq. (20) and surrounding discussion in 
+        Otherwise it is equal to the observed TVD. See Eq. (20) and surrounding discussion in
         "Probing context-dependent errors in quantum processors", by Rudinger et al., for more information.
-        
+
         This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_JSD(), get_TVD() and get_SSJSD()).
 
@@ -607,14 +629,14 @@ class DataComparator():
             The SSTVD for the specified circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("Can only compute TVD between two datasets.")  
+        except: raise ValueError("Can only compute TVD between two datasets.")
         assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .implement() method first!"
 
         return self.sstvds.get(circuit, None)
 
     def get_maximum_SSTVD(self):
         """
-        Returns the maximum, over circuits, of the "statistically significant total variation distance" 
+        Returns the maximum, over circuits, of the "statistically significant total variation distance"
         (SSTVD). This is only possible if the comparison is between two sets of data. See the .get_SSTVD()
         method for information on SSTVD.
 
@@ -624,22 +646,22 @@ class DataComparator():
             The circuit associated with the maximum SSTVD, and the SSTVD of that circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("Can only compute TVD between two datasets.")  
+        except: raise ValueError("Can only compute TVD between two datasets.")
         assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .implement() method first!"
 
         if len(self.sstvds) == 0:
             return None, None
-        else: 
+        else:
             index = _np.argmax(list(self.sstvds.values()))
             max_sstvd_gs = list(self.sstvds.keys())[index]
             max_sstvd = self.sstvds[max_sstvd_gs]
-            
+
             return max_sstvd_gs, max_sstvd
 
     def get_pvalue(self, circuit):
         """
         Returns the pvalue for the log-likelihood ratio test for the specified circuit.
-  
+
         Parameters
         ----------
         circuit : Circuit
@@ -648,16 +670,16 @@ class DataComparator():
        Returns
         -------
         float
-            The p-value of the specified circuit.        
+            The p-value of the specified circuit.
         """
         return self.pVals[circuit]
 
     def get_pvalue_pseudothreshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence 
-        p-values (obtained from the log-likehood ratio test). This is a "pseudo-threshold", because it 
-        is data-dependent in general, but all the per-sequence p-values below this value are statistically 
-        significant. This quantity is given by Eq. (9) in  "Probing context-dependent errors in quantum 
+        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence
+        p-values (obtained from the log-likehood ratio test). This is a "pseudo-threshold", because it
+        is data-dependent in general, but all the per-sequence p-values below this value are statistically
+        significant. This quantity is given by Eq. (9) in  "Probing context-dependent errors in quantum
         processors", by Rudinger et al.
 
         Returns
@@ -671,9 +693,9 @@ class DataComparator():
     def get_LLR(self, circuit):
         """
         Returns the log-likelihood ratio (LLR) for the input circuit.
-        This is the quantity defined in Eq (4) of "Probing context-dependent 
+        This is the quantity defined in Eq (4) of "Probing context-dependent
         errors in quantum processors", by Rudinger et al.
-        
+
         Parameters
         ----------
         circuit : Circuit
@@ -688,9 +710,9 @@ class DataComparator():
 
     def get_LLR_pseudothreshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence 
-        log-likelihood ratio (LLR). This is a "pseudo-threshold", because it is data-dependent in 
-        general, but all LLRs above this value are statistically significant. This quantity is given 
+        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence
+        log-likelihood ratio (LLR). This is a "pseudo-threshold", because it is data-dependent in
+        general, but all LLRs above this value are statistically significant. This quantity is given
         by Eq (10) in  "Probing context-dependent errors in quantum processors", by Rudinger et al.
 
         Returns
@@ -705,8 +727,8 @@ class DataComparator():
         """
         Returns the observed Jensen-Shannon divergence (JSD) between "contexts" for
         the specified circuit. The JSD is a rescaling of the LLR, given by dividing
-        the LLR by 2*N where N is the total number of counts (summed over contexts) for 
-        this circuit. This quantity is given by Eq (15) in  "Probing context-dependent 
+        the LLR by 2*N where N is the total number of counts (summed over contexts) for
+        this circuit. This quantity is given by Eq (15) in  "Probing context-dependent
         errors in quantum processors", Rudinger et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
@@ -726,12 +748,12 @@ class DataComparator():
 
     def get_JSD_pseudothreshold(self):
         """
-        Returns the statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD) 
+        Returns the statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD)
         between "contexts". This is a rescaling of the pseudo-threshold for the LLR, returned by the
         method .get_LLR_pseudothreshold(); see that method for more details. This threshold is also given by
         Eq (17) in  "Probing context-dependent errors in quantum processors", by Rudinger et al.
 
-        Note that this pseudo-threshold is not defined if the total number of counts (summed over 
+        Note that this pseudo-threshold is not defined if the total number of counts (summed over
         contexts) for a sequence varies between sequences.
 
         Returns
@@ -746,9 +768,9 @@ class DataComparator():
     def get_SSJSD(self, circuit):
         """
         Returns the "statistically significanet Jensen-Shannon divergence" (SSJSD) between "contexts" for
-        the specified circuit. This is the JSD of the circuit (see .get_JSD()), if the circuit 
-        has been found to be context dependent, and otherwise it is None. This quantity is the JSD version 
-        of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum processors", by Rudinger 
+        the specified circuit. This is the JSD of the circuit (see .get_JSD()), if the circuit
+        has been found to be context dependent, and otherwise it is None. This quantity is the JSD version
+        of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum processors", by Rudinger
         et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
@@ -765,7 +787,7 @@ class DataComparator():
             The JSD of the specified circuit.
         """
         assert(self.llr_pseudothreshold is not None), "The hypothsis testing has not been implemented yet! Run the .implement() method first!"
-        if self.results.hypothesis_rejected[circuit]:               
+        if self.results.hypothesis_rejected[circuit]:
             return self.jsds[circuit]
         else:
             return None
@@ -775,9 +797,9 @@ class DataComparator():
         Returns the "aggregate" log-likelihood ratio (LLR), comparing the null
         hypothesis of no context dependence in *any* sequence with the full model
         of arbitrary context dependence. This is the sum of the per-sequence LLRs, and
-        it is defined in Eq (11) of "Probing context-dependent  errors in 
+        it is defined in Eq (11) of "Probing context-dependent  errors in
         quantum processors", by Rudinger et al.
-  
+
         Returns
         -------
         float
@@ -787,10 +809,10 @@ class DataComparator():
 
     def get_aggregate_LLR_threshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance threshold for the 
-        "aggregate" log-likelihood ratio (LLR), above which this LLR is significant. 
-        See .get_aggregate_LLR() for more details. This quantity is the LLR version 
-        of the quantity defined in Eq (14) of "Probing context-dependent errors in 
+        Returns the (multi-test-adjusted) statistical significance threshold for the
+        "aggregate" log-likelihood ratio (LLR), above which this LLR is significant.
+        See .get_aggregate_LLR() for more details. This quantity is the LLR version
+        of the quantity defined in Eq (14) of "Probing context-dependent errors in
         quantum processors", by Rudinger et al.
 
         Returns
@@ -804,15 +826,15 @@ class DataComparator():
     def get_aggregate_pvalue(self):
         """
         Returns the p-value for the "aggregate" log-likelihood ratio (LLR), comparing the null
-        hypothesis of no context dependence in any sequence with the full model of arbitrary 
-        dependence. This LLR is defined in Eq (11) in "Probing context-dependent errors in 
-        quantum processors", by Rudinger et al., and it is converted to a p-value via Wilks' 
+        hypothesis of no context dependence in any sequence with the full model of arbitrary
+        dependence. This LLR is defined in Eq (11) in "Probing context-dependent errors in
+        quantum processors", by Rudinger et al., and it is converted to a p-value via Wilks'
         theorem (see discussion therein).
 
         Note that this p-value is often zero to machine precision, when there is context dependence,
-        so a more useful number is often returned by get_aggregate_nsigma() (that quantity is equivalent to 
+        so a more useful number is often returned by get_aggregate_nsigma() (that quantity is equivalent to
         this p-value but expressed on a different scale).
-  
+
         Returns
         -------
         float
@@ -822,10 +844,10 @@ class DataComparator():
 
     def get_aggregate_pvalue_threshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance threshold for the p-value of 
-        the "aggregate" log-likelihood ratio (LLR), below which this p-value is significant. 
+        Returns the (multi-test-adjusted) statistical significance threshold for the p-value of
+        the "aggregate" log-likelihood ratio (LLR), below which this p-value is significant.
         See the .get_aggregate_pvalue() method for more details.
-  
+
         Returns
         -------
         float
@@ -836,10 +858,10 @@ class DataComparator():
 
     def get_aggregate_nsigma(self):
         """
-        Returns the number of standard deviations above the context-independent mean that the "aggregate" 
-        log-likelihood ratio (LLR) is. This quantity is defined in Eq (13) of "Probing context-dependent 
+        Returns the number of standard deviations above the context-independent mean that the "aggregate"
+        log-likelihood ratio (LLR) is. This quantity is defined in Eq (13) of "Probing context-dependent
         errors in quantum processors", by Rudinger et al.
-  
+
         Returns
         -------
         float
@@ -850,14 +872,14 @@ class DataComparator():
     def get_aggregate_nsigma_threshold(self):
         """
         Returns the (multi-test-adjusted) statistical significance threshold for the signed standard
-        deviations of the the "aggregate" log-likelihood ratio (LLR). See the .get_aggregate_nsigma() 
-        method for more details. This quantity is defined in Eq (14) of "Probing context-dependent errors 
+        deviations of the the "aggregate" log-likelihood ratio (LLR). See the .get_aggregate_nsigma()
+        method for more details. This quantity is defined in Eq (14) of "Probing context-dependent errors
         in quantum processors", by Rudinger et al.
-  
+
         Returns
         -------
         float
-            The statistical significance threshold above which the signed standard deviations 
+            The statistical significance threshold above which the signed standard deviations
             of the aggregate LLR is significant.
         """
         assert(self.aggregate_nsigma_threshold is not None), "This has not yet been calculated! Run the .implement() method first!"

@@ -23,7 +23,8 @@ try:
 except:
     pass
 
-def xlogp_rectified(x, p, min_p=1e-4, max_p=1-1e-6):
+
+def xlogp_rectified(x, p, min_p=1e-4, max_p=1 - 1e-6):
     """
     Returns x*log(p) where p is bound within (0,1], with
     adjustments at the boundarys that are useful in minimization
@@ -32,25 +33,25 @@ def xlogp_rectified(x, p, min_p=1e-4, max_p=1-1e-6):
     """
     if x == 0: return 0
     # Fix pos_p to be no smaller than min_p and no larger than max_p
-    pos_p = max(min_p,p)
-    pos_p = min(max_p,pos_p)
+    pos_p = max(min_p, p)
+    pos_p = min(max_p, pos_p)
     # The f(x_0) term in a Taylor expansion of xlog(y) around pos_p
     xlogp_rectified = x * _np.log(pos_p)
     # If p is less than this value, add in a quadratic term.
     if p < min_p:
-        # The derivative of xlog(y) evaluated at min_p    
+        # The derivative of xlog(y) evaluated at min_p
         S = x / min_p
-        # The 2nd derivative of xlog(y) evaluated at min_p                                                                                              
+        # The 2nd derivative of xlog(y) evaluated at min_p
         S2 = -0.5 * x / (min_p**2)
-        # Adjusts v to be the Taylor expansion, to second order, of xlog(y) around min_p evaluated at p.                                                                                   
-        xlogp_rectified += S*(p - min_p) + S2*(p - min_p)**2
+        # Adjusts v to be the Taylor expansion, to second order, of xlog(y) around min_p evaluated at p.
+        xlogp_rectified += S * (p - min_p) + S2 * (p - min_p)**2
     elif p > max_p:
-        # The derivative of xlog(y) evaluated at max_p  
-        S = x / max_p               
-        # The 2nd derivative of xlog(y)evaluated at max_p                                                                                   
+        # The derivative of xlog(y) evaluated at max_p
+        S = x / max_p
+        # The 2nd derivative of xlog(y)evaluated at max_p
         S2 = -0.5 * x / (max_p**2)
-        # Adds a fairly arbitrary drop-off term, to smooth out the hard boundary that should be imposed at p=1.                                                                                           
-        xlogp_rectified += S*(p - max_p) + S2*(1 + p - max_p)**100
+        # Adds a fairly arbitrary drop-off term, to smooth out the hard boundary that should be imposed at p=1.
+        xlogp_rectified += S * (p - max_p) + S2 * (1 + p - max_p)**100
 
     return xlogp_rectified
 
@@ -68,7 +69,8 @@ def xlogp_rectified(x, p, min_p=1e-4, max_p=1-1e-6):
 
 #     return -obj
 
-def trajectoryNegLogLikelihood(p, x, min_p=1e-4, max_p=1-1e-6):
+
+def trajectoryNegLogLikelihood(p, x, min_p=1e-4, max_p=1 - 1e-6):
     """
     The negative log-likelihood of a probabilities trajectory.
 
@@ -79,7 +81,7 @@ def trajectoryNegLogLikelihood(p, x, min_p=1e-4, max_p=1-1e-6):
     """
     logl = 0
     for outcome in x.keys():
-        logl += _np.sum([xlogp_rectified(xot, pot, min_p, max_p) for xot,pot in zip(x[outcome],p[outcome])])
+        logl += _np.sum([xlogp_rectified(xot, pot, min_p, max_p) for xot, pot in zip(x[outcome], p[outcome])])
         #print(logl)
 
     # T = data.shape[0]
@@ -91,6 +93,7 @@ def trajectoryNegLogLikelihood(p, x, min_p=1e-4, max_p=1-1e-6):
     #     obj += xlogp_rectified(xTemp, pTemp, min_p, max_p) + xlogp_rectified(1-xTemp, 1-pTemp, min_p, max_p)
 
     return -logl
+
 
 def loglikelihood_of_model(model, data, times, min_p=0., max_p=1.):
     """
@@ -117,7 +120,7 @@ def loglikelihood_of_model(model, data, times, min_p=0., max_p=1.):
 
     max_p : float, optional
         A positive value close to and <= 1. The value of `p` above which x*log(p) the boundary on p
-        being <= 1 is enforced using a smooth, quickly growing function. The default value of 1. 
+        being <= 1 is enforced using a smooth, quickly growing function. The default value of 1.
         gives the true log-likelihood.
 
     Returns
@@ -129,8 +132,9 @@ def loglikelihood_of_model(model, data, times, min_p=0., max_p=1.):
     p = model.get_probabilities(times)
     return -trajectoryNegLogLikelihood(p, data, min_p, max_p)
 
-def maximum_likelihood_model(model, data, times, min_p=1e-4, max_p=1-1e-6, method='Nelder-Mead', 
-                             verbosity=1, returnOptout=False):                    
+
+def maximum_likelihood_model(model, data, times, min_p=1e-4, max_p=1 - 1e-6, method='Nelder-Mead',
+                             verbosity=1, returnOptout=False):
     """
     Implements maximum likelihood estimation over a model for a time-resolved probabilities trajectory,
     and returns the maximum likelihood model.
@@ -153,15 +157,15 @@ def maximum_likelihood_model(model, data, times, min_p=1e-4, max_p=1-1e-6, metho
     min_p : float, optional
         A positive value close to zero. The value of `p` below which x*log(p) is approximated using
         a Taylor expansion (used to smooth out the parameter boundaries and obtain better fitting
-        performance). The default value should be fine. 
+        performance). The default value should be fine.
 
     max_p : float, optional
         A positive value close to and <= 1. The value of `p` above which x*log(p) the boundary on p
-        being <= 1 is enforced using a smooth, quickly growing function. The default value should be 
-        fine. 
+        being <= 1 is enforced using a smooth, quickly growing function. The default value should be
+        fine.
 
     method : str, optional
-        Any value allowed for the method parameter in scipy.optimize.minimize(). 
+        Any value allowed for the method parameter in scipy.optimize.minimize().
 
     verbosity : int, optional
         The amount of print to screen.
@@ -186,14 +190,14 @@ def maximum_likelihood_model(model, data, times, min_p=1e-4, max_p=1-1e-6, metho
         p = mlemodel.get_probabilities(times)
 
         return trajectoryNegLogLikelihood(p, data, min_p, max_p)
-    
-    options = {'disp':False}
-    numparams = len(model.hyperparameters)*len(model.independent_outcomes)
+
+    options = {'disp': False}
+    numparams = len(model.hyperparameters) * len(model.independent_outcomes)
     if verbosity > 0:
-        print("      - Performing MLE over {} parameters...".format(numparams),end='')
+        print("      - Performing MLE over {} parameters...".format(numparams), end='')
     if verbosity > 1:
         print("")
-        options = {'disp':True}
+        options = {'disp': True}
 
     start = _tm.time()
     seed = model.get_parameters_as_list()
@@ -207,18 +211,19 @@ def maximum_likelihood_model(model, data, times, min_p=1e-4, max_p=1-1e-6, metho
         print("complete.")
     if verbosity > 1:
         print("      - Complete!")
-        print("      - Time taken: {} seconds".format(end-start)),
+        print("      - Time taken: {} seconds".format(end - start)),
         ll_seed_adj = -loglikelihood_of_model(model, data, times, min_p, max_p)
         ll_seed = -loglikelihood_of_model(model, data, times)
         ll_result_adj = -loglikelihood_of_model(mlemodel, data, times, min_p, max_p)
         ll_result = -loglikelihood_of_model(mlemodel, data, times)
-        print("      - The -loglikelihood of the seed = {} (with boundard adjustment = {})".format(ll_seed,ll_seed_adj))
-        print("      - The -loglikelihood of the ouput = {} (with boundard adjustment = {})".format(ll_result,ll_result_adj))
+        print("      - The -loglikelihood of the seed = {} (with boundard adjustment = {})".format(ll_seed, ll_seed_adj))
+        print("      - The -loglikelihood of the ouput = {} (with boundard adjustment = {})".format(ll_result, ll_result_adj))
 
     if returnOptout:
         return mlemodel, optout
     else:
         return mlemodel
+
 
 def uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005, verbosity=1):
     """
@@ -240,13 +245,13 @@ def uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005, v
 
     iteration = 1
     modelchanged = False
-    while maxpt >= 1-epsilon or minpt <= epsilon:
-        
+    while maxpt >= 1 - epsilon or minpt <= epsilon:
+
         modelchanged = True
         newparameters = model.parameters.copy()
         for i in model.parameters.keys():
-            newparameters[i][1:] = [_sig.decrease_magnitude(p,stepsize) for p in newparameters[i][1:]]
-        
+            newparameters[i][1:] = [_sig.decrease_magnitude(p, stepsize) for p in newparameters[i][1:]]
+
         # Input the new parameters to the model
         newmodel.set_parameters(newparameters)
         # Get the new probabilities trajectory
@@ -256,46 +261,48 @@ def uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005, v
         minpt = min([min(pt[o]) for o in model.parameters.keys()])
 
         if iteration >= 10000:
-            _warnings.warning("10,000 iterations implemented trying to make model physical! Quiting and returning unphysical model.")
-            return model 
+            _warnings.warning(
+                "10,000 iterations implemented trying to make model physical! Quiting and returning unphysical model.")
+            return model
 
         iteration += 1
 
     return newmodel, modelchanged
 
-def likelihood_of_general_model(probTrajectoriesFunction, parameters, times, data, min_p=1e-4, max_p=1 - 1e-6): 
+
+def likelihood_of_general_model(probTrajectoriesFunction, parameters, times, data, min_p=1e-4, max_p=1 - 1e-6):
     """
     Todo.
-    """      
+    """
     negll = 0.
     for opstr in data.keys():
         p = probTrajectoriesFunction(parameters, opstr, times[opstr])
         negll += trajectoryNegLogLikelihood(p, data[opstr], min_p, max_p)
-    
+
     return negll
 
 
-def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data, seed, min_p=1e-4, max_p=1-1e-6, 
-                                          verbosity=1, bounds=None, returnOptout=False): 
+def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data, seed, min_p=1e-4, max_p=1 - 1e-6,
+                                          verbosity=1, bounds=None, returnOptout=False):
     """
     Todo.
     """
     def objfunc(parameters):
-        
+
         negll = 0.
         for mdl in data.keys():
             p = probTrajectoriesFunction(parameters, mdl, times[mdl])
             negll += trajectoryNegLogLikelihood(p, data[mdl], min_p, max_p)
-        
+
         return negll
 
-    options = {'disp':False}
+    options = {'disp': False}
     if verbosity > 0:
-        print("- Performing MLE over {} parameters...".format(len(seed)),end='')
+        print("- Performing MLE over {} parameters...".format(len(seed)), end='')
     if verbosity > 1:
         print("")
-        options = {'disp':True}
-    
+        options = {'disp': True}
+
     start = _tm.time()
     optout = _minimize(objfunc, seed, options=options, bounds=bounds)
     mleparameters = optout.x
@@ -304,27 +311,27 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
     if verbosity == 1:
         print("complete.")
     if verbosity > 0:
-        print("- Time taken: {} seconds".format(end-start)),
+        print("- Time taken: {} seconds".format(end - start)),
 
     if returnOptout:
-        return mleparameters, optout 
+        return mleparameters, optout
     else:
         return mleparameters
 
-# def estimate_probability_trajectory(hyperparameters, timeseries, timestamps=None, transform='DCT', 
+# def estimate_probability_trajectory(hyperparameters, timeseries, timestamps=None, transform='DCT',
 #                                     estimator='FFLogistic', seed=None, modes=None, estimatorSettings=[]):
 #     """
-    
+
 #     """
 #     # outcomes = list(timeseries.keys())
 
 #     # # There is a single hyper-parameter, it is assumed to corresponding to allowing fitting of the
-#     # # time-averaged probability for each outcome. 
+#     # # time-averaged probability for each outcome.
 #     # if len(hyperparameters) == 1:
 #     #     parameters = {o: _np.mean(timeseries[o]) for o in outcomes}
 #     #     reconstructions = {o:[parameters[o] for t in range(len(timeseries[o]))] for o in outcomes}
-#     #     # Todo: update this 
-#     #     uncertainties = None 
+#     #     # Todo: update this
+#     #     uncertainties = None
 #     #     #auxDict = {'success':True, 'optimizerOut':None}
 #     #     return parameters, reconstruction, uncertainty, {}
 
@@ -344,7 +351,7 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
 
 #     # if transform == 'DCT':
 
-#     return parameters, reconstruction, uncertainty, auxDict 
+#     return parameters, reconstruction, uncertainty, auxDict
 
 # def amplitudes_from_fourier_filter(freqInds, timeseries):
 #     """
@@ -362,7 +369,7 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
 
 # def estimate_probability_trace(sequence, outcome=0, entity=0, method='MLE', epsilon=0.001, minp=1e-6,
 #                                maxp=1-1e-6, verbosity=1, model_selection='local'):
-#     """        
+#     """
 #     method :  'FFRaw', 'FFSharp', 'FFLogistic', 'FFUniReduce' 'MLE',
 #     """
 
@@ -380,7 +387,7 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
 #         sequenceind = sequence
 
 #     T = self.number_of_timesteps
-    
+
 #     data = self.data[sequenceind,outcomeind,entity,:]
 #     modes = self.pspepo_modes[sequenceind,outcomeind,entity,:]
 #     mean = _np.mean(data)
@@ -390,7 +397,7 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
 #     normalizer = _np.sqrt(2/T)*_np.sqrt(mean*(self.number_of_counts-mean)/self.number_of_counts)/self.number_of_counts_
 
 #     if model_selection == 'local':
-#         threshold = self.pspepo_significance_threshold           
+#         threshold = self.pspepo_significance_threshold
 #         omegas = _np.arange(T)
 #         omegas = omegas[modes**2 >= threshold]
 #         omegas = list(omegas)
@@ -404,7 +411,7 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
 #         omegas = list(omegas)
 #         rawalphas = list(normalizer*modes[omegas])
 #         rawalphas = list(rawalphas)
-#         omegas.insert(0,0)       
+#         omegas.insert(0,0)
 #         rawalphas.insert(0,mean/self.number_of_counts)
 
 #     assert(method in ('FFRaw','FFSharp','FFLogistic','FFUniReduce','MLE')), "Method choice is not valid!"

@@ -6,12 +6,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-import hashlib   as _hashlib
+import hashlib as _hashlib
 import functools as _functools
-import sys       as _sys
-import numpy     as _np
-import inspect   as _inspect
-import pickle    as _pickle
+import sys as _sys
+import numpy as _np
+import inspect as _inspect
+import pickle as _pickle
 
 
 from collections import Counter, defaultdict
@@ -20,12 +20,15 @@ from .opttools import timed_block as _timed_block
 
 DIGEST_TIMES = defaultdict(list)
 
-csize = lambda counter : len(list(counter.elements()))
+
+def csize(counter): return len(list(counter.elements()))
+
 
 def average(l):
     """ Computes the average of the items in a list """
     nCalls = max(1, len(l))
     return sum(l) / nCalls
+
 
 def show_cache_percents(hits, misses, printer):
     """
@@ -40,13 +43,14 @@ def show_cache_percents(hits, misses, printer):
     printer : pygsti.objects.VerbosityPrinter
         logging object
     """
-    nHits     = csize(hits)
-    nMisses   = csize(misses)
+    nHits = csize(hits)
+    nMisses = csize(misses)
     nRequests = nHits + nMisses
     printer.log('    {:<10} requests'.format(nRequests))
     printer.log('    {:<10} hits'.format(nHits))
     printer.log('    {:<10} misses'.format(nMisses))
-    printer.log('    {}% effective\n'.format(round((nHits/max(1, nRequests)) * 100, 2)))
+    printer.log('    {}% effective\n'.format(round((nHits / max(1, nRequests)) * 100, 2)))
+
 
 def show_kvs(title, kvs, printer):
     '''
@@ -56,6 +60,7 @@ def show_kvs(title, kvs, printer):
     for k, v in kvs:
         printer.log('    {:<40} {}'.format(k, v))
     printer.log('')
+
 
 class SmartCache(object):
     '''
@@ -72,20 +77,20 @@ class SmartCache(object):
         decorating : tuple
             module and function being decorated by the smart cache
         '''
-        self.cache       = dict()
-        self.outargs     = dict()
+        self.cache = dict()
+        self.outargs = dict()
         self.ineffective = set()
         self.decoratingModule, self.decoratingFn = decorating
         self.customDigests = []
 
         self.misses = Counter()
-        self.hits   = Counter()
-        self.fhits  = Counter()
+        self.hits = Counter()
+        self.fhits = Counter()
 
-        self.requests            = Counter()
+        self.requests = Counter()
         self.ineffectiveRequests = Counter()
 
-        self.effectiveTimes   = defaultdict(list)
+        self.effectiveTimes = defaultdict(list)
         self.ineffectiveTimes = defaultdict(list)
 
         self.hashTimes = defaultdict(list)
@@ -103,7 +108,7 @@ class SmartCache(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        
+
         def get_pickleable_dict(cacheDict):
             pickleableCache = dict()
             for k, v in cacheDict.items():
@@ -111,10 +116,10 @@ class SmartCache(object):
                     _pickle.dumps(v)
                     pickleableCache[k] = v
                 except TypeError as e:
-                    if isinstance(v,dict):
+                    if isinstance(v, dict):
                         self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
                     else:
-                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e)) # + str(list(v.__dict__.keys())))
+                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))  # + str(list(v.__dict__.keys())))
                 except _pickle.PicklingError as e:
                     self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
             return pickleableCache
@@ -123,26 +128,24 @@ class SmartCache(object):
         d['outargs'] = get_pickleable_dict(self.outargs)
         return d
 
-
-    def __pygsti_getstate__(self): #same but for json/msgpack
+    def __pygsti_getstate__(self):  # same but for json/msgpack
         d = dict(self.__dict__)
         from ..io.jsoncodec import encode_obj
-        
+
         def get_jsonable_dict(cacheDict):
 
             jsonableCache = dict()
             for k, v in cacheDict.items():
                 try:
-                    encode_obj(v,False)
+                    encode_obj(v, False)
                     jsonableCache[k] = v
                 except TypeError as e:
-                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))                    
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
             return jsonableCache
 
         d['cache'] = get_jsonable_dict(self.cache)
         d['outargs'] = get_jsonable_dict(self.outargs)
         return d
-
 
     def add_digest(self, custom):
         '''
@@ -172,7 +175,7 @@ class SmartCache(object):
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
+                key = call_key(fn, tuple(argVals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals, **kwargs)
@@ -206,8 +209,8 @@ class SmartCache(object):
         if kwargs is None:
             kwargs = dict()
         else:
-            for k,v in kwargs.items():
-                if k.startswith('_'): 
+            for k, v in kwargs.items():
+                if k.startswith('_'):
                     special_kwargs[k] = v
             for k in special_kwargs: del kwargs[k]
 
@@ -222,20 +225,20 @@ class SmartCache(object):
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
+                key = call_key(fn, tuple(argVals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
                 #DB: if "_computeSubMxs" in fn.__name__:
                 #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
                 #DB: print("Key detail: ",key[0]) # DB
                 #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
-                        str({k : str(type(v)) for k, v in kwargs.items()})
+                    str({k: str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals, **kwargs)
                     if "_filledarrays" in special_kwargs:
-                        self.outargs[key] = tuple((argVals[i] if isinstance(i,int) else kwargs[i]
-                                                   for i in special_kwargs['_filledarrays'])) # copy?
+                        self.outargs[key] = tuple((argVals[i] if isinstance(i, int) else kwargs[i]
+                                                   for i in special_kwargs['_filledarrays']))  # copy?
                 self.misses[key] += 1
                 hashtime = times['hash']
                 calltime = times['call']
@@ -255,13 +258,13 @@ class SmartCache(object):
                 #Special kwarg processing: any keyword argument that starts with an
                 # underscore is considered to be directed the SmartCache.
                 if "_filledarrays" in special_kwargs:
-                    for i,pos in enumerate(special_kwargs["_filledarrays"]):
-                        if isinstance(pos,int):
-                            argVals[pos][:] = self.outargs[key][i]                            
+                    for i, pos in enumerate(special_kwargs["_filledarrays"]):
+                        if isinstance(pos, int):
+                            argVals[pos][:] = self.outargs[key][i]
                         else:
                             kwargs[pos][:] = self.outargs[key][i]
-                    
-            #Note - maybe we should .view or .copy arrays upon return 
+
+            #Note - maybe we should .view or .copy arrays upon return
             # (now we just trust user not to alter mutable returned vals)
             result = self.cache[key]
         return key, result
@@ -271,19 +274,19 @@ class SmartCache(object):
         '''
         Show the statuses of all Cache objects
         '''
-        totalSaved  = 0
-        totalHits   = Counter()
+        totalSaved = 0
+        totalHits = Counter()
         totalMisses = Counter()
 
         suggestRemove = set()
-        warnNoHits    = set()
-        notCalled     = set()
+        warnNoHits = set()
+        notCalled = set()
 
         for cache in SmartCache.StaticCacheList:
             cache.status(printer)
-            totalHits   += cache.hits
+            totalHits += cache.hits
             totalMisses += cache.misses
-            totalSaved  += cache.saved
+            totalSaved += cache.saved
 
             fullname = '{}.{}'.format(cache.decoratingModule, cache.decoratingFn)
 
@@ -299,20 +302,20 @@ class SmartCache(object):
 
         with printer.verbosity_env(2):
             printer.log('Average hash times by object:')
-            for k, v in sorted(DIGEST_TIMES.items(), key=lambda t : sum(t[1])):
+            for k, v in sorted(DIGEST_TIMES.items(), key=lambda t: sum(t[1])):
                 total = sum(v)
-                avg   = average(v)
+                avg = average(v)
                 printer.log('    {:<65} avg | {}s'.format(k, avg))
                 printer.log('    {:<65} tot | {}s'.format('', total))
-                printer.log('-'*100)
+                printer.log('-' * 100)
 
-        printer.log('\nBecause they take longer to hash than to calculate, \n' + \
+        printer.log('\nBecause they take longer to hash than to calculate, \n' +
                     'the following functions may be unmarked for caching:')
         for name in suggestRemove:
             printer.log('    {}'.format(name))
 
         with printer.verbosity_env(2):
-            printer.log('\nThe following functions would provide a speedup, \n' + \
+            printer.log('\nThe following functions would provide a speedup, \n' +
                         'but currently do not experience any cache hits:')
             for name in warnNoHits:
                 printer.log('    {}'.format(name))
@@ -362,20 +365,21 @@ class SmartCache(object):
             savedTimes = self.avg_timedict(self.effectiveTimes)
             saved = sum(savedTimes.values())
             show_kvs('Effective total saved time:\n',
-                    sorted(savedTimes.items(), key=lambda t : t[1], reverse=True),
-                    printer)
+                     sorted(savedTimes.items(), key=lambda t: t[1], reverse=True),
+                     printer)
 
             overTimes = self.avg_timedict(self.ineffectiveTimes)
             overhead = sum(overTimes.values())
             show_kvs('Ineffective differences:\n',
-                    sorted(overTimes.items(), key=lambda t : t[1]),
-                    printer)
+                     sorted(overTimes.items(), key=lambda t: t[1]),
+                     printer)
 
         printer.log('overhead    : {}'.format(overhead))
         printer.log('saved       : {}'.format(saved))
         printer.log('net benefit : {}'.format(saved - overhead))
         self.saved = saved - overhead
         printer.log(self.unpickleable)
+
 
 def smart_cached(obj):
     '''
@@ -389,9 +393,11 @@ def smart_cached(obj):
         return v
     return _cacher
 
+
 class CustomDigestError(Exception):
     """ Custom Digest Exception type """
     pass
+
 
 def digest(obj, custom_digests=None):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
@@ -409,26 +415,26 @@ def digest(obj, custom_digests=None):
         """Add `v` to the hash, recursively if needed."""
         with _timed_block(str(type(v)), DIGEST_TIMES):
             md5.update(str(type(v)).encode('utf-8'))
-            if isinstance(v, SmartCache): return # don't hash SmartCache args
+            if isinstance(v, SmartCache): return  # don't hash SmartCache args
             if isinstance(v, bytes):
-                md5.update(v)  #can add bytes directly
+                md5.update(v)  # can add bytes directly
             elif v is None:
-                md5.update(str(hash("(_NONE_)")).encode('utf-8')) #make all None's hash the same
+                md5.update(str(hash("(_NONE_)")).encode('utf-8'))  # make all None's hash the same
             else:
                 try:
                     md5.update(str(hash(v)).encode('utf-8'))
-                except TypeError: # as hashException:
+                except TypeError:  # as hashException:
                     if isinstance(v, _np.ndarray):
-                        md5.update(v.tostring() + str(v.shape).encode('utf-8') ) # numpy gives us bytes
+                        md5.update(v.tostring() + str(v.shape).encode('utf-8'))  # numpy gives us bytes
                     elif isinstance(v, (tuple, list)):
-                        for el in v:  add(md5,el)
+                        for el in v: add(md5, el)
                     elif isinstance(v, dict):
                         keys = list(v.keys())
                         for k in sorted(keys):
-                            add(md5,k)
-                            add(md5,v[k])
-                    elif type(v).__module__ == 'mpi4py.MPI': # don't import mpi4py (not always available)
-                        pass #don't hash comm objects
+                            add(md5, k)
+                            add(md5, v[k])
+                    elif type(v).__module__ == 'mpi4py.MPI':  # don't import mpi4py (not always available)
+                        pass  # don't hash comm objects
                     else:
                         for custom_digest in custom_digests:
                             try:
@@ -444,13 +450,14 @@ def digest(obj, custom_digests=None):
                                 a = getattr(v, k)
                                 if _inspect.isroutine(a):
                                     continue
-                                add(md5,k)
-                                add(md5,a)
+                                add(md5, k)
+                                add(md5, a)
             return
 
     M = _hashlib.md5()
     add(M, obj)
-    return M.digest() #return native hash of the MD5 digest
+    return M.digest()  # return native hash of the MD5 digest
+
 
 def get_fn_name_key(fn):
     """ Get the name (str) used to has the function `fn` """
@@ -458,6 +465,7 @@ def get_fn_name_key(fn):
     if hasattr(fn, '__self__'):
         name = fn.__self__.__class__.__name__ + '.' + name
     return name
+
 
 def call_key(fn, args, custom_digests):
     """
@@ -477,8 +485,8 @@ def call_key(fn, args, custom_digests):
     """
     fnName = get_fn_name_key(fn)
     if fn.__name__ == "_create":
-        pass # special case: don't hash "self" in _create functions (b/c self doesn't matter - "self" is being created)
-    elif hasattr(fn, '__self__'): # add "self" to args when it's an instance's method call
+        pass  # special case: don't hash "self" in _create functions (b/c self doesn't matter - "self" is being created)
+    elif hasattr(fn, '__self__'):  # add "self" to args when it's an instance's method call
         args = (fn.__self__,) + args
     inner_digest = _functools.partial(digest, custom_digests=custom_digests)
-    return (fnName,) + tuple(map(inner_digest,args))
+    return (fnName,) + tuple(map(inner_digest, args))

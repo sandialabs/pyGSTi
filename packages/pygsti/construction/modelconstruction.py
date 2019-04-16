@@ -71,11 +71,11 @@ def basis_build_vector(vecExpr, basis):
 
     #standard basis that has the same direct-sum structure as `basis`:
     std_basis = basis.equivalent('std')
-    vecInSimpleStdBasis = _np.zeros( std_basis.elshape, 'd' ) # a matrix, but flattened it is our spamvec
-    vecInSimpleStdBasis[index,index] = 1.0 # now a matrix with just a single 1 on the diag
+    vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
+    vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
     vecInReducedStdBasis = _np.dot(std_basis.get_from_simple_std(), vecInSimpleStdBasis.flatten())
-      # translates the density matrx / SPAMVec to the std basis with our desired block structure
-    
+    # translates the density matrx / SPAMVec to the std basis with our desired block structure
+
     #TODO REMOVE
     #start = 0; vecIndex = 0
     #for blockDim in blockDims:
@@ -89,9 +89,10 @@ def basis_build_vector(vecExpr, basis):
     #from ..baseobjs import BuiltinBasis
     #hackstd = BuiltinBasis('std',opDim)
     #return _bt.change_basis(vecInReducedStdBasis, hackstd, basis)
-    
+
     vec = _bt.change_basis(vecInReducedStdBasis, std_basis, basis)
-    return vec.reshape(-1,1)
+    return vec.reshape(-1, 1)
+
 
 def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     """
@@ -100,6 +101,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     _warnings.warn(("This function is deprecated and will be removed in the"
                     " future.  Please use `basis_build_vector` instead."))
     return basis_build_vector(vecExpr, _Basis.cast(basis, stateSpaceDims))
+
 
 def basis_build_identity_vec(basis):
     """
@@ -119,21 +121,23 @@ def basis_build_identity_vec(basis):
     """
     opDim = basis.dim
     if isinstance(basis, _DirectSumBasis):
-        blockDims = [ c.dim for c in basis.component_bases ]
+        blockDims = [c.dim for c in basis.component_bases]
     else: blockDims = [opDim]
 
-    vecInReducedStdBasis = _np.zeros( (opDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
+    # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
+    vecInReducedStdBasis = _np.zeros((opDim, 1), 'd')
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
     start = 0; vecIndex = 0
     for blockVecDim in blockDims:
-        blockDim = int(_np.sqrt(blockVecDim)) # vec -> matrix dim
-        for i in range(start,start+blockDim):
-            for j in range(start,start+blockDim):
-                if i == j: vecInReducedStdBasis[ vecIndex, 0 ] = 1.0  #set diagonal element of density matrix
+        blockDim = int(_np.sqrt(blockVecDim))  # vec -> matrix dim
+        for i in range(start, start + blockDim):
+            for j in range(start, start + blockDim):
+                if i == j: vecInReducedStdBasis[vecIndex, 0] = 1.0  # set diagonal element of density matrix
                 vecIndex += 1
         start += blockDim
     return _bt.change_basis(vecInReducedStdBasis, "std", basis)
+
 
 def build_identity_vec(stateSpaceDims, basis="gm"):
     """
@@ -271,7 +275,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
 #                elif opName == 'CY': ex = -1j * theta*_bt.sigmay/2
 #                elif opName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
 #                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
-#                
+#
 #            else: # opName in ('CNOT','CPHASE')
 #                assert(len(args) == 2) # qubit-label1, qubit-label2
 #                label1, label2 = args
@@ -378,8 +382,9 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
 #
 #    #Change from std (mx unit) basis to another if requested
 #    opMxInFinalBasis = _bt.change_basis(opInReducedStdBasis, "std", basis, stateSpaceDims)
-#    
+#
 #    return _op.FullDenseOp(opMxInFinalBasis)
+
 
 def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization="full"):
     """
@@ -441,13 +446,12 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
     #dmDim, opDim, blockDims = basis.dim REMOVE
-      #fullOpDim = dmDim**2
-    
+    #fullOpDim = dmDim**2
+
     #Working with a StateSpaceLabels object gives us access to all the info we'll need later
     sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
     assert(sslbls.dim == basis.dim), \
         "State space labels dim (%s) != basis dim (%s)" % (sslbls.dim, basis.dim)
-
 
     # ----------------------------------------------------------------------------------------------------------------------------------------
     # -- Helper Functions --------------------------------------------------------------------------------------------------------------------
@@ -671,25 +675,25 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     #                         "%s (must by 'full', 'TP', 'static', 'linear' or 'linearTP')"
     #                         % parameterization)
     #
+
     def to_label(lbl):
         """ Convert integer-strings to integers in state space label """
         try: return int(lbl)
         except: return lbl.strip()
-            
+
     def to_labels(lbls):
         """ Convert integer-strings to integers in state space labels """
-        return [ to_label(lbl) for lbl in lbls ]
+        return [to_label(lbl) for lbl in lbls]
     #
     # ----------------------------------------------------------------------------------------------------------------------------------------
     # -- End Helper Functions ----------------------------------------------------------------------------------------------------------------
     # ----------------------------------------------------------------------------------------------------------------------------------------
 
-
     #print "DB: dim = ",dim, " dmDim = ",dmDim
-    opInFinalBasis = None #what will become the final operation matrix
+    opInFinalBasis = None  # what will become the final operation matrix
     defaultI2P = "all" if parameterization != "linearTP" else "TP"
-      #default indices to parameterize (I2P) - used only when 
-      # creating parameterized gates
+    #default indices to parameterize (I2P) - used only when
+    # creating parameterized gates
 
     opTermsInFinalBasis = []
     exprTerms = opExpr.split(':')
@@ -697,16 +701,18 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
 
         l = exprTerm.index('('); r = exprTerm.rindex(')')
         opName = exprTerm[0:l]
-        argsStr = exprTerm[l+1:r]
+        argsStr = exprTerm[l + 1:r]
         args = argsStr.split(',')
 
         if opName == "I":
-            labels = to_labels(args) # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
+            # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
+            labels = to_labels(args)
             stateSpaceDim = sslbls.product_dim(labels)
-            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype='densitymx') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
+            # *real* 4x4 mx in Pauli-product basis -- still just the identity!
+            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype='densitymx')
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, labels, pp_opMx)
 
-        elif opName == "D":  #like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
+        elif opName == "D":  # like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
             raise NotImplementedError("Removed temporarily - need to update using embedded gates")
         #    labels = to_labels(args) # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
         #    stateSpaceDim = sslbls.product_dim(labels)
@@ -721,93 +727,100 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
         #    pp_opMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
         #    opTermInFinalBasis = embed_operation(pp_opMx, tuple(labels), indicesToParameterize) # pp_opMx assumed to be in the Pauli-product basis
 
-
-        elif opName in ('X','Y','Z'): #single-qubit gate names
-            assert(len(args) == 2) # theta, qubit-index
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+        elif opName in ('X', 'Y', 'Z'):  # single-qubit gate names
+            assert(len(args) == 2)  # theta, qubit-index
+            theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
             label = to_label(args[1])
             assert(sslbls.labeldims[label] == 4), "%s gate must act on qubits!" % opName
 
-            if opName == 'X': ex = -1j * theta*_bt.sigmax/2
-            elif opName == 'Y': ex = -1j * theta*_bt.sigmay/2
-            elif opName == 'Z': ex = -1j * theta*_bt.sigmaz/2
+            if opName == 'X': ex = -1j * theta * _bt.sigmax / 2
+            elif opName == 'Y': ex = -1j * theta * _bt.sigmay / 2
+            elif opName == 'Z': ex = -1j * theta * _bt.sigmaz / 2
 
-            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
-            operationMx = _gt.unitary_to_process_mx(Uop) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+            Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
+            # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+            operationMx = _gt.unitary_to_process_mx(Uop)
+            # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx')
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label], pp_opMx)
 
-        elif opName == 'N': #more general single-qubit gate
-            assert(len(args) == 5) # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
-            sxCoeff = eval( args[1], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
-            syCoeff = eval( args[2], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
-            szCoeff = eval( args[3], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+        elif opName == 'N':  # more general single-qubit gate
+            assert(len(args) == 5)  # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
+            theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            sxCoeff = eval(args[1], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            syCoeff = eval(args[2], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            szCoeff = eval(args[3], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             label = to_label(args[4])
             assert(sslbls.labeldims[label] == 4), "%s gate must act on qubits!" % opName
 
-            ex = -1j * theta * ( sxCoeff * _bt.sigmax/2. + syCoeff * _bt.sigmay/2. + szCoeff * _bt.sigmaz/2.)
-            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
-            operationMx = _gt.unitary_to_process_mx(Uop) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+            ex = -1j * theta * (sxCoeff * _bt.sigmax / 2. + syCoeff * _bt.sigmay / 2. + szCoeff * _bt.sigmaz / 2.)
+            Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
+            # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+            operationMx = _gt.unitary_to_process_mx(Uop)
+            # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx')
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label], pp_opMx)
-                
-        elif opName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
 
-            if opName in ('CX','CY','CZ'):
-                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+        elif opName in ('CX', 'CY', 'CZ', 'CNOT', 'CPHASE'):  # two-qubit gate names
+
+            if opName in ('CX', 'CY', 'CZ'):
+                assert(len(args) == 3)  # theta, qubit-label1, qubit-label2
+                theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
                 label1 = to_label(args[1]); label2 = to_label(args[2])
 
-                if opName == 'CX': ex = -1j * theta*_bt.sigmax/2
-                elif opName == 'CY': ex = -1j * theta*_bt.sigmay/2
-                elif opName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
-                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
-                
-            else: # opName in ('CNOT','CPHASE')
-                assert(len(args) == 2) # qubit-label1, qubit-label2
+                if opName == 'CX': ex = -1j * theta * _bt.sigmax / 2
+                elif opName == 'CY': ex = -1j * theta * _bt.sigmay / 2
+                elif opName == 'CZ': ex = -1j * theta * _bt.sigmaz / 2
+                Utarget = _spl.expm(ex)  # 2x2 unitary matrix operating on target qubit
+
+            else:  # opName in ('CNOT','CPHASE')
+                assert(len(args) == 2)  # qubit-label1, qubit-label2
                 label1 = to_label(args[0]); label2 = to_label(args[1])
 
                 if opName == 'CNOT':
-                    Utarget = _np.array( [[0, 1],
-                                          [1, 0]], 'd')
+                    Utarget = _np.array([[0, 1],
+                                         [1, 0]], 'd')
                 elif opName == 'CPHASE':
-                    Utarget = _np.array( [[1, 0],
-                                          [0,-1]], 'd')
+                    Utarget = _np.array([[1, 0],
+                                         [0, -1]], 'd')
 
-            Uop = _np.identity(4, 'complex'); Uop[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
+            # 4x4 unitary matrix operating on isolated two-qubit space
+            Uop = _np.identity(4, 'complex'); Uop[2:, 2:] = Utarget
             assert(sslbls.labeldims[label1] == 4 and sslbls.labeldims[label2] == 4), \
                 "%s gate must act on qubits!" % opName
-            
-            operationMx = _gt.unitary_to_process_mx(Uop) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx') # *real* 16x16 mx in Pauli-product basis -- better for parameterization
-            opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label1,label2], pp_opMx)
 
-        elif opName == "LX":  #TODO - better way to describe leakage?
-            assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+            # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
+            operationMx = _gt.unitary_to_process_mx(Uop)
+            # *real* 16x16 mx in Pauli-product basis -- better for parameterization
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx')
+            opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label1, label2], pp_opMx)
+
+        elif opName == "LX":  # TODO - better way to describe leakage?
+            assert(len(args) == 3)  # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
+            theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
             i1 = int(args[1])  # row/column index of a single *state* within the density matrix
             i2 = int(args[2])  # row/column index of a single *state* within the density matrix
-            ex = -1j * theta*_bt.sigmax/2
-            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on the i1-th and i2-th states of the state space basis
+            ex = -1j * theta * _bt.sigmax / 2
+            Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on the i1-th and i2-th states of the state space basis
 
             opDim = basis.dim
-            dmDim = int(_np.sqrt(basis.elsize)) # matrix dim of the "embedding space"
+            dmDim = int(_np.sqrt(basis.elsize))  # matrix dim of the "embedding space"
             if isinstance(basis, _DirectSumBasis):
-                blockDims = [ c.dim for c in basis.component_bases ]
+                blockDims = [c.dim for c in basis.component_bases]
             else: blockDims = [opDim]
-            
+
             Utot = _np.identity(dmDim, 'complex')
-            Utot[ i1,i1 ] = Uop[0,0]
-            Utot[ i1,i2 ] = Uop[0,1]
-            Utot[ i2,i1 ] = Uop[1,0]
-            Utot[ i2,i2 ] = Uop[1,1]
-            opTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
+            Utot[i1, i1] = Uop[0, 0]
+            Utot[i1, i2] = Uop[0, 1]
+            Utot[i2, i1] = Uop[1, 0]
+            Utot[i2, i2] = Uop[1, 1]
+            # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
+            opTermInStdBasis = _gt.unitary_to_process_mx(Utot)
 
             # contract [3] to [2, 1]
-            embedded_std_basis =_Basis.cast('std', 9) # [2]
-            std_basis = _Basis.cast('std', blockDims) # std basis w/blockdim structure, i.e. [4,1]
-            opTermInReducedStdBasis = _bt.resize_std_mx(opTermInStdBasis, 'contract', 
+            embedded_std_basis = _Basis.cast('std', 9)  # [2]
+            std_basis = _Basis.cast('std', blockDims)  # std basis w/blockdim structure, i.e. [4,1]
+            opTermInReducedStdBasis = _bt.resize_std_mx(opTermInStdBasis, 'contract',
                                                         embedded_std_basis, std_basis)
 
             opMxInFinalBasis = _bt.change_basis(opTermInReducedStdBasis, std_basis, basis)
@@ -817,10 +830,9 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
 
         opTermsInFinalBasis.append(opTermInFinalBasis)
 
-        
     opInFinalBasis = opTermsInFinalBasis[0] if len(opTermsInFinalBasis) == 1 \
-        else _op.ComposedDenseOp( list(reversed(opTermsInFinalBasis)) )
-        #Note: expressions are listed in "matrix composition order" (reverse for ComposedDenseOp)
+        else _op.ComposedDenseOp(list(reversed(opTermsInFinalBasis)))
+    #Note: expressions are listed in "matrix composition order" (reverse for ComposedDenseOp)
 
     finalOpMx = opInFinalBasis.todense()
     if basis.real:
@@ -832,11 +844,12 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     if parameterization == "static":
         return _op.StaticDenseOp(finalOpMx)
     if parameterization == "TP":
-        return _op.TPDenseOp(finalOpMx)    
+        return _op.TPDenseOp(finalOpMx)
 
     raise ValueError("Invalid 'parameterization' parameter: " +
                      "%s (must by 'full', 'TP', 'static')"
-                     % parameterization)    
+                     % parameterization)
+
 
 def build_operation(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm", parameterization="full"):
     """
@@ -844,16 +857,16 @@ def build_operation(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm", parame
     """
     _warnings.warn(("This function is deprecated and will be removed in the"
                     " future.  Please use `basis_build_operation` instead."))
-    sslbls = _ld.StateSpaceLabels(stateSpaceLabels,stateSpaceDims)
+    sslbls = _ld.StateSpaceLabels(stateSpaceLabels, stateSpaceDims)
     return basis_build_operation(sslbls, opExpr, _Basis.cast(basis, stateSpaceDims),
                                  parameterization)
 
 
 def basis_build_explicit_model(stateSpaceLabels, basis,
-                        opLabels, opExpressions,
-                        prepLabels=('rho0',), prepExpressions=('0',),
-                        effectLabels='standard', effectExpressions='standard',
-                        povmLabels='Mdefault', parameterization="full"):
+                               opLabels, opExpressions,
+                               prepLabels=('rho0',), prepExpressions=('0',),
+                               effectLabels='standard', effectExpressions='standard',
+                               povmLabels='Mdefault', parameterization="full"):
     """
     Build a new Model given lists of operation labels and expressions.
 
@@ -894,7 +907,7 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
 
     effectLabels : list, optional
         If `povmLabels` is a string, then this is just a list of the effect
-        (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
+        (outcome) labels for the single POVM.  If `povmLabels` is a tuple,
         then `effectLabels` must be a list of lists of effect labels, each
         list corresponding to a POVM.  If set to the special string `"standard"`
         then the length-n binary strings are used when the state space consists
@@ -927,9 +940,9 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
     stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
 
     ret = _emdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=parameterization)
-                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
+    #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
-    for label,rhoExpr in zip(prepLabels, prepExpressions):
+    for label, rhoExpr in zip(prepLabels, prepExpressions):
         vec = basis_build_vector(rhoExpr, basis)
         if parameterization == "full":
             ret.preps[label] = _spamvec.FullSPAMVec(vec, 'densitymx')
@@ -941,52 +954,52 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
     if _compat.isstr(povmLabels):
-        povmLabels = [ povmLabels ]
-        effectLabels = [ effectLabels ]
-        effectExpressions = [ effectExpressions ]
+        povmLabels = [povmLabels]
+        effectLabels = [effectLabels]
+        effectExpressions = [effectExpressions]
 
-    dmDim = int(_np.sqrt(basis.dim)) # "densitymx" evotype assumed... FIX?
+    dmDim = int(_np.sqrt(basis.dim))  # "densitymx" evotype assumed... FIX?
     for povmLbl, ELbls, EExprs in zip(povmLabels,
                                       effectLabels, effectExpressions):
         effects = []
-        
+
         if ELbls == "standard":
             if stateSpaceLabels.num_tensor_prod_blocks() == 1 and \
-               all([ ldim==2 for ldim in stateSpaceLabels.tensor_product_block_dims(0)]):
+               all([ldim == 2 for ldim in stateSpaceLabels.tensor_product_block_dims(0)]):
                 # a single tensor product block comprised of qubits: '000', '001', etc.
                 nQubits = len(stateSpaceLabels.tensor_product_block_dims(0))
-                ELbls = [ ''.join(t) for t in _itertools.product(('0','1'),repeat=nQubits)]
+                ELbls = [''.join(t) for t in _itertools.product(('0', '1'), repeat=nQubits)]
             else:
-                ELbls = list(map(str,range(dmDim))) #standard = 0,1,...,dmDim
+                ELbls = list(map(str, range(dmDim)))  # standard = 0,1,...,dmDim
         if EExprs == "standard":
-            EExprs = list(map(str,range(dmDim))) #standard = 0,1,...,dmDim
+            EExprs = list(map(str, range(dmDim)))  # standard = 0,1,...,dmDim
 
-        for label,EExpr in zip(ELbls,EExprs):
+        for label, EExpr in zip(ELbls, EExprs):
             evec = basis_build_vector(EExpr, basis)
             if parameterization == "static":
-                effects.append( (label,_spamvec.StaticSPAMVec(evec,'densitymx')) )
+                effects.append((label, _spamvec.StaticSPAMVec(evec, 'densitymx')))
             else:
-                effects.append( (label,_spamvec.FullSPAMVec(evec,'densitymx')) )
+                effects.append((label, _spamvec.FullSPAMVec(evec, 'densitymx')))
 
-        if len(effects) > 0: # don't add POVMs with 0 effects
+        if len(effects) > 0:  # don't add POVMs with 0 effects
             if parameterization == "TP":
                 ret.povms[povmLbl] = _povm.TPPOVM(effects)
             else:
                 ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
 
-    for (opLabel,opExpr) in zip(opLabels, opExpressions):
+    for (opLabel, opExpr) in zip(opLabels, opExpressions):
         ret.operations[opLabel] = basis_build_operation(stateSpaceLabels,
-                                          opExpr, basis, parameterization)
-
+                                                        opExpr, basis, parameterization)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
     elif parameterization == "TP":
         ret.default_gauge_group = _gg.TPGaugeGroup(ret.dim)
     else:
-        ret.default_gauge_group = None #assume no gauge freedom
+        ret.default_gauge_group = None  # assume no gauge freedom
 
     return ret
+
 
 def build_explicit_model(stateSpaceLabels,
                          opLabels, opExpressions,
@@ -1028,7 +1041,7 @@ def build_explicit_model(stateSpaceLabels,
 
     effectLabels : list, optional
         If `povmLabels` is a string, then this is just a list of the effect
-        (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
+        (outcome) labels for the single POVM.  If `povmLabels` is a tuple,
         then `effectLabels` must be a list of lists of effect labels, each
         list corresponding to a POVM.  If set to the special string `"standard"`
         then the length-n binary strings are used when the state space consists
@@ -1077,20 +1090,21 @@ def build_explicit_model(stateSpaceLabels,
     stateSpaceDim = stateSpaceLabels.dim
     # Note: what about stateSpaceLabels.tpb_dims?
 
-    if basis == "auto": 
-        if _np.isclose(_np.log2(stateSpaceDim)/2,
-                       round(_np.log2(stateSpaceDim)/2)):
+    if basis == "auto":
+        if _np.isclose(_np.log2(stateSpaceDim) / 2,
+                       round(_np.log2(stateSpaceDim) / 2)):
             basis = "pp"
         elif stateSpaceDim == 9:
             basis = "qt"
         else: basis = "gm"
 
     return basis_build_explicit_model(stateSpaceLabels,
-                  _Basis.cast(basis, stateSpaceLabels),
-                  opLabels, opExpressions,
-                  prepLabels, prepExpressions,
-                  effectLabels, effectExpressions,
-                  povmLabels, parameterization=parameterization)
+                                      _Basis.cast(basis, stateSpaceLabels),
+                                      opLabels, opExpressions,
+                                      prepLabels, prepExpressions,
+                                      effectLabels, effectExpressions,
+                                      povmLabels, parameterization=parameterization)
+
 
 def build_explicit_alias_model(mdl_primitives, alias_dict):
     """
@@ -1104,12 +1118,12 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
     mdl_primitives : Model
         A Model containing the "primitive" gates (those used to compose
         the gates of the returned model).
-    
+
     alias_dict : dictionary
         A dictionary whose keys are strings and values are Circuit objects
         specifying sequences of primitive gates.  Each key,value pair specifies
         the composition rule for a creating a gate in the returned model.
-    
+
     Returns
     -------
     Model
@@ -1118,15 +1132,15 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
     """
     mdl_new = mdl_primitives.copy()
     for gl in mdl_primitives.operations.keys():
-        del mdl_new.operations[gl] #remove all gates from mdl_new
+        del mdl_new.operations[gl]  # remove all gates from mdl_new
 
-    for gl,opstr in alias_dict.items():
+    for gl, opstr in alias_dict.items():
         mdl_new.operations[gl] = mdl_primitives.product(opstr)
-          #Creates fully parameterized gates by default...
+        #Creates fully parameterized gates by default...
     return mdl_new
 
 
-def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None, 
+def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                                     qubit_labels=None, geometry="line", parameterization='static',
                                     evotype="auto", sim_type="auto", on_construction_error='raise',
                                     independent_gates=False, ensure_composed_gates=False, globalIdle=None):
@@ -1162,7 +1176,7 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         gates that are repeatedly embedded (based on `availability`) to form
         the resulting model.
 
-    nonstd_gate_unitaries : dict, optional 
+    nonstd_gate_unitaries : dict, optional
         A dictionary of numpy arrays which specifies the unitary gate action
         of the gate names given by the dictionary's keys.
 
@@ -1184,7 +1198,7 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `nQubits`.  If None, then the 
+        and/or strings.  Must be of length `nQubits`.  If None, then the
         integers from 0 to `nQubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph, optional
@@ -1202,21 +1216,21 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         details.
 
     evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
-        The evolution type.  Often this is determined by the choice of 
+        The evolution type.  Often this is determined by the choice of
         `parameterization` and can be left as `"auto"`, which prefers
         `"densitymx"` (full density matrix evolution) when possible. In some
         cases, however, you may want to specify this manually.  For instance,
         if you give unitary maps instead of superoperators in `gatedict`
         you'll want to set this to `"statevec"`.
 
-    sim_type : {"auto", "matrix", "map", "termorder:<N>"} 
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
         The simulation method used to compute predicted probabilities for the
         resulting :class:`Model`.  Usually `"auto"` is fine, the default for
         each `evotype` is usually what you want.  Setting this to something
         else is expert-level tuning.
 
     on_construction_error : {'raise','warn',ignore'}
-        What to do when the creation of a gate with the given 
+        What to do when the creation of a gate with the given
         `parameterization` fails.  Usually you'll want to `"raise"` the error.
         In some cases, for example when converting as many gates as you can
         into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
@@ -1225,19 +1239,19 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
     independent_gates : bool, optional
         Whether gates are allowed independent local noise or not.  If False,
         then all gates with the same name (e.g. "Gx") will have the *same*
-        (local) noise (e.g. an overrotation by 1 degree), and the 
-        `operation_bks['gates']` dictionary contains a single key per gate 
+        (local) noise (e.g. an overrotation by 1 degree), and the
+        `operation_bks['gates']` dictionary contains a single key per gate
         name.  If True, then gates with the same name acting on different
-        qubits may have different local noise, and so the 
+        qubits may have different local noise, and so the
         `operation_bks['gates']` dictionary contains a key for each gate
          available gate placement.
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or 
+        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
         :class:`ComposedOp` (othewise) objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
-        If False, then the appropriately parameterized gate objects (often 
+        If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.
 
     globalIdle : LinearOperator, optional

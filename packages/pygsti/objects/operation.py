@@ -17,7 +17,7 @@ import warnings as _warnings
 import collections as _collections
 import numbers as _numbers
 
-from ..      import optimize as _opt
+from .. import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import optools as _gt
 from ..tools import jamiolkowski as _jt
@@ -41,17 +41,19 @@ from . import replib
 #Repeated in spamvec.py - TODO: consolidate
 try:
     from . import fastopcalc as _fastopcalc
+
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return _fastopcalc.fast_bulk_eval_compact_polys_complex(
             vtape, ctape, paramvec, dest_shape)
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
 
 
 TOL = 1e-12
-IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
+IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 
 def optimize_operation(opToOptimize, targetOp):
@@ -80,16 +82,17 @@ def optimize_operation(opToOptimize, targetOp):
 
     #TODO: cleanup this code:
     if isinstance(opToOptimize, StaticDenseOp):
-        return #nothing to optimize
+        return  # nothing to optimize
 
     if isinstance(opToOptimize, FullDenseOp):
-        if(targetOp.dim != opToOptimize.dim): #special case: gates can have different overall dimension
-            opToOptimize.dim = targetOp.dim   #  this is a HACK to allow model selection code to work correctly
-        opToOptimize.set_value(targetOp)     #just copy entire overall matrix since fully parameterized
+        if(targetOp.dim != opToOptimize.dim):  # special case: gates can have different overall dimension
+            opToOptimize.dim = targetOp.dim  # this is a HACK to allow model selection code to work correctly
+        opToOptimize.set_value(targetOp)  # just copy entire overall matrix since fully parameterized
         return
 
-    assert(targetOp.dim == opToOptimize.dim) #gates must have the same overall dimension
+    assert(targetOp.dim == opToOptimize.dim)  # gates must have the same overall dimension
     targetMatrix = _np.asarray(targetOp)
+
     def _objective_func(param_vec):
         opToOptimize.from_vector(param_vec)
         return _mt.frobeniusnorm(opToOptimize - targetMatrix)
@@ -146,20 +149,20 @@ def compose(op1, op2, basis, parameterization="auto"):
     # TP => Full
 
     if parameterization == "auto":
-        if any([isinstance(g, FullDenseOp) for g in (op1,op2)]):
+        if any([isinstance(g, FullDenseOp) for g in (op1, op2)]):
             paramType = "full"
-        elif any([isinstance(g, TPDenseOp) for g in (op1,op2)]):
-            paramType = "TP" #update to "full" below if TP-conversion
-                             #not possible?
+        elif any([isinstance(g, TPDenseOp) for g in (op1, op2)]):
+            paramType = "TP"  # update to "full" below if TP-conversion
+            #not possible?
         elif any([isinstance(g, LinearlyParamDenseOp)
-                  for g in (op1,op2)]):
+                  for g in (op1, op2)]):
             paramType = "linear"
         else:
-            assert( isinstance(op1, StaticDenseOp)
-                    and isinstance(op2, StaticDenseOp) )
+            assert(isinstance(op1, StaticDenseOp)
+                   and isinstance(op2, StaticDenseOp))
             paramType = "static"
     else:
-        paramType = parameterization #user-specified final parameterization
+        paramType = parameterization  # user-specified final parameterization
 
     #Convert to paramType as necessary
     cop1 = convert(op1, paramType, basis)
@@ -200,33 +203,33 @@ def convert(gate, toType, basis, extra=None):
     """
     if toType == "full":
         if isinstance(gate, FullDenseOp):
-            return gate #no conversion necessary
+            return gate  # no conversion necessary
         else:
-            ret = FullDenseOp( gate.todense() )
+            ret = FullDenseOp(gate.todense())
             return ret
 
     elif toType == "TP":
         if isinstance(gate, TPDenseOp):
-            return gate #no conversion necessary
+            return gate  # no conversion necessary
         else:
-            return TPDenseOp( gate.todense() )
-              # above will raise ValueError if conversion cannot be done
+            return TPDenseOp(gate.todense())
+            # above will raise ValueError if conversion cannot be done
 
     elif toType == "linear":
         if isinstance(gate, LinearlyParamDenseOp):
-            return gate #no conversion necessary
+            return gate  # no conversion necessary
         elif isinstance(gate, StaticDenseOp):
-            real = _np.isclose(_np.linalg.norm( gate.imag ),0)
+            real = _np.isclose(_np.linalg.norm(gate.imag), 0)
             return LinearlyParamDenseOp(gate.todense(), _np.array([]), {}, real)
         else:
             raise ValueError("Cannot convert type %s to LinearlyParamDenseOp"
                              % type(gate))
-        
+
     elif toType == "static":
         if isinstance(gate, StaticDenseOp):
-            return gate #no conversion necessary
+            return gate  # no conversion necessary
         else:
-            return StaticDenseOp( gate )
+            return StaticDenseOp(gate)
 
     elif toType == "static unitary":
         op_std = _bt.change_basis(gate, basis, 'std')
@@ -236,22 +239,22 @@ def convert(gate, toType, basis, extra=None):
     elif _gt.is_valid_lindblad_paramtype(toType):
         # e.g. "H+S terms","H+S clifford terms"
 
-        _,evotype = _gt.split_lindblad_paramtype(toType)
+        _, evotype = _gt.split_lindblad_paramtype(toType)
         LindbladOpType = LindbladOp \
-                           if evotype in ("svterm","cterm") else \
-                              LindbladDenseOp
+            if evotype in ("svterm", "cterm") else \
+            LindbladDenseOp
 
-        nQubits = _np.log2(gate.dim)/2.0
-        bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+        nQubits = _np.log2(gate.dim) / 2.0
+        bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
 
         return LindbladOpType.from_operation_obj(gate, toType, None, proj_basis,
-                                              basis, truncate=True, lazy=True)
-    
+                                                 basis, truncate=True, lazy=True)
+
     elif toType == "clifford":
         if isinstance(gate, CliffordOp):
-            return gate #no conversion necessary
-        
+            return gate  # no conversion necessary
+
         # assume gate represents a unitary op (otherwise
         #  would need to change Model dim, which isn't allowed)
         return CliffordOp(gate)
@@ -273,7 +276,7 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
     ----------
     gate : LinearOperator
         The gate object to compute a Jacobian for.
-        
+
     eps : float, optional
         The finite difference step to use.
 
@@ -281,20 +284,20 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
     -------
     numpy.ndarray
         An M by N matrix where M is the number of gate elements and
-        N is the number of gate parameters. 
+        N is the number of gate parameters.
     """
     dim = gate.get_dimension()
     op2 = gate.copy()
     p = gate.to_vector()
-    fd_deriv = _np.empty((dim,dim,gate.num_params()), gate.dtype)
+    fd_deriv = _np.empty((dim, dim, gate.num_params()), gate.dtype)
 
     for i in range(gate.num_params()):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
         op2.from_vector(p_plus_dp)
-        fd_deriv[:,:,i] = (op2-gate)/eps
+        fd_deriv[:, :, i] = (op2 - gate) / eps
 
-    fd_deriv.shape = [dim**2,gate.num_params()]
+    fd_deriv.shape = [dim**2, gate.num_params()]
     return fd_deriv
 
 
@@ -317,7 +320,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
         result.  If None, `gate.deriv_wrt_parms()` is used.  Setting this
         argument can be useful when the function is called *within* a LinearOperator
         class's `deriv_wrt_params()` method itself as a part of testing.
-        
+
     eps : float, optional
         The finite difference step to use.
 
@@ -337,15 +340,15 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     #      deriv_to_check - fd_deriv)
     for i in range(deriv_to_check.shape[0]):
         for j in range(deriv_to_check.shape[1]):
-            diff = abs(deriv_to_check[i,j] - fd_deriv[i,j])
-            if diff > 10*eps:
+            diff = abs(deriv_to_check[i, j] - fd_deriv[i, j])
+            if diff > 10 * eps:
                 print("deriv_chk_mismatch: (%d,%d): %g (comp) - %g (fd) = %g" %
-                      (i,j,deriv_to_check[i,j],fd_deriv[i,j],diff)) # pragma: no cover
+                      (i, j, deriv_to_check[i, j], fd_deriv[i, j], diff))  # pragma: no cover
 
-    if _np.linalg.norm(fd_deriv - deriv_to_check)/fd_deriv.size > 10*eps:
+    if _np.linalg.norm(fd_deriv - deriv_to_check) / fd_deriv.size > 10 * eps:
         raise ValueError("Failed check of deriv_wrt_params:\n" +
-                         " norm diff = %g" % 
-                         _np.linalg.norm(fd_deriv - deriv_to_check)) # pragma: no cover
+                         " norm diff = %g" %
+                         _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
 
 
 #Note on initialization sequence of Gates within a Model:
@@ -376,7 +379,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
 class LinearOperator(_modelmember.ModelMember):
     """ Base class for all gate representations """
     cache_reps = False
-    
+
     def __init__(self, dim, evotype):
         """ Initialize a new LinearOperator """
         super(LinearOperator, self).__init__(dim, evotype)
@@ -424,36 +427,35 @@ class LinearOperator(_modelmember.ModelMember):
         OpRep
         """
         if self._evotype == "statevec":
-            return replib.SVOpRep_Dense(_np.ascontiguousarray(self.todense(),complex) )
+            return replib.SVOpRep_Dense(_np.ascontiguousarray(self.todense(), complex))
         elif self._evotype == "densitymx":
-            if LinearOperator.cache_reps: # cache reps to avoid recomputation
+            if LinearOperator.cache_reps:  # cache reps to avoid recomputation
                 if self._cachedrep is None:
-                    self._cachedrep = replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
+                    self._cachedrep = replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(), 'd'))
                 return self._cachedrep
             else:
-                return replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
+                return replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(), 'd'))
         else:
             raise NotImplementedError("torep(%s) not implemented for %s objects!" %
-                                      (self._evotype, self.__class__.__name__))            
+                                      (self._evotype, self.__class__.__name__))
 
     @property
     def dirty(self):
-        return _modelmember.ModelMember.dirty.fget(self) # call base class
+        return _modelmember.ModelMember.dirty.fget(self)  # call base class
 
     @dirty.setter
     def dirty(self, value):
-        if value == True: self._cachedrep = None # clear cached rep
-        _modelmember.ModelMember.dirty.fset(self, value) # call base class setter
+        if value == True: self._cachedrep = None  # clear cached rep
+        _modelmember.ModelMember.dirty.fset(self, value)  # call base class setter
 
     def __getstate__(self):
         st = super(LinearOperator, self).__getstate__()
-        st['_cachedrep'] = None # can't pickle this!
+        st['_cachedrep'] = None  # can't pickle this!
         return st
 
     def copy(self, parent=None):
-        self._cachedrep = None # deepcopy in ModelMember.copy can't copy CReps!
-        return _modelmember.ModelMember.copy(self,parent)
-
+        self._cachedrep = None  # deepcopy in ModelMember.copy can't copy CReps!
+        return _modelmember.ModelMember.copy(self, parent)
 
     def tosparse(self):
         """
@@ -461,9 +463,8 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    
     def get_taylor_order_terms(self, order, return_coeff_polys=False):
-        """ 
+        """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
@@ -474,7 +475,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         The coefficients of these terms are typically polynomials of the gate's
         parameters, where the polynomial's variable indices index the *global*
-        parameters of the gate's parent (usually a :class:`Model`), not the 
+        parameters of the gate's parent (usually a :class:`Model`), not the
         gate's local parameter array (i.e. that returned from `to_vector`).
 
 
@@ -496,11 +497,11 @@ class LinearOperator(_modelmember.ModelMember):
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
-
+        raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" %
+                                  self.__class__.__name__)
 
     def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
         """ TODO: docstring - note this also *sets* the magnitudes of the terms it
@@ -509,53 +510,52 @@ class LinearOperator(_modelmember.ModelMember):
         v = self.to_vector()
         taylor_order = 0
         terms = []; last_len = -1
-        while len(terms) > last_len: # while we keep adding something
+        while len(terms) > last_len:  # while we keep adding something
             #print("order ",taylor_order," : ",len(terms), "terms")
             terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, True)
-            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms_at_order),)) # an array of coeffs
-            for coeff,t in zip(coeffs,terms_at_order):
-                t.set_magnitude( abs(coeff) )
+            coeffs = _bulk_eval_complex_compact_polys(
+                cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+            for coeff, t in zip(coeffs, terms_at_order):
+                t.set_magnitude(abs(coeff))
 
             last_len = len(terms)
             for t in terms_at_order:
                 if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                    terms.append( (taylor_order,t) )
-                    
+                    terms.append((taylor_order, t))
+
             taylor_order += 1
             if taylor_order > max_taylor_order: break
 
         #Sort terms based on magnitude
         sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
-        first_order_indices = [i for i,t in enumerate(sorted_terms) if t[0] == 1]
+        first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
         return [t[1] for t in sorted_terms], first_order_indices
 
-
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
-        """ 
+        """
         Return the squared frobenius difference between this gate and
         `otherOp`, optionally transforming this gate first using matrices
         `transform` and `inv_transform`.
         """
         if transform is None and inv_transform is None:
-            return _gt.frobeniusdist2(self.todense(),otherOp.todense())
+            return _gt.frobeniusdist2(self.todense(), otherOp.todense())
         else:
             return _gt.frobeniusdist2(_np.dot(
-                    inv_transform,_np.dot(self.todense(),transform)),
-                                      otherOp.todense())
+                inv_transform, _np.dot(self.todense(), transform)),
+                otherOp.todense())
 
     def frobeniusdist(self, otherOp, transform=None, inv_transform=None):
-        """ 
+        """
         Return the frobenius distance between this gate
         and `otherOp`, optionally transforming this gate first
         using `transform` and `inv_transform`.
         """
         return _np.sqrt(self.frobeniusdist2(otherOp, transform, inv_transform))
 
-
     def residuals(self, otherOp, transform=None, inv_transform=None):
         """
         The per-element difference between this `DenseOperator` and `otherOp`,
-        possibly after transforming this operation as 
+        possibly after transforming this operation as
         `G => inv_transform * G * transform`.
 
         Parameters
@@ -573,44 +573,44 @@ class LinearOperator(_modelmember.ModelMember):
             A 1D-array of size equal to that of the flattened operation matrix.
         """
         if transform is None and inv_transform is None:
-            return _gt.residuals(self.todense(),otherOp.todense())
+            return _gt.residuals(self.todense(), otherOp.todense())
         else:
             return _gt.residuals(_np.dot(
-                    inv_transform,_np.dot(self.todense(),transform)),
-                                 otherOp.todense())
+                inv_transform, _np.dot(self.todense(), transform)),
+                otherOp.todense())
 
     def jtracedist(self, otherOp, transform=None, inv_transform=None):
-        """ 
+        """
         Return the Jamiolkowski trace distance between this gate
         and `otherOp`, optionally transforming this gate first
         using `transform` and `inv_transform`.
         """
         if transform is None and inv_transform is None:
-            return _gt.jtracedist(self.todense(),otherOp.todense())
+            return _gt.jtracedist(self.todense(), otherOp.todense())
         else:
             return _gt.jtracedist(_np.dot(
-                    inv_transform,_np.dot(self.todense(),transform)),
-                                  otherOp.todense())
+                inv_transform, _np.dot(self.todense(), transform)),
+                otherOp.todense())
 
     def diamonddist(self, otherOp, transform=None, inv_transform=None):
-        """ 
+        """
         Return the diamon distance between this gate
         and `otherOp`, optionally transforming this gate first
         using `transform` and `inv_transform`.
         """
         if transform is None and inv_transform is None:
-            return _gt.diamonddist(self.todense(),otherOp.todense())
+            return _gt.diamonddist(self.todense(), otherOp.todense())
         else:
             return _gt.diamonddist(_np.dot(
-                    inv_transform,_np.dot(self.todense(),transform)),
-                                   otherOp.todense())
+                inv_transform, _np.dot(self.todense(), transform)),
+                otherOp.todense())
 
     def transform(self, S):
         """
         Update operation matrix G with inv(S) * G * S,
 
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting operation matrix is altered as 
+        Generally, the transform function updates the *parameters* of
+        the gate such that the resulting operation matrix is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
@@ -620,19 +620,18 @@ class LinearOperator(_modelmember.ModelMember):
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
         Smx = S.get_transform_matrix()
-        Si  = S.get_transform_matrix_inverse()
-        self.set_value(_np.dot(Si,_np.dot(self.todense(), Smx)))
-
+        Si = S.get_transform_matrix_inverse()
+        self.set_value(_np.dot(Si, _np.dot(self.todense(), Smx)))
 
     def depolarize(self, amount):
         """
         Depolarize this gate by the given `amount`.
 
-        Generally, the depolarize function updates the *parameters* of 
+        Generally, the depolarize function updates the *parameters* of
         the gate such that the resulting operation matrix is depolarized.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
@@ -644,7 +643,7 @@ class LinearOperator(_modelmember.ModelMember):
             equal to one less than the dimension of the gate. In standard
             bases, depolarization corresponds to multiplying the operation matrix
             by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
+            to the identity) equals 1.0 and whose subsequent elements
             (corresponding to non-identity basis elements) equal
             `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
             float).
@@ -653,19 +652,18 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         None
         """
-        if isinstance(amount,float):
-            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        if isinstance(amount, float):
+            D = _np.diag([1] + [1 - amount] * (self.dim - 1))
         else:
-            assert(len(amount) == self.dim-1)
-            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_value(_np.dot(D,self.todense()))
-
+            assert(len(amount) == self.dim - 1)
+            D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
+        self.set_value(_np.dot(D, self.todense()))
 
     def rotate(self, amount, mxBasis="gm"):
         """
         Rotate this gate by the given `amount`.
 
-        Generally, the rotate function updates the *parameters* of 
+        Generally, the rotate function updates the *parameters* of
         the gate such that the resulting operation matrix is rotated.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
@@ -676,7 +674,7 @@ class LinearOperator(_modelmember.ModelMember):
             Specifies the rotation "coefficients" along each of the non-identity
             Pauli-product axes.  The gate's matrix `G` is composed with a
             rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
+            unitary superoperator corresponding to the unitary operator
             `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
             ranges over all of the non-identity un-normalized Pauli operators.
 
@@ -689,10 +687,9 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         None
         """
-        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_value(_np.dot(rotnMx,self.todense()))
+        rotnMx = _gt.rotation_gate_mx(amount, mxBasis)
+        self.set_value(_np.dot(rotnMx, self.todense()))
 
-        
     def compose(self, otherOp):
         """
         Create and return a new gate that is the composition of this operation
@@ -710,10 +707,9 @@ class LinearOperator(_modelmember.ModelMember):
         DenseOperator
         """
         cpy = self.copy()
-        cpy.set_value( _np.dot( self.todense(), otherOp.todense()) )
+        cpy.set_value(_np.dot(self.todense(), otherOp.todense()))
         return cpy
 
-    
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -732,15 +728,14 @@ class LinearOperator(_modelmember.ModelMember):
                                       % str(self.__class__.__name__))
 
         dtype = complex if self._evotype == 'statevec' else 'd'
-        derivMx = _np.zeros((self.size,0),dtype)
+        derivMx = _np.zeros((self.size, 0), dtype)
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
-
+            return _np.take(derivMx, wrtFilter, axis=1)
 
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -752,7 +747,6 @@ class LinearOperator(_modelmember.ModelMember):
         #Default: assume Hessian can be nonzero if there are any parameters
         return self.num_params() > 0
 
-    
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
         Construct the Hessian of this operation with respect to its parameters.
@@ -774,13 +768,13 @@ class LinearOperator(_modelmember.ModelMember):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if not self.has_nonzero_hessian():
-            return _np.zeros((self.size, self.num_params(), self.num_params()),'d')
+            return _np.zeros((self.size, self.num_params(), self.num_params()), 'd')
 
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
 
-
     ##Pickle plumbing
+
     def __setstate__(self, state):
         self.__dict__.update(state)
 
@@ -802,13 +796,13 @@ class LinearOperator(_modelmember.ModelMember):
         if isinstance(M, LinearOperator):
             dim = M.dim
             matrix = _np.asarray(M).copy()
-              # LinearOperator objs should also derive from ndarray
+            # LinearOperator objs should also derive from ndarray
         elif isinstance(M, _np.ndarray):
             matrix = M.copy()
         else:
             try:
                 dim = len(M)
-                d2  = len(M[0]) #pylint : disable=unused-variable
+                d2 = len(M[0])  # pylint : disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != dim for row in M]):
@@ -824,13 +818,12 @@ class LinearOperator(_modelmember.ModelMember):
             raise ValueError("%s has %d dimensions when 2 are expected"
                              % (M, len(matrix.shape)))
 
-        if matrix.shape[0] != matrix.shape[1]: # checked above, but just to be safe
-            raise ValueError("%s is not a *square* 2D array" % M) # pragma: no cover
+        if matrix.shape[0] != matrix.shape[1]:  # checked above, but just to be safe
+            raise ValueError("%s is not a *square* 2D array" % M)  # pragma: no cover
 
         return matrix
 
 
-        
 #class MapOperator(LinearOperator):
 #    def __init__(self, dim, evotype):
 #        """ Initialize a new LinearOperator """
@@ -840,7 +833,7 @@ class LinearOperator(_modelmember.ModelMember):
 #    # metrics using this?
 #    #And perhaps a sparse-mode finite-difference deriv_wrt_params?
 
-    
+
 class DenseOperator(LinearOperator):
     """
     Excapulates a parameterization of a operation matrix.  This class is the
@@ -851,9 +844,9 @@ class DenseOperator(LinearOperator):
         """ Initialize a new LinearOperator """
         self.base = mx
         super(DenseOperator, self).__init__(self.base.shape[0], evotype)
-        assert(evotype in ("densitymx","statevec")), \
+        assert(evotype in ("densitymx", "statevec")), \
             "Invalid evotype for a DenseOperator: %s" % evotype
-        
+
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -874,7 +867,7 @@ class DenseOperator(LinearOperator):
         Return this operation as a dense matrix.
         """
         return _np.asarray(self.base)
-          # *must* be a numpy array for Cython arg conversion
+        # *must* be a numpy array for Cython arg conversion
 
     def tosparse(self):
         """
@@ -903,53 +896,52 @@ class DenseOperator(LinearOperator):
         for k, v in self.__dict__.items():
             setattr(cpy, k, _copy.deepcopy(v, memo))
         return cpy
-    
+
     def __str__(self):
         s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
     #Access to underlying ndarray
-    def __getitem__( self, key ):
+    def __getitem__(self, key):
         self.dirty = True
         return self.base.__getitem__(key)
 
-    def __getslice__(self, i,j):
+    def __getslice__(self, i, j):
         self.dirty = True
-        return self.__getitem__(slice(i,j)) #Called for A[:]
+        return self.__getitem__(slice(i, j))  # Called for A[:]
 
     def __setitem__(self, key, val):
         self.dirty = True
-        return self.base.__setitem__(key,val)
+        return self.base.__setitem__(key, val)
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        ret = getattr(self.__dict__['base'],attr)
+        ret = getattr(self.__dict__['base'], attr)
         self.dirty = True
         return ret
 
     #Mimic array behavior
-    def __pos__(self):         return self.base
-    def __neg__(self):         return -self.base
-    def __abs__(self):         return abs(self.base)
-    def __add__(self,x):       return self.base + x
-    def __radd__(self,x):      return x + self.base
-    def __sub__(self,x):       return self.base - x
-    def __rsub__(self,x):      return x - self.base
-    def __mul__(self,x):       return self.base * x
-    def __rmul__(self,x):      return x * self.base
-    def __truediv__(self, x):  return self.base / x
+    def __pos__(self): return self.base
+    def __neg__(self): return -self.base
+    def __abs__(self): return abs(self.base)
+    def __add__(self, x): return self.base + x
+    def __radd__(self, x): return x + self.base
+    def __sub__(self, x): return self.base - x
+    def __rsub__(self, x): return x - self.base
+    def __mul__(self, x): return self.base * x
+    def __rmul__(self, x): return x * self.base
+    def __truediv__(self, x): return self.base / x
     def __rtruediv__(self, x): return x / self.base
-    def __floordiv__(self,x):  return self.base // x
-    def __rfloordiv__(self,x): return x // self.base
-    def __pow__(self,x):       return self.base ** x
-    def __eq__(self,x):        return self.base == x
-    def __len__(self):         return len(self.base)
-    def __int__(self):         return int(self.base)
-    def __long__(self):        return int(self.base)
-    def __float__(self):       return float(self.base)
-    def __complex__(self):     return complex(self.base)
-
+    def __floordiv__(self, x): return self.base // x
+    def __rfloordiv__(self, x): return x // self.base
+    def __pow__(self, x): return self.base ** x
+    def __eq__(self, x): return self.base == x
+    def __len__(self): return len(self.base)
+    def __int__(self): return int(self.base)
+    def __long__(self): return int(self.base)
+    def __float__(self): return float(self.base)
+    def __complex__(self): return complex(self.base)
 
 
 class StaticDenseOp(DenseOperator):
@@ -971,8 +963,8 @@ class StaticDenseOp(DenseOperator):
         M = LinearOperator.convert_to_matrix(M)
         if evotype == "auto":
             evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
-        assert(evotype in ("statevec","densitymx")), \
-            "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
+        assert(evotype in ("statevec", "densitymx")), \
+            "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
         DenseOperator.__init__(self, M, evotype)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
 
@@ -997,8 +989,8 @@ class StaticDenseOp(DenseOperator):
         -------
         StaticDenseOp
         """
-        return StaticDenseOp(_np.dot( self.base, otherOp.base), self._evotype)
-        
+        return StaticDenseOp(_np.dot(self.base, otherOp.base), self._evotype)
+
 
 class FullDenseOp(DenseOperator):
     """
@@ -1019,11 +1011,10 @@ class FullDenseOp(DenseOperator):
         M = LinearOperator.convert_to_matrix(M)
         if evotype == "auto":
             evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
-        assert(evotype in ("statevec","densitymx")), \
-            "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
-        DenseOperator.__init__(self,M,evotype)
+        assert(evotype in ("statevec", "densitymx")), \
+            "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
+        DenseOperator.__init__(self, M, evotype)
 
-        
     def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
@@ -1042,10 +1033,9 @@ class FullDenseOp(DenseOperator):
         mx = LinearOperator.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
-                             % (self.dim,self.dim))
-        self.base[:,:] = _np.array(mx)
+                             % (self.dim, self.dim))
+        self.base[:, :] = _np.array(mx)
         self.dirty = True
-
 
     def num_params(self):
         """
@@ -1056,8 +1046,7 @@ class FullDenseOp(DenseOperator):
         int
            the number of independent parameters.
         """
-        return 2*self.size if self._evotype == "statevec" else self.size
-
+        return 2 * self.size if self._evotype == "statevec" else self.size
 
     def to_vector(self):
         """
@@ -1069,10 +1058,9 @@ class FullDenseOp(DenseOperator):
             The gate parameters as a 1D array with length num_params().
         """
         if self._evotype == "statevec":
-            return _np.concatenate( (self.base.real.flatten(), self.base.imag.flatten()), axis=0)
+            return _np.concatenate((self.base.real.flatten(), self.base.imag.flatten()), axis=0)
         else:
             return self.base.flatten()
-
 
     def from_vector(self, v):
         """
@@ -1090,12 +1078,11 @@ class FullDenseOp(DenseOperator):
         """
         assert(self.base.shape == (self.dim, self.dim))
         if self._evotype == "statevec":
-            self.base[:,:] = v[0:self.dim**2].reshape( (self.dim,self.dim) ) + \
-                             1j*v[self.dim**2:].reshape( (self.dim,self.dim) )
+            self.base[:, :] = v[0:self.dim**2].reshape((self.dim, self.dim)) + \
+                1j * v[self.dim**2:].reshape((self.dim, self.dim))
         else:
-            self.base[:,:] = v.reshape( (self.dim,self.dim) )
+            self.base[:, :] = v.reshape((self.dim, self.dim))
         self.dirty = True
-
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1110,20 +1097,19 @@ class FullDenseOp(DenseOperator):
             Array of derivatives with shape (dimension^2, num_params)
         """
         if self._evotype == "statevec":
-            derivMx = _np.concatenate( (_np.identity( self.dim**2, 'complex' ),
-                                        1j*_np.identity( self.dim**2,'complex')),
-                                        axis=1 )
+            derivMx = _np.concatenate((_np.identity(self.dim**2, 'complex'),
+                                       1j * _np.identity(self.dim**2, 'complex')),
+                                      axis=1)
         else:
-            derivMx = _np.identity( self.dim**2, self.base.dtype )
-            
+            derivMx = _np.identity(self.dim**2, self.base.dtype)
+
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take(derivMx, wrtFilter, axis=1)
 
-        
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -1155,15 +1141,13 @@ class TPDenseOp(DenseOperator):
         """
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(M))
         mx = LinearOperator.convert_to_matrix(M)
-        assert(_np.isrealobj(mx)),"TPDenseOp must have *real* values!"
-        if not (_np.isclose(mx[0,0], 1.0) and \
-                _np.allclose(mx[0,1:], 0.0)):
+        assert(_np.isrealobj(mx)), "TPDenseOp must have *real* values!"
+        if not (_np.isclose(mx[0, 0], 1.0) and
+                _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create TPDenseOp: " +
                              "invalid form for 1st row!")
         DenseOperator.__init__(self, _ProtectedArray(
-            mx, indicesToProtect=(0, slice(None,None,None))), "densitymx")
-                
-
+            mx, indicesToProtect=(0, slice(None, None, None))), "densitymx")
 
     def set_value(self, M):
         """
@@ -1183,14 +1167,13 @@ class TPDenseOp(DenseOperator):
         mx = LinearOperator.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
-                             % (self.dim,self.dim))
-        if not (_np.isclose(mx[0,0], 1.0) and _np.allclose(mx[0,1:], 0.0)):
+                             % (self.dim, self.dim))
+        if not (_np.isclose(mx[0, 0], 1.0) and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot set TPDenseOp: " +
-                             "invalid form for 1st row!" )
+                             "invalid form for 1st row!")
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
-        self.base[1:,:] = mx[1:,:]
+        self.base[1:, :] = mx[1:, :]
         self.dirty = True
-
 
     def num_params(self):
         """
@@ -1203,7 +1186,6 @@ class TPDenseOp(DenseOperator):
         """
         return self.dim**2 - self.dim
 
-
     def to_vector(self):
         """
         Get the gate parameters as an array of values.
@@ -1213,8 +1195,7 @@ class TPDenseOp(DenseOperator):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        return self.base.flatten()[self.dim:] #.real in case of complex matrices?
-
+        return self.base.flatten()[self.dim:]  # .real in case of complex matrices?
 
     def from_vector(self, v):
         """
@@ -1231,9 +1212,8 @@ class TPDenseOp(DenseOperator):
         None
         """
         assert(self.base.shape == (self.dim, self.dim))
-        self.base[1:,:] = v.reshape((self.dim-1,self.dim))
+        self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
         self.dirty = True
-
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1247,17 +1227,16 @@ class TPDenseOp(DenseOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.identity( self.dim**2, 'd' ) # TP gates are assumed to be real
-        derivMx = derivMx[:,self.dim:] #remove first op_dim cols ( <=> first-row parameters )
+        derivMx = _np.identity(self.dim**2, 'd')  # TP gates are assumed to be real
+        derivMx = derivMx[:, self.dim:]  # remove first op_dim cols ( <=> first-row parameters )
 
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
-
+            return _np.take(derivMx, wrtFilter, axis=1)
 
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -1268,12 +1247,12 @@ class TPDenseOp(DenseOperator):
         """
         return False
 
-    
 
 class LinearlyParameterizedElementTerm(object):
     """
     Encapsulates a single term within a LinearlyParamDenseOp.
     """
+
     def __init__(self, coeff=1.0, paramIndices=[]):
         """
         Create a new LinearlyParameterizedElementTerm
@@ -1342,58 +1321,56 @@ class LinearlyParamDenseOp(DenseOperator):
             elements.
         """
 
-        baseMatrix = _np.array( LinearOperator.convert_to_matrix(baseMatrix), 'complex')
-          #complex, even if passed all real base matrix
+        baseMatrix = _np.array(LinearOperator.convert_to_matrix(baseMatrix), 'complex')
+        #complex, even if passed all real base matrix
 
         elementExpressions = {}
-        for p,ij_tuples in list(parameterToBaseIndicesMap.items()):
-            for i,j in ij_tuples:
-                assert((i,j) not in elementExpressions) #only one parameter allowed per base index pair
-                elementExpressions[(i,j)] = [ LinearlyParameterizedElementTerm(1.0, [p]) ]
+        for p, ij_tuples in list(parameterToBaseIndicesMap.items()):
+            for i, j in ij_tuples:
+                assert((i, j) not in elementExpressions)  # only one parameter allowed per base index pair
+                elementExpressions[(i, j)] = [LinearlyParameterizedElementTerm(1.0, [p])]
 
         typ = "d" if real else "complex"
-        mx = _np.empty( baseMatrix.shape, typ )
+        mx = _np.empty(baseMatrix.shape, typ)
         self.baseMatrix = baseMatrix
         self.parameterArray = parameterArray
         self.numParams = len(parameterArray)
         self.elementExpressions = elementExpressions
         assert(_np.isrealobj(self.parameterArray)), "Parameter array must be real-valued!"
 
-        I = _np.identity(self.baseMatrix.shape[0],'d') # LinearlyParameterizedGates are currently assumed to be real
+        I = _np.identity(self.baseMatrix.shape[0], 'd')  # LinearlyParameterizedGates are currently assumed to be real
         self.leftTrans = leftTransform if (leftTransform is not None) else I
         self.rightTrans = rightTransform if (rightTransform is not None) else I
         self.enforceReal = real
-        mx.flags.writeable = False # only _construct_matrix can change array
+        mx.flags.writeable = False  # only _construct_matrix can change array
 
         if evotype == "auto": evotype = "densitymx" if real else "statevec"
-        assert(evotype in ("densitymx","statevec")), \
-            "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
+        assert(evotype in ("densitymx", "statevec")), \
+            "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
 
         DenseOperator.__init__(self, mx, evotype)
-        self._construct_matrix() # construct base from the parameters
+        self._construct_matrix()  # construct base from the parameters
 
-        
     def _construct_matrix(self):
         """
         Build the internal operation matrix using the current parameters.
         """
         matrix = self.baseMatrix.copy()
-        for (i,j),terms in self.elementExpressions.items():
+        for (i, j), terms in self.elementExpressions.items():
             for term in terms:
-                param_prod = _np.prod( [ self.parameterArray[p] for p in term.paramIndices ] )
-                matrix[i,j] += term.coeff * param_prod
+                param_prod = _np.prod([self.parameterArray[p] for p in term.paramIndices])
+                matrix[i, j] += term.coeff * param_prod
         matrix = _np.dot(self.leftTrans, _np.dot(matrix, self.rightTrans))
 
         if self.enforceReal:
             if _np.linalg.norm(_np.imag(matrix)) > IMAG_TOL:
                 raise ValueError("Linearly parameterized matrix has non-zero" +
-                        "imaginary part (%g)!" % _np.linalg.norm(_np.imag(matrix)))
+                                 "imaginary part (%g)!" % _np.linalg.norm(_np.imag(matrix)))
             matrix = _np.real(matrix)
 
-        assert(matrix.shape == (self.dim,self.dim))
+        assert(matrix.shape == (self.dim, self.dim))
         self.base = matrix
         self.base.flags.writeable = False
-
 
     def num_params(self):
         """
@@ -1406,7 +1383,6 @@ class LinearlyParamDenseOp(DenseOperator):
         """
         return self.numParams
 
-
     def to_vector(self):
         """
         Extract a vector of the underlying gate parameters from this gate.
@@ -1417,7 +1393,6 @@ class LinearlyParamDenseOp(DenseOperator):
             a 1D numpy array with length == num_params().
         """
         return self.parameterArray
-
 
     def from_vector(self, v):
         """
@@ -1437,7 +1412,6 @@ class LinearlyParamDenseOp(DenseOperator):
         self._construct_matrix()
         self.dirty = True
 
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -1450,17 +1424,17 @@ class LinearlyParamDenseOp(DenseOperator):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        derivMx = _np.zeros( (self.numParams, self.dim, self.dim), 'complex' )
-        for (i,j),terms in self.elementExpressions.items():
+        derivMx = _np.zeros((self.numParams, self.dim, self.dim), 'complex')
+        for (i, j), terms in self.elementExpressions.items():
             for term in terms:
-                params_to_mult = [ self.parameterArray[p] for p in term.paramIndices ]
-                for k,p in enumerate(term.paramIndices):
-                    param_partial_prod = _np.prod( params_to_mult[0:k] + params_to_mult[k+1:] ) # exclude k-th factor
-                    derivMx[p,i,j] += term.coeff * param_partial_prod
-        
-        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (d,P,d)
-        derivMx = _np.rollaxis(derivMx,1,3) # now (d,d,P)
-        derivMx = derivMx.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
+                params_to_mult = [self.parameterArray[p] for p in term.paramIndices]
+                for k, p in enumerate(term.paramIndices):
+                    param_partial_prod = _np.prod(params_to_mult[0:k] + params_to_mult[k + 1:])  # exclude k-th factor
+                    derivMx[p, i, j] += term.coeff * param_partial_prod
+
+        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans))  # (d,d) * (P,d,d) * (d,d) => (d,P,d)
+        derivMx = _np.rollaxis(derivMx, 1, 3)  # now (d,d,P)
+        derivMx = derivMx.reshape([self.dim**2, self.numParams])  # (d^2,P) == final shape
 
         if self.enforceReal:
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
@@ -1469,11 +1443,10 @@ class LinearlyParamDenseOp(DenseOperator):
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take(derivMx, wrtFilter, axis=1)
 
-        
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -1483,7 +1456,6 @@ class LinearlyParamDenseOp(DenseOperator):
         bool
         """
         return False
-
 
     def compose(self, otherOp):
         """
@@ -1502,7 +1474,7 @@ class LinearlyParamDenseOp(DenseOperator):
         -------
         LinearlyParamDenseOp
         """
-        assert( isinstance(otherOp, LinearlyParamDenseOp) )
+        assert(isinstance(otherOp, LinearlyParamDenseOp))
 
         ### Implementation Notes ###
         #
@@ -1531,61 +1503,59 @@ class LinearlyParamDenseOp(DenseOperator):
         #
 
         W = _np.dot(self.rightTrans, otherOp.leftTrans)
-        baseMx = _np.dot(self.baseMatrix, _np.dot(W, otherOp.baseMatrix)) # aWb above
-        paramArray = _np.concatenate( (self.parameterArray, otherOp.parameterArray), axis=0)
+        baseMx = _np.dot(self.baseMatrix, _np.dot(W, otherOp.baseMatrix))  # aWb above
+        paramArray = _np.concatenate((self.parameterArray, otherOp.parameterArray), axis=0)
         composedOp = LinearlyParamDenseOp(baseMx, paramArray, {},
-                                                 self.leftTrans, otherOp.rightTrans,
-                                                 self.enforceReal and otherOp.enforceReal,
-                                                 self._evotype)
+                                          self.leftTrans, otherOp.rightTrans,
+                                          self.enforceReal and otherOp.enforceReal,
+                                          self._evotype)
 
         # Precompute what we can before the compute loop
         aW = _np.dot(self.baseMatrix, W)
         Wb = _np.dot(W, otherOp.baseMatrix)
 
-        kMax,nMax = (self.dim,self.dim) #W.shape
-        offset = len(self.parameterArray) # amt to offset parameter indices of otherOp
+        kMax, nMax = (self.dim, self.dim)  # W.shape
+        offset = len(self.parameterArray)  # amt to offset parameter indices of otherOp
 
         # Compute  [A * W * B]_ij element expression as described above
         for i in range(self.baseMatrix.shape[0]):
             for j in range(otherOp.baseMatrix.shape[1]):
                 terms = []
                 for n in range(nMax):
-                    if (n,j) in otherOp.elementExpressions:
-                        for term in otherOp.elementExpressions[(n,j)]:
-                            coeff = aW[i,n] * term.coeff
-                            paramIndices = [ p+offset for p in term.paramIndices ]
-                            terms.append( LinearlyParameterizedElementTerm( coeff, paramIndices ) )
+                    if (n, j) in otherOp.elementExpressions:
+                        for term in otherOp.elementExpressions[(n, j)]:
+                            coeff = aW[i, n] * term.coeff
+                            paramIndices = [p + offset for p in term.paramIndices]
+                            terms.append(LinearlyParameterizedElementTerm(coeff, paramIndices))
 
                 for k in range(kMax):
-                    if (i,k) in self.elementExpressions:
-                        for term in self.elementExpressions[(i,k)]:
-                            coeff = term.coeff * Wb[k,j]
-                            terms.append( LinearlyParameterizedElementTerm( coeff, term.paramIndices ) )
+                    if (i, k) in self.elementExpressions:
+                        for term in self.elementExpressions[(i, k)]:
+                            coeff = term.coeff * Wb[k, j]
+                            terms.append(LinearlyParameterizedElementTerm(coeff, term.paramIndices))
 
                             for n in range(nMax):
-                                if (n,j) in otherOp.elementExpressions:
-                                    for term2 in otherOp.elementExpressions[(n,j)]:
-                                        coeff = term.coeff * W[k,n] * term2.coeff
-                                        paramIndices = term.paramIndices + [ p+offset for p in term2.paramIndices ]
-                                        terms.append( LinearlyParameterizedElementTerm( coeff, paramIndices ) )
+                                if (n, j) in otherOp.elementExpressions:
+                                    for term2 in otherOp.elementExpressions[(n, j)]:
+                                        coeff = term.coeff * W[k, n] * term2.coeff
+                                        paramIndices = term.paramIndices + [p + offset for p in term2.paramIndices]
+                                        terms.append(LinearlyParameterizedElementTerm(coeff, paramIndices))
 
-                composedOp.elementExpressions[(i,j)] = terms
+                composedOp.elementExpressions[(i, j)] = terms
 
         composedOp._construct_matrix()
         return composedOp
-
 
     def __str__(self):
         s = "Linearly Parameterized gate with shape %s, num params = %d\n" % \
             (str(self.base.shape), self.numParams)
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         s += "\nParameterization:"
-        for (i,j),terms in self.elementExpressions.items():
-            tStr = ' + '.join([ '*'.join(["p%d"%p for p in term.paramIndices])
-                                for term in terms] )
-            s += "LinearOperator[%d,%d] = %s\n" % (i,j,tStr)
+        for (i, j), terms in self.elementExpressions.items():
+            tStr = ' + '.join(['*'.join(["p%d" % p for p in term.paramIndices])
+                               for term in terms])
+            s += "LinearOperator[%d,%d] = %s\n" % (i, j, tStr)
         return s
-
 
 
 class EigenvalueParamDenseOp(DenseOperator):
@@ -1609,9 +1579,9 @@ class EigenvalueParamDenseOp(DenseOperator):
             of the gate.
 
         includeOffDiagsInDegen2Blocks : bool
-            If True, include as parameters the (initially zero) 
-            off-diagonal elements in degenerate 2x2 blocks of the 
-            the diagonalized operation matrix (no off-diagonals are 
+            If True, include as parameters the (initially zero)
+            off-diagonal elements in degenerate 2x2 blocks of the
+            the diagonalized operation matrix (no off-diagonals are
             included in blocks larger than 2x2).  This is an option
             specifically used in the intelligent fiducial pair
             reduction (IFPR) algorithm.
@@ -1625,19 +1595,19 @@ class EigenvalueParamDenseOp(DenseOperator):
             any off diagonal elements lying on the top row are *not*
             parameterized as implied by the TP constraint.
         """
-        def cmplx_compare(ia,ib):
+        def cmplx_compare(ia, ib):
             return _mt.complex_compare(evals[ia], evals[ib])
         cmplx_compare_key = _functools.cmp_to_key(cmplx_compare)
 
         def isreal(a):
             """ b/c numpy's isreal tests for strict equality w/0 """
-            return _np.isclose(_np.imag(a),0.0)
+            return _np.isclose(_np.imag(a), 0.0)
 
         # Since matrix is real, eigenvalues must either be real or occur in
         #  conjugate pairs.  Find and sort by conjugate pairs.
 
-        assert(_np.linalg.norm(_np.imag(matrix)) < IMAG_TOL ) #matrix should be real
-        evals, B = _np.linalg.eig(matrix) # matrix == B * diag(evals) * Bi
+        assert(_np.linalg.norm(_np.imag(matrix)) < IMAG_TOL)  # matrix should be real
+        evals, B = _np.linalg.eig(matrix)  # matrix == B * diag(evals) * Bi
         dim = len(evals)
 
         #Sort eigenvalues & eigenvectors by:
@@ -1646,72 +1616,72 @@ class EigenvalueParamDenseOp(DenseOperator):
         # 3) complex eigenvalues in order of real then imaginary part
 
         unitInds = []; realInds = []; complexInds = []
-        for i,ev in enumerate(evals):
-            if _np.isclose(ev,1.0): unitInds.append(i)
+        for i, ev in enumerate(evals):
+            if _np.isclose(ev, 1.0): unitInds.append(i)
             elif isreal(ev): realInds.append(i)
             else: complexInds.append(i)
 
         if TPconstrainedAndUnital:
             #check matrix is TP and unital
-            unitRow = _np.zeros( (len(evals)), 'd'); unitRow[0] = 1.0
-            assert( _np.allclose(matrix[0,:],unitRow) )
-            assert( _np.allclose(matrix[:,0],unitRow) )
+            unitRow = _np.zeros((len(evals)), 'd'); unitRow[0] = 1.0
+            assert(_np.allclose(matrix[0, :], unitRow))
+            assert(_np.allclose(matrix[:, 0], unitRow))
 
             #find the eigenvector with largest first element and make sure
             # this is the first index in unitInds
-            k = _np.argmax([B[0,i] for i in unitInds])
-            if k != 0:  #swap indices 0 <-> k in unitInds
+            k = _np.argmax([B[0, i] for i in unitInds])
+            if k != 0:  # swap indices 0 <-> k in unitInds
                 t = unitInds[0]; unitInds[0] = unitInds[k]; unitInds[k] = t
 
             #Assume we can recombine unit-eval eigenvectors so that the first
             # one (actually the closest-to-unit-row one) == unitRow and the
             # rest do not have any 0th component.
-            iClose = _np.argmax( [abs(B[0,ui]) for ui in unitInds] )
-            B[:, unitInds[iClose] ] = unitRow
-            for i,ui in enumerate(unitInds):
+            iClose = _np.argmax([abs(B[0, ui]) for ui in unitInds])
+            B[:, unitInds[iClose]] = unitRow
+            for i, ui in enumerate(unitInds):
                 if i == iClose: continue
-                B[0, ui] = 0.0; B[:,ui] /= _np.linalg.norm(B[:,ui])
+                B[0, ui] = 0.0; B[:, ui] /= _np.linalg.norm(B[:, ui])
 
         realInds = sorted(realInds, key=lambda i: -abs(evals[i]))
         complexInds = sorted(complexInds, key=cmplx_compare_key)
         new_ordering = unitInds + realInds + complexInds
 
         #Re-order the eigenvalues & vectors
-        sorted_evals = _np.zeros(evals.shape,'complex')
+        sorted_evals = _np.zeros(evals.shape, 'complex')
         sorted_B = _np.zeros(B.shape, 'complex')
-        for i,indx in enumerate(new_ordering):
+        for i, indx in enumerate(new_ordering):
             sorted_evals[i] = evals[indx]
-            sorted_B[:,i] = B[:,indx]
+            sorted_B[:, i] = B[:, indx]
 
         #Save the final list of (sorted) eigenvalues & eigenvectors
         self.evals = sorted_evals
         self.B = sorted_B
         self.Bi = _np.linalg.inv(sorted_B)
 
-        self.options = { 'includeOffDiags': includeOffDiagsInDegen2Blocks,
-                         'TPandUnital': TPconstrainedAndUnital }
+        self.options = {'includeOffDiags': includeOffDiagsInDegen2Blocks,
+                        'TPandUnital': TPconstrainedAndUnital}
 
         #Check that nothing has gone horribly wrong
         assert(_np.allclose(_np.dot(
-                    self.B,_np.dot(_np.diag(self.evals),self.Bi)), matrix))
-                
+            self.B, _np.dot(_np.diag(self.evals), self.Bi)), matrix))
+
         #Build a list of parameter descriptors.  Each element of self.params
         # is a list of (prefactor, (i,j)) tuples.
-        self.params = []        
-        i = 0; N = len(self.evals); processed = [False]*N
+        self.params = []
+        i = 0; N = len(self.evals); processed = [False] * N
         while i < N:
             if processed[i]:
                 i += 1; continue
 
             # Find block (i -> j) of degenerate eigenvalues
-            j = i+1
-            while j < N and _np.isclose(self.evals[i],self.evals[j]): j += 1
-            blkSize = j-i
+            j = i + 1
+            while j < N and _np.isclose(self.evals[i], self.evals[j]): j += 1
+            blkSize = j - i
 
             #Add eigenvalues as parameters
-            ev = self.evals[i] #current eigenvalue being processed
+            ev = self.evals[i]  # current eigenvalue being processed
             if isreal(ev):
-                
+
                 # Side task: for a *real* block of degenerate evals, we want
                 # to ensure the eigenvectors are real, which numpy doesn't
                 # always guarantee (could be conj. pairs for instance).
@@ -1722,130 +1692,126 @@ class EigenvalueParamDenseOp(DenseOperator):
                 #  then solve [v1.r, ...]Ci + [v1.i, ...]Cr = 0
                 #  which can be cast as [Vr,Vi]*[Ci] = 0
                 #                               [Cr]      (nullspace of V)
-                # Note: only involve complex evecs (don't disturb TP evec!)            
+                # Note: only involve complex evecs (don't disturb TP evec!)
                 evecIndsToMakeReal = []
-                for k in range(i,j):
-                    if _np.linalg.norm(self.B[:,k].imag) >= IMAG_TOL:
+                for k in range(i, j):
+                    if _np.linalg.norm(self.B[:, k].imag) >= IMAG_TOL:
                         evecIndsToMakeReal.append(k)
 
                 nToReal = len(evecIndsToMakeReal)
                 if nToReal > 0:
-                    vecs = _np.empty( (dim,nToReal),'complex')
-                    for ik,k in enumerate(evecIndsToMakeReal): 
-                        vecs[:,ik] = self.B[:,k]
+                    vecs = _np.empty((dim, nToReal), 'complex')
+                    for ik, k in enumerate(evecIndsToMakeReal):
+                        vecs[:, ik] = self.B[:, k]
                     V = _np.concatenate((vecs.real, vecs.imag), axis=1)
-                    nullsp = _mt.nullspace(V); 
+                    nullsp = _mt.nullspace(V)
                     #if nullsp.shape[1] < nToReal: # DEBUG
                     #    raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
                     #                     % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
-                    assert(nullsp.shape[1] >= nToReal),"Cannot find enough real linear combos!"
-                    nullsp = nullsp[:,0:nToReal] #truncate #cols if there are more than we need
-    
-                    Cmx = nullsp[nToReal:,:] + 1j*nullsp[0:nToReal,:] # Cr + i*Ci
-                    new_vecs = _np.dot(vecs,Cmx)
-                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
-                    for ik,k in enumerate(evecIndsToMakeReal): 
-                        self.B[:,k] = new_vecs[:,ik]
-                    self.Bi = _np.linalg.inv(self.B)                
+                    assert(nullsp.shape[1] >= nToReal), "Cannot find enough real linear combos!"
+                    nullsp = nullsp[:, 0:nToReal]  # truncate #cols if there are more than we need
 
-                
+                    Cmx = nullsp[nToReal:, :] + 1j * nullsp[0:nToReal, :]  # Cr + i*Ci
+                    new_vecs = _np.dot(vecs, Cmx)
+                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
+                    for ik, k in enumerate(evecIndsToMakeReal):
+                        self.B[:, k] = new_vecs[:, ik]
+                    self.Bi = _np.linalg.inv(self.B)
+
                 #Now, back to constructing parameter descriptors...
-                for k in range(i,j):
+                for k in range(i, j):
                     if TPconstrainedAndUnital and k == 0: continue
-                    prefactor = 1.0; mx_indx = (k,k)
-                    self.params.append( [(prefactor, mx_indx)] )
+                    prefactor = 1.0; mx_indx = (k, k)
+                    self.params.append([(prefactor, mx_indx)])
                     processed[k] = True
             else:
                 iConjugate = {}
-                for k in range(i,j):
+                for k in range(i, j):
                     #Find conjugate eigenvalue to eval[k]
-                    conj = _np.conj(self.evals[k]) # == conj(ev), indep of k
-                    conjB = _np.conj(self.B[:,k])
-                    for l in range(j,N):
-                        if _np.isclose(conj,self.evals[l]) and \
-                                (_np.allclose(conjB, self.B[:,l]) or
-                                 _np.allclose(conjB, 1j*self.B[:,l]) or
-                                 _np.allclose(conjB, -1j*self.B[:,l]) or
-                                 _np.allclose(conjB, -1*self.B[:,l])): #numpy normalizes but doesn't fix "phase" of evecs
-                            self.params.append( [  # real-part param
-                                    (1.0, (k,k)),  # (prefactor, index)
-                                    (1.0, (l,l)) ] ) 
-                            self.params.append( [  # imag-part param
-                                    (1j, (k,k)),  # (prefactor, index)
-                                    (-1j, (l,l)) ] ) 
+                    conj = _np.conj(self.evals[k])  # == conj(ev), indep of k
+                    conjB = _np.conj(self.B[:, k])
+                    for l in range(j, N):
+                        if _np.isclose(conj, self.evals[l]) and \
+                                (_np.allclose(conjB, self.B[:, l]) or
+                                 _np.allclose(conjB, 1j * self.B[:, l]) or
+                                 _np.allclose(conjB, -1j * self.B[:, l]) or
+                                 _np.allclose(conjB, -1 * self.B[:, l])):  # numpy normalizes but doesn't fix "phase" of evecs
+                            self.params.append([  # real-part param
+                                (1.0, (k, k)),  # (prefactor, index)
+                                (1.0, (l, l))])
+                            self.params.append([  # imag-part param
+                                (1j, (k, k)),  # (prefactor, index)
+                                (-1j, (l, l))])
                             processed[k] = processed[l] = True
-                            iConjugate[k] = l #save conj. pair index for below
+                            iConjugate[k] = l  # save conj. pair index for below
                             break
                     else:
                         # should be unreachable, since we ensure mx is real above - but
                         # this may fail when there are multiple degenerate complex evals
                         # since the evecs can get mixed (and we check for evec "match" above)
-                        raise ValueError("Could not find conjugate pair " 
-                                         + " for %s" % self.evals[k]) # pragma: no cover
-            
-            
+                        raise ValueError("Could not find conjugate pair "
+                                         + " for %s" % self.evals[k])  # pragma: no cover
+
             if includeOffDiagsInDegen2Blocks and blkSize == 2:
-                #Note: could remove blkSize == 2 condition or make this a 
+                #Note: could remove blkSize == 2 condition or make this a
                 # separate option.  This is useful currently so that we don't
-                # add lots of off-diag elements in accidentally-degenerate 
+                # add lots of off-diag elements in accidentally-degenerate
                 # cases, but there's probabaly a better heuristic for this, such
                 # as only including off-diag els for unit-eigenvalue blocks
                 # of size 2 (?)
-                for k1 in range(i,j-1):
-                    for k2 in range(k1+1,j):
+                for k1 in range(i, j - 1):
+                    for k2 in range(k1 + 1, j):
                         if isreal(ev):
                             # k1,k2 element
                             if not TPconstrainedAndUnital or k1 != 0:
-                                self.params.append( [(1.0, (k1,k2))] )
+                                self.params.append([(1.0, (k1, k2))])
 
                             # k2,k1 element
                             if not TPconstrainedAndUnital or k2 != 0:
-                                self.params.append( [(1.0, (k2,k1))] )
+                                self.params.append([(1.0, (k2, k1))])
                         else:
-                            k1c, k2c = iConjugate[k1],iConjugate[k2]
+                            k1c, k2c = iConjugate[k1], iConjugate[k2]
 
                             # k1,k2 element
-                            self.params.append( [  # real-part param
-                                    (1.0, (k1,k2)),
-                                    (1.0, (k1c,k2c)) ] ) 
-                            self.params.append( [  # imag-part param
-                                    (1j, (k1,k2)),
-                                    (-1j, (k1c,k2c)) ] ) 
+                            self.params.append([  # real-part param
+                                (1.0, (k1, k2)),
+                                (1.0, (k1c, k2c))])
+                            self.params.append([  # imag-part param
+                                (1j, (k1, k2)),
+                                (-1j, (k1c, k2c))])
 
                             # k2,k1 element
-                            self.params.append( [  # real-part param
-                                    (1.0, (k2,k1)),
-                                    (1.0, (k2c,k1c)) ] ) 
-                            self.params.append( [  # imag-part param
-                                    (1j, (k2,k1)),
-                                    (-1j, (k2c,k1c)) ] )
+                            self.params.append([  # real-part param
+                                (1.0, (k2, k1)),
+                                (1.0, (k2c, k1c))])
+                            self.params.append([  # imag-part param
+                                (1j, (k2, k1)),
+                                (-1j, (k2c, k1c))])
 
-            i = j #advance to next block
+            i = j  # advance to next block
 
         #Allocate array of parameter values (all zero initially)
         self.paramvals = _np.zeros(len(self.params), 'd')
 
         #Finish LinearOperator construction
-        mx = _np.empty( matrix.shape, "d" )
-        mx.flags.writeable = False # only _construct_matrix can change array
+        mx = _np.empty(matrix.shape, "d")
+        mx.flags.writeable = False  # only _construct_matrix can change array
         DenseOperator.__init__(self, mx, "densitymx")
-        self._construct_matrix() # construct base from the parameters
-
+        self._construct_matrix()  # construct base from the parameters
 
     def _construct_matrix(self):
         """
         Build the internal operation matrix using the current parameters.
         """
         base_diag = _np.diag(self.evals)
-        for pdesc,pval in zip(self.params, self.paramvals):
-            for prefactor,(i,j) in pdesc:
-                base_diag[i,j] += prefactor * pval
-        matrix = _np.dot(self.B,_np.dot(base_diag,self.Bi))
+        for pdesc, pval in zip(self.params, self.paramvals):
+            for prefactor, (i, j) in pdesc:
+                base_diag[i, j] += prefactor * pval
+        matrix = _np.dot(self.B, _np.dot(base_diag, self.Bi))
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
-        assert(matrix.shape == (self.dim,self.dim))
+        assert(matrix.shape == (self.dim, self.dim))
         self.base = matrix.real
         self.base.flags.writeable = False
-
 
     def num_params(self):
         """
@@ -1858,7 +1824,6 @@ class EigenvalueParamDenseOp(DenseOperator):
         """
         return len(self.paramvals)
 
-
     def to_vector(self):
         """
         Extract a vector of the underlying gate parameters from this gate.
@@ -1869,7 +1834,6 @@ class EigenvalueParamDenseOp(DenseOperator):
             a 1D numpy array with length == num_params().
         """
         return self.paramvals
-
 
     def from_vector(self, v):
         """
@@ -1890,7 +1854,6 @@ class EigenvalueParamDenseOp(DenseOperator):
         self._construct_matrix()
         self.dirty = True
 
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -1903,34 +1866,34 @@ class EigenvalueParamDenseOp(DenseOperator):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        
+
         # matrix = B * diag * Bi, and only diag depends on parameters
         #  (and only linearly), so:
         # d(matrix)/d(param) = B * d(diag)/d(param) * Bi
 
-        derivMx = _np.zeros( (self.dim**2, self.num_params()), 'd' ) # EigenvalueParameterizedGates are assumed to be real
+        # EigenvalueParameterizedGates are assumed to be real
+        derivMx = _np.zeros((self.dim**2, self.num_params()), 'd')
 
         # Compute d(diag)/d(param) for each params, then apply B & Bi
-        for k,pdesc in enumerate(self.params):
-            dMx = _np.zeros( (self.dim,self.dim), 'complex')
-            for prefactor,(i,j) in pdesc:
-                dMx[i,j] = prefactor
+        for k, pdesc in enumerate(self.params):
+            dMx = _np.zeros((self.dim, self.dim), 'complex')
+            for prefactor, (i, j) in pdesc:
+                dMx[i, j] = prefactor
             tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
-            if _np.linalg.norm(tmp.imag) >= IMAG_TOL: #just a warning until we figure this out.
-                print("EigenvalueParamDenseOp deriv_wrt_params WARNING:" + 
-                      " Imag part = ",_np.linalg.norm(tmp.imag)," pdesc = ",pdesc) # pragma: no cover
+            if _np.linalg.norm(tmp.imag) >= IMAG_TOL:  # just a warning until we figure this out.
+                print("EigenvalueParamDenseOp deriv_wrt_params WARNING:" +
+                      " Imag part = ", _np.linalg.norm(tmp.imag), " pdesc = ", pdesc)  # pragma: no cover
             #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
             #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
-            derivMx[:,k] = tmp.real.flatten()
+            derivMx[:, k] = tmp.real.flatten()
 
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take(derivMx, wrtFilter, axis=1)
 
-        
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -1940,7 +1903,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         bool
         """
         return False
-        
+
 
 class LindbladOp(LinearOperator):
     """
@@ -1948,7 +1911,7 @@ class LindbladOp(LinearOperator):
     exponentiated to give the gate action.
     """
 
-    @classmethod 
+    @classmethod
     def decomp_paramtype(cls, paramType):
         """
         A utility method for creating LindbladOp objects.
@@ -1957,13 +1920,13 @@ class LindbladOp(LinearOperator):
         into a "base" type (specifies parameterization without evolution type,
         e.g. "H+S"), an evolution type (i.e. one of "densitymx", "svterm",
         "cterm", or "statevec").  Furthermore, from the base type two "modes"
-        - one describing the number (and structure) of the non-Hamiltonian 
+        - one describing the number (and structure) of the non-Hamiltonian
         Lindblad coefficients and one describing how the Lindblad coefficients
         are converted to/from parameters - are derived.
 
         The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
         coefficients are stored in a LindbladOp, and is one
-        of `"diagonal"` (only the diagonal elements of the full coefficient 
+        of `"diagonal"` (only the diagonal elements of the full coefficient
         matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
         coefficients on top of the affine projections), or `"all"` (the entire
         coefficient matrix).
@@ -1978,7 +1941,7 @@ class LindbladOp(LinearOperator):
         Parameters
         ----------
         paramType : str
-            The high-level Lindblad parameter type to decompose.  E.g "H+S", 
+            The high-level Lindblad parameter type to decompose.  E.g "H+S",
             "H+S+A terms", "CPTP clifford terms".
 
         Returns
@@ -1989,43 +1952,42 @@ class LindbladOp(LinearOperator):
         param_mode : str
         """
         bTyp, evotype = _gt.split_lindblad_paramtype(paramType)
-        
+
         if bTyp == "CPTP":
-            nonham_mode = "all"; param_mode = "cptp" 
-        elif bTyp in ("H+S","S"):
-            nonham_mode = "diagonal"; param_mode = "cptp" 
-        elif bTyp in ("H+s","s"):
-            nonham_mode = "diagonal"; param_mode = "unconstrained" 
-        elif bTyp in ("H+S+A","S+A"):
-            nonham_mode = "diag_affine"; param_mode = "cptp" 
-        elif bTyp in ("H+s+A","s+A"):
-            nonham_mode = "diag_affine"; param_mode = "unconstrained" 
-        elif bTyp in ("H+D","D"):
-            nonham_mode = "diagonal"; param_mode = "depol" 
-        elif bTyp in ("H+d","d"):
-            nonham_mode = "diagonal"; param_mode = "reldepol" 
-        elif bTyp in ("H+D+A","D+A"):
-            nonham_mode = "diag_affine"; param_mode = "depol" 
-        elif bTyp in ("H+d+A","d+A"):
-            nonham_mode = "diag_affine"; param_mode = "reldepol" 
+            nonham_mode = "all"; param_mode = "cptp"
+        elif bTyp in ("H+S", "S"):
+            nonham_mode = "diagonal"; param_mode = "cptp"
+        elif bTyp in ("H+s", "s"):
+            nonham_mode = "diagonal"; param_mode = "unconstrained"
+        elif bTyp in ("H+S+A", "S+A"):
+            nonham_mode = "diag_affine"; param_mode = "cptp"
+        elif bTyp in ("H+s+A", "s+A"):
+            nonham_mode = "diag_affine"; param_mode = "unconstrained"
+        elif bTyp in ("H+D", "D"):
+            nonham_mode = "diagonal"; param_mode = "depol"
+        elif bTyp in ("H+d", "d"):
+            nonham_mode = "diagonal"; param_mode = "reldepol"
+        elif bTyp in ("H+D+A", "D+A"):
+            nonham_mode = "diag_affine"; param_mode = "depol"
+        elif bTyp in ("H+d+A", "d+A"):
+            nonham_mode = "diag_affine"; param_mode = "reldepol"
 
         elif bTyp == "GLND":
-            nonham_mode = "all"; param_mode = "unconstrained" 
+            nonham_mode = "all"; param_mode = "unconstrained"
         else:
             raise ValueError("Unrecognized base type in `paramType`=%s" % paramType)
 
         return bTyp, evotype, nonham_mode, param_mode
 
-
     @classmethod
     def from_operation_obj(cls, gate, paramType="GLND", unitary_postfactor=None,
-                      proj_basis="pp", mxBasis="pp", truncate=True, lazy=False):
+                           proj_basis="pp", mxBasis="pp", truncate=True, lazy=False):
         """
         Creates a LindbladOp from an existing LinearOperator object and
-        some additional information.  
+        some additional information.
 
         This function is different from `from_operation_matrix` in that it assumes
-        that `gate` is a :class:`LinearOperator`-derived object, and if `lazy=True` and 
+        that `gate` is a :class:`LinearOperator`-derived object, and if `lazy=True` and
         if `gate` is already a matching LindbladOp, it is
         returned directly.  This routine is primarily used in gate conversion
         functions, where conversion is desired only when necessary.
@@ -2036,11 +1998,11 @@ class LindbladOp(LinearOperator):
             The gate object to "convert" to a `LindbladOp`.
 
         paramType : str
-            The high-level "parameter type" of the gate to create.  This 
+            The high-level "parameter type" of the gate to create.  This
             specifies both which Lindblad parameters are included and what
             type of evolution is used.  Examples of valid values are
             `"CPTP"`, `"H+S"`, `"S terms"`, and `"GLND clifford terms"`.
-            
+
         unitaryPostfactor : numpy array or SciPy sparse matrix, optional
             a square 2D array of the same dimension of `gate`.  This specifies
             a part of the gate action to remove before parameterization via
@@ -2050,7 +2012,7 @@ class LindbladOp(LinearOperator):
             is parameterized.  If none, the identity is used by default.
 
         proj_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis used to construct the Lindblad-term error generators onto 
+            The basis used to construct the Lindblad-term error generators onto
             which the gate's error generator is projected.  Allowed values are
             Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
@@ -2063,9 +2025,9 @@ class LindbladOp(LinearOperator):
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
             order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `gate` cannot 
+            If False, then an error is thrown when the given `gate` cannot
             be realized by the specified set of Lindblad projections.
-            
+
         lazy : bool, optional
             If True, then if `gate` is already a LindbladOp
             with the requested details (given by the other arguments), then
@@ -2082,10 +2044,10 @@ class LindbladOp(LinearOperator):
             #Try to obtain unitary_post by getting the closest unitary
             if isinstance(gate, LindbladDenseOp):
                 unitary_postfactor = gate.unitary_postfactor
-            elif isinstance(gate, LinearOperator) and gate._evotype == "densitymx": 
-                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), mxBasis) #Choi mx basis doesn't matter
-                if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
-                    unitary_postfactor = gate # when 'gate' is unitary
+            elif isinstance(gate, LinearOperator) and gate._evotype == "densitymx":
+                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), mxBasis)  # Choi mx basis doesn't matter
+                if _np.linalg.matrix_rank(J, RANK_TOL) == 1:
+                    unitary_postfactor = gate  # when 'gate' is unitary
             # FUTURE: support other gate._evotypes?
             else:
                 unitary_postfactor = None
@@ -2093,38 +2055,37 @@ class LindbladOp(LinearOperator):
         #Break paramType in to a "base" type and an evotype
         bTyp, evotype, nonham_mode, param_mode = cls.decomp_paramtype(paramType)
 
-        ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
+        ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
         nonham_basis = proj_basis
-        
-        def beq(b1,b2):
+
+        def beq(b1, b2):
             """ Check if bases have equal names """
-            b1 = b1.name if isinstance(b1,_Basis) else b1
-            b2 = b2.name if isinstance(b2,_Basis) else b2
+            b1 = b1.name if isinstance(b1, _Basis) else b1
+            b2 = b2.name if isinstance(b2, _Basis) else b2
             return b1 == b2
 
-        def normeq(a,b):
+        def normeq(a, b):
             if a is None and b is None: return True
             if a is None or b is None: return False
-            return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
-        
+            return _mt.safenorm(a - b) < 1e-6  # what about possibility of Clifford gates?
+
         if isinstance(gate, LindbladOp) and \
-           normeq(gate.unitary_postfactor,unitary_postfactor) and \
+           normeq(gate.unitary_postfactor, unitary_postfactor) and \
            isinstance(gate.errorgen, LindbladErrorgen) \
-           and beq(ham_basis,gate.errorgen.ham_basis) and beq(nonham_basis,gate.errorgen.other_basis) \
-           and param_mode==gate.errorgen.param_mode and nonham_mode==gate.errorgen.nonham_mode \
-           and beq(mxBasis,gate.errorgen.matrix_basis) and gate._evotype == evotype and lazy:
-            return gate #no creation necessary!
+           and beq(ham_basis, gate.errorgen.ham_basis) and beq(nonham_basis, gate.errorgen.other_basis) \
+           and param_mode == gate.errorgen.param_mode and nonham_mode == gate.errorgen.nonham_mode \
+           and beq(mxBasis, gate.errorgen.matrix_basis) and gate._evotype == evotype and lazy:
+            return gate  # no creation necessary!
         else:
             return cls.from_operation_matrix(
                 gate, unitary_postfactor, ham_basis, nonham_basis, param_mode,
                 nonham_mode, truncate, mxBasis, evotype)
 
-
     @classmethod
     def from_operation_matrix(cls, opMatrix, unitaryPostfactor=None,
-                         ham_basis="pp", nonham_basis="pp", param_mode="cptp",
-                         nonham_mode="all", truncate=True, mxBasis="pp",
-                         evotype="densitymx"):
+                              ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+                              nonham_mode="all", truncate=True, mxBasis="pp",
+                              evotype="densitymx"):
         """
         Creates a Lindblad-parameterized gate from a matrix and a basis which
         specifies how to decompose (project) the gate's error generator.
@@ -2138,13 +2099,13 @@ class LindbladOp(LinearOperator):
             equal to `unitaryPostfactor` (which cannot also be None). The
             quantity `opMatrix inv(unitaryPostfactor)` is parameterized via
             projection onto the Lindblad terms.
-            
+
         unitaryPostfactor : numpy array or SciPy sparse matrix, optional
             a square 2D array of the same size of `opMatrix` (if
-            not None).  This matrix specifies a part of the gate action 
+            not None).  This matrix specifies a part of the gate action
             to remove before parameterization via Lindblad projections.
-            Typically, this is a target (desired) gate operation such 
-            that only the erroneous part of the gate (i.e. the gate 
+            Typically, this is a target (desired) gate operation such
+            that only the erroneous part of the gate (i.e. the gate
             relative to the target), which should be close to the identity,
             is parameterized.  If none, the identity is used by default.
 
@@ -2175,7 +2136,7 @@ class LindbladOp(LinearOperator):
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
             order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `gate` cannot 
+            If False, then an error is thrown when the given `gate` cannot
             be realized by the specified set of Lindblad projections.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -2193,9 +2154,9 @@ class LindbladOp(LinearOperator):
 
         Returns
         -------
-        LindbladOp        
+        LindbladOp
         """
-        
+
         #Compute a (errgen, unitaryPostfactor) pair from the given
         # (opMatrix, unitaryPostfactor) pair.  Works with both
         # dense and sparse matrices.
@@ -2203,12 +2164,12 @@ class LindbladOp(LinearOperator):
         if opMatrix is None:
             assert(unitaryPostfactor is not None), "arguments cannot both be None"
             opMatrix = unitaryPostfactor
-            
+
         sparseOp = _sps.issparse(opMatrix)
         if unitaryPostfactor is None:
             if sparseOp:
-                upost = _sps.identity(opMatrix.shape[0],'d','csr')
-            else: upost = _np.identity(opMatrix.shape[0],'d')
+                upost = _sps.identity(opMatrix.shape[0], 'd', 'csr')
+            else: upost = _np.identity(opMatrix.shape[0], 'd')
         else: upost = unitaryPostfactor
 
         #Init base from error generator: sets basis members and ultimately
@@ -2217,8 +2178,8 @@ class LindbladOp(LinearOperator):
             #Instead of making error_generator(...) compatible with sparse matrices
             # we require sparse matrices to have trivial initial error generators
             # or we convert to dense:
-            if(_mt.safenorm(opMatrix-upost) < 1e-8):
-                errgenMx = _sps.csr_matrix( opMatrix.shape, dtype='d' ) # all zeros
+            if(_mt.safenorm(opMatrix - upost) < 1e-8):
+                errgenMx = _sps.csr_matrix(opMatrix.shape, dtype='d')  # all zeros
             else:
                 errgenMx = _sps.csr_matrix(
                     _gt.error_generator(opMatrix.toarray(), upost.toarray(),
@@ -2229,14 +2190,13 @@ class LindbladOp(LinearOperator):
             errgenMx = _gt.error_generator(opMatrix, upost, mxBasis, "logGTi")
 
         errgen = LindbladErrorgen.from_error_generator(errgenMx, ham_basis,
-                                        nonham_basis, param_mode, nonham_mode,
-                                        mxBasis, truncate, evotype)
+                                                       nonham_basis, param_mode, nonham_mode,
+                                                       mxBasis, truncate, evotype)
 
         #Use "sparse" matrix exponentiation when given operation matrix was sparse.
         return cls(unitaryPostfactor, errgen, sparse_expm=sparseOp)
 
-
-    def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):     
+    def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):
         """
         Create a new `LinbladOp` based on an error generator and postfactor.
 
@@ -2247,14 +2207,14 @@ class LindbladOp(LinearOperator):
         Parameters
         ----------
         unitaryPostfactor : numpy array or SciPy sparse matrix or int
-            a square 2D array which specifies a part of the gate action 
+            a square 2D array which specifies a part of the gate action
             to remove before parameterization via Lindblad projections.
             While this is termed a "post-factor" because it occurs to the
             right of the exponentiated Lindblad terms, this means it is applied
             to a state *before* the Lindblad terms (which usually represent
             gate errors).  Typically, this is a target (desired) gate operation.
             If this post-factor is just the identity you can simply pass the
-            integer dimension as `unitaryPostfactor` instead of a matrix, or 
+            integer dimension as `unitaryPostfactor` instead of a matrix, or
             you can pass `None` and the dimension will be inferred from
             `errorgen`.
 
@@ -2273,10 +2233,10 @@ class LindbladOp(LinearOperator):
         # Extract superop dimension from 'errorgen'
         d2 = errorgen.dim
         d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "LinearOperator dim must be a perfect square"
+        assert(d * d == d2), "LinearOperator dim must be a perfect square"
 
-        self.errorgen = errorgen # don't copy (allow object reuse)
-        
+        self.errorgen = errorgen  # don't copy (allow object reuse)
+
         # make unitary postfactor sparse when sparse_expm == True and vice versa.
         # (This doens't have to be the case, but we link these two "sparseness" noitions:
         #  when we perform matrix exponentiation in a "sparse" way we assume the matrices
@@ -2285,66 +2245,61 @@ class LindbladOp(LinearOperator):
         self.sparse_expm = sparse_expm
         if unitaryPostfactor is not None:
             if self.sparse_expm == False and _sps.issparse(unitaryPostfactor):
-                unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
+                unitaryPostfactor = unitaryPostfactor.toarray()  # sparse -> dense
             elif self.sparse_expm == True and not _sps.issparse(unitaryPostfactor):
-                unitaryPostfactor = _sps.csr_matrix( _np.asarray(unitaryPostfactor) ) # dense -> sparse
+                unitaryPostfactor = _sps.csr_matrix(_np.asarray(unitaryPostfactor))  # dense -> sparse
 
         evotype = self.errorgen._evotype
-        LinearOperator.__init__(self, d2, evotype) #sets self.dim
-
+        LinearOperator.__init__(self, d2, evotype)  # sets self.dim
 
         #Finish initialization based on evolution type
         if evotype == "densitymx":
-            self.unitary_postfactor = unitaryPostfactor #can be None
+            self.unitary_postfactor = unitaryPostfactor  # can be None
             self.exp_err_gen = None
             self.err_gen_prep = None
-            self._prepare_for_torep() #sets one of the above two members
-                                      # depending on self.errorgen.sparse
-            self.terms = None # Unused
+            self._prepare_for_torep()  # sets one of the above two members
+            # depending on self.errorgen.sparse
+            self.terms = None  # Unused
             self.local_term_poly_coeffs = None
             # TODO REMOVE self.direct_terms = None
             # TODO REMOVE self.direct_term_poly_coeffs = None
-        
-            
-        else: # Term-based evolution
-            
+
+        else:  # Term-based evolution
+
             assert(not self.sparse_expm), "Sparse unitary postfactors are not supported for term-based evolution"
-              #TODO: make terms init-able from sparse elements, and below code work with a *sparse* unitaryPostfactor
+            #TODO: make terms init-able from sparse elements, and below code work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
 
             # Store *unitary* as self.unitary_postfactor - NOT a superop
-            if unitaryPostfactor is not None: #can be None
+            if unitaryPostfactor is not None:  # can be None
                 op_std = _bt.change_basis(unitaryPostfactor, self.errorgen.matrix_basis, 'std')
                 self.unitary_postfactor = _gt.process_mx_to_unitary(op_std)
 
                 # automatically "up-convert" gate to CliffordOp if needed
                 if termtype == "clifford":
-                    self.unitary_postfactor = CliffordOp(self.unitary_postfactor) 
+                    self.unitary_postfactor = CliffordOp(self.unitary_postfactor)
             else:
                 self.unitary_postfactor = None
-            
+
             self.terms = {}
             self.local_term_poly_coeffs = {}
             # TODO REMOVE self.direct_terms = {}
             # TODO REMOVE self.direct_term_poly_coeffs = {}
 
-            
             # Unused
             self.err_gen_prep = self.exp_err_gen = None
 
         #Done with __init__(...)
 
-
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
-        
+
         Returns
         -------
         list
         """
         return [self.errorgen]
-
 
     def copy(self, parent=None):
         """
@@ -2367,32 +2322,29 @@ class LindbladOp(LinearOperator):
 
             # automatically "up-convert" gate to CliffordOp if needed
             if termtype == "clifford":
-                assert(isinstance(self.unitary_postfactor, CliffordOp)) # see __init__
+                assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
                 U = self.unitary_postfactor.unitary
             else: U = self.unitary_postfactor
             op_std = _gt.unitary_to_process_mx(U)
             upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
-        cls = self.__class__ # so that this method works for derived classes too
+        cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(upost, self.errorgen.copy(parent), self.sparse_expm)
         return self._copy_gpindices(copyOfMe, parent)
 
-        
     def _prepare_for_torep(self):
-        """ 
+        """
         Prepares needed intermediate values for calls to `torep()`.
         (sets `self.err_gen_prep` or `self.exp_err_gen`).
-        """                
+        """
         #Pre-compute the exponential of the error generator if dense matrices
         # are used, otherwise cache prepwork for sparse expm calls
-        if self.sparse_expm: # "sparse mode" => don't ever compute matrix-exponential explicitly
+        if self.sparse_expm:  # "sparse mode" => don't ever compute matrix-exponential explicitly
             self.err_gen_prep = _mt.expop_multiply_prep(
                 self.errorgen.torep().aslinearoperator())
         else:
             self.exp_err_gen = _spl.expm(self.errorgen.todense())
 
-
-        
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
@@ -2410,19 +2362,19 @@ class LindbladOp(LinearOperator):
         -------
         None
         """
-        self.terms = {} # clear terms cache since param indices have changed now
+        self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
         #TODO REMOVE self.direct_terms = {}
         #TODO REMOVE self.direct_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
-
     def todense(self):
         """
         Return this operation as a dense matrix.
         """
-        if self.sparse_expm: raise NotImplementedError("todense() not implemented for sparse-expm-mode LindbladOp objects")
-        if self._evotype in ("svterm","cterm"): 
+        if self.sparse_expm: raise NotImplementedError(
+            "todense() not implemented for sparse-expm-mode LindbladOp objects")
+        if self._evotype in ("svterm", "cterm"):
             raise NotImplementedError("todense() not implemented for term-based LindbladOp objects")
 
         if self.unitary_postfactor is not None:
@@ -2448,7 +2400,6 @@ class LindbladOp(LinearOperator):
         else:
             return _sps.csr_matrix(self.todense())
 
-        
     def torep(self):
         """
         Return a "representation" object for this gate.
@@ -2463,32 +2414,31 @@ class LindbladOp(LinearOperator):
         if self._evotype == "densitymx":
             if self.sparse_expm:
                 if self.unitary_postfactor is None:
-                    Udata = _np.empty(0,'d')
-                    Uindices = Uindptr = _np.empty(0,_np.int64)
+                    Udata = _np.empty(0, 'd')
+                    Uindices = Uindptr = _np.empty(0, _np.int64)
                 else:
                     assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
                         "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
                     Udata = self.unitary_postfactor.data
                     Uindptr = _np.ascontiguousarray(self.unitary_postfactor.indptr, _np.int64)
                     Uindices = _np.ascontiguousarray(self.unitary_postfactor.indices, _np.int64)
-                           
+
                 mu, m_star, s, eta = self.err_gen_prep
                 errorgen_rep = self.errorgen.torep()
                 return replib.DMOpRep_Lindblad(errorgen_rep,
-                                                 mu, eta, m_star, s,
-                                                 Udata, Uindices, Uindptr)
+                                               mu, eta, m_star, s,
+                                               Udata, Uindices, Uindptr)
             else:
                 if self.unitary_postfactor is not None:
                     dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
                 else: dense = self.exp_err_gen
-                return replib.DMOpRep_Dense(_np.ascontiguousarray(dense,'d'))
+                return replib.DMOpRep_Dense(_np.ascontiguousarray(dense, 'd'))
         else:
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
-        
-        
+
     def get_taylor_order_terms(self, order, return_coeff_polys=False):
-        """ 
+        """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
@@ -2499,7 +2449,7 @@ class LindbladOp(LinearOperator):
 
         The coefficients of these terms are typically polynomials of the gate's
         parameters, where the polynomial's variable indices index the *global*
-        parameters of the gate's parent (usually a :class:`Model`), not the 
+        parameters of the gate's parent (usually a :class:`Model`), not the
         gate's local parameter array (i.e. that returned from `to_vector`).
 
 
@@ -2522,26 +2472,27 @@ class LindbladOp(LinearOperator):
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
 
         def _compose_poly_indices(terms):
             for term in terms:
                 term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
-                    self.gpindices, _np.array(x,_np.int64))) )
+                    self.gpindices, _np.array(x, _np.int64))))
             return terms
-        
+
         if order not in self.terms:
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
-            assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
-            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
-              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
-                                         self.unitary_postfactor, tt) 
+            assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
+            assert(not _sps.issparse(self.unitary_postfactor)
+                   ), "Unitary post-factor needs to be dense for term-based evotypes"
+            # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
+                                         self.unitary_postfactor, tt)
             #Note: for now, *all* of an error generator's terms are considered 0-th order,
             # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
             # we might want to allow a distinction among the error generator terms, in which
@@ -2549,14 +2500,14 @@ class LindbladOp(LinearOperator):
             loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
             #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
 
-            poly_coeffs = [ t.coeff for t in loc_terms ]
-            tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+            poly_coeffs = [t.coeff for t in loc_terms]
+            tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
             if len(tapes) > 0:
-                vtape = _np.concatenate( [ t[0] for t in tapes ] )
-                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                vtape = _np.concatenate([t[0] for t in tapes])
+                ctape = _np.concatenate([t[1] for t in tapes])
             else:
-                vtape = _np.empty(0,_np.int64)
-                ctape = _np.empty(0,complex)
+                vtape = _np.empty(0, _np.int64)
+                ctape = _np.empty(0, complex)
             coeffs_as_compact_polys = (vtape, ctape)
             self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
@@ -2568,9 +2519,8 @@ class LindbladOp(LinearOperator):
         else:
             return self.terms[order]
 
-
     #def get_direct_order_terms(self, order, order_base=None):
-    #    """ 
+    #    """
     #    TODO: docstring
     #
     #    Parameters
@@ -2599,7 +2549,7 @@ class LindbladOp(LinearOperator):
     #          # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
     #
     #        postTerm = _term.RankOneTerm(1.0, self.unitary_postfactor,
-    #                                     self.unitary_postfactor, tt) 
+    #                                     self.unitary_postfactor, tt)
     #        #Note: for now, *all* of an error generator's terms are considered 0-th order,
     #        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
     #        # we might want to allow a distinction among the error generator terms, in which
@@ -2621,7 +2571,7 @@ class LindbladOp(LinearOperator):
     #            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
     #              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
     #            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
-    #                                         self.unitary_postfactor, tt) 
+    #                                         self.unitary_postfactor, tt)
     #            #Note: for now, *all* of an error generator's terms are considered 0-th order,
     #            # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
     #            # we might want to allow a distinction among the error generator terms, in which
@@ -2634,17 +2584,17 @@ class LindbladOp(LinearOperator):
     #            coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
     #            self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
     #            self.direct_terms[order] = loc_terms # have poly coeffs but not for long (below code overwrites)
-    #        
+    #
     #        v = self.to_vector()
     #        cpolys = self.direct_term_poly_coeffs[order]
     #        terms = self.direct_terms[order]
     #        coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
     #        for coeff,t in zip(coeffs,terms):
     #            t.coeff = coeff
-    #        return terms 
+    #        return terms
 
     #def get_direct_order_coeffs(self, order, order_base=None):
-    #    """ 
+    #    """
     #    TODO: docstring
     #    """
     #    v = self.to_vector()
@@ -2652,15 +2602,13 @@ class LindbladOp(LinearOperator):
     #    terms = self.direct_terms[order]
     #    return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
 
-        
     def get_total_term_magnitude(self):
         """
         TODO: docstring
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
-        return _np.exp( self.errorgen.get_total_term_magnitude() )
-
+        return _np.exp(self.errorgen.get_total_term_magnitude())
 
     def num_params(self):
         """
@@ -2673,7 +2621,6 @@ class LindbladOp(LinearOperator):
         """
         return self.errorgen.num_params()
 
-
     def to_vector(self):
         """
         Extract a vector of the underlying gate parameters from this gate.
@@ -2684,7 +2631,6 @@ class LindbladOp(LinearOperator):
             a 1D numpy array with length == num_params().
         """
         return self.errorgen.to_vector()
-
 
     def from_vector(self, v):
         """
@@ -2707,7 +2653,7 @@ class LindbladOp(LinearOperator):
 
     def get_errgen_coeffs(self):
         """
-        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this operation.  Note that these are not
         necessarily the parameter values, as these coefficients are generally
         functions of the parameters (so as to keep the coefficients positive,
@@ -2724,14 +2670,13 @@ class LindbladOp(LinearOperator):
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
-    
+
         basisdict : dict
             A dictionary mapping the integer basis labels used in the
             keys of `Ltermdict` to basis matrices..
         """
         return self.errorgen.get_coeffs()
 
-        
     def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
@@ -2754,9 +2699,9 @@ class LindbladOp(LinearOperator):
                                        "contains a single LindbladErrorgen error generator"))
 
         tOp = LindbladOp.from_operation_matrix(
-            M,self.unitary_postfactor,
+            M, self.unitary_postfactor,
             self.errorgen.ham_basis, self.errorgen.other_basis,
-            self.errorgen.param_mode,self.errorgen.nonham_mode,
+            self.errorgen.param_mode, self.errorgen.nonham_mode,
             True, self.errorgen.matrix_basis, self._evotype)
 
         #Note: truncate=True to be safe
@@ -2765,20 +2710,19 @@ class LindbladOp(LinearOperator):
             self._prepare_for_torep()
         self.dirty = True
 
-    
     def transform(self, S):
         """
         Update operation matrix G with inv(S) * G * S,
 
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting operation matrix is altered as 
+        Generally, the transform function updates the *parameters* of
+        the gate such that the resulting operation matrix is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
         if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
@@ -2788,9 +2732,9 @@ class LindbladOp(LinearOperator):
 
             #just conjugate postfactor and Lindbladian exponent by U:
             if self.unitary_postfactor is not None:
-                self.unitary_postfactor = _mt.safedot(Uinv,_mt.safedot(self.unitary_postfactor, U))
+                self.unitary_postfactor = _mt.safedot(Uinv, _mt.safedot(self.unitary_postfactor, U))
             self.errorgen.transform(S)
-            self._prepare_for_torep() # needed to rebuild exponentiated error gen
+            self._prepare_for_torep()  # needed to rebuild exponentiated error gen
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -2825,14 +2769,14 @@ class LindbladOp(LinearOperator):
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
 
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
         """
-        assert(typ in ('prep','effect')), "Invalid `typ` argument: %s" % typ
-        
+        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+
         if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
             U = S.get_transform_matrix()
@@ -2841,13 +2785,13 @@ class LindbladOp(LinearOperator):
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
                 if self.unitary_postfactor is not None:
-                    self.unitary_postfactor = _mt.safedot(Uinv,self.unitary_postfactor)
+                    self.unitary_postfactor = _mt.safedot(Uinv, self.unitary_postfactor)
             else:
                 if self.unitary_postfactor is not None:
                     self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
-                
-            self.errorgen.spam_transform(S,typ)
-            self._prepare_for_torep() # needed to rebuild exponentiated error gen
+
+            self.errorgen.spam_transform(S, typ)
+            self._prepare_for_torep()  # needed to rebuild exponentiated error gen
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -2857,14 +2801,13 @@ class LindbladOp(LinearOperator):
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
 
-        
     def __str__(self):
         s = "Lindblad Parameterized gate map with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params())
         return s
 
 
-class LindbladDenseOp(LindbladOp,DenseOperator):
+class LindbladDenseOp(LindbladOp, DenseOperator):
     """
     Encapsulates a operation matrix that is parameterized by a Lindblad-form
     expression, such that each parameter multiplies a particular term in
@@ -2873,7 +2816,7 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
     form is referred to as the "projection basis".
     """
 
-    def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):     
+    def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):
         """
         Create a new LinbladDenseOp based on an error generator and postfactor.
 
@@ -2884,14 +2827,14 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
         Parameters
         ----------
         unitaryPostfactor : numpy array or SciPy sparse matrix or int
-            a square 2D array which specifies a part of the gate action 
+            a square 2D array which specifies a part of the gate action
             to remove before parameterization via Lindblad projections.
             While this is termed a "post-factor" because it occurs to the
             right of the exponentiated Lindblad terms, this means it is applied
             to a state *before* the Lindblad terms (which usually represent
             gate errors).  Typically, this is a target (desired) gate operation.
             If this post-factor is just the identity you can simply pass the
-            integer dimension as `unitaryPostfactor` instead of a matrix, or 
+            integer dimension as `unitaryPostfactor` instead of a matrix, or
             you can pass `None` and the dimension will be inferred from
             `errorgen`.
 
@@ -2908,22 +2851,21 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
         """
         assert(errorgen._evotype == "densitymx"), \
             "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
-            #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
-            # signature as LindbladOp so its @classmethods will work on us.
+        #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
+        # signature as LindbladOp so its @classmethods will work on us.
 
         # sparse_expm mode must be an arguement to mirror the call
         # signature of LindbladOp
         assert(not sparse_expm), \
             "LindbladDenseOp objects must have `sparse_expm=False`!"
-        
+
         #Start with base class construction
         LindbladOp.__init__(
-            self, unitaryPostfactor, errorgen, sparse_expm=False) # (sets self.dim and self.base)
+            self, unitaryPostfactor, errorgen, sparse_expm=False)  # (sets self.dim and self.base)
 
         DenseOperator.__init__(self, self.base, "densitymx")
-            
 
-    def _prepare_for_torep(self): 
+    def _prepare_for_torep(self):
         """
         Build the internal operation matrix using the current parameters.
         """
@@ -2931,11 +2873,11 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
         # LindbladParmaeterizedGateMap's version, which just constructs
         # self.err_gen & self.exp_err_gen, to constructing the entire
         # final matrix.
-        LindbladOp._prepare_for_torep(self) #constructs self.exp_err_gen b/c *not sparse*
+        LindbladOp._prepare_for_torep(self)  # constructs self.exp_err_gen b/c *not sparse*
         matrix = self.todense()  # dot(exp_err_gen, unitary_postfactor)
 
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
-        assert(matrix.shape == (self.dim,self.dim))
+        assert(matrix.shape == (self.dim, self.dim))
 
         self.base = matrix.real
         self.base.flags.writeable = False
@@ -2980,7 +2922,6 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
 
-        
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -2992,16 +2933,16 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
         -------
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
-        """    
+        """
         if self.base_deriv is None:
             d2 = self.dim
 
             #Deriv wrt hamiltonian params
-            derrgen = self.errorgen.deriv_wrt_params(None) #apply filter below; cache *full* deriv
-            derrgen.shape = (d2,d2,-1) # separate 1st d2**2 dim to (d2,d2)
+            derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
+            derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
             dexpL = _dexpX(self.errorgen.todense(), derrgen, self.exp_err_gen,
                            self.unitary_postfactor)
-            derivMx = dexpL.reshape(d2**2,self.num_params()) # [iFlattenedOp,iParam]
+            derivMx = dexpL.reshape(d2**2, self.num_params())  # [iFlattenedOp,iParam]
 
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
                 ("Deriv matrix has imaginary part = %s.  This can result from "
@@ -3010,7 +2951,7 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
                  "starting Model has *no* stochastic error and all such "
                  "parameters affect error rates at 2nd order.  Try "
                  "depolarizing the seed Model.") % str(_np.linalg.norm(_np.imag(derivMx)))
-                 # if this fails, uncomment around "DB COMMUTANT NORM" for further debugging.
+            # if this fails, uncomment around "DB COMMUTANT NORM" for further debugging.
             derivMx = _np.real(derivMx)
             self.base_deriv = derivMx
 
@@ -3020,12 +2961,12 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
 
         if wrtFilter is None:
             return self.base_deriv.view()
-                #view because later setting of .shape by caller can mess with self.base_deriv!
+            #view because later setting of .shape by caller can mess with self.base_deriv!
         else:
-            return _np.take( self.base_deriv, wrtFilter, axis=1 )
+            return _np.take(self.base_deriv, wrtFilter, axis=1)
 
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -3059,70 +3000,70 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
         if self.base_hessian is None:
             d2 = self.dim
             nP = self.num_params()
-            hessianMx = _np.zeros( (d2**2, nP, nP), 'd' )
-    
+            hessianMx = _np.zeros((d2**2, nP, nP), 'd')
+
             #Deriv wrt other params
-            dEdp = self.errorgen.deriv_wrt_params(None) # filter later, cache *full*
-            d2Edp2 = self.errorgen.hessian_wrt_params(None,None) # hessian
-            dEdp.shape = (d2,d2,nP) # separate 1st d2**2 dim to (d2,d2)
-            d2Edp2.shape = (d2,d2,nP,nP) # ditto
+            dEdp = self.errorgen.deriv_wrt_params(None)  # filter later, cache *full*
+            d2Edp2 = self.errorgen.hessian_wrt_params(None, None)  # hessian
+            dEdp.shape = (d2, d2, nP)  # separate 1st d2**2 dim to (d2,d2)
+            d2Edp2.shape = (d2, d2, nP, nP)  # ditto
 
             series, series2 = _d2expSeries(self.errorgen.todense(), dEdp, d2Edp2)
             term1 = series2
-            term2 = _np.einsum("ija,jkq->ikaq",series,series)
+            term2 = _np.einsum("ija,jkq->ikaq", series, series)
             if self.unitary_postfactor is None:
-                d2expL = _np.einsum("ikaq,kj->ijaq", term1+term2,
+                d2expL = _np.einsum("ikaq,kj->ijaq", term1 + term2,
                                     self.exp_err_gen)
             else:
-                d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
+                d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1 + term2,
                                     self.exp_err_gen, self.unitary_postfactor)
-            hessianMx = d2expL.reshape((d2**2,nP,nP))
+            hessianMx = d2expL.reshape((d2**2, nP, nP))
 
             #hessian has been made so index as [iFlattenedOp,iDeriv1,iDeriv2]
             assert(_np.linalg.norm(_np.imag(hessianMx)) < IMAG_TOL)
-            hessianMx = _np.real(hessianMx) # d2O block of hessian
+            hessianMx = _np.real(hessianMx)  # d2O block of hessian
 
             self.base_hessian = hessianMx
 
             #TODO: check hessian with finite difference here?
-            
+
         if wrtFilter1 is None:
             if wrtFilter2 is None:
                 return self.base_hessian.view()
-                  #view because later setting of .shape by caller can mess with self.base_hessian!
+                #view because later setting of .shape by caller can mess with self.base_hessian!
             else:
-                return _np.take(self.base_hessian, wrtFilter2, axis=2 )
+                return _np.take(self.base_hessian, wrtFilter2, axis=2)
         else:
             if wrtFilter2 is None:
-                return _np.take(self.base_hessian, wrtFilter1, axis=1 )
+                return _np.take(self.base_hessian, wrtFilter1, axis=1)
             else:
-                return _np.take( _np.take(self.base_hessian, wrtFilter1, axis=1),
-                                 wrtFilter2, axis=2 )
+                return _np.take(_np.take(self.base_hessian, wrtFilter1, axis=1),
+                                wrtFilter2, axis=2)
 
-        
+
 def _dexpSeries(X, dX):
     TERM_TOL = 1e-12
-    tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
-    assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
+    tr = len(dX.shape)  # tensor rank of dX; tr-2 == # of derivative dimensions
+    assert((tr - 2) in (1, 2)), "Currently, dX can only have 1 or 2 derivative dimensions"
     #assert( len( (_np.isnan(dX)).nonzero()[0] ) == 0 ) # NaN debugging
     #assert( len( (_np.isnan(X)).nonzero()[0] ) == 0 ) # NaN debugging
-    series = dX.copy() # accumulates results, so *need* a separate copy
-    last_commutant = term = dX; i=2
+    series = dX.copy()  # accumulates results, so *need* a separate copy
+    last_commutant = term = dX; i = 2
 
     #take d(matrix-exp) using series approximation
-    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+    while _np.amax(_np.abs(term)) > TERM_TOL:  # _np.linalg.norm(term)
         if tr == 3:
             #commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
             #            _np.einsum("ika,kj->ija",last_commutant,X)
-            commutant = _np.tensordot(X,last_commutant,(1,0)) - \
-                        _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,2,1))
+            commutant = _np.tensordot(X, last_commutant, (1, 0)) - \
+                _np.transpose(_np.tensordot(last_commutant, X, (1, 0)), (0, 2, 1))
         elif tr == 4:
             #commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
             #        _np.einsum("ikab,kj->ijab",last_commutant,X)
-            commutant = _np.tensordot(X,last_commutant,(1,0)) - \
-                _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,3,1,2))
+            commutant = _np.tensordot(X, last_commutant, (1, 0)) - \
+                _np.transpose(_np.tensordot(last_commutant, X, (1, 0)), (0, 3, 1, 2))
 
-        term = 1/_np.math.factorial(i) * commutant
+        term = 1 / _np.math.factorial(i) * commutant
 
         #Uncomment some/all of this when you suspect an overflow due to X having large norm.
         #print("DB COMMUTANT NORM = ",_np.linalg.norm(commutant)) # sometimes this increases w/iter -> divergence => NaN
@@ -3135,52 +3076,54 @@ def _dexpSeries(X, dX):
         #if len( (_np.isnan(term)).nonzero()[0] ) > 0: # NaN debugging
         #    #WARNING: stopping early b/c of NaNs!!! - usually caused by infs
         #    break
-        
-        series += term #1/_np.math.factorial(i) * commutant
+
+        series += term  # 1/_np.math.factorial(i) * commutant
         last_commutant = commutant; i += 1
     return series
 
+
 def _d2expSeries(X, dX, d2X):
     TERM_TOL = 1e-12
-    tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
-    tr2 = len(d2X.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
-    assert( (tr-2,tr2-2) in [(1,2),(2,4)]), "Current support for only 1 or 2 derivative dimensions"
+    tr = len(dX.shape)  # tensor rank of dX; tr-2 == # of derivative dimensions
+    tr2 = len(d2X.shape)  # tensor rank of dX; tr-2 == # of derivative dimensions
+    assert((tr - 2, tr2 - 2) in [(1, 2), (2, 4)]), "Current support for only 1 or 2 derivative dimensions"
 
-    series = dX.copy() # accumulates results, so *need* a separate copy
-    series2 = d2X.copy() # accumulates results, so *need* a separate copy
+    series = dX.copy()  # accumulates results, so *need* a separate copy
+    series2 = d2X.copy()  # accumulates results, so *need* a separate copy
     term = last_commutant = dX
     last_commutant2 = term2 = d2X
-    i=2
+    i = 2
 
     #take d(matrix-exp) using series approximation
     while _np.amax(_np.abs(term)) > TERM_TOL or _np.amax(_np.abs(term2)) > TERM_TOL:
         if tr == 3:
-            commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
-                        _np.einsum("ika,kj->ija",last_commutant,X)
-            commutant2A = _np.einsum("ikq,kja->ijaq",dX,last_commutant) - \
-                    _np.einsum("ika,kjq->ijaq",last_commutant,dX)
-            commutant2B = _np.einsum("ik,kjaq->ijaq",X,last_commutant2) - \
-                    _np.einsum("ikaq,kj->ijaq",last_commutant2,X)
+            commutant = _np.einsum("ik,kja->ija", X, last_commutant) - \
+                _np.einsum("ika,kj->ija", last_commutant, X)
+            commutant2A = _np.einsum("ikq,kja->ijaq", dX, last_commutant) - \
+                _np.einsum("ika,kjq->ijaq", last_commutant, dX)
+            commutant2B = _np.einsum("ik,kjaq->ijaq", X, last_commutant2) - \
+                _np.einsum("ikaq,kj->ijaq", last_commutant2, X)
 
         elif tr == 4:
-            commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
-                    _np.einsum("ikab,kj->ijab",last_commutant,X)
-            commutant2A = _np.einsum("ikqr,kjab->ijabqr",dX,last_commutant) - \
-                    _np.einsum("ikab,kjqr->ijabqr",last_commutant,dX)
-            commutant2B = _np.einsum("ik,kjabqr->ijabqr",X,last_commutant2) - \
-                    _np.einsum("ikabqr,kj->ijabqr",last_commutant2,X)
+            commutant = _np.einsum("ik,kjab->ijab", X, last_commutant) - \
+                _np.einsum("ikab,kj->ijab", last_commutant, X)
+            commutant2A = _np.einsum("ikqr,kjab->ijabqr", dX, last_commutant) - \
+                _np.einsum("ikab,kjqr->ijabqr", last_commutant, dX)
+            commutant2B = _np.einsum("ik,kjabqr->ijabqr", X, last_commutant2) - \
+                _np.einsum("ikabqr,kj->ijabqr", last_commutant2, X)
 
-        term = 1/_np.math.factorial(i) * commutant
-        term2 = 1/_np.math.factorial(i) * (commutant2A + commutant2B)
-        series += term 
+        term = 1 / _np.math.factorial(i) * commutant
+        term2 = 1 / _np.math.factorial(i) * (commutant2A + commutant2B)
+        series += term
         series2 += term2
         last_commutant = commutant
         last_commutant2 = (commutant2A + commutant2B)
-        i += 1        
+        i += 1
     return series, series2
 
-def _dexpX(X,dX,expX=None,postfactor=None):
-    """ 
+
+def _dexpX(X, dX, expX=None, postfactor=None):
+    """
     Computes the derivative of the exponential of X(t) using
     the Haddamard lemma series expansion.
 
@@ -3210,33 +3153,32 @@ def _dexpX(X,dX,expX=None,postfactor=None):
         The derivative of `exp(X)*postfactor` given as a tensor with the
         same shape and axes as `dX`.
     """
-    tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
-    assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
+    tr = len(dX.shape)  # tensor rank of dX; tr-2 == # of derivative dimensions
+    assert((tr - 2) in (1, 2)), "Currently, dX can only have 1 or 2 derivative dimensions"
 
-    series = _dexpSeries(X,dX)
+    series = _dexpSeries(X, dX)
     if expX is None: expX = _spl.expm(X)
 
     if tr == 3:
         #dExpX = _np.einsum('ika,kj->ija', series, expX)
-        dExpX = _np.transpose(_np.tensordot(series, expX, (1,0)),(0,2,1))
+        dExpX = _np.transpose(_np.tensordot(series, expX, (1, 0)), (0, 2, 1))
         if postfactor is not None:
             #dExpX = _np.einsum('ila,lj->ija', dExpX, postfactor)
-            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1,0)),(0,2,1))
+            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1, 0)), (0, 2, 1))
     elif tr == 4:
         #dExpX = _np.einsum('ikab,kj->ijab', series, expX)
-        dExpX = _np.transpose(_np.tensordot(series, expX, (1,0)),(0,3,1,2))
+        dExpX = _np.transpose(_np.tensordot(series, expX, (1, 0)), (0, 3, 1, 2))
         if postfactor is not None:
             #dExpX = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
-            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1,0)),(0,3,1,2))
-            
-    return dExpX
+            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1, 0)), (0, 3, 1, 2))
 
+    return dExpX
 
 
 class TPInstrumentOp(DenseOperator):
     """
     A partial implementation of :class:`LinearOperator` which encapsulates an element of a
-    :class:`TPInstrument`.  Instances rely on their parent being a 
+    :class:`TPInstrument`.  Instances rely on their parent being a
     `TPInstrument`.
     """
 
@@ -3254,28 +3196,27 @@ class TPInstrumentOp(DenseOperator):
 
         index : int
             The index indicating which element of the `TPInstrument` the
-            constructed object is.  Must be in the range 
+            constructed object is.  Must be in the range
             `[0,len(param_ops)-1]`.
         """
         self.param_ops = param_ops
         self.index = index
-        DenseOperator.__init__(self, _np.identity(param_ops[0].dim,'d'),
-                            "densitymx") #Note: sets self.gpindices; TP assumed real
+        DenseOperator.__init__(self, _np.identity(param_ops[0].dim, 'd'),
+                               "densitymx")  # Note: sets self.gpindices; TP assumed real
         self._construct_matrix()
 
         #Set our own parent and gpindices based on param_ops
         # (this breaks the usual paradigm of having the parent object set these,
         #  but the exception is justified b/c the parent has set these members
         #  of the underlying 'param_ops' gates)
-        self.dependents = [0,index+1] if index < len(param_ops)-1 \
-                          else list(range(len(param_ops)))
-          #indices into self.param_ops of the gates this gate depends on
+        self.dependents = [0, index + 1] if index < len(param_ops) - 1 \
+            else list(range(len(param_ops)))
+        #indices into self.param_ops of the gates this gate depends on
         self.set_gpindices(_slct.list_to_slice(
-            _np.concatenate( [ param_ops[i].gpindices_as_array()
-                               for i in self.dependents ], axis=0),True,False),
-                           param_ops[0].parent) #use parent of first param gate
-                                                  # (they should all be the same)
-
+            _np.concatenate([param_ops[i].gpindices_as_array()
+                             for i in self.dependents], axis=0), True, False),
+                           param_ops[0].parent)  # use parent of first param gate
+        # (they should all be the same)
 
     def _construct_matrix(self):
         """
@@ -3283,19 +3224,18 @@ class TPInstrumentOp(DenseOperator):
            = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
         """
         nEls = len(self.param_ops)
-        if self.index < nEls-1:
-            self.base = _np.asarray( self.param_ops[self.index+1]
-                                     + self.param_ops[0] )
+        if self.index < nEls - 1:
+            self.base = _np.asarray(self.param_ops[self.index + 1]
+                                    + self.param_ops[0])
         else:
-            assert(self.index == nEls-1), \
-                "Invalid index %d > %d" % (self.index,nEls-1)
-            self.base = _np.asarray( -sum(self.param_ops)
-                                     -(nEls-3)*self.param_ops[0] )
-        
-        assert(self.base.shape == (self.dim,self.dim))
+            assert(self.index == nEls - 1), \
+                "Invalid index %d > %d" % (self.index, nEls - 1)
+            self.base = _np.asarray(-sum(self.param_ops)
+                                    - (nEls - 3) * self.param_ops[0])
+
+        assert(self.base.shape == (self.dim, self.dim))
         self.base.flags.writeable = False
 
-        
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -3310,34 +3250,33 @@ class TPInstrumentOp(DenseOperator):
             Array of derivatives with shape (dimension^2, num_params)
         """
         Np = self.num_params()
-        derivMx = _np.zeros((self.dim**2,Np),'d')
+        derivMx = _np.zeros((self.dim**2, Np), 'd')
         Nels = len(self.param_ops)
 
         off = 0
-        if self.index < Nels-1: # matrix = Di + MT = param_ops[index+1] + param_ops[0]
-            for i in [self.index+1, 0]:
+        if self.index < Nels - 1:  # matrix = Di + MT = param_ops[index+1] + param_ops[0]
+            for i in [self.index + 1, 0]:
                 Np = self.param_ops[i].num_params()
-                derivMx[:,off:off+Np] = self.param_ops[i].deriv_wrt_params()
+                derivMx[:, off:off + Np] = self.param_ops[i].deriv_wrt_params()
                 off += Np
 
-        else: # matrix = -(nEls-1)*MT-sum(Di)
+        else:  # matrix = -(nEls-1)*MT-sum(Di)
             Np = self.param_ops[0].num_params()
-            derivMx[:,off:off+Np] = -(Nels-1)*self.param_ops[0].deriv_wrt_params()
+            derivMx[:, off:off + Np] = -(Nels - 1) * self.param_ops[0].deriv_wrt_params()
             off += Np
 
-            for i in range(1,Nels):
+            for i in range(1, Nels):
                 Np = self.param_ops[i].num_params()
-                derivMx[:,off:off+Np] = -self.param_ops[i].deriv_wrt_params()
+                derivMx[:, off:off + Np] = -self.param_ops[i].deriv_wrt_params()
                 off += Np
-        
+
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take(derivMx, wrtFilter, axis=1)
 
-        
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -3347,7 +3286,6 @@ class TPInstrumentOp(DenseOperator):
         bool
         """
         return False
-
 
     def num_params(self):
         """
@@ -3360,7 +3298,6 @@ class TPInstrumentOp(DenseOperator):
         """
         return len(self.gpindices_as_array())
 
-    
     def to_vector(self):
         """
         Get the gate parameters as an array of values.
@@ -3373,7 +3310,6 @@ class TPInstrumentOp(DenseOperator):
         raise ValueError(("TPInstrumentOp.to_vector() should never be called"
                           " - use TPInstrument.to_vector() instead"))
 
-    
     def from_vector(self, v):
         """
         Initialize this partially-implemented gate using a vector of its parameters.
@@ -3392,14 +3328,14 @@ class TPInstrumentOp(DenseOperator):
         # having been simplified and now being initialized from a vector (within a
         # calculator).  We rely on the Instrument elements having their
         # from_vector() methods called in self.index order.
-        
-        if self.index < len(self.param_ops)-1: #final element doesn't need to init any param gates
-            for i in self.dependents: #re-init all my dependents (may be redundant)
-                if i == 0 and self.index > 0: continue # 0th param-gate already init by index==0 element
+
+        if self.index < len(self.param_ops) - 1:  # final element doesn't need to init any param gates
+            for i in self.dependents:  # re-init all my dependents (may be redundant)
+                if i == 0 and self.index > 0: continue  # 0th param-gate already init by index==0 element
                 paramop_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, self.param_ops[i].gpindices)
-                self.param_ops[i].from_vector( v[paramop_local_inds] )
-                
+                self.param_ops[i].from_vector(v[paramop_local_inds])
+
         self._construct_matrix()
 
 
@@ -3408,7 +3344,7 @@ class ComposedOp(LinearOperator):
     A gate map that is the composition of a number of map-like factors (possibly
     other `LinearOperator`s)
     """
-    
+
     def __init__(self, ops_to_compose, dim="auto", evotype="auto"):
         """
         Creates a new ComposedOp.
@@ -3421,7 +3357,7 @@ class ComposedOp(LinearOperator):
             with vectors  in  *left-to-right* ordering, maintaining the same
             convention as operation sequences in pyGSTi.  Note that this is
             *opposite* from standard matrix multiplication order.
-            
+
         dim : int or "auto"
             Dimension of this operation.  Can be set to `"auto"` to take dimension
             from `ops_to_compose[0]` *if* there's at least one gate being
@@ -3435,7 +3371,7 @@ class ComposedOp(LinearOperator):
         assert(len(ops_to_compose) > 0 or dim != "auto"), \
             "Must compose at least one gate when dim='auto'!"
         self.factorops = list(ops_to_compose)
-        
+
         if dim == "auto":
             dim = ops_to_compose[0].dim
         assert(all([dim == gate.dim for gate in ops_to_compose])), \
@@ -3455,7 +3391,7 @@ class ComposedOp(LinearOperator):
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
-        
+
         Returns
         -------
         list
@@ -3479,10 +3415,9 @@ class ComposedOp(LinearOperator):
         -------
         None
         """
-        self.terms = {} # clear terms cache since param indices have changed now
+        self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
-
 
     def append(self, *factorops_to_add):
         """
@@ -3499,8 +3434,8 @@ class ComposedOp(LinearOperator):
         None
         """
         self.factorops.extend(factorops_to_add)
-        if self.parent: #need to alert parent that *number* (not just value)
-            self.parent._mark_for_rebuild(self) #  of our params may have changed
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # of our params may have changed
 
     def remove(self, *factorop_indices):
         """
@@ -3517,8 +3452,8 @@ class ComposedOp(LinearOperator):
         """
         for i in sorted(factorop_indices, reverse=True):
             del self.factorops[i]
-        if self.parent: #need to alert parent that *number* (not just value)
-            self.parent._mark_for_rebuild(self) #  of our params may have changed
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # of our params may have changed
 
     def copy(self, parent=None):
         """
@@ -3529,12 +3464,11 @@ class ComposedOp(LinearOperator):
         LinearOperator
             A copy of this object.
         """
-        # We need to override this method so that factor gates have their 
+        # We need to override this method so that factor gates have their
         # parent reset correctly.
-        cls = self.__class__ # so that this method works for derived classes too
-        copyOfMe = cls([ g.copy(parent) for g in self.factorops ], self.dim, self._evotype)
+        cls = self.__class__  # so that this method works for derived classes too
+        copyOfMe = cls([g.copy(parent) for g in self.factorops], self.dim, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
-
 
     def tosparse(self):
         """ Return the operation as a sparse matrix """
@@ -3549,7 +3483,7 @@ class ComposedOp(LinearOperator):
         """
         mx = self.factorops[0].todense()
         for gate in self.factorops[1:]:
-            mx = _np.dot(gate.todense(),mx)
+            mx = _np.dot(gate.todense(), mx)
         return mx
 
     def torep(self):
@@ -3563,7 +3497,7 @@ class ComposedOp(LinearOperator):
         -------
         OpRep
         """
-        factor_op_reps = [ gate.torep() for gate in self.factorops ]
+        factor_op_reps = [gate.torep() for gate in self.factorops]
         #FUTURE? factor_op_reps = [ repmemo.get(id(gate), gate.torep(debug_time_dict)) for gate in self.factorops ] #something like this?
 
         if self._evotype == "densitymx":
@@ -3571,14 +3505,13 @@ class ComposedOp(LinearOperator):
         elif self._evotype == "statevec":
             return replib.SVOpRep_Composed(factor_op_reps, self.dim)
         elif self._evotype == "stabilizer":
-            nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
+            nQubits = int(round(_np.log2(self.dim)))  # "stabilizer" is a unitary-evolution type mode
             return replib.SBOpRep_Composed(factor_op_reps, nQubits)
-        
+
         assert(False), "Invalid internal _evotype: %s" % self._evotype
 
-
     def get_taylor_order_terms(self, order, return_coeff_polys=False):
-        """ 
+        """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
@@ -3589,7 +3522,7 @@ class ComposedOp(LinearOperator):
 
         The coefficients of these terms are typically polynomials of the gate's
         parameters, where the polynomial's variable indices index the *global*
-        parameters of the gate's parent (usually a :class:`Model`), not the 
+        parameters of the gate's parent (usually a :class:`Model`), not the
         gate's local parameter array (i.e. that returned from `to_vector`).
 
 
@@ -3611,29 +3544,29 @@ class ComposedOp(LinearOperator):
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
             terms = []
             for p in _lt.partition_into(order, len(self.factorops)):
-                factor_lists = [ self.factorops[i].get_taylor_order_terms(pi) for i,pi in enumerate(p) ]
+                factor_lists = [self.factorops[i].get_taylor_order_terms(pi) for i, pi in enumerate(p)]
                 for factors in _itertools.product(*factor_lists):
-                    terms.append( _term.compose_terms(factors) )
+                    terms.append(_term.compose_terms(factors))
             self.terms[order] = terms
 
             def _decompose_indices(x):
                 return tuple(_modelmember._decompose_gpindices(
-                    self.gpindices, _np.array(x,_np.int64)))
-                             
-            poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms] #with *local* indices
-            tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+                    self.gpindices, _np.array(x, _np.int64)))
+
+            poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
+            tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
             if len(tapes) > 0:
-                vtape = _np.concatenate( [ t[0] for t in tapes ] )
-                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                vtape = _np.concatenate([t[0] for t in tapes])
+                ctape = _np.concatenate([t[1] for t in tapes])
             else:
-                vtape = _np.empty(0,_np.int64)
-                ctape = _np.empty(0,complex)
+                vtape = _np.empty(0, _np.int64)
+                ctape = _np.empty(0, complex)
             coeffs_as_compact_polys = (vtape, ctape)
             self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
@@ -3644,7 +3577,6 @@ class ComposedOp(LinearOperator):
         else:
             return self.terms[order]
 
-    
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -3656,7 +3588,6 @@ class ComposedOp(LinearOperator):
         """
         return len(self.gpindices_as_array())
 
-
     def to_vector(self):
         """
         Get the gate parameters as an array of values.
@@ -3666,14 +3597,13 @@ class ComposedOp(LinearOperator):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        assert(self.gpindices is not None),"Must set a ComposedOp's .gpindices before calling to_vector"
+        assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling to_vector"
         v = _np.empty(self.num_params(), 'd')
         for gate in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
-                    self.gpindices, gate.gpindices)
+                self.gpindices, gate.gpindices)
             v[factorgate_local_inds] = gate.to_vector()
         return v
-
 
     def from_vector(self, v):
         """
@@ -3689,41 +3619,39 @@ class ComposedOp(LinearOperator):
         -------
         None
         """
-        assert(self.gpindices is not None),"Must set a ComposedOp's .gpindices before calling from_vector"
+        assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling from_vector"
         for gate in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
-                    self.gpindices, gate.gpindices)
-            gate.from_vector( v[factorgate_local_inds] )
+                self.gpindices, gate.gpindices)
+            gate.from_vector(v[factorgate_local_inds])
         self.dirty = True
-
 
     def transform(self, S):
         """
         Update operation matrix G with inv(S) * G * S,
 
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting operation matrix is altered as 
+        Generally, the transform function updates the *parameters* of
+        the gate such that the resulting operation matrix is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
         In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or
         corresponds to a TP-like transform matrix.
 
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
         for gate in self.factorops:
             gate.transform(S)
 
-
     def __str__(self):
         """ Return string representation """
         s = "Composed gate of %d factors:\n" % len(self.factorops)
-        for i,gate in enumerate(self.factorops):
+        for i, gate in enumerate(self.factorops):
             s += "Factor %d:\n" % i
             s += str(gate)
         return s
@@ -3734,7 +3662,7 @@ class ExponentiatedOp(ComposedOp):
     A gate map that is the composition of a number of map-like factors (possibly
     other `LinearOperator`s)
     """
-    
+
     def __init__(self, op_to_exponentiate, power, evotype="auto"):
         """
         TODO: docstring
@@ -3748,7 +3676,7 @@ class ExponentiatedOp(ComposedOp):
             with vectors  in  *left-to-right* ordering, maintaining the same
             convention as operation sequences in pyGSTi.  Note that this is
             *opposite* from standard matrix multiplication order.
-            
+
         dim : int or "auto"
             Dimension of this operation.  Can be set to `"auto"` to take dimension
             from `ops_to_compose[0]` *if* there's at least one gate being
@@ -3767,18 +3695,18 @@ class ExponentiatedOp(ComposedOp):
 
         if evotype == "auto":
             evotype = op_to_exponentiate._evotype
-        
-        ComposedOp.__init__(self, [self.exponentiated_op]*power, dim, evotype)
+
+        ComposedOp.__init__(self, [self.exponentiated_op] * power, dim, evotype)
 
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
-        
+
         Returns
         -------
         list
         """
-        return [ self.exponentiated_op ]
+        return [self.exponentiated_op]
 
     def copy(self, parent=None):
         """
@@ -3789,12 +3717,11 @@ class ExponentiatedOp(ComposedOp):
         LinearOperator
             A copy of this object.
         """
-        # We need to override this method so that factor gates have their 
+        # We need to override this method so that factor gates have their
         # parent reset correctly.
-        cls = self.__class__ # so that this method works for derived classes too
+        cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.exponentiated_op.copy(parent), self.power, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
-
 
     def torep(self):
         """
@@ -3812,10 +3739,9 @@ class ExponentiatedOp(ComposedOp):
         elif self._evotype == "statevec":
             return replib.SVOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, self.dim)
         elif self._evotype == "stabilizer":
-            nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
+            nQubits = int(round(_np.log2(self.dim)))  # "stabilizer" is a unitary-evolution type mode
             return replib.SVOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, nQubits)
         assert(False), "Invalid internal _evotype: %s" % self._evotype
-
 
     def to_vector(self):
         """
@@ -3827,7 +3753,6 @@ class ExponentiatedOp(ComposedOp):
             The gate parameters as a 1D array with length num_params().
         """
         return self.exponentiated_op.to_vector()
-
 
     def from_vector(self, v):
         """
@@ -3847,19 +3772,18 @@ class ExponentiatedOp(ComposedOp):
         self.exponentiated_op.from_vector(v)
         self.dirty = True
 
-
     def __str__(self):
         """ Return string representation """
         s = "Exponentiated gate that raise the below op to the %d power\n" % self.power
         s += str(self.exponentiated_op)
         return s
 
-    
-class ComposedDenseOp(ComposedOp,DenseOperator):
+
+class ComposedDenseOp(ComposedOp, DenseOperator):
     """
     A gate that is the composition of a number of matrix factors (possibly other gates).
     """
-    
+
     def __init__(self, ops_to_compose, dim="auto", evotype="auto"):
         """
         Creates a new ComposedDenseOp.
@@ -3883,14 +3807,13 @@ class ComposedDenseOp(ComposedOp,DenseOperator):
             the evolution type of `ops_to_compose[0]` *if* there's at least
             one gate being composed.
         """
-        ComposedOp.__init__(self, ops_to_compose, dim, evotype) #sets self.dim & self._evotype
-        DenseOperator.__init__(self, _np.identity(self.dim), self._evotype) #type doesn't matter here - just a dummy
+        ComposedOp.__init__(self, ops_to_compose, dim, evotype)  # sets self.dim & self._evotype
+        DenseOperator.__init__(self, _np.identity(self.dim), self._evotype)  # type doesn't matter here - just a dummy
         self._construct_matrix()
-
 
     def _construct_matrix(self):
         self.base = self.todense()
-        assert(self.base.shape == (self.dim,self.dim))
+        assert(self.base.shape == (self.dim, self.dim))
         self.base.flags.writeable = False
 
     def torep(self):
@@ -3924,7 +3847,6 @@ class ComposedDenseOp(ComposedOp,DenseOperator):
         ComposedOp.from_vector(self, v)
         self._construct_matrix()
 
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -3938,41 +3860,40 @@ class ComposedDenseOp(ComposedOp,DenseOperator):
             Array of derivatives with shape (dimension^2, num_params)
         """
         typ = complex if any([_np.iscomplexobj(gate) for gate in self.factorops]) else 'd'
-        derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), typ)
-        
-        #Product rule to compute jacobian
-        for i,gate in enumerate(self.factorops): # loop over the gate we differentiate wrt
-            if gate.num_params() == 0: continue #no contribution
-            deriv = gate.deriv_wrt_params(None) #TODO: use filter?? / make relative to this gate...
-            deriv.shape = (self.dim,self.dim,gate.num_params())
+        derivMx = _np.zeros((self.dim, self.dim, self.num_params()), typ)
 
-            if i > 0: # factors before ith
+        #Product rule to compute jacobian
+        for i, gate in enumerate(self.factorops):  # loop over the gate we differentiate wrt
+            if gate.num_params() == 0: continue  # no contribution
+            deriv = gate.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this gate...
+            deriv.shape = (self.dim, self.dim, gate.num_params())
+
+            if i > 0:  # factors before ith
                 pre = self.factorops[0]
                 for gateA in self.factorops[1:i]:
-                    pre = _np.dot(gateA,pre)
+                    pre = _np.dot(gateA, pre)
                 #deriv = _np.einsum("ija,jk->ika", deriv, pre )
-                deriv = _np.transpose(_np.tensordot(deriv, pre, (1,0)),(0,2,1))
+                deriv = _np.transpose(_np.tensordot(deriv, pre, (1, 0)), (0, 2, 1))
 
-            if i+1 < len(self.factorops): # factors after ith
-                post = self.factorops[i+1]
-                for gateA in self.factorops[i+2:]:
-                    post = _np.dot(gateA,post)
+            if i + 1 < len(self.factorops):  # factors after ith
+                post = self.factorops[i + 1]
+                for gateA in self.factorops[i + 2:]:
+                    post = _np.dot(gateA, post)
                 #deriv = _np.einsum("ij,jka->ika", post, deriv )
-                deriv = _np.tensordot(post, deriv, (1,0))
+                deriv = _np.tensordot(post, deriv, (1, 0))
 
             factorgate_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, gate.gpindices)
-            derivMx[:,:,factorgate_local_inds] += deriv
+            derivMx[:, :, factorgate_local_inds] += deriv
 
         derivMx.shape = (self.dim**2, self.num_params())
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
-
+            return _np.take(derivMx, wrtFilter, axis=1)
 
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -3982,16 +3903,15 @@ class ComposedDenseOp(ComposedOp,DenseOperator):
         bool
         """
         return any([gate.has_nonzero_hessian() for gate in self.factorops])
-            
 
 
 class EmbeddedOp(LinearOperator):
     """
     A gate map containing a single lower (or equal) dimensional gate within it.
-    An EmbeddedOp acts as the identity on all of its domain except the 
+    An EmbeddedOp acts as the identity on all of its domain except the
     subspace of its contained gate, where it acts as the contained gate does.
     """
-    
+
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed):
         """
         Initialize an EmbeddedOp object.
@@ -4026,60 +3946,62 @@ class EmbeddedOp(LinearOperator):
         labels = targetLabels
 
         evotype = gate_to_embed._evotype
-        if evotype in ("densitymx","statevec"):
-            iTensorProdBlks = [ self.state_space_labels.tpb_index[label] for label in labels ]
-              # index of tensor product block (of state space) a bit label is part of
+        if evotype in ("densitymx", "statevec"):
+            iTensorProdBlks = [self.state_space_labels.tpb_index[label] for label in labels]
+            # index of tensor product block (of state space) a bit label is part of
             if len(set(iTensorProdBlks)) != 1:
-                raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
-                                 " same tensor-product-block of the state space -- checked previously") # pragma: no cover
-        
-            iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-            tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
-            basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
-            for l in tensorProdBlkLabels:
-                basisInds.append( list(range(self.state_space_labels.labeldims[l])) )
-                  # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
+                raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" +
+                                 " same tensor-product-block of the state space -- checked previously")  # pragma: no cover
 
-            self.numBasisEls = _np.array(list(map(len,basisInds)),_np.int64)
-            self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
+            iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above)
+            tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
+            basisInds = []  # list of possible *density-matrix-space* indices of each component of the tensor product block
+            for l in tensorProdBlkLabels:
+                basisInds.append(list(range(self.state_space_labels.labeldims[l])))
+                # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
+
+            self.numBasisEls = _np.array(list(map(len, basisInds)), _np.int64)
+            self.iTensorProdBlk = iTensorProdBlk  # save which block is "active" one
 
             #offset into "active" tensor product block
             blockDims = self.state_space_labels.tpb_dims
-            self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-    
+            # number of basis elements preceding our block's elements
+            self.offset = sum([blockDims[i] for i in range(0, iTensorProdBlk)])
+
             divisor = 1
             self.divisors = []
             for l in labels:
                 self.divisors.append(divisor)
-                divisor *= self.state_space_labels.labeldims[l] # e.g. 4 or 2 for qubits (depending on evotype)
-    
+                divisor *= self.state_space_labels.labeldims[l]  # e.g. 4 or 2 for qubits (depending on evotype)
+
             # multipliers to go from per-label indices to tensor-product-block index
             # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-            self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                reversed(list(map(len,basisInds[1:]))))) ), _np.int64)
-    
+            self.multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
+                reversed(list(map(len, basisInds[1:])))))), _np.int64)
+
             # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
-            labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
-            self.actionInds = _np.array(labelIndices,_np.int64)
+            labelIndices = [tensorProdBlkLabels.index(label) for label in labels]
+            self.actionInds = _np.array(labelIndices, _np.int64)
             assert(_np.product([self.numBasisEls[i] for i in self.actionInds]) == self.embedded_op.dim), \
-                "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (self.embedded_op.dim, str(labels))
+                "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (
+                    self.embedded_op.dim, str(labels))
 
             basisInds_noop = basisInds[:]
             basisInds_noop_blankaction = basisInds[:]
-            for labelIndex in sorted(labelIndices,reverse=True):
+            for labelIndex in sorted(labelIndices, reverse=True):
                 del basisInds_noop[labelIndex]
                 basisInds_noop_blankaction[labelIndex] = [0]
             self.basisInds_noop = basisInds_noop
 
-            self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
-              # for inserting target-qubit basis indices into list of noop-qubit indices
-            
-        else: # evotype in ("stabilizer","svterm","cterm"):
+            self.sorted_bili = sorted(list(enumerate(labelIndices)), key=lambda x: x[1])
+            # for inserting target-qubit basis indices into list of noop-qubit indices
+
+        else:  # evotype in ("stabilizer","svterm","cterm"):
             # term-mode doesn't need any of the following members
             self.offset = None
             self.multipliers = None
             self.divisors = None
-            
+
             self.sorted_bili = None
             self.iTensorProdBlk = None
             self.numBasisEls = None
@@ -4090,43 +4012,40 @@ class EmbeddedOp(LinearOperator):
             # how to embed cliffords on qubits...
             assert(len(self.state_space_labels.labels) == 1 and
                    all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
-                   "All state space labels must correspond to *qubits*"
+                "All state space labels must correspond to *qubits*"
             if isinstance(self.embedded_op, CliffordOp):
                 assert(len(targetLabels) == len(self.embedded_op.svector) // 2), \
                     "Inconsistent number of qubits in `targetLabels` and Clifford `embedded_op`"
 
             #Cache info to speedup representation's acton(...) methods:
             # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-            qubitLabels = self.state_space_labels.labels[0] 
-            self.qubit_indices =  _np.array([ qubitLabels.index(targetLbl)
-                                              for targetLbl in self.targetLabels ], _np.int64)
+            qubitLabels = self.state_space_labels.labels[0]
+            self.qubit_indices = _np.array([qubitLabels.index(targetLbl)
+                                            for targetLbl in self.targetLabels], _np.int64)
         else:
-            self.qubit_indices = None # (unused)
+            self.qubit_indices = None  # (unused)
 
         opDim = self.state_space_labels.dim
         LinearOperator.__init__(self, opDim, evotype)
-        
 
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see modelmember implementation)
         return _modelmember.ModelMember.__getstate__(self)
-    
+
     def __setstate__(self, d):
-        if "dirty" in d: # backward compat: .dirty was replaced with ._dirty in ModelMember
+        if "dirty" in d:  # backward compat: .dirty was replaced with ._dirty in ModelMember
             d['_dirty'] = d['dirty']; del d['dirty']
         self.__dict__.update(d)
-
 
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
-        
+
         Returns
         -------
         list
         """
         return [self.embedded_op]
-
 
     def copy(self, parent=None):
         """
@@ -4139,22 +4058,20 @@ class EmbeddedOp(LinearOperator):
         """
         # We need to override this method so that embedded gate has its
         # parent reset correctly.
-        cls = self.__class__ # so that this method works for derived classes too
+        cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.state_space_labels, self.targetLabels,
                        self.embedded_op.copy(parent))
         return self._copy_gpindices(copyOfMe, parent)
-        
-        
+
     def _decomp_op_index(self, indx):
         """ Decompose index of a Pauli-product matrix into indices of each
             Pauli in the product """
         ret = []
         for d in reversed(self.divisors):
-            ret.append( indx // d )
+            ret.append(indx // d)
             indx = indx % d
         return ret
 
-    
     def _merge_op_and_noop_bases(self, op_b, noop_b):
         """
         Merge the Pauli basis indices for the "gate"-parts of the total
@@ -4166,12 +4083,11 @@ class EmbeddedOp(LinearOperator):
         Note: return value always have length == len(basisInds) == number
         of components
         """
-        ret = list(noop_b[:])    #start with noop part...
-        for bi,li in self.sorted_bili:
-            ret.insert(li, op_b[bi]) #... and insert gate parts at proper points
+        ret = list(noop_b[:])  # start with noop part...
+        for bi, li in self.sorted_bili:
+            ret.insert(li, op_b[bi])  # ... and insert gate parts at proper points
         return ret
 
-    
     def _iter_matrix_elements(self, relToBlock=False):
         """ Iterates of (op_i,op_j,embedded_op_i,embedded_op_j) tuples giving mapping
             between nonzero elements of operation matrix and elements of the embedded gate matrx """
@@ -4180,18 +4096,23 @@ class EmbeddedOp(LinearOperator):
 
         offset = 0 if relToBlock else self.offset
         for op_i in range(self.embedded_op.dim):     # rows ~ "output" of the gate map
-            for op_j in range(self.embedded_op.dim): # cols ~ "input"  of the gate map
-                op_b1 = self._decomp_op_index(op_i) # op_b? are lists of dm basis indices, one index per
-                op_b2 = self._decomp_op_index(op_j) #  tensor product component that the gate operates on (2 components for a 2-qubit gate)
-    
-                for b_noop in _itertools.product(*self.basisInds_noop): #loop over all state configurations we don't operate on
-                                                                   # - so really a loop over diagonal dm elements
-                    b_out = self._merge_op_and_noop_bases(op_b1, b_noop)  # using same b_noop for in and out says we're acting
-                    b_in  = self._merge_op_and_noop_bases(op_b2, b_noop)  #  as the identity on the no-op state space
-                    out_vec_index = _np.dot(self.multipliers, tuple(b_out)) # index of output dm basis el within vec(tensor block basis)
-                    in_vec_index  = _np.dot(self.multipliers, tuple(b_in))  # index of input dm basis el within vec(tensor block basis)
+            for op_j in range(self.embedded_op.dim):  # cols ~ "input"  of the gate map
+                op_b1 = self._decomp_op_index(op_i)  # op_b? are lists of dm basis indices, one index per
+                # tensor product component that the gate operates on (2 components for a 2-qubit gate)
+                op_b2 = self._decomp_op_index(op_j)
 
-                    yield (out_vec_index+offset, in_vec_index+offset, op_i, op_j)
+                # loop over all state configurations we don't operate on
+                for b_noop in _itertools.product(*self.basisInds_noop):
+                                                                   # - so really a loop over diagonal dm elements
+                    # using same b_noop for in and out says we're acting
+                    b_out = self._merge_op_and_noop_bases(op_b1, b_noop)
+                    b_in = self._merge_op_and_noop_bases(op_b2, b_noop)  # as the identity on the no-op state space
+                    # index of output dm basis el within vec(tensor block basis)
+                    out_vec_index = _np.dot(self.multipliers, tuple(b_out))
+                    # index of input dm basis el within vec(tensor block basis)
+                    in_vec_index = _np.dot(self.multipliers, tuple(b_in))
+
+                    yield (out_vec_index + offset, in_vec_index + offset, op_i, op_j)
 
     def torep(self):
         """
@@ -4207,9 +4128,9 @@ class EmbeddedOp(LinearOperator):
         if self._evotype == "stabilizer":
             nQubits = int(round(_np.log2(self.dim)))
             return replib.SBOpRep_Embedded(self.embedded_op.torep(),
-                                             nQubits, self.qubit_indices)
+                                           nQubits, self.qubit_indices)
 
-        if self._evotype not in ("statevec","densitymx"):
+        if self._evotype not in ("statevec", "densitymx"):
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
 
@@ -4217,8 +4138,9 @@ class EmbeddedOp(LinearOperator):
         iActiveBlock = self.iTensorProdBlk
         nComponents = len(self.state_space_labels.labels[iActiveBlock])
         embeddedDim = self.embedded_op.dim
-        blocksizes = _np.array([ _np.product(self.state_space_labels.tensor_product_block_dims(k)) for k in range(nBlocks)], _np.int64)
-        
+        blocksizes = _np.array([_np.product(self.state_space_labels.tensor_product_block_dims(k))
+                                for k in range(nBlocks)], _np.int64)
+
         if self._evotype == "statevec":
             return replib.SVOpRep_Embedded(self.embedded_op.torep(),
                                            self.numBasisEls, self.actionInds, blocksizes,
@@ -4233,18 +4155,17 @@ class EmbeddedOp(LinearOperator):
     def tosparse(self):
         """ Return the operation as a sparse matrix """
         embedded_sparse = self.embedded_op.tosparse().tolil()
-        finalOp = _sps.identity( self.dim, embedded_sparse.dtype, format='lil' )
+        finalOp = _sps.identity(self.dim, embedded_sparse.dtype, format='lil')
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i,j,gi,gj in self._iter_matrix_elements():
-            finalOp[i,j] = embedded_sparse[gi,gj]
+        for i, j, gi, gj in self._iter_matrix_elements():
+            finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    
     def todense(self):
         """ Return the operation as a dense matrix """
-        
+
         #FUTURE: maybe here or in a new "tosymplectic" method, could
         # create an embeded clifford symplectic rep as follows (when
         # evotype == "stabilizer"):
@@ -4254,20 +4175,20 @@ class EmbeddedOp(LinearOperator):
         #    qubitLabels = self.state_space_labels.labels[0]
         #    smatrix, svector = _symp.embed_clifford(self.embedded_op.smatrix,
         #                                            self.embedded_op.svector,
-        #                                            self.qubit_indices,len(qubitLabels))        
-        
+        #                                            self.qubit_indices,len(qubitLabels))
+
         embedded_dense = self.embedded_op.todense()
-        finalOp = _np.identity( self.dim, embedded_dense.dtype ) # operates on entire state space (direct sum of tensor prod. blocks)
+        # operates on entire state space (direct sum of tensor prod. blocks)
+        finalOp = _np.identity(self.dim, embedded_dense.dtype)
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i,j,gi,gj in self._iter_matrix_elements():
-            finalOp[i,j] = embedded_dense[gi,gj]
+        for i, j, gi, gj in self._iter_matrix_elements():
+            finalOp[i, j] = embedded_dense[gi, gj]
         return finalOp
 
-    
     def get_taylor_order_terms(self, order, return_coeff_polys=False):
-        """ 
+        """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
@@ -4278,7 +4199,7 @@ class EmbeddedOp(LinearOperator):
 
         The coefficients of these terms are typically polynomials of the gate's
         parameters, where the polynomial's variable indices index the *global*
-        parameters of the gate's parent (usually a :class:`Model`), not the 
+        parameters of the gate's parent (usually a :class:`Model`), not the
         gate's local parameter array (i.e. that returned from `to_vector`).
 
 
@@ -4300,21 +4221,20 @@ class EmbeddedOp(LinearOperator):
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space_labels.copy()
         sslbls.reduce_dims_densitymx_to_state()
         if return_coeff_polys:
-            terms, coeffs = self.embedded_op.get_taylor_order_terms(order,True)
-            embedded_terms = [ _term.embed_term(t, sslbls, self.targetLabels) for t in terms]
+            terms, coeffs = self.embedded_op.get_taylor_order_terms(order, True)
+            embedded_terms = [_term.embed_term(t, sslbls, self.targetLabels) for t in terms]
             return embedded_terms, coeffs
         else:
-            return [ _term.embed_term(t, sslbls, self.targetLabels)
-                 for t in self.embedded_op.get_taylor_order_terms(order,False) ]
+            return [_term.embed_term(t, sslbls, self.targetLabels)
+                    for t in self.embedded_op.get_taylor_order_terms(order, False)]
 
-    
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -4326,7 +4246,6 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.num_params()
 
-
     def to_vector(self):
         """
         Get the gate parameters as an array of values.
@@ -4337,7 +4256,6 @@ class EmbeddedOp(LinearOperator):
             The gate parameters as a 1D array with length num_params().
         """
         return self.embedded_op.to_vector()
-
 
     def from_vector(self, v):
         """
@@ -4357,36 +4275,34 @@ class EmbeddedOp(LinearOperator):
         self.embedded_op.from_vector(v)
         self.dirty = True
 
-
     def transform(self, S):
         """
         Update operation matrix G with inv(S) * G * S,
 
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting operation matrix is altered as 
+        Generally, the transform function updates the *parameters* of
+        the gate such that the resulting operation matrix is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
         In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or
         corresponds to a TP-like transform matrix.
 
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
         # I think we could do this but extracting the approprate parts of the
         # S and Sinv matrices... but haven't needed it yet.
         raise NotImplementedError("Cannot transform an EmbeddedDenseOp yet...")
 
-    
     def depolarize(self, amount):
         """
         Depolarize this gate by the given `amount`.
 
-        Generally, the depolarize function updates the *parameters* of 
+        Generally, the depolarize function updates the *parameters* of
         the gate such that the resulting operation matrix is depolarized.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
@@ -4398,7 +4314,7 @@ class EmbeddedOp(LinearOperator):
             equal to one less than the dimension of the gate. In standard
             bases, depolarization corresponds to multiplying the operation matrix
             by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
+            to the identity) equals 1.0 and whose subsequent elements
             (corresponding to non-identity basis elements) equal
             `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
             float).
@@ -4409,12 +4325,11 @@ class EmbeddedOp(LinearOperator):
         """
         self.embedded_op.depolarize(amount)
 
-
     def rotate(self, amount, mxBasis="gm"):
         """
         Rotate this gate by the given `amount`.
 
-        Generally, the rotate function updates the *parameters* of 
+        Generally, the rotate function updates the *parameters* of
         the gate such that the resulting operation matrix is rotated.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
@@ -4425,7 +4340,7 @@ class EmbeddedOp(LinearOperator):
             Specifies the rotation "coefficients" along each of the non-identity
             Pauli-product axes.  The gate's matrix `G` is composed with a
             rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
+            unitary superoperator corresponding to the unitary operator
             `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
             ranges over all of the non-identity un-normalized Pauli operators.
 
@@ -4439,7 +4354,6 @@ class EmbeddedOp(LinearOperator):
         None
         """
         self.embedded_op.rotate(amount, mxBasis)
-
 
     #def compose(self, otherOp):
     #    """
@@ -4461,7 +4375,7 @@ class EmbeddedOp(LinearOperator):
     #    raise NotImplementedError("Can't compose an EmbeddedDenseOp yet")
 
     def has_nonzero_hessian(self):
-        """ 
+        """
         Returns whether this gate has a non-zero Hessian with
         respect to its parameters, i.e. whether it only depends
         linearly on its parameters or not.
@@ -4472,23 +4386,22 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.has_nonzero_hessian()
 
-
     def __str__(self):
         """ Return string representation """
-        s = "Embedded gate with full dimension %d and state space %s\n" % (self.dim,self.state_space_labels)
+        s = "Embedded gate with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
         s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
              % (self.embedded_op.dim, str(self.targetLabels))
         s += str(self.embedded_op)
         return s
 
-    
 
 class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
     """
     A gate containing a single lower (or equal) dimensional gate within it.
-    An EmbeddedDenseOp acts as the identity on all of its domain except the 
+    An EmbeddedDenseOp acts as the identity on all of its domain except the
     subspace of its contained gate, where it acts as the contained gate does.
     """
+
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed):
         """
         Initialize a EmbeddedDenseOp object.
@@ -4515,13 +4428,13 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
             that specifies the only non-trivial action of the EmbeddedDenseOp.
         """
         EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels,
-                                 gate_to_embed) # sets self.dim & self._evotype
-        DenseOperator.__init__(self, _np.identity(self.dim), self._evotype) # type irrelevant - just a dummy
+                            gate_to_embed)  # sets self.dim & self._evotype
+        DenseOperator.__init__(self, _np.identity(self.dim), self._evotype)  # type irrelevant - just a dummy
         self._construct_matrix()
 
     def _construct_matrix(self):
         self.base = self.todense()
-        assert(self.base.shape == (self.dim,self.dim))
+        assert(self.base.shape == (self.dim, self.dim))
         self.base.flags.writeable = False
 
     def torep(self):
@@ -4537,7 +4450,6 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
         """
         # implement this so we're sure to use DenseOperator version
         return DenseOperator.torep(self)
-
 
     def from_vector(self, v):
         """
@@ -4557,7 +4469,6 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
         self._construct_matrix()
         self.dirty = True
 
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -4572,19 +4483,18 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
         """
         # Note: this function exploits knowledge of EmbeddedOp internals!!
         embedded_deriv = self.embedded_op.deriv_wrt_params(wrtFilter)
-        derivMx = _np.zeros((self.dim**2,self.num_params()),embedded_deriv.dtype)
+        derivMx = _np.zeros((self.dim**2, self.num_params()), embedded_deriv.dtype)
         M = self.embedded_op.dim
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i,j,gi,gj in self._iter_matrix_elements():
-            derivMx[i*self.dim+j,:] = embedded_deriv[gi*M+gj,:] #fill row of jacobian
+        for i, j, gi, gj in self._iter_matrix_elements():
+            derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
 
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
-
+            return _np.take(derivMx, wrtFilter, axis=1)
 
     def depolarize(self, amount):
         """
@@ -4594,7 +4504,6 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
         """
         EmbeddedOp.depolarize(self, amount)
         self._construct_matrix()
-
 
     def rotate(self, amount, mxBasis="gm"):
         """
@@ -4610,7 +4519,7 @@ class CliffordOp(LinearOperator):
     """
     A Clifford gate, represented via a symplectic
     """
-    
+
     def __init__(self, unitary, symplecticrep=None):
         """
         Creates a new CliffordOp from a unitary operation.
@@ -4635,8 +4544,8 @@ class CliffordOp(LinearOperator):
         """
         #self.superop = superop
         self.unitary = unitary
-        assert(self.unitary is not None),"Must supply `unitary` argument!"
-        
+        assert(self.unitary is not None), "Must supply `unitary` argument!"
+
         #if self.superop is not None:
         #    assert(unitary is None and symplecticrep is None),"Only supply one argument to __init__"
         #    raise NotImplementedError("Superop -> Unitary calc not implemented yet")
@@ -4652,10 +4561,9 @@ class CliffordOp(LinearOperator):
         self.inv_svector = None
 
         nQubits = len(self.svector) // 2
-        dim = 2**nQubits # "stabilizer" is a "unitary evolution"-type mode
+        dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
         LinearOperator.__init__(self, dim, "stabilizer")
 
-        
     #NOTE: if this gate had parameters, we'd need to clear inv_smatrix & inv_svector
     # whenever the smatrix or svector changed, respectively (probably in from_vector?)
 
@@ -4672,15 +4580,15 @@ class CliffordOp(LinearOperator):
         """
         if self.inv_smatrix is None or self.inv_svector is None:
             self.inv_smatrix, self.inv_svector = _symp.inverse_clifford(
-                self.smatrix, self.svector) #cache inverse since it's expensive
+                self.smatrix, self.svector)  # cache inverse since it's expensive
 
         invs, invp = self.inv_smatrix, self.inv_svector
         U = self.unitary.todense() if isinstance(self.unitary, LinearOperator) else self.unitary
-        return replib.SBOpRep_Clifford(_np.ascontiguousarray(self.smatrix,_np.int64),
-                                         _np.ascontiguousarray(self.svector,_np.int64),
-                                         _np.ascontiguousarray(invs,_np.int64),
-                                         _np.ascontiguousarray(invp,_np.int64),
-                                         _np.ascontiguousarray(U,complex))
+        return replib.SBOpRep_Clifford(_np.ascontiguousarray(self.smatrix, _np.int64),
+                                       _np.ascontiguousarray(self.svector, _np.int64),
+                                       _np.ascontiguousarray(invs, _np.int64),
+                                       _np.ascontiguousarray(invp, _np.int64),
+                                       _np.ascontiguousarray(U, complex))
 
     def __str__(self):
         """ Return string representation """
@@ -4703,13 +4611,12 @@ class CliffordOp(LinearOperator):
 #    of multiple LindbladOps based on kite structure (one per kite block).
 
 
-
 class ComposedErrorgen(LinearOperator):
-    """ 
+    """
     A composition (sum!) of several Lindbladian exponent operators, that is, a
     *sum* (not product) of other error generators.
     """
-    
+
     def __init__(self, errgens_to_compose, dim="auto", evotype="auto"):
         """
         Creates a new ComposedErrorgen.
@@ -4718,8 +4625,8 @@ class ComposedErrorgen(LinearOperator):
         ----------
         errgens_to_compose : list
             List of `LinearOperator`-derived objects that are summed together (composed)
-            to form this error generator. 
-            
+            to form this error generator.
+
         dim : int or "auto"
             Dimension of this error generator.  Can be set to `"auto"` to take
             the dimension from `errgens_to_compose[0]` *if* there's at least one
@@ -4744,7 +4651,7 @@ class ComposedErrorgen(LinearOperator):
         assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
             "All error generators must have the same evolution type (%s expected)!" % evotype
 
-        # set "API" error-generator members (to interface properly w/other objects)        
+        # set "API" error-generator members (to interface properly w/other objects)
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
         #self.sparse = errgens_to_compose[0].sparse \
         #    if len(errgens_to_compose) > 0 else False
@@ -4758,16 +4665,15 @@ class ComposedErrorgen(LinearOperator):
 
         #OLD: when a generators "rep" was self.err_gen_mx
         #if evotype == "densitymx":
-        #    self._construct_errgen_matrix()        
+        #    self._construct_errgen_matrix()
         #else:
         #    self.err_gen_mx = None
-        
-        LinearOperator.__init__(self, dim, evotype)
 
+        LinearOperator.__init__(self, dim, evotype)
 
     def get_coeffs(self):
         """
-        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this error generator.  Note that these are
         not necessarily the parameter values, as these coefficients are
         generally functions of the parameters (so as to keep the coefficients
@@ -4784,7 +4690,7 @@ class ComposedErrorgen(LinearOperator):
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
-    
+
         basisdict : dict
             A dictionary mapping the integer basis labels used in the
             keys of `Ltermdict` to basis matrices..
@@ -4796,33 +4702,32 @@ class ComposedErrorgen(LinearOperator):
             # see if we need to update basisdict to avoid collisions
             # and avoid duplicating basis elements
             final_basisLbls = {}
-            for lbl,basisEl in bdict.items():
-                for existing_lbl,existing_basisEl in basisdict.values():
-                    if _mt.safenorm(basisEl-existing_basisEl) < 1e-6:
+            for lbl, basisEl in bdict.items():
+                for existing_lbl, existing_basisEl in basisdict.values():
+                    if _mt.safenorm(basisEl - existing_basisEl) < 1e-6:
                         final_basisLbls[lbl] = existing_lbl
                         break
-                else: # no existing basis element found - need a new element
-                    if lbl in basisdict: # then can't keep current label
+                else:  # no existing basis element found - need a new element
+                    if lbl in basisdict:  # then can't keep current label
                         final_basisLbls[lbl] = next_available
                         next_available += 1
                     else:
                         #fine to keep lbl since it's unused
                         final_basisLbls[lbl] = lbl
-                        if isinstance(lbl,int):
-                            next_available = max(next_available,lbl+1)
+                        if isinstance(lbl, int):
+                            next_available = max(next_available, lbl + 1)
 
                     #Add new basis element
-                    basisdict[ final_basisLbls[lbl] ] = basisEl
-                    
+                    basisdict[final_basisLbls[lbl]] = basisEl
+
             for key, coeff in ltdict:
-                new_key = tuple( [key[0]] + [ final_basisLbls[l] for l in key[1:] ] )
+                new_key = tuple([key[0]] + [final_basisLbls[l] for l in key[1:]])
                 if new_key in Ltermdict:
                     Ltermdict[new_key] += coeff
                 else:
                     Ltermdict[new_key] = coeff
 
         return Ltermdict, basisdict
-
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -4836,25 +4741,24 @@ class ComposedErrorgen(LinearOperator):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        #TODO: in the furture could do this more cleverly so 
+        #TODO: in the furture could do this more cleverly so
         # each factor gets an appropriate wrtFilter instead of
         # doing all filtering at the end
-        
+
         d2 = self.dim
-        derivMx = _np.zeros( (d2**2,self.num_params()), 'd')
+        derivMx = _np.zeros((d2**2, self.num_params()), 'd')
         for eg in self.factors:
-            factor_deriv = eg.deriv_wrt_params(None) # do filtering at end
+            factor_deriv = eg.deriv_wrt_params(None)  # do filtering at end
             rel_gpindices = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            derivMx[:,rel_gpindices] += factor_deriv[:,:]
+            derivMx[:, rel_gpindices] += factor_deriv[:, :]
 
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take(derivMx, wrtFilter, axis=1)
 
         return derivMx
-        
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
@@ -4877,36 +4781,35 @@ class ComposedErrorgen(LinearOperator):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        #TODO: in the furture could do this more cleverly so 
+        #TODO: in the furture could do this more cleverly so
         # each factor gets an appropriate wrtFilter instead of
         # doing all filtering at the end
-        
+
         d2 = self.dim
         nP = self.num_params()
-        hessianMx = _np.zeros( (d2**2,nP,nP), 'd')
+        hessianMx = _np.zeros((d2**2, nP, nP), 'd')
         for eg in self.factors:
-            factor_hessian = eg.hessian_wrt_params(None,None) # do filtering at end
+            factor_hessian = eg.hessian_wrt_params(None, None)  # do filtering at end
             rel_gpindices = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            hessianMx[:,rel_gpindices,rel_gpindices] += factor_hessian[:,:,:]
+            hessianMx[:, rel_gpindices, rel_gpindices] += factor_hessian[:, :, :]
 
         if wrtFilter1 is None:
             if wrtFilter2 is None:
                 return hessianMx
             else:
-                return _np.take(hessianMx, wrtFilter2, axis=2 )
+                return _np.take(hessianMx, wrtFilter2, axis=2)
         else:
             if wrtFilter2 is None:
-                return _np.take(hessianMx, wrtFilter1, axis=1 )
+                return _np.take(hessianMx, wrtFilter1, axis=1)
             else:
-                return _np.take( _np.take(hessianMx, wrtFilter1, axis=1),
-                                 wrtFilter2, axis=2 )
-
+                return _np.take(_np.take(hessianMx, wrtFilter1, axis=1),
+                                wrtFilter2, axis=2)
 
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
-        
+
         Returns
         -------
         list
@@ -4928,8 +4831,8 @@ class ComposedErrorgen(LinearOperator):
         None
         """
         self.factors.extend(factors_to_add)
-        if self.parent: #need to alert parent that *number* (not just value)
-            self.parent._mark_for_rebuild(self) #  of our params may have changed
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # of our params may have changed
 
     def remove(self, *factor_indices):
         """
@@ -4946,8 +4849,8 @@ class ComposedErrorgen(LinearOperator):
         """
         for i in sorted(factor_indices, reverse=True):
             del self.factors[i]
-        if self.parent: #need to alert parent that *number* (not just value)
-            self.parent._mark_for_rebuild(self) #  of our params may have changed
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # of our params may have changed
 
     def copy(self, parent=None):
         """
@@ -4958,10 +4861,10 @@ class ComposedErrorgen(LinearOperator):
         LinearOperator
             A copy of this object.
         """
-        # We need to override this method so that factors have their 
+        # We need to override this method so that factors have their
         # parent reset correctly.
-        cls = self.__class__ # so that this method works for derived classes too
-        copyOfMe = cls([ f.copy(parent) for f in self.factors ], self.dim, self._evotype)
+        cls = self.__class__  # so that this method works for derived classes too
+        copyOfMe = cls([f.copy(parent) for f in self.factors], self.dim, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
 
     def tosparse(self):
@@ -4987,7 +4890,6 @@ class ComposedErrorgen(LinearOperator):
     #        mx += eg.err_gen_mx
     #    self.err_gen_mx = mx
 
-
     def torep(self):
         """
         Return a "representation" object for this error generator.
@@ -4999,20 +4901,19 @@ class ComposedErrorgen(LinearOperator):
         -------
         OpRep
         """
-        factor_reps = [ factor.torep() for factor in self.factors ]
+        factor_reps = [factor.torep() for factor in self.factors]
         if self._evotype == "densitymx":
             return replib.DMOpRep_Sum(factor_reps, self.dim)
         elif self._evotype == "statevec":
             return replib.SVOpRep_Sum(factor_reps, self.dim)
         elif self._evotype == "stabilizer":
-            nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
+            nQubits = int(round(_np.log2(self.dim)))  # "stabilizer" is a unitary-evolution type mode
             return replib.SBOpRep_Sum(factor_reps, nQubits)
-        
+
         assert(False), "Invalid internal _evotype: %s" % self._evotype
 
-
     def get_taylor_order_terms(self, order, return_coeff_polys=False):
-        """ 
+        """
         Get the `order`-th order Taylor-expansion terms of this error generator..
 
         This function either constructs or returns a cached list of the terms at
@@ -5023,7 +4924,7 @@ class ComposedErrorgen(LinearOperator):
 
         The coefficients of these terms are typically polynomials of the gate's
         parameters, where the polynomial's variable indices index the *global*
-        parameters of the gate's parent (usually a :class:`Model`), not the 
+        parameters of the gate's parent (usually a :class:`Model`), not the
         gate's local parameter array (i.e. that returned from `to_vector`).
 
 
@@ -5045,7 +4946,7 @@ class ComposedErrorgen(LinearOperator):
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
@@ -5063,7 +4964,6 @@ class ComposedErrorgen(LinearOperator):
         """
         return len(self.gpindices_as_array())
 
-
     def to_vector(self):
         """
         Get the error generator parameters as an array of values.
@@ -5073,14 +4973,13 @@ class ComposedErrorgen(LinearOperator):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        assert(self.gpindices is not None),"Must set a ComposedErrorgen's .gpindices before calling to_vector"
+        assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling to_vector"
         v = _np.empty(self.num_params(), 'd')
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
-                    self.gpindices, eg.gpindices)
+                self.gpindices, eg.gpindices)
             v[factor_local_inds] = eg.to_vector()
         return v
-
 
     def from_vector(self, v):
         """
@@ -5096,51 +4995,49 @@ class ComposedErrorgen(LinearOperator):
         -------
         None
         """
-        assert(self.gpindices is not None),"Must set a ComposedErrorgen's .gpindices before calling from_vector"
+        assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling from_vector"
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
-                    self.gpindices, eg.gpindices)
-            eg.from_vector( v[factor_local_inds] )
+                self.gpindices, eg.gpindices)
+            eg.from_vector(v[factor_local_inds])
         self.dirty = True
-
 
     def transform(self, S):
         """
         Update operation matrix G with inv(S) * G * S,
 
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting operation matrix is altered as 
+        Generally, the transform function updates the *parameters* of
+        the gate such that the resulting operation matrix is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
         In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or
         corresponds to a TP-like transform matrix.
 
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
         for eg in self.factors:
             eg.transform(S)
 
-
     def __str__(self):
         """ Return string representation """
         s = "Composed error generator of %d factors:\n" % len(self.factors)
-        for i,eg in enumerate(self.factors):
+        for i, eg in enumerate(self.factors):
             s += "Factor %d:\n" % i
             s += str(eg)
         return s
 
 
-# Idea: 
+# Idea:
 # Op = exp(Errgen); Errgen is an error just on 2nd qubit (and say we have 3 qubits)
 # so Op = I x (I+eps*A) x I (small eps limit); eps*A is 1-qubit error generator
 # also Op ~= I+Errgen in small eps limit, so
-# Errgen = I x (I+eps*A) x I - I x I x I 
+# Errgen = I x (I+eps*A) x I - I x I x I
 #        = I x I x I + eps I x A x I - I x I x I
 #        = eps I x A x I = I x eps*A x I
 # --> we embed error generators by tensoring with I's on non-target sectors.
@@ -5149,10 +5046,10 @@ class ComposedErrorgen(LinearOperator):
 class EmbeddedErrorgen(EmbeddedOp):
     """
     An error generator containing a single lower (or equal) dimensional gate within it.
-    An EmbeddedErrorGen acts as the null map (zero) on all of its domain except the 
+    An EmbeddedErrorGen acts as the null map (zero) on all of its domain except the
     subspace of its contained error generator, where it acts as the contained item does.
     """
-    
+
     def __init__(self, stateSpaceLabels, targetLabels, errgen_to_embed):
         """
         Initialize an EmbeddedErrorgen object.
@@ -5185,24 +5082,24 @@ class EmbeddedErrorgen(EmbeddedOp):
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
         #self.sparse = True # Embedded error generators are *always* sparse (pointless to
         #                   # have dense versions of these)
-        
+
         embedded_matrix_basis = errgen_to_embed.matrix_basis
         if _compat.isstr(embedded_matrix_basis):
             self.matrix_basis = embedded_matrix_basis
-        else: # assume a Basis object
+        else:  # assume a Basis object
             my_basis_dim = self.state_space_labels.dim
             self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
 
             #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:
             #self.matrix_basis = _Basis(
             #    name="embedded_" + embedded_matrix_basis.name,
-            #    matrices=[self._embed_basis_mx(mx) for mx in 
+            #    matrices=[self._embed_basis_mx(mx) for mx in
             #              embedded_matrix_basis.get_composite_matrices()],
             #    sparse=True)
 
         #OLD: when a generators "rep" was self.err_gen_mx
         #if errgen_to_embed._evotype == "densitymx":
-        #    self._construct_errgen_matrix()        
+        #    self._construct_errgen_matrix()
         #else:
         #    self.err_gen_mx = None
 
@@ -5215,11 +5112,10 @@ class EmbeddedErrorgen(EmbeddedOp):
 
     def _embed_basis_mx(self, mx):
         """ Take a dense or sparse basis matrix and embed it. """
-        mxAsGate = StaticDenseOp(mx) if isinstance(mx,_np.ndarray) \
-            else StaticDenseOp(mx.todense()) #assume mx is a sparse matrix
+        mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
+            else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
         return EmbeddedOp(self.state_space_labels, self.targetLabels,
-                               mxAsGate).tosparse() # always convert to *sparse* basis els
-
+                          mxAsGate).tosparse()  # always convert to *sparse* basis els
 
     def from_vector(self, v):
         """
@@ -5235,13 +5131,12 @@ class EmbeddedErrorgen(EmbeddedOp):
         -------
         None
         """
-        EmbeddedOp.from_vector(self, v) 
+        EmbeddedOp.from_vector(self, v)
         self.dirty = True
-
 
     def get_coeffs(self):
         """
-        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this operation.  Note that these are
         not necessarily the parameter values, as these coefficients are
         generally functions of the parameters (so as to keep the coefficients
@@ -5258,18 +5153,18 @@ class EmbeddedErrorgen(EmbeddedOp):
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
-    
+
         basisdict : dict
             A dictionary mapping the integer basis labels used in the
             keys of `Ltermdict` to basis matrices..
         """
         Ltermdict, basisdict = self.embedded_op.get_coeffs()
-        
+
         #go through basis and embed basis matrices
         new_basisdict = {}
         for lbl, basisEl in basisdict.items():
             new_basisdict[lbl] = self._embed_basis_mx(basisEl)
-        
+
         return Ltermdict, new_basisdict
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -5311,7 +5206,7 @@ class EmbeddedErrorgen(EmbeddedOp):
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim,self.state_space_labels)
+        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
         s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
              % (self.embedded_op.dim, str(self.targetLabels))
         s += str(self.embedded_op)
@@ -5335,7 +5230,7 @@ class LindbladErrorgen(LinearOperator):
         Create a Lindblad-form error generator from an error generator matrix
         and a basis which specifies how to decompose (project) the error
         generator.
-            
+
         errgen : numpy array or SciPy sparse matrix
             a square 2D array that gives the full error generator. The shape of
             this array sets the dimension of the operator. The projections of
@@ -5375,11 +5270,11 @@ class LindbladErrorgen(LinearOperator):
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
             order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `errgen` cannot 
+            If False, then an error is thrown when the given `errgen` cannot
             be realized by the specified set of Lindblad projections.
 
         evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the error generator being constructed.  
+            The evolution type of the error generator being constructed.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
             via matrix-vector products.  `"svterm"` denotes state-vector term-
             based evolution (action of gate is obtained by evaluating the rank-1
@@ -5394,7 +5289,7 @@ class LindbladErrorgen(LinearOperator):
         d2 = errgen.shape[0]
         #d = int(round(_np.sqrt(d2)))  # OLD TODO REMOVE
         #if d*d != d2: raise ValueError("Error generator dim must be a perfect square")
-        
+
         #Determine whether we're using sparse bases or not
         sparse = None
         if ham_basis is not None:
@@ -5405,15 +5300,15 @@ class LindbladErrorgen(LinearOperator):
             if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
             elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
             elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
-        if sparse is None: sparse = False #the default
+        if sparse is None: sparse = False  # the default
 
         #Create or convert bases to appropriate sparsity
-        if not isinstance(ham_basis, _Basis): # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=d2
-            ham_basis = _Basis.cast(ham_basis,d2,sparse=sparse)
+        if not isinstance(ham_basis, _Basis):  # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=d2
+            ham_basis = _Basis.cast(ham_basis, d2, sparse=sparse)
         if not isinstance(nonham_basis, _Basis):
-            nonham_basis = _Basis.cast(nonham_basis,d2,sparse=sparse)
+            nonham_basis = _Basis.cast(nonham_basis, d2, sparse=sparse)
         if not isinstance(mxBasis, _Basis):
-            matrix_basis = _Basis.cast(mxBasis,d2,sparse=sparse)
+            matrix_basis = _Basis.cast(mxBasis, d2, sparse=sparse)
         else: matrix_basis = mxBasis
 
         # errgen + bases => coeffs
@@ -5425,15 +5320,14 @@ class LindbladErrorgen(LinearOperator):
         # coeffs + bases => Ltermdict, basisdict
         Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
             hamC, otherC, ham_basis, nonham_basis, nonham_mode)
-        
+
         return cls(d2, Ltermdict, basisdict,
                    param_mode, nonham_mode, truncate,
-                   matrix_basis, evotype )
+                   matrix_basis, evotype)
 
-        
     def __init__(self, dim, Ltermdict, basisdict=None,
                  param_mode="cptp", nonham_mode="all", truncate=True,
-                 mxBasis="pp", evotype="densitymx"): 
+                 mxBasis="pp", evotype="densitymx"):
         """
         Create a new LinbladErrorgen based on a set of Lindblad terms.
 
@@ -5512,7 +5406,7 @@ class LindbladErrorgen(LinearOperator):
 
         self.nonham_mode = nonham_mode
         self.param_mode = param_mode
-        
+
         # Ltermdict, basisdict => bases + parameter values
         # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
         # since the latter is what set_errgen needs
@@ -5526,22 +5420,22 @@ class LindbladErrorgen(LinearOperator):
         elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
         else: self.sparse = False
 
-        self.matrix_basis = _Basis.cast(mxBasis,d2,sparse=self.sparse)
+        self.matrix_basis = _Basis.cast(mxBasis, d2, sparse=self.sparse)
 
         self.paramvals = _gt.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
-        LinearOperator.__init__(self, d2, evotype) #sets self.dim
+        LinearOperator.__init__(self, d2, evotype)  # sets self.dim
 
         #Finish initialization based on evolution type
-        assert(evotype in ("densitymx","svterm","cterm")), \
+        assert(evotype in ("densitymx", "svterm", "cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         #Fast CSR-matrix summing variables: N/A if not sparse or using terms
         self.hamCSRSumIndices = None
         self.otherCSRSumIndices = None
-        self.sparse_err_gen_template = None            
-        
+        self.sparse_err_gen_template = None
+
         if evotype == "densitymx":
             self.hamGens, self.otherGens = self._init_generators()
 
@@ -5554,12 +5448,12 @@ class LindbladErrorgen(LinearOperator):
                 if self.otherGens is not None:
                     if self.nonham_mode == "diagonal":
                         oList = self.otherGens
-                    else: # nonham_mode in ("diag_affine", "all")
-                        oList = [ mx for mxRow in self.otherGens for mx in mxRow ]                        
+                    else:  # nonham_mode in ("diag_affine", "all")
+                        oList = [mx for mxRow in self.otherGens for mx in mxRow]
                     all_csr_matrices.extend(oList)
-    
+
                 csr_sum_array, indptr, indices, N = \
-                        _mt.get_csr_sum_indices(all_csr_matrices)
+                    _mt.get_csr_sum_indices(all_csr_matrices)
                 self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
                 self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
                 self.sparse_err_gen_template = (indptr, indices, N)
@@ -5567,17 +5461,17 @@ class LindbladErrorgen(LinearOperator):
             #initialize intermediate storage for matrix and for deriv computation
             # (needed for _construct_errgen)
             bsO = self.other_basis_size
-            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
+            self.Lmx = _np.zeros((bsO - 1, bsO - 1), 'complex') if bsO > 0 else None
 
-            self._construct_errgen_matrix() # sets self.err_gen_mx
-            self.Lterms = None # Unused
-            
-        else: # Term-based evolution
+            self._construct_errgen_matrix()  # sets self.err_gen_mx
+            self.Lterms = None  # Unused
+
+        else:  # Term-based evolution
 
             assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
-              #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
+            #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
-            
+
             self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basisdict, hamBInds,
                                                               otherBInds, termtype)
             # Unused
@@ -5586,154 +5480,155 @@ class LindbladErrorgen(LinearOperator):
 
         #Done with __init__(...)
 
-
     def _init_generators(self):
         #assumes self.dim, self.ham_basis, self.other_basis, and self.matrix_basis are setup...
-        
+
         d2 = self.dim
         d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "Errorgen dim must be a perfect square"
+        assert(d * d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = self.matrix_basis.transform_matrix(_BuiltinBasis("std",self.matrix_basis.dim, self.sparse))
-          # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
-        leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
-                          else _np.linalg.inv(mxBasisToStd)
+        mxBasisToStd = self.matrix_basis.transform_matrix(_BuiltinBasis("std", self.matrix_basis.dim, self.sparse))
+        # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
+        leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+            else _np.linalg.inv(mxBasisToStd)
         rightTrans = mxBasisToStd
 
-        hamBasisMxs = self.ham_basis.elements 
+        hamBasisMxs = self.ham_basis.elements
         otherBasisMxs = self.other_basis.elements
         #OLD: these don't work if basis is empty (dim=0)
         # OLD REMOVE: _basis_matrices(self.ham_basis, d2, sparse=self.sparse)
         # OLD REMOVE: _basis_matrices(self.other_basis, d2, sparse=self.sparse)
-        
+
         hamGens, otherGens = _gt.lindblad_error_generators(
-            hamBasisMxs,otherBasisMxs,normalize=False,
-            other_mode=self.nonham_mode) # in std basis
+            hamBasisMxs, otherBasisMxs, normalize=False,
+            other_mode=self.nonham_mode)  # in std basis
 
         # Note: lindblad_error_generators will return sparse generators when
         #  given a sparse basis (or basis matrices)
 
         if hamGens is not None:
-            bsH = len(hamGens)+1 #projection-basis size (not nec. == d2)
-            _gt._assert_shape(hamGens, (bsH-1,d2,d2), self.sparse)
+            bsH = len(hamGens) + 1  # projection-basis size (not nec. == d2)
+            _gt._assert_shape(hamGens, (bsH - 1, d2, d2), self.sparse)
 
             # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
-                hamGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
-                                              inplace=True, check=True) for mx in hamGens ]
+                hamGens = [_mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                                        inplace=True, check=True) for mx in hamGens]
                 for mx in hamGens: mx.sort_indices()
-                  # for faster addition ops in _construct_errgen_matrix
+                # for faster addition ops in _construct_errgen_matrix
             else:
                 #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
-                hamGens = _np.transpose( _np.tensordot( 
-                        _np.tensordot(leftTrans, hamGens, (1,1)), rightTrans, (2,0)), (1,0,2))
+                hamGens = _np.transpose(_np.tensordot(
+                    _np.tensordot(leftTrans, hamGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
         else:
             bsH = 0
         assert(bsH == self.ham_basis_size)
-            
+
         if otherGens is not None:
 
             if self.nonham_mode == "diagonal":
-                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
-                _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
+                bsO = len(otherGens) + 1  # projection-basis size (not nec. == d2)
+                _gt._assert_shape(otherGens, (bsO - 1, d2, d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    otherGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
-                                                    inplace=True, check=True) for mx in otherGens ]
+                    otherGens = [_mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                                              inplace=True, check=True) for mx in otherGens]
                     for mx in hamGens: mx.sort_indices()
-                      # for faster addition ops in _construct_errgen_matrix
+                    # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
-                    otherGens = _np.transpose( _np.tensordot( 
-                            _np.tensordot(leftTrans, otherGens, (1,1)), rightTrans, (2,0)), (1,0,2))
+                    otherGens = _np.transpose(_np.tensordot(
+                        _np.tensordot(leftTrans, otherGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
 
             elif self.nonham_mode == "diag_affine":
-                bsO = len(otherGens[0])+1 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
-                _gt._assert_shape(otherGens, (2,bsO-1,d2,d2), self.sparse)
+                # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
+                bsO = len(otherGens[0]) + 1
+                _gt._assert_shape(otherGens, (2, bsO - 1, d2, d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
-                                        for mx in mxRow ] for mxRow in otherGens ]
+                    otherGens = [[_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                                  for mx in mxRow] for mxRow in otherGens]
 
                     for mxRow in otherGens:
                         for mx in mxRow: mx.sort_indices()
-                          # for faster addition ops in _construct_errgen_matrix
+                        # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                     #                          otherGens, rightTrans)
-                    otherGens = _np.transpose( _np.tensordot( 
-                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
-                    
+                    otherGens = _np.transpose(_np.tensordot(
+                        _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
+
             else:
-                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
-                _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
+                bsO = len(otherGens) + 1  # projection-basis size (not nec. == d2)
+                _gt._assert_shape(otherGens, (bsO - 1, bsO - 1, d2, d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
-                                        for mx in mxRow ] for mxRow in otherGens ]
+                    otherGens = [[_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                                  for mx in mxRow] for mxRow in otherGens]
                     #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
                     # terms) need to be real
 
                     for mxRow in otherGens:
                         for mx in mxRow: mx.sort_indices()
-                          # for faster addition ops in _construct_errgen_matrix
+                        # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                     #                            otherGens, rightTrans)
-                    otherGens = _np.transpose( _np.tensordot( 
-                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
+                    otherGens = _np.transpose(_np.tensordot(
+                        _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
 
         else:
             bsO = 0
         assert(bsO == self.other_basis_size)
         return hamGens, otherGens
 
-    
     def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
 
         d2 = self.dim
         d = int(round(_np.sqrt(d2)))
-        tt = termtype # shorthand - used to construct RankOneTerm objects below,
-                      # as we expect `basisdict` will contain *dense* basis
-                      # matrices (maybe change in FUTURE?)
+        tt = termtype  # shorthand - used to construct RankOneTerm objects below,
+        # as we expect `basisdict` will contain *dense* basis
+        # matrices (maybe change in FUTURE?)
         numHamParams = len(hamBasisLabels)
         numOtherBasisEls = len(otherBasisLabels)
-                      
+
         # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
         # coeffs (w/ *local* variable indices) that get converted to per-order
         # terms later.
-        IDENT = None # sentinel for the do-nothing identity op
+        IDENT = None  # sentinel for the do-nothing identity op
         Lterms = []
         for termLbl in Ltermdict:
             termType = termLbl[0]
-            if termType == "H": # Hamiltonian
-                k = hamBasisLabels[termLbl[1]] #index of parameter
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
+            if termType == "H":  # Hamiltonian
+                k = hamBasisLabels[termLbl[1]]  # index of parameter
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basisdict[termLbl[1]], IDENT, tt))
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}),
+                                                IDENT, basisdict[termLbl[1]].conjugate().T, tt))
 
-            elif termType == "S": # Stochastic
-                if self.nonham_mode in ("diagonal","diag_affine"):
-                    if self.param_mode in ("depol","reldepol"): # => same single param for all stochastic terms
-                        k = numHamParams + 0 #index of parameter
+            elif termType == "S":  # Stochastic
+                if self.nonham_mode in ("diagonal", "diag_affine"):
+                    if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
+                        k = numHamParams + 0  # index of parameter
                     else:
-                        k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
+                        k = numHamParams + otherBasisLabels[termLbl[1]]  # index of parameter
                     Lm = Ln = basisdict[termLbl[1]]
-                    pw = 2 if self.param_mode in ("cptp","depol") else 1 # power to raise parameter to in order to get coeff
+                    # power to raise parameter to in order to get coeff
+                    pw = 2 if self.param_mode in ("cptp", "depol") else 1
 
-                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
+                    Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
-                        
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}), Ln, Lm_dag, tt))
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), IDENT, _np.dot(Ln_dag, Lm), tt))
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), _np.dot(Lm_dag, Ln), IDENT, tt))
+
                 else:
-                    i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
-                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
-                    Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
+                    i = otherBasisLabels[termLbl[1]]  # index of row in "other" coefficient matrix
+                    j = otherBasisLabels[termLbl[2]]  # index of col in "other" coefficient matrix
+                    Lm, Ln = basisdict[termLbl[1]], basisdict[termLbl[2]]
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
@@ -5743,46 +5638,48 @@ class LindbladErrorgen(LinearOperator):
                         # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
                         # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
                         #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-                        def iRe(a,b): return numHamParams + (a*numOtherBasisEls + b)
-                        def iIm(a,b): return numHamParams + (b*numOtherBasisEls + a)
-                        for k in range(0,min(i,j)+1):
+                        def iRe(a, b): return numHamParams + (a * numOtherBasisEls + b)
+                        def iIm(a, b): return numHamParams + (b * numOtherBasisEls + a)
+                        for k in range(0, min(i, j) + 1):
                             if k <= i and k <= j:
-                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
+                                polyTerms[(iRe(i, k), iRe(j, k))] = 1.0
                             if k <= i and k < j:
-                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
+                                polyTerms[(iRe(i, k), iIm(j, k))] = -1.0j
                             if k < i and k <= j:
-                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
+                                polyTerms[(iIm(i, k), iRe(j, k))] = 1.0j
                             if k < i and k < j:
-                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
-                    else: # param_mode == "unconstrained"
+                                polyTerms[(iIm(i, k), iIm(j, k))] = 1.0
+                    else:  # param_mode == "unconstrained"
                         # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
-                        ijIndx = numHamParams + (i*numOtherBasisEls + j)
-                        jiIndx = numHamParams + (j*numOtherBasisEls + i)
-                        polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
+                        ijIndx = numHamParams + (i * numOtherBasisEls + j)
+                        jiIndx = numHamParams + (j * numOtherBasisEls + i)
+                        polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
 
                     base_poly = _Polynomial(polyTerms)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
+                    Lterms.append(_term.RankOneTerm(1.0 * base_poly, Ln, Lm, tt))
+                    # adjoint(_np.dot(Lm_dag,Ln))
+                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm), tt))
+                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT, tt))
 
-            elif termType == "A": # Affine
+            elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
-                if self.param_mode in ("depol","reldepol"): # => same single param for all stochastic terms
-                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]] #index of parameter
+                if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
+                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]]  # index of parameter
                 else:
-                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]] #index of parameter
+                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]]  # index of parameter
 
                 # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * sum{ P_i rho P_i } where Pi's
                 #  are the normalized paulis (including the identity), and rho has trace == 1
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
                 L = basisdict[termLbl[1]]
-                Bmxs = _bt.basis_matrices("pp",d2, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
+                # Note: only works when `d` corresponds to integral # of qubits!
+                Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
 
-                for B in Bmxs: # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0} ), _np.dot(L,B), B, tt) ) # /(d2-1.)
-                    
+                for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,): 1.0}), _np.dot(L, B), B, tt))  # /(d2-1.)
+
                 #TODO: check normalization of these terms vs those used in projections.
 
         #DEBUG
@@ -5796,31 +5693,29 @@ class LindbladErrorgen(LinearOperator):
 
         #Make compact polys that are ready to (repeatedly) evaluate (useful
         # for term-based calcs which call get_total_term_magnitude() a lot)
-        poly_coeffs = [ t.coeff for t in Lterms ]
-        tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+        poly_coeffs = [t.coeff for t in Lterms]
+        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
         if len(tapes) > 0:
-            vtape = _np.concatenate( [ t[0] for t in tapes ] )
-            ctape = _np.concatenate( [ t[1] for t in tapes ] )
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
         else:
-            vtape = _np.empty(0,_np.int64)
-            ctape = _np.empty(0,complex)
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
         coeffs_as_compact_polys = (vtape, ctape)
 
         return Lterms, coeffs_as_compact_polys
 
-    
     def _set_params_from_matrix(self, errgen, truncate):
         """ Sets self.paramvals based on `errgen` """
-        hamC, otherC  = \
+        hamC, otherC = \
             _gt.lindblad_errgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
                 return_generators=False, other_mode=self.nonham_mode,
-                sparse=self.sparse) # in std basis
+                sparse=self.sparse)  # in std basis
 
         self.paramvals = _gt.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
-            
     def _construct_errgen_matrix(self):
         """
         Build the error generator matrix using the current parameters.
@@ -5829,62 +5724,60 @@ class LindbladErrorgen(LinearOperator):
         hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
-                            
+
         #Finally, build operation matrix from generators and coefficients:
         if self.sparse:
             #FUTURE: could try to optimize the sum-scalar-mults ops below, as these take the
             # bulk of from_vector time, which recurs frequently.
-            indptr, indices, N = self.sparse_err_gen_template # the CSR arrays giving
-               # the structure of a CSR matrix with 0-elements in all possible places
-            data = _np.zeros(len(indices),'complex') # data starts at zero
-            
+            indptr, indices, N = self.sparse_err_gen_template  # the CSR arrays giving
+            # the structure of a CSR matrix with 0-elements in all possible places
+            data = _np.zeros(len(indices), 'complex')  # data starts at zero
+
             if hamCoeffs is not None:
                 # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
-                _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
+                _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
 
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
                     _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
-                    
-                else: # nonham_mode in ("diag_affine", "all")
+
+                else:  # nonham_mode in ("diag_affine", "all")
                     # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
                     #                      for c,gen in zip(cRow,genRow)])
                     _mt.csr_sum(data, otherCoeffs.flat,
                                 [oGen for oGenRow in self.otherGens for oGen in oGenRow],
                                 self.otherCSRSumIndices)
-            lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
-            
-        else: #dense matrices
+            lnd_error_gen = _sps.csr_matrix((data, indices.copy(), indptr.copy()), shape=(N, N))  # copies needed (?)
+
+        else:  # dense matrices
             if hamCoeffs is not None:
                 #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
-                lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
+                lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0, 0))
             else:
-                lnd_error_gen = _np.zeros( (d2,d2), 'complex')
+                lnd_error_gen = _np.zeros((d2, d2), 'complex')
 
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
-                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0,0))
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0, 0))
 
-                else: # nonham_mode in ("diag_affine", "all")
+                else:  # nonham_mode in ("diag_affine", "all")
                     #lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
                     #                            self.otherGens)
-                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0, 1), (0, 1)))
 
-
-        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0)), \
-            "Imaginary error gen norm: %g" % _mt.safenorm(lnd_error_gen,'imag')
-        #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
+        assert(_np.isclose(_mt.safenorm(lnd_error_gen, 'imag'), 0)), \
+            "Imaginary error gen norm: %g" % _mt.safenorm(lnd_error_gen, 'imag')
+        #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)
         self.err_gen_mx = _mt.safereal(lnd_error_gen, inplace=True)
-
 
     def todense(self):
         """
         Return this error generator as a dense matrix.
         """
         if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladErrorgen objects")
-        if self._evotype in ("svterm","cterm"): 
+        if self._evotype in ("svterm", "cterm"):
             raise NotImplementedError("todense() not implemented for term-based LindbladErrorgen objects")
         return self.err_gen_mx
 
@@ -5900,7 +5793,6 @@ class LindbladErrorgen(LinearOperator):
             return self.err_gen_mx
         else:
             return _sps.csr_matrix(self.todense())
-
 
     def torep(self):
         """
@@ -5919,16 +5811,15 @@ class LindbladErrorgen(LinearOperator):
                 return replib.DMOpRep_Sparse(
                     _np.ascontiguousarray(A.data),
                     _np.ascontiguousarray(A.indices, _np.int64),
-                    _np.ascontiguousarray(A.indptr, _np.int64) )
+                    _np.ascontiguousarray(A.indptr, _np.int64))
             else:
-                return replib.DMOpRep_Dense(_np.ascontiguousarray(self.err_gen_mx,'d'))
+                return replib.DMOpRep_Dense(_np.ascontiguousarray(self.err_gen_mx, 'd'))
         else:
             raise NotImplementedError("torep(%s) not implemented for %s objects!" %
-                                      (self._evotype, self.__class__.__name__))            
-
+                                      (self._evotype, self.__class__.__name__))
 
     def get_taylor_order_terms(self, order, return_coeff_polys=False):
-        """ 
+        """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
@@ -5939,7 +5830,7 @@ class LindbladErrorgen(LinearOperator):
 
         The coefficients of these terms are typically polynomials of the gate's
         parameters, where the polynomial's variable indices index the *global*
-        parameters of the gate's parent (usually a :class:`Model`), not the 
+        parameters of the gate's parent (usually a :class:`Model`), not the
         gate's local parameter array (i.e. that returned from `to_vector`).
 
 
@@ -5961,15 +5852,15 @@ class LindbladErrorgen(LinearOperator):
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys == False)
-        return self.Lterms #terms with local-index polynomial coefficients
+        return self.Lterms  # terms with local-index polynomial coefficients
 
     #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
-    #    """ 
+    #    """
     #    TODO: docstring
     #    """
     #    v = self.to_vector()
@@ -5983,8 +5874,7 @@ class LindbladErrorgen(LinearOperator):
         # return (sum of absvals of term coeffs)
         vtape, ctape = self.Lterm_coeffs
         coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
-        return _np.sum(_np.abs(coeffs)) #sum([ abs(coeff) for coeff in coeffs])
-
+        return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
 
     def num_params(self):
         """
@@ -5997,7 +5887,6 @@ class LindbladErrorgen(LinearOperator):
         """
         return len(self.paramvals)
 
-
     def to_vector(self):
         """
         Extract a vector of the underlying gate parameters from this gate.
@@ -6008,7 +5897,6 @@ class LindbladErrorgen(LinearOperator):
             a 1D numpy array with length == num_params().
         """
         return self.paramvals
-
 
     def from_vector(self, v):
         """
@@ -6030,10 +5918,9 @@ class LindbladErrorgen(LinearOperator):
             self._construct_errgen_matrix()
         self.dirty = True
 
-
     def get_coeffs(self):
         """
-        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this error generator.  Note that these are
         not necessarily the parameter values, as these coefficients are
         generally functions of the parameters (so as to keep the coefficients
@@ -6050,7 +5937,7 @@ class LindbladErrorgen(LinearOperator):
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
-    
+
         basisdict : dict
             A dictionary mapping the integer basis labels used in the
             keys of `Ltermdict` to basis matrices..
@@ -6063,20 +5950,19 @@ class LindbladErrorgen(LinearOperator):
             hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode)
         return Ltermdict, basisdict
 
-
     def transform(self, S):
         """
         Update error generator E with inv(S) * E * S,
 
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting operation matrix is altered as 
+        Generally, the transform function updates the *parameters* of
+        the gate such that the resulting operation matrix is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
         if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
@@ -6085,9 +5971,9 @@ class LindbladErrorgen(LinearOperator):
             Uinv = S.get_transform_matrix_inverse()
 
             #conjugate Lindbladian exponent by U:
-            self.err_gen_mx = _mt.safedot(Uinv,_mt.safedot(self.err_gen_mx, U))
+            self.err_gen_mx = _mt.safedot(Uinv, _mt.safedot(self.err_gen_mx, U))
             self._set_params_from_matrix(self.err_gen_mx, truncate=True)
-            self._construct_errgen_matrix() # unnecessary? (TODO)
+            self._construct_errgen_matrix()  # unnecessary? (TODO)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -6115,14 +6001,14 @@ class LindbladErrorgen(LinearOperator):
         Parameters
         ----------
         S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
+            A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
 
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
         """
-        assert(typ in ('prep','effect')), "Invalid `typ` argument: %s" % typ
-        
+        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+
         if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
             U = S.get_transform_matrix()
@@ -6130,12 +6016,12 @@ class LindbladErrorgen(LinearOperator):
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
-                self.err_gen_mx = _mt.safedot(Uinv,self.err_gen_mx)
+                self.err_gen_mx = _mt.safedot(Uinv, self.err_gen_mx)
             else:
                 self.err_gen_mx = _mt.safedot(self.err_gen_mx, U)
-                
+
             self._set_params_from_matrix(self.err_gen_mx, truncate=True)
-            self._construct_errgen_matrix() # unnecessary? (TODO)
+            self._construct_errgen_matrix()  # unnecessary? (TODO)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -6145,162 +6031,160 @@ class LindbladErrorgen(LinearOperator):
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
 
-
     def _dHdp(self):
-        return self.hamGens.transpose((1,2,0)) #PRETRANS
+        return self.hamGens.transpose((1, 2, 0))  # PRETRANS
         #return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
 
     def _dOdp(self):
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
-        nHam = bsH-1 if (bsH > 0) else 0
+        nHam = bsH - 1 if (bsH > 0) else 0
         d2 = self.dim
-        
-        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
+
+        assert(bsO > 0), "Cannot construct dOdp when other_basis_size == 0!"
         if self.nonham_mode == "diagonal":
             otherParams = self.paramvals[nHam:]
-            
+
             # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
             #  except "depol" & "reldepol" cases, when shape == [d2,d2,1]
-            if self.param_mode == "depol": # all coeffs same & == param^2
+            if self.param_mode == "depol":  # all coeffs same & == param^2
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
                 #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
-                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
-            elif self.param_mode == "reldepol": # all coeffs same & == param
+                dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams[0]
+            elif self.param_mode == "reldepol":  # all coeffs same & == param
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'reldepol' case!"
                 #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
-                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
-            elif self.param_mode == "cptp": # (coeffs = params^2)
-                #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams) 
-                dOdp = _np.transpose(self.otherGens,(1,2,0)) * 2*otherParams # just a broadcast
-            else: # "unconstrained" (coeff == params)
+                dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams[0]
+            elif self.param_mode == "cptp":  # (coeffs = params^2)
+                #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+                dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams  # just a broadcast
+            else:  # "unconstrained" (coeff == params)
                 #dOdp  = _np.einsum('alj->lja', self.otherGens)
-                dOdp  = _np.transpose(self.otherGens, (1,2,0))
-
+                dOdp = _np.transpose(self.otherGens, (1, 2, 0))
 
         elif self.nonham_mode == "diag_affine":
             otherParams = self.paramvals[nHam:]
             # Note: otherGens has shape (2,bsO-1,d2,d2) with diag-term generators
             # in first "row" and affine generators in second row.
-            
+
             # Derivative of exponent wrt other param; shape == [d2,d2,2,bs-1]
             #  except "depol" & "reldepol" cases, when shape == [d2,d2,bs]
-            if self.param_mode == "depol": # all coeffs same & == param^2
+            if self.param_mode == "depol":  # all coeffs same & == param^2
                 diag_params, affine_params = otherParams[0:1], otherParams[1:]
-                dOdp  = _np.empty((d2,d2,bsO),'complex')
+                dOdp = _np.empty((d2, d2, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) * 2*diag_params[0] # single diagonal term
-                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
-            elif self.param_mode == "reldepol": # all coeffs same & == param^2
-                dOdp  = _np.empty((d2,d2,bsO),'complex')
+                dOdp[:, :, 0] = _np.squeeze(self.otherGens[0], 0) * 2 * diag_params[0]  # single diagonal term
+                dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
+            elif self.param_mode == "reldepol":  # all coeffs same & == param^2
+                dOdp = _np.empty((d2, d2, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
-                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) # single diagonal term
-                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # affine part: each gen has own param
-            elif self.param_mode == "cptp": # (coeffs = params^2)
-                diag_params, affine_params = otherParams[0:bsO-1], otherParams[bsO-1:]
-                dOdp  = _np.empty((d2,d2,2,bsO-1),'complex')
+                dOdp[:, :, 0] = _np.squeeze(self.otherGens[0], 0)  # single diagonal term
+                dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # affine part: each gen has own param
+            elif self.param_mode == "cptp":  # (coeffs = params^2)
+                diag_params, affine_params = otherParams[0:bsO - 1], otherParams[bsO - 1:]
+                dOdp = _np.empty((d2, d2, 2, bsO - 1), 'complex')
                 #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
                 #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-                dOdp[:,:,0,:] = _np.transpose(self.otherGens[0],(1,2,0)) * 2*diag_params # broadcast works
-                dOdp[:,:,1,:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
-            else: # "unconstrained" (coeff == params)
+                dOdp[:, :, 0, :] = _np.transpose(self.otherGens[0], (1, 2, 0)) * 2 * diag_params  # broadcast works
+                dOdp[:, :, 1, :] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
+            else:  # "unconstrained" (coeff == params)
                 #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
-                dOdp  = _np.transpose(self.otherGens, (2,3,0,1) ) # -> shape (d2,d2,2,bsO-1)
+                dOdp = _np.transpose(self.otherGens, (2, 3, 0, 1))  # -> shape (d2,d2,2,bsO-1)
 
-        else: # nonham_mode == "all" ; all lindblad terms included
-            assert(self.param_mode in ("cptp","unconstrained"))
-            
+        else:  # nonham_mode == "all" ; all lindblad terms included
+            assert(self.param_mode in ("cptp", "unconstrained"))
+
             if self.param_mode == "cptp":
-                L,Lbar = self.Lmx,self.Lmx.conjugate()
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-                
-                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                  # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
-                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+                L, Lbar = self.Lmx, self.Lmx.conjugate()
+                F1 = _np.tril(_np.ones((bsO - 1, bsO - 1), 'd'))
+                F2 = _np.triu(_np.ones((bsO - 1, bsO - 1), 'd'), 1) * 1j
+
+                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
+                dOdp = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1)  # only a >= b nonzero (F1)
                 dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-            else: # "unconstrained"
-                F0 = _np.identity(bsO-1,'d')
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-            
+                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2)  # only b > a nonzero (F2)
+                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate())  # ditto
+            else:  # "unconstrained"
+                F0 = _np.identity(bsO - 1, 'd')
+                F1 = _np.tril(_np.ones((bsO - 1, bsO - 1), 'd'), -1)
+                F2 = _np.triu(_np.ones((bsO - 1, bsO - 1), 'd'), 1) * 1j
+
                 # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
                 #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
                 #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
                 #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
                 #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
                 #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-                tmp_ablj = _np.transpose(self.otherGens, (2,3,0,1)) # ablj -> ljab
-                tmp_balj = _np.transpose(self.otherGens, (2,3,1,0)) # balj -> ljab
-                dOdp  = tmp_ablj * F0  # a == b case
-                dOdp += tmp_ablj * F1 + tmp_balj * F1 # a > b (F1)
-                dOdp += tmp_balj * F2 - tmp_ablj * F2 # a < b (F2)
+                tmp_ablj = _np.transpose(self.otherGens, (2, 3, 0, 1))  # ablj -> ljab
+                tmp_balj = _np.transpose(self.otherGens, (2, 3, 1, 0))  # balj -> ljab
+                dOdp = tmp_ablj * F0  # a == b case
+                dOdp += tmp_ablj * F1 + tmp_balj * F1  # a > b (F1)
+                dOdp += tmp_balj * F2 - tmp_ablj * F2  # a < b (F2)
 
         # apply basis transform
-        tr = len(dOdp.shape) #tensor rank
-        assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
+        tr = len(dOdp.shape)  # tensor rank
+        assert((tr - 2) in (1, 2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
 
         assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
         return _np.real(dOdp)
 
-
     def _d2Odp2(self):
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
-        nHam = bsH-1 if (bsH > 0) else 0
+        nHam = bsH - 1 if (bsH > 0) else 0
         d2 = self.dim
-        
-        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
+
+        assert(bsO > 0), "Cannot construct dOdp when other_basis_size == 0!"
         if self.nonham_mode == "diagonal":
             otherParams = self.paramvals[nHam:]
-            nP = len(otherParams); 
-            
+            nP = len(otherParams)
+
             # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
             if self.param_mode == "depol":
                 assert(nP == 1)
                 #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
-                d2Odp2  = _np.squeeze(self.otherGens,0)[:,:,None,None] * 2
+                d2Odp2 = _np.squeeze(self.otherGens, 0)[:, :, None, None] * 2
             elif self.param_mode == "cptp":
-                assert(nP == bsO-1)
+                assert(nP == bsO - 1)
                 #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
-                d2Odp2  = _np.transpose(self.otherGens, (1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
-            else: # param_mode == "unconstrained" or "reldepol"
-                assert(nP == bsO-1)
-                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
+                d2Odp2 = _np.transpose(self.otherGens, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
+            else:  # param_mode == "unconstrained" or "reldepol"
+                assert(nP == bsO - 1)
+                d2Odp2 = _np.zeros([d2, d2, nP, nP], 'd')
 
         elif self.nonham_mode == "diag_affine":
             otherParams = self.paramvals[nHam:]
-            nP = len(otherParams); 
-            
+            nP = len(otherParams)
+
             # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
             if self.param_mode == "depol":
-                assert(nP == bsO) # 1 diag param + (bsO-1) affine params
-                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
+                assert(nP == bsO)  # 1 diag param + (bsO-1) affine params
+                d2Odp2 = _np.empty((d2, d2, nP, nP), 'complex')
                 #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
-                d2Odp2[:,:,0,0]  = _np.squeeze(self.otherGens[0],0) * 2 # single diagonal term
-                d2Odp2[:,:,1:,1:]  = 0 # 2nd deriv wrt. all affine params == 0
+                d2Odp2[:, :, 0, 0] = _np.squeeze(self.otherGens[0], 0) * 2  # single diagonal term
+                d2Odp2[:, :, 1:, 1:] = 0  # 2nd deriv wrt. all affine params == 0
             elif self.param_mode == "cptp":
-                assert(nP == 2*(bsO-1)); hnP = bsO-1 # half nP
-                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
+                assert(nP == 2 * (bsO - 1)); hnP = bsO - 1  # half nP
+                d2Odp2 = _np.empty((d2, d2, nP, nP), 'complex')
                 #d2Odp2[:,:,0:hnP,0:hnP] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
-                d2Odp2[:,:,0:hnP,0:hnP] = _np.transpose(self.otherGens[0],(1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
-                d2Odp2[:,:,hnP:,hnP:]   = 0 # 2nd deriv wrt. all affine params == 0
-            else: # param_mode == "unconstrained" or "reldepol"
-                assert(nP == 2*(bsO-1))
-                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
+                d2Odp2[:, :, 0:hnP, 0:hnP] = _np.transpose(self.otherGens[0], (1, 2, 0))[
+                    :, :, :, None] * 2 * _np.identity(nP, 'd')
+                d2Odp2[:, :, hnP:, hnP:] = 0  # 2nd deriv wrt. all affine params == 0
+            else:  # param_mode == "unconstrained" or "reldepol"
+                assert(nP == 2 * (bsO - 1))
+                d2Odp2 = _np.zeros([d2, d2, nP, nP], 'd')
 
-        else: # nonham_mode == "all" : all lindblad terms included
-            nP = bsO-1
+        else:  # nonham_mode == "all" : all lindblad terms included
+            nP = bsO - 1
             if self.param_mode == "cptp":
-                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'complex') #yikes! maybe make this SPARSE in future?
-                
+                d2Odp2 = _np.zeros([d2, d2, nP, nP, nP, nP], 'complex')  # yikes! maybe make this SPARSE in future?
+
                 #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
                 # indices of d2Odp2 are [i,j,a,b,q,r]
-                
+
                 def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
                     """ Generates (base,ab,qr) tuples such that `base` runs over
                         all possible 'other' params and 'ab' and 'qr' run over
@@ -6308,31 +6192,30 @@ class LindbladErrorgen(LinearOperator):
                         ab_inc_eq == True then the > becomes a >=, and likewise
                         for qr_inc_eq.  Used for looping over nonzero hessian els. """
                     for _base in range(nP):
-                        start_ab = _base if ab_inc_eq else _base+1
-                        start_qr = _base if qr_inc_eq else _base+1
-                        for _ab in range(start_ab,nP):
-                            for _qr in range(start_qr,nP):
-                                yield (_base,_ab,_qr)
-                                
-                for base,a,q in iter_base_ab_qr(True,True): # Case1: base=b=r, ab=a, qr=q
-                    d2Odp2[:,:,a,base,q,base] = self.otherGens[a,q] + self.otherGens[q,a]
-                for base,a,r in iter_base_ab_qr(True,False): # Case2: base=b=q, ab=a, qr=r
-                    d2Odp2[:,:,a,base,base,r] = -1j*self.otherGens[a,r] + 1j*self.otherGens[r,a]
-                for base,b,q in iter_base_ab_qr(False,True): # Case3: base=a=r, ab=b, qr=q
-                    d2Odp2[:,:,base,b,q,base] = 1j*self.otherGens[b,q] - 1j*self.otherGens[q,b]
-                for base,b,r in iter_base_ab_qr(False,False): # Case4: base=a=q, ab=b, qr=r
-                    d2Odp2[:,:,base,b,base,r] = self.otherGens[b,r] + self.otherGens[r,b]
-                
-            else: # param_mode == "unconstrained"
-                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'d') #all params linear
+                        start_ab = _base if ab_inc_eq else _base + 1
+                        start_qr = _base if qr_inc_eq else _base + 1
+                        for _ab in range(start_ab, nP):
+                            for _qr in range(start_qr, nP):
+                                yield (_base, _ab, _qr)
+
+                for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
+                    d2Odp2[:, :, a, base, q, base] = self.otherGens[a, q] + self.otherGens[q, a]
+                for base, a, r in iter_base_ab_qr(True, False):  # Case2: base=b=q, ab=a, qr=r
+                    d2Odp2[:, :, a, base, base, r] = -1j * self.otherGens[a, r] + 1j * self.otherGens[r, a]
+                for base, b, q in iter_base_ab_qr(False, True):  # Case3: base=a=r, ab=b, qr=q
+                    d2Odp2[:, :, base, b, q, base] = 1j * self.otherGens[b, q] - 1j * self.otherGens[q, b]
+                for base, b, r in iter_base_ab_qr(False, False):  # Case4: base=a=q, ab=b, qr=r
+                    d2Odp2[:, :, base, b, base, r] = self.otherGens[b, r] + self.otherGens[r, b]
+
+            else:  # param_mode == "unconstrained"
+                d2Odp2 = _np.zeros([d2, d2, nP, nP, nP, nP], 'd')  # all params linear
 
         # apply basis transform
-        tr = len(d2Odp2.shape) #tensor rank
-        assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
+        tr = len(d2Odp2.shape)  # tensor rank
+        assert((tr - 2) in (2, 4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
 
         assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
         return _np.real(d2Odp2)
-
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -6345,37 +6228,36 @@ class LindbladErrorgen(LinearOperator):
         -------
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
-        """    
+        """
         assert(not self.sparse), \
             "LindbladErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
 
         d2 = self.dim
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
-    
+
         #Deriv wrt hamiltonian params
         if bsH > 0:
             dH = self._dHdp()
-            dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedOp,iHamParam]
-        else: 
-            dH = _np.empty( (d2**2,0), 'd') #so concat works below
+            dH = dH.reshape((d2**2, bsH - 1))  # [iFlattenedOp,iHamParam]
+        else:
+            dH = _np.empty((d2**2, 0), 'd')  # so concat works below
 
         #Deriv wrt other params
         if bsO > 0:
             dO = self._dOdp()
-            dO = dO.reshape((d2**2,-1)) # [iFlattenedOp,iOtherParam]
+            dO = dO.reshape((d2**2, -1))  # [iFlattenedOp,iOtherParam]
         else:
-            dO = _np.empty( (d2**2,0), 'd') #so concat works below
+            dO = _np.empty((d2**2, 0), 'd')  # so concat works below
 
-        derivMx = _np.concatenate((dH,dO), axis=1)
-        assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL) #allowed to be complex?
+        derivMx = _np.concatenate((dH, dO), axis=1)
+        assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)  # allowed to be complex?
         derivMx = _np.real(derivMx)
 
         if wrtFilter is None:
             return derivMx
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
-
+            return _np.take(derivMx, wrtFilter, axis=1)
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
@@ -6404,37 +6286,37 @@ class LindbladErrorgen(LinearOperator):
         d2 = self.dim
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
-        nHam = bsH-1 if (bsH > 0) else 0
-        
+        nHam = bsH - 1 if (bsH > 0) else 0
+
         #Split hessian in 4 pieces:   d2H  |  dHdO
         #                             dHdO |  d2O
         # But only d2O is non-zero - and only when cptp == True
 
         nTotParams = self.num_params()
-        hessianMx = _np.zeros( (d2**2, nTotParams, nTotParams), 'd' )
-    
+        hessianMx = _np.zeros((d2**2, nTotParams, nTotParams), 'd')
+
         #Deriv wrt other params
-        if bsO > 0: #if there are any "other" params
-            nP = nTotParams-nHam #num "other" params, e.g. (bsO-1) or (bsO-1)**2
+        if bsO > 0:  # if there are any "other" params
+            nP = nTotParams - nHam  # num "other" params, e.g. (bsO-1) or (bsO-1)**2
             d2Odp2 = self._d2Odp2()
             d2Odp2 = d2Odp2.reshape((d2**2, nP, nP))
 
             #d2Odp2 has been reshape so index as [iFlattenedOp,iDeriv1,iDeriv2]
             assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
-            hessianMx[:,nHam:,nHam:] = _np.real(d2Odp2) # d2O block of hessian
-            
+            hessianMx[:, nHam:, nHam:] = _np.real(d2Odp2)  # d2O block of hessian
+
         if wrtFilter1 is None:
             if wrtFilter2 is None:
                 return hessianMx
             else:
-                return _np.take(hessianMx, wrtFilter2, axis=2 )
+                return _np.take(hessianMx, wrtFilter2, axis=2)
         else:
             if wrtFilter2 is None:
-                return _np.take(hessianMx, wrtFilter1, axis=1 )
+                return _np.take(hessianMx, wrtFilter1, axis=1)
             else:
-                return _np.take( _np.take(hessianMx, wrtFilter1, axis=1),
-                                 wrtFilter2, axis=2 )
-        
+                return _np.take(_np.take(hessianMx, wrtFilter1, axis=1),
+                                wrtFilter2, axis=2)
+
     def __str__(self):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params())

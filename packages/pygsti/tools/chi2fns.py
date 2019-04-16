@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from . import listtools as _lt
 
+
 def chi2_terms(model, dataset, circuits=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
@@ -35,7 +36,7 @@ def chi2_terms(model, dataset, circuits=None,
         string aggregated over outcomes.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
         else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
@@ -52,8 +53,9 @@ def chi2_terms(model, dataset, circuits=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
-        evTree, _,_, lookup, outcomes_lookup = \
+        # Note: simplify_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None
+        evTree, _, _, lookup, outcomes_lookup = \
             smart(model.bulk_evaltree_from_resources,
                   circuits, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
 
@@ -67,41 +69,40 @@ def chi2_terms(model, dataset, circuits=None,
     nEls = evTree.num_final_elements()
     ng = evTree.num_final_strings()
     gd = model.get_dimension()
-    C = 1.0/1024.0**3
+    C = 1.0 / 1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8*(3*nEls) # in bytes
+    persistentMem = 8 * (3 * nEls)  # in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
+                          % (persistentMem * C))
 
     #  Allocate peristent memory
-    N      = _np.empty( nEls , 'd')
-    f      = _np.empty( nEls , 'd')
-    probs  = _np.empty( nEls , 'd')
+    N = _np.empty(nEls, 'd')
+    f = _np.empty(nEls, 'd')
+    probs = _np.empty(nEls, 'd')
 
     dsCircuits = _lt.find_replace_tuple_list(
-            circuits, opLabelAliases)
-    for (i,opStr) in enumerate(dsCircuits):
-        N[ lookup[i] ] = dataset[opStr].total
-        f[ lookup[i] ] = [ dataset[opStr].fraction(x) for x in outcomes_lookup[i] ]
+        circuits, opLabelAliases)
+    for (i, opStr) in enumerate(dsCircuits):
+        N[lookup[i]] = dataset[opStr].total
+        f[lookup[i]] = [dataset[opStr].fraction(x) for x in outcomes_lookup[i]]
 
     smart(model.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
-    cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
-    v = N * ((probs - f)**2/cprobs)
+    cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
+    v = N * ((probs - f)**2 / cprobs)
 
     #Aggregate over outcomes:
     # v[iElement] contains all chi2 contributions - now aggregate over outcomes
     # terms[iCircuit] wiil contain chi2 contributions for each original gate
     # string (aggregated over outcomes)
     nCircuits = len(circuits)
-    terms = _np.empty(nCircuits , 'd')
+    terms = _np.empty(nCircuits, 'd')
     for i in range(nCircuits):
-        terms[i] = _np.sum( v[lookup[i]], axis=0 )
+        terms[i] = _np.sum(v[lookup[i]], axis=0)
     return terms
-
 
 
 def chi2(model, dataset, circuits=None,
@@ -171,7 +172,7 @@ def chi2(model, dataset, circuits=None,
 
     approximateHessian : bool, optional
         Whether, when `returnHessian == True`, an *approximate* version of
-        the Hessian should be returned.  This approximation neglects 
+        the Hessian should be returned.  This approximation neglects
         terms proportional to the Hessian of the probabilities w.r.t. the
         gate parameters (which can take a long time to compute).  See
         `logl_approximate_hessian` for details on the analogous approximation
@@ -194,7 +195,7 @@ def chi2(model, dataset, circuits=None,
         shape (nModelParams, nModelParams).
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
         else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
@@ -221,8 +222,8 @@ def chi2(model, dataset, circuits=None,
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
         #OLD: evTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuits)
-        evTree,_,_,lookup,outcomes_lookup = smart(model.bulk_evaltree_from_resources,
-                                                    circuits, comm, dataset=dataset)
+        evTree, _, _, lookup, outcomes_lookup = smart(model.bulk_evaltree_from_resources,
+                                                      circuits, comm, dataset=dataset)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -230,38 +231,37 @@ def chi2(model, dataset, circuits=None,
             evaltree_cache['lookup'] = lookup
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
-
     #Memory allocation
     nEls = evTree.num_final_elements()
     ng = evTree.num_final_strings()
     ne = model.num_params(); gd = model.get_dimension()
-    C = 1.0/1024.0**3
+    C = 1.0 / 1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8* (3*nEls) # in bytes
-    compute_hprobs = bool(returnHessian and not approximateHessian) # don't need hprobs for approx-Hessian
-    if returnGradient or returnHessian: persistentMem += 8*nEls*ne
-    if compute_hprobs: persistentMem += 8*nEls*ne**2
+    persistentMem = 8 * (3 * nEls)  # in bytes
+    compute_hprobs = bool(returnHessian and not approximateHessian)  # don't need hprobs for approx-Hessian
+    if returnGradient or returnHessian: persistentMem += 8 * nEls * ne
+    if compute_hprobs: persistentMem += 8 * nEls * ne**2
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
+        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit * C) +
                           "< memory required to hold final results (%g GB)"
-                          % (persistentMem*C))
+                          % (persistentMem * C))
 
     #  Allocate peristent memory
-    N      = _np.empty( nEls, 'd')
-    f      = _np.empty( nEls, 'd')
-    probs  = _np.empty( nEls, 'd')
+    N = _np.empty(nEls, 'd')
+    f = _np.empty(nEls, 'd')
+    probs = _np.empty(nEls, 'd')
 
     if returnGradient or returnHessian:
-        dprobs = _np.empty( (nEls,vec_gs_len), 'd')
+        dprobs = _np.empty((nEls, vec_gs_len), 'd')
     if compute_hprobs:
-        hprobs = _np.empty( (nEls,vec_gs_len,vec_gs_len), 'd')
+        hprobs = _np.empty((nEls, vec_gs_len, vec_gs_len), 'd')
 
     #  Estimate & check intermediate memory
     #    - maybe make Model methods get intermediate estimates?
-    intermedMem = 8*ng*gd**2 # ~ bulk_product
-    if returnGradient: intermedMem += 8*ng*gd**2*ne # ~ bulk_dproduct
-    if compute_hprobs: intermedMem += 8*ng*gd**2*ne**2 # ~ bulk_hproduct
+    intermedMem = 8 * ng * gd**2  # ~ bulk_product
+    if returnGradient: intermedMem += 8 * ng * gd**2 * ne  # ~ bulk_dproduct
+    if compute_hprobs: intermedMem += 8 * ng * gd**2 * ne**2  # ~ bulk_hproduct
     if memLimit is not None and memLimit < intermedMem:
         reductionFactor = float(intermedMem) / float(memLimit)
         maxEvalSubTreeSize = int(ng / reductionFactor)
@@ -269,7 +269,7 @@ def chi2(model, dataset, circuits=None,
         maxEvalSubTreeSize = None
 
     if maxEvalSubTreeSize is not None:
-        lookup = evTree.split(lookup,maxEvalSubTreeSize, None)
+        lookup = evTree.split(lookup, maxEvalSubTreeSize, None)
 
     #DEBUG - no verbosity passed in to just leave commented out
     #if memLimit is not None:
@@ -283,47 +283,45 @@ def chi2(model, dataset, circuits=None,
     #        print "Chi2 mem limit has imposed a division of evaluation tree:"
     #  evTree.print_analysis()
 
-
     dsCircuits = _lt.find_replace_tuple_list(
         circuits, opLabelAliases)
-    for (i,opStr) in enumerate(dsCircuits):
-        N[ lookup[i] ] = dataset[opStr].total
-        f[ lookup[i] ] = [ dataset[opStr].fraction(x) for x in outcomes_lookup[i] ]
+    for (i, opStr) in enumerate(dsCircuits):
+        N[lookup[i]] = dataset[opStr].total
+        f[lookup[i]] = [dataset[opStr].fraction(x) for x in outcomes_lookup[i]]
 
     if compute_hprobs:
         smart(model.bulk_fill_hprobs, hprobs, evTree,
-              probs, dprobs, clipTo, check, comm, _filledarrays=(0,2,3))
+              probs, dprobs, clipTo, check, comm, _filledarrays=(0, 2, 3))
     elif returnGradient:
         smart(model.bulk_fill_dprobs, dprobs, evTree,
-              probs, clipTo, check, comm, _filledarrays=(0,2))
+              probs, clipTo, check, comm, _filledarrays=(0, 2))
     else:
         smart(model.bulk_fill_probs, probs, evTree,
               clipTo, check, comm, _filledarrays=(0,))
 
-
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
-    cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
-    chi2 = _np.sum( N * ((probs - f)**2/cprobs), axis=0) # Note 0 is only axis in this case
+    cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
+    chi2 = _np.sum(N * ((probs - f)**2 / cprobs), axis=0)  # Note 0 is only axis in this case
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
 
     if returnGradient:
-        t = ((probs - f)/cprobs)[:,None] # (iElement, 0) = (KM,1)
-        dchi2 = N[:,None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
-        dchi2 = _np.sum( dchi2, axis=0 ) # sum over operation sequences and spam labels => (N)
+        t = ((probs - f) / cprobs)[:, None]  # (iElement, 0) = (KM,1)
+        dchi2 = N[:, None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
+        dchi2 = _np.sum(dchi2, axis=0)  # sum over operation sequences and spam labels => (N)
 
     if returnHessian:
-        dprobs_p = dprobs[:,None,:] # (KM,1,N)
-        t = ((probs - f)/cprobs)[:,None,None] # (iElement, 0,0) = (KM,1,1)
-        dt = ((1.0/cprobs - (probs-f)/cprobs**2)[:,None] * dprobs)[:,:,None] # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
+        dprobs_p = dprobs[:, None, :]  # (KM,1,N)
+        t = ((probs - f) / cprobs)[:, None, None]  # (iElement, 0,0) = (KM,1,1)
+        dt = ((1.0 / cprobs - (probs - f) / cprobs**2)[:, None] *
+              dprobs)[:, :, None]  # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
 
-        if approximateHessian: # neglect all hprobs-proportional terms
-            d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p)
-        else: # we have hprobs and can compute the true Hessian
-            d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
+        if approximateHessian:  # neglect all hprobs-proportional terms
+            d2chi2 = N[:, None, None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p)
+        else:  # we have hprobs and can compute the true Hessian
+            d2chi2 = N[:, None, None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
 
-        d2chi2 = _np.sum( d2chi2, axis=0 ) # sum over operation sequences and spam labels => (N1,N2)
+        d2chi2 = _np.sum(d2chi2, axis=0)  # sum over operation sequences and spam labels => (N1,N2)
         # (KM,1,1) * ( (KM,N1,1) * (KM,1,1) * (KM,1,N2) + (KM,1,1) * (KM,N1,1) * (KM,1,N2) + (KM,1,1) * (KM,1,1) * (KM,N1,N2) )
-
 
     if returnGradient:
         return (chi2, dchi2, d2chi2) if returnHessian else (chi2, dchi2)
@@ -331,7 +329,7 @@ def chi2(model, dataset, circuits=None,
         return (chi2, d2chi2) if returnHessian else chi2
 
 
-def chi2fn_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):
     """
     Computes chi^2 for a 2-outcome measurement.
 
@@ -359,11 +357,11 @@ def chi2fn_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
         where cp is the value of p clipped to the interval
         (minProbClipForWeighting, 1-minProbClipForWeighting)
     """
-    cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
-    return N*(p-f)**2/(cp*(1-cp))
+    cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
+    return N * (p - f)**2 / (cp * (1 - cp))
 
 
-def chi2fn_2outcome_wfreqs( N, p, f ):
+def chi2fn_2outcome_wfreqs(N, p, f):
     """
     Computes chi^2 for a 2-outcome measurement using frequency-weighting.
 
@@ -388,11 +386,11 @@ def chi2fn_2outcome_wfreqs( N, p, f ):
         where f* = (f*N+1)/N+2 is the frequency value used in the
         statistical weighting (prevents divide by zero errors)
     """
-    f1 = (f*N+1)/(N+2)
-    return N*(p-f)**2/(f1*(1-f1))
+    f1 = (f * N + 1) / (N + 2)
+    return N * (p - f)**2 / (f1 * (1 - f1))
 
 
-def chi2fn( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn(N, p, f, minProbClipForWeighting=1e-4):
     """
     Computes the chi^2 term corresponding to a single outcome.
 
@@ -422,11 +420,11 @@ def chi2fn( N, p, f, minProbClipForWeighting=1e-4 ):
         (minProbClipForWeighting, 1-minProbClipForWeighting)
     """
     #cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
-    cp = _np.clip(p,minProbClipForWeighting,1e10) #effectively no upper bound
-    return N*(p-f)**2/cp
+    cp = _np.clip(p, minProbClipForWeighting, 1e10)  # effectively no upper bound
+    return N * (p - f)**2 / cp
 
 
-def chi2fn_wfreqs( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
     """
     Computes the frequency-weighed chi^2 term corresponding to a single outcome.
 
@@ -455,5 +453,5 @@ def chi2fn_wfreqs( N, p, f, minProbClipForWeighting=1e-4 ):
         where f* = (f*N+1)/N+2 is the frequency value used in the
         statistical weighting (prevents divide by zero errors)
     """
-    f1 = (f*N+1)/(N+2)
-    return N*(p-f)**2/f1
+    f1 = (f * N + 1) / (N + 2)
+    return N * (p - f)**2 / f1

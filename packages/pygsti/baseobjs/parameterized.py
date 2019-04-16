@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from functools import wraps
 
+
 def parameterized(dec):
     """
     Used to create decorator functions that take arguments.  Functions
@@ -16,9 +17,9 @@ def parameterized(dec):
     morphed into a standard decorator function.
     """
     @wraps(dec)
-    def _decorated_dec(*args, **kwargs): # new function that replaces dec, and returns a *standard* decorator function
+    def _decorated_dec(*args, **kwargs):  # new function that replaces dec, and returns a *standard* decorator function
         @wraps(_decorated_dec)
-        def _standard_decorator(f): #std decorator (function that replaces f) that calls dec with more args
+        def _standard_decorator(f):  # std decorator (function that replaces f) that calls dec with more args
             return dec(f, *args, **kwargs)
         return _standard_decorator
-    return _decorated_dec # function this replaces the action of dec
+    return _decorated_dec  # function this replaces the action of dec

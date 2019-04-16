@@ -6,13 +6,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-import numpy             as _np
-import warnings          as _warnings
+import numpy as _np
+import warnings as _warnings
 
-from .. import tools     as _tools
-from .. import objects   as _objs
+from .. import tools as _tools
+from .. import objects as _objs
 
 from ..baseobjs import smart_cached
+
 
 def total_count_matrix(gsplaq, dataset):
     """
@@ -37,10 +38,10 @@ def total_count_matrix(gsplaq, dataset):
         operation sequences.
     """
     ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
-    for i,j,opstr,elIndices,outcomes in gsplaq.iter_simplified():
-        ret[elIndices] = dataset[ opstr ].total
-          # OR should it sum only over outcomes, i.e.
-          # = sum([dataset[opstr][ol] for ol in outcomes])
+    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
+        ret[elIndices] = dataset[opstr].total
+        # OR should it sum only over outcomes, i.e.
+        # = sum([dataset[opstr][ol] for ol in outcomes])
     return ret
 
 
@@ -69,8 +70,8 @@ def count_matrices(gsplaq, dataset):
         effect-fiducial pair.
     """
     ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
-    for i,j,opstr,elIndices,outcomes in gsplaq.iter_simplified():
-        datarow = dataset[ opstr ]
+    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
+        datarow = dataset[opstr]
         ret[elIndices] = [datarow[ol] for ol in outcomes]
     return ret
 
@@ -101,8 +102,7 @@ def frequency_matrices(gsplaq, dataset):
         effect-fiducial pair.
     """
     return count_matrices(gsplaq, dataset) \
-           / total_count_matrix( gsplaq, dataset)
-
+        / total_count_matrix(gsplaq, dataset)
 
 
 def probability_matrices(gsplaq, model,
@@ -138,13 +138,14 @@ def probability_matrices(gsplaq, model,
     ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
     if probs_precomp_dict is None:
         if model is not None:
-            for i,j,opstr,elIndices,outcomes in gsplaq.iter_simplified():
+            for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
                 probs = model.probs(opstr)
                 ret[elIndices] = [probs[ol] for ol in outcomes]
     else:
-        for i,j,opstr,elIndices,_ in gsplaq.iter_simplified():
-            ret[elIndices] =  probs_precomp_dict[opstr] #precomp is already in element-array form
+        for i, j, opstr, elIndices, _ in gsplaq.iter_simplified():
+            ret[elIndices] = probs_precomp_dict[opstr]  # precomp is already in element-array form
     return ret
+
 
 @smart_cached
 def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
@@ -186,12 +187,12 @@ def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
 
-    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-            gsplaq.iter_simplified(),gsplaq_ds.iter_simplified()) :
-        chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
+        chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
                                freqs[elIndices_ds], minProbClipForWeighting)
-        ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
+        ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
     return ret
 
 
@@ -238,12 +239,12 @@ def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
 
-    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-            gsplaq.iter_simplified(),gsplaq_ds.iter_simplified()) :
-        logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
-                                         freqs[elIndices_ds], minProbClip)
-        ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
+        logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
+                                        freqs[elIndices_ds], minProbClip)
+        ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
     return ret
 
 
@@ -285,11 +286,11 @@ def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
 
-    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-            gsplaq.iter_simplified(),gsplaq_ds.iter_simplified()) :
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
         TVDs = 0.5 * _np.abs(probs[elIndices] - freqs[elIndices_ds])
-        ret[i,j] = sum(TVDs) # sum all elements for each (i,j) pair
+        ret[i, j] = sum(TVDs)  # sum all elements for each (i,j) pair
     return ret
 
 
@@ -317,11 +318,11 @@ def small_eigval_err_rate(sigma, directGSTmodels):
     float
         the approximate per-gate error rate.
     """
-    if sigma is None: return _np.nan # in plot processing, "None" circuits = no plot output = nan values
+    if sigma is None: return _np.nan  # in plot processing, "None" circuits = no plot output = nan values
     mdl_direct = directGSTmodels[sigma]
-    minEigval = min(abs(_np.linalg.eigvals( mdl_direct.operations["GsigmaLbl"] )))
-    return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
-
+    minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations["GsigmaLbl"])))
+    # (approximate) per-gate error rate; max averts divide by zero error
+    return 1.0 - minEigval**(1.0 / max(len(sigma), 1))
 
 
 def _eformat(f, prec):
@@ -329,39 +330,39 @@ def _eformat(f, prec):
     Formatting routine for writing compact representations of
     numbers in plot boxes
     """
-    if _np.isnan(f): return "" #show NAN as blanks
+    if _np.isnan(f): return ""  # show NAN as blanks
     if prec == 'compact' or prec == 'compacthp':
         if f < 0:
-            ef = _eformat(-f,prec)
+            ef = _eformat(-f, prec)
             return "-" + ef if (ef != "0") else "0"
 
         if prec == 'compacthp':
-            if f <= 0.5e-9: #can't fit in 3 digits; 1e-9 = "1m9" is the smallest 3-digit (not counting minus signs)
+            if f <= 0.5e-9:  # can't fit in 3 digits; 1e-9 = "1m9" is the smallest 3-digit (not counting minus signs)
                 return "0"
-            if f < 0.005: # then need scientific notation since 3-digit float would be 0.00...
+            if f < 0.005:  # then need scientific notation since 3-digit float would be 0.00...
                 s = "%.0e" % f
                 try:
                     mantissa, exp = s.split('e')
                     exp = int(exp); assert(exp < 0)
-                    if exp < -9: return "0" #should have been caugth above, but just in case
+                    if exp < -9: return "0"  # should have been caugth above, but just in case
                     return "%sm%d" % (mantissa, -exp)
                 except:
                     return "?"
             if f < 1:
-                z = "%.2f" % f # print first two decimal places
+                z = "%.2f" % f  # print first two decimal places
                 if z.startswith("0."): return z[1:]  # fails for '1.00'; then thunk down to next f<10 case
             if f < 10:
-                return "%.1f" % f # print whole number and tenths
+                return "%.1f" % f  # print whole number and tenths
 
         if f < 100:
-            return "%.0f" % f # print nearest whole number if only 1 or 2 digits
+            return "%.0f" % f  # print nearest whole number if only 1 or 2 digits
 
         #if f >= 100, minimal scientific notation, such as "4e7", not "4e+07"
         s = "%.0e" % f
         try:
             mantissa, exp = s.split('e')
             exp = int(exp)
-            if exp >= 100: return "B" #if number is too big to print
+            if exp >= 100: return "B"  # if number is too big to print
             if exp >= 10: return "*%d" % exp
             return "%se%d" % (mantissa, exp)
         except:
@@ -369,11 +370,11 @@ def _eformat(f, prec):
 
     elif type(prec) == int:
         if prec >= 0:
-            return "%.*f" % (prec,f)
+            return "%.*f" % (prec, f)
         else:
-            return "%.*g" % (-prec,f)
+            return "%.*g" % (-prec, f)
     else:
-        return "%g" % f #fallback to general format
+        return "%g" % f  # fallback to general format
 
 
 def _num_non_nan(array):
@@ -400,7 +401,7 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
         #Get all the boxes where the entries are not all NaN
         non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]
         s = _np.shape(non_all_NaN)
-        dof_each_box = [_num_non_nan(k)*element_dof for k in non_all_NaN]
+        dof_each_box = [_num_non_nan(k) * element_dof for k in non_all_NaN]
 
         # Don't assert this anymore -- just use average below
         if not _all_same(dof_each_box):
@@ -413,7 +414,7 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
             # Each box is a chi2_(sum) random variable
             dof_per_box = _np.average(dof_each_box)
         else:
-            dof_per_box = None #unknown, since there are no boxes
+            dof_per_box = None  # unknown, since there are no boxes
     else:
         # Each box is a chi2_m random variable currently dictated by the number of
         # dataset degrees of freedom.
@@ -426,8 +427,7 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
     return n_boxes, dof_per_box
 
 
-
-def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6), 
+def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6, 1e6),
                           check=False, opLabelAliases=None,
                           comm=None, smartc=None, wildcard=None):
     """
@@ -435,9 +435,9 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6),
     CircuitStructure `gss`.
     """
     def smart(fn, *args, **kwargs):
-        if smartc: 
+        if smartc:
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: 
+        else:
             if '_filledarrays' in kwargs: del kwargs['_filledarrays']
             return fn(*args, **kwargs)
 
@@ -445,35 +445,36 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6),
 
     #compute probabilities
     #OLD: evt,lookup,_ = smart(model.bulk_evaltree, circuitList, dataset=dataset)
-    evt,_,_,lookup,outcomes_lookup = smart(model.bulk_evaltree_from_resources,
-                                          circuitList, comm, dataset=dataset)
+    evt, _, _, lookup, outcomes_lookup = smart(model.bulk_evaltree_from_resources,
+                                               circuitList, comm, dataset=dataset)
 
-    bulk_probs = _np.zeros(evt.num_final_elements(), 'd') # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
+    # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
+    bulk_probs = _np.zeros(evt.num_final_elements(), 'd')
     smart(model.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm, _filledarrays=(0,))
-      # bulk_probs indexed by [element_index]
+    # bulk_probs indexed by [element_index]
 
     if wildcard:
-        freqs = _np.empty(evt.num_final_elements(), 'd' )
+        freqs = _np.empty(evt.num_final_elements(), 'd')
         ds_circuit_list = _tools.find_replace_tuple_list(
             circuitList, opLabelAliases)
-        for (i,opStr) in enumerate(ds_circuit_list):
+        for (i, opStr) in enumerate(ds_circuit_list):
             cnts = dataset[opStr].counts; total = sum(cnts.values())
-            freqs[ lookup[i] ] = [ cnts.get(x,0)/total for x in outcomes_lookup[i] ]
+            freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
 
         probs_in = bulk_probs.copy()
         wildcard.update_probs(probs_in, bulk_probs, freqs, circuitList, lookup)
 
     probs_dict = \
-        { circuitList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
-          for i in range(len(circuitList)) }
+        {circuitList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
+         for i in range(len(circuitList))}
     return probs_dict
 
 
 #@smart_cached
 def _computeSubMxs(gss, model, subMxCreationFn, dataset=None, subMxCreationFn_extra_arg=None):
     if model is not None: gss.simplify_plaquettes(model, dataset)
-    subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y,subMxCreationFn_extra_arg)
-                 for x in gss.used_xvals() ] for y in gss.used_yvals()]
+    subMxs = [[subMxCreationFn(gss.get_plaquette(x, y), x, y, subMxCreationFn_extra_arg)
+               for x in gss.used_xvals()] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
 
@@ -518,27 +519,25 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
         Direct-X chi^2 values corresponding to operation sequences where
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
-    if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
+    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
         plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=directModel)
-        plaq_pr = gss.create_plaquette( _objs.Circuit( ("GsigmaLbl",) ) )
+        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
         plaq_pr.simplify_circuits(directModel)
 
         cnts = total_count_matrix(plaq_ds, dataset)
-        probs = probability_matrices( plaq_pr, directModel) # no probs_precomp_dict
-        freqs = frequency_matrices( plaq_ds, dataset)
+        probs = probability_matrices(plaq_pr, directModel)  # no probs_precomp_dict
+        freqs = frequency_matrices(plaq_ds, dataset)
 
-        ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
-        for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-                plaq_pr.iter_simplified(),plaq_ds.iter_simplified()) :
-            chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
+        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
+        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
+            chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
                                    freqs[elIndices_ds], minProbClipForWeighting)
-            ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
+            ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
 
         return ret
     else:
-        return _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-
-
+        return _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
 
 
 @smart_cached
@@ -581,26 +580,24 @@ def direct_logl_matrix(gsplaq, gss, dataset, directModel,
         Direct-X logL values corresponding to operation sequences where
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
-    if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
+    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
         plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=directModel)
-        plaq_pr = gss.create_plaquette( _objs.Circuit( ("GsigmaLbl",) ) )
+        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
         plaq_pr.simplify_circuits(directModel)
 
         cnts = total_count_matrix(plaq_ds, dataset)
-        probs = probability_matrices( plaq_pr, directModel) # no probs_precomp_dict
-        freqs = frequency_matrices( plaq_ds, dataset)
+        probs = probability_matrices(plaq_pr, directModel)  # no probs_precomp_dict
+        freqs = frequency_matrices(plaq_ds, dataset)
 
-        ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
-        for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-                plaq_pr.iter_simplified(),plaq_ds.iter_simplified()) :
-            logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
-                                                  freqs[elIndices_ds], minProbClip)
-            ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair
+        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
+        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
+            logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
+                                            freqs[elIndices_ds], minProbClip)
+            ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
         return ret
     else:
-        return _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-
-
+        return _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
 
 
 @smart_cached
@@ -626,9 +623,9 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
         where a base circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for i,j,opstr in gsplaq:
-        ret[i,j] = dscomparator.llrs[opstr]
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    for i, j, opstr in gsplaq:
+        ret[i, j] = dscomparator.llrs[opstr]
     return ret
 
 
@@ -663,17 +660,17 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     #for opstr in driftresults.circuitlist:
     #    pvalues_and_strings_dict[opstr] = driftresults.get_maxpower_pvalue(sequence=opstr)
 
-    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for i,j,opstr in gsplaq:
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    for i, j, opstr in gsplaq:
         try:
             pval = driftresults.get_maxpower_pvalue(sequence=opstr)
-            if pval  <= 0.:
+            if pval <= 0.:
                 #oneoverpvls = 1./driftresults.ps_pvalue.copy()
                 #oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
                 #ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
-                ret[i,j] = 16
+                ret[i, j] = 16
             else:
-                ret[i,j] = _np.log10(1./pval) #pvalues_and_strings_dict[opstr])
+                ret[i, j] = _np.log10(1. / pval)  # pvalues_and_strings_dict[opstr])
         except:
             pass
     return ret
@@ -707,17 +704,18 @@ def drift_maxpower_matrices(gsplaq, driftresults):
     #for opstr in driftresults.circuitlist:
     #    maxpowers_and_strings_dict[opstr] = driftresults.get_maxpower(sequence=opstr)
 
-    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for i,j,opstr in gsplaq:
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    for i, j, opstr in gsplaq:
         try:
-            ret[i,j] = driftresults.get_maxpower(sequence=opstr)
+            ret[i, j] = driftresults.get_maxpower(sequence=opstr)
             #maxpowers_and_strings_dict[opstr]
         except:
             pass
     return ret
 
+
 def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAll=False,
-                comm=None, smartc=None):  #TODO: pipe down minprobclip, radius, probclipinterval?
+                comm=None, smartc=None):  # TODO: pipe down minprobclip, radius, probclipinterval?
     """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `model` model at the "points" (sequences)
@@ -784,18 +782,18 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     gstrs = gss.allstrs
     if objective == "chi2":
         assert(wildcard is None), "Can only use wildcard budget with 'logl' objective!"
-        fitQty = _tools.chi2( model, dataset, gstrs,
-                              minProbClipForWeighting=1e-4,
-                              opLabelAliases=gss.aliases,
-                              comm=comm, smartc=smartc )
+        fitQty = _tools.chi2(model, dataset, gstrs,
+                             minProbClipForWeighting=1e-4,
+                             opLabelAliases=gss.aliases,
+                             comm=comm, smartc=smartc)
     elif objective == "logl":
         logL_upperbound = _tools.logl_max(model, dataset, gstrs, opLabelAliases=gss.aliases,
                                           smartc=smartc)
-        logl = _tools.logl( model, dataset, gstrs, opLabelAliases=gss.aliases,
-                            comm=comm, smartc=smartc, wildcard=wildcard)
-        fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
+        logl = _tools.logl(model, dataset, gstrs, opLabelAliases=gss.aliases,
+                           comm=comm, smartc=smartc, wildcard=wildcard)
+        fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
         if(logL_upperbound < logl):
-            if _np.isclose(logL_upperbound,logl):
+            if _np.isclose(logL_upperbound, logl):
                 logl = logL_upperbound; fitQty = 0.0
             else:
                 raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
@@ -803,13 +801,13 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
 
     if Np is None: Np = model.num_nongauge_params()
-    Ns = dataset.get_degrees_of_freedom(ds_gstrs) #number of independent parameters in dataset
-    k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
-    Nsig = (fitQty-k)/_np.sqrt(2*k)
-    if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns,Np))
-        #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
+    Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
+    k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
+    Nsig = (fitQty - k) / _np.sqrt(2 * k)
+    if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
+    #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
-    if   Nsig <= 2: rating = 5
+    if Nsig <= 2: rating = 5
     elif Nsig <= 20: rating = 4
     elif Nsig <= 100: rating = 3
     elif Nsig <= 500: rating = 2

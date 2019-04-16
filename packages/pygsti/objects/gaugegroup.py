@@ -8,15 +8,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
+
 class GaugeGroup(object):
-    """ 
+    """
     A GaugeGroup describes a parameterized set (ideally a group) of gauge
     transformations which specifies the "optimization space" explored by
     gauge optimization algorithms.  This base class is used to define the
     common interface of all types of gauge "groups" (even though they need
     not be groups in the mathematical sense).
     """
-    
+
     def __init__(self, name):
         """
         Creates a new gauge group object
@@ -65,38 +66,39 @@ class GaugeGroup(object):
         numpy.ndarray
             A 1D array of length :method:`num_params`.
         """
-        return _np.array([],'d')
+        return _np.array([], 'd')
 
 
 class GaugeGroupElement(object):
-    """ 
+    """
     The element of a :class:`GaugeGroup`, which represents a single gauge
     transformation.
     """
+
     def __init__(self):
         """Creates a new GaugeGroupElement"""
         pass
-    
+
     def get_transform_matrix(self):
         """Return the gauge-transform matrix"""
         return None
-    
+
     def get_transform_matrix_inverse(self):
         """Return the inverse of the gauge-transform matrix"""
         return None
-    
-    def deriv_wrt_params(self,wrtFilter=None):
+
+    def deriv_wrt_params(self, wrtFilter=None):
         """
-        Return the derivative of the group of gauge transformations (with 
+        Return the derivative of the group of gauge transformations (with
         respect to the group's parameters) at this element.
         """
         return None
-    
+
     def to_vector(self):
         """Return the parameter vector corresponding to this transform."""
-        return _np.array([],'d')
-    
-    def from_vector(self,v):
+        return _np.array([], 'd')
+
+    def from_vector(self, v):
         """
         Reinitialize this `GaugeGroupElement` using the the parameter
         vector `v`.
@@ -107,26 +109,28 @@ class GaugeGroupElement(object):
             A 1D array of length :method:`num_params`
         """
         pass
-    
-    def num_params(self): 
+
+    def num_params(self):
         """
         Return the number of parameters of this gauge group element (equivalent
         to the number of parameters of it's gauge group).
-        
+
         Returns
         -------
         int
         """
         return 0
-    
+
+
 class OpGaugeGroup(GaugeGroup):
     """
     A gauge group based on the parameterization of a single `LinearOperator`, which is
     used to parameterize the gauge-transform matrix.  This class is used as
     the base class for sevearl other of gauge group classes.
     """
+
     def __init__(self, gate, elementcls, name):
-        """ 
+        """
         Create a new `OpGaugeGroup`.
 
         Parameters
@@ -143,7 +147,7 @@ class OpGaugeGroup(GaugeGroup):
         """
         self.gate = gate
         self.element = elementcls
-        GaugeGroup.__init__(self,name)
+        GaugeGroup.__init__(self, name)
 
     def num_params(self):
         """ See :method:`GaugeGroup.num_params` """
@@ -154,10 +158,11 @@ class OpGaugeGroup(GaugeGroup):
         elgate = self.gate.copy()
         elgate.from_vector(param_vec)
         return self.element(elgate)
-    
+
     def get_initial_params(self):
         """ See :method:`GaugeGroup.get_initial_params` """
         return self.gate.to_vector()
+
 
 class OpGaugeGroupElement(GaugeGroupElement):
     """ The element type for `OpGaugeGroup`-derived gauge groups """
@@ -165,7 +170,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
     def __init__(self, gate):
         """
         Create a new element based on `gate`
-        
+
         Parameters
         ----------
         gate : LinearOperator
@@ -194,7 +199,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         """ See :method:`GaugeGroupElement.to_vector` """
         return self.gate.to_vector()
 
-    def from_vector(self,v):
+    def from_vector(self, v):
         """ See :method:`GaugeGroupElement.from_vector` """
         self.gate.from_vector(v)
         self._inv_matrix = None
@@ -204,129 +209,140 @@ class OpGaugeGroupElement(GaugeGroupElement):
         return self.gate.num_params()
 
 
-
 class FullGaugeGroup(OpGaugeGroup):
-    """ 
+    """
     A fully-parameterized gauge group, where every element of the gauge
     transformation matrix is an independent parameter.
     """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
-        gate = _op.FullDenseOp(_np.identity(dim,'d'))
+        from . import operation as _op  # b/c operation.py imports gaugegroup
+        gate = _op.FullDenseOp(_np.identity(dim, 'd'))
         OpGaugeGroup.__init__(self, gate, FullGaugeGroupElement, "Full")
+
 
 class FullGaugeGroupElement(OpGaugeGroupElement):
     """ Element of a :class:`FullGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        OpGaugeGroupElement.__init__(self,gate)
+        OpGaugeGroupElement.__init__(self, gate)
 
 
 class TPGaugeGroup(OpGaugeGroup):
-    """ 
+    """
     A gauge group spanning all trace-preserving (TP) gauge transformation,
     implemented as a gauge transformation matrix whose first row is locked
     as `[1,0,0...0]` and where every other element is an independent parameter.
     """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
-        gate = _op.TPDenseOp(_np.identity(dim,'d'))
+        from . import operation as _op  # b/c operation.py imports gaugegroup
+        gate = _op.TPDenseOp(_np.identity(dim, 'd'))
         OpGaugeGroup.__init__(self, gate, TPGaugeGroupElement, "TP")
+
 
 class TPGaugeGroupElement(OpGaugeGroupElement):
     """ Element of a :class:`TPGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        OpGaugeGroupElement.__init__(self,gate)
+        OpGaugeGroupElement.__init__(self, gate)
 
     def get_transform_matrix_inverse(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
         if self._inv_matrix is None:
             self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
-            self._inv_matrix[0,:] = 0.0 #ensure invers is *exactly* TP
-            self._inv_matrix[0,0] = 1.0 # as otherwise small variations can get amplified
+            self._inv_matrix[0, :] = 0.0  # ensure invers is *exactly* TP
+            self._inv_matrix[0, 0] = 1.0  # as otherwise small variations can get amplified
         return self._inv_matrix
 
 
 class DiagGaugeGroup(OpGaugeGroup):
-    """ 
+    """
     A gauge group consisting of just diagonal gauge-transform matrices, where
     each diagonal element is a separate parameter.
     """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
-        ltrans = _np.identity(dim,'d')
-        rtrans = _np.identity(dim,'d')
-        baseMx = _np.identity(dim,'d')
+        from . import operation as _op  # b/c operation.py imports gaugegroup
+        ltrans = _np.identity(dim, 'd')
+        rtrans = _np.identity(dim, 'd')
+        baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(dim, 'd')
-        parameterToBaseIndicesMap = { i: [(i,i)] for i in range(dim) }
+        parameterToBaseIndicesMap = {i: [(i, i)] for i in range(dim)}
         gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                               parameterToBaseIndicesMap,
-                                               ltrans, rtrans, real=True)
+                                        parameterToBaseIndicesMap,
+                                        ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, DiagGaugeGroupElement, "Diagonal")
+
 
 class DiagGaugeGroupElement(OpGaugeGroupElement):
     """ Element of a :class:`DiagGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        OpGaugeGroupElement.__init__(self,gate)
+        OpGaugeGroupElement.__init__(self, gate)
 
 
 class TPDiagGaugeGroup(TPGaugeGroup):
-    """ 
+    """
     A gauge group consisting of just trace-preserving (TP) diagonal
     gauge-transform matrices, where the first (`[0,0]`) element is fixed at 1.0,
     and each subsequent diagonal element is a separate parameter.
-    """    
+    """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
-        ltrans = _np.identity(dim,'d')
-        rtrans = _np.identity(dim,'d')
-        baseMx = _np.identity(dim,'d')
-        parameterArray = _np.zeros(dim-1, 'd')
-        parameterToBaseIndicesMap = { i: [(i+1,i+1)] for i in range(dim-1) }
+        from . import operation as _op  # b/c operation.py imports gaugegroup
+        ltrans = _np.identity(dim, 'd')
+        rtrans = _np.identity(dim, 'd')
+        baseMx = _np.identity(dim, 'd')
+        parameterArray = _np.zeros(dim - 1, 'd')
+        parameterToBaseIndicesMap = {i: [(i + 1, i + 1)] for i in range(dim - 1)}
         gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                               parameterToBaseIndicesMap,
-                                               ltrans, rtrans, real=True)
+                                        parameterToBaseIndicesMap,
+                                        ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, TPDiagGaugeGroupElement, "TP Diagonal")
+
 
 class TPDiagGaugeGroupElement(TPGaugeGroupElement):
     """ Element of a :class:`TPDiagGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        TPGaugeGroupElement.__init__(self,gate)
+        TPGaugeGroupElement.__init__(self, gate)
 
 
 class UnitaryGaugeGroup(OpGaugeGroup):
@@ -336,26 +352,29 @@ class UnitaryGaugeGroup(OpGaugeGroup):
     unitary evolution.  Parameterization is performed via a Lindblad
     parametrizaton with only Hamiltonian terms.
     """
+
     def __init__(self, dim, basis):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
+        from . import operation as _op  # b/c operation.py imports gaugegroup
         gate = _op.LindbladDenseOp.from_operation_matrix(
-            None, _np.identity(dim,'d'), ham_basis=basis, nonham_basis=None,
+            None, _np.identity(dim, 'd'), ham_basis=basis, nonham_basis=None,
             param_mode="cptp", mxBasis=basis)
         OpGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement, "Unitary")
 
+
 class UnitaryGaugeGroupElement(OpGaugeGroupElement):
     """ Element of a :class:`UnitaryGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        OpGaugeGroupElement.__init__(self,gate)
+        OpGaugeGroupElement.__init__(self, gate)
 
 
 class SpamGaugeGroup(OpGaugeGroup):
@@ -366,32 +385,35 @@ class SpamGaugeGroup(OpGaugeGroup):
       [ . . ... .]   much more than typical near-unital and TP gates, and
       [ 0 0 ... b] ] so we call this group of transformations the "SPAM gauge".
     """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
-        ltrans = _np.identity(dim,'d')
-        rtrans = _np.identity(dim,'d')
-        baseMx = _np.identity(dim,'d')
+        from . import operation as _op  # b/c operation.py imports gaugegroup
+        ltrans = _np.identity(dim, 'd')
+        rtrans = _np.identity(dim, 'd')
+        baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(2, 'd')
-        parameterToBaseIndicesMap = { 0: [(0,0)],
-                                      1: [(i,i) for i in range(1,dim)] }
+        parameterToBaseIndicesMap = {0: [(0, 0)],
+                                     1: [(i, i) for i in range(1, dim)]}
         gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                               parameterToBaseIndicesMap,
-                                               ltrans, rtrans, real=True)
+                                        parameterToBaseIndicesMap,
+                                        ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, SpamGaugeGroupElement, "Spam")
+
 
 class SpamGaugeGroupElement(OpGaugeGroupElement):
     """ Element of a :class:`SpamGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        OpGaugeGroupElement.__init__(self,gate)
+        OpGaugeGroupElement.__init__(self, gate)
 
 
 class TPSpamGaugeGroup(OpGaugeGroup):
@@ -400,43 +422,46 @@ class TPSpamGaugeGroup(OpGaugeGroup):
     of each transform matrix is fixed at 1.0 (so all gauge transforms are trace
     preserving), leaving just a single degree of freedom.
     """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op #b/c operation.py imports gaugegroup
-        ltrans = _np.identity(dim,'d')
-        rtrans = _np.identity(dim,'d')
-        baseMx = _np.identity(dim,'d')
+        from . import operation as _op  # b/c operation.py imports gaugegroup
+        ltrans = _np.identity(dim, 'd')
+        rtrans = _np.identity(dim, 'd')
+        baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(1, 'd')
-        parameterToBaseIndicesMap = { 0: [(i,i) for i in range(1,dim)] }
+        parameterToBaseIndicesMap = {0: [(i, i) for i in range(1, dim)]}
         gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                               parameterToBaseIndicesMap,
-                                               ltrans, rtrans, real=True)
+                                        parameterToBaseIndicesMap,
+                                        ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, TPSpamGaugeGroupElement, "TP Spam")
+
 
 class TPSpamGaugeGroupElement(OpGaugeGroupElement):
     """ Element of :class:`TPSpamGaugeGroup` """
+
     def __init__(self, gate):
-        """ 
+        """
         Creates a new gauge group element based on `gate`, which
         is assumed to have the correct parameterization.
         """
-        OpGaugeGroupElement.__init__(self,gate)
-
+        OpGaugeGroupElement.__init__(self, gate)
 
 
 class TrivialGaugeGroup(GaugeGroup):
-    """ 
+    """
     A trivial gauge group with no degrees of freedom.  Useful
     for telling pyGSTi that you don't want to do any gauge optimization
-    within the framework common to the other gauge groups. Using a 
+    within the framework common to the other gauge groups. Using a
     `TrivialGaugeGroup` instead of `None` in gauge optimization will
     prevent pyGSTi from wondering if you meant to not-gauge-optimize and
     displaying warning messages.
     """
+
     def __init__(self, dim):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
@@ -444,7 +469,7 @@ class TrivialGaugeGroup(GaugeGroup):
         might gauge-transform.
         """
         self.dim = dim
-        GaugeGroup.__init__(self,"Trivial")
+        GaugeGroup.__init__(self, "Trivial")
 
     def num_params(self):
         """ See :method:`GaugeGroup.num_params` """
@@ -454,20 +479,21 @@ class TrivialGaugeGroup(GaugeGroup):
         """ See :method:`GaugeGroup.get_element` """
         assert(len(param_vec) == 0)
         return TrivialGaugeGroupElement(self.dim)
-    
+
     def get_initial_params(self):
         """ See :method:`GaugeGroup.get_initial_params` """
-        return _np.empty(0,'d')
+        return _np.empty(0, 'd')
 
-        
+
 class TrivialGaugeGroupElement(GaugeGroupElement):
     """ Element of :class:`TrivialGaugeGroup` """
+
     def __init__(self, dim):
-        """ 
+        """
         Creates a new trivial gauge group element of dimension `dim`.
         (so transform matirx is a `dim` by `dim` identity matrix).
         """
-        self._matrix = _np.identity(dim,'d')
+        self._matrix = _np.identity(dim, 'd')
         GaugeGroupElement.__init__(self)
 
     def get_transform_matrix(self):
@@ -476,17 +502,17 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
 
     def get_transform_matrix_inverse(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
-        return self._matrix #inverse of identity is itself!
+        return self._matrix  # inverse of identity is itself!
 
     def deriv_wrt_params(self, wrtFilter=None):
         """ See :method:`GaugeGroupElement.deriv_wrt_params` """
-        return _np.empty(0,'d')
+        return _np.empty(0, 'd')
 
     def to_vector(self):
         """ See :method:`GaugeGroupElement.to_vector` """
-        return _np.empty(0,'d')
+        return _np.empty(0, 'd')
 
-    def from_vector(self,v):
+    def from_vector(self, v):
         """ See :method:`GaugeGroupElement.from_vector` """
         assert(len(v) == 0)
 

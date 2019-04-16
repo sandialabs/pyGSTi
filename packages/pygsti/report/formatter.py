@@ -10,6 +10,7 @@ from copy import deepcopy
 
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 
+
 class Formatter(object):
     '''
     Class defining the formatting rules for an object
@@ -22,15 +23,15 @@ class Formatter(object):
     which is useful (i.e. in creating figure formatters)
     '''
 
-    def __init__(self, 
-            custom=None, 
-            stringreplacers=None, 
-            regexreplace=None,
-            formatstring='%s',
-            ebstring='%s +/- %s',
-            nmebstring=None,
-            stringreturn=None,
-            defaults=None):
+    def __init__(self,
+                 custom=None,
+                 stringreplacers=None,
+                 regexreplace=None,
+                 formatstring='%s',
+                 ebstring='%s +/- %s',
+                 nmebstring=None,
+                 stringreturn=None,
+                 defaults=None):
         '''
         Create a Formatter object by supplying formatting rules to be applied
 
@@ -46,24 +47,24 @@ class Formatter(object):
 
         formatstring : string (optional) Outer formatting for after both replacements have been made
 
-        ebstring : string (optional) formatstring used if the item being formatted has attached error bars 
+        ebstring : string (optional) formatstring used if the item being formatted has attached error bars
 
         stringreturn : tuple (string, string)
             return the second string if the label is equal to the first
 
         defaults : dictionary (string, any)
-            overriden values to the dictionary passed in during formatted. 
+            overriden values to the dictionary passed in during formatted.
             ie for rounded formatters, which override the precision key to be set to two
         '''
-        self.custom          = custom
+        self.custom = custom
         self.stringreplacers = stringreplacers
-        self.stringreturn    = stringreturn
-        self.regexreplace    = regexreplace
-        self.formatstring    = formatstring
-        self.ebstring        = ebstring
+        self.stringreturn = stringreturn
+        self.regexreplace = regexreplace
+        self.formatstring = formatstring
+        self.ebstring = ebstring
         if nmebstring is None:
             nmebstring = ebstring
-        self.nmebstring      = nmebstring
+        self.nmebstring = nmebstring
 
         if defaults is None:
             self.defaults = dict()
@@ -85,7 +86,7 @@ class Formatter(object):
         --------
         formatted item : string
         '''
-        specs = deepcopy(specs) # Modifying other dictionaries would be rude
+        specs = deepcopy(specs)  # Modifying other dictionaries would be rude
         specs.update(self.defaults)
 
         if isinstance(item, _ReportableQty):
@@ -96,7 +97,7 @@ class Formatter(object):
             return item.render_with(self, specs, self.ebstring, self.nmebstring)
         # item is not ReportableQty, and custom is defined
         # avoids calling custom twice on ReportableQty objects
-        elif self.custom is not None: 
+        elif self.custom is not None:
             item = self.custom(item, specs)
 
         item = str(item)
@@ -112,8 +113,8 @@ class Formatter(object):
         # And then replace all occurrences of certain regexes
         if self.regexreplace is not None:
             result = _re.search(self.regexreplace[0], item)
-            if result is not None:  #Note: specific to 1-group regexps currently...
-                s,e = result.span() # same as result.start(), result.end()
+            if result is not None:  # Note: specific to 1-group regexps currently...
+                s, e = result.span()  # same as result.start(), result.end()
                 item = item[0:s] + (self.regexreplace[1] % result.group(1)) + item[e:]
         formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
@@ -131,7 +132,7 @@ class Formatter(object):
         for k, v in kwargs.items():
             if k not in ret.__dict__:
                 raise ValueError('Invalid argument to Formatter.variant: {}={}\n{}'.format(k, v,
-                    'Valid arguments are: {}'.format(list(ret.__dict__.keys()))))
+                                                                                           'Valid arguments are: {}'.format(list(ret.__dict__.keys()))))
             if k == 'ebstring' and ('nmebstring' not in kwargs) \
                and ret.ebstring == ret.nmebstring:
                 ret.__dict__[k] = v

@@ -13,8 +13,9 @@ from .. import objects as _obj
 from .. import algorithms as _alg
 from .. import tools as _tools
 
-def make_bootstrap_dataset(inputDataSet,generationMethod,inputModel=None,
-                           seed=None,outcomeLabels=None,verbosity=1):
+
+def make_bootstrap_dataset(inputDataSet, generationMethod, inputModel=None,
+                           seed=None, outcomeLabels=None, verbosity=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -57,8 +58,8 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputModel=None,
         outcomeLabels = inputDataSet.get_outcome_labels()
 
     rndm = seed if isinstance(seed, _np.random.RandomState) \
-           else _np.random.RandomState(seed)
-    
+        else _np.random.RandomState(seed)
+
     if inputModel is None:
         if generationMethod == 'nonparametric':
             print("Generating non-parametric dataset.")
@@ -70,15 +71,15 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputModel=None,
         elif generationMethod == 'nonparametric':
             raise ValueError("For 'nonparametric', inputModel must be None")
         firstPOVMLbl = list(inputModel.povms.keys())[0]
-          # TODO: allow outcomes from multiple POVMS? (now just consider *first* POVM)
-        possibleOutcomeLabels = [ (eLbl,) for eLbl in inputModel.povms[firstPOVMLbl].keys() ] 
-        assert( all([ol in possibleOutcomeLabels for ol in outcomeLabels]) )
+        # TODO: allow outcomes from multiple POVMS? (now just consider *first* POVM)
+        possibleOutcomeLabels = [(eLbl,) for eLbl in inputModel.povms[firstPOVMLbl].keys()]
+        assert(all([ol in possibleOutcomeLabels for ol in outcomeLabels]))
 
     possibleOutcomeLabels = inputDataSet.get_outcome_labels()
-    assert( all([ol in possibleOutcomeLabels for ol in outcomeLabels]) )
+    assert(all([ol in possibleOutcomeLabels for ol in outcomeLabels]))
 
     #create new dataset
-    simDS = _obj.DataSet(outcomeLabels=outcomeLabels, 
+    simDS = _obj.DataSet(outcomeLabels=outcomeLabels,
                          collisionAction=inputDataSet.collisionAction)
     circuit_list = list(inputDataSet.keys())
     for s in circuit_list:
@@ -86,22 +87,23 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputModel=None,
         if generationMethod == 'parametric':
             ps = inputModel.probs(s)
         elif generationMethod == 'nonparametric':
-            ps = { ol: inputDataSet[s].fraction(ol) for ol in outcomeLabels }
-        pList = _np.array([_np.clip(ps[outcomeLabel],0,1) for outcomeLabel in outcomeLabels])
-          #Truncate before normalization; bad extremal values shouldn't
-          # screw up not-bad values, yes?
+            ps = {ol: inputDataSet[s].fraction(ol) for ol in outcomeLabels}
+        pList = _np.array([_np.clip(ps[outcomeLabel], 0, 1) for outcomeLabel in outcomeLabels])
+        #Truncate before normalization; bad extremal values shouldn't
+        # screw up not-bad values, yes?
         pList = pList / sum(pList)
         countsArray = rndm.multinomial(nSamples, pList, 1)
-        counts = { ol: countsArray[0,i] for i,ol in enumerate(outcomeLabels) }
+        counts = {ol: countsArray[0, i] for i, ol in enumerate(outcomeLabels)}
         simDS.add_count_dict(s, counts)
     simDS.done_adding_data()
     return simDS
 
+
 def make_bootstrap_models(numModels, inputDataSet, generationMethod,
-                            fiducialPrep, fiducialMeasure, germs, maxLengths,
-                            inputModel=None, targetModel=None, startSeed=0,
-                            outcomeLabels=None, lsgstLists=None,
-                            returnData=False, verbosity=2):
+                          fiducialPrep, fiducialMeasure, germs, maxLengths,
+                          inputModel=None, targetModel=None, startSeed=0,
+                          outcomeLabels=None, lsgstLists=None,
+                          returnData=False, verbosity=2):
     """
     Creates a series of "bootstrapped" Models form a single DataSet (and
     possibly Model) used for generating bootstrapped error bars.  The
@@ -183,7 +185,7 @@ def make_bootstrap_models(numModels, inputDataSet, generationMethod,
 
     if maxLengths == None:
         print("No maxLengths value specified; using [0,1,24,...,1024]")
-        maxLengths = [0]+[2**k for k in range(10)]
+        maxLengths = [0] + [2**k for k in range(10)]
 
     if (inputModel is None and targetModel is None):
         raise ValueError("Must supply either inputModel or targetModel!")
@@ -198,11 +200,11 @@ def make_bootstrap_models(numModels, inputDataSet, generationMethod,
     for run in range(numModels):
         print("%d " % run, end='')
         datasetList.append(
-            make_bootstrap_dataset(inputDataSet,generationMethod,
-                                   inputModel, startSeed+run,
+            make_bootstrap_dataset(inputDataSet, generationMethod,
+                                   inputModel, startSeed + run,
                                    outcomeLabels)
-            )
-        
+        )
+
     modelList = []
     print("Creating Models: ")
     for run in range(numModels):
@@ -224,8 +226,8 @@ def make_bootstrap_models(numModels, inputDataSet, generationMethod,
 
 
 def gauge_optimize_model_list(gsList, targetModel,
-                           gateMetric = 'frobenius', spamMetric = 'frobenius',
-                           plot=True):
+                              gateMetric='frobenius', spamMetric='frobenius',
+                              plot=True):
     """
     Optimizes the "spam weight" parameter used in gauge optimization by
     attempting spam a range of spam weights and taking the one the minimizes
@@ -269,23 +271,23 @@ def gauge_optimize_model_list(gsList, targetModel,
     gateMin = []
     gateMax = []
     gateMean = []
-    for spWind, spW in enumerate(_np.logspace(-4,0,13)): #try spam weights
+    for spWind, spW in enumerate(_np.logspace(-4, 0, 13)):  # try spam weights
         print("Spam weight %s" % spWind)
         listOfBootStrapEstsNoOptG0toTargetVarSpam = []
         for mdl in listOfBootStrapEstsNoOpt:
             listOfBootStrapEstsNoOptG0toTargetVarSpam.append(
-                _alg.gaugeopt_to_target(mdl,targetModel, 
-                                        itemWeights={'spam': spW },
+                _alg.gaugeopt_to_target(mdl, targetModel,
+                                        itemWeights={'spam': spW},
                                         gatesMetric=gateMetric,
                                         spamMetric=spamMetric))
 
         ModelGOtoTargetVarSpamVecArray = _np.zeros([numResamples],
-                                                     dtype='object')
+                                                   dtype='object')
         for i in range(numResamples):
             ModelGOtoTargetVarSpamVecArray[i] = \
                 listOfBootStrapEstsNoOptG0toTargetVarSpam[i].to_vector()
 
-        mdlStdevVec = _np.std(ModelGOtoTargetVarSpamVecArray,ddof=ddof)
+        mdlStdevVec = _np.std(ModelGOtoTargetVarSpamVecArray, ddof=ddof)
         gsStdevVecSPAM = mdlStdevVec[:8]
         mdlStdevVecOps = mdlStdevVec[8:]
 
@@ -317,21 +319,19 @@ def gauge_optimize_model_list(gsList, targetModel,
 
     # gateTimesSPAMMean = _np.array(SPAMMean) * _np.array(gateMean)
 
-    bestSPAMWeight = _np.logspace(-4,0,13)[ _np.argmin(
-            _np.array(SPAMMean)*_np.array(gateMean)) ]
+    bestSPAMWeight = _np.logspace(-4, 0, 13)[_np.argmin(
+        _np.array(SPAMMean) * _np.array(gateMean))]
     print("Best SPAM weight is %s" % bestSPAMWeight)
 
     listOfBootStrapEstsG0toTargetSmallSpam = []
     for mdl in listOfBootStrapEstsNoOpt:
         listOfBootStrapEstsG0toTargetSmallSpam.append(
-            _alg.gaugeopt_to_target(mdl,targetModel,
+            _alg.gaugeopt_to_target(mdl, targetModel,
                                     itemWeights={'spam': bestSPAMWeight},
                                     gatesMetric=gateMetric,
                                     spamMetric=spamMetric))
 
     return listOfBootStrapEstsG0toTargetSmallSpam
-
-
 
 
 ################################################################################
@@ -340,7 +340,7 @@ def gauge_optimize_model_list(gsList, targetModel,
 
 #For metrics that evaluate model with single scalar:
 def mdl_stdev(gsFunc, gsEnsemble, ddof=1, axis=None, **kwargs):
-    """ 
+    """
     Standard deviation of `gsFunc` over an ensemble of models.
 
     Parameters
@@ -363,10 +363,11 @@ def mdl_stdev(gsFunc, gsEnsemble, ddof=1, axis=None, **kwargs):
     numpy.ndarray
         The output of numpy.std
     """
-    return _np.std([gsFunc(mdl, **kwargs) for mdl in gsEnsemble],axis=axis, ddof=ddof)
+    return _np.std([gsFunc(mdl, **kwargs) for mdl in gsEnsemble], axis=axis, ddof=ddof)
+
 
 def mdl_mean(gsFunc, gsEnsemble, axis=None, **kwargs):
-    """ 
+    """
     Mean of `gsFunc` over an ensemble of models.
 
     Parameters
@@ -391,8 +392,9 @@ def mdl_mean(gsFunc, gsEnsemble, axis=None, **kwargs):
 #Note: for metrics that evaluate model with scalar for each gate, use axis=0
 # argument to above functions
 
-def to_mean_model(gsList,target_gs):
-    """ 
+
+def to_mean_model(gsList, target_gs):
+    """
     Return the :class:`Model` constructed from the mean parameter
     vector of the models in `gsList`, that is, the mean of the
     parameter vectors of each model in `gsList`.
@@ -409,17 +411,18 @@ def to_mean_model(gsList,target_gs):
     Returns
     -------
     Model
-    """        
+    """
     numResamples = len(gsList)
-    gsVecArray = _np.zeros([numResamples],dtype='object')
+    gsVecArray = _np.zeros([numResamples], dtype='object')
     for i in range(numResamples):
         gsVecArray[i] = gsList[i].to_vector()
     output_gs = target_gs.copy()
     output_gs.from_vector(_np.mean(gsVecArray))
     return output_gs
 
-def to_std_model(gsList,target_gs,ddof=1):
-    """ 
+
+def to_std_model(gsList, target_gs, ddof=1):
+    """
     Return the :class:`Model` constructed from the standard-deviation
     parameter vector of the models in `gsList`, that is, the standard-
     devaiation of the parameter vectors of each model in `gsList`.
@@ -441,15 +444,16 @@ def to_std_model(gsList,target_gs,ddof=1):
     Model
     """
     numResamples = len(gsList)
-    gsVecArray = _np.zeros([numResamples],dtype='object')
+    gsVecArray = _np.zeros([numResamples], dtype='object')
     for i in range(numResamples):
         gsVecArray[i] = gsList[i].to_vector()
     output_gs = target_gs.copy()
-    output_gs.from_vector(_np.std(gsVecArray,ddof=ddof))
+    output_gs.from_vector(_np.std(gsVecArray, ddof=ddof))
     return output_gs
 
-def to_rms_model(gsList,target_gs):
-    """ 
+
+def to_rms_model(gsList, target_gs):
+    """
     Return the :class:`Model` constructed from the root-mean-squared
     parameter vector of the models in `gsList`, that is, the RMS
     of the parameter vectors of each model in `gsList`.
@@ -468,7 +472,7 @@ def to_rms_model(gsList,target_gs):
     Model
     """
     numResamples = len(gsList)
-    gsVecArray = _np.zeros([numResamples],dtype='object')
+    gsVecArray = _np.zeros([numResamples], dtype='object')
     for i in range(numResamples):
         gsVecArray[i] = _np.sqrt(gsList[i].to_vector()**2)
     output_gs = target_gs.copy()

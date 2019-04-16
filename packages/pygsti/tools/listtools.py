@@ -9,7 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 
-def remove_duplicates_in_place(l,indexToTest=None):
+
+def remove_duplicates_in_place(l, indexToTest=None):
     """
     Remove duplicates from the list passed as an argument.
 
@@ -36,14 +37,15 @@ def remove_duplicates_in_place(l,indexToTest=None):
     else:
         for x in l:
             t = x[indexToTest]
-    
+
             if t not in s:
                 s.add(t)
                 l[n] = x; n += 1
 
     del l[n:]
 
-def remove_duplicates(l,indexToTest=None):
+
+def remove_duplicates(l, indexToTest=None):
     """
     Remove duplicates from the a list and return the result.
 
@@ -86,7 +88,7 @@ def compute_occurrence_indices(lst):
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the
     returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This is useful
-    when working with `DataSet` objects that have `collisionAction` 
+    when working with `DataSet` objects that have `collisionAction`
     set to "keepseparate".
 
     Parameters
@@ -104,10 +106,11 @@ def compute_occurrence_indices(lst):
             lookup[x] = 0
         else:
             lookup[x] += 1
-        ret.append( lookup[x] )
+        ret.append(lookup[x])
     return ret
 
-def find_replace_tuple(t,aliasDict):
+
+def find_replace_tuple(t, aliasDict):
     """
     Replace elements of t according to rules in `aliasDict`.
 
@@ -127,14 +130,14 @@ def find_replace_tuple(t,aliasDict):
     """
     t = tuple(t)
     if aliasDict is None: return t
-    for label,expandedStr in aliasDict.items():
+    for label, expandedStr in aliasDict.items():
         while label in tuple(t):
             i = t.index(label)
-            t = t[:i] + tuple(expandedStr) + t[i+1:]
+            t = t[:i] + tuple(expandedStr) + t[i + 1:]
     return t
 
 
-def find_replace_tuple_list(list_of_tuples,aliasDict):
+def find_replace_tuple_list(list_of_tuples, aliasDict):
     """
     Applies :func:`find_replace_tuple` on each element of `list_of_tuples`.
 
@@ -152,7 +155,7 @@ def find_replace_tuple_list(list_of_tuples,aliasDict):
     -------
     list
     """
-    return [ find_replace_tuple(t,aliasDict) for t in list_of_tuples ]
+    return [find_replace_tuple(t, aliasDict) for t in list_of_tuples]
 
 
 def sorted_partitions(n):
@@ -174,50 +177,51 @@ def sorted_partitions(n):
         Iterates over arrays of descending integers (sorted partitions).
     """
 
-    if n == 0: #special case
-        yield _np.zeros(0,_np.int64); return
-        
-    p = _np.zeros(n,_np.int64)
+    if n == 0:  # special case
+        yield _np.zeros(0, _np.int64); return
+
+    p = _np.zeros(n, _np.int64)
     k = 0    # Index of last element in a partition
-    p[k] = n # Initialize first partition as number itself
- 
+    p[k] = n  # Initialize first partition as number itself
+
     # This loop first yields current partition, then generates next
     # partition. The loop stops when the current partition has all 1s
     while True:
-        yield p[0:k+1]
- 
+        yield p[0:k + 1]
+
         # Find the rightmost non-one value in p[]. Also, update the
         # rem_val so that we know how much value can be accommodated
-        rem_val = 0;
+        rem_val = 0
         while k >= 0 and p[k] == 1:
             rem_val += p[k]
             k -= 1
- 
+
         # if k < 0, all the values are 1 so there are no more partitions
         if k < 0: return
- 
+
         # Decrease the p[k] found above and adjust the rem_val
         p[k] -= 1
         rem_val += 1
- 
+
         # If rem_val is more, then the sorted order is violated.  Divide
         # rem_val in different values of size p[k] and copy these values at
         # different positions after p[k]
         while rem_val > p[k]:
-            p[k+1] = p[k]
+            p[k + 1] = p[k]
             rem_val -= p[k]
             k += 1
- 
+
         # Copy rem_val to next position and increment position
-        p[k+1] = rem_val
+        p[k + 1] = rem_val
         k += 1
+
 
 def partitions(n):
     """
     Iterate over all partitions of integer `n`.
 
     A partition of `n` here is defined as a list of one or more non-zero
-    integers which sum to `n`.  Every partition is iterated over exacty 
+    integers which sum to `n`.  Every partition is iterated over exacty
     once - there are no duplicates/repetitions.
 
     Parameters
@@ -232,9 +236,9 @@ def partitions(n):
     """
     for p in sorted_partitions(n):
         previous = tuple()
-        for pp in _itertools.permutations(p[::-1]): # flip p so it's in *ascending* order
-            if pp > previous: # only *unique* permutations
-                previous = pp # (relies in itertools implementatin detail that
+        for pp in _itertools.permutations(p[::-1]):  # flip p so it's in *ascending* order
+            if pp > previous:  # only *unique* permutations
+                previous = pp  # (relies in itertools implementatin detail that
                 yield pp      # any permutations of a sorted iterable are in
                 # sorted order unless they are duplicates of prior permutations
 
@@ -256,7 +260,7 @@ def partition_into(n, nbins):
         The number to partition.
 
     nbins : int
-        The fixed number of bins, equal to the length of all the 
+        The fixed number of bins, equal to the length of all the
         partitions that are iterated over.
 
     Returns
@@ -265,18 +269,18 @@ def partition_into(n, nbins):
         Iterates over arrays of integers (partitions).
     """
     if n == 0:
-        a = _np.zeros(nbins,_np.int64)
+        a = _np.zeros(nbins, _np.int64)
         yield tuple(a)
 
     elif n == 1:
-        a = _np.zeros(nbins,_np.int64)
+        a = _np.zeros(nbins, _np.int64)
         for i in range(nbins):
             a[i] = 1
             yield tuple(a)
             a[i] = 0
-            
+
     elif n == 2:
-        a = _np.zeros(nbins,_np.int64)
+        a = _np.zeros(nbins, _np.int64)
         for i in range(nbins):
             a[i] = 2
             yield tuple(a)
@@ -284,7 +288,7 @@ def partition_into(n, nbins):
 
         for i in range(nbins):
             a[i] = 1
-            for j in range(i+1,nbins):
+            for j in range(i + 1, nbins):
                 a[j] = 1
                 yield tuple(a)
                 a[j] = 0
@@ -294,25 +298,25 @@ def partition_into(n, nbins):
         for p in _partition_into_slow(n, nbins):
             yield p
 
-                
+
 def _partition_into_slow(n, nbins):
     """
     Helper function for `partition_into` that performs the same task for
     a general number `n`.
     """
     for p in sorted_partitions(n):
-        if len(p) > nbins: continue # don't include partitions of length > nbins
+        if len(p) > nbins: continue  # don't include partitions of length > nbins
         previous = tuple()
-        p = _np.concatenate( (p, _np.zeros(nbins-len(p),_np.int64)) ) # pad with zeros
+        p = _np.concatenate((p, _np.zeros(nbins - len(p), _np.int64)))  # pad with zeros
         for pp in _itertools.permutations(p[::-1]):
-            if pp > previous: # only *unique* permutations 
-                previous = pp # (relies in itertools implementatin detail that
+            if pp > previous:  # only *unique* permutations
+                previous = pp  # (relies in itertools implementatin detail that
                 yield pp      # any permutations of a sorted iterable are in
                 # sorted order unless they are duplicates of prior permutations
 
 
 def incd_product(*args):
-    """ 
+    """
     Like `itertools.product` but returns the first modified index (which was
     incremented) along with the product tuple itself.
 
@@ -325,29 +329,29 @@ def incd_product(*args):
     -------
     iterator over tuples
     """
-    lists = [list(a) for a in args] # so we can get new iterators to each argument
+    lists = [list(a) for a in args]  # so we can get new iterators to each argument
     iters = [iter(l) for l in lists]
     N = len(lists)
-    incr = 0 # the first index that was changed (incremented) since the last iteration
+    incr = 0  # the first index that was changed (incremented) since the last iteration
     try:
-        t = [ next(i) for i in iters ]
-    except StopIteration: # at least one list is empty 
-        yield incr, () #just yield one item w/empty tuple, like itertools.product
+        t = [next(i) for i in iters]
+    except StopIteration:  # at least one list is empty
+        yield incr, ()  # just yield one item w/empty tuple, like itertools.product
         return
-    yield incr, tuple(t) # first yield is special b/c establishes baseline (incr==0)
-    
-    incr = N-1
+    yield incr, tuple(t)  # first yield is special b/c establishes baseline (incr==0)
+
+    incr = N - 1
     while incr >= 0:
-        try: # to increment index incr
+        try:  # to increment index incr
             t[incr] = next(iters[incr])
-        except StopIteration: # if exhaused, increment iterator to left
+        except StopIteration:  # if exhaused, increment iterator to left
             incr -= 1
-        else: # reset all iterators to right of incremented one and yield
-            for i in range(incr+1,N):
-                iters[i]= iter(lists[i])
-                t[i] = next(iters[i]) #won't raise error b/c all lists have len >= 1
+        else:  # reset all iterators to right of incremented one and yield
+            for i in range(incr + 1, N):
+                iters[i] = iter(lists[i])
+                t[i] = next(iters[i])  # won't raise error b/c all lists have len >= 1
             yield incr, tuple(t)
-            incr = N-1 #next time try to increment the last index again
+            incr = N - 1  # next time try to increment the last index again
     return
 
 
@@ -383,38 +387,38 @@ def incd_product(*args):
 #            break #everything has been processed -- we're done!
 #
 #        while True: # loop over cycle
-#            
+#
 #            # at this point, data for index iDest has been stored or copied
 #            iSrc = indices[iDest] # get source index for current destination
-#    
+#
 #            # record appropriate copy command
 #            if iSrc == cycleFirstIndex:
 #                copyList.append( (iDest, -1) ) # copy from offline storage
 #                flgs[iDest] = True
-#    
-#                #end of this cycle since we've hit our starting point, 
+#
+#                #end of this cycle since we've hit our starting point,
 #                # but no need to shelve first cycle element in this case.
 #                break #(end of cycle)
 #            else:
 #                if iSrc in shelved: #original iSrc is now at index shelved[iSrc]
 #                    iSrc = shelved[iSrc]
-#    
+#
 #                copyList.append( (iDest,iSrc) ) # => copy src -> dest
 #                flgs[iDest] = True
-#    
+#
 #                if iSrc < nIndices:
 #                    #Continue cycle (swapping within "active" (index < nIndices) region)
 #                    iDest = iSrc # make src the new dest
 #                else:
 #                    #end of this cycle, and first cycle index hasn't been
-#                    # used, so shelve it (store it for later use) if it 
+#                    # used, so shelve it (store it for later use) if it
 #                    # will be needed in the future.
 #                    if cycleFirstIndex in indices:
 #                        copyList.append( (iSrc,-1) )
 #                        shelved[cycleFirstIndex] = iSrc
 #
 #                    break #(end of cycle)
-#            
+#
 #    return copyList
 #
 ## X  X     X
@@ -452,7 +456,7 @@ def incd_product(*args):
 #        if iDest == -1: store = a[mkindex(iSrc)].copy() #otherwise just get a view!
 #        elif iSrc == -1: a[mkindex(iDest)] = store
 #        else: a[mkindex(iDest)] = a[mkindex(iSrc)]
-#        
+#
 #    ret = a[mkindex(slice(0,len(indices)))]
 #    if _np.linalg.norm(ret-check) > 1e-8 :
 #        print("ERROR CHECK FAILED")

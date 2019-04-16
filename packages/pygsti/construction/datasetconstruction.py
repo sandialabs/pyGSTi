@@ -20,6 +20,7 @@ from . import circuitconstruction as _gstrc
 
 from pprint import pprint
 
+
 def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                        sampleError="multinomial", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate",
@@ -104,71 +105,70 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
     if isinstance(modelOrDataset, _ds.DataSet):
         dsGen = modelOrDataset
         gsGen = None
-        dataset = _ds.DataSet( collisionAction=collisionAction,
-                               outcomeLabelIndices = dsGen.olIndex ) # keep same outcome labels
+        dataset = _ds.DataSet(collisionAction=collisionAction,
+                              outcomeLabelIndices=dsGen.olIndex)  # keep same outcome labels
     else:
         gsGen = modelOrDataset
         dsGen = None
-        dataset = _ds.DataSet( collisionAction=collisionAction )
+        dataset = _ds.DataSet(collisionAction=collisionAction)
 
-                
     if aliasDict:
-        aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
-                      for ky,val in aliasDict.items() } # convert to use Labels
+        aliasDict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
+                     for ky, val in aliasDict.items()}  # convert to use Labels
 
     if gsGen:
-        trans_circuit_list = [ _gstrc.translate_circuit(s, aliasDict)
-                                  for s in circuit_list ]
+        trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
+                              for s in circuit_list]
         all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 
-    if comm is None or comm.Get_rank() == 0: # only root rank computes
-                
-        if sampleError in ("binomial","multinomial"):
+    if comm is None or comm.Get_rank() == 0:  # only root rank computes
+
+        if sampleError in ("binomial", "multinomial"):
             if randState is None:
-                rndm = _rndm.RandomState(seed) # ok if seed is None
+                rndm = _rndm.RandomState(seed)  # ok if seed is None
             else:
                 rndm = randState
 
-        for k,s in enumerate(circuit_list):
+        for k, s in enumerate(circuit_list):
 
             #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
             trans_s = _gstrc.translate_circuit(s, aliasDict)
             if gsGen:
                 ps = all_probs[trans_s]
 
-                if sampleError in ("binomial","multinomial"):
+                if sampleError in ("binomial", "multinomial"):
                     #Adjust to probabilities if needed (and warn if not close to in-bounds)
                     for ol in ps:
                         if ps[ol] < 0:
                             if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
                             ps[ol] = 0.0
                         elif ps[ol] > 1:
-                            if ps[ol] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                            if ps[ol] > (1 + TOL): _warnings.warn("Clipping probs > 1 to 1")
                             ps[ol] = 1.0
             else:
-                ps = _collections.OrderedDict([ (ol,frac) for ol,frac
-                                                in dsGen[trans_s].fractions.items()])
+                ps = _collections.OrderedDict([(ol, frac) for ol, frac
+                                               in dsGen[trans_s].fractions.items()])
 
-            if gsGen and sampleError in ("binomial","multinomial"):
+            if gsGen and sampleError in ("binomial", "multinomial"):
                 #Check that sum ~= 1 (and nudge if needed) since binomial and
                 #  multinomial random calls assume this.
                 psum = sum(ps.values())
                 adjusted = False
-                if psum > 1+TOL:
+                if psum > 1 + TOL:
                     adjusted = True
                     _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                if psum < 1-TOL:
+                if psum < 1 - TOL:
                     adjusted = True
                     _warnings.warn("Adjusting sum(probs) < 1 to 1")
 
                 # A cleaner probability cleanup.. lol
-                OVERTOL  = 1.0 + TOL
+                OVERTOL = 1.0 + TOL
                 UNDERTOL = 1.0 - TOL
-                normalized = lambda : UNDERTOL <= sum(ps.values()) <= OVERTOL
+                def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
                 if not normalized():
                     m = max(ps.values())
-                    ps = {lbl : round(p/m, NTOL) for lbl, p in ps.items()}
+                    ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
                     print(sum(ps.values()))
 
                 assert normalized(), 'psum={}'.format(sum(ps.values()))
@@ -176,55 +176,55 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                     _warnings.warn('Adjustment finished')
 
             if nSamples is None and dsGen is not None:
-                N = dsGen[trans_s].total #use the number of samples from the generating dataset
-                 #Note: total() accounts for other intermediate-measurment branches automatically
+                N = dsGen[trans_s].total  # use the number of samples from the generating dataset
+                #Note: total() accounts for other intermediate-measurment branches automatically
             else:
                 try:
-                    N = nSamples[k] #try to treat nSamples as a list
+                    N = nSamples[k]  # try to treat nSamples as a list
                 except:
-                    N = nSamples #if not indexable, nSamples should be a single number
+                    N = nSamples  # if not indexable, nSamples should be a single number
 
             nWeightedSamples = N
 
-            counts = {} #don't use an ordered dict here - add_count_dict will sort keys
-            labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1]) ]
-              # "outcome labels" - sort by prob for consistent generation
+            counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
+            labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
+            # "outcome labels" - sort by prob for consistent generation
             if sampleError == "binomial":
-                
-                if len(labels) == 1: #Special case when labels[0] == 1.0 (100%)
+
+                if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
                     counts[labels[0]] = nWeightedSamples
                 else:
                     assert(len(labels) == 2)
-                    ol0,ol1 = labels[0], labels[1]
+                    ol0, ol1 = labels[0], labels[1]
                     counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
                     counts[ol1] = nWeightedSamples - counts[ol0]
 
             elif sampleError == "multinomial":
                 countsArray = rndm.multinomial(nWeightedSamples,
-                        [ps[ol] for ol in labels], size=1) # well-ordered list of probs
-                for i,ol in enumerate(labels):
-                    counts[ol] = countsArray[0,i]
+                                               [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
+                for i, ol in enumerate(labels):
+                    counts[ol] = countsArray[0, i]
             else:
-                for outcomeLabel,p in ps.items():
-                    pc = _np.clip(p,0,1) # Note: *not* used in "none" case
+                for outcomeLabel, p in ps.items():
+                    pc = _np.clip(p, 0, 1)  # Note: *not* used in "none" case
                     if sampleError == "none":
                         counts[outcomeLabel] = float(nWeightedSamples * p)
                     elif sampleError == "clip":
                         counts[outcomeLabel] = float(nWeightedSamples * pc)
                     elif sampleError == "round":
-                        counts[outcomeLabel] = int(round(nWeightedSamples*pc))
+                        counts[outcomeLabel] = int(round(nWeightedSamples * pc))
                     else: raise ValueError("Invalid sample error parameter: '%s'  Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError)
 
             dataset.add_count_dict(s, counts)
         dataset.done_adding_data()
 
-    if comm is not None: # broadcast to non-root procs
-        dataset = comm.bcast(dataset if (comm.Get_rank() == 0) else None,root=0)
+    if comm is not None:  # broadcast to non-root procs
+        dataset = comm.bcast(dataset if (comm.Get_rank() == 0) else None, root=0)
 
     return dataset
 
 
-def merge_outcomes(dataset,label_merge_dict):
+def merge_outcomes(dataset, label_merge_dict):
     """
     Creates a DataSet which merges certain outcomes in input DataSet;
     used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
@@ -250,17 +250,17 @@ def merge_outcomes(dataset,label_merge_dict):
         The DataSet with outcomes merged according to the rules given in label_merge_dict.
     """
     # strings -> tuple outcome labels in keys and values of label_merge_dict
-    to_outcome = _ld.OutcomeLabelDict.to_outcome #shorthand
-    label_merge_dict = { to_outcome(key): list(map(to_outcome,val)) 
-                         for key,val in label_merge_dict.items() }
+    to_outcome = _ld.OutcomeLabelDict.to_outcome  # shorthand
+    label_merge_dict = {to_outcome(key): list(map(to_outcome, val))
+                        for key, val in label_merge_dict.items()}
 
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
-    if not set(dataset.get_outcome_labels()).issubset( merge_dict_old_outcomes ):
+    if not set(dataset.get_outcome_labels()).issubset(merge_dict_old_outcomes):
         raise ValueError(("`label_merge_dict` must account for all the outcomes in original dataset."
-                          " It's missing directives for:\n%s") % 
-                         '\n'.join(set(map(str,dataset.get_outcome_labels())) - set(map(str,merge_dict_old_outcomes))))
+                          " It's missing directives for:\n%s") %
+                         '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes))))
 
     for key in dataset.keys():
         linecounts = dataset[key].counts
@@ -268,13 +268,14 @@ def merge_outcomes(dataset,label_merge_dict):
         for new_outcome in new_outcomes:
             count_dict[new_outcome] = 0
             for old_outcome in label_merge_dict[new_outcome]:
-                count_dict[new_outcome] += linecounts.get(old_outcome,0)
-        merged_dataset.add_count_dict(key,count_dict,aux=dataset[key].aux)
+                count_dict[new_outcome] += linecounts.get(old_outcome, 0)
+        merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux)
     merged_dataset.done_adding_data()
     return merged_dataset
 
+
 def create_qubit_merge_dict(nQubits, qubits_to_keep):
-    """ 
+    """
     Creates a dictionary appropriate for use with :function:`merge_outcomes`,
     that aggregates all but the specified `qubits_to_keep` when the outcome
     labels are those of `nQubits` qubits (i.e. strings of 0's and 1's).
@@ -283,22 +284,22 @@ def create_qubit_merge_dict(nQubits, qubits_to_keep):
     ----------
     nQubits : int
         The total number of qubits
-        
+
     qubits_to_keep : list
         A list of integers specifying which qubits should be kept, that is,
-        *not* aggregated, when the returned dictionary is passed to 
+        *not* aggregated, when the returned dictionary is passed to
         `merge_outcomes`.
 
     Returns
     -------
     dict
     """
-    outcome_labels = [''.join(map(str,t)) for t in _itertools.product([0,1], repeat=nQubits)]
+    outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=nQubits)]
     return create_merge_dict(qubits_to_keep, outcome_labels)
 
 
 def create_merge_dict(indices_to_keep, outcome_labels):
-    """ 
+    """
     Creates a dictionary appropriate for use with :function:`merge_outcomes`,
     that aggregates all but the specified `indices_to_keep`.
 
@@ -309,7 +310,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     be a list of all the original outcome labels which reduce to the key value
     when the non-`indices_to_keep` characters are removed.
 
-    For example, if `outcome_labels == ['00','01','10','11']` and 
+    For example, if `outcome_labels == ['00','01','10','11']` and
     `indices_to_keep == [1]` then this function returns the dict
     `{'0': ['00','10'], '1': ['01','11'] }`.
 
@@ -334,26 +335,26 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     for ol in outcome_labels:
         if _compat.isstr(ol):
             reduced = ''.join([ol[i] for i in indices_to_keep])
-        else: 
-            assert(len(ol) == 1) #should be a 1-tuple
-            reduced = (''.join([ol[0][i] for i in indices_to_keep]),) # a tuple
+        else:
+            assert(len(ol) == 1)  # should be a 1-tuple
+            reduced = (''.join([ol[0][i] for i in indices_to_keep]),)  # a tuple
         merge_dict[reduced].append(ol)
-    return dict(merge_dict) # return a *normal* dict
+    return dict(merge_dict)  # return a *normal* dict
 
 
-def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
+def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
                    new_sectors=None, idle='Gi'):
     """
     Creates a DataSet that restricts is the restriction of `dataset`
     to the sectors identified by `sectors_to_keep`.
 
     More specifically, this function aggregates (sums) outcomes in `dataset`
-    which differ only in sectors (usually qubits - see below)  *not* in 
+    which differ only in sectors (usually qubits - see below)  *not* in
     `sectors_to_keep`, and removes any operation labels which act specifically on
-    sectors not in `sectors_to_keep` (e.g. an idle gate acting on *all* 
+    sectors not in `sectors_to_keep` (e.g. an idle gate acting on *all*
     sectors because it's `.sslbls` is None will *not* be removed).
 
-    Here "sectors" are state-space labels, present in the operation sequences of 
+    Here "sectors" are state-space labels, present in the operation sequences of
     `dataset`.  Each sector also corresponds to a particular character position
     within the outcomes labels of `dataset`.  Thus, for this function to work,
     the outcome labels of `dataset` must all be 1-tuples whose sole element is
@@ -368,7 +369,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
     case there is no need to specify `sindices_to_keep`.  One may want to
     "rebase" the indices to 0 in the returned data set using `new_sectors`
     (E.g. `sectors_to_keep == [4,5,6]` and `new_sectors == [0,1,2]`).
-    
+
     Parameters
     ----------
     dataset : DataSet object
@@ -382,22 +383,22 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
         The 0-based indices of the labels in `sectors_to_keep` which give the
         postiions of the corresponding letters in each outcome string (see above).
         If the state space labels are integers (labeling *qubits*) thath are also
-        letter-positions, then this may be left as `None`.  For example, if the 
+        letter-positions, then this may be left as `None`.  For example, if the
         outcome strings of `dataset` are '00','01','10',and '11' and the first
         position refers to qubit "Q1" and the second to qubit "Q2" (present in
         operation labels), then to extract just "Q2" data `sectors_to_keep` should be
         `["Q2"]` and `sindices_to_keep` should be `[1]`.
 
     new_sectors : list or tuple, optional
-        New sectors names to map the elements of `sectors_to_keep` onto in the 
+        New sectors names to map the elements of `sectors_to_keep` onto in the
         output DataSet's operation sequences.  None means the labels are not renamed.
         This can be useful if, for instance, you want to run a 2-qubit protocol
-        that expects the qubits to be labeled "0" and "1" on qubits "4" and "5" 
-        of a larger set.  Simply set `sectors_to_keep == [4,5]` and 
+        that expects the qubits to be labeled "0" and "1" on qubits "4" and "5"
+        of a larger set.  Simply set `sectors_to_keep == [4,5]` and
         `new_sectors == [0,1]`.
 
     idle : string or Label, optional
-        The operation label to be used when there are no kept components of a 
+        The operation label to be used when there are no kept components of a
         "layer" (element) of a circuit.
 
 
@@ -410,7 +411,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
         sindices_to_keep = sectors_to_keep
 
     ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
-                                             dataset.get_outcome_labels()))
+                                                          dataset.get_outcome_labels()))
     ds_merged = ds_merged.copy_nonstatic()
     ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
         s, sectors_to_keep, new_sectors, idle), aggregate=True)

@@ -12,8 +12,9 @@ from ...tools import decompose_gate_matrix as _decompose_gate_matrix
 
 #from rpe_models import rpeInstanceDict
 
-def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
-                         previousAngle=None,rpeconfig_inst=None):
+
+def extract_rotation_hat(xhat, yhat, k, Nx, Ny, angleName="epsilon",
+                         previousAngle=None, rpeconfig_inst=None):
     """
     For a single germ generation (k value), estimate the angle of rotation
     for either alpha, epsilon, or Phi.  (Warning:  Do not use for theta
@@ -52,38 +53,39 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
     alpha_j : float
         The current angle estimate.
     """
-    
+
     if angleName == 'alpha':
-        arctan2Val = rpeconfig_inst.alpha_hat_func(xhat,yhat,Nx,Ny)
+        arctan2Val = rpeconfig_inst.alpha_hat_func(xhat, yhat, Nx, Ny)
 #            _np.arctan2((xhat-Nx/2.)/Nx,-(yhat-Ny/2.)/Ny)
     elif angleName == 'epsilon':
-        arctan2Val = rpeconfig_inst.epsilon_hat_func(xhat,yhat,Nx,Ny)
+        arctan2Val = rpeconfig_inst.epsilon_hat_func(xhat, yhat, Nx, Ny)
     elif angleName == 'Phi':
-        arctan2Val = rpeconfig_inst.Phi_hat_func(xhat,yhat,Nx,Ny)
+        arctan2Val = rpeconfig_inst.Phi_hat_func(xhat, yhat, Nx, Ny)
 #            arctan2Val = _np.arctan2((xhat-Nx/2.)/Nx,-(yhat-Ny/2.)/Ny)
     else:
         raise Exception('Need valid angle name!')
 
-    if k!=1 and previousAngle == None:
+    if k != 1 and previousAngle == None:
         raise Exception('Need previousAngle!')
     if k == 1:
-#        return _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
+        #        return _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
         return arctan2Val
 
-    elif k>1:
-#        angle_j = 1./k * _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
-        angle_j = 1./k * arctan2Val
-        while not (angle_j >= previousAngle - _np.pi/k and \
-                   angle_j <= previousAngle + _np.pi/k):
-            if angle_j <= previousAngle - _np.pi/k:
-                angle_j += 2 * _np.pi/k
-            elif angle_j > previousAngle + _np.pi/k:
-                angle_j -= 2 * _np.pi/k
+    elif k > 1:
+        #        angle_j = 1./k * _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
+        angle_j = 1. / k * arctan2Val
+        while not (angle_j >= previousAngle - _np.pi / k and
+                   angle_j <= previousAngle + _np.pi / k):
+            if angle_j <= previousAngle - _np.pi / k:
+                angle_j += 2 * _np.pi / k
+            elif angle_j > previousAngle + _np.pi / k:
+                angle_j -= 2 * _np.pi / k
             else:
                 raise Exception('What?!')
         return angle_j
 
-def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=None,rpeconfig_inst=None):
+
+def est_angle_list(DS, angleSinStrs, angleCosStrs, angleName="epsilon", lengthList=None, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
@@ -103,14 +105,14 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
 
     angleName : { "alpha", "epsilon", "Phi" }, optional
       The angle to be extracted
-      
+
     lengthList : The list of sequence lengths.  Default is None;
         If None is specified, then lengthList becomes [1,2,4,...,2**(len(angleSinStrs)-1)]
-     
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-       
+
     Returns
     -------
     angleHatList : list of floats
@@ -134,12 +136,13 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
 #        yhatTemp = DS[angleCosStrs[i]]['0']
 #        Nx = xhatTemp + DS[angleSinStrs[i]]['1']
 #        Ny = yhatTemp + DS[angleCosStrs[i]]['1']
-        angleTemp1 = extract_rotation_hat(xhatTemp,yhatTemp,length,
-                                          Nx,Ny,angleName,angleTemp1,rpeconfig_inst)
+        angleTemp1 = extract_rotation_hat(xhatTemp, yhatTemp, length,
+                                          Nx, Ny, angleName, angleTemp1, rpeconfig_inst)
         angleHatList.append(angleTemp1)
     return angleHatList
 
-def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
+
+def sin_phi2_func(theta, Phi, epsilon, rpeconfig_inst=None):
     """
     Returns the function whose zero, for fixed Phi and epsilon, occurs at the
     desired value of theta. (This function exists to be passed to a minimizer
@@ -155,22 +158,23 @@ def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
 
     epsilon : float
        Angle of rotation about "loose axis".
-    
+
     Returns
     -------
     sinPhi2FuncVal
         The value of sin_phi2_func for given inputs.  (Must be 0 to achieve "true" theta.)
     """
-        
+
     newEpsilon = rpeconfig_inst.new_epsilon_func(epsilon)
 
-    sinPhi2FuncVal = _np.abs(2*_np.sin(theta) * _np.cos(_np.pi*newEpsilon/2)*
-                            _np.sqrt(1-_np.sin(theta)**2*
-                                    _np.cos(_np.pi*newEpsilon/2)**2)
-                            - _np.sin(Phi/2))
+    sinPhi2FuncVal = _np.abs(2 * _np.sin(theta) * _np.cos(_np.pi * newEpsilon / 2) *
+                             _np.sqrt(1 - _np.sin(theta)**2 *
+                                      _np.cos(_np.pi * newEpsilon / 2)**2)
+                             - _np.sin(Phi / 2))
     return sinPhi2FuncVal
 
-def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = False,rpeconfig_inst=None):
+
+def est_theta_list(DS, angleSinStrs, angleCosStrs, epsilonList, returnPhiFunList=False, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate theta,
     along with already-made estimates of epsilon, return a list of theta
@@ -209,12 +213,12 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
         to True.
     """
 
-    PhiList = est_angle_list(DS,angleSinStrs,angleCosStrs,'Phi',rpeconfig_inst=rpeconfig_inst)
+    PhiList = est_angle_list(DS, angleSinStrs, angleCosStrs, 'Phi', rpeconfig_inst=rpeconfig_inst)
     thetaList = []
     PhiFunList = []
     for index, Phi in enumerate(PhiList):
         epsilon = epsilonList[index]
-        soln = _opt.minimize(lambda x: sin_phi2_func(x,Phi,epsilon,rpeconfig_inst),0)
+        soln = _opt.minimize(lambda x: sin_phi2_func(x, Phi, epsilon, rpeconfig_inst), 0)
         thetaList.append(soln['x'][0])
         PhiFunList.append(soln['fun'])
 #        if soln['fun'] > 1e-2:
@@ -225,10 +229,10 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
         return thetaList
 
 
-def extract_alpha(model,rpeconfig_inst):
+def extract_alpha(model, rpeconfig_inst):
     """
     For a given model, obtain the angle of rotation about the "fixed axis"
-    
+
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
 
@@ -236,25 +240,26 @@ def extract_alpha(model,rpeconfig_inst):
     ----------
     model : Model
        The model whose angle of rotation about the fixed axis is to be calculated.
-    
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-    
+
     Returns
     -------
     alphaVal : float
         The value of alpha for the input model.
     """
     op_label = rpeconfig_inst.fixed_axis_gate_label
-    decomp = _decompose_gate_matrix( model.operations[op_label] )
+    decomp = _decompose_gate_matrix(model.operations[op_label])
     alphaVal = decomp['pi rotations'] * _np.pi
     return alphaVal
 
-def extract_epsilon(model,rpeconfig_inst):
+
+def extract_epsilon(model, rpeconfig_inst):
     """
-    For a given model, obtain the angle of rotation about the "loose axis" 
-    
+    For a given model, obtain the angle of rotation about the "loose axis"
+
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
 
@@ -262,27 +267,28 @@ def extract_epsilon(model,rpeconfig_inst):
     ----------
     model : Model
        The model whose angle of rotation about the "loose axis" is to be calculated.
-    
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-    
+
     Returns
     -------
     epsilonVal : float
         The value of epsilon for the input model.
     """
     op_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _decompose_gate_matrix( model.operations[op_label] )
-    
+    decomp = _decompose_gate_matrix(model.operations[op_label])
+
     epsilonVal = decomp['pi rotations'] * _np.pi
     return epsilonVal
 
-def extract_theta(model,rpeconfig_inst):
+
+def extract_theta(model, rpeconfig_inst):
     """
     For a given model, obtain the angle between the estimated "loose axis" and
     the target "loose axis".
-    
+
     WARNING:  This is a gauge-covariant parameter!  (I think!)  Gauge must be
     fixed prior to estimating.
 
@@ -290,58 +296,59 @@ def extract_theta(model,rpeconfig_inst):
     ----------
     model : Model
         The model whose loose axis misalignment is to be calculated.
-    
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-    
+
     Returns
     -------
     thetaVal : float
         The value of theta for the input model.
     """
     op_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _decompose_gate_matrix( model.operations[op_label] )
+    decomp = _decompose_gate_matrix(model.operations[op_label])
     target_axis = rpeconfig_inst.loose_axis_target
-    
-    decomp = _decompose_gate_matrix( model.operations[op_label] )
-    thetaVal =  _np.real_if_close( [ _np.arccos(
-                _np.dot(decomp['axis of rotation'], target_axis))])[0]
-    if thetaVal > _np.pi/2:
+
+    decomp = _decompose_gate_matrix(model.operations[op_label])
+    thetaVal = _np.real_if_close([_np.arccos(
+        _np.dot(decomp['axis of rotation'], target_axis))])[0]
+    if thetaVal > _np.pi / 2:
         thetaVal = _np.pi - thetaVal
-    elif thetaVal < -_np.pi/2:
+    elif thetaVal < -_np.pi / 2:
         thetaVal = _np.pi + thetaVal
     return thetaVal
 
 
 def consistency_check(angle_k, angle_final, k):
     """ Check internal consistency """
-    wedge_size = _np.pi/(2*k)
+    wedge_size = _np.pi / (2 * k)
     angle_k += _np.pi
-    angle_k = angle_k % (2*_np.pi)
+    angle_k = angle_k % (2 * _np.pi)
     angle_k -= _np.pi
 
     angle_final += _np.pi
-    angle_final = angle_final % (2*_np.pi)
+    angle_final = angle_final % (2 * _np.pi)
     angle_final -= _np.pi
 
     if _np.abs(angle_k - angle_final) <= wedge_size:
         return 1.0
-    elif _np.abs(angle_k - (angle_final+2*_np.pi)) <= wedge_size:
+    elif _np.abs(angle_k - (angle_final + 2 * _np.pi)) <= wedge_size:
         return 1.0
-    elif _np.abs(angle_k - (angle_final-2*_np.pi)) <= wedge_size:
+    elif _np.abs(angle_k - (angle_final - 2 * _np.pi)) <= wedge_size:
         return 1.0
     else:
         return 0.0
 
-def analyze_rpe_data(inputDataset,trueOrTargetModel,stringListD,rpeconfig_inst,do_consistency_check=False,k_list=None):
+
+def analyze_rpe_data(inputDataset, trueOrTargetModel, stringListD, rpeconfig_inst, do_consistency_check=False, k_list=None):
     """
     Compute angle estimates and compare to true or target values for alpha, epsilon,
-    and theta.  ("True" will typically be used for simulated data, when the 
+    and theta.  ("True" will typically be used for simulated data, when the
     true angle values are known a priori; "target" will typically be used for
     experimental data, where we do not know the true angle values, and can
     only compare to our desired angles.)
-    
+
     Parameters
     ----------
     inputDataset : DataSet
@@ -353,11 +360,11 @@ def analyze_rpe_data(inputDataset,trueOrTargetModel,stringListD,rpeconfig_inst,d
     stringListD : dict
        The dictionary of operation sequence lists used for the RPE experiments.
        This should be generated via make_rpe_string_list_d.
-    
+
     rpeconfig_inst : rpeconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-    
+
     Returns
     -------
     resultsD : dict
@@ -376,39 +383,39 @@ def analyze_rpe_data(inputDataset,trueOrTargetModel,stringListD,rpeconfig_inst,d
         -'PhiFunErrorList' : List (ordered by k) of sin_phi2_func values.
 
     """
-    alphaCosStrList = stringListD['alpha','cos']
-    alphaSinStrList = stringListD['alpha','sin']
-    epsilonCosStrList = stringListD['epsilon','cos']
-    epsilonSinStrList = stringListD['epsilon','sin']
-    thetaCosStrList = stringListD['theta','cos']
-    thetaSinStrList = stringListD['theta','sin']
+    alphaCosStrList = stringListD['alpha', 'cos']
+    alphaSinStrList = stringListD['alpha', 'sin']
+    epsilonCosStrList = stringListD['epsilon', 'cos']
+    epsilonSinStrList = stringListD['epsilon', 'sin']
+    thetaCosStrList = stringListD['theta', 'cos']
+    thetaSinStrList = stringListD['theta', 'sin']
     try:
         alphaTrue = trueOrTargetModel.alphaTrue
     except:
-        alphaTrue = extract_alpha(trueOrTargetModel,rpeconfig_inst)
+        alphaTrue = extract_alpha(trueOrTargetModel, rpeconfig_inst)
     try:
         epsilonTrue = trueOrTargetModel.epsilonTrue
     except:
-        epsilonTrue = extract_epsilon(trueOrTargetModel,rpeconfig_inst)
+        epsilonTrue = extract_epsilon(trueOrTargetModel, rpeconfig_inst)
     try:
         thetaTrue = trueOrTargetModel.thetaTrue
     except:
-        thetaTrue = extract_theta(trueOrTargetModel,rpeconfig_inst)
+        thetaTrue = extract_theta(trueOrTargetModel, rpeconfig_inst)
     alphaErrorList = []
     epsilonErrorList = []
     thetaErrorList = []
 #    PhiFunErrorList = []
     alphaHatList = est_angle_list(inputDataset,
                                   alphaSinStrList,
-                                  alphaCosStrList,'alpha',rpeconfig_inst=rpeconfig_inst)
+                                  alphaCosStrList, 'alpha', rpeconfig_inst=rpeconfig_inst)
     epsilonHatList = est_angle_list(inputDataset,
                                     epsilonSinStrList,
-                                    epsilonCosStrList, 'epsilon',rpeconfig_inst=rpeconfig_inst)
-    thetaHatList,PhiFunErrorList = est_theta_list(inputDataset,
-                                                  thetaSinStrList,
-                                                  thetaCosStrList,
-                                                  epsilonHatList,rpeconfig_inst=rpeconfig_inst,
-                                                  returnPhiFunList=True)
+                                    epsilonCosStrList, 'epsilon', rpeconfig_inst=rpeconfig_inst)
+    thetaHatList, PhiFunErrorList = est_theta_list(inputDataset,
+                                                   thetaSinStrList,
+                                                   thetaCosStrList,
+                                                   epsilonHatList, rpeconfig_inst=rpeconfig_inst,
+                                                   returnPhiFunList=True)
     for alphaTemp1 in alphaHatList:
         alphaErrorList.append(abs(alphaTrue - alphaTemp1))
     for epsilonTemp1 in epsilonHatList:
@@ -426,23 +433,26 @@ def analyze_rpe_data(inputDataset,trueOrTargetModel,stringListD,rpeconfig_inst,d
             raise ValueError("Consistency check requested, but no k List given!")
         else:
             num_ks = len(k_list)
-            resultsD['alphaCheckMat'] = _np.zeros([num_ks,num_ks],float)
-            resultsD['epsilonCheckMat'] = _np.zeros([num_ks,num_ks],float)
-            resultsD['thetaCheckMat'] = _np.zeros([num_ks,num_ks],float)
-            for k_final_ind,_ in enumerate(k_list):
+            resultsD['alphaCheckMat'] = _np.zeros([num_ks, num_ks], float)
+            resultsD['epsilonCheckMat'] = _np.zeros([num_ks, num_ks], float)
+            resultsD['thetaCheckMat'] = _np.zeros([num_ks, num_ks], float)
+            for k_final_ind, _ in enumerate(k_list):
                 alpha_final_k = alphaHatList[k_final_ind]
                 epsilon_final_k = epsilonHatList[k_final_ind]
                 theta_final_k = thetaHatList[k_final_ind]
-                k_list_temp = list(k_list[:k_final_ind+1])
+                k_list_temp = list(k_list[:k_final_ind + 1])
                 for k_small_ind, k_small_val in enumerate(k_list_temp):
-#                    print k_small_ind, k_small_val, k_final_ind, k_final_val, k_list_temp
+                    #                    print k_small_ind, k_small_val, k_final_ind, k_final_val, k_list_temp
                     alpha_small_k = alphaHatList[k_small_ind]
                     epsilon_small_k = epsilonHatList[k_small_ind]
                     theta_small_k = thetaHatList[k_small_ind]
-                    resultsD['alphaCheckMat'][k_small_ind,k_final_ind] = consistency_check(alpha_small_k,alpha_final_k,k_small_val)
-                    resultsD['epsilonCheckMat'][k_small_ind,k_final_ind] = consistency_check(epsilon_small_k,epsilon_final_k,k_small_val)
-                    resultsD['thetaCheckMat'][k_small_ind,k_final_ind] = consistency_check(theta_small_k,theta_final_k,k_small_val)
-                
+                    resultsD['alphaCheckMat'][k_small_ind, k_final_ind] = consistency_check(
+                        alpha_small_k, alpha_final_k, k_small_val)
+                    resultsD['epsilonCheckMat'][k_small_ind, k_final_ind] = consistency_check(
+                        epsilon_small_k, epsilon_final_k, k_small_val)
+                    resultsD['thetaCheckMat'][k_small_ind, k_final_ind] = consistency_check(
+                        theta_small_k, theta_final_k, k_small_val)
+
     resultsD['alphaHatList'] = alphaHatList
     resultsD['epsilonHatList'] = epsilonHatList
     resultsD['thetaHatList'] = thetaHatList

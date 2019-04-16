@@ -9,12 +9,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ... import objects as _objs
 
+
 def load_bitstring_probabilities(filename, sequences_to_indices=None):
     """
     TODO: docstring
     """
     pdict = {}
-    with open(filename,'r') as f:
+    with open(filename, 'r') as f:
         for line in f:
             # Skips comment rows
             if not line.startswith("#"):
@@ -23,26 +24,27 @@ def load_bitstring_probabilities(filename, sequences_to_indices=None):
                 if len(row) != 0:
                     opstr = row[0]
                     data = row[1].split(',')
-                    pdict[_objs.Circuit(None,stringrep=opstr)] = _np.array([float(p) for p in data])
-                    
+                    pdict[_objs.Circuit(None, stringrep=opstr)] = _np.array([float(p) for p in data])
+
     if sequences_to_indices is None:
         return pdict
-    
+
     if sequences_to_indices is not None:
         sequences = list(sequences_to_indices.keys())
-        parray = _np.zeros((len(sequences),1,2,len(pdict[list(pdict.keys())[0]])),float)
-        
-        for i in range(0,len(sequences)):
-            parray[sequences_to_indices[sequences[i]],0,1,:] = pdict[sequences[i]]
-            parray[sequences_to_indices[sequences[i]],0,0,:] = 1 - pdict[sequences[i]]
+        parray = _np.zeros((len(sequences), 1, 2, len(pdict[list(pdict.keys())[0]])), float)
+
+        for i in range(0, len(sequences)):
+            parray[sequences_to_indices[sequences[i]], 0, 1, :] = pdict[sequences[i]]
+            parray[sequences_to_indices[sequences[i]], 0, 0, :] = 1 - pdict[sequences[i]]
         return parray
-    
+
+
 def load_bitstring_data(filename, sequences_to_indices=None):
     """
     TODO: docstring
     """
     datadict = {}
-    with open(filename,'r') as f:
+    with open(filename, 'r') as f:
         for line in f:
             # Skips comment rows
             if not line.startswith("#"):
@@ -51,21 +53,21 @@ def load_bitstring_data(filename, sequences_to_indices=None):
                 if len(row) != 0:
                     opstr = row[0]
                     data = row[1]
-                    datadict[_objs.Circuit(None,stringrep=opstr)] = _np.array([float(p) for p in data])
-    
-    sequences = list(datadict.keys())            
+                    datadict[_objs.Circuit(None, stringrep=opstr)] = _np.array([float(p) for p in data])
+
+    sequences = list(datadict.keys())
     sequences_to_indices = {}
-    for i in range(0,len(sequences)):
+    for i in range(0, len(sequences)):
         sequences_to_indices[sequences[i]] = i
-    
-    dataarray = _np.zeros((len(sequences),1,2,len(datadict[list(datadict.keys())[0]])),float)
-        
-    for i in range(0,len(sequences)):
-        dataarray[sequences_to_indices[sequences[i]],0,1,:] = datadict[sequences[i]]
-        dataarray[sequences_to_indices[sequences[i]],0,0,:] = 1 - datadict[sequences[i]]
-        
+
+    dataarray = _np.zeros((len(sequences), 1, 2, len(datadict[list(datadict.keys())[0]])), float)
+
+    for i in range(0, len(sequences)):
+        dataarray[sequences_to_indices[sequences[i]], 0, 1, :] = datadict[sequences[i]]
+        dataarray[sequences_to_indices[sequences[i]], 0, 0, :] = 1 - datadict[sequences[i]]
+
     indices_to_sequences = {}
-    for i in range(0,len(sequences)):
+    for i in range(0, len(sequences)):
         indices_to_sequences[i] = sequences[i]
-        
+
     return dataarray, indices_to_sequences

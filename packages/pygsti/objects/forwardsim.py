@@ -67,7 +67,7 @@ class ForwardSimulator(object):
         #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
-        
+
         self.paramvec = paramvec
         self.Np = len(paramvec)
         self.evotype = simplified_op_server.get_evotype()
@@ -83,7 +83,6 @@ class ForwardSimulator(object):
             The vectorized model parameters.
         """
         return self.paramvec
-
 
     def from_vector(self, v):
         """
@@ -126,22 +125,22 @@ class ForwardSimulator(object):
         """
         probs = _ld.OutcomeLabelDict()
         raw_dict, outcomeLbls = simplified_circuit
-        iOut = 0 #outcome index
+        iOut = 0  # outcome index
 
         for raw_circuit, spamTuples in raw_dict.items():
-            rholabel = None # current prep label
-            elabels = [] # a list of effect labels to evaluate cur_rholabel with
+            rholabel = None  # current prep label
+            elabels = []  # a list of effect labels to evaluate cur_rholabel with
             for spamTuple in spamTuples:
                 if spamTuple[0] == rholabel: elabels.append(spamTuple[1])
                 else:
                     if len(elabels) > 0:
                         # evaluate spamTuples w/same rholabel together
-                        for pval in self.prs(rholabel,elabels,raw_circuit,clipTo,False):
+                        for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False):
                             probs[outcomeLbls[iOut]] = pval; iOut += 1
-                    rholabel, raw_gstr = spamTuple[0], raw_circuit # make "current"
-                    elabels = [ spamTuple[1] ]
+                    rholabel, raw_gstr = spamTuple[0], raw_circuit  # make "current"
+                    elabels = [spamTuple[1]]
             if len(elabels) > 0:
-                for pval in self.prs(rholabel,elabels,raw_circuit,clipTo,False):
+                for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False):
                     probs[outcomeLbls[iOut]] = pval; iOut += 1
             #OLD
             #for spamTuple in spamTuples:
@@ -150,8 +149,7 @@ class ForwardSimulator(object):
             #    iOut += 1
         return probs
 
-
-    def dprobs(self, simplified_circuit, returnPr=False,clipTo=None):
+    def dprobs(self, simplified_circuit, returnPr=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -175,17 +173,15 @@ class ForwardSimulator(object):
             dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
             for each spam label (string) SL.
         """
-        dprobs = { }
+        dprobs = {}
         raw_dict, outcomeLbls = simplified_circuit
-        iOut = 0 #outcome index
+        iOut = 0  # outcome index
         for raw_circuit, spamTuples in raw_dict.items():
             for spamTuple in spamTuples:
                 dprobs[outcomeLbls[iOut]] = self.dpr(
                     spamTuple, raw_circuit, returnPr, clipTo)
                 iOut += 1
         return dprobs
-
-
 
     def hprobs(self, simplified_circuit, returnPr=False, returnDeriv=False, clipTo=None):
         """
@@ -215,13 +211,13 @@ class ForwardSimulator(object):
             hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
             for each spam label (string) SL.
         """
-        hprobs = { }
+        hprobs = {}
         raw_dict, outcomeLbls = simplified_circuit
-        iOut = 0 #outcome index
+        iOut = 0  # outcome index
         for raw_circuit, spamTuples in raw_dict.items():
             for spamTuple in spamTuples:
                 hprobs[outcomeLbls[iOut]] = self.hpr(
-                    spamTuple, raw_circuit, returnPr,returnDeriv,clipTo)
+                    spamTuple, raw_circuit, returnPr, returnDeriv, clipTo)
                 iOut += 1
         return hprobs
 
@@ -269,7 +265,7 @@ class ForwardSimulator(object):
             A dictionary such that `probs[opstr]` is an ordered dictionary of
             outcome probabilities whose keys are (tuples of) outcome labels.
         """
-        vp = _np.empty(evalTree.num_final_elements(),'d')
+        vp = _np.empty(evalTree.num_final_elements(), 'd')
         if smartc:
             smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
                                   clipTo, check, comm, _filledarrays=(0,))
@@ -279,17 +275,15 @@ class ForwardSimulator(object):
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(circuits):
             elInds = _slct.indices(elIndices[i]) \
-                     if isinstance(elIndices[i],slice) else elIndices[i]
+                if isinstance(elIndices[i], slice) else elIndices[i]
             ret[opstr] = _ld.OutcomeLabelDict(
-                [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+                [(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
-
     def bulk_dprobs(self, circuits, evalTree, elIndices, outcomes,
-                    returnPr=False,clipTo=None,
-                    check=False,comm=None,
+                    returnPr=False, clipTo=None,
+                    check=False, comm=None,
                     wrtFilter=None, wrtBlockSize=None):
-
         """
         Construct a dictionary containing the probability-derivatives
         for an entire list of operation sequences.
@@ -357,8 +351,8 @@ class ForwardSimulator(object):
         nElements = evalTree.num_final_elements()
         nDerivCols = self.Np
 
-        vdp = _np.empty( (nElements,nDerivCols), 'd' )
-        vp = _np.empty( nElements, 'd' ) if returnPr else None
+        vdp = _np.empty((nElements, nDerivCols), 'd')
+        vp = _np.empty(nElements, 'd') if returnPr else None
 
         self.bulk_fill_dprobs(vdp, evalTree,
                               vp, clipTo, check, comm,
@@ -367,22 +361,20 @@ class ForwardSimulator(object):
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(circuits):
             elInds = _slct.indices(elIndices[i]) \
-                     if isinstance(elIndices[i],slice) else elIndices[i]
+                if isinstance(elIndices[i], slice) else elIndices[i]
             if returnPr:
                 ret[opstr] = _ld.OutcomeLabelDict(
-                    [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
+                    [(outLbl, (vdp[ei], vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
                 ret[opstr] = _ld.OutcomeLabelDict(
-                    [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+                    [(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
-
     def bulk_hprobs(self, circuits, evalTree, elIndices, outcomes,
-                    returnPr=False,returnDeriv=False,clipTo=None,
-                    check=False,comm=None,
+                    returnPr=False, returnDeriv=False, clipTo=None,
+                    check=False, comm=None,
                     wrtFilter1=None, wrtFilter2=None,
                     wrtBlockSize1=None, wrtBlockSize2=None):
-
         """
         Construct a dictionary containing the probability-Hessians
         for an entire list of operation sequences.
@@ -454,41 +446,40 @@ class ForwardSimulator(object):
         """
         nElements = evalTree.num_final_elements()
         nDerivCols1 = self.Np if (wrtFilter1 is None) \
-                           else len(wrtFilter1)
+            else len(wrtFilter1)
         nDerivCols2 = self.Np if (wrtFilter2 is None) \
-                           else len(wrtFilter2)
+            else len(wrtFilter2)
 
-        vhp = _np.empty( (nElements,nDerivCols1,nDerivCols2),'d')
-        vdp1 = _np.empty( (nElements,self.Np), 'd' ) \
+        vhp = _np.empty((nElements, nDerivCols1, nDerivCols2), 'd')
+        vdp1 = _np.empty((nElements, self.Np), 'd') \
             if returnDeriv else None
-        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
-        vp = _np.empty( nElements, 'd' ) if returnPr else None
+        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1 != wrtFilter2) else None
+        vp = _np.empty(nElements, 'd') if returnPr else None
 
         self.bulk_fill_hprobs(vhp, evalTree,
                               vp, vdp1, vdp2, clipTo, check, comm,
-                              wrtFilter1,wrtFilter1,wrtBlockSize1,wrtBlockSize2)
+                              wrtFilter1, wrtFilter1, wrtBlockSize1, wrtBlockSize2)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(circuits):
             elInds = _slct.indices(elIndices[i]) \
-                     if isinstance(elIndices[i],slice) else elIndices[i]
+                if isinstance(elIndices[i], slice) else elIndices[i]
             outcomeQtys = _ld.OutcomeLabelDict()
             for ei, outLbl in zip(elInds, outcomes[i]):
                 if returnDeriv:
                     if vdp2 is None:
-                        if returnPr: t = (vhp[ei],vdp1[ei],vp[ei])
-                        else:        t = (vhp[ei],vdp1[ei])
+                        if returnPr: t = (vhp[ei], vdp1[ei], vp[ei])
+                        else: t = (vhp[ei], vdp1[ei])
                     else:
-                        if returnPr: t = (vhp[ei],vdp1[ei],vdp2[ei],vp[ei])
-                        else:        t = (vhp[ei],vdp1[ei],vdp2[ei])
+                        if returnPr: t = (vhp[ei], vdp1[ei], vdp2[ei], vp[ei])
+                        else: t = (vhp[ei], vdp1[ei], vdp2[ei])
                 else:
-                    if returnPr: t = (vhp[ei],vp[ei])
-                    else:        t = vhp[ei]
+                    if returnPr: t = (vhp[ei], vp[ei])
+                    else: t = vhp[ei]
                 outcomeQtys[outLbl] = t
             ret[opstr] = outcomeQtys
-            
-        return ret
 
+        return ret
 
     def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
@@ -497,69 +488,66 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("construct_evaltree(...) is not implemented!")
 
-    
     def _fill_result_tuple(self, result_tup, evalTree,
                            param_slice1, param_slice2, calc_and_fill_fn):
-        """ 
+        """
         This function takes a "calc-and-fill" function, which computes
         and *fills* (i.e. doesn't return to save copying) some arrays. The
-        arrays that are filled internally to `calc_and_fill_fn` must be the 
+        arrays that are filled internally to `calc_and_fill_fn` must be the
         same as the elements of `result_tup`.  The fill function computes
         values for only a single spam label (specified to it by the first
         two arguments), and in general only a specified slice of the values
         for this spam label (given by the subsequent arguments, except for
-        the last).  The final argument is a boolean specifying whether 
-        the filling should overwrite or add to the existing array values, 
+        the last).  The final argument is a boolean specifying whether
+        the filling should overwrite or add to the existing array values,
         which is a functionality needed to correctly handle the remainder
         spam label.
         """
-        
-        pslc1 = param_slice1
-        pslc2 = param_slice2
-        for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
-            # fInds = "final indices" = the "element" indices in the final
-            #          filled quantity combining both spam and gate-sequence indices
-            # gInds  = "gate sequence indices" = indices into the (tree-) list of
-            #          all of the raw operation sequences which need to be computed
-            #          for the current spamTuple (this list has the SAME length as fInds).            
-            calc_and_fill_fn(spamTuple,fInds,gInds,pslc1,pslc2,False) #TODO: remove SumInto == True cases
-                    
-        return
 
-    def _fill_result_tuple_collectrho(self, result_tup, evalTree,
-                           param_slice1, param_slice2, calc_and_fill_fn):
-        """ 
-        Similar to :method:`_fill_result_tuple`, but collects common-rho
-        spamtuples together for speeding up map-based evaluation.  Thus, where
-        `_fill_result_tuple` makes a separate call to `calc_and_fill_fn` for 
-        each `(rhoLabel,Elabel)` spamtuple, this function calls 
-        `calc_and_fill_fn(rhoLabel, Elabels, ...)`.
-        """ 
-        
         pslc1 = param_slice1
         pslc2 = param_slice2
-        collected = _collections.OrderedDict() # keys are rho labels
-        for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
+        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
             # fInds = "final indices" = the "element" indices in the final
             #          filled quantity combining both spam and gate-sequence indices
             # gInds  = "gate sequence indices" = indices into the (tree-) list of
             #          all of the raw operation sequences which need to be computed
             #          for the current spamTuple (this list has the SAME length as fInds).
-            rholabel,elabel = spamTuple #this should always be the case... (no "custom" / "raw" labels)
-            if rholabel not in collected: collected[rholabel] = [list(),list(),list()]
+            calc_and_fill_fn(spamTuple, fInds, gInds, pslc1, pslc2, False)  # TODO: remove SumInto == True cases
+
+        return
+
+    def _fill_result_tuple_collectrho(self, result_tup, evalTree,
+                                      param_slice1, param_slice2, calc_and_fill_fn):
+        """
+        Similar to :method:`_fill_result_tuple`, but collects common-rho
+        spamtuples together for speeding up map-based evaluation.  Thus, where
+        `_fill_result_tuple` makes a separate call to `calc_and_fill_fn` for
+        each `(rhoLabel,Elabel)` spamtuple, this function calls
+        `calc_and_fill_fn(rhoLabel, Elabels, ...)`.
+        """
+
+        pslc1 = param_slice1
+        pslc2 = param_slice2
+        collected = _collections.OrderedDict()  # keys are rho labels
+        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
+            # fInds = "final indices" = the "element" indices in the final
+            #          filled quantity combining both spam and gate-sequence indices
+            # gInds  = "gate sequence indices" = indices into the (tree-) list of
+            #          all of the raw operation sequences which need to be computed
+            #          for the current spamTuple (this list has the SAME length as fInds).
+            rholabel, elabel = spamTuple  # this should always be the case... (no "custom" / "raw" labels)
+            if rholabel not in collected: collected[rholabel] = [list(), list(), list()]
             collected[rholabel][0].append(elabel)
             collected[rholabel][1].append(fInds)
             collected[rholabel][2].append(gInds)
-            
-        for rholabel, (elabels, fIndsList, gIndsList) in collected.items():
-            calc_and_fill_fn(rholabel, elabels, fIndsList, gIndsList,pslc1,pslc2, False) 
-                    
-        return
 
+        for rholabel, (elabels, fIndsList, gIndsList) in collected.items():
+            calc_and_fill_fn(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, False)
+
+        return
 
     def bulk_fill_probs(self, mxToFill, evalTree,
                         clipTo=None, check=False, comm=None):
-
         """
         Compute the outcome probabilities for an entire tree of operation sequences.
 
@@ -570,9 +558,9 @@ class ForwardSimulator(object):
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
         compute the gate-only sequences.  This routine fills in `mxToFill`, which
-        must have length equal to the number of final elements (this can be 
+        must have length equal to the number of final elements (this can be
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
-        correspond to which strings and outcomes, you'll need the mappings 
+        correspond to which strings and outcomes, you'll need the mappings
         generated when the original list of `Circuits` was simplified.
 
         Parameters
@@ -605,12 +593,10 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("bulk_fill_probs(...) is not implemented!")
 
-
     def bulk_fill_dprobs(self, mxToFill, evalTree,
-                         prMxToFill=None,clipTo=None,check=False,
+                         prMxToFill=None, clipTo=None, check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
-
         """
         Compute the outcome probability-derivatives for an entire tree of gate
         strings.
@@ -622,7 +608,7 @@ class ForwardSimulator(object):
         ----------
         mxToFill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M is the 
+          computed elements (i.e. evalTree.num_final_elements()) and M is the
           number of model parameters.
 
         evalTree : EvalTree
@@ -676,10 +662,9 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("bulk_fill_dprobs(...) is not implemented!")
 
-
     def bulk_fill_hprobs(self, mxToFill, evalTree,
-                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None, 
-                         clipTo=None, check=False,comm=None, wrtFilter1=None, wrtFilter2=None,
+                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
+                         clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
                          wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
         """
         Compute the outcome probability-Hessians for an entire tree of gate
@@ -749,12 +734,10 @@ class ForwardSimulator(object):
         -------
         None
         """
-        raise NotImplementedError("bulk_fill_hprobs(...) is not implemented!")        
-
+        raise NotImplementedError("bulk_fill_hprobs(...) is not implemented!")
 
     def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
                              bReturnDProbs12=False, comm=None):
-                             
         """
         Constructs a generator that computes the 2nd derivatives of the
         probabilities generated by a each gate sequence given by evalTree
@@ -804,7 +787,7 @@ class ForwardSimulator(object):
         Returns
         -------
         block_generator
-          A generator which, when iterated, yields the 3-tuple 
+          A generator which, when iterated, yields the 3-tuple
           `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
           (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
           are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
@@ -822,5 +805,3 @@ class ForwardSimulator(object):
           - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
         raise NotImplementedError("bulk_hprobs_by_block(...) is not implemented!")
-                    
-

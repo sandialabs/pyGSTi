@@ -7,32 +7,35 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 
-import numpy      as _np
-import itertools  as _itertools
-import random     as _random
+import numpy as _np
+import itertools as _itertools
+import random as _random
 import scipy.misc as _spmisc
 from ..construction import circuitconstruction as _gsc
-from ..tools        import remove_duplicates      as _remove_duplicates
-from ..tools        import slicetools             as _slct
+from ..tools import remove_duplicates as _remove_duplicates
+from ..tools import slicetools as _slct
 
-from ..             import objects as _objs
+from .. import objects as _objs
 
-def _nCr(n,r):
+
+def _nCr(n, r):
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
     #f = _math.factorial; return f(n) / f(r) / f(n-r)
-    return _spmisc.comb(n,r)
+    return _spmisc.comb(n, r)
+
 
 def _random_combination(indices_tuple, r):
     """
     Random selection from itertools.combinations(indices_tuple, r)
-      from http://docs.python.org/2/library/itertools.html#recipes 
+      from http://docs.python.org/2/library/itertools.html#recipes
     """
     n = len(indices_tuple)
     iis = sorted(_random.sample(range(n), r))
     return tuple(indices_tuple[i] for i in iis)
 
+
 def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
-                                   testLs=(256,2048), prepovmTuples="first", tol=0.75,
+                                   testLs=(256, 2048), prepovmTuples="first", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
                                    verbosity=0, testPairList=None, memLimit=None,
                                    minimumPairs=1):
@@ -42,9 +45,9 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
     A "standard" set of GST operation sequences consists of all sequences of the form:
 
     statePrep + prepFiducial + germPower + measureFiducial + measurement
-    
-    This set is typically over-complete, and it is possible to restrict the 
-    (prepFiducial, measureFiducial) pairs to a subset of all the possible 
+
+    This set is typically over-complete, and it is possible to restrict the
+    (prepFiducial, measureFiducial) pairs to a subset of all the possible
     pairs given the separate `prepStrs` and `effectStrs` lists.  This function
     attempts to find a set of fiducial pairs that still amplify all of the
     model's parameters (i.e. is "amplificationally complete").  The test
@@ -53,7 +56,7 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
     values scale linearly with the germ-power length.
 
     In the special case when `testPairList` is not None, the function *tests*
-    the given set of fiducial pairs for amplificational completeness, and 
+    the given set of fiducial pairs for amplificational completeness, and
     does not perform any search.
 
     Parameters
@@ -90,14 +93,14 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
 
     seed : int, optional
         The seed to use for generating random-pair-sets.
-        
+
     verbosity : int, optional
         How much detail to print to stdout.
 
     testPairList : list or None, optional
         If not None, a list of (iRhoStr,iEffectStr) tuples of integers,
         specifying a list of fiducial pairs (indices are into `prepStrs` and
-        `effectStrs`, respectively).  These pairs are then tested for 
+        `effectStrs`, respectively).  These pairs are then tested for
         amplificational completeness and the number of amplified parameters
         is printed to stdout.  (This is a special debugging functionality.)
 
@@ -106,7 +109,7 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
 
     minimumPairs : int, optional
         The minimium number of fiducial pairs to try (default == 1).  Set this
-        to integers larger than 1 to avoid trying pair sets that are known to 
+        to integers larger than 1 to avoid trying pair sets that are known to
         be too small.
 
     Returns
@@ -122,9 +125,9 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
     if prepovmTuples == "first":
         firstRho = list(targetModel.preps.keys())[0]
         firstPOVM = list(targetModel.povms.keys())[0]
-        prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                      for prepLbl,povmLbl in prepovmTuples ]
+        prepovmTuples = [(firstRho, firstPOVM)]
+    prepovmTuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+                     for prepLbl, povmLbl in prepovmTuples]
 
     nModelParams = targetModel.num_params()
 
@@ -132,44 +135,44 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
 
-        st=0 #running row count over to-be-concatenated dPall matrix
-        elIndicesForPair = [ [] for i in range(len(prepStrs)*len(effectStrs))]
-          #contains lists of final leading-dim indices corresponding to each fiducial pair
-          
-        dPall = [] # one element per germ, concatenate later
+        st = 0  # running row count over to-be-concatenated dPall matrix
+        elIndicesForPair = [[] for i in range(len(prepStrs) * len(effectStrs))]
+        #contains lists of final leading-dim indices corresponding to each fiducial pair
 
-        for iGerm,germ in enumerate(germList):
-            expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
+        dPall = []  # one element per germ, concatenate later
+
+        for iGerm, germ in enumerate(germList):
+            expGerm = _gsc.repeat_with_max_length(germ, L)  # could pass exponent and set to germ**exp here
             lst = _gsc.create_circuit_list(
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prepStrs, f1=effectStrs,
-                expGerm=expGerm, pp=prepovmTuples, order=('f0','f1','pp'))
+                expGerm=expGerm, pp=prepovmTuples, order=('f0', 'f1', 'pp'))
 
-            evTree,blkSz,_,lookup,_ = targetModel.bulk_evaltree_from_resources(
+            evTree, blkSz, _, lookup, _ = targetModel.bulk_evaltree_from_resources(
                 lst, memLimit=memLimit, distributeMethod="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
-            dP = _np.empty( (evTree.num_final_elements(),targetModel.num_params()), 'd' )
-            targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz) # num_els x num_params
+            dP = _np.empty((evTree.num_final_elements(), targetModel.num_params()), 'd')
+            targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz)  # num_els x num_params
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final operation sequence of evTree)
             nPrepPOVM = len(prepovmTuples)
-            for k in range(len(prepStrs)*len(effectStrs)):
-                for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
+            for k in range(len(prepStrs) * len(effectStrs)):
+                for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):  # "original" indices into lst for k-th fiducial pair
                     elArray = _slct.as_array(lookup[o]) + st
-                    elIndicesForPair[k].extend( list(elArray) )
-            st += evTree.num_final_elements() # b/c we'll concatenate tree's elements later
-                
-        return _np.concatenate( dPall, axis=0 ), elIndicesForPair
-            #indexed by [iElement, iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
-            # where iGerm, f0, f1, and SPAM are all bundled into iElement (but elIndicesForPair
-            # provides the necessary indexing for picking out certain pairs)
+                    elIndicesForPair[k].extend(list(elArray))
+            st += evTree.num_final_elements()  # b/c we'll concatenate tree's elements later
 
-    def get_number_amplified(M0,M1,L0,L1,verb):
+        return _np.concatenate(dPall, axis=0), elIndicesForPair
+        #indexed by [iElement, iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
+        # where iGerm, f0, f1, and SPAM are all bundled into iElement (but elIndicesForPair
+        # provides the necessary indexing for picking out certain pairs)
+
+    def get_number_amplified(M0, M1, L0, L1, verb):
         """ Return the number of amplified parameters """
         printer = _objs.VerbosityPrinter.build_printer(verb)
-        L_ratio = float(L1)/float(L0)
+        L_ratio = float(L1) / float(L0)
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
@@ -179,16 +182,15 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
 
         numAmplified = 0
         printer.log("Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape), 4)
-        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol), 4)
-        for i,(v0,v1) in enumerate(zip(sorted(s0,reverse=True),sorted(s1,reverse=True))):
-            if abs(v0) > 0.1 and (v1/v0)/L_ratio > tol:
+        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0, L1, tol), 4)
+        for i, (v0, v1) in enumerate(zip(sorted(s0, reverse=True), sorted(s1, reverse=True))):
+            if abs(v0) > 0.1 and (v1 / v0) / L_ratio > tol:
                 numAmplified += 1
-                printer.log("%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
-            printer.log("%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+                printer.log("%d: %g  %g  %g YES" % (i, v0, v1, (v1 / v0) / L_ratio), 4)
+            printer.log("%d: %g  %g  %g NO" % (i, v0, v1, (v1 / v0) / L_ratio), 4)
         return numAmplified
 
     #rank = len( [v for v in s if v > 0.001] )
-
 
     printer.log("------  Fiducial Pair Reduction --------")
 
@@ -199,31 +201,31 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
 
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial pairs
     if testPairList is None:
-        maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity+1)
+        maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity + 1)
         printer.log("maximum number of amplified parameters = %s" % maxAmplified)
 
     #Loop through fiducial pairs and add all derivative rows (1 x nModelParams) to test matrix
     # then check if testMatrix has full rank ( == nModelParams)
 
-    nPossiblePairs = len(prepStrs)*len(effectStrs)
+    nPossiblePairs = len(prepStrs) * len(effectStrs)
     allPairIndices = list(range(nPossiblePairs))
     nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
 
-    if testPairList is not None: #special mode for testing/debugging single pairlist
-        pairIndices0 = _np.concatenate( [ elIndices0[iRhoStr*nEStrs + iEStr]
-                                         for iRhoStr,iEStr in testPairList ] )
-        pairIndices1 = _np.concatenate( [ elIndices1[iRhoStr*nEStrs + iEStr]
-                                         for iRhoStr,iEStr in testPairList ] )
-        testMx0 = _np.take( fullTestMx0, pairIndices0, axis=0 )
-        testMx1 = _np.take( fullTestMx1, pairIndices1, axis=0 )
+    if testPairList is not None:  # special mode for testing/debugging single pairlist
+        pairIndices0 = _np.concatenate([elIndices0[iRhoStr * nEStrs + iEStr]
+                                        for iRhoStr, iEStr in testPairList])
+        pairIndices1 = _np.concatenate([elIndices1[iRhoStr * nEStrs + iEStr]
+                                        for iRhoStr, iEStr in testPairList])
+        testMx0 = _np.take(fullTestMx0, pairIndices0, axis=0)
+        testMx1 = _np.take(fullTestMx1, pairIndices1, axis=0)
         nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
         printer.log("Number of amplified parameters = %s" % nAmplified)
         return None
 
     bestAmplified = 0
-    for nNeededPairs in range(minimumPairs,nPossiblePairs):
-        printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" % \
-                (nNeededPairs,_nCr(nPossiblePairs,nNeededPairs)))
+    for nNeededPairs in range(minimumPairs, nPossiblePairs):
+        printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" %
+                    (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)))
 
         bestAmplified = 0
         if searchMode == "sequential":
@@ -233,41 +235,40 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
             _random.seed(seed)  # ok if seed is None
             nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
             if nRandom < nTotalPairCombos:
-                pairIndicesToIterateOver = [ _random_combination(allPairIndices, nNeededPairs) for i in range(nRandom) ]
+                pairIndicesToIterateOver = [_random_combination(allPairIndices, nNeededPairs) for i in range(nRandom)]
             else:
                 pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
         for pairIndicesToTest in pairIndicesToIterateOver:
-            pairIndices0 = _np.concatenate( [ elIndices0[i] for i in pairIndicesToTest ] )
-            pairIndices1 = _np.concatenate( [ elIndices1[i] for i in pairIndicesToTest ] )            
-            testMx0 = _np.take( fullTestMx0, pairIndices0, axis=0 )
-            testMx1 = _np.take( fullTestMx1, pairIndices1, axis=0 )
+            pairIndices0 = _np.concatenate([elIndices0[i] for i in pairIndicesToTest])
+            pairIndices1 = _np.concatenate([elIndices1[i] for i in pairIndicesToTest])
+            testMx0 = _np.take(fullTestMx0, pairIndices0, axis=0)
+            testMx1 = _np.take(fullTestMx1, pairIndices1, axis=0)
             nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
             if printer.verbosity > 1:
                 ret = []
                 for i in pairIndicesToTest:
                     iRhoStr = i // nEStrs
-                    iEStr   = i - iRhoStr*nEStrs
-                    ret.append( (iRhoStr,iEStr) )
-                printer.log("Pair list %s ==> %d amplified parameters" % (" ".join(map(str,ret)), nAmplified))
+                    iEStr = i - iRhoStr * nEStrs
+                    ret.append((iRhoStr, iEStr))
+                printer.log("Pair list %s ==> %d amplified parameters" % (" ".join(map(str, ret)), nAmplified))
 
             if nAmplified == maxAmplified:
                 ret = []
                 for i in pairIndicesToTest:
                     iRhoStr = i // nEStrs
-                    iEStr   = i - iRhoStr*nEStrs
-                    ret.append( (iRhoStr,iEStr) )
+                    iEStr = i - iRhoStr * nEStrs
+                    ret.append((iRhoStr, iEStr))
                 return ret
 
     printer.log(" --> Highest number of amplified parameters was %d" % bestAmplified)
 
     #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs, which by definition will hit the "max-amplified" target
-    listOfAllPairs = [ (iRhoStr,iEStr)
-                       for iRhoStr in range(nRhoStrs)
-                       for iEStr in range(nEStrs) ]
+    listOfAllPairs = [(iRhoStr, iEStr)
+                      for iRhoStr in range(nRhoStrs)
+                      for iEStr in range(nEStrs)]
     return listOfAllPairs
-
 
 
 def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
@@ -281,15 +282,15 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
     A "standard" set of GST operation sequences consists of all sequences of the form:
 
     statePrep + prepFiducial + germPower + measureFiducial + measurement
-    
-    This set is typically over-complete, and it is possible to restrict the 
-    (prepFiducial, measureFiducial) pairs to a subset of all the possible 
+
+    This set is typically over-complete, and it is possible to restrict the
+    (prepFiducial, measureFiducial) pairs to a subset of all the possible
     pairs given the separate `prepStrs` and `effectStrs` lists.  This function
     attempts to find sets of fiducial pairs, one set per germ, that still
     amplify all of the model's parameters (i.e. is "amplificationally
     complete").  For each germ, a fiducial pair set is found that amplifies
     all of the "parameters" (really linear combinations of them) that the
-    particular germ amplifies.  
+    particular germ amplifies.
 
     To test whether a set of fiducial pairs satisfies this condition, the
     sum of projectors `P_i = dot(J_i,J_i^T)`, where `J_i` is a matrix of the
@@ -330,7 +331,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
 
     seed : int, optional
         The seed to use for generating random-pair-sets.
-        
+
     verbosity : int, optional
         How much detail to print to stdout.
 
@@ -351,28 +352,27 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
     if prepovmTuples == "first":
         firstRho = list(targetModel.preps.keys())[0]
         firstPOVM = list(targetModel.povms.keys())[0]
-        prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                      for prepLbl,povmLbl in prepovmTuples ]
-    
+        prepovmTuples = [(firstRho, firstPOVM)]
+    prepovmTuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+                     for prepLbl, povmLbl in prepovmTuples]
 
-    pairListDict = {} # dict of lists of 2-tuples: one pair list per germ
+    pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
 
     printer.log("------  Individual Fiducial Pair Reduction --------")
     with printer.progress_logging(1):
-        for i,germ in enumerate(germList):
+        for i, germ in enumerate(germList):
 
             #Create a new model containing static target gates and a
-            # special "germ" gate that is parameterized only by it's 
+            # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = targetModel.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.product(germ)
             gsGerm.operations["Ggerm"] = _objs.EigenvalueParamDenseOp(
-                                                   germMx, True, constrainToTP)
+                germMx, True, constrainToTP)
 
-            printer.show_progress(i, len(germList), 
-                                  suffix='-- %s germ (%d params)' % 
+            printer.show_progress(i, len(germList),
+                                  suffix='-- %s germ (%d params)' %
                                   (germ, gsGerm.num_params()))
             #Debugging
             #print(gsGerm.operations["Ggerm"].evals)
@@ -385,20 +385,20 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             lst = _gsc.create_circuit_list(
                 "pp[0]+f0+germ+f1+pp[1]", f0=prepStrs, f1=effectStrs,
                 germ=_objs.Circuit(("Ggerm",)), pp=prepovmTuples,
-                order=('f0','f1','pp'))
+                order=('f0', 'f1', 'pp'))
 
-            evTree,blkSz,_,lookup,_ = gsGerm.bulk_evaltree_from_resources(
+            evTree, blkSz, _, lookup, _ = gsGerm.bulk_evaltree_from_resources(
                 lst, memLimit=memLimit, distributeMethod="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
 
-            elIndicesForPair = [ [] for i in range(len(prepStrs)*len(effectStrs)) ]
+            elIndicesForPair = [[] for i in range(len(prepStrs) * len(effectStrs))]
             nPrepPOVM = len(prepovmTuples)
-            for k in range(len(prepStrs)*len(effectStrs)):
-                for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
-                    elIndicesForPair[k].extend( list(_slct.indices(lookup[o])) )
+            for k in range(len(prepStrs) * len(effectStrs)):
+                for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):  # "original" indices into lst for k-th fiducial pair
+                    elIndicesForPair[k].extend(list(_slct.indices(lookup[o])))
 
-            dPall = _np.empty( (evTree.num_final_elements(),gsGerm.num_params()), 'd' )
-            gsGerm.bulk_fill_dprobs(dPall, evTree, wrtBlockSize=blkSz) # num_els x num_params
+            dPall = _np.empty((evTree.num_final_elements(), gsGerm.num_params()), 'd')
+            gsGerm.bulk_fill_dprobs(dPall, evTree, wrtBlockSize=blkSz)  # num_els x num_params
 
             # Construct sum of projectors onto the directions (1D spaces)
             # corresponding to varying each parameter (~eigenvalue) of the
@@ -408,8 +408,8 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             # each of the germ parameters (~eigenvalues), which is *all* we
             # want sensitivity to.
             RANK_TOL = 1e-7
-            rank = _np.linalg.matrix_rank( _np.dot(dPall, dPall.T), RANK_TOL )
-            if rank < gsGerm.num_params(): # full fiducial set should work!
+            rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
+            if rank < gsGerm.num_params():  # full fiducial set should work!
                 raise ValueError("Incomplete fiducial-pair set!")
 
               #Below will take a *subset* of the rows in dPall
@@ -417,14 +417,14 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
               # are being considered.
 
             nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
-            nPossiblePairs = len(prepStrs)*len(effectStrs)
+            nPossiblePairs = len(prepStrs) * len(effectStrs)
             allPairIndices = list(range(nPossiblePairs))
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = None; maxRank = 0
-            for nNeededPairs in range(gsGerm.num_params(),nPossiblePairs):
-                printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" % \
-                                (nNeededPairs,_nCr(nPossiblePairs,nNeededPairs)),2)
+            for nNeededPairs in range(gsGerm.num_params(), nPossiblePairs):
+                printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" %
+                            (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 2)
 
                 if searchMode == "sequential":
                     pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
@@ -433,40 +433,41 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
                     _random.seed(seed)  # ok if seed is None
                     nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
                     if nRandom < nTotalPairCombos:
-                        pairIndicesToIterateOver = [ _random_combination(allPairIndices, nNeededPairs) for i in range(nRandom) ]
+                        pairIndicesToIterateOver = [_random_combination(
+                            allPairIndices, nNeededPairs) for i in range(nRandom)]
                     else:
                         pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
-                        
+
                 for pairIndicesToTest in pairIndicesToIterateOver:
-    
+
                     #Get list of pairs as tuples for printing & returning
                     pairList = []
                     for i in pairIndicesToTest:
-                        iRhoStr = i // nEStrs; iEStr = i - iRhoStr*nEStrs
-                        pairList.append( (iRhoStr,iEStr) )
-    
-                    # Same computation of rank as above, but with only a 
+                        iRhoStr = i // nEStrs; iEStr = i - iRhoStr * nEStrs
+                        pairList.append((iRhoStr, iEStr))
+
+                    # Same computation of rank as above, but with only a
                     # subset of the total fiducial pairs.
-                    elementIndicesToTest = _np.concatenate([ elIndicesForPair[i] for i in pairIndicesToTest])
-                    dP = _np.take(dPall, elementIndicesToTest, axis=0) # subset_of_num_elements x num_params
-                    rank = _np.linalg.matrix_rank( _np.dot(dP, dP.T), RANK_TOL )
-                    maxRank = max(maxRank,rank)
-    
+                    elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
+                    dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
+                    rank = _np.linalg.matrix_rank(_np.dot(dP, dP.T), RANK_TOL)
+                    maxRank = max(maxRank, rank)
+
                     printer.log("Pair list %s ==> %d of %d amplified parameters"
-                                % (" ".join(map(str,pairList)), rank,
+                                % (" ".join(map(str, pairList)), rank,
                                    gsGerm.num_params()), 3)
-    
+
                     if rank == gsGerm.num_params():
-                        printer.log("Found a good set of %d pairs: %s" % \
-                                        (nNeededPairs," ".join(map(str,pairList))),2)
+                        printer.log("Found a good set of %d pairs: %s" %
+                                    (nNeededPairs, " ".join(map(str, pairList))), 2)
                         goodPairList = pairList
                         break
 
                 if goodPairList is not None:
-                    break #exit another loop level if a solution was found
+                    break  # exit another loop level if a solution was found
 
             assert(goodPairList is not None)
-            pairListDict[germ] = goodPairList # add to final list of per-germ pairs
+            pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
 
             #TODO REMOVE: should never be called b/c of ValueError catch above for insufficient fidicials
             #else:
@@ -483,7 +484,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
 
 
 def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
-                        testLs=(256,2048), prepovmTuples="first", tol=0.75,
+                        testLs=(256, 2048), prepovmTuples="first", tol=0.75,
                         verbosity=0, memLimit=None):
     """
     Tests a set of global or per-germ fiducial pairs.
@@ -536,39 +537,38 @@ def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
     if prepovmTuples == "first":
         firstRho = list(targetModel.preps.keys())[0]
         firstPOVM = list(targetModel.povms.keys())[0]
-        prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                      for prepLbl,povmLbl in prepovmTuples ]
-
+        prepovmTuples = [(firstRho, firstPOVM)]
+    prepovmTuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+                     for prepLbl, povmLbl in prepovmTuples]
 
     nModelParams = targetModel.num_params()
 
     def get_derivs(L):
-        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> 
+        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
 
         circuits = []
         for germ in germList:
-            expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
-            pairList = fidPairs[germ] if isinstance(fidPairs,dict) else fidPairs
+            expGerm = _gsc.repeat_with_max_length(germ, L)  # could pass exponent and set to germ**exp here
+            pairList = fidPairs[germ] if isinstance(fidPairs, dict) else fidPairs
             circuits += _gsc.create_circuit_list("pp[0]+p[0]+expGerm+p[1]+pp[1]",
-                                                       p=[ (prepStrs[i],effectStrs[j]) for i,j in pairList ],
-                                                       pp=prepovmTuples, expGerm=expGerm, order=['p','pp'])
+                                                 p=[(prepStrs[i], effectStrs[j]) for i, j in pairList],
+                                                 pp=prepovmTuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)
 
-        evTree,wrtSize,_,_,_ = targetModel.bulk_evaltree_from_resources(
+        evTree, wrtSize, _, _, _ = targetModel.bulk_evaltree_from_resources(
             circuits, memLimit=memLimit, distributeMethod="deriv",
             subcalls=['bulk_fill_dprobs'], verbosity=0)
 
-        dP = _np.empty( (evTree.num_final_elements(), nModelParams) )
-           #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|Circuit|AM>)/d(iGatesetParam)
-        
+        dP = _np.empty((evTree.num_final_elements(), nModelParams))
+        #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|Circuit|AM>)/d(iGatesetParam)
+
         targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=wrtSize)
         return dP
 
-    def get_number_amplified(M0,M1,L0,L1):
+    def get_number_amplified(M0, M1, L0, L1):
         """ Return the number of amplified parameters """
-        L_ratio = float(L1)/float(L0)
+        L_ratio = float(L1) / float(L0)
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
@@ -578,28 +578,26 @@ def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
 
         numAmplified = 0
         printer.log("Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape), 4)
-        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol), 4)
-        for i,(v0,v1) in enumerate(zip(sorted(s0,reverse=True),sorted(s1,reverse=True))):
-            if abs(v0) > 0.1 and (v1/v0)/L_ratio > tol:
+        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0, L1, tol), 4)
+        for i, (v0, v1) in enumerate(zip(sorted(s0, reverse=True), sorted(s1, reverse=True))):
+            if abs(v0) > 0.1 and (v1 / v0) / L_ratio > tol:
                 numAmplified += 1
-                printer.log("%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
-            printer.log("%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+                printer.log("%d: %g  %g  %g YES" % (i, v0, v1, (v1 / v0) / L_ratio), 4)
+            printer.log("%d: %g  %g  %g NO" % (i, v0, v1, (v1 / v0) / L_ratio), 4)
         return numAmplified
 
-    L0,L1 = testLs
-    
+    L0, L1 = testLs
+
     printer.log("----------  Testing Fiducial Pairs ----------")
-    printer.log("Getting jacobian at L=%d" % L0,2)
+    printer.log("Getting jacobian at L=%d" % L0, 2)
     dP0 = get_derivs(L0)
-    printer.log("Getting jacobian at L=%d" % L1,2)
+    printer.log("Getting jacobian at L=%d" % L1, 2)
     dP1 = get_derivs(L1)
-    printer.log("Computing number amplified",2)
+    printer.log("Computing number amplified", 2)
     nAmplified = get_number_amplified(dP0, dP1, L0, L1)
     printer.log("Number of amplified parameters = %s" % nAmplified)
-    
+
     return nAmplified
-
-
 
 
 #def _old_TestPair(targetModel, fiducialList, germList, L, testPairList, spamLabels="all"):
