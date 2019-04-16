@@ -53,7 +53,10 @@ cache:
   timeout: 1000
 
 stages:
-  - lint
+  - name: lint
+    if: NOT branch IN (master, beta)
+  - name: lint-comprehensive
+    if: branch IN (master, beta)
   - test
   # Run tests on python 2.7 & 3.5, but only on master/beta
   - name: test-extra
@@ -63,13 +66,23 @@ stages:
 
 jobs:
   include:
-    - stage: lint
+    - &lint-job
+      python: 3.7
       install:
         - pip install -e .[linting]
-      python: 3.7
       script:
-        - python -m flake8 --statistics packages/pygsti
-    
+        - python -m flake8 --statistics $LINTOPTS packages/pygsti
+    - <<: *lint-job
+      stage: lint
+      name: "Critical errors"
+      env: LINTOPTS="--config=.flake8-critical"
+    - <<: *lint-job
+      stage: lint
+      name: "PEP8"
+    - <<: *lint-job
+      stage: lint-comprehensive
+      name: "Comprehensive linting"
+        
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
       python: 3.5
@@ -120,8 +133,10 @@ jobs:
       env: NOSETESTS=none NOSEOPTS=$NOSEOPTS_DEFAULT
       install: skip
       script: python CI/deploy
+      
   allow_failures:
     - stage: lint
+      name: "PEP8"
 
 notifications:
   email:
