@@ -462,7 +462,7 @@ class LinearOperator(_modelmember.ModelMember):
         raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
     
-    def get_taylor_order_terms(self, order):
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
         """ 
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -483,12 +483,52 @@ class LinearOperator(_modelmember.ModelMember):
         order : int
             The order of terms to get.
 
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
         Returns
         -------
-        list
+        terms : list
             A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            output of :method:`Polynomial.compact`.
         """
         raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
+
+
+    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
+        """ TODO: docstring - note this also *sets* the magnitudes of the terms it
+            returns to their current value (based on parameters) """
+        #print("DB: OP get_high_magnitude_terms")
+        v = self.to_vector()
+        taylor_order = 0
+        terms = []; last_len = -1
+        while len(terms) > last_len: # while we keep adding something
+            #print("order ",taylor_order," : ",len(terms), "terms")
+            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, True)
+            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms_at_order),)) # an array of coeffs
+            for coeff,t in zip(coeffs,terms_at_order):
+                t.set_magnitude( abs(coeff) )
+
+            last_len = len(terms)
+            for t in terms_at_order:
+                if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
+                    terms.append( (taylor_order,t) )
+                    
+            taylor_order += 1
+            if taylor_order > max_taylor_order: break
+
+        #Sort terms based on magnitude
+        sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
+        first_order_indices = [i for i,t in enumerate(sorted_terms) if t[0] == 1]
+        return [t[1] for t in sorted_terms], first_order_indices
+
 
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
         """ 
@@ -2447,7 +2487,7 @@ class LindbladOp(LinearOperator):
                              (self._evotype, self.__class__.__name__))
         
         
-    def get_taylor_order_terms(self, order, map_to_global_indices=True):
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
         """ 
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -2469,24 +2509,30 @@ class LindbladOp(LinearOperator):
             Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
             to retrieve.
 
-        map_to_global_indices : bool
-            If False, the returned terms' polynomial coefficients have variables
-            indexed to this :class:`LindbladOp`'s parameters; If True, they index the "global"
-            parameters of the parent :class:`Model`.
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
 
         Returns
         -------
-        list
+        terms : list
             A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            output of :method:`Polynomial.compact`.
         """
 
         def _compose_poly_indices(terms):
             for term in terms:
-                term.map_indices(lambda x: tuple(_modelmember._compose_gpindices(
+                term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
                     self.gpindices, _np.array(x,_np.int64))) )
             return terms
         
-        if order not in self.terms or not map_to_global_indices:
+        if order not in self.terms:
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
@@ -2514,128 +2560,97 @@ class LindbladOp(LinearOperator):
             coeffs_as_compact_polys = (vtape, ctape)
             self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
-            if not map_to_global_indices:
-                return loc_terms
-            self.terms[order] = _compose_poly_indices(loc_terms) # only cache terms with global indices to avoid confusion...
-        return self.terms[order]
+            # only cache terms with *global* indices to avoid confusion...
+            self.terms[order] = _compose_poly_indices(loc_terms)
+
+        if return_coeff_polys:
+            return self.terms[order], self.local_term_poly_coeffs[order]
+        else:
+            return self.terms[order]
 
 
-    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
-        """ TODO: docstring - note this also *sets* the magnitudes of the terms it
-            returns to their current value (based on parameters) """
-        #print("DB: OP get_high_magnitude_terms")
-        v = self.to_vector()
-        taylor_order = 0
-        terms = []; last_len = -1
-        while len(terms) > last_len: # while we keep adding something
-            #print("order ",taylor_order," : ",len(terms), "terms")
-            terms_at_order = self.get_taylor_order_terms(taylor_order) #?? , map_to_global_indices=False)
+    #def get_direct_order_terms(self, order, order_base=None):
+    #    """ 
+    #    TODO: docstring
+    #
+    #    Parameters
+    #    ----------
+    #    order : int
+    #        The order of terms to get.
+    #
+    #    order_base : float
+    #        What constitutes 1 order of magnitude.  If None, then
+    #        polynomial coefficients are used.
+    #
+    #    Returns
+    #    -------
+    #    list
+    #        A list of :class:`RankOneTerm` objects.
+    #    """
+    #
+    #    #Approach 1: always create terms
+    #    if False: # order not in self.terms: # always do this now, since we always need to re-create "direct" terms
+    #        if self._evotype == "svterm": tt = "dense"
+    #        elif self._evotype == "cterm": tt = "clifford"
+    #        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
+    #
+    #        assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
+    #        assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
+    #          # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+    #
+    #        postTerm = _term.RankOneTerm(1.0, self.unitary_postfactor,
+    #                                     self.unitary_postfactor, tt) 
+    #        #Note: for now, *all* of an error generator's terms are considered 0-th order,
+    #        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
+    #        # we might want to allow a distinction among the error generator terms, in which
+    #        # case this term-exponentiation step will need to become more complicated...
+    #        loc_terms = _term.exp_terms(self.errorgen.get_direct_order_terms(0), [order], postTerm, order_base)[order]
+    #        #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
+    #        #self.terms[order] = _compose_poly_indices(loc_terms)
+    #        return loc_terms
+    #
+    #    #Approach 2: get poly terms and evaluate them
+    #    if True:
+    #
+    #        if order not in self.direct_terms:
+    #            if self._evotype == "svterm": tt = "dense"
+    #            elif self._evotype == "cterm": tt = "clifford"
+    #            else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
+    #
+    #            assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
+    #            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
+    #              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+    #            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
+    #                                         self.unitary_postfactor, tt) 
+    #            #Note: for now, *all* of an error generator's terms are considered 0-th order,
+    #            # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
+    #            # we might want to allow a distinction among the error generator terms, in which
+    #            # case this term-exponentiation step will need to become more complicated...
+    #            loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
+    #            poly_coeffs = [ t.coeff for t in loc_terms ]
+    #            tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+    #            vtape = _np.concatenate( [ t[0] for t in tapes ] )
+    #            ctape = _np.concatenate( [ t[1] for t in tapes ] )
+    #            coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
+    #            self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
+    #            self.direct_terms[order] = loc_terms # have poly coeffs but not for long (below code overwrites)
+    #        
+    #        v = self.to_vector()
+    #        cpolys = self.direct_term_poly_coeffs[order]
+    #        terms = self.direct_terms[order]
+    #        coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
+    #        for coeff,t in zip(coeffs,terms):
+    #            t.coeff = coeff
+    #        return terms 
 
-            cpolys = self.local_term_poly_coeffs[taylor_order]
-            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms_at_order),)) # an array of coeffs
-            for coeff,t in zip(coeffs,terms_at_order):
-                t.set_magnitude( abs(coeff) )
-
-            last_len = len(terms)
-            for t in terms_at_order:
-                if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                    terms.append( (taylor_order,t) )
-                    
-            taylor_order += 1
-            if taylor_order > max_taylor_order: break
-
-        #Sort terms based on magnitude
-        sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
-        first_order_indices = [i for i,t in enumerate(sorted_terms) if t[0] == 1]
-        return [t[1] for t in sorted_terms], first_order_indices
-
-    def get_num_firstorder_terms(self):
-        """ TODO: docstring """
-        return len(self.get_taylor_order_terms(1))
-    
-    def get_direct_order_terms(self, order, order_base=None):
-        """ 
-        TODO: docstring
-
-        Parameters
-        ----------
-        order : int
-            The order of terms to get.
-
-        order_base : float
-            What constitutes 1 order of magnitude.  If None, then
-            polynomial coefficients are used.
-
-        Returns
-        -------
-        list
-            A list of :class:`RankOneTerm` objects.
-        """
-
-        #Approach 1: always create terms
-        if False: # order not in self.terms: # always do this now, since we always need to re-create "direct" terms
-            if self._evotype == "svterm": tt = "dense"
-            elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-
-            assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
-            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
-              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-
-            postTerm = _term.RankOneTerm(1.0, self.unitary_postfactor,
-                                         self.unitary_postfactor, tt) 
-            #Note: for now, *all* of an error generator's terms are considered 0-th order,
-            # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
-            # we might want to allow a distinction among the error generator terms, in which
-            # case this term-exponentiation step will need to become more complicated...
-            loc_terms = _term.exp_terms(self.errorgen.get_direct_order_terms(0), [order], postTerm, order_base)[order]
-            #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
-            #self.terms[order] = _compose_poly_indices(loc_terms)
-            return loc_terms
-
-        #Approach 2: get poly terms and evaluate them
-        if True:
-
-            if order not in self.direct_terms:
-                if self._evotype == "svterm": tt = "dense"
-                elif self._evotype == "cterm": tt = "clifford"
-                else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
-    
-                assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
-                assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
-                  # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-                postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
-                                             self.unitary_postfactor, tt) 
-                #Note: for now, *all* of an error generator's terms are considered 0-th order,
-                # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
-                # we might want to allow a distinction among the error generator terms, in which
-                # case this term-exponentiation step will need to become more complicated...
-                loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
-                poly_coeffs = [ t.coeff for t in loc_terms ]
-                tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
-                vtape = _np.concatenate( [ t[0] for t in tapes ] )
-                ctape = _np.concatenate( [ t[1] for t in tapes ] )
-                coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
-                self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
-                self.direct_terms[order] = loc_terms # have poly coeffs but not for long (below code overwrites)
-            
-            v = self.to_vector()
-            cpolys = self.direct_term_poly_coeffs[order]
-            terms = self.direct_terms[order]
-            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
-            for coeff,t in zip(coeffs,terms):
-                t.coeff = coeff
-            return terms 
-
-
-    def get_direct_order_coeffs(self, order, order_base=None):
-        """ 
-        TODO: docstring
-        """
-        v = self.to_vector()
-        cpolys = self.direct_term_poly_coeffs[order]
-        terms = self.direct_terms[order]
-        return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
+    #def get_direct_order_coeffs(self, order, order_base=None):
+    #    """ 
+    #    TODO: docstring
+    #    """
+    #    v = self.to_vector()
+    #    cpolys = self.direct_term_poly_coeffs[order]
+    #    terms = self.direct_terms[order]
+    #    return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
 
         
     def get_total_term_magnitude(self):
@@ -3430,7 +3445,11 @@ class ComposedOp(LinearOperator):
             evotype = ops_to_compose[0]._evotype
         assert(all([evotype == gate._evotype for gate in ops_to_compose])), \
             "All gates must have the same evolution type (%s expected)!" % evotype
-        
+
+        #Term cache dicts (only used for "svterm" and "cterm" evotypes)
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
+
         LinearOperator.__init__(self, dim, evotype)
 
     def submembers(self):
@@ -3442,6 +3461,28 @@ class ComposedOp(LinearOperator):
         list
         """
         return self.factorops
+
+    def set_gpindices(self, gpindices, parent, memo=None):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this ModelMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : Model or ModelMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        self.terms = {} # clear terms cache since param indices have changed now
+        self.local_term_poly_coeffs = {}
+        _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+
 
     def append(*factorops_to_add):
         """
@@ -3536,7 +3577,7 @@ class ComposedOp(LinearOperator):
         assert(False), "Invalid internal _evotype: %s" % self._evotype
 
 
-    def get_taylor_order_terms(self, order):
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
         """ 
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -3557,17 +3598,51 @@ class ComposedOp(LinearOperator):
         order : int
             The order of terms to get.
 
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
         Returns
         -------
-        list
+        terms : list
             A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            output of :method:`Polynomial.compact`.
         """
-        terms = []
-        for p in _lt.partition_into(order, len(self.factorops)):
-            factor_lists = [ self.factorops[i].get_taylor_order_terms(pi) for i,pi in enumerate(p) ]
-            for factors in _itertools.product(*factor_lists):
-                terms.append( _term.compose_terms(factors) )
-        return terms # Cache terms in FUTURE?
+        if order not in self.terms:
+            terms = []
+            for p in _lt.partition_into(order, len(self.factorops)):
+                factor_lists = [ self.factorops[i].get_taylor_order_terms(pi) for i,pi in enumerate(p) ]
+                for factors in _itertools.product(*factor_lists):
+                    terms.append( _term.compose_terms(factors) )
+            self.terms[order] = terms
+
+            def _decompose_indices(x):
+                return tuple(_modelmember._decompose_gpindices(
+                    self.gpindices, _np.array(x,_np.int64)))
+                             
+            poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms] #with *local* indices
+            tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+            if len(tapes) > 0:
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+            else:
+                vtape = _np.empty(0,_np.int64)
+                ctape = _np.empty(0,complex)
+            coeffs_as_compact_polys = (vtape, ctape)
+            self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
+        if return_coeff_polys:
+            #Return coefficient polys in terms of *local* parameters (get_taylor_terms
+            #  and above composition gives polys in terms of *global*, model params)
+            return self.terms[order], self.local_term_poly_coeffs[order]
+        else:
+            return self.terms[order]
 
     
     def num_params(self):
@@ -4191,7 +4266,7 @@ class EmbeddedOp(LinearOperator):
         return finalOp
 
     
-    def get_taylor_order_terms(self, order):
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
         """ 
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -4212,16 +4287,32 @@ class EmbeddedOp(LinearOperator):
         order : int
             The order of terms to get.
 
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
         Returns
         -------
-        list
+        terms : list
             A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            output of :method:`Polynomial.compact`.
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space_labels.copy()
         sslbls.reduce_dims_densitymx_to_state()
-        return [ _term.embed_term(t, sslbls, self.targetLabels)
-                 for t in self.embedded_op.get_taylor_order_terms(order) ]
+        if return_coeff_polys:
+            terms, coeffs = self.embedded_op.get_taylor_order_terms(order,True)
+            embedded_terms = [ _term.embed_term(t, sslbls, self.targetLabels) for t in terms]
+            return embedded_terms, coeffs
+        else:
+            return [ _term.embed_term(t, sslbls, self.targetLabels)
+                 for t in self.embedded_op.get_taylor_order_terms(order,False) ]
 
     
     def num_params(self):
@@ -4921,7 +5012,7 @@ class ComposedErrorgen(LinearOperator):
         assert(False), "Invalid internal _evotype: %s" % self._evotype
 
 
-    def get_taylor_order_terms(self, order):
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
         """ 
         Get the `order`-th order Taylor-expansion terms of this error generator..
 
@@ -4942,13 +5033,25 @@ class ComposedErrorgen(LinearOperator):
         order : int
             The order of terms to get.
 
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
         Returns
         -------
-        list
+        terms : list
             A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            output of :method:`Polynomial.compact`.
         """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
-        return list(_itertools.chain(*[eg.get_taylor_order_terms(order) for eg in self.factors]))
+        assert(return_coeff_polys == False)
+        return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
 
     def num_params(self):
         """
@@ -5825,7 +5928,7 @@ class LindbladErrorgen(LinearOperator):
                                       (self._evotype, self.__class__.__name__))            
 
 
-    def get_taylor_order_terms(self, order):
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
         """ 
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -5846,21 +5949,33 @@ class LindbladErrorgen(LinearOperator):
         order : int
             The order of terms to get.
 
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
         Returns
         -------
-        list
+        terms : list
             A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the 
+            output of :method:`Polynomial.compact`.
         """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
+        assert(return_coeff_polys == False)
         return self.Lterms #terms with local-index polynomial coefficients
 
-    def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
-        """ 
-        TODO: docstring
-        """
-        v = self.to_vector()
-        poly_terms = self.get_taylor_order_terms(order)
-        return [ term.evaluate_coeff(v) for term in poly_terms ]
+    #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
+    #    """ 
+    #    TODO: docstring
+    #    """
+    #    v = self.to_vector()
+    #    poly_terms = self.get_taylor_order_terms(order)
+    #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
     def get_total_term_magnitude(self):
         """

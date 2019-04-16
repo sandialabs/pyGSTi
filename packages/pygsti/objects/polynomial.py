@@ -218,12 +218,35 @@ class Polynomial(dict):
 
         Returns
         -------
+        Polynomial
+        """
+        return Polynomial({ mapfn(k): v for k,v in self.items() })
+
+        
+    def map_indices_inplace(self, mapfn):
+        """
+        Performs an in-place find & replace on this polynomial's variable indices.
+
+        This is useful when the variable indices have external significance
+        (like being the indices of a gate's parameters) and one want to convert
+        to another set of indices (like a parent model's parameters).
+
+        Parameters
+        ----------
+        mapfn : function
+            A function that takes as input an "old" variable-index-tuple 
+            (a key of this Polynomial) and returns the updated "new"
+            variable-index-tuple.
+
+        Returns
+        -------
         None
         """
         new_items = { mapfn(k): v for k,v in self.items() }
         self.clear()
         self.update(new_items)
 
+        
     def mult(self,x):
         """ 
         Multiplies this polynomial by another polynomial `x`.

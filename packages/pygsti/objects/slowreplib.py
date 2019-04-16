@@ -1051,7 +1051,7 @@ class PolyRep(dict):
         cpy.update(self) # constructor expects dict w/var-index keys, not ints like self has
         return cpy
 
-    def map_indices(self, mapfn):
+    def map_indices_inplace(self, mapfn):
         """
         Map the variable indices in this `PolyRep`.
         This allows one to change the "labels" of the variables.
@@ -1621,6 +1621,8 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     mpv = calc.Np # max_poly_vars
     mpo = 1000 ## PLATFORM_BITS / _np.log2(mpv) #max_poly_order allowed for our integer storage
     distinct_gateLabels = sorted(set(circuit))
+
+    #TODO REMOVE
     #print("DB: _prs_as_pruned_polys: ", circuit, "Distinct = ",distinct_gateLabels)
     #op_term_reps = { glbl: [ t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order)]
     #                 for glbl in distinct_gateLabels }
@@ -1637,7 +1639,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
             
     #Similar with rho_terms and E_terms, but lists
     #rho_term_reps = [ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order) ]
-    #rho_num_foat = calc.sos.get_prep(rholabel).get_num_firstorder_terms()
+    #rho_num_foat = calc.sos.get_prep(rholabel).get_num_firstorder_terms() # TODO REMOVE
     if rholabel not in repcache:
         hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order)

@@ -388,7 +388,7 @@ class RankOneTerm(object):
         copy_of_me.post_ops = self.post_ops[:]
         return copy_of_me
 
-    def map_indices(self, mapfn):
+    def map_indices_inplace(self, mapfn):
         """
         Performs a bulk find & replace on the coefficient polynomial's variable
         indices.  This function should only be called when this term's
@@ -405,9 +405,9 @@ class RankOneTerm(object):
         -------
         None
         """
-        assert(hasattr(self.coeff, 'map_indices')), \
-            "Coefficient (type %s) must implements `map_indices`" % str(type(self.coeff))
-        self.coeff.map_indices(mapfn)
+        assert(hasattr(self.coeff, 'map_indices_inplace')), \
+            "Coefficient (type %s) must implements `map_indices_inplace`" % str(type(self.coeff))
+        self.coeff.map_indices_inplace(mapfn)
 
         
     def torep(self, max_poly_order, max_poly_vars, typ):
