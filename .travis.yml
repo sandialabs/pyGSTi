@@ -67,6 +67,8 @@ stages:
 jobs:
   include:
     - &lint-job
+      stage: lint
+      name: "PEP8"
       python: 3.7
       before_install: skip
       install:
@@ -74,16 +76,12 @@ jobs:
       script:
         - python -m flake8 --statistics $LINTOPTS packages/pygsti
     - <<: *lint-job
-      stage: lint
       name: "Critical errors"
       env: LINTOPTS="--config=.flake8-critical"
     - <<: *lint-job
-      stage: lint
-      name: "PEP8"
-    - <<: *lint-job
       stage: lint-comprehensive
       name: "Comprehensive linting"
-        
+
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
       python: 3.5
@@ -134,7 +132,7 @@ jobs:
       env: NOSETESTS=none NOSEOPTS=$NOSEOPTS_DEFAULT
       install: skip
       script: python CI/deploy
-      
+
   allow_failures:
     - stage: lint
       name: "PEP8"
