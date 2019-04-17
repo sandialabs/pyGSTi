@@ -656,21 +656,14 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
         and effect-fiducial pair.
 
     """
-    pvalues_and_strings_dict = {}
-    #for opstr in driftresults.circuitlist:
-    #    pvalues_and_strings_dict[opstr] = driftresults.get_maxpower_pvalue(sequence=opstr)
-
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
     for i, j, opstr in gsplaq:
         try:
             pval = driftresults.get_maxpower_pvalue(sequence=opstr)
             if pval <= 0.:
-                #oneoverpvls = 1./driftresults.ps_pvalue.copy()
-                #oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
-                #ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
                 ret[i, j] = 16
             else:
-                ret[i, j] = _np.log10(1. / pval)  # pvalues_and_strings_dict[opstr])
+                ret[i, j] = _np.log10(1. / pval)
         except:
             pass
     return ret
@@ -700,15 +693,10 @@ def drift_maxpower_matrices(gsplaq, driftresults):
         base circuit is sandwiched between the each prep-fiducial and effect-fiducial pair.
 
     """
-    maxpowers_and_strings_dict = {}
-    #for opstr in driftresults.circuitlist:
-    #    maxpowers_and_strings_dict[opstr] = driftresults.get_maxpower(sequence=opstr)
-
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
     for i, j, opstr in gsplaq:
         try:
             ret[i, j] = driftresults.get_maxpower(sequence=opstr)
-            #maxpowers_and_strings_dict[opstr]
         except:
             pass
     return ret

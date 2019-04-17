@@ -405,7 +405,7 @@ def _compose_gpindices(parent_gpindices, child_gpindices):
     if isinstance(child_gpindices, slice) and child_gpindices == slice(0, 0, None):
         return slice(0, 0, None)  # "null slice" ==> "null slice" convention
     if isinstance(parent_gpindices, slice):
-        start, stop = parent_gpindices.start, parent_gpindices.stop
+        start = parent_gpindices.start
         assert(parent_gpindices.step is None), "No support for nontrivial step size yet"
 
         if isinstance(child_gpindices, slice):

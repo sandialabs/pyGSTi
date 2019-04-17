@@ -388,7 +388,6 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
         #Added by EGN: special behavior needed when Model has
         # an gate name used to designate a perfect 1-qubit idle op (used as placeholder).
         # This translates to a set of "<gatename>:X" operation labels all w/idle_errorrate
-        nQubits = int(round(_np.log2(pspec.models['clifford'].dim)))
         idleLbl = idle1Q_placeholder
         for q in pspec.qubit_labels:
             gl = _Lbl(idleLbl, q)
@@ -485,7 +484,6 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
         #Added by EGN: special behavior needed when Model has
         # an gate name used to designate a perfect 1-qubit idle op (used as placeholder).
         # This translates to a set of "<gatename>:X" operation labels all w/appropriate errorrate
-        nQubits = int(round(_np.log2(pspec.models['clifford'].dim)))
         idleLbl = idle1Q_placeholder
         for q in pspec.qubit_labels:
             gl = _Lbl(idleLbl, q)

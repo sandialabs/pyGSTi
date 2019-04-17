@@ -486,7 +486,6 @@ class MultiDataSet(object):
                     self.timeDict[datasetName][new_slc_part1] = ds_timeData[other_slc]
                     self.repDict[datasetName][new_slc_part1] = ds_repData[other_slc]
 
-                    nPad = l1 - l2
                     timeVal = ds_timeData[other_slc.stop - 1]  # index and timestamp in 0-count bins
                     oliVal = ds_oliData[other_slc.stop - 1]       # just repeat the final bin's outcome
                     self.oliDict[datasetName][new_slc_part2] = oliVal

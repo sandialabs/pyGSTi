@@ -900,7 +900,6 @@ def circuit_color_histogram(circuit_structure, subMxs, colormap,
             width=1)  # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
     )
 
-    xbins_for_numpy = _np.linspace(minval - binsize / 2.0, maxval + binsize / 2.0, nbins + 1)
     hist_values, np_bins = _np.histogram(ys, nbins, range=(minval - binsize / 2.0,
                                                            maxval + binsize / 2.0))
     if len(hist_values) > 0 and len(hist_values[hist_values > 0]) > 0:
@@ -2703,8 +2702,6 @@ class FitComparisonBoxPlot(WorkspacePlot):
     def _create(self, Xs, Ys, gssByYX, modelByYX, datasetByYX, objective,
                 Xlabel, Ylabel, scale, comm, wildcard):
 
-        xs = list(range(len(Xs)))
-        ys = list(range(len(Ys)))
         xlabels = list(map(str, Xs))
         ylabels = list(map(str, Ys))
 
@@ -3042,8 +3039,6 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         xdata = _np.asarray(rbR.data.lengths)
         ydata = _np.asarray(rbR.data.ASPs)
-
-        xlabel = 'Sequence length'
 
         data = []  # list of traces
         data.append(go.Scatter(

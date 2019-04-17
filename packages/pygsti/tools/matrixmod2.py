@@ -258,13 +258,11 @@ def fix_top(A):
     if A.shape == (1, 1):
         return _np.eye(1, dtype='int')
 
-    b_rank_deficient = True
     t = len(A)
 
     found_B = False
     for ind in range(t):
         aa, P = permute_top(A, ind)
-        z = aa[0, 1:]
         B = _np.round_(aa[1:, 1:])
 
         if detmod2(B) == 0:

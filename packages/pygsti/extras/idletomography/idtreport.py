@@ -319,7 +319,6 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         obs_rate = info_dict['rate']
         data_pts = info_dict['data']
         errorbars = info_dict['errbars']
-        weights = info_dict['weights']
         fitCoeffs = info_dict['fitCoeffs']
         fitOrder = info_dict['fitOrder']
         if idtresults.predicted_obs_rates is not None:
@@ -366,7 +365,6 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                 #Expectation value - assume weight at most 2 for now
                 if typ == "diffbasis":
                     obs_indices = [i for i, letter in enumerate(obsORoutcome.rep) if letter != 'I']
-                    N = len(obsORoutcome)  # number of qubits
                     minus_sign = _np.prod([fidpair[1].signs[i] for i in obs_indices])
 
                     # <Z> = p0 - p1 (* minus_sign)
@@ -893,7 +891,7 @@ def create_idletomography_report(results, filename, title="auto",
                 dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
                 dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset  # only used for #of spam labels below
 
-            dsComp = dict()
+            # dsComp = dict()
             all_dsComps = dict()
             indices = []
             for i in range(len(dataset_labels)):

@@ -930,7 +930,6 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     # found above.
     if poissonPicture:
         totCnts = totalCntVec  # shorthand
-        S = cntVecMx / min_p - totCnts  # slope term that is derivative of logl at min_p
         S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
         dprobs12_coeffs = \
@@ -940,7 +939,6 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
 
     else:
-        S = cntVecMx / min_p  # slope term that is derivative of logl at min_p
         S2 = -0.5 * cntVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
         dprobs12_coeffs = \
             _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)

@@ -358,10 +358,6 @@ class TermEvalTree(EvalTree):
             subTree.dp_polys = {}
             subTree.hp_polys = {}
 
-            mapParentIndxToSubTreeIndx = {k: ik for ik, k in enumerate(parentIndices)}
-            curCacheSize = 0
-            subTreeCacheIndices = {}
-
             for ik in fullEvalOrder:  # includes any initial indices
                 k = parentIndices[ik]  # original tree index
                 circuit = self[k]  # original tree data

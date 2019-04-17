@@ -804,7 +804,6 @@ class DriftResults(object):
         #     _plt.plot(times,self.timeseries[sequence][entity][outcome_index]/self.number_of_counts,'.',label=label)
 
         entityInd = self.entitieslist.index(entity)
-        outcomeInd = self.outcomes.index(outcome)
 
         for opstr in circuitlist:
             gstrInd = self.indexforCircuit[opstr]

@@ -59,7 +59,7 @@ class Polynomial(dict):
         Polynomial
         """
         max_num_vars = rep.max_num_vars  # one of the few/only cases where a rep
-        max_order = rep.max_order        # needs to expose some python properties
+        # max_order = rep.max_order        # needs to expose some python properties
 
         def int_to_vinds(indx_tup):
             ret = []

@@ -2307,7 +2307,6 @@ class WorkspacePlot(WorkspaceOutput):
             of the embeddable output.  Keys are `"html"` and `"js"`.
         """
         resizable = self.options.get('resizable', True)
-        autosize = self.options.get('autosize', 'none')
         valign = self.options.get('valign', 'top')
         overrideIDs = self.options.get('switched_item_id_overrides', {})
         switched_item_mode = self.options.get('switched_item_mode', 'inline')

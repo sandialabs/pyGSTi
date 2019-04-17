@@ -137,7 +137,7 @@ class ForwardSimulator(object):
                         # evaluate spamTuples w/same rholabel together
                         for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False):
                             probs[outcomeLbls[iOut]] = pval; iOut += 1
-                    rholabel, raw_gstr = spamTuple[0], raw_circuit  # make "current"
+                    rholabel = spamTuple[0]  # make "current"
                     elabels = [spamTuple[1]]
             if len(elabels) > 0:
                 for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False):

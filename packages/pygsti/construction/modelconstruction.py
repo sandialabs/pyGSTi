@@ -248,7 +248,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
 
     #print "DB: dim = ",dim, " dmDim = ",dmDim
     opInFinalBasis = None  # what will become the final operation matrix
-    defaultI2P = "all" if parameterization != "linearTP" else "TP"
+    # defaultI2P = "all" if parameterization != "linearTP" else "TP"
     #default indices to parameterize (I2P) - used only when
     # creating parameterized gates
 

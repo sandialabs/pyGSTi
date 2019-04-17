@@ -67,8 +67,6 @@ def chi2_terms(model, dataset, circuits=None,
 
     #Memory allocation
     nEls = evTree.num_final_elements()
-    ng = evTree.num_final_strings()
-    gd = model.get_dimension()
     C = 1.0 / 1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)

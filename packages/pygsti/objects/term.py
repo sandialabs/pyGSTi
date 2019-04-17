@@ -97,8 +97,6 @@ def exp_terms(terms, orders, postterm=None, order_base=None):
         final_terms[order] = []
 
         #Alternate method
-        test_terms = []
-
         def add_terms(term_list_index, composed_factors_so_far):
             if term_list_index == order:
                 final_terms[order].append(composed_factors_so_far)

@@ -1386,7 +1386,7 @@ def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
     if len(op.shape) != 2 or op.shape[0] != op.shape[1]:
         raise ValueError('expected op to have equal input and output dimensions')
 
-    n = op.shape[0]
+    # n = op.shape[0]
     n0 = 1  # always act exp(op) on *single* vectors
     mu = 0  # _spsl._expm_multiply._trace(A) / float(n)
     #ASSUME op is *traceless*

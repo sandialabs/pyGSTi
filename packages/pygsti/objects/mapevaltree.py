@@ -614,7 +614,6 @@ class MapEvalTree(EvalTree):
             subTree.num_final_strs = numFinal
             subTree[:] = [None] * len(parentIndices)
 
-            mapParentIndxToSubTreeIndx = {k: ik for ik, k in enumerate(parentIndices)}
             curCacheSize = 0
             subTreeCacheIndices = {}
 

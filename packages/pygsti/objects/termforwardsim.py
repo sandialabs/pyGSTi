@@ -565,7 +565,6 @@ class TermForwardSimulator(ForwardSimulator):
         np1, np2 = num_param1_groups, num_param2_groups
         FLOATSIZE = 8  # in bytes: TODO: a better way
 
-        dim = self.dim
         wrtLen1 = (self.Np + np1 - 1) // np1  # ceiling(num_params / np1)
         wrtLen2 = (self.Np + np2 - 1) // np2  # ceiling(num_params / np2)
 

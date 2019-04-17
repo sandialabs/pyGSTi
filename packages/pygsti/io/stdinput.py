@@ -721,10 +721,6 @@ def read_model(filename):
     """
     basis = 'pp'  # default basis to load as
 
-    spam_vecs = _OrderedDict()
-    spam_labels = _OrderedDict(); remainder_spam_label = ""
-    identity_vec = _np.transpose(_np.array([_np.sqrt(2.0), 0, 0, 0]))  # default = 1-QUBIT identity vector
-
     basis_abbrev = "pp"  # default assumed basis
     basis_dim = None
     gaugegroup_name = None

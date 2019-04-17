@@ -2737,7 +2737,6 @@ def project_to_target_eigenspace(model, targetModel, EPS=1e-6):
         #Project each eigenvector (col of Uop) onto space of cols
         evectors = {}  # key = index of gate eigenval, val = assoc. (projected) eigenvec
         for ipair, (i, j) in enumerate(pairs):
-            tgt_eval = evals_tgt[i]
             if j in evectors: continue  # we already processed this one!
 
             # non-orthog projection:
@@ -2754,8 +2753,7 @@ def project_to_target_eigenspace(model, targetModel, EPS=1e-6):
             for i2, j2 in pairs[ipair + 1:]:
                 if abs(evals_gate[j].imag) > 1e-6 and _np.isclose(evals_gate[j], _np.conjugate(evals_gate[j2])):
                     evectors[j2] = _np.conjugate(evectors[j])
-                    E2 = _np.array(eigenspace[i2]).T; E2dag = E2.T.conjugate()
-                    x = _np.linalg.solve(_np.dot(Edag, E), _np.dot(Edag, evectors[j2]))
+                    # x = _np.linalg.solve(_np.dot(Edag, E), _np.dot(Edag, evectors[j2]))
                     #assert(_np.isclose(_np.linalg.norm(x),_np.linalg.norm(coeffs))) ??
                     #check that this vector is in the span of eigenspace[i2]?
 

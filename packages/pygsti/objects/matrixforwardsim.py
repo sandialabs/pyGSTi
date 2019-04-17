@@ -583,12 +583,13 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         if clipTo is not None:
             ret = _np.clip(ps, clipTo[0], clipTo[1])
-        else: ret = ps
+        else:
+            ret = ps
 
         #DEBUG CHECK
         #check_ps = _np.array( [ self.pr( (rholabel,elabel), circuit, clipTo, bScale) for elabel in elabels ])
         #assert(_np.linalg.norm(ps-check_ps) < 1e-8)
-        return ps
+        return ret
 
     def dpr(self, spamTuple, circuit, returnPr, clipTo):
         """

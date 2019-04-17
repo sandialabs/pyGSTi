@@ -912,20 +912,18 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
     if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
     else:
-        assert(isinstance(structure, list) or isinstance(structure, tuple)
-               ), "If not a string, `structure` must be a list or tuple."
+        assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+            "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for subsetQs in structure:
             assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(subsetQs)
-            assert(len(set(qubits_used)) == len(qubits_used)
-                   ), "The qubits in the tuples/lists of `structure must all be unique!"
+            assert(len(set(qubits_used)) == len(qubits_used)), \
+                "The qubits in the tuples/lists of `structure must all be unique!"
 
-        assert(set(qubits_used).issubset(set(pspec.qubit_labels))
-               ), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
-        n = len(qubits_used)
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
@@ -1066,20 +1064,18 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, ci
     if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
     else:
-        assert(isinstance(structure, list) or isinstance(structure, tuple)
-               ), "If not a string, `structure` must be a list or tuple."
+        assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+            "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for subsetQs in structure:
             assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(subsetQs)
-            assert(len(set(qubits_used)) == len(qubits_used)
-                   ), "The qubits in the tuples/lists of `structure must all be unique!"
+            assert(len(set(qubits_used)) == len(qubits_used)), \
+                "The qubits in the tuples/lists of `structure must all be unique!"
 
-        assert(set(qubits_used).issubset(set(pspec.qubit_labels))
-               ), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
-        n = len(qubits_used)
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
@@ -1927,20 +1923,18 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
     if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
     else:
-        assert(isinstance(structure, list) or isinstance(structure, tuple)
-               ), "If not a string, `structure` must be a list or tuple."
+        assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+            "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for subsetQs in structure:
             assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(subsetQs)
-            assert(len(set(qubits_used)) == len(qubits_used)
-                   ), "The qubits in the tuples/lists of `structure must all be unique!"
+            assert(len(set(qubits_used)) == len(qubits_used)), \
+                "The qubits in the tuples/lists of `structure must all be unique!"
 
-        assert(set(qubits_used).issubset(set(pspec.qubit_labels))
-               ), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
-        n = len(qubits_used)
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
@@ -2472,10 +2466,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "If not None, `subsetQs` must be a list!"
         subsetQs = list(subsetQs)
         n = len(subsetQs)
-        allqubits = subsetQs
     else:
         n = pspec.number_of_qubits
-        allqubits = pspec.qubit_labels[:]  # copy this list
 
     # Check that the inverse of every gate is in the model:
     for gname in pspec.root_gate_names:

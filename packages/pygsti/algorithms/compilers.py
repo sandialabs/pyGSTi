@@ -1726,9 +1726,6 @@ def compile_cnot_circuit_using_OiCAGE_algorithm(s, pspec, qubitorder, subsetQs=N
         # Go through and remove every qubit from this list.
         while len(remaining_Qs_for_round) > 0:
 
-            # complement of `remaining_qubits` = "eliminated qubits"
-            eliminated_qubits = set(allqubits) - set(remaining_qubits)
-
             # Find the most distant qubit still to be dealt with in this round
             mostdistantQ_rQsgraph_index = _np.argmax(distances_to_qubit_q)
             mostdistantQ = rQsgraph_llist[mostdistantQ_rQsgraph_index]

@@ -990,8 +990,6 @@ class GaugeRobustErrgenTable(WorkspaceTable):
                                                      genType)
 
     def _create(self, model, targetModel, confidenceRegionInfo, genType):
-
-        opLabels = model.get_primitive_op_labels()  # operation labels
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Error rates', 'Value']

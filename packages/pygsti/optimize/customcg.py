@@ -197,16 +197,16 @@ def _max_within_bracket(g, s1, g1, s2, g2, s3, g3):
         assert(g4 is not None)  # assume function is defined at all points in bracket
         if s4 > s2:
             if(g4 > g2):  # Drop x1 (move to x2), move x2 to x4.
-                s1, g1 = s2, g2
+                s1, _ = s2, g2
                 s2, g2 = s4, g4
             else:  # Drop x3 (move to x4)
-                s3, g3 = s4, g4
+                s3, _ = s4, g4
         else:
             if g4 > g2:  # Drop x3 (move to x2), move x2 to x4
-                s3, g3 = s2, g2
+                s3, _ = s2, g2
                 s2, g2 = s4, g4
             else:  # Drop x1 (move to x4)
-                s1, g1 = s4, g4
+                s1, _ = s4, g4
     return s2
 
 

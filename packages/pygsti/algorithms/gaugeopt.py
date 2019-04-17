@@ -749,7 +749,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl_pre, mdl_post,
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
             EMx = _tools.vec_to_stdmx(effectvec.todense()[:, None], opBasis)
-            dmDim = EMx.shape[0]
+            # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "denMx should be Hermitian!"
 

@@ -1213,7 +1213,6 @@ class Circuit(object):
         Circuit
         """
         parallel_lbls = []
-        cur_components = []
         first_free = {'*': 0}
         for lbl in self.tup:
             if can_break_labels:  # then process label components individually

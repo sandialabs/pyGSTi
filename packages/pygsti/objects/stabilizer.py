@@ -518,7 +518,7 @@ class StabilizerFrame(object):
         p : numpy array
             The 'phase vector' over the integers mod 4 representing the Clifford
         """
-        two_n, n = self.n * 2, self.n
+        n = self.n
         assert(_symp.check_valid_clifford(s, p)), "The `s`,`p` matrix-vector pair is not a valid Clifford!"
 
         if qubit_filter is not None:
@@ -638,8 +638,6 @@ class StabilizerFrame(object):
         -------
         None
         """
-        vs = (_np.array([1, 0], complex), _np.array([0, 1], complex))  # (v0,v1)
-
         debug = False
 
         qubits = list(range(self.n))  # start with all qubits being acted on

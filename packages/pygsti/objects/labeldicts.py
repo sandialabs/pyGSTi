@@ -131,7 +131,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         elif self.flags['cast_to_type'] == "operation":
             try:
                 d1 = len(obj)
-                d2 = len(obj[0])  # pylint: disable=unused-variable
+                len(obj[0])
+                # XXX this is an abuse of exception handling
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % obj)
             if any([len(row) != d1 for row in obj]):

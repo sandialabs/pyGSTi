@@ -1128,7 +1128,6 @@ class PolyRep(dict):
         None
         """
         # assume a scalar that can multiply values
-        newpoly = self.copy()
         for k in self:
             self[k] *= x
 
@@ -1316,11 +1315,6 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     pCache = _np.empty((len(evalTree), len(elabels)), 'd')
     dpr_cache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
 
-    #Get (extension-type) representation objects
-    rhorep = calc.sos.get_prep(rholabel).torep('prep')
-    ereps = [calc.sos.get_effect(el).torep('effect') for el in elabels]
-    operation_lookup = {lbl: i for i, lbl in enumerate(evalTree.opLabels)}  # operation labels -> ints for faster lookup
-    operationreps = {i: calc.sos.get_operation(lbl).torep() for lbl, i in operation_lookup.items()}
     cacheSize = evalTree.cache_size()
 
     # create rho_cache (or use scratch)
@@ -1460,14 +1454,14 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
 
     #HERE DEBUG!!!
     global DEBUG_FCOUNT
-    db_part_cnt = 0
-    db_factor_cnt = 0
+    # db_part_cnt = 0
+    # db_factor_cnt = 0
     #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",calc.max_order)
 
     prps = [None] * len(elabels)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
     for order in range(calc.max_order + 1):
         #print("DB: pr_as_poly order=",order)
-        db_npartitions = 0
+        # db_npartitions = 0
         for p in _lt.partition_into(order, len(circuit) + 2):  # +2 for SPAM bookends
             #factor_lists = [ calc.sos.get_operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
             factor_lists = [rho_term_reps[p[0]]] + \
@@ -1686,7 +1680,6 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     factor_lists = [rho_term_reps] + \
         [op_term_reps[glbl] for glbl in circuit] + \
         [E_term_reps]
-    factor_list_lens = list(map(len, factor_lists))
     last_index = len(factor_lists) - 1
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
@@ -1920,7 +1913,6 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     #print("Target magnitude: ",target_mag)
     threshold_upper_bound = 1.0
     threshold_lower_bound = None
-    npaths_upper_bound = npaths_lower_bound = None
     #db_last_threshold = None #DEBUG TODO REMOVE
     #mag = 0; nPaths = 0
 
@@ -1933,18 +1925,14 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(nEffects, 'd')
         nPaths = _np.zeros(nEffects, int)
-        accepted_bs_and_mags = traverse_paths_upto_threshold(
-            oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path)  # sets mag and nPaths
 
         if _np.all(mag >= target_mag):  # try larger threshold
             threshold_lower_bound = threshold
-            npaths_lower_bound = nPaths
             if threshold_upper_bound is not None:
                 threshold = (threshold_upper_bound + threshold_lower_bound) / 2
             else: threshold *= 2
         else:  # try smaller threshold
             threshold_upper_bound = threshold
-            npaths_upper_bound = nPaths
             if threshold_lower_bound is not None:
                 threshold = (threshold_upper_bound + threshold_lower_bound) / 2
             else: threshold /= 2

@@ -224,7 +224,6 @@ class ConfidenceRegionFactory(object):
         ds_circuit_list = _tools.find_replace_tuple_list(
             circuit_list, aliases)
 
-        nCircuits = len(circuit_list)
         nModelParams = model.num_nongauge_params()
         nDataParams = dataset.get_degrees_of_freedom(ds_circuit_list)
         #number of independent parameters in dataset (max. model # of params)

@@ -803,7 +803,8 @@ class LinearOperator(_modelmember.ModelMember):
         else:
             try:
                 dim = len(M)
-                d2 = len(M[0])  # pylint : disable=unused-variable
+                len(M[0])
+                # XXX this is an abuse of exception handling
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != dim for row in M]):
@@ -5517,7 +5518,6 @@ class LindbladErrorgen(LinearOperator):
     def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
 
         d2 = self.dim
-        d = int(round(_np.sqrt(d2)))
         tt = termtype  # shorthand - used to construct RankOneTerm objects below,
         # as we expect `basisdict` will contain *dense* basis
         # matrices (maybe change in FUTURE?)
@@ -6000,7 +6000,7 @@ class LindbladErrorgen(LinearOperator):
             # Derivative of exponent wrt other param; shape == [d2,d2,2,bs-1]
             #  except "depol" & "reldepol" cases, when shape == [d2,d2,bs]
             if self.param_mode == "depol":  # all coeffs same & == param^2
-                diag_params, affine_params = otherParams[0:1], otherParams[1:]
+                diag_params = otherParams[0:1]
                 dOdp = _np.empty((d2, d2, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
@@ -6013,7 +6013,7 @@ class LindbladErrorgen(LinearOperator):
                 dOdp[:, :, 0] = _np.squeeze(self.otherGens[0], 0)  # single diagonal term
                 dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # affine part: each gen has own param
             elif self.param_mode == "cptp":  # (coeffs = params^2)
-                diag_params, affine_params = otherParams[0:bsO - 1], otherParams[bsO - 1:]
+                diag_params = otherParams[0:bsO - 1]
                 dOdp = _np.empty((d2, d2, 2, bsO - 1), 'complex')
                 #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
                 #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params

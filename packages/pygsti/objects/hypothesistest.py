@@ -243,7 +243,6 @@ class HypothesisTest(object):
         stop = False
         while not stop:
             stop = True
-            most_significant_index = []
             for h in dynamic_null_hypothesis:
                 if not self.nested_hypotheses[h]:
                     if dynamic_local_significance[h] > self.significance_tested_at[h]:

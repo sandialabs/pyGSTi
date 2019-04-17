@@ -770,7 +770,6 @@ Eigenvalue_nonunitary_diamondnorm = _modf.opsfn_factory(eigenvalue_nonunitary_di
 
 def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
-    d = _np.sqrt(A.shape[0])
     return _tools.average_gate_infidelity(A, B, mxBasis)
 
 
@@ -950,7 +949,6 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
     mxBasis = modelB.basis  # target model is more likely to have a valid basis
     Id = _np.identity(modelA.dim, 'd')
     opLabels = [gl for gl, gate in modelB.operations.items() if not _np.allclose(gate, Id)]
-    idLabels = [gl for gl, gate in modelB.operations.items() if _np.allclose(gate, Id)]
     nOperations = len(opLabels)
 
     error_superops = []; ptype_counts = {}; ptype_scaleFctrs = {}

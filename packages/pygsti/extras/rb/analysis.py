@@ -198,8 +198,6 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
     """
     lengths = RBSdataset.lengths
     ASPs = RBSdataset.ASPs
-    success_counts = RBSdataset.success_counts
-    total_counts = RBSdataset.total_counts
     n = RBSdataset.number_of_qubits
 
     if _compat.isstr(asymptote):

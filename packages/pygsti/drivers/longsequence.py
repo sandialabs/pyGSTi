@@ -1420,7 +1420,6 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                     mdl = mdl_lsgst_list[-1]
                     circuitsToUse = rawLists[-1]
-                    nCircuits = len(circuitsToUse)
                     nDataParams = ds.get_degrees_of_freedom(circuitsToUse)  # number of independent parameters
                     # in dataset (max. model # of params)
                     nModelParams = mdl.num_params()  # just use total number of params
@@ -1478,7 +1477,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                             soln = _spo.minimize(_wildcard_objective, Wvec_init,
                                                  method='L-BFGS-B', callback=None, tol=1e-6)
                             Wvec = soln.x
-                            orig_eta = eta
+                            # orig_eta = eta
                             firstTerms = _wildcard_objective_firstTerms(Wvec)
                             meets_conditions = bool(firstTerms < 1e-4)  # some zero-tolerance here
                             #print("Value = ",_wildcard_objective_firstTerms(Wvec),_wildcard_objective(Wvec),Wvec)

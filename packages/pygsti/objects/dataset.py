@@ -45,7 +45,6 @@ class DataSet_KeyValIterator(object):
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
-        cntcache = self.dataset.cnt_cache
         auxInfo = dataset.auxInfo
 
         def getcache(opstr):
@@ -77,7 +76,6 @@ class DataSet_ValIterator(object):
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
-        cntcache = self.dataset.cnt_cache
         auxInfo = dataset.auxInfo
 
         def getcache(opstr):

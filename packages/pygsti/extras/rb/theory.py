@@ -382,7 +382,6 @@ def L_matrix(mdl, target_model, weights=None):
             weights[key] = 1.
 
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
-    dim = len(list(target_model.operations.keys()))
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
             mdl.operations[key].todense().T, _np.linalg.inv(target_model.operations[key].todense())
@@ -596,7 +595,6 @@ def exact_RB_ASPs(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
             assert(label in list(mdl.operations.keys())
                    ), "Some group elements not in `mdl`, so `compilation must be specified."
 
-    d = int(round(_np.sqrt(mdl.dim)))
     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
     m = _np.zeros(1 + i_max, int)
     P_m = _np.zeros(1 + i_max, float)

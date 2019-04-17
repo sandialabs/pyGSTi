@@ -426,7 +426,6 @@ class LazyBasis(Basis):
 
     def __str__(self):
         if self._labels is None and self.dim > 64:
-            labelstr = "(no labels computed yet)"
             return '{} (dim={}), {} elements of shape {} (not computed yet)'.format(
                 self.longname, self.dim, self.size, self.elshape)
         else:

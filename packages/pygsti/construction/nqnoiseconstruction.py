@@ -525,7 +525,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
         else: raise ValueError("Invalid `algorithm` argument: %s" % algorithm)
 
         # loop over all possible (remaining) fiducial pairs
-        nQubits = len(qubit_filter); nIters = len(singleQfiducials)**nQubits
+        nQubits = len(qubit_filter)
         loc_Indices, _, _ = _mpit.distribute_indices(
             list(range(len(singleQfiducials)**nQubits)), comm, False)
         loc_itr = 0; nLocIters = len(loc_Indices)
@@ -688,7 +688,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model, prepLbl=None, e
     assert(model._sim_type == "termorder" and model._sim_args[0] == '1'), \
         '`model` must use "termorder:1" simulation type!'
 
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    # printer = _VerbosityPrinter.build_printer(verbosity)
 
     if prepLbl is None:
         prepLbl = model._shlp.get_default_prep_lbl()
@@ -701,7 +701,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model, prepLbl=None, e
     Np = _slct.length(wrtParams)
     nEffectLbls = len(effectLbls)
     nRows = len(fidpairs) * nEffectLbls  # number of jacobian rows
-    J = _np.empty((nRows, Np), 'complex'); Jrank = 0
+    J = _np.empty((nRows, Np), 'complex')
 
     for i, (prepFid, measFid) in enumerate(fidpairs):
         gstr_L0 = prepFid + measFid            # should be a Circuit
@@ -886,7 +886,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     #  action.
 
     nQubits = len(qubit_filter)
-    nCore = len(core_filter)
+    # nCore = len(core_filter)
 
     #Tile idle_fidpairs for maxWt onto nQubits
     # (similar to tile_idle_fidpairs(...) but don't need to convert to circuits?)

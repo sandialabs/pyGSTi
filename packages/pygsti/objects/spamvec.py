@@ -734,7 +734,8 @@ class SPAMVec(_modelmember.ModelMember):
                 vector.shape = (vector.size, 1)
         else:
             try:
-                dim = len(V)  # pylint: disable=unused-variable
+                len(V)
+                # XXX this is an abuse of exception handling
             except:
                 raise ValueError("%s doesn't look like an array/list" % V)
             try:
@@ -2732,9 +2733,8 @@ class LindbladSPAMVec(SPAMVec):
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
-            if self._evotype == "svterm": tt = "dense"
-            elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
+            if self._evotype not in ('svterm', 'cterm'):
+                raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None), "LindbladSPAMVec must be added to a Model before use!"
 
             state_terms = self.state_vec.get_taylor_order_terms(0); assert(len(state_terms) == 1)

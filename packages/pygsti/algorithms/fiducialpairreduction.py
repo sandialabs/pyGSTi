@@ -130,8 +130,6 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
     prepovmTuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
                      for prepLbl, povmLbl in prepovmTuples]
 
-    nModelParams = targetModel.num_params()
-
     def get_derivs(L):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
@@ -421,7 +419,8 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             # depending on which (of all possible) fiducial pairs
             # are being considered.
 
-            nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
+            # nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
+            nEStrs = len(effectStrs)
             nPossiblePairs = len(prepStrs) * len(effectStrs)
             allPairIndices = list(range(nPossiblePairs))
 

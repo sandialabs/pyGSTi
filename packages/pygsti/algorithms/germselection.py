@@ -780,7 +780,6 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     fd = op_dim**2  # flattened gate dimension
 
     nOrigStrs = len(circuits)
-    nSimplifiedStrs = evalTree.num_final_strings()
 
     ret = _np.empty((nOrigStrs, fd, dProds.shape[1]), 'complex')
     for iOrig in range(nOrigStrs):

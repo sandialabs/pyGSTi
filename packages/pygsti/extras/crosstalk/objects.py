@@ -64,11 +64,6 @@ class CrosstalkResults(object):
                                                        + self.number_of_regions + 6, self.number_of_regions + 4))
         fig.subplots_adjust(wspace=2, hspace=2)
 
-        if self.name is not None:
-            title = 'Crosstalk matrices for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
-        else:
-            title = 'Crosstalk matrices for dataset. Confidence level ' + str(self.confidence)
-
         # common arguments to imshow
         kwargs = dict(
             origin='lower', interpolation='nearest', vmin=0, vmax=1, aspect='equal', cmap='YlOrBr')

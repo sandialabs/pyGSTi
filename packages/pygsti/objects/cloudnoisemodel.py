@@ -877,7 +877,6 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    StaticDenseOp = _get_Static_factory(sim_type, parameterization)  # always a *gate*
     Lindblad = _get_Lindblad_factory(sim_type, parameterization, errcomp_type)
     #constructs a gate or errorgen based on value of errcomp_type
 

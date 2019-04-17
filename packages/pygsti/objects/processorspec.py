@@ -323,7 +323,6 @@ class ProcessorSpec(object):
         # Lists that are all the hard-coded 1-qubit and 2-qubit gates.
         # future: should probably import these from _itgss somehow.
         hardcoded_oneQgates = ['I', 'X', 'Y', 'Z', 'H', 'P', 'HP', 'PH', 'HPH'] + ['C' + str(i) for i in range(24)]
-        hardcoded_twoQgates = ['CNOT', 'CPHASE', 'SWAP']
 
         # Currently we can only compile CNOT gates, although that should be fixed.
         for gate in twoQgates:
@@ -427,7 +426,6 @@ class ProcessorSpec(object):
             # If requested, try to compile remaining 2Q gates that are `non-local` (not between neighbouring qubits)
             # using specific algorithms.
             if add_nonlocal_twoQgates:
-                non_compilable = []
                 for gname, q1, q2 in not_locally_compilable:
                     library.add_nonlocal_compilation_of(_Label(gname, (q1, q2)),
                                                         verbosity=verbosity)

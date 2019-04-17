@@ -27,7 +27,8 @@ def load_pygsti_dataset(filename):
     format if its the old type.
     """
     try:
-        file = open(filename, "r")
+        # file = open(filename, "r")
+        open(filename, "r")
     except IOError:
         print("File not found, or other file IO error.")
 
@@ -158,8 +159,6 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
                 for r in range(num_rep):
                     data.append(flattened_line)
-
-        num_seqs = [len(set(collect_settings[i])) for i in range(num_settings)]
 
         data = _np.asarray(data)
 

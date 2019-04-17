@@ -428,7 +428,6 @@ class QubitGraph(object):
         # Find the shortest path between node1 and node2
         # (following the chain in self._predecessors until we arrive at node1)
         shortestpath = [node2]
-        current_node = node2
         current_index = j
 
         while current_index != i:
