@@ -311,7 +311,7 @@ class LabelTup(Label, tuple):
 
 # We want LabelStr to act like the string literal type (not
 # 'str' when we import unicode_literals above)
-strlittype = str if _sys.version_info >= (3, 0) else unicode  # (a *native* python type)
+strlittype = str if _sys.version_info >= (3, 0) else unicode  # (a *native* python type)  # noqa: F821
 
 
 class LabelStr(Label, strlittype):

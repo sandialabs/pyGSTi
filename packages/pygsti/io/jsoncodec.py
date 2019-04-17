@@ -179,7 +179,7 @@ def encode_std_obj(py_obj, binary):
     elif not binary and isinstance(py_obj, bytes):
         return {'__bytes__': tostr(_base64.b64encode(py_obj))}
     elif binary and (isinstance(py_obj, str)
-                     or (_sys.version_info < (3, 0) and isinstance(py_obj, unicode))):
+                     or (_sys.version_info < (3, 0) and isinstance(py_obj, unicode))):  # noqa: F821
         #Python2 "strings" can also be unicode (but 'unicode' isn't defined in python3!)
         return {'__string__': tobin(py_obj)}
 
@@ -351,7 +351,7 @@ def decode_std_obj(json_obj, binary):
         if _sys.version_info >= (3, 0):
             return range(start, stop, step)
         else:
-            return list(xrange(start, stop, step))  # lists in python2
+            return list(xrange(start, stop, step))  # lists in python2  # noqa: F821
     elif B('__ndict__') in json_obj:
         return dict([(decode_obj(k, binary), decode_obj(v, binary))
                      for k, v in json_obj[B('__ndict__')]])
