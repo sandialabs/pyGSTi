@@ -404,7 +404,7 @@ def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=[
             c_cost = costfunction(c, pspec)
             if c_cost < bestcost:
                 circuit = c.copy()
-                cost = bestcost
+                bestcost = c_cost
     else: circuit = circuits[0]
 
     # If we want to Pauli randomize the circuits, we insert a random compiled Pauli layer between every layer.
