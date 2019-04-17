@@ -122,15 +122,15 @@ def gaugeopt_to_target(model, targetModel, itemWeights=None,
     """
     if itemWeights is None: itemWeights = {}
 
-    ls_mode_allowed = bool(targetModel is not None and
-                           gatesMetric == "frobenius" and
-                           spamMetric == "frobenius")
+    ls_mode_allowed = bool(targetModel is not None \
+                           and gatesMetric == "frobenius" \
+                           and spamMetric == "frobenius")
     #and model.dim < 64: # least squares optimization seems uneffective if more than 3 qubits
     #  -- observed by Lucas - should try to debug why 3 qubits seemed to cause trouble...
 
     if method == "ls" and not ls_mode_allowed:
-        raise ValueError("Least-squares method is not allowed! Target" +
-                         " model must be non-None and frobenius metrics" +
+        raise ValueError("Least-squares method is not allowed! Target"
+                         " model must be non-None and frobenius metrics"
                          " must be used.")
     if method == "auto":
         method = 'ls' if ls_mode_allowed else 'L-BFGS-B'
@@ -229,7 +229,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)
         try:
             if model.frobeniusdist(mdl_cmp) > 1e-6:
-                raise ValueError("MPI ERROR in gaugeopt: *different* models" +
+                raise ValueError("MPI ERROR in gaugeopt: *different* models"
                                  " given to different processors!")  # pragma: no cover
         except NotImplementedError: pass  # OK if some gates (maps) don't implement this
 
@@ -281,7 +281,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     else:
         if comm is not None and comm.Get_rank() == 0:
-            _warnings.warn("MPI comm was given for gauge optimization but can" +
+            _warnings.warn("MPI comm was given for gauge optimization but can"
                            " only be used with the least-squares method.")
 
         bToStdout = (printer.verbosity >= 2 and printer.filename is None)

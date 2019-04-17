@@ -908,10 +908,10 @@ class MatrixForwardSimulator(ForwardSimulator):
                 # warning -- note that we *cannot* make use of a tree being
                 # split because there's no good way to reconstruct the
                 # *non-final* parent-tree elements from those of the sub-trees.
-                _warnings.warn("Increased speed could be obtained" +
-                               " by giving dproduct cache computation" +
-                               " *fewer* processors and *smaller* (sub-)tree" +
-                               " (e.g. by splitting tree beforehand), as there" +
+                _warnings.warn("Increased speed could be obtained"
+                               " by giving dproduct cache computation"
+                               " *fewer* processors and *smaller* (sub-)tree"
+                               " (e.g. by splitting tree beforehand), as there"
                                " are more cpus than derivative columns.")
 
             # Use comm to distribute columns
@@ -921,7 +921,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
             #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
             if mySubComm is not None and mySubComm.Get_size() > 1:
-                _warnings.warn("Too many processors to make use of in " +
+                _warnings.warn("Too many processors to make use of in "
                                " _compute_dproduct_cache.")
                 if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
                 #don't compute anything on "extra", i.e. rank != 0, cpus
@@ -1017,10 +1017,10 @@ class MatrixForwardSimulator(ForwardSimulator):
                 # warning -- note that we *cannot* make use of a tree being
                 # split because there's no good way to reconstruct the
                 # *non-final* parent-tree elements from those of the sub-trees.
-                _warnings.warn("Increased speed could be obtained" +
-                               " by giving hproduct cache computation" +
-                               " *fewer* processors and *smaller* (sub-)tree" +
-                               " (e.g. by splitting tree beforehand), as there" +
+                _warnings.warn("Increased speed could be obtained"
+                               " by giving hproduct cache computation"
+                               " *fewer* processors and *smaller* (sub-)tree"
+                               " (e.g. by splitting tree beforehand), as there"
                                " are more cpus than hessian elements.")  # pragma: no cover
 
             # allocate final result memory
@@ -1051,7 +1051,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 else: myHessianSlice2 = myDeriv2ColSlice
 
                 if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
-                    _warnings.warn("Too many processors to make use of in " +
+                    _warnings.warn("Too many processors to make use of in "
                                    " _compute_hproduct_cache.")
                     #TODO: remove: not needed now that we track owners
                     #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
@@ -2258,7 +2258,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                                                               blkComm, block_wrtSlice, profiler)
                     profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                     profiler.mem_check(
-                        "bulk_fill_dprobs: post compute dproduct blk (expect " +
+                        "bulk_fill_dprobs: post compute dproduct blk (expect "
                         " +%.2fGB, shape=%s)" % (dProdCache.nbytes / (1024.0**3),
                                                  str(dProdCache.shape)))
 

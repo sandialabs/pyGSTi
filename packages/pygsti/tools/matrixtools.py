@@ -603,12 +603,12 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
 
     if mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
-            raise ValueError("Cannot construct a real log: unpaired negative" +
-                             " real eigenvalues: %s" % [evals[i] for i in unpaired_indices] +
-                             "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
+            raise ValueError("Cannot construct a real log: unpaired negative" \
+                             + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices] \
+                             + "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
         elif actionIfImaginary == "warn":
-            _warnings.warn("Cannot construct a real log: unpaired negative" +
-                           " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
+            _warnings.warn("Cannot construct a real log: unpaired negative" \
+                           + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
         elif actionIfImaginary == "ignore":
             pass
         else:

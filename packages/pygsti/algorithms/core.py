@@ -182,8 +182,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if svdTruncateTo is None or svdTruncateTo == targetModel.dim:  # use target sslbls and basis
         lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
     else:  # construct a default basis for the requested dimension
-        dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] *
-                                          svdTruncateTo)  # - just act on diagonal density mx
+        # - just act on diagonal density mx
+        dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] * svdTruncateTo)
         lgstModel = _objs.ExplicitOpModel([('L%d' % i,) for i in range(svdTruncateTo)], dumb_basis)
 
     for opLabel in opLabelsToEstimate:
@@ -1081,7 +1081,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         #assume all models at least have same parameters - so just compare vecs
         v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
         if _np.linalg.norm(mdl.to_vector() - v_cmp) > 1e-6:
-            raise ValueError("MPI ERROR: *different* MC2GST start models" +  # pragma: no cover
+            raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
@@ -1100,9 +1100,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     #  Estimate & check persistent memory (from allocs directly below)
     persistentMem = 8 * (ng * (ns + ns * ne + 1 + 3 * ns))  # final results in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Memory limit (%g GB) is " % (memLimit * C) +
-                          "< memory required to hold final results (%g GB)"
-                          % (persistentMem * C))
+        raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
+                          "({} GB)".format(memLimit * C, persistentMem * C))
 
     #Create evaluation tree (split into subtrees if needed)
     tm = _time.time()
@@ -1275,11 +1274,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             v = (probs - f) * weights; chisq = _np.sum(v * v)
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
                                            probs > (1 - minProbClipForWeighting))).nonzero()[0])
-            printer.log("MC2-OBJ: chi2=%g\n" % chisq +
-                        "         p in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
-                        "         weights in (%g,%g)\n" % (_np.min(weights), _np.max(weights)) +
-                        "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) +
-                        "         maxLen = %d, nClipped=%d" % (maxCircuitLength, nClipped), 4)
+            printer.log("MC2-OBJ: chi2=%g\n" % chisq \
+                        + "         p in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) \
+                        + "         weights in (%g,%g)\n" % (_np.min(weights), _np.max(weights)) \
+                        + "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) \
+                        + "         maxLen = %d, nClipped=%d" % (maxCircuitLength, nClipped), 4)
 
             assert((cptp_penalty_factor == 0 and spam_penalty_factor == 0) or regularizeFactor == 0), \
                 "Cannot have regularizeFactor and other penalty factors != 0"
@@ -1426,12 +1425,12 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
                                            probs > (1 - minProbClipForWeighting))).nonzero()[0])
-            printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac)) +
-                        "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
-                        "         dpr in (%g,%g)\n" % (_np.min(dprobs), _np.max(dprobs)) +
-                        "         prefactor in (%g,%g)\n" % (_np.min(dPr_prefactor), _np.max(dPr_prefactor)) +
-                        "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) +
-                        "         maxLen = %d, nClipped = %d" % (maxCircuitLength, nClipped), 4)
+            printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac)) \
+                        + "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) \
+                        + "         dpr in (%g,%g)\n" % (_np.min(dprobs), _np.max(dprobs)) \
+                        + "         prefactor in (%g,%g)\n" % (_np.min(dPr_prefactor), _np.max(dPr_prefactor)) \
+                        + "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) \
+                        + "         maxLen = %d, nClipped = %d" % (maxCircuitLength, nClipped), 4)
 
             if check_jacobian:
                 errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
@@ -2294,7 +2293,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         #assume all models at least have same parameters - so just compare vecs
         v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
         if _np.linalg.norm(mdl.to_vector() - v_cmp) > 1e-6:
-            raise ValueError("MPI ERROR: *different* MC2GST start models" +  # pragma: no cover
+            raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
         if forcefn_grad is not None:
@@ -2318,9 +2317,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     #  Estimate & check persistent memory (from allocs directly below)
     persistentMem = 8 * (ng * (ns + ns * ne + 1 * ns))  # final results in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Memory limit (%g GB) is " % (memLimit * C) +
-                          "< memory required to hold final results (%g GB)"
-                          % (persistentMem * C))
+        raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
+                          "({} GB)".format(memLimit * C, persistentMem * C))
 
     #Get evaluation tree (split into subtrees if needed)
     if (memLimit is not None):
@@ -2328,9 +2326,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         gthrMem = int(0.1 * (memLimit - persistentMem))
         mlim = memLimit - persistentMem - gthrMem - curMem
         assert mlim > 0, 'Not enough memory, exiting..'
-        printer.log("Memory: limit = %.2fGB" % (memLimit * C) +
-                    "(cur, persist, gthr = %.2f, %.2f, %.2f GB)" %
-                    (curMem * C, persistentMem * C, gthrMem * C))
+        printer.log("Memory: limit = %.2fGB" % (memLimit * C) \
+                    + "(cur, persist, gthr = %.2f, %.2f, %.2f GB)"
+                    % (curMem * C, persistentMem * C, gthrMem * C))
     else: gthrMem = mlim = None
 
     if evaltree_cache and 'evTree' in evaltree_cache \

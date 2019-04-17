@@ -566,11 +566,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
     else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
     if 'verbosity' in advancedOptions:  # for backward compatibility
-        _warnings.warn("'verbosity' as an advanced option is deprecated." +
+        _warnings.warn("'verbosity' as an advanced option is deprecated."
                        " Please use the 'verbosity' argument directly.")
         verbosity = advancedOptions['verbosity']
     if 'memoryLimitInBytes' in advancedOptions:  # for backward compatibility
-        _warnings.warn("'memoryLimitInBytes' as an advanced option is deprecated." +
+        _warnings.warn("'memoryLimitInBytes' as an advanced option is deprecated."
                        " Please use the 'memLimit' argument directly.")
         memLimit = advancedOptions['memoryLimitInBytes']
 
@@ -598,8 +598,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
 
     #Starting Point - compute on rank 0 and distribute
     if isinstance(target_model, _objs.ExplicitOpModel):
-        LGSTcompatibleOps = all([(isinstance(g, _objs.FullDenseOp) or
-                                  isinstance(g, _objs.TPDenseOp))
+        LGSTcompatibleOps = all([(isinstance(g, _objs.FullDenseOp) \
+                                  or isinstance(g, _objs.TPDenseOp))
                                  for g in target_model.operations.values()])
     else:
         LGSTcompatibleOps = False
@@ -614,8 +614,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         assert(isinstance(lsgstLists[0], validStructTypes)), \
             "Cannot run LGST: fiducials not specified!"
         opLabels = advancedOptions.get('opLabels',
-                                       list(target_model.operations.keys()) +
-                                       list(target_model.instruments.keys()))
+                                       list(target_model.operations.keys()) \
+                                       + list(target_model.instruments.keys()))
         mdl_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, target_model,
                                  opLabels, svdTruncateTo=op_dim,
                                  opLabelAliases=lsgstLists[0].aliases,
@@ -969,13 +969,13 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
                                         (goLabel, est_label + suffix), 2)
                             params = ret.estimates[est_label].goparameters[goLabel]  # no need to copy here
                             gsopt = ret.estimates[est_label].models[goLabel].copy()
-                            ret.estimates[est_label +
-                                          suffix].add_gaugeoptimized(params, gsopt, goLabel, comm, printer - 3)
+                            ret.estimates[est_label + suffix].add_gaugeoptimized(params, gsopt, goLabel, comm,
+                                                                                 printer - 3)
                         else:
                             printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
                                         (goLabel, est_label + suffix), 2)
-                            ret.estimates[est_label +
-                                          suffix].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
+                            ret.estimates[est_label + suffix].add_gaugeoptimized(goparams, None, goLabel, comm,
+                                                                                 printer - 3)
 
             # Add gauge optimizations to end of any existing "stdout" meta info
             if 'stdout' in ret.estimates[est_label].meta:

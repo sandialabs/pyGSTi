@@ -338,8 +338,8 @@ class _BasePOVM(POVM):
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
             non_comp_effects = [v for k, v in items]
-            identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects]) +
-                                                comp_val, 'd')  # ensure shapes match before summing
+            identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects]) \
+                                                + comp_val, 'd')  # ensure shapes match before summing
             complement_effect = _sv.ComplementSPAMVec(
                 identity_for_complement, non_comp_effects)
             complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
@@ -845,8 +845,8 @@ class ComputationalBasisPOVM(POVM):
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
         fkeys = ('0', '1')
-        return bool(len(key) == self.nqubits and
-                    all([(letter in fkeys) for letter in key]))
+        return bool(len(key) == self.nqubits \
+                    and all([(letter in fkeys) for letter in key]))
 
     def __iter__(self):
         return self.keys()

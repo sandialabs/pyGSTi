@@ -178,8 +178,8 @@ class ProcessorSpec(object):
                                 twoQgates += ['CNOT', ]
                                 add_nonlocal_twoQgates = True
                         else:
-                            raise ValueError("One of the values for the key `" + ctype +
-                                             "` to `construct_clifford_compilations` is not a valid option!")
+                            raise ValueError("One of the values for the key `{}` to "
+                                             "`construct_clifford_compilations` is not a valid option!".format(ctype))
                     self.add_std_compilations(ctype, oneQgates, twoQgates, add_nonlocal_twoQgates, verbosity)
 
                 # We construct the requested `absolute` (i.e., not only up to Paulis) compilations.
@@ -194,8 +194,8 @@ class ProcessorSpec(object):
                         elif subctype == '1Qcliffords':
                             oneQgates += ['C' + str(q) for q in range(24)]
                         else:
-                            raise ValueError("One of the values for the key `" + ctype +
-                                             "` to `construct_clifford_compilations` is not a valid option!")
+                            raise ValueError("One of the values for the key `{}` to "
+                                             "`construct_clifford_compilations` is not a valid option!".format(ctype))
                     self.add_std_compilations(ctype, oneQgates, twoQgates, verbosity)
 
                 else:

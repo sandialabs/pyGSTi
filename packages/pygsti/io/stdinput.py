@@ -411,8 +411,8 @@ class StdInputParser(object):
             for outcomeLabel, iCol in countCols:
                 if colValues[iCol] == '--': continue  # skip blank sentinels
                 if colValues[iCol] > 0 and colValues[iCol] < 1:
-                    _warnings.warn("Count column (%d) contains value(s) " % iCol +
-                                   "between 0 and 1 - could this be a frequency?")
+                    _warnings.warn("Count column (%d) contains value(s) between 0 and 1 - "
+                                   "could this be a frequency?" % iCol)
                 assert(not isinstance(colValues[iCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
                 countDict[outcomeLabel] = colValues[iCol]
@@ -420,8 +420,8 @@ class StdInputParser(object):
             for outcomeLabel, iCol, iTotCol in freqCols:
                 if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue  # skip blank sentinels
                 if colValues[iCol] < 0 or colValues[iCol] > 1.0:
-                    _warnings.warn("Frequency column (%d) contains value(s) " % iCol +
-                                   "outside of [0,1.0] interval - could this be a count?")
+                    _warnings.warn("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
+                                   "could this be a count?" % iCol)
                 assert(not isinstance(colValues[iTotCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
                 countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
@@ -560,7 +560,7 @@ class StdInputParser(object):
                 outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in colLabels:
-                    raise ValueError("Frequency columns specified without" +
+                    raise ValueError("Frequency columns specified without"
                                      "count total for dataset '%s'" % dsLabel)
                 else: iTotal = colLabels.index('%s count total' % dsLabel)
 
@@ -589,17 +589,19 @@ class StdInputParser(object):
         countCols, freqCols, impliedCounts1Q = fillInfo
 
         for dsLabel, outcomeLabel, iCol in countCols:
-            if colValues[iCol] == '--': continue
+            if colValues[iCol] == '--':
+                continue
             if colValues[iCol] > 0 and colValues[iCol] < 1:
-                raise ValueError("Count column (%d) contains value(s) " % iCol +
-                                 "between 0 and 1 - could this be a frequency?")
+                raise ValueError("Count column (%d) contains value(s) between 0 and 1 - "
+                                 "could this be a frequency?" % iCol)
             countDicts[dsLabel][outcomeLabel] = colValues[iCol]
 
         for dsLabel, outcomeLabel, iCol, iTotCol in freqCols:
-            if colValues[iCol] == '--': continue
+            if colValues[iCol] == '--':
+                continue
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
-                raise ValueError("Frequency column (%d) contains value(s) " % iCol +
-                                 "outside of [0,1.0] interval - could this be a count?")
+                raise ValueError("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
+                                 "could this be a count?" % iCol)
             countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
         for dsLabel, outcomeLabel, iTotCol in impliedCounts1Q:

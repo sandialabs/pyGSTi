@@ -1571,8 +1571,7 @@ def optimize_integer_germs_slack(modelList, germsList, randomize=True,
                 neighborScore = _np.max(neighborScoreList)  # Take worst case.
                 # Move if we've found better position; if we've relaxed, we
                 # only move when L1 is improved.
-                if neighborScore <= score and (neighborL1 < L1 or
-                                               not lessWeightOnly):
+                if neighborScore <= score and (neighborL1 < L1 or not lessWeightOnly):
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
 

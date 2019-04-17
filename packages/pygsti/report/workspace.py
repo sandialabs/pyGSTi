@@ -1461,8 +1461,8 @@ class WorkspaceOutput(object):
             if key in self.options:
                 self.options[key] = val
             else:
-                raise ValueError("Invalid render option: %s\nValid options are:\n" % key +
-                                 '\n'.join(self.options.keys()))
+                raise ValueError("Invalid render option: %s\nValid options are:\n" % key \
+                                 + '\n'.join(self.options.keys()))
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
@@ -2045,9 +2045,9 @@ class WorkspaceTable(WorkspaceOutput):
                             _os.remove("%s.log" % tableDivID)
                             _os.remove("%s.aux" % tableDivID)
                         except _subprocess.CalledProcessError as e:
-                            printer.error("%s returned code %d " % (latex_cmd, e.returncode) +
-                                          "trying to render standalone %s.tex. " % tableDivID +
-                                          "Check %s.log to see details." % tableDivID)
+                            printer.error("%s returned code %d " % (latex_cmd, e.returncode) \
+                                          + "trying to render standalone %s.tex. " % tableDivID \
+                                          + "Check %s.log to see details." % tableDivID)
                         finally:
                             _os.chdir(cwd)
 
@@ -2130,9 +2130,10 @@ class WorkspaceTable(WorkspaceOutput):
 
         if filename.endswith(".html"):
             if index is None:
-                if N == 1: index = 0
-                else: raise ValueError("Must supply `index` argument for a" +
-                                       "non-trivially-switched WorkspaceTable")
+                if N == 1:
+                    index = 0
+                else:
+                    raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspaceTable")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2170,9 +2171,10 @@ class WorkspaceTable(WorkspaceOutput):
 
         else:
             if index is None:
-                if N == 1: index = 0
-                else: raise ValueError("Must supply `index` argument for a" +
-                                       "non-trivially-switched WorkspaceTable")
+                if N == 1:
+                    index = 0
+                else:
+                    raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspaceTable")
 
             output_dir = _os.path.dirname(filename)
             filebase, ext = _os.path.splitext(_os.path.basename(filename))
@@ -2504,9 +2506,10 @@ class WorkspacePlot(WorkspaceOutput):
         if filename.endswith(".html"):
             #Note: Same as WorkspaceTable except for N
             if index is None:
-                if N == 1: index = 0
-                else: raise ValueError("Must supply `index` argument for a" +
-                                       "non-trivially-switched WorkspacePlot")
+                if N == 1:
+                    index = 0
+                else:
+                    raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspacePlot")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2550,9 +2553,10 @@ class WorkspacePlot(WorkspaceOutput):
             from .mpl_colormaps import plotly_to_matplotlib as _plotly_to_matplotlib
 
             if index is None:
-                if N == 1: index = 0
-                else: raise ValueError("Must supply `index` argument for a" +
-                                       "non-trivially-switched WorkspacePlot")
+                if N == 1:
+                    index = 0
+                else:
+                    raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspacePlot")
             _plotly_to_matplotlib(self.figs[index], filename)
 
         else:
@@ -2734,9 +2738,9 @@ class WorkspaceText(WorkspaceOutput):
                             _os.remove("%s.log" % textDivID)
                             _os.remove("%s.aux" % textDivID)
                         except _subprocess.CalledProcessError as e:
-                            printer.error("%s returned code %d " % (latex_cmd, e.returncode) +
-                                          "trying to render standalone %s.tex. " % textDivID +
-                                          "Check %s.log to see details." % textDivID)
+                            printer.error("%s returned code %d " % (latex_cmd, e.returncode) \
+                                          + "trying to render standalone %s.tex. " % textDivID \
+                                          + "Check %s.log to see details." % textDivID)
                         finally:
                             _os.chdir(cwd)
 
@@ -2819,9 +2823,10 @@ class WorkspaceText(WorkspaceOutput):
 
         if filename.endswith(".html"):
             if index is None:
-                if N == 1: index = 0
-                else: raise ValueError("Must supply `index` argument for a" +
-                                       "non-trivially-switched WorkspaceText")
+                if N == 1:
+                    index = 0
+                else:
+                    raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspaceText")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2859,9 +2864,10 @@ class WorkspaceText(WorkspaceOutput):
 
         else:
             if index is None:
-                if N == 1: index = 0
-                else: raise ValueError("Must supply `index` argument for a" +
-                                       "non-trivially-switched WorkspaceText")
+                if N == 1:
+                    index = 0
+                else:
+                    raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspaceText")
 
             output_dir = _os.path.dirname(filename)
             filebase, ext = _os.path.splitext(_os.path.basename(filename))

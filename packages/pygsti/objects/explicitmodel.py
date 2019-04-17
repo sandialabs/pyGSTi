@@ -284,8 +284,8 @@ class ExplicitOpModel(_mdl.OpModel):
         a ValueError is raised.
         """
         if len(self.preps) != 1:
-            raise ValueError("'.prep' can only be used on models" +
-                             " with a *single* state prep.  This Model has" +
+            raise ValueError("'.prep' can only be used on models"
+                             " with a *single* state prep.  This Model has"
                              " %d state preps!" % len(self.preps))
         return list(self.preps.values())[0]
 
@@ -296,8 +296,8 @@ class ExplicitOpModel(_mdl.OpModel):
         a ValueError is raised.
         """
         if len(self.povms) != 1:
-            raise ValueError("'.effects' can only be used on models" +
-                             " with a *single* POVM.  This Model has" +
+            raise ValueError("'.effects' can only be used on models"
+                             " with a *single* POVM.  This Model has"
                              " %d POVMS!" % len(self.povms))
         return list(self.povms.values())[0]
 

@@ -1075,13 +1075,13 @@ def compile_symplectic_using_iAG_algorithm(s, pspec, subsetQs=None, cnotalg='COC
     RHS1A_CNOTs.reverse()
     RHS1B_CNOTs.reverse()
     RHS1C_CNOTs.reverse()
-    circuit_1_cnots = _Circuit(layer_labels=RHS1A_CNOTs + RHS1B_CNOTs +
-                               RHS1C_CNOTs, line_labels=qubitlabels).parallelize()
+    circuit_1_cnots = _Circuit(layer_labels=RHS1A_CNOTs + RHS1B_CNOTs + RHS1C_CNOTs,
+                               line_labels=qubitlabels).parallelize()
     circuit_1_local = _Circuit(layer_labels=RHS2_Pall_layer, line_labels=qubitlabels).parallelize()
     LHS7_CNOTs.reverse()
     circuit_2_cnots = _Circuit(layer_labels=LHS7_CNOTs, line_labels=qubitlabels).parallelize()
-    circuit_2_local = _Circuit(layer_labels=LHS6_Psome_layer + LHS5_Hall_layer +
-                               LHS4_Pall_layer, line_labels=qubitlabels).parallelize()
+    circuit_2_local = _Circuit(layer_labels=LHS6_Psome_layer + LHS5_Hall_layer + LHS4_Pall_layer,
+                               line_labels=qubitlabels).parallelize()
     LHS3_CNOTs.reverse()
     circuit_3_cnots = _Circuit(layer_labels=LHS3_CNOTs, line_labels=qubitlabels)
     circuit_3_local = _Circuit(layer_labels=LHS2_Psome_layer + LHS1_Hsome_layer, line_labels=qubitlabels)

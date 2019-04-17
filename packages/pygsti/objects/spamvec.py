@@ -308,7 +308,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
                       (i, j, deriv_to_check[i, j], fd_deriv[i, j], diff))
 
     if _np.linalg.norm(fd_deriv - deriv_to_check) > 100 * eps:
-        raise ValueError("Failed check of deriv_wrt_params:\n" +
+        raise ValueError("Failed check of deriv_wrt_params:\n"
                          " norm diff = %g" %
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
@@ -1029,7 +1029,7 @@ class TPSPAMVec(DenseSPAMVec):
         vector = SPAMVec.convert_to_vector(vec)
         firstEl = len(vector)**-0.25
         if not _np.isclose(vector[0, 0], firstEl):
-            raise ValueError("Cannot create TPSPAMVec: " +
+            raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
         DenseSPAMVec.__init__(self, _ProtectedArray(
             vector, indicesToProtect=(0, 0)), "densitymx")
@@ -1054,7 +1054,7 @@ class TPSPAMVec(DenseSPAMVec):
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
         if not _np.isclose(vec[0, 0], firstEl):
-            raise ValueError("Cannot create TPSPAMVec: " +
+            raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
         self.base[1:, :] = vec[1:, :]
         self.dirty = True
@@ -1401,8 +1401,8 @@ class CPTPSPAMVec(DenseSPAMVec):
             self._set_params_from_vector(vec, truncate=False)
             self.dirty = True
         except AssertionError as e:
-            raise ValueError("Error initializing the parameters of this " +
-                             " CPTPSPAMVec object: " + str(e))
+            raise ValueError("Error initializing the parameters of this "
+                             "CPTPSPAMVec object: " + str(e))
 
     def num_params(self):
         """

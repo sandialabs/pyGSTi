@@ -445,8 +445,8 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
     #print(control)
 
     if min(results.number_of_timesteps) <= 25:
-        _warnings.warn('At least some sequences have very few timesteps (less than 25). ' +
-                       'This means that the statistical signficance thresholds and p-values, ' +
+        _warnings.warn('At least some sequences have very few timesteps (less than 25). '
+                       'This means that the statistical signficance thresholds and p-values, '
                        'which rely on the central limit theorem to be valid, may be inaccurate.')
 
     # The baseline degrees of freedom for each type of power spectra
@@ -539,8 +539,9 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
                         tupit += 1
                 paddedtup = tuple(paddedtup)
                 #print(paddedtup)
-                sigFreqInds[paddedtup] = list(usedTestFreqInds.copy()[spectra[tup] >
-                                                                      power_significance_pseudothreshold[test]])
+                sigFreqInds[paddedtup] = list(usedTestFreqInds.copy()[
+                    spectra[tup] > power_significance_pseudothreshold[test]
+                ])
                 if len(sigFreqInds[paddedtup]) > 0:
                     driftdetectedinClass[test] = True
                     driftdetected = True

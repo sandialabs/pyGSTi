@@ -244,8 +244,8 @@ class SpamParametersTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         for gstitle, model in zip(titles, models):
-            cri = confidenceRegionInfo if (confidenceRegionInfo and
-                                           confidenceRegionInfo.model.frobeniusdist(model) < 1e-6) else None
+            cri = confidenceRegionInfo if (confidenceRegionInfo \
+                                           and confidenceRegionInfo.model.frobeniusdist(model) < 1e-6) else None
             spamDotProdsQty = _ev(_reportables.Spam_dotprods(model), cri)
             DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
             assert(DPs.shape[1] == len(effectLbls)), \
@@ -1331,10 +1331,10 @@ class GateDecompTable(WorkspaceTable):
         colHeadings = ('Gate', 'Ham. Evals.', 'Rotn. angle', 'Rotn. axis', 'Log Error') \
             + tuple(["Axis angle w/%s" % str(gl) for gl in opLabels])
         tooltips = ('Gate', 'Hamiltonian Eigenvalues', 'Rotation angle', 'Rotation axis',
-                    'Taking the log of a gate may be performed approximately.  This is ' +
-                    'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
-            tuple(["Angle between the rotation axis of %s and the gate of the current row"
-                   % str(gl) for gl in opLabels])
+                    'Taking the log of a gate may be performed approximately.  This is '
+                    'error in that estimate, i.e. norm(G - exp(approxLogG)).') \
+                    + tuple(["Angle between the rotation axis of %s and the gate of the current row"
+                             % str(gl) for gl in opLabels])
         formatters = [None] * len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters,
@@ -2546,8 +2546,8 @@ class ExampleTable(WorkspaceTable):
         colHeadings = ["Hover over me...", "And me!", "Click the pig"]
         tooltips = ["This tooltip can give more information about what this column displays",
                     "Unfortunately, we can't show nicely formatted math in these tooltips (yet)",
-                    "Click on the pyGSTi logo below to create the non-automatically-generated plot;" +
-                    " then hover over the colored boxes."]
+                    "Click on the pyGSTi logo below to create the non-automatically-generated plot; "
+                    "then hover over the colored boxes."]
         example_mx = _np.array([[1.0, 1 / 3, -1 / 3, -1.0],
                                 [1 / 3, 1.0, 0.0, -1 / 5],
                                 [-1 / 3, 0.0, 1.0, 1 / 6],

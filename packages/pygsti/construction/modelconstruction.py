@@ -409,7 +409,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     if parameterization == "TP":
         return _op.TPDenseOp(finalOpMx)
 
-    raise ValueError("Invalid 'parameterization' parameter: " +
+    raise ValueError("Invalid 'parameterization' parameter: "
                      "%s (must by 'full', 'TP', 'static')"
                      % parameterization)
 

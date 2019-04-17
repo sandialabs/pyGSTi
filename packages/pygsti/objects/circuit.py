@@ -2032,8 +2032,8 @@ class Circuit(object):
                     if isinstance(lblB, _Label):
                         #see if layerA happens to *not* have anything on lblB.sslbls:
                         if layerA_sslbls is None or \
-                           (lblB.sslbls is not None and
-                                len(set(lblB.sslbls).intersection(layerA_sslbls)) == 0):
+                           (lblB.sslbls is not None \
+                            and len(set(lblB.sslbls).intersection(layerA_sslbls)) == 0):
                             applies.append((-1, b, lblB.name, lblB.sslbls))  # shift label over
                             break
 
@@ -2536,8 +2536,8 @@ class Circuit(object):
         f.write("\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
-        f.write("\\usepackage[paperwidth=" + str(5. + d * .3) +
-                "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
+        f.write("\\usepackage[paperwidth=" + str(5. + d * .3) \
+                + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
         f.write("\input{Qcircuit}\n")
         f.write("\\begin{document}\n")
         f.write("\\begin{equation*}\n")
@@ -2656,8 +2656,8 @@ class Circuit(object):
             # Go through the (non-self.identity) gates in the layer and convert them to quil
             for gate in layer.components:
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
-                assert(len(gate_qubits) <=
-                       2 or gate.qubits is None), 'Gate on more than 2 qubits given; this is currently not supported!'
+                assert(len(gate_qubits) <= 2 or gate.qubits is None), \
+                    'Gate on more than 2 qubits given; this is currently not supported!'
 
                 # Find the quil for the gate.
                 quil_for_gate = gatename_conversion[gate.name]

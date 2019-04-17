@@ -60,8 +60,8 @@ def gateset_infidelity(mdl, target_model, itype='EI',
         The weighted average-over-gates infidelity between the two models.
 
     """
-    assert(itype == 'AGI' or itype ==
-           'EI'), "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
+    assert(itype == 'AGI' or itype == 'EI'), \
+        "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
 
     if mxBasis is None: mxBasis = mdl.basis
 

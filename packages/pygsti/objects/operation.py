@@ -346,7 +346,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
                       (i, j, deriv_to_check[i, j], fd_deriv[i, j], diff))  # pragma: no cover
 
     if _np.linalg.norm(fd_deriv - deriv_to_check) / fd_deriv.size > 10 * eps:
-        raise ValueError("Failed check of deriv_wrt_params:\n" +
+        raise ValueError("Failed check of deriv_wrt_params:\n"
                          " norm diff = %g" %
                          _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
 
@@ -1142,9 +1142,9 @@ class TPDenseOp(DenseOperator):
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(M))
         mx = LinearOperator.convert_to_matrix(M)
         assert(_np.isrealobj(mx)), "TPDenseOp must have *real* values!"
-        if not (_np.isclose(mx[0, 0], 1.0) and
-                _np.allclose(mx[0, 1:], 0.0)):
-            raise ValueError("Cannot create TPDenseOp: " +
+        if not (_np.isclose(mx[0, 0], 1.0) \
+                and _np.allclose(mx[0, 1:], 0.0)):
+            raise ValueError("Cannot create TPDenseOp: "
                              "invalid form for 1st row!")
         DenseOperator.__init__(self, _ProtectedArray(
             mx, indicesToProtect=(0, slice(None, None, None))), "densitymx")
@@ -1169,7 +1169,7 @@ class TPDenseOp(DenseOperator):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))
         if not (_np.isclose(mx[0, 0], 1.0) and _np.allclose(mx[0, 1:], 0.0)):
-            raise ValueError("Cannot set TPDenseOp: " +
+            raise ValueError("Cannot set TPDenseOp: "
                              "invalid form for 1st row!")
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:, :] = mx[1:, :]
@@ -1364,7 +1364,7 @@ class LinearlyParamDenseOp(DenseOperator):
 
         if self.enforceReal:
             if _np.linalg.norm(_np.imag(matrix)) > IMAG_TOL:
-                raise ValueError("Linearly parameterized matrix has non-zero" +
+                raise ValueError("Linearly parameterized matrix has non-zero"
                                  "imaginary part (%g)!" % _np.linalg.norm(_np.imag(matrix)))
             matrix = _np.real(matrix)
 
@@ -1734,11 +1734,11 @@ class EigenvalueParamDenseOp(DenseOperator):
                     conjB = _np.conj(self.B[:, k])
                     for l in range(j, N):
                         # numpy normalizes but doesn't fix "phase" of evecs
-                        if _np.isclose(conj, self.evals[l]) and \
-                                (_np.allclose(conjB, self.B[:, l]) or
-                                 _np.allclose(conjB, 1j * self.B[:, l]) or
-                                 _np.allclose(conjB, -1j * self.B[:, l]) or
-                                 _np.allclose(conjB, -1 * self.B[:, l])):
+                        if _np.isclose(conj, self.evals[l]) \
+                           and (_np.allclose(conjB, self.B[:, l]) \
+                                or _np.allclose(conjB, 1j * self.B[:, l]) \
+                                or _np.allclose(conjB, -1j * self.B[:, l]) \
+                                or _np.allclose(conjB, -1 * self.B[:, l])):
                             self.params.append([  # real-part param
                                 (1.0, (k, k)),  # (prefactor, index)
                                 (1.0, (l, l))])
@@ -1884,7 +1884,7 @@ class EigenvalueParamDenseOp(DenseOperator):
                 dMx[i, j] = prefactor
             tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
             if _np.linalg.norm(tmp.imag) >= IMAG_TOL:  # just a warning until we figure this out.
-                print("EigenvalueParamDenseOp deriv_wrt_params WARNING:" +
+                print("EigenvalueParamDenseOp deriv_wrt_params WARNING:"
                       " Imag part = ", _np.linalg.norm(tmp.imag), " pdesc = ", pdesc)  # pragma: no cover
             #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
             #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
@@ -3873,7 +3873,7 @@ class EmbeddedOp(LinearOperator):
             iTensorProdBlks = [self.state_space_labels.tpb_index[label] for label in labels]
             # index of tensor product block (of state space) a bit label is part of
             if len(set(iTensorProdBlks)) != 1:
-                raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" +
+                raise ValueError("All qubit labels of a multi-qubit gate must correspond to the"
                                  " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
 
             iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above)
@@ -3935,8 +3935,8 @@ class EmbeddedOp(LinearOperator):
         if evotype == "stabilizer":
             # assert that all state space labels == qubits, since we only know
             # how to embed cliffords on qubits...
-            assert(len(self.state_space_labels.labels) == 1 and
-                   all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
+            assert(len(self.state_space_labels.labels) == 1 \
+                   and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
                 "All state space labels must correspond to *qubits*"
             if isinstance(self.embedded_op, CliffordOp):
                 assert(len(targetLabels) == len(self.embedded_op.svector) // 2), \

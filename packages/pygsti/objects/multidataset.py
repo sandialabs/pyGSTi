@@ -154,8 +154,8 @@ class MultiDataSet(object):
 
         #Optionally load from a file
         if fileToLoadFrom is not None:
-            assert(oliDict is None and timeDict is None and repDict is None and
-                   circuitIndices is None and outcomeLabels is None and outcomeLabelIndices is None)
+            assert(oliDict is None and timeDict is None and repDict is None \
+                   and circuitIndices is None and outcomeLabels is None and outcomeLabelIndices is None)
             self.load(fileToLoadFrom)
             return
 

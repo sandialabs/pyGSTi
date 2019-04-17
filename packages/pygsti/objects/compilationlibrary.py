@@ -335,8 +335,8 @@ class CompilationLibrary(_collections.OrderedDict):
             smatrix, svector = srep
 
         assert(_symp.check_valid_clifford(smatrix, svector)), "The gate is not a valid Clifford!"
-        assert(_np.shape(smatrix)[0] // 2 ==
-               nqubits), "The gate acts on a different number of qubits to stated by `nqubits`"
+        assert(_np.shape(smatrix)[0] // 2 == nqubits), \
+            "The gate acts on a different number of qubits to stated by `nqubits`"
 
         if verbosity > 0:
             if self.ctype == 'absolute':

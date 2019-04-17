@@ -1891,8 +1891,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                             orig_bn = b[n - 1]
                             for k in range(1, num_elabels):
                                 b[n - 1] = k
-                                mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude /
-                                              oprep_lists[i][orig_bn].magnitude)
+                                mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude \
+                                              / oprep_lists[i][orig_bn].magnitude)
                                 fn_visitpath(b, mag2, n - 1)
 
                             b[n - 1] = orig_bn

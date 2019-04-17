@@ -1315,7 +1315,7 @@ class OpModel(Model):
 
         if memLimit is not None:
             if memLimit <= 0:
-                raise MemoryError("Attempted evaltree generation " +
+                raise MemoryError("Attempted evaltree generation "
                                   "w/memlimit = %g <= 0!" % memLimit)
             printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
                         % (distributeMethod, memLimit * C))
@@ -1358,9 +1358,9 @@ class OpModel(Model):
                 wrtLen1 = (num_params + np1 - 1) // np1  # ceiling(num_params / np1)
                 wrtLen2 = (num_params + np2 - 1) // np2  # ceiling(num_params / np2)
                 nSubtreesPerProc = (ng + Ng - 1) // Ng  # ceiling(ng / Ng)
-                printer.log(" Memory estimate = %.2fGB" % (mem * C) +
-                            " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
-                            (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
+                printer.log(" Memory estimate = %.2fGB" % (mem * C) \
+                            + " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)."
+                            % (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
                 #printer.log("  cacheSize = %d" % cacheSize)
                 #printer.log("  wrtLen = %d" % wrtLen)

@@ -1145,8 +1145,8 @@ def error_generator(gate, target_op, mxBasis, typ="logG-logT"):
 
         #Otherwise, there could be branch cut issues or worse, so just
         # raise an error for now (maybe return a dummy if needed elsewhere?)
-        raise ValueError("Could not construct a real logarithms for the" +
-                         "'logG-logT' generator.  Perhaps you should use " +
+        raise ValueError("Could not construct a real logarithms for the "
+                         "'logG-logT' generator.  Perhaps you should use "
                          "the 'logTiG' or 'logGTi' generator instead?")
 
     elif typ == "logTiG":

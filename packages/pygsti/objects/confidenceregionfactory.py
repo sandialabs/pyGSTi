@@ -681,8 +681,8 @@ class ConfidenceRegionFactoryView(object):
             self.stdIntervalScaling = _np.sqrt(stdC1 / C1)  # see above description
             self.stdRegionScaling = _np.sqrt(stdCk / C1)  # see above description
 
-            _warnings.warn("Non-Markovian error bars are experimental and" +
-                           " cannot be interpreted as standard error bars." +
+            _warnings.warn("Non-Markovian error bars are experimental and"
+                           " cannot be interpreted as standard error bars."
                            " Proceed with caution!")
 
         #Store list of profile-likelihood confidence intervals
@@ -744,7 +744,7 @@ class ConfidenceRegionFactoryView(object):
             a symmetric confidence interval.
         """
         if self.profLCI is None:
-            raise NotImplementedError("Profile-likelihood confidence intervals" +
+            raise NotImplementedError("Profile-likelihood confidence intervals"
                                       "are not implemented for this type of confidence region")
         if label is None:
             return self.profLCI

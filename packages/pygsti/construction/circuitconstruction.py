@@ -852,8 +852,8 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=()):
     for lbl in circuit:
         sublbls = []; pintersect = False  # btwn lbl's sslbls & to-keep
         for sublbl in lbl.components:
-            if (sublbl.sslbls is None or
-                    set(sublbl.sslbls).issubset(sslbls_to_keep)):  # then keep this comp
+            if (sublbl.sslbls is None \
+                or set(sublbl.sslbls).issubset(sslbls_to_keep)):  # then keep this comp
 
                 if sslbl_map:  # update state space labels
                     new_sslbls = None if (sublbl.sslbls is None) else \

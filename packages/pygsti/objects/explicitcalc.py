@@ -736,8 +736,8 @@ class ExplicitOpModel_Calc(object):
             assert(rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL))  # rank shouldn't change with normalization
             #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
         except(_np.linalg.LinAlgError):
-            _warnings.warn("Linear algebra error (probably a non-convergent" +
-                           "SVD) ignored during matric rank checks in " +
+            _warnings.warn("Linear algebra error (probably a non-convergent"
+                           "SVD) ignored during matric rank checks in "
                            "Model.get_nongauge_projector(...) ")
 
         return Pp

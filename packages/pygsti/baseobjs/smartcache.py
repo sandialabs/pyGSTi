@@ -309,13 +309,13 @@ class SmartCache(object):
                 printer.log('    {:<65} tot | {}s'.format('', total))
                 printer.log('-' * 100)
 
-        printer.log('\nBecause they take longer to hash than to calculate, \n' +
+        printer.log('\nBecause they take longer to hash than to calculate, \n'
                     'the following functions may be unmarked for caching:')
         for name in suggestRemove:
             printer.log('    {}'.format(name))
 
         with printer.verbosity_env(2):
-            printer.log('\nThe following functions would provide a speedup, \n' +
+            printer.log('\nThe following functions would provide a speedup, \n'
                         'but currently do not experience any cache hits:')
             for name in warnNoHits:
                 printer.log('    {}'.format(name))

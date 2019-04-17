@@ -215,8 +215,8 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
 
     for i in range(nRows):
         for j in range(nCols):
-            data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1) *
-                 j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
+            data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1) \
+                 * j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
 
     xtics = []; ytics = []
     for i in range(nRows): ytics.append(float((elRows + 1) * i) - 0.5 + 0.5 * float(elRows))
@@ -1151,8 +1151,8 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
                 w = gridlinewidth
             else:
                 #add darker lines at multiples of thickLineInterval boxes
-                w = 3 if (thickLineInterval and
-                          (i + 1) % thickLineInterval == 0) else 1
+                w = 3 if (thickLineInterval \
+                          and (i + 1) % thickLineInterval == 0) else 1
 
             gridlines.append(
                 {

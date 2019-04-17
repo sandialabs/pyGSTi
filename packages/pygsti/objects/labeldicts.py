@@ -34,7 +34,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
     def __setitem__(self, key, val):
         """ Assumes key is a Label object """
         if not (self._prefix is None or key.has_prefix(self._prefix)):
-            raise KeyError("All keys must be strings, " +
+            raise KeyError("All keys must be strings, "
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict, self).__setitem__(key, val)
 
@@ -142,7 +142,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
         if self.parent is None: return
         elif self.parent.dim != dim:
-            raise ValueError("Cannot add object with dimension " +
+            raise ValueError("Cannot add object with dimension "
                              "%s to model of dimension %d"
                              % (dim, self.parent.dim))
 

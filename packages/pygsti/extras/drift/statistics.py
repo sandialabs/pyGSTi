@@ -40,7 +40,7 @@ def power_fdr_quasithreshold(significance, numstats, dof):
     """
     Todo
     """
-    quasithreshold = _np.array([_chi2.isf((numstats - i) * significance /
-                                          numstats, dof) / dof for i in range(numstats)])
+    quasithreshold = _np.array([_chi2.isf((numstats - i) * significance \
+                                          / numstats, dof) / dof for i in range(numstats)])
 
     return quasithreshold

@@ -74,8 +74,8 @@ def chi2_terms(model, dataset, circuits=None,
     #  Estimate & check persistent memory (from allocs directly below)
     persistentMem = 8 * (3 * nEls)  # in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit * C) +
-                          "< memory required to hold final results (%g GB)"
+        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit * C) \
+                          + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
     #  Allocate peristent memory
@@ -243,8 +243,8 @@ def chi2(model, dataset, circuits=None,
     if returnGradient or returnHessian: persistentMem += 8 * nEls * ne
     if compute_hprobs: persistentMem += 8 * nEls * ne**2
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit * C) +
-                          "< memory required to hold final results (%g GB)"
+        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit * C) \
+                          + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
     #  Allocate peristent memory
@@ -313,8 +313,8 @@ def chi2(model, dataset, circuits=None,
     if returnHessian:
         dprobs_p = dprobs[:, None, :]  # (KM,1,N)
         t = ((probs - f) / cprobs)[:, None, None]  # (iElement, 0,0) = (KM,1,1)
-        dt = ((1.0 / cprobs - (probs - f) / cprobs**2)[:, None] *
-              dprobs)[:, :, None]  # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
+        dt = ((1.0 / cprobs - (probs - f) / cprobs**2)[:, None] \
+              * dprobs)[:, :, None]  # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
 
         if approximateHessian:  # neglect all hprobs-proportional terms
             d2chi2 = N[:, None, None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p)

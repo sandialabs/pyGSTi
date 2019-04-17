@@ -838,7 +838,7 @@ def create_idletomography_report(results, filename, title="auto",
     switchBd, dataset_labels = \
         _create_switchboard(ws, results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1):
-        raise ValueError("PDF reports can only show a *single* dataset," +
+        raise ValueError("PDF reports can only show a *single* dataset,"
                          " estimate, and gauge optimization.")
 
     # Generate Tables

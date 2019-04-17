@@ -502,8 +502,8 @@ class DataComparator():
 
         """
         self.significance = significance
-        assert(aggregate_test_weighting <= 1. or aggregate_test_weighting >=
-               0.), "The weighting on the aggregate test must be between 0 and 1!"
+        assert(aggregate_test_weighting <= 1. or aggregate_test_weighting >= 0.), \
+            "The weighting on the aggregate test must be between 0 and 1!"
 
         if verbosity >= 2:
             print("Implementing {0:.2f}% significance statistical hypothesis testing...".format(

@@ -1770,7 +1770,7 @@ class DataSet(object):
                 #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
                 # unpickling protocol=0 (the default) info.
             else:
-                _warnings.warn("Deprecated dataset format.  Please re-save " +
+                _warnings.warn("Deprecated dataset format.  Please re-save "
                                "this dataset soon to avoid future incompatibility.")
                 return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
         cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
