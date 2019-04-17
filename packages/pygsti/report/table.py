@@ -248,10 +248,6 @@ class ReportTable(object):
         """
         return [row.cells[0].data.get_value() for row in self._rows if len(row.cells) > 0]
 
-    def has_key(self, key):
-        """ Whether `key` exists (as the first element of some row) """
-        return key in list(self.keys())
-
     def row(self, key=None, index=None):
         """
         Retrieve a row's cell data.  A row is identified by either its `key`

@@ -265,10 +265,6 @@ class MultiDataSet(object):
         """ Returns a list of the keys (dataset names) of this MultiDataSet """
         return list(self.oliDict.keys())
 
-    def has_key(self, datasetName):
-        """ Test whether this MultiDataSet contains a given dataset name """
-        return datasetName in self.oliDict
-
     def items(self):
         """ Iterator over (dataset name, DataSet) pairs """
         return MultiDataSet_KeyValIterator(self)

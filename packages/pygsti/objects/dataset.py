@@ -174,7 +174,7 @@ class DataSetRow(object):
         else:
             return ((self.dataset.ol[i], t, 1) for (i, t) in zip(self.oli, self.time))
 
-    def has_key(self, outcomeLabel):
+    def __contains__(self, outcomeLabel):
         """ Checks whether data counts for `outcomelabel` are available."""
         return outcomeLabel in self.counts
 
@@ -637,7 +637,23 @@ class DataSet(object):
         return len(self.cirIndex)
 
     def __contains__(self, circuit):
-        return self.has_key(circuit)
+        """
+        Test whether data set contains a given circuit.
+
+        Parameters
+        ----------
+        circuit : tuple or Circuit
+            A tuple of operation labels or a Circuit instance
+            which specifies the the circuit to check for.
+
+        Returns
+        -------
+        bool
+            whether circuit was found.
+        """
+        if not isinstance(circuit, _cir.Circuit):
+            circuit = _cir.Circuit(circuit)
+        return circuit in self.cirIndex
 
     def __hash__(self):
         if self.uuid is not None:
@@ -750,25 +766,6 @@ class DataSet(object):
                     for opstr in self.cirIndex.keys()]
         else:
             return list(self.cirIndex.keys())
-
-    def has_key(self, circuit):
-        """
-        Test whether data set contains a given circuit.
-
-        Parameters
-        ----------
-        circuit : tuple or Circuit
-            A tuple of operation labels or a Circuit instance
-            which specifies the the circuit to check for.
-
-        Returns
-        -------
-        bool
-            whether circuit was found.
-        """
-        if not isinstance(circuit, _cir.Circuit):
-            circuit = _cir.Circuit(circuit)
-        return circuit in self.cirIndex
 
     def items(self):
         """
@@ -1441,7 +1438,7 @@ class DataSet(object):
             if not isinstance(opstr, _cir.Circuit):
                 opstr = _cir.Circuit(opstr)
 
-            if self.has_key(opstr):
+            if opstr in self:
                 gstr_indices.append(self.cirIndex[opstr])
                 if opstr in self.auxInfo:
                     auxkeys_to_remove.append(opstr)
