@@ -18,6 +18,7 @@ table() and cell() functions are used by table.py in table creation
 everything else is used in creating formatters in formatters.py
 '''
 
+
 def table(customHeadings, colHeadingsFormatted, rows, spec):
     '''
     Create a LaTeX table
@@ -42,7 +43,7 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
             and "latex" in customHeadings:
         latex = customHeadings['latex']
     else:
-        latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
+        latex = "\\begin{%s}[l]{%s}\n\hline\n" % \
             (table, "|c" * len(colHeadingsFormatted) + "|")
         latex += ("%s \\\\ \hline\n"
                   % (" & ".join(colHeadingsFormatted)))
@@ -51,8 +52,8 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
 
         if len(formatted_rowData) > 0:
             formatted_rowData_latex = [
-                (formatted_cell['latex'] if isinstance(formatted_cell,dict)
-                 else formatted_cell) for formatted_cell in formatted_rowData ]
+                (formatted_cell['latex'] if isinstance(formatted_cell, dict)
+                 else formatted_cell) for formatted_cell in formatted_rowData]
             latex += " & ".join(formatted_rowData_latex)
 
             #MULTI-ROW support for *data* (non-col-header) rows of table.  Currently
@@ -77,11 +78,12 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
             latex += " \\\\ \hline\n"
 
     latex += "\end{%s}\n" % table
-    return {'latex' : latex}
+    return {'latex': latex}
+
 
 def cell(data, label, spec):
     '''
-    Format the cell of a latex table 
+    Format the cell of a latex table
 
     Parameters
     ----------
@@ -96,7 +98,8 @@ def cell(data, label, spec):
     string
     '''
     addMathMode = bool(("^" in data or "_" in data) and "$" not in data)
-    return "$"+data+"$" if addMathMode else data
+    return "$" + data + "$" if addMathMode else data
+
 
 def list(l, specs):
     """
@@ -116,7 +119,7 @@ def list(l, specs):
         latex string for l.
     """
     return "\\begin{tabular}{c}\n" + \
-                " \\\\ \n".join(l) + "\n \end{tabular}\n"
+        " \\\\ \n".join(l) + "\n \end{tabular}\n"
 
 
 def vector(v, specs):
@@ -136,15 +139,15 @@ def vector(v, specs):
     string
         latex string for v.
     """
-    lines = [ ]
+    lines = []
     for el in v:
-        lines.append( value(el, specs, mathmode=True) )
+        lines.append(value(el, specs, mathmode=True))
     if specs['brackets']:
         return "\\ensuremath{ \\begin{pmatrix}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
     else:
         return "\\ensuremath{ \\begin{pmatrix}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
 
 
 def matrix(m, specs):
@@ -164,23 +167,24 @@ def matrix(m, specs):
     string
         latex string for m.
     """
-    lines    = [ ]
-    prefix   = ""
+    lines = []
+    prefix = ""
     fontsize = specs['fontsize']
 
     if fontsize is not None:
-        prefix += "\\fontsize{%f}{%f}\selectfont " % (fontsize, fontsize*1.2)
+        prefix += "\\fontsize{%f}{%f}\selectfont " % (fontsize, fontsize * 1.2)
 
     for r in range(m.shape[0]):
-        lines.append( " & ".join(
-                [value(el, specs, mathmode=True) for el in m[r,:] ] ) )
+        lines.append(" & ".join(
+            [value(el, specs, mathmode=True) for el in m[r, :]]))
 
     if specs['brackets']:
-        return prefix + "\\ensuremath{ \\begin{pmatrix}\n"  + \
-        " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+        return prefix + "\\ensuremath{ \\begin{pmatrix}\n" + \
+            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
     else:
-        return prefix + "\\ensuremath{ \\begin{pmatrix}\n"  + \
-        " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+        return prefix + "\\ensuremath{ \\begin{pmatrix}\n" + \
+            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+
 
 def value(el, specs, mathmode=False):
     """
@@ -206,31 +210,31 @@ def value(el, specs, mathmode=False):
         latex string for el.
     """
     # ROUND = digits to round values to
-    TOL = 1e-9  #tolerance for printing zero values
+    TOL = 1e-9  # tolerance for printing zero values
 
-    precision      = specs['precision']
-    sciprecision   = specs['sciprecision']
+    precision = specs['precision']
+    sciprecision = specs['sciprecision']
     polarprecision = specs['polarprecision']
     complexAsPolar = specs['complexAsPolar']
 
     def render(x):
         """Render a single float (can be real or imag part)"""
-        if abs(x) < 5*10**(-(precision+1)):
-            s = "%.*e" % (sciprecision,x)
+        if abs(x) < 5 * 10**(-(precision + 1)):
+            s = "%.*e" % (sciprecision, x)
         elif abs(x) < 1:
-            s = "%.*f" % (precision,x)
+            s = "%.*f" % (precision, x)
         elif abs(x) <= 10**precision:
-            s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get precision+1 digits when x is > 1
+            s = "%.*f" % (precision - int(_np.log10(abs(x))), x)  # round to get precision+1 digits when x is > 1
         else:
-            s = "%.*e" % (sciprecision,x)
+            s = "%.*e" % (sciprecision, x)
 
         #Fix scientific notition
         p = s.split('e')
         if len(p) == 2:
-            ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
+            ex = str(int(p[1]))  # exponent without extras (e.g. +04 => 4)
             if mathmode:
                 s = p[0] + "\\times 10^{" + ex + "}"
-            else: #ensure math mode so \times and ^ will work
+            else:  # ensure math mode so \times and ^ will work
                 s = "\\ensuremath{ " + p[0] + "\\times 10^{" + ex + "} }"
 
         #Strip superfluous endings
@@ -241,26 +245,26 @@ def value(el, specs, mathmode=False):
 
     if _compat.isstr(el):
         return el
-    if isinstance(el, (int,_np.int64)):
+    if isinstance(el, (int, _np.int64)):
         return "%d" % el
     try:
         if el is None or _np.isnan(el): return "--"
-    except TypeError: pass # if isnan fails b/c a non-numeric type, just proceed
-        
+    except TypeError: pass  # if isnan fails b/c a non-numeric type, just proceed
+
     try:
         if abs(el.real) > TOL:
             if abs(el.imag) > TOL:
                 if complexAsPolar:
-                    r,phi = cmath.polar(el)
-                    ex = ("i%.*f" % (polarprecision, phi/_np.pi)) if phi >= 0 \
-                        else ("-i%.*f" % (polarprecision, -phi/_np.pi))
+                    r, phi = cmath.polar(el)
+                    ex = ("i%.*f" % (polarprecision, phi / _np.pi)) if phi >= 0 \
+                        else ("-i%.*f" % (polarprecision, -phi / _np.pi))
                     if mathmode:
-                        s = "%se^{%s\\pi}" % (render(r),ex)
-                    else: #ensure math mode so ^ will work
-                        s = "\\ensuremath{ %se^{%s\\pi} }" % (render(r),ex)
+                        s = "%se^{%s\\pi}" % (render(r), ex)
+                    else:  # ensure math mode so ^ will work
+                        s = "\\ensuremath{ %se^{%s\\pi} }" % (render(r), ex)
 
                 else:
-                    s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))
+                    s = "%s%s%si" % (render(el.real), '+' if el.imag > 0 else '-', render(abs(el.imag)))
             else:
                 s = "%s" % render(el.real)
         else:
@@ -290,5 +294,5 @@ def escaped(txt, specs):
     -------
     string
     """
-    ret = txt.replace("_","\_")
+    ret = txt.replace("_", "\_")
     return ret

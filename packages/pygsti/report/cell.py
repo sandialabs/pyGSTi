@@ -7,34 +7,35 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .formatters import formatDict  as _formatDict
-from .convert    import convertDict as _convertDict
+from .formatters import formatDict as _formatDict
+from .convert import convertDict as _convertDict
 
 
 class Cell(object):
     '''
     Representation of a table cell, containing formatting and labeling info
     '''
+
     def __init__(self, data=None, formatterName=None, label=None):
         '''
-        Creates Cell object 
+        Creates Cell object
 
         Parameters
         ----------
-        data : ReportableQty 
+        data : ReportableQty
             data to be reported
         formatterName : string
             name of the formatter to be used (ie 'Effect')
         label : string
             label of the cell
         '''
-        self.data          = data
+        self.data = data
         self.formatterName = formatterName
-        self.label         = label
+        self.label = label
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
-        return state_dict 
+        return state_dict
 
     def __setstate__(self, d):
         self.__dict__.update(d)
@@ -57,7 +58,7 @@ class Cell(object):
             formatter = _formatDict[self.formatterName]
             formatted_item = formatter[fmt](self.data, spec)
             assert formatted_item is not None, ("Formatter " + str(type(formatter[fmt]))
-                                              + " returned None for item = " + str(self.data))
+                                                + " returned None for item = " + str(self.data))
             return formatted_item
         else:
             if self.data.get_value() is not None:
@@ -79,7 +80,7 @@ class Cell(object):
         -------
         string
         '''
-        format_cell   = _convertDict[fmt]['cell'] # Function for rendering a cell in the format "fmt"
+        format_cell = _convertDict[fmt]['cell']  # Function for rendering a cell in the format "fmt"
         formattedData = self._render_data(fmt, spec)
 
         return format_cell(formattedData, self.label, spec)

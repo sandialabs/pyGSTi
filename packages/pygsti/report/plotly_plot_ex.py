@@ -13,10 +13,11 @@ from plotly import tools as _plotlytools
 #from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
 #from pkg_resources import resource_string
 
+
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, lock_aspect_ratio=False,
-            master=True, click_to_display=False, link_to=None,link_to_id=False):
-    """ 
+            master=True, click_to_display=False, link_to=None, link_to_id=False):
+    """
     Create a pyGSTi plotly graph locally, returning HTML & JS separately.
 
     Parameters
@@ -38,7 +39,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     resizable : bool, optional
         Make the plot resizable by including a "resize" event handler and
         any additional initialization.
-    
+
     lock_aspect_ratio : bool, optional
         Whether the aspect ratio of the plot should be allowed to change
         when it is sized based on it's container.
@@ -88,7 +89,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     # (and triggers resize-script creation)
     if orig_width: del fig['layout']['width']
     if orig_height: del fig['layout']['height']
-    
+
     #Special polar plot case - see below - add dummy width & height so
     # we can find/replace them with variables in generated javascript.
     if 'angularaxis' in fig['layout']:
@@ -100,32 +101,32 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     config['linkText'] = link_text
 
     #Add version-dependent kwargs to _plot_html call below
-    plotly_version = tuple(map(int,_plotly_version.split('.')))
-    if plotly_version < (3,8,0): # "old" plotly with _plot_html function
+    plotly_version = tuple(map(int, _plotly_version.split('.')))
+    if plotly_version < (3, 8, 0):  # "old" plotly with _plot_html function
         from plotly.offline.offline import _plot_html
 
         kwargs = {}
-        if plotly_version >= (3,7,0): # then auto_play arg exists
+        if plotly_version >= (3, 7, 0):  # then auto_play arg exists
             kwargs['auto_play'] = False
-        
+
         #Note: removing width and height from layout above causes default values to
-        # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.        
+        # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.
         plot_html, plotdivid, _, _ = _plot_html(
             fig, config, validate, '100%', '100%',
-            global_requirejs=False, #no need for global_requirejs here 
-            **kwargs)               #since we now extract js and remake full script.
+            global_requirejs=False,  # no need for global_requirejs here
+            **kwargs)  # since we now extract js and remake full script.
     else:
         from plotly.io import to_html as _to_html
         import uuid as _uuid
         plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
-                            include_mathjax=False, post_script=None, full_html=False,
-                            animation_opts=None, validate=validate)
+                             include_mathjax=False, post_script=None, full_html=False,
+                             animation_opts=None, validate=validate)
         assert(plot_html.startswith("<div>") and plot_html.endswith("</div>"))
         plot_html = plot_html[len("<div>"):-len("</div>")].strip()
         assert(plot_html.endswith("</script>"))
         id_index = plot_html.find('id="')
-        id_index_end = plot_html.find('"',id_index+len('id="'))
-        plotdivid = _uuid.UUID(plot_html[id_index+len('id="'):id_index_end])
+        id_index_end = plot_html.find('"', id_index + len('id="'))
+        plotdivid = _uuid.UUID(plot_html[id_index + len('id="'):id_index_end])
 
     if orig_width: fig['layout']['width'] = orig_width
     if orig_height: fig['layout']['height'] = orig_height
@@ -135,7 +136,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     # on Plotly output (_plot_html) being HTML followed by JS
     tag = '<script type="text/javascript">'; end_tag = '</script>'
     iTag = plot_html.index(tag)
-    plot_js = plot_html[iTag+len(tag):-len(end_tag)].strip()
+    plot_js = plot_html[iTag + len(tag):-len(end_tag)].strip()
     plot_html = plot_html[0:iTag].strip()
 
     full_script = ''
@@ -145,7 +146,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     # when appropriate (see workspace.py).
 
     #Get javascript for create and (possibly) resize handlers
-    plotly_create_js = plot_js #the ususal plotly creation javascript
+    plotly_create_js = plot_js  # the ususal plotly creation javascript
     plotly_resize_js = None
 
     if resizable:
@@ -157,7 +158,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             # (I don't know why, and it's not documented, but in plotly.js there are explict conditions
             #  in Plotly.relayout that short-circuit when "gd.frameworks.isPolar" is true).  So,
             #  we just re-create the plot with a different size to mimic resizing.
-            plot_js = plot_js.replace('"width": 123','"width": pw').replace('"height": 123','"height": ph')
+            plot_js = plot_js.replace('"width": 123', '"width": pw').replace('"height": 123', '"height": ph')
             plotly_resize_js = (
                 'var plotlydiv = $("#{id}");\n'
                 'plotlydiv.children(".plotly").remove();\n'
@@ -165,9 +166,9 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 'var ph = plotlydiv.height();\n'
                 '{resized}\n').format(id=plotdivid, resized=plot_js)
             plotly_create_js = plotly_resize_js
-        
+
     aspect_val = aspect_ratio if aspect_ratio else "null"
-        
+
     groupclass = "pygsti-plotgroup-master" \
                  if master else "pygsti-plotgroup-slave"
 
@@ -196,11 +197,11 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     if click_to_display and master:
         # move plotly plot creation from "create" to "click" handler
         plotly_click_js = plotly_create_js
-        plotly_create_js = ""            
-        
-    full_script = (  #(assume this will all be run within an on-ready handler)
-        '  $("#{id}").addClass("{groupclass}");\n' #perform this right away
-        '  $("#{id}").on("init", function(event) {{\n' #always add init-size handler
+        plotly_create_js = ""
+
+    full_script = (  # (assume this will all be run within an on-ready handler)
+        '  $("#{id}").addClass("{groupclass}");\n'  # perform this right away
+        '  $("#{id}").on("init", function(event) {{\n'  # always add init-size handler
         '    pex_init_plotdiv($("#{id}"), {ow}, {oh});\n'
         '    pex_init_slaves($("#{id}"));\n'
         '    console.log("Initialized {id}");\n'
@@ -209,10 +210,10 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         '     plotman.enqueue(function() {{ \n'
         '       {plotlyClickJS} \n'
         '     }}, "Click-creating Plot {id}" );\n'
-        '     $("#{id}").off("click.pygsti");\n' #remove this event handler
+        '     $("#{id}").off("click.pygsti");\n'  # remove this event handler
         '     console.log("Click-Created {id}");\n'
         '  }});\n'
-        '  $("#{id}").on("create", function(event, fracw, frach) {{\n' #always add create handler
+        '  $("#{id}").on("create", function(event, fracw, frach) {{\n'  # always add create handler
         '     pex_update_plotdiv_size($("#{id}"), {ratio}, fracw, frach, {ow}, {oh});\n'
         '     plotman.enqueue(function() {{ \n'
         '       $("#{id}").addClass("pygBackground");\n'
@@ -220,7 +221,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         '       pex_create_slaves($("#{id}"), {ow}, {oh});\n'
         '     }}, "Creating Plot {id}" );\n'
         '     console.log("Created {id}");\n'
-        '  }});\n'            
+        '  }});\n'
     ).format(id=plotdivid, ratio=aspect_val,
              groupclass=groupclass,
              ow=orig_width if orig_width else "null",
@@ -240,16 +241,16 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             '     }}, "Resizing Plot {id}" );\n'
             '    //console.log("Resized {id}");\n'
             '  }});\n'
-            ).format(id=plotdivid, ratio=aspect_val,
-                     ow=orig_width if orig_width else "null",
-                     oh=orig_height if orig_height else "null",
-                     plotlyResizeJS=plotly_resize_js)
+        ).format(id=plotdivid, ratio=aspect_val,
+                 ow=orig_width if orig_width else "null",
+                 oh=orig_height if orig_height else "null",
+                 plotlyResizeJS=plotly_resize_js)
 
-    return {'html': plot_html, 'js': full_script }
-        
+    return {'html': plot_html, 'js': full_script}
+
 
 def init_notebook_mode_ex(connected=False):
-    """ 
+    """
     A copy of init_notebook_mode in plotly.offline except this version
     loads the pyGSTi-customized plotly library when connected=False
     (which contains fixes relevant to pyGSTi plots).
@@ -257,13 +258,13 @@ def init_notebook_mode_ex(connected=False):
     global __PLOTLY_OFFLINE_INITIALIZED
 
     if connected:
-        # Inject plotly.js into the output cell                                 
+        # Inject plotly.js into the output cell
         script_inject = (
             ''
             '<script>'
             'requirejs.config({'
             'paths: { '
-            # Note we omit the extension .js because require will include it.   
+            # Note we omit the extension .js because require will include it.
             '\'plotly\': [\'https://cdn.plot.ly/plotly-latest.min\']},'
             '});'
             'if(!window.Plotly) {{'
@@ -273,7 +274,7 @@ def init_notebook_mode_ex(connected=False):
             '</script>'
         )
     else:
-        # Inject plotly.js into the output cell                                 
+        # Inject plotly.js into the output cell
         script_inject = (
             ''
             '<script type=\'text/javascript\'>'
@@ -286,26 +287,27 @@ def init_notebook_mode_ex(connected=False):
             '}});'
             '}}'
             '</script>'
-            '').format(script=get_plotlyjs_ex())  #EGN changed to _ex
+            '').format(script=get_plotlyjs_ex())  # EGN changed to _ex
 
     #ORIG: ipython_display.display(ipython_display.HTML(script_inject))
     __PLOTLY_OFFLINE_INITIALIZED = True
-    return script_inject #EGN: just return so we can combine with other HTML
+    return script_inject  # EGN: just return so we can combine with other HTML
+
 
 def get_plotlyjs_ex():
     """ Gets the custom pyGSTi version of plotly """
     path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                         "templates","offline", "plotly-latest.min.js") # "plotly-polarfixed.js"
+                         "templates", "offline", "plotly-latest.min.js")  # "plotly-polarfixed.js"
 
     #EGN this block mocks-up resource_string to also work when using a
     # local package... could look into whether this is unecessary if we
     # just do a "pip -e pygsti" install instead of install_locally.py...
     with open(path) as f:
         plotlyjs = f.read()
-        try: # to convert to unicode since we use unicode literals
+        try:  # to convert to unicode since we use unicode literals
             plotlyjs = plotlyjs.decode('utf-8')
         except AttributeError:
-            pass #Python3 case when unicode is read in natively (no need to decode)
-    
+            pass  # Python3 case when unicode is read in natively (no need to decode)
+
     #ORIG plotlyjs = resource_string('plotly', path).decode('utf-8')
     return plotlyjs

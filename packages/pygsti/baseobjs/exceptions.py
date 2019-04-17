@@ -6,9 +6,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+
 class GSTRuntimeError(Exception):
     """Gate Set Tomography run-time exception class."""
     pass
+
 
 class GSTValueError(Exception):
     """Gate Set Tomography value error exception class."""

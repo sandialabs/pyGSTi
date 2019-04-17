@@ -14,6 +14,7 @@ table() and cell() functions are used by table.py in table creation
 everything else is used in creating formatters in formatters.py
 '''
 
+
 def table(customHeadings, colHeadingsFormatted, rows, spec):
     '''
     Create a "Python table" - really a pandas DataFrame
@@ -41,7 +42,7 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
 
     def getval(lbl):
         return lbl.value if isinstance(lbl, _ReportableQty) else lbl
-    
+
     if customHeadings is not None \
             and "python" in customHeadings:
         colLabels = customHeadings['python']
@@ -49,32 +50,32 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
         colLabels = [getval(x) for x in colHeadingsFormatted]
     nCols = len(colLabels)
 
-    if nCols == 0: return {'python': _pd.DataFrame() }
+    if nCols == 0: return {'python': _pd.DataFrame()}
 
     #Remove duplicate in colLabels (otherwise these cols get merged weirdly below)
     for i in range(len(colLabels)):
         if colLabels[i] in colLabels[0:i]:
             k = 1
-            while colLabels[i]+str(k) in colLabels[0:i]: k+=1
-            colLabels[i] = colLabels[i]+str(k)
+            while colLabels[i] + str(k) in colLabels[0:i]: k += 1
+            colLabels[i] = colLabels[i] + str(k)
 
     #Add addition error-bar columns for any columns that have error bar info
     cols_containing_ebs = set()
     for formatted_rowData in rows:
         assert(len(formatted_rowData) == nCols)
-        for i,formatted_cellData in enumerate(formatted_rowData):
+        for i, formatted_cellData in enumerate(formatted_rowData):
             if isinstance(formatted_cellData, _ReportableQty) and \
                formatted_cellData.has_eb():
                 cols_containing_ebs.add(i)
 
-    n=0 # number of cols inserted
+    n = 0  # number of cols inserted
     for iCol in sorted(cols_containing_ebs):
-        origLbl = colLabels[iCol+n]
-        colLabels.insert(iCol+n+1, origLbl + " Error Bar")
+        origLbl = colLabels[iCol + n]
+        colLabels.insert(iCol + n + 1, origLbl + " Error Bar")
         n += 1
-        
-    rowLabels = [ ]
-    rowIndexName =  getval(colLabels[0])
+
+    rowLabels = []
+    rowIndexName = getval(colLabels[0])
     if len(rowIndexName.strip()) == 0:
         rowIndexName = None
 
@@ -83,19 +84,19 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
         dict_of_columns[colLabel] = []
 
     for formatted_rowData in rows:
-        rowLabels.append(getval(formatted_rowData[0])); n=0
-        
-        for i,formatted_cellData in enumerate(formatted_rowData[1:],start=1):
+        rowLabels.append(getval(formatted_rowData[0])); n = 0
+
+        for i, formatted_cellData in enumerate(formatted_rowData[1:], start=1):
             if i in cols_containing_ebs:
                 if isinstance(formatted_cellData, _ReportableQty):
                     val, eb = formatted_cellData.get_value_and_err_bar()
                 else:
                     val, eb = formatted_cellData, None
-                dict_of_columns[colLabels[i+n]].append( val )
-                dict_of_columns[colLabels[i+n+1]].append( eb )
+                dict_of_columns[colLabels[i + n]].append(val)
+                dict_of_columns[colLabels[i + n + 1]].append(eb)
                 n += 1
             else:
-                dict_of_columns[colLabels[i+n]].append( getval(formatted_cellData) )
+                dict_of_columns[colLabels[i + n]].append(getval(formatted_cellData))
 
     indx = _pd.Index(rowLabels, name=rowIndexName)
     #print("DB PANDAS: headings=",colLabels)  #DEBUG
@@ -103,13 +104,13 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     df = _pd.DataFrame(dict_of_columns,
                        columns=dict_of_columns.keys(),
                        index=indx)
-    
-    return {'python' : df}
+
+    return {'python': df}
 
 
 def cell(data, label, spec):
     '''
-    Format the cell of a python table 
+    Format the cell of a python table
 
     Parameters
     ----------
@@ -125,6 +126,7 @@ def cell(data, label, spec):
     string
     '''
     return data
+
 
 def list(l, specs):
     """
@@ -161,7 +163,7 @@ def vector(v, specs):
 
     Returns
     -------
-    numpy array        
+    numpy array
     """
     return v
 
@@ -184,6 +186,7 @@ def matrix(m, specs):
     numpy array
     """
     return m
+
 
 def value(el, specs):
     """

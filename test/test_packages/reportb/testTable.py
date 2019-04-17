@@ -38,7 +38,7 @@ class TestTable(BaseTestCase):
         table.addrow(['1.0'], ['Normal'])
         table.render('html')
 
-        self.assertTrue(table.has_key('1.0'))
+        self.assertTrue('1.0' in table)
 
         rowLabels = list(table.keys())
         row1Data  = table[rowLabels[0]]

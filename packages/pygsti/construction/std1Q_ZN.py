@@ -14,90 +14,91 @@ from . import modelconstruction as _setc
 from . import stdtarget as _stdtarget
 
 
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gz','Gn'],
-                                [ "Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
+_target_model = _setc.build_explicit_model([('Q0',)], ['Gz', 'Gn'],
+                                           ["Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
 
 
 prepStrs = _strc.circuit_list([(),
-                                       ('Gn',),
-                                       ('Gn','Gn'),
-                                       ('Gn','Gz','Gn'),
-                                       ('Gn','Gn','Gn',),
-                                       ('Gn','Gz','Gn','Gn','Gn')]) # for 1Q MUB
+                               ('Gn',),
+                               ('Gn', 'Gn'),
+                               ('Gn', 'Gz', 'Gn'),
+                               ('Gn', 'Gn', 'Gn',),
+                               ('Gn', 'Gz', 'Gn', 'Gn', 'Gn')])  # for 1Q MUB
 
 effectStrs = _strc.circuit_list([(),
-                                       ('Gn',),
-                                       ('Gn','Gn'),
-                                       ('Gn','Gz','Gn'),
-                                       ('Gn','Gn','Gn',),
-                                       ('Gn','Gn','Gn','Gz','Gn')]) # for 1Q MUB
+                                 ('Gn',),
+                                 ('Gn', 'Gn'),
+                                 ('Gn', 'Gz', 'Gn'),
+                                 ('Gn', 'Gn', 'Gn',),
+                                 ('Gn', 'Gn', 'Gn', 'Gz', 'Gn')])  # for 1Q MUB
 
-germs = _strc.circuit_list([ ('Gz',),
-                                ('Gn',),
-                                ('Gz','Gn'),
-                                ('Gz','Gz','Gn'),
-                                ('Gz','Gn','Gn'),
-                                ('Gz','Gz','Gn','Gz','Gn','Gn') ])
-germs_lite = germs[:] #same list!
+germs = _strc.circuit_list([('Gz',),
+                            ('Gn',),
+                            ('Gz', 'Gn'),
+                            ('Gz', 'Gz', 'Gn'),
+                            ('Gz', 'Gn', 'Gn'),
+                            ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn')])
+germs_lite = germs[:]  # same list!
 
 
-_gscache = { ("full","auto"): _target_model }
+_gscache = {("full", "auto"): _target_model}
+
+
 def target_model(parameterization_type="full", sim_type="auto"):
-    """ 
+    """
     Returns a copy of the target model in the given parameterization.
 
     Parameters
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
-        The gate and SPAM vector parameterization type. See 
+        The gate and SPAM vector parameterization type. See
         :function:`Model.set_all_parameterizations` for all allowed values.
-        
+
     sim_type : {"auto", "matrix", "map", "termorder:X" }
         The simulator type to be used for model calculations (leave as
         "auto" if you're not sure what this is).
-    
+
     Returns
     -------
     Model
     """
-    return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
+    return _stdtarget._copy_target(_sys.modules[__name__], parameterization_type,
                                    sim_type, _gscache)
 
 
-
-global_fidPairs =  [
+global_fidPairs = [
     (0, 0), (2, 3), (5, 2), (5, 4)]
 
 pergerm_fidPairsDict = {
-  ('Gz',): [
+    ('Gz',): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gn',): [
+    ('Gn',): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gn'): [
+    ('Gz', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gn', 'Gn'): [
+    ('Gz', 'Gn', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gz', 'Gn'): [
+    ('Gz', 'Gz', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn'): [
+    ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn'): [
         (0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)],
 }
 
 
-global_fidPairs_lite =  [
+global_fidPairs_lite = [
     (0, 0), (2, 3), (5, 2), (5, 4)]
 
 pergerm_fidPairsDict_lite = {
-  ('Gz',): [
+    ('Gz',): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gn',): [
+    ('Gn',): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gn'): [
+    ('Gz', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gn', 'Gn'): [
+    ('Gz', 'Gn', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gz', 'Gn'): [
+    ('Gz', 'Gz', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn'): [
+    ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn'): [
         (0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)],
 }

@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
+
 def length(s):
     """
     Returns the length (the number of indices) contained in a slice.
@@ -21,13 +22,14 @@ def length(s):
     -------
     int
     """
-    if not isinstance(s,slice): return len(s)
+    if not isinstance(s, slice): return len(s)
     if s.start is None or s.stop is None:
         return 0
     if s.step is None:
         return s.stop - s.start
     else:
         return len(range(s.start, s.stop, s.step))
+
 
 def shift(s, offset):
     """
@@ -45,7 +47,7 @@ def shift(s, offset):
     -------
     slice
     """
-    if s == slice(0,0,None): return s #special "null slice": shifted(null_slice) == null_slice
+    if s == slice(0, 0, None): return s  # special "null slice": shifted(null_slice) == null_slice
     return slice(s.start + offset, s.stop + offset, s.step)
 
 
@@ -69,14 +71,14 @@ def intersect(s1, s2):
     elif s2.start is None:
         start = s1.start
     else:
-        start = max(s1.start,s2.start)
+        start = max(s1.start, s2.start)
 
     if s1.stop is None:
         stop = s2.stop
     elif s2.stop is None:
         stop = s1.stop
     else:
-        stop = min(s1.stop,s2.stop)
+        stop = min(s1.stop, s2.stop)
 
     if stop is not None and start is not None and stop < start:
         stop = start
@@ -84,7 +86,7 @@ def intersect(s1, s2):
     return slice(start, stop, s1.step)
 
 
-def indices(s,n=None):
+def indices(s, n=None):
     """
     Returns a list of the indices specified by slice `s`.
 
@@ -118,10 +120,11 @@ def indices(s,n=None):
         assert(n is not None), "Must supply `n` to obtain indices of a slice with negative stop point!"
         stop = n + s.stop
     else: stop = s.stop
-    
+
     if s.step is None:
-        return list(range(start,stop))
-    return list(range(start,stop,s.step))
+        return list(range(start, stop))
+    return list(range(start, stop, s.step))
+
 
 def list_to_slice(lst, array_ok=False, require_contiguous=True):
     """
@@ -152,20 +155,21 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
             assert(lst.step is None or lst.step == 1), \
                 "Slice must be contiguous!"
         return lst
-    if lst is None or len(lst) == 0: return slice(0,0)
-    start=lst[0]
+    if lst is None or len(lst) == 0: return slice(0, 0)
+    start = lst[0]
 
-    if len(lst) == 1: return slice(start,start+1)
-    step=lst[1]-lst[0]; stop = start + step*len(lst)
+    if len(lst) == 1: return slice(start, start + 1)
+    step = lst[1] - lst[0]; stop = start + step * len(lst)
     if require_contiguous:
         assert(step == 1), "Slice must be contiguous!"
 
-    if list(lst) == list(range(start,stop,step)):
+    if list(lst) == list(range(start, stop, step)):
         if step == 1: step = None
-        return slice(start,stop,step)
+        return slice(start, stop, step)
 
-    if array_ok: return _np.array(lst,_np.int64)
+    if array_ok: return _np.array(lst, _np.int64)
     else: raise ValueError("List does not correspond to a slice!")
+
 
 def as_array(slcOrListLike):
     """
@@ -202,7 +206,7 @@ def divide(slc, maxLen):
     step = 1 if (slc.step is None) else slc.step
     while sub_start < slc.stop:
         # Note: len(range(start,stop,step)) == stop-start+(step-1) // step
-        sub_slices.append( slice(sub_start, min(sub_start+maxLen*step,slc.stop),
-                                 slc.step) )
-        sub_start += maxLen*step
+        sub_slices.append(slice(sub_start, min(sub_start + maxLen * step, slc.stop),
+                                slc.step))
+        sub_start += maxLen * step
     return sub_slices

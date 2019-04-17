@@ -57,7 +57,7 @@ from .instrument import TPInstrument
 
 from .model import Model
 from .explicitmodel import ExplicitOpModel
-from .explicitmodel import ExplicitOpModel as GateSet #alias
+from .explicitmodel import ExplicitOpModel as GateSet  # alias
 from .implicitmodel import ImplicitOpModel
 from .localnoisemodel import LocalNoiseModel
 from .cloudnoisemodel import CloudNoiseModel
@@ -89,4 +89,13 @@ from .results import Results
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 
 #Important Base Objects
-from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis, Label, CircuitLabel
+from ..baseobjs import VerbosityPrinter, \
+    Profiler, \
+    SmartCache, \
+    Basis, \
+    BuiltinBasis, \
+    ExplicitBasis, \
+    TensorProdBasis, \
+    DirectSumBasis, \
+    Label, \
+    CircuitLabel
