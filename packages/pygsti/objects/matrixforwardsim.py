@@ -2528,9 +2528,9 @@ class MatrixForwardSimulator(ForwardSimulator):
                 if deriv2MxToFill is not None:
                     _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill, [felInds],
                                         1, blk1Comm, gatherMemLimit)
-                   #Note: deriv2MxToFill gets computed on every inner loop completion
-                   # (to save mem) but isn't gathered until now (but using blk1Comm).
-                   # (just as prMxToFill is computed fully on each inner loop *iteration*!)
+                    #Note: deriv2MxToFill gets computed on every inner loop completion
+                    # (to save mem) but isn't gathered until now (but using blk1Comm).
+                    # (just as prMxToFill is computed fully on each inner loop *iteration*!)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]

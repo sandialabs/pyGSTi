@@ -4029,7 +4029,7 @@ class EmbeddedOp(LinearOperator):
 
                 # loop over all state configurations we don't operate on
                 for b_noop in _itertools.product(*self.basisInds_noop):
-                                                                   # - so really a loop over diagonal dm elements
+                    # - so really a loop over diagonal dm elements
                     # using same b_noop for in and out says we're acting
                     b_out = self._merge_op_and_noop_bases(op_b1, b_noop)
                     b_in = self._merge_op_and_noop_bases(op_b2, b_noop)  # as the identity on the no-op state space

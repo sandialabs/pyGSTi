@@ -237,7 +237,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
             # If it's not a 2-qubit gate, we delete it.
             if twoQgates_available[d - 1 - i].number_of_qubits != 2:
                 del twoQgates_available[d - 1 - i]
-             # If it's not a gate on the allowed qubits, we delete it.
+            # If it's not a gate on the allowed qubits, we delete it.
             elif not set(twoQgates_available[d - 1 - i].qubits).issubset(set(qubits)):
                 del twoQgates_available[d - 1 - i]
 

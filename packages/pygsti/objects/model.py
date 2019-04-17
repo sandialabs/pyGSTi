@@ -1398,11 +1398,11 @@ class OpModel(Model):
                     if(next >= mem_estimate): raise MemoryError("Not enough memory: splitting unproductive")
                     mem_estimate = next
 
-                   #Note: could do these while loops smarter, e.g. binary search-like?
-                   #  or assume memEstimate scales linearly in ng? E.g:
-                   #     if memLimit < memEstimate:
-                   #         reductionFactor = float(memEstimate) / float(memLimit)
-                   #         maxTreeSize = int(nstrs / reductionFactor)
+                    #Note: could do these while loops smarter, e.g. binary search-like?
+                    #  or assume memEstimate scales linearly in ng? E.g:
+                    #     if memLimit < memEstimate:
+                    #         reductionFactor = float(memEstimate) / float(memLimit)
+                    #         maxTreeSize = int(nstrs / reductionFactor)
             else:
                 memEstimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
 

@@ -138,8 +138,9 @@ class ProtectedArray(object):
                     new_indicesToProtect = None
                     break
 
-            else:  # if we didn't break b/c of above block, which means each dim has
-                  # at least one protected index
+            else:
+                # if we didn't break b/c of above block, which means each dim has
+                # at least one protected index
 
                 #if there are no unprotected indices, then just set writeable == False
                 if nUnprotectedIndices == 0:

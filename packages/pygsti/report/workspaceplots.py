@@ -1700,9 +1700,9 @@ class ColorBoxPlot(WorkspacePlot):
                     element_dof = len(dataset.get_outcome_labels()) - 1
 
                 n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp, element_dof)
-              # NOTE: currently dof_per_box is constant, and takes the total
-              # number of outcome labels in the DataSet, which can be incorrect
-              # when different sequences have different outcome labels.
+                # NOTE: currently dof_per_box is constant, and takes the total
+                # number of outcome labels in the DataSet, which can be incorrect
+                # when different sequences have different outcome labels.
 
             if len(subMxs) > 0:
                 dataMax = max([(0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))

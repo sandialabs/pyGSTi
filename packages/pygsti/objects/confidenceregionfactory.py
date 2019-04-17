@@ -338,7 +338,7 @@ class ConfidenceRegionFactory(object):
         for i in orderInds[self.nGaugeParams:]:
             invEvals[i] = 1.0 / evals[i]
 
-          #re-construct "inverted" quadratic form
+        #re-construct "inverted" quadratic form
         inv_projected_hessian = _np.diag(invEvals)
         inv_projected_hessian = _np.dot(U, _np.dot(inv_projected_hessian, Udag))
 

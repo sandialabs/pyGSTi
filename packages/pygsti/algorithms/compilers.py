@@ -1752,7 +1752,7 @@ def compile_cnot_circuit_using_OiCAGE_algorithm(s, pspec, qubitorder, subsetQs=N
 
             # We must set out[i,mostdistantQ_index] = 0. There is no need to do anything here if that alreadys holds.
             if sout[qindex, mostdistantQ_index] == 1:
-               # Find the shortest path out from i to mostdistantQ_index, and do CNOTs to make that all 1s.
+                # Find the shortest path out from i to mostdistantQ_index, and do CNOTs to make that all 1s.
                 for nextqubit, currentqubit in reversed(rQsgraph.shortest_path_edges(mostdistantQ, q)):
                     nextqubitindex = allqubits.index(nextqubit)
                     if sout[qindex, nextqubitindex] == 0:

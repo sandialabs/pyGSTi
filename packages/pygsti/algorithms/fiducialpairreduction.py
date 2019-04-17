@@ -417,9 +417,9 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             if rank < gsGerm.num_params():  # full fiducial set should work!
                 raise ValueError("Incomplete fiducial-pair set!")
 
-              #Below will take a *subset* of the rows in dPall
-              # depending on which (of all possible) fiducial pairs
-              # are being considered.
+            #Below will take a *subset* of the rows in dPall
+            # depending on which (of all possible) fiducial pairs
+            # are being considered.
 
             nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
             nPossiblePairs = len(prepStrs) * len(effectStrs)

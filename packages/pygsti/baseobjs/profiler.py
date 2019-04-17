@@ -349,8 +349,8 @@ class Profiler(object):
         s = "---> Max Memory usage = %.2fGB\n" % (max_memory * BtoGB)
         s += "---> Memory usage (by %s): \n" % sortBy
 
-        if sortBy == "timestamp":  # special case in that we print each event,
-                                  # not just the average usage per checkpoint
+        if sortBy == "timestamp":
+            # special case in that we print each event, not just the average usage per checkpoint
             raise NotImplementedError("TODO")
 
         avg_usages = {k: _np.mean([u for t, u in infos]) for k, infos

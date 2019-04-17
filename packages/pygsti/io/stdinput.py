@@ -341,7 +341,7 @@ class StdInputParser(object):
                             else:  # put brackets around it
                                 commentDict = _ast.literal_eval("{ " + comment + " }")
                             #commentDict = _json.loads("{ " + comment + " }")
-                              #Alt: safer(?) & faster, but need quotes around all keys & vals
+                            #Alt: safer(?) & faster, but need quotes around all keys & vals
                         except:
                             warnings.append("%s Line %d: Could not parse comment '%s'"
                                             % (filename, iLine, comment))

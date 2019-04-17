@@ -26,7 +26,7 @@ def is_sparse_basis(nameOrBasis):
     if isinstance(nameOrBasis, Basis):
         return nameOrBasis.sparse
     else:  # assume everything else is not sparse
-          # (could test for a sparse matrix list in the FUTURE)
+        # (could test for a sparse matrix list in the FUTURE)
         return False
 
 

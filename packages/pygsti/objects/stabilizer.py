@@ -451,8 +451,9 @@ class StabilizerFrame(object):
                     amp_samples[k] = get_target_ampl(target)
             return (anchor, amp_samples)
 
-        else:  # both target and qs_to_sample are None - just get & return as
-              # many amplitudes as we can (for full state readout)
+        else:
+            # both target and qs_to_sample are None - just get & return as
+            # many amplitudes as we can (for full state readout)
 
             num_ampl_added = 1  # just to kick off the loop
             while(num_ampl_added > 0):

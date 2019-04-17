@@ -1491,11 +1491,13 @@ class CPTPSPAMVec(DenseSPAMVec):
         # and so have derivs wrt *all* Pxy elements.
         for ij in range(nP):
             for kl in range(nP):
-                if ij == kl:  # dp_ij / dP_ij = 1.0 / (sum(P_xy**2))^(1/2) - 0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_ij
-                              #               = 1.0 / (sum(P_xy**2))^(1/2) - P_ij^2 / (sum(P_xy**2))^(3/2)
+                if ij == kl:
+                    # dp_ij / dP_ij = 1.0 / (sum(P_xy**2))^(1/2) - 0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_ij
+                    #               = 1.0 / (sum(P_xy**2))^(1/2) - P_ij^2 / (sum(P_xy**2))^(3/2)
                     dpdP[ij, ij] = 1.0 / paramNorm - self.params[ij]**2 / paramNorm**3
-                else:   # dp_ij / dP_kl = -0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_kl
-                        #               = - P_ij * P_kl / (sum(P_xy**2))^(3/2)
+                else:
+                    # dp_ij / dP_kl = -0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_kl
+                    #               = - P_ij * P_kl / (sum(P_xy**2))^(3/2)
                     dpdP[ij, kl] = - self.params[ij] * self.params[kl] / paramNorm**3
 
         #Apply the chain rule to get dVdP:
@@ -1715,8 +1717,8 @@ class TensorProdSPAMVec(SPAMVec):
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
 
         elif self._evotype == "stabilizer":
-            if self.typ == "prep":  # prep-type vectors can be represented as dense effects too; this just
-                                   # means that self.factors
+            if self.typ == "prep":
+                # prep-type vectors can be represented as dense effects too; this just means that self.factors
                 if typ == "prep":
                     # => self.factors should all be StabilizerSPAMVec objs
                     #Return stabilizer-rep tuple, just like StabilizerSPAMVec
@@ -2330,7 +2332,7 @@ class LindbladSPAMVec(SPAMVec):
            and beq(ham_basis, spamvec.error_map.ham_basis) and beq(nonham_basis, spamvec.error_map.other_basis) \
            and param_mode == spamvec.error_map.param_mode and nonham_mode == spamvec.error_map.nonham_mode \
            and beq(mxBasis, spamvec.error_map.matrix_basis) and lazy:
-           #normeq(gate.pure_state_vec,purevec) \ # TODO: more checks for equality?!
+            #normeq(gate.pure_state_vec,purevec) \ # TODO: more checks for equality?!
             return spamvec  # no creation necessary!
         else:
             #Convert vectors (if possible) to SPAMVecs

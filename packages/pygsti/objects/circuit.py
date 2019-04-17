@@ -2032,8 +2032,7 @@ class Circuit(object):
                     if isinstance(lblB, _Label):
                         #see if layerA happens to *not* have anything on lblB.sslbls:
                         if layerA_sslbls is None or \
-                           (lblB.sslbls is not None \
-                            and len(set(lblB.sslbls).intersection(layerA_sslbls)) == 0):
+                           (lblB.sslbls is not None and len(set(lblB.sslbls).intersection(layerA_sslbls)) == 0):
                             applies.append((-1, b, lblB.name, lblB.sslbls))  # shift label over
                             break
 

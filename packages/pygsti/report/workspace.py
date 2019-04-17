@@ -2224,7 +2224,7 @@ class WorkspaceTable(WorkspaceOutput):
         # (if '$' in ret['html']) or else at the *end* of the ready handler (if no math needed rendering).
         init_table_js = ''
         if create_table_plots and resizable:  # make a resizable widget on *entire* plot
-             # (will only act on first call, but wait until first plots are created)
+            # (will only act on first call, but wait until first plots are created)
             init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
         if add_autosize_handler and autosize == "continual":
             init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)

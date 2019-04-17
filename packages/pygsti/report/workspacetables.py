@@ -1330,11 +1330,12 @@ class GateDecompTable(WorkspaceTable):
 
         colHeadings = ('Gate', 'Ham. Evals.', 'Rotn. angle', 'Rotn. axis', 'Log Error') \
             + tuple(["Axis angle w/%s" % str(gl) for gl in opLabels])
-        tooltips = ('Gate', 'Hamiltonian Eigenvalues', 'Rotation angle', 'Rotation axis',
-                    'Taking the log of a gate may be performed approximately.  This is '
-                    'error in that estimate, i.e. norm(G - exp(approxLogG)).') \
-                    + tuple(["Angle between the rotation axis of %s and the gate of the current row"
-                             % str(gl) for gl in opLabels])
+        tooltips = (
+            'Gate', 'Hamiltonian Eigenvalues', 'Rotation angle', 'Rotation axis',
+            'Taking the log of a gate may be performed approximately.  This is '
+            'error in that estimate, i.e. norm(G - exp(approxLogG)).'
+        ) + tuple(["Angle between the rotation axis of %s and the gate of the current row"
+                   % str(gl) for gl in opLabels])
         formatters = [None] * len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters,

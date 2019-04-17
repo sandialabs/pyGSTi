@@ -150,16 +150,20 @@ def write_rb_summary_data_to_file(RBSdataset, filename):
                 for i in range(len(RBSdataset.lengths)):
                     l = RBSdataset.lengths[i]
                     for j in range(len(RBSdataset.success_counts[i])):
-                        f.write('{} {} {} {} {}\n'.format(l, RBSdataset.success_counts[i][j],
-                            RBSdataset.total_counts[i][j], RBSdataset.circuit_depths[i][j],
-                            RBSdataset.circuit_twoQgate_counts[i][j]))
+                        f.write('{} {} {} {} {}\n'.format(l,
+                                                          RBSdataset.success_counts[i][j],
+                                                          RBSdataset.total_counts[i][j],
+                                                          RBSdataset.circuit_depths[i][j],
+                                                          RBSdataset.circuit_twoQgate_counts[i][j]))
             else:
                 f.write('# RB length // Success probability // Circuit depth // Circuit two-qubit gate count\n')
                 for i in range(len(RBSdataset.lengths)):
                     l = RBSdataset.lengths[i]
                     for j in range(len(RBSdataset.success_probabilities[i])):
-                        f.write('{} {} {} {}\n'.format(l, RBSdataset.success_probabilities[i][j],
-                            RBSdataset.circuit_depths[i][j], RBSdataset.circuit_twoQgate_counts[i][j]))
+                        f.write('{} {} {} {}\n'.format(l,
+                                                       RBSdataset.success_probabilities[i][j],
+                                                       RBSdataset.circuit_depths[i][j],
+                                                       RBSdataset.circuit_twoQgate_counts[i][j]))
 
         else:
             if RBSdataset.success_counts is not None:

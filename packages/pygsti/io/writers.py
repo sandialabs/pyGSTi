@@ -130,7 +130,7 @@ def write_dataset(filename, dataset, circuit_list=None,
                 #output '--' for outcome labels that aren't present in this row
                 output.write(circuit.str + "  " \
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
-                                        for ol in outcomeLabels]))
+                                          for ol in outcomeLabels]))
             else:  # use expanded label:count format
                 output.write(circuit.str + "  " \
                              + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
