@@ -185,7 +185,8 @@ def inverse_clifford(s, p):
         The 'phase vector' representing the inverse of the input Clifford.
 
     """
-    assert(check_valid_clifford(s, p)), "The input symplectic matrix - phase vector pair does not define a valid Clifford!"
+    assert(check_valid_clifford(s, p)), \
+        "The input symplectic matrix - phase vector pair does not define a valid Clifford!"
 
     sinverse = inverse_symplectic(s)
 

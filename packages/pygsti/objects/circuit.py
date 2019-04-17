@@ -100,7 +100,8 @@ def _opSeqToStr(seq, line_labels):
 def toLabel(x):
     """ Helper function for converting `x` to a single Label object """
     if isinstance(x, _Label): return x
-    #elif isinstance(x,Circuit): return x.to_circuit_label() # do this manually when desired, as it "boxes" a circuit being inserted
+    # # do this manually when desired, as it "boxes" a circuit being inserted
+    #elif isinstance(x,Circuit): return x.to_circuit_label()
     else: return _Label(x)
 
 
@@ -276,17 +277,19 @@ class Circuit(object):
         self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
 
-        ## Special case: layer_labels can be a single CircuitLabel or Circuit
-        ## (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
-        #isCircuit = isinstance(layer_labels, _Circuit)
-        #isCircuitLabel = isinstance(layer_labels, _CircuitLabel)
-        #if isCircuitLabel:
+        # # Special case: layer_labels can be a single CircuitLabel or Circuit
+        # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
+        # isCircuit = isinstance(layer_labels, _Circuit)
+        # isCircuitLabel = isinstance(layer_labels, _CircuitLabel)
+        # if isCircuitLabel:
         #    assert(line_labels is None or line_labels == "auto" or line_labels == expected_line_labels), \
-        #        "Given `line_labels` (%s) are inconsistent with CircuitLabel's sslbls (%s)" % (str(line_labels),str(layer_labels.sslbls))
+        #        "Given `line_labels` (%s) are inconsistent with CircuitLabel's sslbls (%s)" \
+        #        % (str(line_labels),str(layer_labels.sslbls))
         #    assert(num_lines is None or layer_labels.sslbls == tuple(range(num_lines))), \
-        #        "Given `num_lines` (%d) is inconsistend with CircuitLabel's sslbls (%s)" % (num_lines,str(layer_labels.sslbls))
+        #        "Given `num_lines` (%d) is inconsistend with CircuitLabel's sslbls (%s)" \
+        #        % (num_lines,str(layer_labels.sslbls))
         #    if name is None: name = layer_labels.name # Note: `name` can be used to rename a CircuitLabel
-        #
+
         #    self._line_labels = layer_labels.sslbls
         #    self._reps = layer_labels.reps
         #    self._name = name
@@ -354,7 +357,9 @@ class Circuit(object):
     @str.setter
     def str(self, value):
         """ The Python string representation of this Circuit."""
-        assert(not self._static), "Cannot edit a read-only circuit!  Set editable=True when calling pygsti.obj.Circuit to create editable circuit."
+        assert(not self._static), \
+            ("Cannot edit a read-only circuit!  "
+             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
         cparser = _CircuitParser()
         chk, chk_labels = cparser.parse(value)
 
@@ -782,7 +787,8 @@ class Circuit(object):
                     if len(sslbls.intersection(lines)) > 0:  # then we need to move this label
                         if not sslbls.issubset(lines):
                             raise ValueError("Cannot shift a block that is straddled by %s!" % _Label(lbl))
-                            #FUTURE: recover from this error gracefully so we don't leave the circuit in an intermediate state?
+                            #FUTURE: recover from this error gracefully so we don't leave the circuit in an intermediate
+                            #state?
                         inds_to_delete.append(k)  # remove it from current layer
                         self._labels[i + numToInsert].append(lbl)  # and put it in the destination layer
                 for k in reversed(inds_to_delete):
@@ -1650,8 +1656,8 @@ class Circuit(object):
             Specifies which gates are allowed to be used when generating compilations from `compilation`. Can only be
             not None if `compilation` is a CompilationLibrary. If a `dict`, keys must be gate names (like `"Gcnot"`) and
             values :class:`QubitGraph` objects indicating where that gate (if it's present in the library) may be used.
-            If a `set`, then it specifies a set of qubits and any gate in the current library that is confined within that
-            set is allowed. If None, then all gates within the library are allowed.
+            If a `set`, then it specifies a set of qubits and any gate in the current library that is confined within
+            that set is allowed. If None, then all gates within the library are allowed.
 
         depth_compression : bool, optional
             Whether to perform depth compression after changing the gate library. If oneQgate_relations is None this
@@ -1661,8 +1667,8 @@ class Circuit(object):
             often result in a massive increase in circuit depth.
 
         oneQgate_relations : dict, optional
-            Gate relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to
-            cancel / combine gates. E.g., one key-value pair might be  ('Gh','Gh') : 'I', to signify that two Hadamards c
+            Gate relations for the one-qubit gates in the new gate library, that are used in the depth compression, to
+            cancel / combine gates. E.g., one key-value pair might be ('Gh','Gh') : 'I', to signify that two Hadamards c
             ompose to the idle gate 'Gi'. See the depth_compression() method for more details.
 
 
@@ -1687,7 +1693,8 @@ class Circuit(object):
                     return None
         # Otherwise, we assume it's a dict.
         else:
-            assert(allowed_filter is None), "`allowed_filter` can only been not None if the compilation is a CompilationLibrary!"
+            assert(allowed_filter is None), \
+                "`allowed_filter` can only been not None if the compilation is a CompilationLibrary!"
             # The function we query to find compilations
 
             def get_compilation(gate):
@@ -1711,7 +1718,8 @@ class Circuit(object):
             for icomp in reversed(icomps_to_remove):
                 self._remove_layer_component(ilayer, icomp)
 
-        # If specified, perform the depth compression. It is better to do this *after* the identity name has been changed.
+        # If specified, perform the depth compression.
+        # It is better to do this *after* the identity name has been changed.
         if depth_compression:
             self.compress_depth(oneQgate_relations=oneQgate_relations, verbosity=0)
 
@@ -2169,16 +2177,11 @@ class Circuit(object):
             print("- Implementing circuit depth compression")
             print("  - Circuit depth before compression is {}".format(self.num_layers()))
 
-        #try:
         flag1 = False
         if oneQgate_relations is not None:
             flag1 = self.combine_oneQgates(oneQgate_relations)
         flag2 = self.shift_gates_forward()
         flag3 = self.delete_idle_layers()
-        #except:
-        #    print(self.number_of_lines, len(self.line_labels), self.line_labels, len(self.line_items),len(self.line_items[0]))
-        #    print(self.line_items)
-        #    assert(False)
 
         if verbosity > 0:
             if not (flag1 or flag2 or flag3):
@@ -2570,13 +2573,19 @@ class Circuit(object):
         f.write("\end{document}")
         f.close()
 
-    def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None, readout_conversion=None, block_between_layers=True, block_idles=True):  # TODO
+    def convert_to_quil(self,
+                        gatename_conversion=None,
+                        qubit_conversion=None,
+                        readout_conversion=None,
+                        block_between_layers=True,
+                        block_idles=True):  # TODO
         """
         Converts this circuit to a quil string.
 
         Parameters
         ----------
-        gatename_conversion : dict, optional
+        gatename_conversion : dict,
+        optional
             If not None, a dictionary that converts the gatenames in the circuit to the
             gatenames that will appear in the quil output. If only standard pyGSTi names
             are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not

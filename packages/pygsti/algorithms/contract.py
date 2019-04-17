@@ -14,7 +14,8 @@ from .. import tools as _tools
 from .. import optimize as _opt
 
 
-def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead", verbosity=0):
+def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead",
+             verbosity=0):
     """
     Contract a Model to a specified space.
 
@@ -215,7 +216,8 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
             evals_left = len(sorted_evals_with_inds)
             ideal_shift = shift_left / evals_left
 
-            for (i, sorted_eval) in sorted_evals_with_inds:  # loop over new_evals from smallest to largest (note all > 0)
+            for (i, sorted_eval) in sorted_evals_with_inds:
+                # loop over new_evals from smallest to largest (note all > 0)
                 evals_left -= 1  # number of eigenvalue beyond current eval (in sorted order)
                 if sorted_eval + ideal_shift >= 0:
                     new_evals[i] = sorted_eval + ideal_shift
@@ -224,7 +226,8 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
                     new_evals[i] = 0
                     shift_left += sorted_eval
                     ideal_shift = shift_left / evals_left  # divide remaining shift evenly among remaining eigenvalues
-                else:  # last eigenvalue would be < 0 with ideal shift and can't set == 0 b/c all others must be zero too
+                else:
+                    # last eigenvalue would be < 0 with ideal shift and can't set == 0 b/c all others must be zero too
                     new_evals[i] = 1.0  # so set what was the largest eigenvalue == 1.0
 
             #if abs( sum(new_evals) - 1.0 ) >= 1e-8:              #DEBUG
@@ -261,7 +264,8 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
 
             new_op = _tools.jamiolkowski_iso_inv(new_Jmx, opMxBasis=mdl.basis, choiMxBasis="gm")
 
-            #Old way of enforcing TP -- new way should be better since it's not iterative, but keep this around just in case.
+            # # Old way of enforcing TP -- new way should be better since it's not iterative, but keep this around just
+            # # in case.
             #  new_op = _tools.jamiolkowski_iso_inv(new_Jmx)
             #
             #  if(TPalso):

@@ -111,7 +111,8 @@ class HypothesisTest(object):
         -------
         A HypothesisTest object.
         """
-        assert(0. < significance and significance < 1.), 'The significance level in a hypotheses test must be > 0 and < 1!'
+        assert(0. < significance and significance < 1.), \
+            'The significance level in a hypotheses test must be > 0 and < 1!'
 
         self.hypotheses = hypotheses
         self.significance = significance
@@ -198,7 +199,8 @@ class HypothesisTest(object):
         #for h in self.hypotheses:
         #    if self.nested_hypotheses[h]:
         #        for hh in h:
-        #            assert(hh in list(pvalues.keys())), "Some hypothese do not have a pvalue in this pvalue dictionary!"
+        #           assert(hh in list(pvalues.keys())), \
+        #               "Some hypothese do not have a pvalue in this pvalue dictionary!"
         #            assert(pvalues[hh] >= 0. and pvalues[hh] <= 1.), "Invalid p-value!"
         #    else:
         #        assert(h in list(pvalues.keys())), "Some hypothese do not have a pvalue in this pvalue dictionary!"
@@ -344,7 +346,8 @@ class HypothesisTest(object):
             self.pvalue_pseudothreshold[hypotheses] = significance / num_hypotheses
 
         elif correction == 'Benjamini-Hochberg':
-            #print("Warning: the family-wise error rate is not being controlled! Instead the False discovery rate is being controlled")
+            # print("Warning: the family-wise error rate is not being controlled! "
+            #       "Instead the False discovery rate is being controlled")
             dynamic_hypotheses = list(_copy.copy(hypotheses))
             pvalues = [self.pvalues[h] for h in dynamic_hypotheses]
             pvalues, dynamic_hypotheses = zip(*sorted(zip(pvalues, dynamic_hypotheses)))
@@ -374,7 +377,8 @@ class HypothesisTest(object):
             self.pvalue_pseudothreshold[hypotheses] = significance / num_hypotheses
 
         elif correction == 'none':
-            #print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
+            # print("Warning: the family-wise error rate is not being controlled, "
+            #       "as the correction specified for this nested hypothesis is 'none'!")
             self.pvalue_pseudothreshold[hypotheses] = significance
             for h in hypotheses:
                 self.significance_tested_at[h] = significance

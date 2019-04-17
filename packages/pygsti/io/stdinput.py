@@ -678,7 +678,8 @@ class StdInputParser(object):
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
                     circuitTuple, circuitLbls = self.parse_circuit(circuitStr, lookupDict)
-                    if circuitLbls is None: circuitLbls = "auto"  # maybe allow a default line_labels to be passed in later?
+                    # maybe allow a default line_labels to be passed in later?
+                    if circuitLbls is None: circuitLbls = "auto"
                     circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:

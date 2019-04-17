@@ -906,7 +906,8 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
         wtBasis = _BuiltinBasis('pp', 4**wt, sparse=sparse)
 
         printer.log("Weight %d, max-hops %d: %d possible qubits" % (wt, maxHops, nPossible), 3)
-        #print("DB: possible qubits = ",possible_err_qubit_inds, " (radius of %d around %s)" % (maxHops,str(target_qubit_inds)))
+        # print("DB: possible qubits = ", possible_err_qubit_inds,
+        #       " (radius of %d around %s)" % (maxHops,str(target_qubit_inds)))
 
         for err_qubit_local_inds in _itertools.combinations(list(range(nPossible)), wt):
             # err_qubit_inds are in range [0,nPossible-1] qubit indices

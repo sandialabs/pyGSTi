@@ -32,17 +32,17 @@ TOL = 1e-20
 #
 #   after patching (linear extrapolation below min_p and ignore f == 0 terms ( 0*log(0) == 0 ) ):
 #
-# logl = sum_{i,sl} N_{i,sl} log(p_{i,sl})                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
-#                   N_{i,sl} log(min_p)     + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2 if p_{i,sl} < p_min and N_{i,sl} > 0
-#                   0                                                                             if N_{i,sl} == 0
+# logl = sum_{i,sl} N_{i,sl} log(p_{i,sl})                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0                         # noqa
+#                   N_{i,sl} log(min_p)     + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2 if p_{i,sl} < p_min and N_{i,sl} > 0                          # noqa
+#                   0                                                                             if N_{i,sl} == 0                                              # noqa
 #
-# dlogL = sum_{i,sl} N_{i,sl} / p_{i,sl} * dp                    if p_{i,sl} >= min_p and N_{i,sl} > 0
-#                    (S + 2*S2*(p_{i,sl} - min_p)) * dp          if p_{i,sl} < p_min and N_{i,sl} > 0
-#                    0                                           if N_{i,sl} == 0
+# dlogL = sum_{i,sl} N_{i,sl} / p_{i,sl} * dp                    if p_{i,sl} >= min_p and N_{i,sl} > 0                                                          # noqa
+#                    (S + 2*S2*(p_{i,sl} - min_p)) * dp          if p_{i,sl} < p_min and N_{i,sl} > 0                                                           # noqa
+#                    0                                           if N_{i,sl} == 0                                                                               # noqa
 #
-# hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 +  N_{i,sl} / p_{i,sl} *hp        if p_{i,sl} >= min_p and N_{i,sl} > 0
-#                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                  if p_{i,sl} < p_min and N_{i,sl} > 0
-#                    0                                                                     if N_{i,sl} == 0
+# hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 +  N_{i,sl} / p_{i,sl} *hp        if p_{i,sl} >= min_p and N_{i,sl} > 0                                # noqa
+#                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                  if p_{i,sl} < p_min and N_{i,sl} > 0                                 # noqa
+#                    0                                                                     if N_{i,sl} == 0                                                     # noqa
 #
 #  where S = N_{i,sl} / min_p is the slope of the line tangent to logl at min_p
 #    and S2 = 0.5*( -N_{i,sl} / min_p**2 ) is 1/2 the 2nd derivative of the logl term at min_p
@@ -71,28 +71,29 @@ TOL = 1e-20
 #
 #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubic below radius "a"):
 #
-# logl = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
-#                   N_{i,sl} log(min_p)    - N[i]*min_p    + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2  if p_{i,sl} < p_min and N_{i,sl} > 0
-#                   0                      - N[i]*p_{i,sl}                                                        if N_{i,sl} == 0 and p_{i,sl} >= a
-#                   0                      - N[i]*( -(1/(3a**2))p_{i,sl}**3 + p_{i,sl}**2/a + (1/3)*a )           if N_{i,sl} == 0 and p_{i,sl} < a
+# logl = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0         # noqa
+#                   N_{i,sl} log(min_p)    - N[i]*min_p    + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2  if p_{i,sl} < p_min and N_{i,sl} > 0          # noqa
+#                   0                      - N[i]*p_{i,sl}                                                        if N_{i,sl} == 0 and p_{i,sl} >= a            # noqa
+#                   0                      - N[i]*( -(1/(3a**2))p_{i,sl}**3 + p_{i,sl}**2/a + (1/3)*a )           if N_{i,sl} == 0 and p_{i,sl} < a             # noqa
 #
-# dlogL = sum_{i,sl} [ N_{i,sl} / p_{i,sl} - N[i] ] * dp                   if p_{i,sl} >= min_p and N_{i,sl} > 0
-#                    (S + 2*S2*(p_{i,sl} - min_p)) * dp                    if p_{i,sl} < p_min and N_{i,sl} > 0
-#                    -N[i] * dp                                            if N_{i,sl} == 0 and p_{i,sl} >= a
+# dlogL = sum_{i,sl} [ N_{i,sl} / p_{i,sl} - N[i] ] * dp                   if p_{i,sl} >= min_p and N_{i,sl} > 0                                                # noqa
+#                    (S + 2*S2*(p_{i,sl} - min_p)) * dp                    if p_{i,sl} < p_min and N_{i,sl} > 0                                                 # noqa
+#                    -N[i] * dp                                            if N_{i,sl} == 0 and p_{i,sl} >= a                                                   # noqa
 #                    -N[i] * ( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * dp  if N_{i,sl} == 0 and p_{i,sl} < a
 #
-# hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 + [ N_{i,sl} / p_{i,sl} - N[i] ]*hp      if p_{i,sl} >= min_p and N_{i,sl} > 0
-#                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                         if p_{i,sl} < p_min and N_{i,sl} > 0
-#                    -N[i] * hp                                                                   if N_{i,sl} == 0 and p_{i,sl} >= a
-#                    -N[i]*( (-2/a**2)p_{i,sl} + 2/a ) * dp1 * dp2
-#                        - N[i]*( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * hp                      if N_{i,sl} == 0 and p_{i,sl} < a
+# hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 + [ N_{i,sl} / p_{i,sl} - N[i] ]*hp      if p_{i,sl} >= min_p and N_{i,sl} > 0                         # noqa
+#                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                         if p_{i,sl} < p_min and N_{i,sl} > 0                          # noqa
+#                    -N[i] * hp                                                                   if N_{i,sl} == 0 and p_{i,sl} >= a                            # noqa
+#                    -N[i]*( (-2/a**2)p_{i,sl} + 2/a ) * dp1 * dp2                                                                                              # noqa
+#                        - N[i]*( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * hp                      if N_{i,sl} == 0 and p_{i,sl} < a                             # noqa
 #
 #  where S = N_{i,sl} / min_p - N[i] is the slope of the line tangent to logl at min_p
 #    and S2 = 0.5*( -N_{i,sl} / min_p**2 ) is 1/2 the 2nd derivative of the logl term at min_p so
 #    logL_term = logL_term(min_p) + S * (p-min_p) + S2 * (p-min_p)**2
 #   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
 #
-# For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
+# For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require
+# min at p == 0):
 #  Given a radius r << 1 (but r>0):
 #   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }
 #  OLD: quadratic that doesn't match 2nd-deriv:
@@ -173,18 +174,13 @@ def logl_terms(model, dataset, circuit_list=None,
         #    evaltree_cache['cntVecMx'] = countVecMx
         #    evaltree_cache['totalCntVec'] = totalCntVec
 
-    #OLD
-    #freqs = countVecMx / totalCntVec[None,:]
-    #freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
-    #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
-
     smart(model.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm, _filledarrays=(0,))
     if wildcard:
         probs_in = probs.copy()
         wildcard.update_probs(probs_in, probs, countVecMx / totalCntVec, circuit_list, lookup)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
+    # XXX: aren't the next blocks duplicated elsewhere?
     if poissonPicture:
         S = countVecMx / min_p - totalCntVec  # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
@@ -193,11 +189,16 @@ def logl_terms(model, dataset, circuit_list=None,
         v = _np.minimum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
         v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-        v = _np.where(countVecMx == 0, -totalCntVec * _np.where(probs >= a, probs,
-                                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
-        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
+        v = _np.where(countVecMx == 0,
+                      -totalCntVec * _np.where(probs >= a, probs,
+                                               (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
+                      v)
+        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum:
+        #max(0,(a-p))^2/(2a) + p
 
-    else:  # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+    else:
+        # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
+        # to sum to 1)
         S = countVecMx / min_p               # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
         v = countVecMx * _np.log(pos_probs)  # dim KM (K = nSpamLabels, M = nCircuits)
@@ -425,13 +426,6 @@ def logl_jacobian(model, dataset, circuit_list=None,
         totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
         countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
-    #OLD
-    #freqs = cntVecMx / totalCntVec[None,:]
-    #freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    #freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
-    #freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
-    #minusCntVecMx = -1.0 * cntVecMx
-
     smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
           clipTo=probClipInterval, check=check, comm=comm,
           wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
@@ -446,9 +440,12 @@ def logl_jacobian(model, dataset, circuit_list=None,
         v = _np.minimum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
         v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-        v = _np.where(countVecMx == 0, -totalCntVec * _np.where(probs >= a, probs,
-                                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
-        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
+        v = _np.where(countVecMx == 0,
+                      -totalCntVec * _np.where(probs >= a, probs,
+                                               (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
+                      v)
+        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum:
+        #max(0,(a-p))^2/(2a) + p
 
         dprobs_factor_pos = (countVecMx / pos_probs - totalCntVec)
         dprobs_factor_neg = S + 2 * S2 * (probs - min_p)
@@ -457,7 +454,9 @@ def logl_jacobian(model, dataset, circuit_list=None,
         dprobs_factor = _np.where(countVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
         jac = dprobs * dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
 
-    else:  # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+    else:
+        # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
+        # to sum to 1)
         S = countVecMx / min_p              # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
         v = countVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
@@ -595,15 +594,20 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             S = cntVecMx / min_p - totCnts  # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
-            #hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
-            #hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
-            #hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
-            #hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
+            # # (K,M,1,1) * (K,M,N,N')
+            # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
+            # # (K,M,1,1) * (K,M,N,N')
+            # hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs
+            # # (K,M,1,1) * (K,M,N,N')
+            # hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs
+            # hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
             #                             -totalCntVec[None,:,None,None] * hprobs,
-            #                             (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] * dprobs12
-            #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] * hprobs )
-            #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
-            #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
+            #                             (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] \
+            #                              * dprobs12
+            #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] \
+            #                              * hprobs )
+            # hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
+            # hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
 
             #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
@@ -633,18 +637,23 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
 
     else:
 
-        #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+        #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
+        #to sum to 1)
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
             """ Factored-out computation of hessian from raw components """
             S = cntVecMx / min_p  # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
 
-            #hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
-            #hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
-            #hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
-            #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
-            #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian) # (K,M,N,N')
+            # # (K,M,1,1) * (K,M,N,N')
+            # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
+            # # (K,M,1,1) * (K,M,N,N')
+            # hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs
+            # # (K,M,1,1) * (K,M,N,N')
+            # hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs
+            # hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
+            # # (K,M,N,N')
+            # hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian)
 
             #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
@@ -1280,30 +1289,6 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
     Nsigma = (twoDeltaLogL_terms - k) / _np.sqrt(2 * k)
     pvalue = _np.array([1.0 - _stats.chi2.cdf(x, k) for x in twoDeltaLogL_terms], 'd')
     return twoDeltaLogL_terms, Nsigma, pvalue
-
-
-#                        min_p = advancedOptions.get('minProbClip',1e-4)
-#                        a = advancedOptions.get('radius',1e-4)
-#                        minusCntVecMx = -1.0 * cntVecMx
-#                        freqs = cntVecMx / totalCntVec
-#                        freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-#                        freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 ) # poisson picture
-#                        # freqTerm = cntVecMx * _np.log(freqs_nozeros) # non-poisson pitcure
-#                        freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
-#
-#def two_delta_logl_terms():
-#    #HERE
-#                            pos_probs = _np.where(probs < min_p, min_p, probs)
-#                            S = minusCntVecMx / min_p + totalCntVec
-#                            S2 = -0.5 * minusCntVecMx / (min_p**2)
-#                            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
-#                            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-#                            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-#                            v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-#                                    #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
-#                            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
-#                            assert(v.ndim == 1)#v.shape = [KM] #reshape ensuring no copy is needed
-#                            return 2*v #Note: no test for whether probs is in [0,1] so no guarantee that
 
 
 def forbidden_prob(model, dataset):

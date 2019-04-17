@@ -202,12 +202,12 @@ def chi2(model, dataset, circuits=None,
             return fn(*args, **kwargs)
 
     # Scratch work:
-    # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over circuits & spam labels)
-    # d(chi^2)/dx = sum_i N_i * [ 2(p_i-f_i)*dp_i/dx / p_i - (p_i-f_i)^2 / p_i^2 * dp_i/dx ]
-    #             = sum_i N_i * (p_i-f_i) / p_i * [2 - (p_i-f_i)/p_i   ] * dp_i/dx
-    #             = sum_i N_i * t_i * [2 - t_i ] * dp_i/dx     where t_i = (p_i-f_i) / p_i
-    # d2(chi^2)/dydx = sum_i N_i * [ dt_i/dy * [2 - t_i ] * dp_i/dx - t_i * dt_i/dy * dp_i/dx + t_i * [2 - t_i] * d2p_i/dydx ]
-    #                          where dt_i/dy = [ 1/p_i - (p_i-f_i) / p_i^2 ] * dp_i/dy
+    # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over circuits & spam labels)                                                                                      # noqa
+    # d(chi^2)/dx = sum_i N_i * [ 2(p_i-f_i)*dp_i/dx / p_i - (p_i-f_i)^2 / p_i^2 * dp_i/dx ]                                                                    # noqa
+    #             = sum_i N_i * (p_i-f_i) / p_i * [2 - (p_i-f_i)/p_i   ] * dp_i/dx                                                                              # noqa
+    #             = sum_i N_i * t_i * [2 - t_i ] * dp_i/dx     where t_i = (p_i-f_i) / p_i                                                                      # noqa
+    # d2(chi^2)/dydx = sum_i N_i * [ dt_i/dy * [2 - t_i ] * dp_i/dx - t_i * dt_i/dy * dp_i/dx + t_i * [2 - t_i] * d2p_i/dydx ]                                  # noqa
+    #                          where dt_i/dy = [ 1/p_i - (p_i-f_i) / p_i^2 ] * dp_i/dy                                                                          # noqa
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
 
@@ -299,7 +299,8 @@ def chi2(model, dataset, circuits=None,
         smart(model.bulk_fill_probs, probs, evTree,
               clipTo, check, comm, _filledarrays=(0,))
 
-    #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
+    # # clipped probabilities (also clip derivs to 0?)
+    # cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting)
     cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
     chi2 = _np.sum(N * ((probs - f)**2 / cprobs), axis=0)  # Note 0 is only axis in this case
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
@@ -321,7 +322,8 @@ def chi2(model, dataset, circuits=None,
             d2chi2 = N[:, None, None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
 
         d2chi2 = _np.sum(d2chi2, axis=0)  # sum over operation sequences and spam labels => (N1,N2)
-        # (KM,1,1) * ( (KM,N1,1) * (KM,1,1) * (KM,1,N2) + (KM,1,1) * (KM,N1,1) * (KM,1,N2) + (KM,1,1) * (KM,1,1) * (KM,N1,N2) )
+        # (KM,1,1) * ( (KM,N1,1) * (KM,1,1) * (KM,1,N2) + (KM,1,1) * (KM,N1,1) * \
+        #  (KM,1,N2) + (KM,1,1) * (KM,1,1) * (KM,N1,N2) )
 
     if returnGradient:
         return (chi2, dchi2, d2chi2) if returnHessian else (chi2, dchi2)

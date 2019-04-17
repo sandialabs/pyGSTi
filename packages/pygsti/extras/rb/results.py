@@ -240,14 +240,16 @@ class RBSummaryDataset(object):
 
             if self.total_counts is not None:
                 BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, success_counts=sampled_scounts,
-                                                    total_counts=self.total_counts, sortedinput=True, finitesampling=self.finitesampling,
+                                                    total_counts=self.total_counts, sortedinput=True,
+                                                    finitesampling=self.finitesampling,
                                                     descriptor='data created from a non-parametric bootstrap')
 
             else:
                 BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, success_counts=None,
-                                                    total_counts=None, successprobabilites=sampled_SPs, sortedinput=True,
-                                                    finitesampling=self.finitesampling,
-                                                    descriptor='data created from a non-parametric bootstrap without per-circuit finite-sampling error')
+                                                    total_counts=None, successprobabilites=sampled_SPs,
+                                                    sortedinput=True, finitesampling=self.finitesampling,
+                                                    descriptor=('data created from a non-parametric bootstrap '
+                                                                'without per-circuit finite-sampling error'))
 
             self.bootstraps.append(BStrappeddataset)
 
@@ -412,7 +414,8 @@ class RBResults(object):
             allfitkeys = list(self.fits.keys())
             if 'full' in allfitkeys: fitkey = 'full'
             else:
-                assert(len(allfitkeys) == 1), "There are multiple fits and none have the key 'full'. Please specify the fit to plot!"
+                assert(len(allfitkeys) == 1), \
+                    "There are multiple fits and none have the key 'full'. Please specify the fit to plot!"
                 fitkey = allfitkeys[0]
 
         _plt.figure(figsize=size)
@@ -423,12 +426,13 @@ class RBResults(object):
             A = self.fits[fitkey].estimates['A']
             B = self.fits[fitkey].estimates['B']
             p = self.fits[fitkey].estimates['p']
-            _plt.plot(lengths, A + B * p**lengths, label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
-                                                                                           self.fits[fitkey].stds['r']))
+            _plt.plot(lengths, A + B * p**lengths,
+                      label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
+                                                              self.fits[fitkey].stds['r']))
 
         if success_probabilities:
-            _plt.violinplot(list(self.data.success_probabilities), self.data.lengths, points=10, widths=1., showmeans=False,
-                            showextrema=False, showmedians=False)  # , label='Success probabilities')
+            _plt.violinplot(list(self.data.success_probabilities), self.data.lengths, points=10, widths=1.,
+                            showmeans=False, showextrema=False, showmedians=False) # , label='Success probabilities')
 
         if title is not None: _plt.title(title)
         _plt.ylabel("Success probability")

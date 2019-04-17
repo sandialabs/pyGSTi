@@ -119,7 +119,8 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
         of fiducial pairs (indices are into `prepStrs` and `effectStrs`).
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing like)
+    #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing
+    #like)
 
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
     if prepovmTuples == "first":
@@ -159,7 +160,8 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
             #Add this germ's element indices for each fiducial pair (final operation sequence of evTree)
             nPrepPOVM = len(prepovmTuples)
             for k in range(len(prepStrs) * len(effectStrs)):
-                for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):  # "original" indices into lst for k-th fiducial pair
+                for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
+                    # "original" indices into lst for k-th fiducial pair
                     elArray = _slct.as_array(lookup[o]) + st
                     elIndicesForPair[k].extend(list(elArray))
             st += evTree.num_final_elements()  # b/c we'll concatenate tree's elements later
@@ -199,7 +201,8 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
     fullTestMx0 = dP0
     fullTestMx1 = dP1
 
-    #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial pairs
+    #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial
+    #pairs
     if testPairList is None:
         maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity + 1)
         printer.log("maximum number of amplified parameters = %s" % maxAmplified)
@@ -264,7 +267,8 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
 
     printer.log(" --> Highest number of amplified parameters was %d" % bestAmplified)
 
-    #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs, which by definition will hit the "max-amplified" target
+    #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs, which by definition will hit
+    #the "max-amplified" target
     listOfAllPairs = [(iRhoStr, iEStr)
                       for iRhoStr in range(nRhoStrs)
                       for iEStr in range(nEStrs)]
@@ -394,7 +398,8 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             elIndicesForPair = [[] for i in range(len(prepStrs) * len(effectStrs))]
             nPrepPOVM = len(prepovmTuples)
             for k in range(len(prepStrs) * len(effectStrs)):
-                for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):  # "original" indices into lst for k-th fiducial pair
+                for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
+                    # "original" indices into lst for k-th fiducial pair
                     elIndicesForPair[k].extend(list(_slct.indices(lookup[o])))
 
             dPall = _np.empty((evTree.num_final_elements(), gsGerm.num_params()), 'd')
@@ -598,35 +603,3 @@ def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
     printer.log("Number of amplified parameters = %s" % nAmplified)
 
     return nAmplified
-
-
-#def _old_TestPair(targetModel, fiducialList, germList, L, testPairList, spamLabels="all"):
-#
-#    if spamLabels == "all":
-#        spamLabels = targetModel.get_spam_labels()
-#
-#    dprobs = []
-#    for iGerm,germ in enumerate(germList):
-#        expGerm = _gsc.repeat_with_max_length(germ,L)
-#        lst = _gsc.create_circuit_list("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
-#                                        expGerm=expGerm, order=('f0','f1'))
-#        evTree = targetModel.bulk_evaltree(lst)
-#        dprobs.append( targetModel.bulk_dprobs(evTree) )
-#
-#    nModelParams = targetModel.num_params()
-#    testMatrix = _np.empty( (0,nModelParams) )
-#    for (i0,i1) in testPairList: #[(0,0),(1,0),(2,3),(4,5)]:
-#        iCmp = i0*len(fiducialList) + i1 #composite index of (f0,f1) in dprobs[iGerm][spamLabel]
-#
-#        for iGerm,germ in enumerate(germList):
-#            for spamLabel in spamLabels:
-#                testMatrix = _np.concatenate( (testMatrix, dprobs[iGerm][spamLabel][iCmp:iCmp+1,:] ), axis=0 )
-#
-#        U,s,V = _np.linalg.svd(testMatrix)
-#        rank = len( [v for v in s if v > 0.001] )
-#        sorteds = sorted(s,reverse=True)
-#        #print "DEBUG: added (%d,%d): testMx=%s, rank=%d, iCmp=%d, s =\n%s\n" % (i0,i1,testMatrix.shape,rank,iCmp,'\n'.join(map(str,enumerate(sorted(s,reverse=True)))))
-#
-#    print "Singular values:\n", '\n'.join(map(str,enumerate(sorteds)))
-#    #print "normalized 34th singular val = ",sorteds[33]/len(pairList)
-#    #print "normalized 35th singular val = ",sorteds[34]/len(pairList)

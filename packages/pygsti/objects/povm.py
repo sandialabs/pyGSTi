@@ -43,12 +43,15 @@ from ..tools import optools as _gt
 #       a LinearOperator may do nothing, but a POVM might then allocate its member effects.
 #       E.G:  POVM created = creates objects all with None gpindices
 #             POVM assigned to a Model => Model allocates POVM & calls POVM.allocated_callback()
-#             POVM.allocated_callback() allocates (on behalf of Model b/c POVM owns those indices?) its member effects - maybe needs to
-#               add them to Model.effects so they're accounted for later & calls SPAMVec.allocated_callback()
+#             POVM.allocated_callback() allocates (on behalf of Model b/c POVM owns those indices?) its member effects -
+#               maybe needs to add them to Model.effects so they're accounted for later & calls
+#               SPAMVec.allocated_callback()
 #             SPAMVec.allocated_callback() does nothing.
-#    - it seems good for Model to keep track directly of allocated preps, gates, & effects OR else
-#      it will need to alert objects when they're allocated indices shift so they can shift their member's indices... (POVM.shifted_callback())
-#    - at this point, could just add set_gpindices and shift_gpindices members to ModelMember, though not all indices necessarily shift by same amt...
+#    - it seems good for Model to keep track directly of allocated preps, gates, & effects OR else it will need to alert
+#      objects when they're allocated indices shift so they can shift their member's
+#      indices... (POVM.shifted_callback())
+#    - at this point, could just add set_gpindices and shift_gpindices members to ModelMember, though not all indices
+#      necessarily shift by same amt...
 # - grouping a set of effect vectors together for iterating
 #    over (just holding the names seems sufficient)
 
@@ -527,7 +530,6 @@ class _BasePOVM(POVM):
 
         if self.complement_label:
             # depolarization of other effects "depolarizes" the complement
-            #self[self.complement_label].depolarize(amount) # I don't think this is desired - still want probs to sum to 1!
             self[self.complement_label]._construct_vector()
         self.dirty = True
 
@@ -635,13 +637,6 @@ class TensorProdPOVM(POVM):
             assert(all([len(elbl) == l for elbl in fkeys])), \
                 "All the effect labels for a given factor POVM must be the *same* length!"
             self._factor_lbllens.append(l)
-
-        #OLD: self._keys = _collections.OrderedDict( [("".join(el),False) for el in _itertools.product(*effectLabelKeys) ] )
-
-        #OLDER: create all vectors upon init (gets slow if there are lots of qubits)
-        #for el in _itertools.product(*effectLabelKeys):
-        #    effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
-        #    items.append( ("".join(el), effect) )
 
         super(TensorProdPOVM, self).__init__(dim, evotype, items)
 

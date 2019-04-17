@@ -13,52 +13,52 @@ from . import basistools as _bt
 from . import matrixtools as _mt
 
 
-# Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)
-#            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP
-# Choi Mx J:     rho  --> sum_ij Jij Bi rho Bj^dag  where Bi is some basis of mxs for rho-space; independent of basis for rho and Bi
-#           vec(rhoS) --> sum_ij Jij (BSi x BSj^*) vec(rhoS)  where rhoS and BSi's are in std basis
-#  Now,
-#       Jkl = Trace( sum_ij Jij (BSi x BSj^*) , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )
-#           = Trace( GStd , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )
+# Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
+#            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP                                                # noqa
+# Choi Mx J:     rho  --> sum_ij Jij Bi rho Bj^dag  where Bi is some basis of mxs for rho-space; independent of basis for rho and Bi                            # noqa
+#           vec(rhoS) --> sum_ij Jij (BSi x BSj^*) vec(rhoS)  where rhoS and BSi's are in std basis                                                             # noqa
+#  Now,                                                                                                                                                         # noqa
+#       Jkl = Trace( sum_ij Jij (BSi x BSj^*) , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )                                                 # noqa
+#           = Trace( GStd , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )                                                                     # noqa
 #  In below function, take Bi's to be Pauli matrices
 #  Note: vec(.) vectorization above is assumed to be done by-*rows* (as numpy.flatten does).
 
-#Note that in just the std basis, the construction of the Jamiolkowski representation of a process phi is
-#  J(Phi) = sum_(0<i,j<n) Phi(|i><j|) x |i><j|    where {|i>}_1^n spans the state space
+# Note that in just the std basis, the construction of the Jamiolkowski representation of a process phi is                                                      # noqa
+#  J(Phi) = sum_(0<i,j<n) Phi(|i><j|) x |i><j|    where {|i>}_1^n spans the state space                                                                         # noqa
 #
-#  Derivation: if we write:
-#    Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|
-#  and
-#    rho = sum_ij rho_ij |i><j|
-#  then
-#    Phi(rho) = sum_(ij)(kl) C[(kl)(ij)] rho_ij |k><l|
-#             = sum_(ij)(kl) C[(kl)(ij)] |k> rho_ij <l|
-#             = sum_(ij)(kl) C[(kl)(ij)] |k> <i| rho |j> <l|
-#             = sum_(ij)(kl) C[(ik)(jl)] |i> <j| rho |l> <k|  (just permute index labels)
-#  The definition of the Jamiolkoski matrix J is:
-#    Phi(rho) = sum_(ij)(kl) J(ij)(kl) |i><j| rho |l><k|
-#  so
-#    J(ij)(kl) == C[(ik)(jl)]
+#  Derivation: if we write:                                                                                                                                     # noqa
+#    Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|                                                                                                                    # noqa
+#  and                                                                                                                                                          # noqa
+#    rho = sum_ij rho_ij |i><j|                                                                                                                                 # noqa
+#  then                                                                                                                                                         # noqa
+#    Phi(rho) = sum_(ij)(kl) C[(kl)(ij)] rho_ij |k><l|                                                                                                          # noqa
+#             = sum_(ij)(kl) C[(kl)(ij)] |k> rho_ij <l|                                                                                                         # noqa
+#             = sum_(ij)(kl) C[(kl)(ij)] |k> <i| rho |j> <l|                                                                                                    # noqa
+#             = sum_(ij)(kl) C[(ik)(jl)] |i> <j| rho |l> <k|  (just permute index labels)                                                                       # noqa
+#  The definition of the Jamiolkoski matrix J is:                                                                                                               # noqa
+#    Phi(rho) = sum_(ij)(kl) J(ij)(kl) |i><j| rho |l><k|                                                                                                        # noqa
+#  so                                                                                                                                                           # noqa
+#    J(ij)(kl) == C[(ik)(jl)]                                                                                                                                   # noqa
 #
-#  Note: |i><j| x |k><l| is an object in "gate/process" space, since
-#    it maps a vectorized density matrix, e.g. |a><b| to another density matrix via:
-#    (|i><j| x |k><l|) vec(|a><b|) = [mx with 1 in (i*dmDim + k) row and (j*dmDim + l) col][vec with 1 in a*dmDim+b row]
-#                                  = vec(|i><k|) if |a><b| == |j><l| else 0
-#    so (|i><j| x |k><l|) vec(|j><l|) = vec(|i><k|)
-#    and could write as: (|ik><jl|) |jl> = |ik>
+#  Note: |i><j| x |k><l| is an object in "gate/process" space, since                                                                                            # noqa
+#    it maps a vectorized density matrix, e.g. |a><b| to another density matrix via:                                                                            # noqa
+#    (|i><j| x |k><l|) vec(|a><b|) = [mx with 1 in (i*dmDim + k) row and (j*dmDim + l) col][vec with 1 in a*dmDim+b row]                                        # noqa
+#                                  = vec(|i><k|) if |a><b| == |j><l| else 0                                                                                     # noqa
+#    so (|i><j| x |k><l|) vec(|j><l|) = vec(|i><k|)                                                                                                             # noqa
+#    and could write as: (|ik><jl|) |jl> = |ik>                                                                                                                 # noqa
 #
-# Now write J as:
-#    J  = sum_ijkl |ij> J(ij)(kl) <kl|
-#       = sum_ijkl J(ij)(kl) |ij> <kl|
-#       = sum_ijkl J(ij)(kl) (|i><k| x |j><l|)
-#       = sum_ijkl C(ik)(jl) (|i><k| x |j><l|)
-#       = sum_jl [ sum_ik C(ik)(jl) |i><k| ] x |j><l| (using Note above)
-#       = sum_jl Phi(|j><l|) x |j><l|   (using definition Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|)
-#  which is the original J(Phi) expression.
+# Now write J as:                                                                                                                                               # noqa
+#    J  = sum_ijkl |ij> J(ij)(kl) <kl|                                                                                                                          # noqa
+#       = sum_ijkl J(ij)(kl) |ij> <kl|                                                                                                                          # noqa
+#       = sum_ijkl J(ij)(kl) (|i><k| x |j><l|)                                                                                                                  # noqa
+#       = sum_ijkl C(ik)(jl) (|i><k| x |j><l|)                                                                                                                  # noqa
+#       = sum_jl [ sum_ik C(ik)(jl) |i><k| ] x |j><l| (using Note above)                                                                                        # noqa
+#       = sum_jl Phi(|j><l|) x |j><l|   (using definition Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|)                                                              # noqa
+#  which is the original J(Phi) expression.                                                                                                                     # noqa
 #
-# This can be written equivalently as:
-#  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij
-#  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|
+# This can be written equivalently as:                                                                                                                          # noqa
+#  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij                                                                                                                   # noqa
+#  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|                                                              # noqa
 
 def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
     """
@@ -109,12 +109,6 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
     BVec = choiMxBasis.simple_equivalent().elements
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
-
-    #TODO REMOVE - now we just use simple_equivalent above
-    #if M < N: # then try to make a complete basis based on the *name* of the desired basis
-    #    BVec = choiMxBasis.simple_equivalent().elements
-    #    M = len(BVec)
-    #    assert(M == N), 'Expected {}, got {}'.format(M, N)  #make sure the number of basis matrices matches the dim of the gate given
 
     choiMx = _np.empty((N, N), 'complex')
     for i in range(M):

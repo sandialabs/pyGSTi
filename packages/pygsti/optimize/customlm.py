@@ -320,7 +320,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         if comm is not None:
             # ensure all procs agree on what x is (in case the interrupt occurred around x being updated)
             comm.Bcast(x, root=0)
-            printer.log("Rank %d caught keyboard interrupt!  Returning the current solution as being *converged*." % comm.Get_rank())
+            printer.log("Rank %d caught keyboard interrupt!  Returning the current solution as being *converged*."
+                        % comm.Get_rank())
         else:
             printer.log("Caught keyboard interrupt!  Returning the current solution as being *converged*.")
         msg = "Keyboard interrupt!"

@@ -1705,15 +1705,17 @@ class EigenvalueParamDenseOp(DenseOperator):
                         vecs[:, ik] = self.B[:, k]
                     V = _np.concatenate((vecs.real, vecs.imag), axis=1)
                     nullsp = _mt.nullspace(V)
-                    #if nullsp.shape[1] < nToReal: # DEBUG
-                    #    raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
+                    # if nullsp.shape[1] < nToReal: # DEBUG
+                    #    raise ValueError("Nullspace only has dimension %d when %d was expected! "
+                    #                     "(i=%d, j=%d, blkSize=%d)\nevals = %s" \
                     #                     % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
                     assert(nullsp.shape[1] >= nToReal), "Cannot find enough real linear combos!"
                     nullsp = nullsp[:, 0:nToReal]  # truncate #cols if there are more than we need
 
                     Cmx = nullsp[nToReal:, :] + 1j * nullsp[0:nToReal, :]  # Cr + i*Ci
                     new_vecs = _np.dot(vecs, Cmx)
-                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
+                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), \
+                        "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
                     for ik, k in enumerate(evecIndsToMakeReal):
                         self.B[:, k] = new_vecs[:, ik]
                     self.Bi = _np.linalg.inv(self.B)
@@ -1731,11 +1733,12 @@ class EigenvalueParamDenseOp(DenseOperator):
                     conj = _np.conj(self.evals[k])  # == conj(ev), indep of k
                     conjB = _np.conj(self.B[:, k])
                     for l in range(j, N):
+                        # numpy normalizes but doesn't fix "phase" of evecs
                         if _np.isclose(conj, self.evals[l]) and \
                                 (_np.allclose(conjB, self.B[:, l]) or
                                  _np.allclose(conjB, 1j * self.B[:, l]) or
                                  _np.allclose(conjB, -1j * self.B[:, l]) or
-                                 _np.allclose(conjB, -1 * self.B[:, l])):  # numpy normalizes but doesn't fix "phase" of evecs
+                                 _np.allclose(conjB, -1 * self.B[:, l])):
                             self.params.append([  # real-part param
                                 (1.0, (k, k)),  # (prefactor, index)
                                 (1.0, (l, l))])
@@ -2519,89 +2522,6 @@ class LindbladOp(LinearOperator):
         else:
             return self.terms[order]
 
-    #def get_direct_order_terms(self, order, order_base=None):
-    #    """
-    #    TODO: docstring
-    #
-    #    Parameters
-    #    ----------
-    #    order : int
-    #        The order of terms to get.
-    #
-    #    order_base : float
-    #        What constitutes 1 order of magnitude.  If None, then
-    #        polynomial coefficients are used.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #        A list of :class:`RankOneTerm` objects.
-    #    """
-    #
-    #    #Approach 1: always create terms
-    #    if False: # order not in self.terms: # always do this now, since we always need to re-create "direct" terms
-    #        if self._evotype == "svterm": tt = "dense"
-    #        elif self._evotype == "cterm": tt = "clifford"
-    #        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-    #
-    #        assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
-    #        assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
-    #          # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-    #
-    #        postTerm = _term.RankOneTerm(1.0, self.unitary_postfactor,
-    #                                     self.unitary_postfactor, tt)
-    #        #Note: for now, *all* of an error generator's terms are considered 0-th order,
-    #        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
-    #        # we might want to allow a distinction among the error generator terms, in which
-    #        # case this term-exponentiation step will need to become more complicated...
-    #        loc_terms = _term.exp_terms(self.errorgen.get_direct_order_terms(0), [order], postTerm, order_base)[order]
-    #        #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
-    #        #self.terms[order] = _compose_poly_indices(loc_terms)
-    #        return loc_terms
-    #
-    #    #Approach 2: get poly terms and evaluate them
-    #    if True:
-    #
-    #        if order not in self.direct_terms:
-    #            if self._evotype == "svterm": tt = "dense"
-    #            elif self._evotype == "cterm": tt = "clifford"
-    #            else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
-    #
-    #            assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
-    #            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
-    #              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-    #            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
-    #                                         self.unitary_postfactor, tt)
-    #            #Note: for now, *all* of an error generator's terms are considered 0-th order,
-    #            # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
-    #            # we might want to allow a distinction among the error generator terms, in which
-    #            # case this term-exponentiation step will need to become more complicated...
-    #            loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
-    #            poly_coeffs = [ t.coeff for t in loc_terms ]
-    #            tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
-    #            vtape = _np.concatenate( [ t[0] for t in tapes ] )
-    #            ctape = _np.concatenate( [ t[1] for t in tapes ] )
-    #            coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
-    #            self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
-    #            self.direct_terms[order] = loc_terms # have poly coeffs but not for long (below code overwrites)
-    #
-    #        v = self.to_vector()
-    #        cpolys = self.direct_term_poly_coeffs[order]
-    #        terms = self.direct_terms[order]
-    #        coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
-    #        for coeff,t in zip(coeffs,terms):
-    #            t.coeff = coeff
-    #        return terms
-
-    #def get_direct_order_coeffs(self, order, order_base=None):
-    #    """
-    #    TODO: docstring
-    #    """
-    #    v = self.to_vector()
-    #    cpolys = self.direct_term_poly_coeffs[order]
-    #    terms = self.direct_terms[order]
-    #    return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
-
     def get_total_term_magnitude(self):
         """
         TODO: docstring
@@ -2885,21 +2805,24 @@ class LindbladDenseOp(LindbladOp, DenseOperator):
         self.base_hessian = None
 
         ##TEST FOR CP: DEBUG!!!
-        #from ..tools import jamiolkowski as _jt
-        #evals = _np.linalg.eigvals(_jt.jamiolkowski_iso(matrix,"pp"))
-        #if min(evals) < -1e-6:
+        # from ..tools import jamiolkowski as _jt
+        # evals = _np.linalg.eigvals(_jt.jamiolkowski_iso(matrix,"pp"))
+        # if min(evals) < -1e-6:
         #    print("Choi eigenvalues of final mx = ",sorted(evals))
-        #    print("Choi eigenvalues of final mx (pp Choi) = ",sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(matrix,"pp","pp"))))
+        #    print("Choi eigenvalues of final mx (pp Choi) = ",
+        #          sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(matrix,"pp","pp"))))
         #    print("Choi evals of exp(gen) = ", sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(self.exp_err_gen,"pp"))))
-        #
+
         #    ham_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
         #    other_error_gen = _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
         #    ham_error_gen = _np.dot(self.leftTrans, _np.dot(ham_error_gen, self.rightTrans))
         #    other_error_gen = _np.dot(self.leftTrans, _np.dot(other_error_gen, self.rightTrans))
         #    ham_exp_err_gen = _spl.expm(ham_error_gen)
         #    other_exp_err_gen = _spl.expm(other_error_gen)
-        #    print("Choi evals of exp(hamgen) = ", sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(ham_exp_err_gen,"pp"))))
-        #    print("Choi evals of exp(othergen) = ", sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(other_exp_err_gen,"pp"))))
+        #    print("Choi evals of exp(hamgen) = ",
+        #          sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(ham_exp_err_gen,"pp"))))
+        #    print("Choi evals of exp(othergen) = ",
+        #          sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(other_exp_err_gen,"pp"))))
         #    print("Evals of otherCoeffs = ",sorted(_np.linalg.eigvals(otherCoeffs)))
         #    assert(False)
 
@@ -3498,7 +3421,7 @@ class ComposedOp(LinearOperator):
         OpRep
         """
         factor_op_reps = [gate.torep() for gate in self.factorops]
-        #FUTURE? factor_op_reps = [ repmemo.get(id(gate), gate.torep(debug_time_dict)) for gate in self.factorops ] #something like this?
+        #FUTURE? factor_op_reps = [ repmemo.get(id(gate), gate.torep(debug_time_dict)) for gate in self.factorops ] #something like this? # noqa
 
         if self._evotype == "densitymx":
             return replib.DMOpRep_Composed(factor_op_reps, self.dim)
@@ -3951,11 +3874,12 @@ class EmbeddedOp(LinearOperator):
             # index of tensor product block (of state space) a bit label is part of
             if len(set(iTensorProdBlks)) != 1:
                 raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" +
-                                 " same tensor-product-block of the state space -- checked previously")  # pragma: no cover
+                                 " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
 
             iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above)
             tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
-            basisInds = []  # list of possible *density-matrix-space* indices of each component of the tensor product block
+            # list of possible *density-matrix-space* indices of each component of the tensor product block
+            basisInds = []
             for l in tensorProdBlkLabels:
                 basisInds.append(list(range(self.state_space_labels.labeldims[l])))
                 # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
@@ -3979,7 +3903,8 @@ class EmbeddedOp(LinearOperator):
             self.multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
                 reversed(list(map(len, basisInds[1:])))))), _np.int64)
 
-            # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
+            # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts
+            # as identity w.r.t.
             labelIndices = [tensorProdBlkLabels.index(label) for label in labels]
             self.actionInds = _np.array(labelIndices, _np.int64)
             assert(_np.product([self.numBasisEls[i] for i in self.actionInds]) == self.embedded_op.dim), \
@@ -4949,7 +4874,8 @@ class ComposedErrorgen(LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
+        assert(order == 0), \
+            "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys == False)
         return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
 
@@ -5303,7 +5229,8 @@ class LindbladErrorgen(LinearOperator):
         if sparse is None: sparse = False  # the default
 
         #Create or convert bases to appropriate sparsity
-        if not isinstance(ham_basis, _Basis):  # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=d2
+        if not isinstance(ham_basis, _Basis):
+            # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=d2
             ham_basis = _Basis.cast(ham_basis, d2, sparse=sparse)
         if not isinstance(nonham_basis, _Basis):
             nonham_basis = _Basis.cast(nonham_basis, d2, sparse=sparse)
@@ -5619,7 +5546,8 @@ class LindbladErrorgen(LinearOperator):
                     # power to raise parameter to in order to get coeff
                     pw = 2 if self.param_mode in ("cptp", "depol") else 1
 
-                    Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
+                    Lm_dag = Lm.conjugate().T
+                    # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
                     Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}), Ln, Lm_dag, tt))
                     Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), IDENT, _np.dot(Ln_dag, Lm), tt))
@@ -5855,7 +5783,8 @@ class LindbladErrorgen(LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
+        assert(order == 0), \
+            "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys == False)
         return self.Lterms  # terms with local-index polynomial coefficients
 

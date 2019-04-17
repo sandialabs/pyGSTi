@@ -660,7 +660,6 @@ class ExplicitOpModel_Calc(object):
 
             # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions *orthogonal* to the gauge directions
             # columns are the non-gauge directions *orthogonal* to the gauge directions
             nonGaugeDirections = _mt.nullspace_qr(gen_dG.T)
 
@@ -701,7 +700,8 @@ class ExplicitOpModel_Calc(object):
         else:
             #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
             gen_ndG = _mt.nullspace_qr(gen_dG.T)  # cols are non-gauge directions
-            #print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
+            # print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" \
+            #       % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
         #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below

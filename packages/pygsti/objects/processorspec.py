@@ -74,15 +74,15 @@ class ProcessorSpec(object):
             All gate names must start with 'G'.
 
         availability : dict, optional
-            A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries`
-            and the strings (which are gate names) in `gate_names` and whose values are lists of qubit-label-tuples.
-            Each qubit-label-tuple must have length equal to the number of qubits the corresponding gate acts upon,
-            and causes that gate to be available to act on the specified qubits. Instead of a list of tuples, values
-            of `availability` may take the special values `"all-permutations"` and `"all-combinations"`, which as their names
-            imply, equate to all possible permutations and combinations of the appropriate number of qubit labels (deterined
-            by the gate's dimension). If a gate name is not present in `availability`, the default is `"all-permutations"`.
-            So, the availability of a gate only needs to be specified when it cannot act in every valid way on the qubits
-            (e.g., the device does not have all-to-all connectivity).
+            A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` and the
+            strings (which are gate names) in `gate_names` and whose values are lists of qubit-label-tuples.  Each
+            qubit-label-tuple must have length equal to the number of qubits the corresponding gate acts upon, and
+            causes that gate to be available to act on the specified qubits. Instead of a list of tuples, values of
+            `availability` may take the special values `"all-permutations"` and `"all-combinations"`, which as their
+            names imply, equate to all possible permutations and combinations of the appropriate number of qubit labels
+            (deterined by the gate's dimension). If a gate name is not present in `availability`, the default is
+            `"all-permutations"`.  So, the availability of a gate only needs to be specified when it cannot act in every
+            valid way on the qubits (e.g., the device does not have all-to-all connectivity).
 
         construct_models : tuple, optional
             Standard model for the gates to add.
@@ -93,8 +93,8 @@ class ProcessorSpec(object):
         construct_clifford_compilations : dict, optional
             The compilations for "standard" Clifford gates that are constructed. These are mostly only of importance for
             compiling many-qubit Clifford gates, and similar tasks related to creating randomized benchmarking circuits.
-            The standard option is exhaustive (i.e., there are no further allowed options), and leaving this as-is should
-            be fine for most purposes.
+            The standard option is exhaustive (i.e., there are no further allowed options), and leaving this as-is
+            should be fine for most purposes.
 
         verbosity : int, optional
             If > 0, information about the generation of the ProcessorSpec is printed to the screen.
@@ -152,8 +152,8 @@ class ProcessorSpec(object):
 
         # If we construct a Clifford model, we do add various things that are Clifford-specific.
         if 'clifford' in construct_models:
-            # Add compilations for the "basic" Clifford gates specified, which are used for, e.g., Clifford compiler algorithms.
-            # We only do this if there is a 'clifford' model, as these are Clifford compilations.
+            # Add compilations for the "basic" Clifford gates specified, which are used for, e.g., Clifford compiler
+            # algorithms.  We only do this if there is a 'clifford' model, as these are Clifford compilations.
             for ctype in list(construct_clifford_compilations.keys()):
 
                 # We construct the requested Pauli-equivalent compilations.
@@ -167,11 +167,13 @@ class ProcessorSpec(object):
                         if subctype == '1Qcliffords':
                             oneQgates += ['H', 'P', 'PH', 'HP', 'HPH']
                         elif subctype == 'localcnots':
-                            # So that the default still makes sense with 1 qubit, we ignore the request to compile CNOTs in that case
+                            # So that the default still makes sense with 1 qubit, we ignore the request to compile CNOTs
+                            # in that case
                             if self.number_of_qubits > 1:
                                 twoQgates += ['CNOT', ]
                         elif subctype == 'allcnots':
-                            # So that the default still makes sense with 1 qubit, we ignore the request to compile CNOTs in that case
+                            # So that the default still makes sense with 1 qubit, we ignore the request to compile CNOTs
+                            # in that case
                             if self.number_of_qubits > 1:
                                 twoQgates += ['CNOT', ]
                                 add_nonlocal_twoQgates = True
@@ -200,8 +202,8 @@ class ProcessorSpec(object):
                     raise ValueError(
                         "The keys to `construct_clifford_compilations` can only be `paulieq` and `absolute!")
 
-            # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not Clifford gates
-            # then these are not counted as "connections".
+            # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not
+            # Clifford gates then these are not counted as "connections".
             connectivity = _np.zeros((self.number_of_qubits, self.number_of_qubits), dtype=bool)
             for oplabel in self.models['clifford'].get_primitive_op_labels():
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
@@ -241,11 +243,16 @@ class ProcessorSpec(object):
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto', 'map')), "Clifford model must use 'map' simulation type"
-            model = _LocalNoiseModel.build_standard(self.number_of_qubits, self.root_gate_names,
-                                                    self.nonstd_gate_unitaries, self.availability,
-                                                    self.qubit_labels, parameterization='clifford',
-                                                    sim_type=sim_type, on_construction_error='warn',  # *drop* gates that aren't cliffords
-                                                    independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
+            model = _LocalNoiseModel.build_standard(self.number_of_qubits,
+                                                    self.root_gate_names,
+                                                    self.nonstd_gate_unitaries,
+                                                    self.availability,
+                                                    self.qubit_labels,
+                                                    parameterization='clifford',
+                                                    sim_type=sim_type,
+                                                    on_construction_error='warn', # *drop* gates that aren't cliffords
+                                                    independent_gates=False,
+                                                    ensure_composed_gates=False)  # change these? add `geometry`?
 
         elif model_name in ('target', 'Target', 'static', 'TP', 'full'):
             param = model_name if (parameterization == 'auto') \
@@ -320,7 +327,8 @@ class ProcessorSpec(object):
 
         # Currently we can only compile CNOT gates, although that should be fixed.
         for gate in twoQgates:
-            assert(gate == 'CNOT'), "The only 2-qubit gate auto-generated compilations currently possible are for the CNOT gate (Gcnot)!"
+            assert(gate == 'CNOT'), ("The only 2-qubit gate auto-generated compilations currently possible "
+                                     "are for the CNOT gate (Gcnot)!")
 
         if 'clifford' not in self.models:
             raise ValueError("Cannot create standard compilations without a 'clifford' model!")
@@ -341,9 +349,9 @@ class ProcessorSpec(object):
                 library.add_local_compilation_of(_Label(gname, q), verbosity=verbosity)
             if verbosity > 0: print("Complete.")
 
-        # Manually add in the "obvious" compilations for CNOT gates as templates, so that we use the normal conversions based
-        # on the Hadamard gate -- if this is possible. If we don't do this, we resort to random compilations, which might not
-        # give the "expected" compilations (even if the alternatives might be just as good).
+        # Manually add in the "obvious" compilations for CNOT gates as templates, so that we use the normal conversions
+        # based on the Hadamard gate -- if this is possible. If we don't do this, we resort to random compilations,
+        # which might not give the "expected" compilations (even if the alternatives might be just as good).
         if 'CNOT' in twoQgates:
             # Look to see if we have a CNOT gate in the model (with any name).
             cnot_name = None
@@ -374,8 +382,8 @@ class ProcessorSpec(object):
                     library.templates['CNOT'].append((_Label(H_name, 0), _Label(H_name, 1), _Label(
                         cnot_name, (1, 0)), _Label(H_name, 0), _Label(H_name, 1)))
 
-            # If CNOT isn't available, look to see if we have CPHASE gate in the model (with any name). If we do *and* we have
-            # Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
+            # If CNOT isn't available, look to see if we have CPHASE gate in the model (with any name). If we do *and*
+            # we have Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
             else:
                 cphase_name = None
                 for gn in self.root_gate_names:
@@ -383,21 +391,24 @@ class ProcessorSpec(object):
                         cphase_name = gn
                         break
 
-                # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation template.
+                # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation
+                # template.
                 if H_name is not None:
                     if cphase_name is not None:
                         # Note: we need the identity gate for these templates, which we put explicitly
                         # in template layers and which all models should be able to deal with (as the
                         # lack of labels in a layer).
 
-                        # Add it with CPHASE in both directions, in case the CPHASES have been specified as being available in only one direction
+                        # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
+                        # available in only one direction
                         library.templates['CNOT'] = [(_Label(IDENT, 0), _Label(H_name, 1), _Label(
                             cphase_name, (0, 1)), _Label(IDENT, 0), _Label(H_name, 1))]
                         library.templates['CNOT'].append((_Label(IDENT, 0), _Label(H_name, 1), _Label(
                             cphase_name, (1, 0)), _Label(IDENT, 0), _Label(H_name, 1)))
 
-        # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the default templates were not
-        # relevant or aren't relevant for some qubits, this will generate new templates by brute force.
+        # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the
+        # default templates were not relevant or aren't relevant for some qubits, this will generate new templates by
+        # brute force.
         for gate in twoQgates:
             not_locally_compilable = []
             for q1 in self.qubit_labels:
@@ -413,8 +424,8 @@ class ProcessorSpec(object):
                         except _CompilationError:
                             not_locally_compilable.append((gname, q1, q2))
 
-            # If requested, try to compile remaining 2Q gates that are `non-local` (not between neighbouring qubits) using specific
-            # algorithms.
+            # If requested, try to compile remaining 2Q gates that are `non-local` (not between neighbouring qubits)
+            # using specific algorithms.
             if add_nonlocal_twoQgates:
                 non_compilable = []
                 for gname, q1, q2 in not_locally_compilable:
@@ -449,7 +460,8 @@ class ProcessorSpec(object):
             if u.shape == (4, 4):
                 #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
                 if _np.allclose(u, Id):
-                    _warnings.warn("The identity should often *not* be included in the root gate names of a ProcessorSpec.")
+                    _warnings.warn("The identity should often *not* be included "
+                                   "in the root gate names of a ProcessorSpec.")
                 nontrivial_gname_pauligate_pairs.append((gname, u))
 
         for gname1, u1 in nontrivial_gname_pauligate_pairs:

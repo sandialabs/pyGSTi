@@ -383,8 +383,10 @@ def L_matrix(mdl, target_model, weights=None):
 
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     dim = len(list(target_model.operations.keys()))
-    L_matrix = (1 / normalizer) * _np.sum(weights[key] * _np.kron(mdl.operations[key].todense().T,
-                                                                  _np.linalg.inv(target_model.operations[key].todense())) for key in target_model.operations.keys())
+    L_matrix = (1 / normalizer) * _np.sum(
+        weights[key] * _np.kron(
+            mdl.operations[key].todense().T, _np.linalg.inv(target_model.operations[key].todense())
+        ) for key in target_model.operations.keys())
 
     return L_matrix
 

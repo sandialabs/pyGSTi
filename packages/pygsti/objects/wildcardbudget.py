@@ -35,7 +35,6 @@ class WildcardBudget(object):
 
         def computeTVD(A, B, alpha, beta, q, f):
             ret = 0.5 * (sum(q[A] - alpha * f[A]) + sum(beta * f[B] - q[B]))
-            #print("computeTVD: ",q,f," = ",ret, " (",alpha,beta,A,B,q[A],alpha*f[A],sum(q[A]-alpha*f[A]),sum(beta*f[B] - q[B]),")")
             return ret
 
         def compute_alpha(A, B, C, TVD, q, f):
@@ -120,7 +119,8 @@ class WildcardBudget(object):
             for j, alpha0, beta0, AorB in sorted_breaks:
                 # will keep getting smaller with each iteration
                 TVD_at_breakpt = computeTVD(A, B, alpha0, beta0, qvec, fvec)
-                #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is the same
+                #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is
+                #the same
 
                 #print("break: j=",j," alpha=",alpha0," beta=",beta0," A?=",AorB, " TVD = ",TVD_at_breakpt)
                 tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
@@ -153,7 +153,6 @@ class WildcardBudget(object):
             assert(abs(W - compTVD) < 1e-3), "TVD mismatch!"
             #assert(_np.isclose(W, compTVD)), "TVD mismatch!"
 
-            #print("final alpha = ",alpha," beta=",beta, " inds=",elInds, " --> probs_out[cur_inds]: ", probs_out[elInds])
         return
 
 

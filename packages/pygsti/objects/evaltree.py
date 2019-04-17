@@ -555,7 +555,8 @@ class EvalTree(list):
                     else:  # k < iFirstNonFinal-1, so find a desired "final" el at boundary to swap it with
                         iLastFinal = iFirstNonFinal - 1
                         while iLastFinal > k and (iLastFinal in already_computed_inds):
-                            iLastFinal -= 1  # the element at iLastFinal happens to be one that we wanted to be non-final, so remove it
+                            # the element at iLastFinal happens to be one that we wanted to be non-final, so remove it
+                            iLastFinal -= 1
                         if iLastFinal != k:
                             subTreeIndices[iLastFinal], subTreeIndices[k] = \
                                 subTreeIndices[k], subTreeIndices[iLastFinal]  # Swap k <-> iLastFinal

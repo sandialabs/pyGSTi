@@ -671,7 +671,8 @@ class OpModel(Model):
                     new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
-                #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices) #," loc=",new_local_inds)
+                # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
+                #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
                 #obj.set_gpindices( slice(off, off+obj.num_params()), self )
                 #shift += obj.num_params()
@@ -679,7 +680,8 @@ class OpModel(Model):
 
                 shift += num_new_params
                 off += num_new_params
-                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
+                # print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
+                #       % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds) > 0 else -1; L = len(v)
@@ -778,8 +780,9 @@ class OpModel(Model):
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type in ("termgap", "termdirect"):
-            assert(len(self._sim_args) >= 3 +
-                   1), "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" % (self._sim_type, self._sim_type)
+            assert(len(self._sim_args) >= 3 + 1), \
+                "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" \
+                % (self._sim_type, self._sim_type)
             kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['pathmag_gap'] = float(self._sim_args[1])
@@ -978,8 +981,9 @@ class OpModel(Model):
                     sublabel_tups_to_iter = []  # one per label component (may be only 1)
                     for sub_gl in op_label.components:
                         if self._shlp.is_instrument_lbl(sub_gl):
-                            sublabel_tups_to_iter.append([(sub_gl, inst_el_lbl)
-                                                          for inst_el_lbl in self._shlp.get_member_labels_for_instrument(sub_gl)])
+                            sublabel_tups_to_iter.append(
+                                [(sub_gl, inst_el_lbl)
+                                 for inst_el_lbl in self._shlp.get_member_labels_for_instrument(sub_gl)])
                         else:
                             sublabel_tups_to_iter.append([(sub_gl, None)])  # just a single element
 
@@ -1272,9 +1276,10 @@ class OpModel(Model):
         """
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
-        # Let ng = # operation sequence groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of corresponding subtree
-        # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned
-        #  some number of operation sequence groups, where their ~nprocs/Ng processors are used to partition the np param
+        # Let ng = # operation sequence groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of
+        #          corresponding subtree
+        # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned some
+        #  number of operation sequence groups, where their ~nprocs/Ng processors are used to partition the np param
         #  groups. Note that 1 <= Ng <= min(ng,nprocs).
         # Notes:
         #  - making np or ng > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*

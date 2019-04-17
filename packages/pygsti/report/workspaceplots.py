@@ -470,10 +470,6 @@ def generate_boxplot(subMxs,
         tmargin *= scale
         bmargin *= scale
 
-        #DEBUG
-        #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
-        #print("DB dims = ",width,height)
-
         pfig['layout'].update(width=width,
                               height=height,
                               margin=go_Margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin))
@@ -1234,10 +1230,6 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     rmargin *= scale
     tmargin *= scale
     bmargin *= scale
-
-    #DEBUG
-    #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
-    #print("DB dims = ",width,height)
 
     layout = go.Layout(
         title=title,
@@ -3514,7 +3506,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 #        if histogram:
 #            fig = _plt.figure()
 #            histdata = subMxSums.flatten()
-#            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+#            #take gives back (1,N) shaped array (why?)
+#            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0]
 #            histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
 #            histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
 #            _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
@@ -3527,7 +3520,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 #           if histogram:
 #                fig = _plt.figure()
 #                histdata = _np.concatenate( [ subMxs[iy][ix].flatten() for ix in range(nXs) for iy in range(nYs)] )
-#                histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+#                #take gives back (1,N) shaped array (why?)
+#                histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0]
 #                histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
 #                histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
 #                _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,

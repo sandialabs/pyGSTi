@@ -235,6 +235,12 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     is_edge_ct = _np.zeros(len(g.edges()))
     edge_tvds = {}
 
+    def _setting_range(x):
+        return range(
+            setting_indices[x],
+            setting_indices[x + 1] if x < (number_of_regions - 1) else num_columns
+        )
+
     for idx, edge in enumerate(g.edges()):
         source = edge[0]
         dest = edge[1]
@@ -252,18 +258,18 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
             print("Crosstalk detected. Regions " + str(source) + " and " + str(dest))
 
         if source < number_of_regions and dest >= number_of_regions:
-            if dest not in range(setting_indices[source], (setting_indices[(source + 1)] if source < (number_of_regions - 1) else num_columns)):
+            if dest not in _setting_range(source):
                 for region in range(number_of_regions):
-                    if dest in range(setting_indices[region], (setting_indices[(region + 1)] if region < (number_of_regions - 1) else num_columns)):
+                    if dest in _setting_range(region):
                         break
                 cmatrix[source, region] = 1
                 is_edge_ct[idx] = 1
                 print("Crosstalk detected. Regions " + str(source) + " and " + str(region))
 
         if source >= number_of_regions and dest < number_of_regions:
-            if source not in range(setting_indices[dest], (setting_indices[(dest + 1)] if dest < (number_of_regions - 1) else num_columns)):
+            if source not in _setting_range(dest):
                 for region in range(number_of_regions):
-                    if source in range(setting_indices[region], (setting_indices[(region + 1)] if region < (number_of_regions - 1) else num_columns)):
+                    if source in _setting_range(region):
                         break
                 cmatrix[region, dest] = 1
                 is_edge_ct[idx] = 1

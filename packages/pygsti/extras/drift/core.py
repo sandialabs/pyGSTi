@@ -22,50 +22,6 @@ import warnings as _warnings
 import itertools as _itertools
 import copy as _copy
 
-# def do_basic_drift_characterization(ds, significance=0.05, transform='auto', setting='fastest'):
-
-#     return 0
-
-# def do_oneQubit_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
-#                                      spectrafrequencies='auto', testfrequencies='all',
-#                                      enforceConstNumTimes='auto', control='FDR',
-#                                      modelSelection='local', verbosity=1, name=None)
-
-
-#     do_general_drift_characterization(ds, significance=significance, marginalize=False, transform=transform,
-#                                       spectrafrequencies=spectrafrequencies, testfrequencies=testfrequencies,
-#                                       groupoutcomes=groupoutcomes, enforceConstNumTimes=enforceConstNumTimes,
-#                                       whichTests=(('avg','avg','avg'), ('avg','per','avg')), betweenClassCorrection=True,
-#                                       inClassCorrection=('Bonferroni','BH','BH','BH'),
-#                             modelSelection='perSeqPerEnt', verbosity=1, name=None)
-
-#     return 0
-
-# def do_rb_drift_characterization(ds, significance=0.05, transform='DCT', control='FDR'):
-
-#     return 0
-
-# def do_gst_drift_characterization(ds, significance=0.05, prepStrs=None, effectStrs=None, germList=None,
-#                                   maxLengthList=None, transform='DCT', control='FDR'):
-
-#     """
-#     prepStrs : list of Circuits
-#         List of the preparation fiducial operation sequences, which follow state
-#         preparation.
-
-#     effectStrs : list of Circuits
-#         List of the measurement fiducial operation sequences, which precede
-#         measurement.
-
-#     germList : list of Circuits
-#         List of the germ operation sequences.
-
-#     maxLengthList : list of ints
-#         List of maximum lengths. A zero value in this list has special
-#         meaning, and corresponds to the LGST sequences.
-#     """
-#     return 0
-
 def do_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
                               spectrafrequencies='auto', testFreqInds=None,
                               groupoutcomes=None, enforceConstNumTimes='auto',
@@ -137,7 +93,8 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
                 enforceConstNumTimes = True
 
         if transform != 'LSP':
-            assert(enforceConstNumTimes), "Except for the LSP transform, the code currently requires that fixed T is enforced!"
+            assert(enforceConstNumTimes), \
+                "Except for the LSP transform, the code currently requires that fixed T is enforced!"
 
         if verbosity > 0:
             print(" - Formatting the data...", end='')
@@ -148,7 +105,8 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
 
     if verbosity > 0: print(" - Calculating power spectra...", end='')
 
-    # Calculate the power spectra: if we're not doing an LSP we can pass anything as the frequencies as it's just ignored.
+    # Calculate the power spectra: if we're not doing an LSP we can pass anything as the frequencies as it's just
+    # ignored.
     calculate_power_spectra(results, transform=transform, frequenciesInHz=spectrafrequencies)
 
     if verbosity > 0: print("complete.")
@@ -216,7 +174,8 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
         spectral analysis of this formatted time-series data.
     """
     if groupoutcomes is not None:
-        assert(not marginalize == True), "Cannot marginalize the data *and* format the data according to a `groupoutcomes` dictionary!"
+        assert(not marginalize == True), \
+            "Cannot marginalize the data *and* format the data according to a `groupoutcomes` dictionary!"
 
     # Initialize an empty results object, with the name written in.
     results = _dresults.DriftResults(name=name)
@@ -236,7 +195,8 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
         num_timesteps.append(len(timesforseq))
         timestamps.append(timesforseq)
         # Check that the number of clicks is constant over all timestamps
-        assert(_np.std(_np.array(countsforseq)) <= 1e-15), "The number of total clicks must be the same at every timestamp!"
+        assert(_np.std(_np.array(countsforseq)) <= 1e-15), \
+            "The number of total clicks must be the same at every timestamp!"
         # Record the counts-per-timestamp for this sequence
         counts.append(countsforseq[0])
 
@@ -276,7 +236,8 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
             print(" - marginalizing data...")
         full_outcomes = ds.get_outcome_labels()
         for s in full_outcomes[0][0]:
-            assert(s == '0' or s == '1'), "If marginalizing, this function assumes that the outcomes are strings of 0s and 1s!"
+            assert(s == '0' or s == '1'), \
+                "If marginalizing, this function assumes that the outcomes are strings of 0s and 1s!"
             if len(s) == 1:
                 # Over-writes marginalize if the marginalization will be trivial
                 marginalize = False
@@ -605,8 +566,10 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
             localsig = sig / fwernum
 
             if verbosity > 0:
-                print("      - Implementing {} Benjamini-Hockberg procedure statistical tests each containing {} tests.".format(fwernum, fdrnumtests))
-                print("      - Local statistical significance for each Benjamini-Hockberg procedure is {}".format(localsig))
+                print("      - Implementing {} Benjamini-Hockberg procedure statistical tests "
+                      "each containing {} tests.".format(fwernum, fdrnumtests))
+                print("      - Local statistical significance for each Benjamini-Hockberg procedure "
+                      "is {}".format(localsig))
 
             power_significance_pseudothreshold[test] = {}
 
@@ -647,14 +610,16 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
                     ind = next(i for i, v in enumerate(dif) if v > 0.0)
                     sigtuples = fdrtuples[ind:]
                     if verbosity > 1:
-                        print("         - {} significant test statistics found for test-set {}!".format(fdrnumtests - ind, tup))
+                        print("         - {} significant test statistics found for "
+                              "test-set {}!".format(fdrnumtests - ind, tup))
                     driftdetectedinClass[test] = True
                     driftdetected = True
                     power_significance_pseudothreshold[test][tup] = quasithreshold[ind]
 
                 except:
                     if verbosity > 1:
-                        print("         - 0 significant test statistics found for test-set {}.".format(tup))
+                        print("         - 0 significant test statistics found for "
+                              "test-set {}.".format(tup))
                     power_significance_pseudothreshold[test][tup] = quasithreshold[-1]
                     sigtuples = []
 
@@ -766,7 +731,8 @@ def estimate_probability_trajectories(results, modelSelector=(('per', 'per', 'av
                 hyperparameters = freqs
                 #starttime = hyperparameters['starttime']
                 modelparameters = {'starttime': results.timestamps[s][0],
-                                   'timestep': results.meantimestepPerSeq[s], 'numsteps': results.number_of_timesteps[s]}
+                                   'timestep': results.meantimestepPerSeq[s],
+                                   'numsteps': results.number_of_timesteps[s]}
                 # The parameters for the DCT filter without amplitude reduction model (a "raw" DCT filter). This
                 # is the basis for *all* the models, so we construct it and save it no matter what
                 # estimator has been requested
@@ -785,12 +751,14 @@ def estimate_probability_trajectories(results, modelSelector=(('per', 'per', 'av
 
                     #ffmodel.get_probabilities(timeseries)
 
-                    # The uniform-amplitude-reduction model is the same as above, but with post-processing on the size of the amplitudes.
+                    # The uniform-amplitude-reduction model is the same as above, but with post-processing on the size
+                    # of the amplitudes.
                     ffmodelUniReduce = ffmodel.copy()
                     ffmodelUniReduce, flag = _est.uniform_amplitude_compression(ffmodelUniReduce, timestamps)
                     # Records this estimate.
-                    results.add_reconstruction(ent, seq, ffmodelUniReduce, modelSelector=modelSelector, estimator='FF-UAR',
-                                               auxDict={'null': null, "reduction": flag}, overwrite=overwrite)
+                    results.add_reconstruction(ent, seq, ffmodelUniReduce, modelSelector=modelSelector,
+                                               estimator='FF-UAR', auxDict={'null': null, "reduction": flag},
+                                               overwrite=overwrite)
 
                 # If we are doing MLE, we go in here and use the estimates above to seed it.
                 if estimator == 'MLE':
@@ -801,9 +769,9 @@ def estimate_probability_trajectories(results, modelSelector=(('per', 'per', 'av
                         ffmodelmle, optout = _est.maximum_likelihood_model(ffmodelmle, timeseries, timestamps,
                                                                            verbosity=verbosity - 1, returnOptout=True)
                     else:
-                        # If there are no significant frequencies the MLE model is necessarily equal to the "raw" Fourier
-                        # filter (so just copy it and don't do any estimation), but not necessarily the UAR model (if the
-                        # data mean is v. close to 0 or 1).
+                        # If there are no significant frequencies the MLE model is necessarily equal to the "raw"
+                        # Fourier filter (so just copy it and don't do any estimation), but not necessarily the UAR
+                        # model (if the data mean is v. close to 0 or 1).
                         ffmodelmle = ffmodel.copy()
                         optout = None
 
@@ -823,7 +791,8 @@ def estimate_probability_trajectories(results, modelSelector=(('per', 'per', 'av
             #     freqs.insert(0,0.)
             #     hyperparameters = {'freqs' : freqs}
 
-            #params, recon, uncert, aux = _est.estimate_probability_trace(timeseries, timestamps, results.transform, estimator,
-            #                                                             hyperparameters, modes=modes, estimatorSettings)
+            # params, recon, uncert, aux = _est.estimate_probability_trace(timeseries, timestamps, results.transform,
+            #                                                             estimator, hyperparameters, modes=modes,
+            #                                                             estimatorSettings)
 
     return None

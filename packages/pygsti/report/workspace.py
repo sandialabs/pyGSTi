@@ -216,21 +216,6 @@ class Workspace(object):
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        '''
-        if PY3:
-            @_functools.wraps(cls.__init__)
-            def factory_function(*args, **kwargs):
-                #with printer.verbosity_env(2): use this once merged w/ report_opt
-                name = cls.__name__
-                with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Creating {}:', verbosity=2):
-                    plot = cls(self, *args, **kwargs)
-                if autodisplay:
-                    with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:', verbosity=2):
-                        plot.display()
-                return plot
-            return factory_function
-        else:
-        '''
         factoryfn_argnames = argnames[2:]  # strip off self & ws args
         newargspec = (factoryfn_argnames,) + argspec[1:]
 
@@ -1521,25 +1506,12 @@ class WorkspaceOutput(object):
         from IPython.display import display as _display
         from IPython.display import HTML as _HTML
 
-        #import ipywidgets as _widgets
-        #if self.widget is None:
-        #    self.widget = _widgets.HTMLMath(value="?",
-        #                                placeholder='Plot HTML',
-        #                                description='Plot HTML',
-        #                                disabled=False)
         self.set_render_options(global_requirejs=True)  # b/c jupyter uses require.js
         out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
 
-        #self.widget.value = content
-        #with open("debug.html","w") as f:
-        #    jsincludes = '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js">'
-        #    filecontent = "<html><head><script>\n%s\n</script>\n%s\n</head>\n<body> %s </body></html>" % (_get_plotlyjs(),jsincludes,content)
-        #    f.write(filecontent)
-        #print("DB content:\n",content)
-        #_display(self.widget)
         _display(_HTML(content))
 
     def saveas(self, filename, index=None, verbosity=0):

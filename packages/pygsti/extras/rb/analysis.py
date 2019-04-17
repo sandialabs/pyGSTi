@@ -206,8 +206,8 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"
         asymptote = 1 / 2**n
 
-    FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote, ftype='full+FA',
-                                                             rtype=rtype)
+    FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote,
+                                                             ftype='full+FA', rtype=rtype)
 
     if bootstrap_samples > 0:
 
@@ -228,8 +228,9 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
         for i in range(bootstrap_samples):
 
             BS_ASPs = RBSdataset.bootstraps[i].ASPs
-            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed, asymptote=asymptote,
-                                                                           ftype='full+FA', rtype=rtype)
+            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed,
+                                                                           asymptote=asymptote, ftype='full+FA',
+                                                                           rtype=rtype)
 
             if BS_FF_results['success']:
                 A_bootstraps_FF.append(BS_FF_results['estimates']['A'])
@@ -285,9 +286,9 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
                                        FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,
                                        bootstraps_failrate=bootstraps_failrate_FF)
 
-    fits['A-fixed'] = _results.FitResults('LS', FAF_results['seed'], rtype, FAF_results['success'], FAF_results['estimates'],
-                                          FAF_results['variable'], stds=std_FAF, bootstraps=bootstraps_FAF,
-                                          bootstraps_failrate=bootstraps_failrate_FAF)
+    fits['A-fixed'] = _results.FitResults('LS', FAF_results['seed'], rtype, FAF_results['success'],
+                                          FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
+                                          bootstraps=bootstraps_FAF, bootstraps_failrate=bootstraps_failrate_FAF)
 
     results = _results.RBResults(RBSdataset, rtype, fits)
 

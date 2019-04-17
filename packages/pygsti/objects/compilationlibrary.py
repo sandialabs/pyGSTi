@@ -230,7 +230,10 @@ class CompilationLibrary(_collections.OrderedDict):
         if not force and oplabel in self:
             return self[oplabel]  # don't re-compute unless we're told to
 
-        circuit = self.construct_local_compilation_of(oplabel, unitary=unitary, srep=srep, max_iterations=max_iterations,
+        circuit = self.construct_local_compilation_of(oplabel,
+                                                      unitary=unitary,
+                                                      srep=srep,
+                                                      max_iterations=max_iterations,
                                                       verbosity=verbosity)
         return circuit
 
@@ -368,7 +371,9 @@ class CompilationLibrary(_collections.OrderedDict):
         for counter in range(0, max_iterations):
 
             if verbosity > 0:
-                print("  - Checking all length {} {}-qubit circuits... ({})".format(counter + 1, nqubits, len(obtained_sreps)))
+                print("  - Checking all length {} {}-qubit circuits... ({})".format(counter + 1,
+                                                                                    nqubits,
+                                                                                    len(obtained_sreps)))
 
             candidates = []  # all valid compilations, if any, of this length.
 
@@ -795,16 +800,17 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         Circuit
         """
-        # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes gates that
-        # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
+        # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes
+        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence
+        # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
             circuit = self.get_local_compilation_of(
                 oplabel, unitary=None, srep=None, max_iterations=10, force=force, verbosity=verbosity)
             # Check for the case where this function won't currently behave as expected.
             if isinstance(allowed_filter, dict):
-                raise ValueError(
-                    "This function may behave incorrectly when the allowed_filer is a dict *and* the gate can be compiled locally!")
+                raise ValueError("This function may behave incorrectly when the allowed_filer is a dict "
+                                 "*and* the gate can be compiled locally!")
 
         # If local compilation isn't possible, we move on and try non-local compilation
         except:
@@ -850,16 +856,17 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes gates that
-        # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
+        # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes
+        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence
+        # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
             self.add_local_compilation_of(oplabel, unitary=None, srep=None,
                                           max_iterations=10, force=force, verbosity=verbosity)
             # Check for the case where this function won't currently behave as expected.
             if isinstance(allowed_filter, dict):
-                raise ValueError(
-                    "This function may behave incorrectly when the allowed_filer is a dict *and* the gate can be compiled locally!")
+                raise ValueError("This function may behave incorrectly when the allowed_filer is a dict "
+                                 "*and* the gate can be compiled locally!")
 
         # If local compilation isn't possible, we move on and try non-local compilation
         except:

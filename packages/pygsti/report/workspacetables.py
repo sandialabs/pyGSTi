@@ -561,7 +561,8 @@ class ModelVsTargetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips,
                              confidenceRegionInfo=confidenceRegionInfo)
 
-        #Leave this off for now, as it's primary use is to compare with RB and the predicted RB number is better for this.
+        #Leave this off for now, as it's primary use is to compare with RB and the predicted RB number is better
+        #for this.
         #pAGsI = _ev(_reportables.Average_gateset_infidelity(model, targetModel), confidenceRegionInfo)
         #table.addrow(("Avg. primitive model infidelity", pAGsI), (None, 'Normal') )
 
@@ -1203,9 +1204,10 @@ class NQubitErrgenTable(WorkspaceTable):
                     hamCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "hamiltonian")
                     if display_as == "boxes":
                         #m,M = getMinMax(coeffsM,_np.max(_np.abs(hamCoeffs)))
+                        # May need to add EB code and/or title to MatrixPlot in FUTURE
                         hamCoeffs_fig = _wp.MatrixPlot(
                             self.ws, hamCoeffs, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")  # May need to add EB code and/or title to MatrixPlot in FUTURE
+                            boxLabels=True, prec="compacthp")
                         row_data.append(hamCoeffs_fig)  # HERE
                         row_formatters.append('Figure')
                     else:
@@ -1216,9 +1218,10 @@ class NQubitErrgenTable(WorkspaceTable):
                     stoCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "stochastic")
                     if display_as == "boxes":
                         #m,M = getMinMax(coeffsM,_np.max(_np.abs(stoCoeffs)))
+                        # May need to add EB code and/or title to MatrixPlot in FUTURE
                         stoCoeffs_fig = _wp.MatrixPlot(
                             self.ws, stoCoeffs, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")  # May need to add EB code and/or title to MatrixPlot in FUTURE
+                            boxLabels=True, prec="compacthp")
                         row_data.append(stoCoeffs_fig)
                         row_formatters.append('Figure')
                     else:
@@ -1229,9 +1232,10 @@ class NQubitErrgenTable(WorkspaceTable):
                     affCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "affine")
                     if display_as == "boxes":
                         #m,M = getMinMax(coeffsM,_np.max(_np.abs(effCoeffs)))
+                        # May need to add EB code and/or title to MatrixPlot in FUTURE
                         affCoeffs_fig = _wp.MatrixPlot(
                             self.ws, affCoeffs, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")  # May need to add EB code and/or title to MatrixPlot in FUTURE
+                            boxLabels=True, prec="compacthp")
                         row_data.append(affCoeffs_fig)
                         row_formatters.append('Figure')
                     else:
@@ -2308,8 +2312,9 @@ class GaugeOptParamsTable(WorkspaceTable):
                 table.addrow(("%sMetric for SPAM-to-target" % pre, str(goargs['spamMetric'])), (None, None))
             if 'itemWeights' in goargs:
                 if goargs['itemWeights']:
-                    table.addrow(("%sItem weights" % pre, ", ".join([("%s=%.2g" % (k, v))
-                                                                     for k, v in goargs['itemWeights'].items()])), (None, None))
+                    table.addrow(
+                        ("%sItem weights" % pre,
+                         ", ".join([("%s=%.2g" % (k, v)) for k, v in goargs['itemWeights'].items()])), (None, None))
             if 'gauge_group' in goargs:
                 table.addrow(("%sGauge group" % pre, goargs['gauge_group'].name), (None, None))
 

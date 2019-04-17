@@ -63,15 +63,12 @@ class Polynomial(dict):
 
         def int_to_vinds(indx_tup):
             ret = []
-            #DB: cnt = 0; orig = indx
             for indx in indx_tup:
                 while indx != 0:
                     nxt = indx // (max_num_vars + 1)
                     i = indx - nxt * (max_num_vars + 1)
                     ret.append(i - 1)
                     indx = nxt
-                    #DB: cnt += 1
-                    #DB: if cnt > 50: print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
             #assert(len(ret) <= max_order) #TODO: is this needed anymore?
             return tuple(sorted(ret))
 
@@ -448,7 +445,6 @@ class Polynomial(dict):
         def vinds_to_int(vinds):
             """ Convert tuple index of ints to single int given max_order,max_numvars """
             ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
-            #OLD (before multi-int keys): assert(len(vinds) <= self.max_order), "max_order (%d) is too low!" % self.max_order
             ret_tup = []
             for k in range(ints_in_key):
                 ret = 0; m = 1
@@ -636,14 +632,16 @@ def compact_deriv(vtape, ctape, wrtParams):
                     dctapes[cur_iWrt].append(coeff * cnt)
                     dvtapes[cur_iWrt].extend([nVars - 1] + dvars)
                     dnterms[cur_iWrt] += 1
-                    #print(" wrt=%d found cnt=%d: adding deriv term coeff=%f vars=%s" % (wrt[cur_iWrt], cnt, coeff*cnt, [nVars-1] + dvars))
+                    # print(" wrt=%d found cnt=%d: adding deriv term coeff=%f vars=%s" \
+                    #       % (wrt[cur_iWrt], cnt, coeff*cnt, [nVars-1] + dvars))
 
                     cur_iWrt += 1  # processed this wrt param - move to next one
 
             #Now term has been processed, adding derivative terms to the dctapes and dvtapes "tape-lists"
             # We continue processing terms, adding to these tape lists, until all the terms of the
             # current poly are processed.  Then we can concatenate the tapes for each wrtParams element.
-            j = j0 + nVars  # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+            # Move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+            j = j0 + nVars
 
         #Now all terms are processed - concatenate tapes for wrtParams and add to resulting tape.
         for nTerms, dvtape, dctape in zip(dnterms, dvtapes, dctapes):

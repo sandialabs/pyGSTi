@@ -45,8 +45,9 @@ class DriftResults(object):
         Todo: add details.
         """
         if not overwrite:
-            assert(not hasattr(self, "timeseries")
-                   ), "This results object already contains timeseries data! To overwrite it you must set `overwrite` to True!"
+            assert(not hasattr(self, "timeseries")), \
+                ("This results object already contains timeseries data! "
+                 "To overwrite it you must set `overwrite` to True!")
 
         # The timeseries is a list of lists of dicts. The first index is entity index (corresponding
         # to the entity at that index of the lsit self.entities). The second index is the
@@ -283,8 +284,8 @@ class DriftResults(object):
 
     def add_drift_detection_results(self, significance, testClasses, betweenClassCorrection, inClassCorrections,
                                     control, driftdetected, driftdetectedinClass, testFreqInds, sigFreqIndsinClass,
-                                    powerSignificancePseudothreshold, significanceForClass, name='detection', overwrite=False,
-                                    settodefault=False):
+                                    powerSignificancePseudothreshold, significanceForClass, name='detection',
+                                    overwrite=False, settodefault=False):
         """
         Todo
         """
@@ -303,8 +304,9 @@ class DriftResults(object):
             self.defaultdetectorkey = name
 
         if not overwrite:
-            assert(name not in self.significance.keys(
-            )), "Already contains drift detection results with this name! To overwrite them you must set `overwrite` to True!"
+            assert(name not in self.significance.keys()), \
+                ("Already contains drift detection results with this name! "
+                 "To overwrite them you must set `overwrite` to True!")
 
         if settodefault:
             self.defaultdetectorkey = name
@@ -433,8 +435,9 @@ class DriftResults(object):
         if detectorkey is None:
             detectorkey = self.defaultdetectorkey
         testtup = self._create_testclass_tuple(entity, sequence, outcome)
-        assert(testtup in self._testClasses[detectorkey]
-               ), "Can only get a significance threshold if this test class was implemented! To create an ad-hoc post-fact threshold use the functions in drift.statistics"
+        assert(testtup in self._testClasses[detectorkey]), \
+            ("Can only get a significance threshold if this test class was implemented! "
+             "To create an ad-hoc post-fact threshold use the functions in drift.statistics")
 
         thresholdset = self._powerSignificancePseudothreshold[detectorkey][testtup]
         # If it's a float, it's a "true" threshold, so we set the threshold to this.
@@ -562,7 +565,8 @@ class DriftResults(object):
         #         sequence_label = str(sequence_index)
 
         # if self.number_of_entities > 1:
-        #     assert(not (outcome != 'averaged' and entity == 'averaged')), "Not permitted to average over multiple entities but not outcomes!"
+        #     assert(not (outcome != 'averaged' and entity == 'averaged')), \
+        #         "Not permitted to average over multiple entities but not outcomes!"
 
         # # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged
         # if sequence_index == 'averaged' and (entity == 'averaged' or self.number_of_entities == 1):
@@ -605,7 +609,8 @@ class DriftResults(object):
 
         #     if self.number_of_entities> 1:
         #         if self.number_of_outcomes > 2:
-        #             title = 'Entity and outcome averaged power spectrum for sequence ' + sequence_label + name_in_title1
+        #             title = 'Entity and outcome averaged power spectrum for sequence ' \
+        #                 + sequence_label + name_in_title1
         #         else:
         #             title = 'Entity-averaged power spectrum for sequence ' + sequence_label + name_in_title1
         #     else:
@@ -727,9 +732,9 @@ class DriftResults(object):
     #                                  savepath=None, loc=None, title=True):
 
     #     if self.multitest_compensation == 'none':
-    #         ws = "Warning: multi-tests compensation is 'none'. This means that if there are many sequences it is likely"
-    #         ws += " that some of them will have non-trivial estimates for the time-dependent probability!"
-    #         print(ws)
+    #         print("Warning: multi-tests compensation is 'none'. "
+    #               "This means that if there are many sequences it is likely that some of them will have "
+    #               "non-trivial estimates for the time-dependent probability!")
 
     #     # Find the (sequence,entity,outcome) index with the most power in the reconstruction. This is
     #     # not necessarily the index with the largest max power in the data spectrum.

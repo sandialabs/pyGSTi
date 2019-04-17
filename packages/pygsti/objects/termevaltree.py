@@ -409,7 +409,15 @@ class TermEvalTree(EvalTree):
         cpy = self._copyBase(TermEvalTree(self[:]))
         return cpy
 
-    def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag, recalc_threshold=True):
+    def get_p_pruned_polys(self,
+                           calc,
+                           rholabel,
+                           elabels,
+                           comm,
+                           memLimit,
+                           pathmagnitude_gap,
+                           min_term_mag,
+                           recalc_threshold=True):
 
         elabels = tuple(elabels)  # make sure this is hashable
         circuit_list = self.generate_circuit_list(permute=False)
@@ -426,8 +434,15 @@ class TermEvalTree(EvalTree):
 
             if current_threshold is None or recalc_threshold:
                 raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
-                    calc.prs_as_pruned_polyreps(rholabel, elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
-                                                min_term_mag, current_threshold)
+                    calc.prs_as_pruned_polyreps(rholabel,
+                                                elabels,
+                                                opstr,
+                                                self.repcache,
+                                                comm,
+                                                memLimit,
+                                                pathmagnitude_gap,
+                                                min_term_mag,
+                                                current_threshold)
             else:
                 #Could just recompute sopm and npaths?
                 raw_polyreps = None

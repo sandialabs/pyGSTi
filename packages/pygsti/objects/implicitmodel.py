@@ -55,9 +55,15 @@ class ImplicitOpModel(_mdl.OpModel):
     on-demand basis.
     """
 
-    def __init__(self, state_space_labels, basis="pp", primitive_labels=None, layer_lizard_class=_ll.ImplicitLayerLizard,
-                 layer_lizard_args=(), simplifier_helper_class=None,
-                 sim_type="auto", evotype="densitymx"):
+    def __init__(self,
+                 state_space_labels,
+                 basis="pp",
+                 primitive_labels=None,
+                 layer_lizard_class=_ll.ImplicitLayerLizard,
+                 layer_lizard_args=(),
+                 simplifier_helper_class=None,
+                 sim_type="auto",
+                 evotype="densitymx"):
         """
         Creates a new ImplicitOpModel.  Usually only called from derived
         classes `__init__` functions.

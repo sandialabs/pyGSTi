@@ -376,7 +376,8 @@ def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
                 permCheckedStrs.append(pys)
 
         outputDict[length] = []
-        for pys in permCheckedStrs:  # Now check to see if any elements of tempList2 are powers of elements already in output
+        for pys in permCheckedStrs:
+            # Now check to see if any elements of tempList2 are powers of elements already in output
             if not _pow_check(pys, outputDict):  # Seqeunce is not a power of anything in output
                 outputDict[length].append(pys)
 

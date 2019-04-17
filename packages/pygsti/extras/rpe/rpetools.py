@@ -341,7 +341,8 @@ def consistency_check(angle_k, angle_final, k):
         return 0.0
 
 
-def analyze_rpe_data(inputDataset, trueOrTargetModel, stringListD, rpeconfig_inst, do_consistency_check=False, k_list=None):
+def analyze_rpe_data(inputDataset, trueOrTargetModel, stringListD, rpeconfig_inst, do_consistency_check=False,
+                     k_list=None):
     """
     Compute angle estimates and compare to true or target values for alpha, epsilon,
     and theta.  ("True" will typically be used for simulated data, when the

@@ -2741,9 +2741,9 @@ class LindbladSPAMVec(SPAMVec):
             if self.typ == "prep":
                 terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
             else:  # "effect"
-                #Effect terms are special in that all their pre/post ops act in order on the *state* before
-                # the final effect is used to compute a probability.  Thus, constructing the same "terms"
-                # as above works here too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+                # Effect terms are special in that all their pre/post ops act in order on the *state* before the final
+                # effect is used to compute a probability.  Thus, constructing the same "terms" as above works here
+                # too - the difference comes when this SPAMVec is used as an effect rather than a prep.
                 terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
 
             #OLD: now this is done within calculator when possible b/c not all terms can be collapsed
@@ -2758,97 +2758,6 @@ class LindbladSPAMVec(SPAMVec):
             return self.terms[order], self.local_term_poly_coeffs[order]
         else:
             return self.terms[order]
-
-    #def get_direct_order_terms(self, order, base_order):
-    #    """
-    #    Get the `order`-th order Taylor-expansion terms of this SPAM vector.
-    #
-    #    This function either constructs or returns a cached list of the terms at
-    #    the given order.  Each term is "rank-1", meaning that it is a state
-    #    preparation followed by or POVM effect preceded by actions on a
-    #    density matrix `rho` of the form:
-    #
-    #    `rho -> A rho B`
-    #
-    #    Parameters
-    #    ----------
-    #    order : int
-    #        The order of terms to get.
-    #
-    #    order_base : float
-    #        What constitutes 1 order of magnitude.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #        A list of :class:`RankOneTerm` objects.
-    #    """
-    #    #Approach 1
-    #    if False: #order not in self.terms: # always do this now, since we always need to re-create "direct" terms
-    #        if self._evotype == "svterm": tt = "dense"
-    #        elif self._evotype == "cterm": tt = "clifford"
-    #        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-    #        assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
-    #
-    #        state_terms = self.state_vec.get_direct_order_terms(0, base_order); assert(len(state_terms) == 1)
-    #        stateTerm = state_terms[0]
-    #        err_terms = self.error_map.get_direct_order_terms(order, base_order)
-    #        if self.typ == "prep":
-    #            terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
-    #        else: # "effect"
-    #            #Effect terms are special in that all their pre/post ops act in order on the *state* before
-    #            # the final effect is used to compute a probability.  Thus, constructing the same "terms"
-    #            # as above works here too - the difference comes when this SPAMVec is used as an effect rather than a prep.
-    #            terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
-    #
-    #        #OLD: now this is done within calculator when possible b/c not all terms can be collapsed
-    #        #terms = [ t.collapse() for t in terms ] # collapse terms for speed
-    #        # - resulting in terms with just a single pre/post op, each == a pure state
-    #        return terms
-    #
-    #    #Approach 2: get poly terms and evaluate them
-    #    if True:
-    #        if order not in self.direct_terms:
-    #            if self._evotype == "svterm": tt = "dense"
-    #            elif self._evotype == "cterm": tt = "clifford"
-    #            else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
-    #            assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
-    #
-    #            state_terms = self.state_vec.get_taylor_order_terms(0); assert(len(state_terms) == 1)
-    #            stateTerm = state_terms[0]
-    #            err_terms = self.error_map.get_taylor_order_terms(order, terms_with_global_indices=False)
-    #            if self.typ == "prep":
-    #                terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
-    #            else: # "effect"
-    #                #Effect terms are special in that all their pre/post ops act in order on the *state* before
-    #                # the final effect is used to compute a probability.  Thus, constructing the same "terms"
-    #                # as above works here too - the difference comes when this SPAMVec is used as an effect rather than a prep.
-    #                terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
-    #
-    #            poly_coeffs = [ t.coeff for t in terms ]
-    #            tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
-    #            vtape = _np.concatenate( [ t[0] for t in tapes ] )
-    #            ctape = _np.concatenate( [ t[1] for t in tapes ] )
-    #            coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
-    #            self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
-    #            self.direct_terms[order] = terms # have poly coeffs but not for long (below code overwrites)
-    #
-    #        v = self.to_vector()
-    #        cpolys = self.direct_term_poly_coeffs[order]
-    #        terms = self.direct_terms[order]
-    #        coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
-    #        for coeff,t in zip(coeffs,terms):
-    #            t.coeff = coeff
-    #        return terms
-    #
-    #def get_direct_order_coeffs(self, order, order_base=None):
-    #    """
-    #    TODO: docstring
-    #    """
-    #    v = self.to_vector()
-    #    cpolys = self.direct_term_poly_coeffs[order]
-    #    terms = self.direct_terms[order]
-    #    return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
 
     def get_total_term_magnitude(self):
         """

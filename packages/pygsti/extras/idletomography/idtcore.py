@@ -581,7 +581,8 @@ def determine_paulidicts(model):
         if isinstance(g, _objs.EmbeddedOp):
             #Note: an embedded gate need not use the *same* state space labels as the model
             lbls = [cur_sslbls[g.state_space_labels.labels[0].index(locLbl)] for locLbl in g.targetLabels]
-            # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between them, & make sub-labels?
+            # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between
+            # them, & make sub-labels?
             return extract_action(g.embedded_op, lbls, ql)
 
         # StaticDenseOp, LindbladDenseOp, other gates...
@@ -894,7 +895,12 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
         slope = -_np.sign(coeffs[0]) * _np.sqrt(det) if det >= 0 else coeffs[1]
     else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
 
-    return {'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'errbars': errbars, 'weights': wts}
+    return {'rate': slope,
+            'fitOrder': fitOrder,
+            'fitCoeffs': coeffs,
+            'data': data_to_fit,
+            'errbars': errbars,
+            'weights': wts}
 
 
 def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
@@ -1008,7 +1014,12 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
         # but if determinant is < 0, fall back to x=0 slope
     else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
 
-    return {'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'errbars': errbars, 'weights': wts}
+    return {'rate': slope,
+            'fitOrder': fitOrder,
+            'fitCoeffs': coeffs,
+            'data': data_to_fit,
+            'errbars': errbars,
+            'weights': wts}
 
 
 def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=2,

@@ -17,11 +17,13 @@ from . import replib
 
 
 #Notes regarding literature:
-# Hostens, Dehaene, De Moor "Stabilizer states and Clifford operations for systems of arbitrary dimensions, and modular arithmetic" (arXiv:quant-ph/0408190)
+# Hostens, Dehaene, De Moor "Stabilizer states and Clifford operations for systems of arbitrary dimensions, and modular
+# arithmetic" (arXiv:quant-ph/0408190)
 #  - shows how to encode/manipulate cliffords and stabilizer states for qudits
 #  - this is *exactly* the representation that we use, and formulas in this paper are
 #     identical to the ones used in pyGSTi. (uses "11 = -iY" and mod4 phase vectors)
-# Jeroen Dehaene and Bart De Moor "The Clifford group, stabilizer states, and linear and quadratic operations over GF(2)" (arXiv:quant-ph/0304125v1)
+# Jeroen Dehaene and Bart De Moor "The Clifford group, stabilizer states, and linear and quadratic operations over
+# GF(2)" (arXiv:quant-ph/0304125v1)
 #  - shows how to encode/manipulate cliffords and stabilizer states for qubits in ptic
 #  - uses bit (mod2) not mod 4 phase vectors, unlike what we do now, but may be useful
 # Aaronson & Gottesman "Improved Simulation of Stabilizer Circuits" (arXiv:quant-ph/0406196)
@@ -320,8 +322,8 @@ class StabilizerFrame(object):
             eff_parity = (parity - (fixed1s % 2)) % 2  # effective parity for zpos_to_fill
 
             if debug:  # DEBUG
-                print("  Current gen = ", i, " phase = ", gen_p, " zpos=", zpos, " fixed1s=", fixed1s, " tofill=", zpos_to_fill,
-                      " eff_parity=", eff_parity, "lead=", lead)
+                print("  Current gen = ", i, " phase = ", gen_p, " zpos=", zpos, " fixed1s=", fixed1s,
+                      " tofill=", zpos_to_fill, " eff_parity=", eff_parity, "lead=", lead)
                 print("   -anchor: ", anchor, end='')
 
             if target is not None and (target1s % 2) != parity:
@@ -480,8 +482,6 @@ class StabilizerFrame(object):
                         if t not in amplitudes:
                             amplitudes[tuple(result)] = new_amp
                             num_ampl_added += 1
-                        #else:
-                        #    assert(_np.isclose(amplitudes[tuple(result)],new_amp)), "Inconsistency in amplitude generation"
 
                         if debug:
                             print("  -->Apply to b=", zvals, " (amp=", amp, ") ==> b'=", result, " (amp=", new_amp,

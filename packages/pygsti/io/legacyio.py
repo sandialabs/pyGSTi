@@ -68,10 +68,11 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         def Lind_setstate(self, state):
             assert(not state['sparse']), "Can only unpickle old *dense* LindbladParameterizedGate objects"
             g = _objs.LindbladDenseOp.from_operation_matrix(state['base'], state['unitary_postfactor'],
-                                                            ham_basis=state['ham_basis'], nonham_basis=state['other_basis'],
-                                                            param_mode=state['param_mode'], nonham_mode=state['nonham_mode'],
-                                                            truncate=True, mxBasis=state['matrix_basis'],
-                                                            evotype=state['_evotype'])
+                                                            ham_basis=state['ham_basis'],
+                                                            nonham_basis=state['other_basis'],
+                                                            param_mode=state['param_mode'],
+                                                            nonham_mode=state['nonham_mode'], truncate=True,
+                                                            mxBasis=state['matrix_basis'], evotype=state['_evotype'])
             self.__dict__.update(g.__dict__)
 
         def ModelMember_setstate(self, state):

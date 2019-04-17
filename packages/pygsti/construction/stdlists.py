@@ -448,7 +448,6 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 
             #Typical case of germs repeated to maxLen using Rfn
             for ii, germ in enumerate(germList):
-                #if ii % 100 == 0: print("germ %d of %d: %.2fs" % (ii,len(germList),_time.time()-t0)) DEBUG - and remove ii
                 if germ == empty_germ: continue  # handled specially above
                 if maxLen > germLengthLimits.get(germ, 1e100): continue
                 germ_power = truncFn(germ, maxLen)

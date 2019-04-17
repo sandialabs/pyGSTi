@@ -197,7 +197,15 @@ class TermForwardSimulator(ForwardSimulator):
         #print("PRS = ",prs)
         return prs
 
-    def prs_as_pruned_polyreps(self, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+    def prs_as_pruned_polyreps(self,
+                               rholabel,
+                               elabels,
+                               circuit,
+                               repcache,
+                               comm=None,
+                               memLimit=None,
+                               pathmagnitude_gap=0.0,
+                               min_term_mag=0.01,
                                current_threshold=None):
         """
         TODO: docstring
@@ -647,7 +655,13 @@ class TermForwardSimulator(ForwardSimulator):
                 if self.mode == "direct":
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
                 elif self.mode == "pruned":
-                    polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag,
+                    polys = evalSubTree.get_p_pruned_polys(self,
+                                                           rholabel,
+                                                           elabels,
+                                                           mySubComm,
+                                                           None,
+                                                           self.pathmagnitude_gap,
+                                                           self.min_term_mag,
                                                            recalc_threshold=not self.opt_mode)
                 else:  # self.mode == "taylor-order"
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm)  # computes polys if necessary
@@ -788,8 +802,14 @@ class TermForwardSimulator(ForwardSimulator):
                     if self.mode == "taylor-order":
                         polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     elif self.mode == "pruned":
-                        polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap,
-                                                               self.min_term_mag, recalc_threshold=True)
+                        polys = evalSubTree.get_p_pruned_polys(self,
+                                                               rholabel,
+                                                               elabels,
+                                                               fillComm,
+                                                               None,
+                                                               self.pathmagnitude_gap,
+                                                               self.min_term_mag,
+                                                               recalc_threshold=True)
 
                     for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                         if self.mode == "direct":
@@ -814,8 +834,13 @@ class TermForwardSimulator(ForwardSimulator):
                             iFinal = i
                             vec = orig_vec.copy(); vec[i] += eps
                             self.from_vector(vec)
-                            dprobs[:, :, iFinal] = (self.prs_directly(rholabel, elabels, circuit_list,
-                                                                      comm=None, memLimit=None, resetWts=False, repcache=repcache) - probs) / eps
+                            dprobs[:, :, iFinal] = (self.prs_directly(rholabel,
+                                                                      elabels,
+                                                                      circuit_list,
+                                                                      comm=None,
+                                                                      memLimit=None,
+                                                                      resetWts=False,
+                                                                      repcache=repcache) - probs) / eps
                     self.from_vector(orig_vec)
                 elif self.mode == "pruned":
                     #Take derivative here
@@ -828,7 +853,9 @@ class TermForwardSimulator(ForwardSimulator):
                 for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                     if self.mode == 'direct':
                         dprCache = dprobs[i]  # shape (nAllEvalTreeCircuits, nDerivCols)
-                    else:  # TODO: maybe for "pruned" case we can just eval derivs of `polys` instead of computing derivative polynomials...
+                    else:
+                        # TODO: maybe for "pruned" case we can just eval derivs of `polys` instead of computing
+                        # derivative polynomials...
                         dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs, nP))
                     dps = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, nDerivCols)
                     _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)
@@ -1097,7 +1124,7 @@ class TermForwardSimulator(ForwardSimulator):
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than hessian elements(%d)!" % (self.Np**2)
-                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover
+                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
                 fillComm = blk2Comm  # comm used by calc_and_fill
 
                 for iBlk1 in myBlk1Indices:

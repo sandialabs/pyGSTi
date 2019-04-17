@@ -63,7 +63,8 @@ def basis_build_vector(vecExpr, basis):
     #                                                     #Hilbert-space state index, so "reduced-std" basis
     #blockDims = [int(_np.sqrt(opDim))] # FIX - get block dims from basis?
 
-    #So far just allow integer prepExpressions that give the index of state (within the state space) that we prep/measure
+    #So far just allow integer prepExpressions that give the index of state (within the state space) that we
+    #prep/measure
     try:
         index = int(vecExpr)
     except:
@@ -160,231 +161,6 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     """
     return basis_build_identity_vec(_Basis.cast(basis, stateSpaceDims))
 
-#OLD TODO REMOVE
-#def _oldBuildGate(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm"):
-##coherentStateSpaceBlockDims
-#    """
-#    Build a operation matrix from an expression
-#
-#    Parameters
-#    ----------
-#    stateSpaceDims : a list of integers specifying the dimension of each block
-#    of a block-diagonal the density matrix
-#    stateSpaceLabels : a list of tuples, each one corresponding to a block of
-#    the density matrix.  Elements of the tuple are user-defined labels
-#    beginning with "L" (single level) or "Q" (two-level; qubit) which interpret
-#    the states within the block as a tensor product structure between the
-#    labelled constituent systems.
-#
-#    opExpr : string containing an expression for the gate to build
-#
-#    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-#        The source and destination basis, respectively.  Allowed
-#        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-#        and Qutrit (qt) (or a custom basis object).
-#    """
-#    # opExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
-#    #                      two qubit ops: CNOT
-#    #                      clevel qubit ops: Leak
-#    #                      two clevel opts: Flip
-#    #  each of which is given additional parameters specifying which indices it acts upon
-#
-#
-#    #Operator matrix will be in matrix unit basis, which we order by vectorizing
-#    # (by concatenating rows) each block of coherent states in the order given.
-#    raise NotImplementedError("TODO: REMOVE this function")
-#    dmDim, _ , _ = _Dim(stateSpaceDims)
-#    fullOpDim = dmDim**2
-#
-#    #Working with a StateSpaceLabels object gives us access to all the info we'll need later
-#    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
-#    if sslbls.dim != _Dim(stateSpaceDims):
-#        raise ValueError("Dimension mismatch!")
-#
-#    #Store each tensor product block's start index (within the density matrix)
-#    startIndex = []; M = 0
-#    for tpb_dim in sslbls.dim.blockDims:
-#        startIndex.append(M); M += tpb_dim
-#
-#    #print "DB: dim = ",dim, " dmDim = ",dmDim
-#    opInStdBasis = _np.identity( fullOpDim, 'complex' )
-#      # in full basis of matrix units, which we later reduce to the
-#      # that basis of matrix units corresponding to the allowed non-zero
-#      #  elements of the density matrix.
-#
-#    exprTerms = opExpr.split(':')
-#    for exprTerm in exprTerms:
-#
-#        opTermInStdBasis = _np.identity( fullOpDim, 'complex' )
-#        l = exprTerm.index('('); r = exprTerm.index(')')
-#        opName = exprTerm[0:l]
-#        argsStr = exprTerm[l+1:r]
-#        args = argsStr.split(',')
-#
-#        if opName == "I":
-#            pass
-#
-#        elif opName in ('X','Y','Z'): #single-qubit gate names
-#            assert(len(args) == 2) # theta, qubit-index
-#            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-#            label = args[1].strip(); assert(sslbls.labeldims[label] == 2)
-#
-#            if opName == 'X': ex = -1j * theta*_bt.sigmax/2
-#            elif opName == 'Y': ex = -1j * theta*_bt.sigmay/2
-#            elif opName == 'Z': ex = -1j * theta*_bt.sigmaz/2
-#            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
-#
-#            iTensorProdBlk = sslbls.tpb_index[label] # index of tensor product block (of state space) this bit label is part of
-#            cohBlk = sslbls.labels[iTensorProdBlk]
-#            basisInds = []
-#            for l in cohBlk:
-#                basisInds.append(list(range(sslbls.labeldims[l])))
-#
-#            tensorBlkBasis = list(_itertools.product(*basisInds))
-#            K = cohBlk.index(label)
-#            N = len(tensorBlkBasis)
-#            UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
-#            for i,b1 in enumerate(tensorBlkBasis):
-#                for j,b2 in enumerate(tensorBlkBasis):
-#                    if (b1[:K]+b1[K+1:]) == (b2[:K]+b2[K+1:]):   #if all part of tensor prod match except for qubit we're operating on
-#                        UcohBlk[i,j] = Uop[ b1[K], b2[K] ] # then fill in element
-#
-#            opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-#
-#            #Map opBlk's basis into final gate basis
-#            mapBlk = []
-#            s = startIndex[iTensorProdBlk] #within state space (i.e. row or col of density matrix)
-#            cohBlkSize = UcohBlk.shape[0]
-#            for i in range(cohBlkSize):
-#                for j in range(cohBlkSize):
-#                    vec_ij_index = (s+i)*dmDim + (s+j) #vectorize by concatenating rows
-#                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
-#            for i,fi in enumerate(mapBlk):
-#                for j,fj in enumerate(mapBlk):
-#                    opTermInStdBasis[fi,fj] = opBlk[i,j]
-#
-#
-#        elif opName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
-#
-#            if opName in ('CX','CY','CZ'):
-#                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-#                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-#                label1, label2 = args[1:]
-#
-#                if opName == 'CX': ex = -1j * theta*_bt.sigmax/2
-#                elif opName == 'CY': ex = -1j * theta*_bt.sigmay/2
-#                elif opName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
-#                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
-#
-#            else: # opName in ('CNOT','CPHASE')
-#                assert(len(args) == 2) # qubit-label1, qubit-label2
-#                label1, label2 = args
-#                if opName == 'CNOT':
-#                    Utarget = _np.array( [[0, 1],
-#                                          [1, 0]], 'd')
-#                elif opName == 'CPHASE':
-#                    Utarget = _np.array( [[1, 0],
-#                                          [0,-1]], 'd')
-#
-#            Uop = _np.identity(4, 'complex'); Uop[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
-#
-#            assert(sslbls.labeldims[label1] == 2 and sslbls.labeldims[label2] == 2)
-#            iTensorProdBlk = sslbls.tpb_index[label1] # index of tensor product block (of state space) this bit label is part of
-#            assert( iTensorProdBlk == sslbls.tpb_index[label2] ) #labels must be members of the same tensor product block
-#            cohBlk = sslbls.labels[iTensorProdBlk]
-#            basisInds = []
-#            for l in cohBlk:
-#                basisInds.append(list(range(sslbls.labeldims[l])))
-#
-#            tensorBlkBasis = list(_itertools.product(*basisInds))
-#            K1 = cohBlk.index(label1)
-#            K2 = cohBlk.index(label2)
-#            N = len(tensorBlkBasis)
-#            UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
-#            for i,b1 in enumerate(tensorBlkBasis):
-#                for j,b2 in enumerate(tensorBlkBasis):
-#                    b1p = list(b1); del b1p[max(K1,K2)]; del b1p[min(K1,K2)] # b1' -- remove basis indices for tensor
-#                    b2p = list(b2); del b2p[max(K1,K2)]; del b2p[min(K1,K2)] # b2'      product parts we operate on
-#                    if b1p == b2p:   #if all parts of tensor product match except for qubits we're operating on
-#                        UcohBlk[i,j] = Uop[ 2*b1[K1]+b1[K2], 2*b2[K1]+b2[K2] ] # then fill in element
-#
-#            #print "UcohBlk = \n",UcohBlk
-#
-#            opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-#
-#            #Map opBlk's basis into final gate basis
-#            mapBlk = []
-#            s = startIndex[iTensorProdBlk] #within state space (i.e. row or col of density matrix)
-#            cohBlkSize = UcohBlk.shape[0]
-#            for i in range(cohBlkSize):
-#                for j in range(cohBlkSize):
-#                    vec_ij_index = (s+i)*dmDim + (s+j) #vectorize by concatenating rows
-#                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
-#            for i,fi in enumerate(mapBlk):
-#                for j,fj in enumerate(mapBlk):
-#                    opTermInStdBasis[fi,fj] = opBlk[i,j]
-#
-#        elif opName == "LX":  #TODO - better way to describe leakage?
-#            assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
-#            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-#            i1 = int(args[1])
-#            i2 = int(args[2])
-#            ex = -1j * theta*_bt.sigmax/2
-#            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on the i1-th and i2-th states of the state space basis
-#            Utot = _np.identity(dmDim, 'complex')
-#            Utot[ i1,i1 ] = Uop[0,0]
-#            Utot[ i1,i2 ] = Uop[0,1]
-#            Utot[ i2,i1 ] = Uop[1,0]
-#            Utot[ i2,i2 ] = Uop[1,1]
-#
-#            opBlk = _gt.unitary_to_process_mx(Utot) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-#
-#            #Map opBlk's basis (vectorized 2x2) into final gate basis
-#            mapBlk = [] #note: "start index" is effectively zero since we're mapping all the blocs
-#            for i in range(dmDim):
-#                for j in range(dmDim):
-#                    vec_ij_index = (i)*dmDim + (j) #vectorize by concatenating rows
-#                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
-#            for i,fi in enumerate(mapBlk):
-#                for j,fj in enumerate(mapBlk):
-#                    opTermInStdBasis[fi,fj] = opBlk[i,j]
-#
-#            #sq = startIndex[qbIndex]; sc = startIndex[clIndex]  #sq,sc are density matrix start indices
-#            #vsq = dmiToVi[ (sq,sq) ]; vsc = dmiToVi[ (sc,sc) ]  # vector indices of (sq,sq) and (sc,sc) density matrix elements
-#            #vsq1 = dmiToVi[ (sq,sq+1) ]; vsq2 = dmiToVi[ (sq+1,sq) ]  # vector indices of qubit coherences
-#            #
-#            ## action = swap (sq,sq) and (sc,sc) elements of a d.mx. and destroy coherences within qubit
-#            #opTermInStdBasis[vsq,vsc] = opTermInStdBasis[vsc,vsq] = 1.0
-#            #opTermInStdBasis[vsq,vsq] = opTermInStdBasis[vsc,vsc] = 0.0
-#            #opTermInStdBasis[vsq1,vsq1] = opTermInStdBasis[vsq2,vsq2] = 0.0
-#
-#
-##        elif opName == "Flip":
-##            assert(len(args) == 2) # clevel-index0, clevel-index1
-##            indx0 = int(args[0])
-##            indx1 = int(args[1])
-##            assert(indx0 != indx1)
-##            assert(bitLabels[indx0] == 'L' and bitLabels[indx1] == 'L')
-##
-##            s0 = startIndex[indx0]; s1 = startIndex[indx1] #density matrix indices
-##            vs0 = dmiToVi[ (s0,s0) ]; vs1 = dmiToVi[ (s1,s1) ]  # vector indices of (s0,s0) and (s1,s1) density matrix elements
-##
-##            # action = swap (s0,s0) and (s1,s1) elements of a d.mx.
-##            opTermInStdBasis[vs0,vs1] = opTermInStdBasis[vs1,vs0] = 1.0
-##            opTermInStdBasis[vs0,vs0] = opTermInStdBasis[vs1,vs1] = 0.0
-#
-#        else: raise ValueError("Invalid gate name: %s" % opName)
-#
-#        opInStdBasis = _np.dot(opInStdBasis, opTermInStdBasis)
-#
-#    #Pare down opInStdBasis to only include those matrix unit basis elements that are allowed to be nonzero
-#    opInReducedStdBasis = _bt.resize_mx(opInStdBasis, stateSpaceDims, resize='contract')
-#
-#    #Change from std (mx unit) basis to another if requested
-#    opMxInFinalBasis = _bt.change_basis(opInReducedStdBasis, "std", basis, stateSpaceDims)
-#
-#    return _op.FullDenseOp(opMxInFinalBasis)
-
 
 def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization="full"):
     """
@@ -453,228 +229,9 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     assert(sslbls.dim == basis.dim), \
         "State space labels dim (%s) != basis dim (%s)" % (sslbls.dim, basis.dim)
 
-    # ----------------------------------------------------------------------------------------------------------------------------------------
-    # -- Helper Functions --------------------------------------------------------------------------------------------------------------------
-    # ----------------------------------------------------------------------------------------------------------------------------------------
-    #
-    #def equals_except(list1, list2, exemptIndices):
-    #    """ Test equivalence of list1 and list2 except for certain indices """
-    #    for i,(l1,l2) in enumerate(zip(list1,list2)):
-    #        if i in exemptIndices: continue
-    #        if l1 != l2: return False
-    #    return True
-    #
-    #def embed_operator_unitary(Uop, labels):
-    #    """ Use the "unitary method" to embed a gate within it's larger Hilbert space """
-    #    # Note: Uop should be in std basis (really no other basis it could be
-    #    # since gm and pp are only for acting on dm space)
-    #    iTensorProdBlks = [ sslbls.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
-    #    if len(set(iTensorProdBlks)) > 1:
-    #        raise ValueError("All qubit labels of a multi-qubit gate must correspond to the same tensor-product-block of the state space")
-    #
-    #    iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-    #    tensorProdBlkLabels = sslbls.labels[iTensorProdBlk]
-    #    basisInds = [] # list of *state* indices of each component of the tensor product block
-    #    for l in tensorProdBlkLabels:
-    #        basisInds.append( list(range(sslbls.labeldims[l])) ) # e.g. [0,1] for qubits
-    #
-    #    tensorBlkBasis = list(_itertools.product(*basisInds)) #state-space basis (remember tensor-prod-blocks are in state space)
-    #    N = len(tensorBlkBasis) #size of state space (not density matrix space, which is N**2)
-    #
-    #    labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
-    #    labelMultipliers = []; stateSpaceDim = 1
-    #    for l in reversed(labels):
-    #        labelMultipliers.append(stateSpaceDim)
-    #        stateSpaceDim *= sslbls.labeldims[l]
-    #    labelMultipliers.reverse() #reverse back to labels order (labels was reversed in loop above)
-    #    labelMultipliers = _np.array(labelMultipliers,_np.int64) #so we can use _np.dot below
-    #    assert(stateSpaceDim == Uop.shape[0] == Uop.shape[1])
-    #
-    #    # Unitary op approach: build unitary acting on state space than use kron => map acting on vec(density matrix) space
-    #    UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
-    #    for i,b1 in enumerate(tensorBlkBasis):
-    #        for j,b2 in enumerate(tensorBlkBasis):
-    #            if equals_except(b1,b2,labelIndices): #if all parts of tensor prod match except for qubit(s) we're operating on
-    #                op_b1 = _np.array([ b1[K] for K in labelIndices ],_np.int64) #basis indices for just the qubits we're operating on
-    #                op_b2 = _np.array([ b2[K] for K in labelIndices ],_np.int64) # - i.e. those corresponding to the given Uop
-    #                op_i = _np.dot(labelMultipliers, op_b1)
-    #                op_j = _np.dot(labelMultipliers, op_b2)
-    #                UcohBlk[i,j] = Uop[ op_i, op_j ] # fill in element
-    #                #FUTURE: could keep track of what Uop <-> UcohBlk elements for parameterization here
-    #
-    #    opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-    #
-    #    #print "DEBUG: Uop = \n", Uop
-    #    #print "DEBUG: UcohBlk = \n", UcohBlk
-    #
-    #    #Map opBlk's basis into final gate basis (shift basis indices due to the composition of different direct-sum
-    #    # blocks along diagonal of final gate mx)
-    #    offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-    #    finalGateInStdBasis = _np.identity( opDim, 'complex' )             # operates on entire state space (direct sum of tensor prod. blocks)
-    #    finalGateInStdBasis[offset:offset+N**2,offset:offset+N**2] = opBlk # opBlk gets offset along diagonal by the numer of preceding basis elements
-    #
-    #    if parameterization != "full":
-    #        raise ValueError("Unitary embedding is only implemented for parmeterization='full'")
-    #
-    #    finalOpInFinalBasis = _bt.change_basis(finalGateInStdBasis, "std", basis.name, blockDims)
-    #    return _op.FullDenseOp(finalOpInFinalBasis)
-    #
-    #
-    #def embed_operation(opmx, labels, indicesToParameterize="all"):
-    #    """ Embed "local" operation matrix into gate for larger Hilbert space using
-    #        our standard method """
-    #    #print "DEBUG: embed_operation opmx = \n", opmx
-    #    iTensorProdBlks = [  sslbls.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
-    #    if len(set(iTensorProdBlks)) != 1:
-    #        raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
-    #                         " same tensor-product-block of the state space -- checked previously")
-    #
-    #    iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-    #    tensorProdBlkLabels = sslbls.labels[iTensorProdBlk]
-    #    basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
-    #    for l in tensorProdBlkLabels:
-    #        basisInds.append( list(range(sslbls.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
-    #
-    #    tensorBlkEls = list(_itertools.product(*basisInds)) #dm-space basis
-    #    lookup_blkElIndex = { tuple(b):i for i,b in enumerate(tensorBlkEls) } # index within vec(tensor prod blk) of each basis el
-    #    N = len(tensorBlkEls) #size of density matrix space
-    #    assert( N == blockDims[iTensorProdBlk]**2 )
-    #
-    #    # operator matrix approach: insert elements of opmx into map acting on vec(density matrix) space
-    #    opBlk = _np.identity( N, 'd' ) # matrix operating on vec(tensor product block), (tensor prod blk is a part of the total density mx)
-    #      #Note: because we're in the Pauil-product basis this is a *real* matrix (and opmx should have only real elements and be in the pp basis)
-    #
-    #    # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
-    #    basisInds_noop = basisInds[:]
-    #    labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
-    #    for labelIndex in sorted(labelIndices,reverse=True):
-    #        del basisInds_noop[labelIndex]
-    #    tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only
-    #    parameterToBaseIndicesMap = {}
-    #
-    #    def decomp_op_index(indx):
-    #        """ Decompose index of a Pauli-product matrix into indices of each
-    #        Pauli in the product """
-    #        ret = []; divisor = 1; divisors = []
-    #        #print "Decomp %d" % indx,
-    #        for l in labels:
-    #            divisors.append(divisor)
-    #            divisor *= sslbls.labeldims[l]**2 # E.g. "4" for qubits
-    #        for d in reversed(divisors):
-    #            ret.append( indx // d )
-    #            indx = indx % d
-    #        #print " => %s (div = %s)" % (str(ret), str(divisors))
-    #        return ret
-    #
-    #    def merge_op_and_noop_bases(op_b, noop_b):
-    #        """
-    #        Merge the Pauli basis indices for the "gate"-parts of the total
-    #        basis contained in op_b (i.e. of the components of the tensor
-    #        product space that are operated on) and the "noop"-parts contained
-    #        in noop_b.  Thus, len(op_b) + len(noop_b) == len(basisInds), and
-    #        this function merges together basis indices for the operated-on and
-    #        not-operated-on tensor product components.
-    #        Note: return value always have length == len(basisInds) == number
-    #        of componens
-    #        """
-    #        ret = list(noop_b[:])    #start with noop part...
-    #        for li,b_el in sorted( zip(labelIndices,op_b), key=lambda x: x[0]):
-    #            ret.insert(li, b_el) #... and insert gate parts at proper points
-    #        return ret
-    #
-    #
-    #    for op_i in range(opmx.shape[0]):     # rows ~ "output" of the gate map
-    #        for op_j in range(opmx.shape[1]): # cols ~ "input"  of the gate map
-    #            if indicesToParameterize == "all":
-    #                iParam = op_i*opmx.shape[1] + op_j #index of (i,j) gate parameter in 1D array of parameters (flatten opmx)
-    #                parameterToBaseIndicesMap[ iParam ] = []
-    #            elif indicesToParameterize == "TP":
-    #                if op_i > 0:
-    #                    iParam = (op_i-1)*opmx.shape[1] + op_j
-    #                    parameterToBaseIndicesMap[ iParam ] = []
-    #                else:
-    #                    iParam = None
-    #            elif (op_i,op_j) in indicesToParameterize:
-    #                iParam = indicesToParameterize.index( (op_i,op_j) )
-    #                parameterToBaseIndicesMap[ iParam ] = []
-    #            else:
-    #                iParam = None #so we don't parameterize below
-    #
-    #            op_b1 = decomp_op_index(op_i) # op_b? are lists of dm basis indices, one index per
-    #            op_b2 = decomp_op_index(op_j) #  tensor product component that the gate operates on (2 components for a 2-qubit gate)
-    #
-    #            for b_noop in tensorBlkEls_noop: #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements
-    #                b_out = merge_op_and_noop_bases(op_b1, b_noop)  # using same b_noop for in and out says we're acting
-    #                b_in  = merge_op_and_noop_bases(op_b2, b_noop)  #  as the identity on the no-op state space
-    #                out_vec_index = lookup_blkElIndex[ tuple(b_out) ] # index of output dm basis el within vec(tensor block basis)
-    #                in_vec_index  = lookup_blkElIndex[ tuple(b_in) ]  # index of input dm basis el within vec(tensor block basis)
-    #
-    #                opBlk[ out_vec_index, in_vec_index ] = opmx[ op_i, op_j ]
-    #                if iParam is not None:
-    #                    # keep track of what opBlk <-> opmx elements for parameterization
-    #                    parameterToBaseIndicesMap[ iParam ].append( (out_vec_index, in_vec_index) )
-    #
-    #
-    #    #Map opBlk's basis into final gate basis (shift basis indices due to the composition of different direct-sum
-    #    # blocks along diagonal of final gate mx)
-    #    offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-    #    finalOp = _np.identity( opDim, 'd' )              # operates on entire state space (direct sum of tensor prod. blocks)
-    #    finalOp[offset:offset+N,offset:offset+N] = opBlk  # opBlk gets offset along diagonal by the number of preceding basis elements
-    #    # Note: final is a *real* matrix whose basis is the pauli-product basis in the iTensorProdBlk-th block, concatenated with
-    #    #   bases for the other blocks - say the "std" basis (which one does't matter since the identity is the same for std, gm, and pp)
-    #
-    #    #print "DEBUG: embed_operation opBlk = \n", opBlk
-    #    tensorDim = blockDims[iTensorProdBlk]
-    #    startBasis = _Basis('pp',  tensorDim)
-    #    finalBasis = _Basis(basis.name, tensorDim)
-    #
-    #    d = slice(offset, offset+N)
-    #
-    #    full_ppToFinal       = _np.identity(opDim, 'complex')
-    #    full_ppToFinal[d, d] = startBasis.transform_matrix(finalBasis)
-    #
-    #    full_finalToPP       = _np.identity(opDim, 'complex')
-    #    full_finalToPP[d, d] = finalBasis.transform_matrix(startBasis)
-    #
-    #    finalOpInFinalBasis = _np.dot(full_ppToFinal,
-    #                                    _np.dot( finalOp, full_finalToPP))
-    #    if parameterization == "full":
-    #        return _op.FullDenseOp(
-    #            _np.real(finalOpInFinalBasis)
-    #            if finalBasis.real else finalOpInFinalBasis, "densitymx" )
-    #
-    #    if parameterization == "static":
-    #        return _op.StaticDenseOp(
-    #            _np.real(finalOpInFinalBasis)
-    #            if finalBasis.real else finalOpInFinalBasis, "densitymx" )
-    #
-    #    if parameterization == "TP":
-    #        if not finalBasis.real:
-    #            raise ValueError("TP gates must be real. Failed to build gate!") # pragma: no cover
-    #        return _op.TPDenseOp(_np.real(finalOpInFinalBasis))
-    #
-    #    elif parameterization in ("linear","linearTP"):
-    #        #OLD (INCORRECT) -- but could give this as paramArray if gave zeros as base matrix instead of finalOp
-    #        # paramArray = opmx.flatten() if indicesToParameterize == "all" else _np.array([opmx[t] for t in indicesToParameterize])
-    #
-    #        #Set all params to *zero* since base matrix contains all initial elements -- parameters just give deviation
-    #        if indicesToParameterize == "all":
-    #            paramArray = _np.zeros(opmx.size, 'd')
-    #        elif indicesToParameterize == "TP":
-    #            paramArray = _np.zeros(opmx.size - opmx.shape[1], 'd')
-    #        else:
-    #            paramArray = _np.zeros(len(indicesToParameterize), 'd' )
-    #
-    #        return _op.LinearlyParamDenseOp(
-    #            finalOp, paramArray, parameterToBaseIndicesMap,
-    #            full_ppToFinal, full_finalToPP, finalBasis.real )
-    #
-    #
-    #    else:
-    #        raise ValueError("Invalid 'parameterization' parameter: " +
-    #                         "%s (must by 'full', 'TP', 'static', 'linear' or 'linearTP')"
-    #                         % parameterization)
-    #
+    # ------------------------------------------------------------------------------------------------------------------
+    # -- Helper Functions ----------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
     def to_label(lbl):
         """ Convert integer-strings to integers in state space label """
@@ -684,10 +241,10 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     def to_labels(lbls):
         """ Convert integer-strings to integers in state space labels """
         return [to_label(lbl) for lbl in lbls]
-    #
-    # ----------------------------------------------------------------------------------------------------------------------------------------
-    # -- End Helper Functions ----------------------------------------------------------------------------------------------------------------
-    # ----------------------------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # -- End Helper Functions ------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
     #print "DB: dim = ",dim, " dmDim = ",dmDim
     opInFinalBasis = None  # what will become the final operation matrix
@@ -712,20 +269,26 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype='densitymx')
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, labels, pp_opMx)
 
-        elif opName == "D":  # like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
+        elif opName == "D":
+            # like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
             raise NotImplementedError("Removed temporarily - need to update using embedded gates")
-        #    labels = to_labels(args) # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
-        #    stateSpaceDim = sslbls.product_dim(labels)
-        #
-        #    if parameterization not in ("linear","linearTP"):
-        #        raise ValueError("'D' gate only makes sense to use when and parameterization == 'linear'")
-        #
-        #    if defaultI2P == "TP":
-        #        indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ] #parameterize only the diagonals els after the first
-        #    else:
-        #        indicesToParameterize = [ (i,i) for i in range(0,stateSpaceDim**2) ] #parameterize only the diagonals els
-        #    pp_opMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
-        #    opTermInFinalBasis = embed_operation(pp_opMx, tuple(labels), indicesToParameterize) # pp_opMx assumed to be in the Pauli-product basis
+            # # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
+            # labels = to_labels(args)
+            # stateSpaceDim = sslbls.product_dim(labels)
+
+            # if parameterization not in ("linear","linearTP"):
+            #     raise ValueError("'D' gate only makes sense to use when and parameterization == 'linear'")
+
+            # if defaultI2P == "TP":
+            #     # parameterize only the diagonals els after the first
+            #     indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ]
+            # else:
+            #     # parameterize only the diagonals els
+            #     indicesToParameterize = [ (i,i) for i in range(0,stateSpaceDim**2) ]
+            # # *real* 4x4 mx in Pauli-product basis -- still just the identity!
+            # pp_opMx = _np.identity(stateSpaceDim**2, 'd')
+            # # pp_opMx assumed to be in the Pauli-product basis
+            # opTermInFinalBasis = embed_operation(pp_opMx, tuple(labels), indicesToParameterize)
 
         elif opName in ('X', 'Y', 'Z'):  # single-qubit gate names
             assert(len(args) == 2)  # theta, qubit-index
@@ -1274,27 +837,3 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
                                            qubit_labels, geometry, parameterization, evotype,
                                            sim_type, on_construction_error, independent_gates,
                                            ensure_composed_gates, globalIdle)
-
-
-###SCRATCH
-# Old from embed_operation:
-#        for op_i in range(opmx.shape[0]):     # rows ~ "output" of the gate map
-#            for op_j in range(opmx.shape[1]): # cols ~ "input"  of the gate map
-#                op_b1_ket, op_b2_bra = decomp_op_index(op_i) # op_b* are lists of state indices, one index per
-#                op_b2_ket, op_b2_bra = decomp_op_index(op_j) #  tensor product component that the gate operates on (2 components for a 2-qubit gate)
-#
-#                for i,b_noop in enumerate(tensorBlkBasis_noop): #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements
-#
-#                    out_ket = insert_op_basis(op_b1_ket, b_noop)  # using same b_noop for ket & bra says we're acting
-#                    out_bra = insert_op_basis(op_b1_bra, b_noop)  #  as the identity on the no-op state space
-#                    out_blkBasis_i = lookup_blkBasisIndex[ tuple(out_ket) ] # row index of ket within tensor block basis (state space basis)
-#                    out_blkBasis_j = lookup_blkBasisIndex[ tuple(out_bra) ] # col index of ket within tensor block basis (state space basis)
-#                    out_vec_index = N*out_blkBasis_i + out_blkBasis_j  # index of (row,col) tensor block element (vectorized row,col)
-#
-#                    in_ket = insert_op_basis(op_b2_ket, b_noop)  # using same b_noop for ket & bra says we're acting
-#                    in_bra = insert_op_basis(op_b2_bra, b_noop)  #  as the identity on the no-op state space
-#                    in_blkBasis_i = lookup_blkBasisIndex[ tuple(in_ket) ] # row index of ket within tensor block basis (state space basis)
-#                    in_blkBasis_j = lookup_blkBasisIndex[ tuple(in_bra) ] # col index of ket within tensor block basis (state space basis)
-#                    in_vec_index = N*in_blkBasis_i + in_blkBasis_j  # index of (row,col) tensor block element (vectorized row,col)
-#
-#                    opBlk[ out_vec_index, in_vec_index ] = opmx[ op_i, op_j ]

@@ -66,7 +66,8 @@ def change_basis(mx, from_basis, to_basis):
 
     elif from_is_basis == True and to_is_basis == True:
         #Case2: both Basis objects.  Just make sure they agree :)
-        assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch: %d,%d,%d" % (from_basis.dim, to_basis.dim, dim)
+        assert(from_basis.dim == to_basis.dim == dim), \
+            "Dimension mismatch: %d,%d,%d" % (from_basis.dim, to_basis.dim, dim)
     else:
         # If one is just a string, then use the .equivalent of the
         # other basis, since there can be desired structure (in the
@@ -75,7 +76,8 @@ def change_basis(mx, from_basis, to_basis):
         # overall dimension.
         if from_is_basis:
             assert(from_basis.dim == dim), "src-basis dimension mismatch: %d != %d" % (from_basis.dim, dim)
-            #to_basis = from_basis.equivalent(to_basis) #Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
+            #to_basis = from_basis.equivalent(to_basis)
+            # ^Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
             to_basis = BuiltinBasis(to_basis, dim, sparse=from_basis.sparse)
         else:
             assert(to_basis.dim == dim), "dest-basis dimension mismatch: %d != %d" % (to_basis.dim, dim)

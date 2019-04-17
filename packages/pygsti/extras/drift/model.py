@@ -120,11 +120,14 @@ class ProbabilityTrajectoryModel(object):
         """
         todo
         """
-        return {o: _np.sum(_np.array([self.parameters[o][ind] * self.basisfunction(i, times) for ind, i in enumerate(self.hyperparameters)]), axis=0) for o in self.independent_outcomes}
-
-    #def get_probabilities(times):
-    #
-    #   return {o : [_np.sum(_np.array([self.parameters[o][0] + self.parameters[o][i]*_np.cos(freqIns[i]*_np.pi*(t-starttime+0.5)/timedif) for i in range(self.dof)])) for t in times]}
+        return {
+            o: _np.sum(
+                _np.array(
+                    [self.parameters[o][ind] * self.basisfunction(i, times)
+                     for ind, i in enumerate(self.hyperparameters)]
+                ), axis=0
+            ) for o in self.independent_outcomes
+        }
 
     def copy(self):
         return _copy.deepcopy(self)
@@ -157,8 +160,8 @@ class DCTProbabilityTrajectoryModel(ProbabilityTrajectoryModel):
             self.numsteps = modelparameters['numsteps']
             #timedif = endtime - starttime
         except:
-            raise ValueError(
-                "The hyperparameters are invalid for the model type! Need the start time and end time to creat the basis functions!")
+            raise ValueError("The hyperparameters are invalid for the model type! "
+                             "Need the start time and end time to creat the basis functions!")
 
         self.fullmodelsize = _np.inf
 
@@ -168,4 +171,6 @@ class DCTProbabilityTrajectoryModel(ProbabilityTrajectoryModel):
         """
         Todo
         """
-        return _np.array([_np.cos(i * _np.pi * ((t - self.starttime) / self.timestep + 0.5) / self.numsteps) for t in times])
+        return _np.array(
+            [_np.cos(i * _np.pi * ((t - self.starttime) / self.timestep + 0.5) / self.numsteps) for t in times]
+        )

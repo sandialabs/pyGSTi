@@ -117,9 +117,11 @@ class VerbosityPrinter(object):
     printer's verbosity
     '''
 
-    # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the beginning of the program
+    # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the
+    # beginning of the program
     _commPath = ''
-    _commFileName = ''  # The name of the generated files, e.g. 'comm_output'. '' means don't output to comm files.  Must also be set
+    # The name of the generated files, e.g. 'comm_output'. '' means don't output to comm files.  Must also be set
+    _commFileName = ''
     _commFileExt = '.txt'
 
     def _create_file(self, filename):
@@ -128,7 +130,10 @@ class VerbosityPrinter(object):
 
     def _get_comm_file(self, comm_id):
         if len(VerbosityPrinter._commFileName) == 0: return ''
-        return '%s%s%s%s' % (VerbosityPrinter._commPath, VerbosityPrinter._commFileName, comm_id, VerbosityPrinter._commFileExt)
+        return '%s%s%s%s' % (VerbosityPrinter._commPath,
+                             VerbosityPrinter._commFileName,
+                             comm_id,
+                             VerbosityPrinter._commFileExt)
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
@@ -144,7 +149,8 @@ class VerbosityPrinter(object):
           Where to put output (If none, output goes to screen)
         comm - mpi4py.MPI.Comm object, optional:
           Restricts output if the program is running in parallel
-            ( By default, if the core is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, and 3 (assuming 4 cores))
+            ( By default, if the core is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, and 3
+            (assuming 4 cores))
         warnings - bool, optional:
           don't print warnings
         '''
@@ -238,7 +244,8 @@ class VerbosityPrinter(object):
         self.__dict__.update(stateDict)
         self._comm = None  # initialize to None upon unpickling
 
-    # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for the entire program)
+    # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for
+    # the entire program)
     def _append_to(self, filename, message):
         with open(filename, 'a') as output:
             output.write(message)  # + '\n')
@@ -302,7 +309,8 @@ class VerbosityPrinter(object):
             self._put('\nWARNING: %s\n' % message, stderr=True)
             self._record("WARNING", 0, '\nWARNING: %s\n' % message)
 
-    def log(self, message, messageLevel=None, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0, end='\n', flush=True):
+    def log(self, message, messageLevel=None, indentChar='  ', showStatustype=False, doIndent=True,
+            indentOffset=0, end='\n', flush=True):
         '''
         Log a status message to screen/file
         Determines whether the message should be printed based on current verbosity setting,
@@ -506,9 +514,9 @@ class VerbosityPrinter(object):
         return recorded
 
 
-########################################################################################################################################
-#                                Demonstration of how the VerbosityPrinter class is used                                               #
-########################################################################################################################################
+########################################################################################################################
+#                                Demonstration of how the VerbosityPrinter class is used                               #
+########################################################################################################################
 
 # Some basic demonstrations of how to use the printer class with an arbitrary function
 

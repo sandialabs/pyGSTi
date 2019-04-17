@@ -1271,8 +1271,10 @@ class DataSet(object):
                 if circuit in self.cirIndex:
                     circuitIndx = self.cirIndex[circuit]
                     repData = self.repData[circuitIndx].copy() if (self.repData is not None) else None
-                    trunc_dataset.add_raw_series_data(circuit, [self.ol[i] for i in self.oliData[circuitIndx]],
-                                                      self.timeData[circuitIndx].copy(), repData)  # Copy operation so truncated dataset can be modified
+                    trunc_dataset.add_raw_series_data(circuit,
+                                                      [self.ol[i] for i in self.oliData[circuitIndx]],
+                                                      self.timeData[circuitIndx].copy(),
+                                                      repData)  # Copy operation so truncated dataset can be modified
                 elif missingAction == "raise":
                     raise KeyError(("Circuit %s was not found in "
                                     "dataset being truncated and "

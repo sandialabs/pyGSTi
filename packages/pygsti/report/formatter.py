@@ -131,8 +131,9 @@ class Formatter(object):
         ret = deepcopy(self)
         for k, v in kwargs.items():
             if k not in ret.__dict__:
-                raise ValueError('Invalid argument to Formatter.variant: {}={}\n{}'.format(k, v,
-                                                                                           'Valid arguments are: {}'.format(list(ret.__dict__.keys()))))
+                raise ValueError('Invalid argument to Formatter.variant: {}={}\n{}'.format(
+                    k, v, 'Valid arguments are: {}'.format(list(ret.__dict__.keys()))
+                ))
             if k == 'ebstring' and ('nmebstring' not in kwargs) \
                and ret.ebstring == ret.nmebstring:
                 ret.__dict__[k] = v

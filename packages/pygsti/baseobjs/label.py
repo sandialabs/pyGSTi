@@ -716,7 +716,10 @@ class CircuitLabel(Label, tuple):
             mapped_sslbls = [mapper[sslbl] for sslbl in self.sslbls]
         else:  # assume mapper is callable
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
-        return CircuitLabel(self.name, tuple((lbl.map_state_space_labels(mapper) for lbl in self.components)), mapped_sslbls, self[2])
+        return CircuitLabel(self.name,
+                            tuple((lbl.map_state_space_labels(mapper) for lbl in self.components)),
+                            mapped_sslbls,
+                            self[2])
 
     def __str__(self):
         """
@@ -772,7 +775,10 @@ class CircuitLabel(Label, tuple):
 
     def replacename(self, oldname, newname):
         """ Returns a label with `oldname` replaced by `newname`."""
-        return CircuitLabel(self.name, tuple((x.replacename(oldname, newname) for x in self.components)), self.sslbls, self[2])
+        return CircuitLabel(self.name,
+                            tuple((x.replacename(oldname, newname) for x in self.components)),
+                            self.sslbls,
+                            self[2])
 
     def issimple(self):
         """ Whether this is a "simple" (opaque w/a true name, from a

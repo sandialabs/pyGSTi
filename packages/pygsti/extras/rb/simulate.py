@@ -267,7 +267,8 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
                 f.write('# Number of qubits\n')
                 if subsetQs is None: f.write(str(pspec.number_of_qubits))
                 else: f.write(str(len(subsetQs)))
-                f.write('\n# RB length // Success counts // Total counts // Circuit depth // Circuit two-qubit gate count\n')
+                f.write('\n# RB length // Success counts // Total counts '
+                        '// Circuit depth // Circuit two-qubit gate count\n')
 
     n = pspec.number_of_qubits
     lengthslist = []
@@ -316,8 +317,8 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
         if verbosity > 0: print('')
     if returndata:
 
-        data = _res.RBSummaryDataset(n, lengthslist, success_counts=scounts, total_counts=counts, circuit_depths=cdepths,
-                                     circuit_twoQgate_counts=c2Qgcounts)
+        data = _res.RBSummaryDataset(n, lengthslist, success_counts=scounts, total_counts=counts,
+                                     circuit_depths=cdepths, circuit_twoQgate_counts=c2Qgcounts)
         return data
 
 
@@ -328,8 +329,8 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
     1-qubit gates, and the same on all 2-qubit gates. The probability of the 3 different Pauli errors on each
     qubit is specified by `ptype` and can either be uniform, or always X, Y, or Z errors.
 
-    The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()`
-    circuit simulator function.
+    The dictionary returned is in the appropriate format for the
+    `circuit_simulator_for_tensored_independent_pauli_errors()` circuit simulator function.
 
     Parameters
     ----------
@@ -432,8 +433,8 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
     `gate_errorrate_dict`. The probability of the 3 different Pauli errors on each qubit is specified by
     `ptype` and can either be uniform, or always X, Y, or Z errors.
 
-    The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()`
-    circuit simulator function.
+    The dictionary returned is in the appropriate format for the
+    `circuit_simulator_for_tensored_independent_pauli_errors()` circuit simulator function.
 
     Parameters
     ----------
@@ -518,8 +519,8 @@ def create_local_pauli_error_model(pspec, oneQgate_errorrate_dict, twoQgate_erro
     and all the 2-qubit gates on a qubit have the same error rate. The probability of the 3 different Pauli
     errors on each qubit is specified by `ptype` and can either be uniform, or always X, Y, or Z errors.
 
-    The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()`
-    circuit simulator function.
+    The dictionary returned is in the appropriate format for the
+    `circuit_simulator_for_tensored_independent_pauli_errors()` circuit simulator function.
 
     Parameters
     ----------

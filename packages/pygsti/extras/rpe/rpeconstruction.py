@@ -92,7 +92,8 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
 
         outputModel.operations[loose_axis_gate_label] = \
             _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label]),
-                            outputModel.operations[loose_axis_gate_label]), modelAux1.operations[auxiliary_axis_gate_label])
+                            outputModel.operations[loose_axis_gate_label]),
+                    modelAux1.operations[auxiliary_axis_gate_label])
 
     outputModel = outputModel.depolarize(op_noise=gateDepol,
                                          spam_noise=SPAMdepol)
@@ -239,7 +240,9 @@ def make_rpe_angle_string_list_dict(log2kMaxOrkList, rpeconfig_inst):
     alphaCosStrList, alphaSinStrList = make_rpe_angle_str_lists(kList, 'alpha', rpeconfig_inst)
     epsilonCosStrList, epsilonSinStrList = make_rpe_angle_str_lists(kList, 'epsilon', rpeconfig_inst)
     thetaCosStrList, thetaSinStrList = make_rpe_angle_str_lists(kList, 'theta', rpeconfig_inst)
-    totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
+    totalStrList = alphaCosStrList + alphaSinStrList \
+        + epsilonCosStrList + epsilonSinStrList \
+        + thetaCosStrList + thetaSinStrList
     totalStrList = _tools.remove_duplicates(totalStrList)  # probably superfluous
 
     stringListD = {}

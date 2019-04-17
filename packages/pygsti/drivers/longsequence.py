@@ -1399,12 +1399,13 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     reopt = bool(scale_typ == "Robust+")
 
                 elif scale_typ == "wildcard":
-                    # Find wildcard budget - maybe need addtional user-defined params re: how to parameterize wildcard budget?
+                    # Find wildcard budget - maybe need addtional user-defined params re: how to parameterize wildcard
+                    # budget?
                     # output -> wildcard vector W_vec
                     printer.log("******************* Adding Wildcard Budget **************************")
 
                     # Approach: we create an objective function that, for a given Wvec, computes:
-                    # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1
+                    # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1                                     # noqa
                     # and minimize this for different eta (binary search) to find that largest eta for which the
                     # first two terms is are zero.  This Wvec is our keeper.
 
@@ -1432,11 +1433,11 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     assert(objective == "logl"), "Can only use wildcard scaling with 'logl' objective!"
                     twoDeltaLogL_terms = fitQty
                     twoDeltaLogL = sum(twoDeltaLogL_terms)
-                    #print("DB2: ",twoDeltaLogL,twoDeltaLogL_threshold, sum(_np.clip(twoDeltaLogL_terms-redbox_threshold,0,None)))
 
                     budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels())
 
-                    if twoDeltaLogL <= twoDeltaLogL_threshold and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
+                    if twoDeltaLogL <= twoDeltaLogL_threshold \
+                       and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
                         printer.log("No need to add budget!")
                         Wvec = _np.zeros(len(mdl.get_primitive_op_labels()), 'd')
                     else:
@@ -1447,10 +1448,11 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                         def _wildcard_objective_firstTerms(Wv):
                             budget.from_vector(Wv)
                             twoDLogL_terms = _tools.two_delta_logl_terms(mdl, ds, circuitsToUse, min_p, pci, a,
-                                                                         poissonPicture=True, evaltree_cache=evaltree_cache,
-                                                                         wildcard=budget)
+                                                                         poissonPicture=True,
+                                                                         evaltree_cache=evaltree_cache, wildcard=budget)
                             twoDLogL = sum(twoDLogL_terms)
-                            return max(0, twoDLogL - twoDeltaLogL_threshold) + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
+                            return max(0, twoDLogL - twoDeltaLogL_threshold) \
+                                + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
 
                         def _wildcard_objective(Wv):
                             return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
@@ -1458,7 +1460,8 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                         nIters = 0; eta_lower_bound = eta_upper_bound = None
                         Wvec_init = budget.to_vector()
 
-                        # Stage 1: make eta large enough that we get a *large* nonzero objective; keep starting with same Wvec_init
+                        # Stage 1: make eta large enough that we get a *large* nonzero objective; keep starting with
+                        # same Wvec_init
                         while nIters < 100:
                             printer.log("  Finding initial eta: %g" % eta)
                             soln = _spo.minimize(_wildcard_objective, Wvec_init,

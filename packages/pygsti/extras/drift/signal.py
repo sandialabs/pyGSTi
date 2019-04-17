@@ -150,7 +150,9 @@ def DCT(x, counts=1, null_hypothesis=None):
     #    assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
     #    assert(len(null_hypothesis) == N), "The null hypothesis array must be the same length as the data array!"
 
-    return _dct((x - counts * null_hypothesis) / _np.sqrt(counts * null_hypothesis * (1 - null_hypothesis)), norm='ortho')
+    return _dct((x - counts * null_hypothesis) \
+                / _np.sqrt(counts * null_hypothesis * (1 - null_hypothesis)),
+                norm='ortho')
 
 
 def IDCT(modes, null_hypothesis, counts=1):
@@ -178,7 +180,8 @@ def IDCT(modes, null_hypothesis, counts=1):
     #assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
     #assert(len(null_hypothesis) == len(modes)), "The null hypothesis array must be the same length as the data array!"
 
-    return _idct(modes, norm='ortho') * _np.sqrt(counts * null_hypothesis * (1 - null_hypothesis)) + counts * null_hypothesis
+    return _idct(modes, norm='ortho') * _np.sqrt(counts * null_hypothesis * (1 - null_hypothesis)) \
+        + counts * null_hypothesis
 
 
 def bartlett_spectrum(x, num_spectra, counts=1, null_hypothesis=None):
@@ -449,7 +452,8 @@ def moving_average(sequence, width=100):
 
 #     if alphas[0] > (1 - epsilon) or alphas[0] < epsilon:
 #         newalphas[1:] = _np.zeros(len(newalphas)-1)
-#         print("Constraint can't be satisfied using this function, because the zero-mode contribution is outside the requested bounds!")
+#         print("Constraint can't be satisfied using this function, because the zero-mode contribution "
+#               "is outside the requested bounds!")
 #         return newalphas
 
 #     iteration = 0

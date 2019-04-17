@@ -90,22 +90,11 @@ def exp_terms(terms, orders, postterm=None, order_base=None):
     for order in orders:  # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
         if order == 0:
             final_terms[order] = [Uterm_tup[0]]; continue
-        #TODO REMOVE
-        #if order_base is not None:
-        #    coeff_threshold = order_base**order
         one_over_factorial = 1 / _np.math.factorial(order)
 
         # expand 1/n! L^n into a list of rank-1 terms
         #termLists = [terms]*order
         final_terms[order] = []
-        #for factors in _itertools.product(*termLists):
-        #    factors_to_compose = Uterm_tup + factors # apply Uterm first
-        #    #TODO REMOVE
-        #    #if order_base is not None:
-        #    #    coeff = _np.product([t.coeff for t in factors_to_compose])
-        #        #LATER (will cause J=0 if we're not careful): if abs(coeff) < coeff_threshold: continue # don't include small terms
-        #        # TODO: create new function that looks at all/many taylor orders and bins into order_base orders?
-        #    final_terms[order].append( one_over_factorial * compose_terms(factors_to_compose) )
 
         #Alternate method
         test_terms = []

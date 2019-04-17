@@ -645,7 +645,9 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         elif sampler == 'Qelimination': sampler = circuit_layer_by_Qelimination
         elif sampler == 'co2Qgates':
             sampler = circuit_layer_by_co2Qgates
-            assert(len(samplerargs) >= 1), "The samplerargs must at least a 1-element list with the first element the 'co2Qgates' argument of the co2Qgates sampler."
+            assert(len(samplerargs) >= 1), \
+                ("The samplerargs must at least a 1-element list with the first element "
+                 "the 'co2Qgates' argument of the co2Qgates sampler.")
         elif sampler == 'local': sampler = circuit_layer_of_oneQgates
         else: raise ValueError("Sampler type not understood!")
 
@@ -681,7 +683,8 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     return circuit
 
 
-def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[]):
+def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False,
+                                lsargs=[]):
     """
     Generates a random circuit of the specified length.
 
@@ -772,8 +775,8 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         subsetQs = tuple(subsetQs)
         # Sample a random circuit of "native gates" over this set of qubits, with the
         # specified sampling.
-        subset_circuit = random_circuit(pspec=pspec, length=length_per_subset[ssQs_ind], subsetQs=subsetQs, sampler=sampler,
-                                        samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
+        subset_circuit = random_circuit(pspec=pspec, length=length_per_subset[ssQs_ind], subsetQs=subsetQs,
+                                        sampler=sampler, samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[subsetQs] = subset_circuit
         # find the symplectic matrix / phase vector this circuit implements.
         s_rc_dict[subsetQs], p_rc_dict[subsetQs] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit, pspec=pspec)
@@ -813,8 +816,9 @@ def _get_setting(l, circuitindex, substructure, lengths, circuits_per_length, st
     return settingDict
 
 
-def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False,
-                                            lsargs=[], set_isolated=True, setcomplement_isolated=False,
+def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length, structure='1Q', sampler='Qelimination',
+                                            samplerargs=[], addlocal=False, lsargs=[], set_isolated=True,
+                                            setcomplement_isolated=False,
                                             descriptor='A set of simultaneous random circuits', verbosity=1):
     """
     Generates a set of simultaneous random circuits of the specified lengths.
@@ -930,11 +934,12 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
-            print('- Sampling {} circuits at length {} ({} of {} lengths)'.format(circuits_per_length, l, lnum + 1, len(lengths)))
+            print('- Sampling {} circuits at length {} ({} of {} lengths)'.format(circuits_per_length, l,
+                                                                                  lnum + 1, len(lengths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
-            circuit, idealout = simultaneous_random_circuit(pspec, l, structure=structure, sampler=sampler, samplerargs=samplerargs,
-                                                            addlocal=addlocal, lsargs=lsargs)
+            circuit, idealout = simultaneous_random_circuit(pspec, l, structure=structure, sampler=sampler,
+                                                            samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
 
             if (not set_isolated) and (not setcomplement_isolated):
                 experiment_dict['circuits'][l, j] = circuit
@@ -947,8 +952,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
                 experiment_dict['settings'][l, j] = {}
                 experiment_dict['circuits'][l, j][tuple(structure)] = circuit
                 experiment_dict['probs'][l, j][tuple(structure)] = idealout
-                experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, lengths, circuits_per_length,
-                                                                                   structure)
+                experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, lengths,
+                                                                                   circuits_per_length, structure)
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
                     subset_circuit = circuit.copy(editable=True)
@@ -966,8 +971,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
                     #         setting[s] =  len(lengths) + lnum*circuits_per_length + j
                     #     else:
                     #         setting[s] =  lnum
-                    experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths, circuits_per_length,
-                                                                                       structure)
+                    experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths,
+                                                                                       circuits_per_length, structure)
                     # print(subset)
                     # print(_get_setting(l, j, subset, lengths, circuits_per_length, structure))
 
@@ -992,8 +997,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
                     #         setting[s] =  len(lengths) + lnum*circuits_per_length + j
                     #     else:
                     #         setting[s] =  lnum
-                    experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths, circuits_per_length,
-                                                                                       structure)
+                    experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths,
+                                                                                       circuits_per_length, structure)
 
             if verbosity > 0: print(j + 1, end=',')
         if verbosity > 0: print('')
@@ -1002,7 +1007,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
 
 
 def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, circuits_per_subset, structure='1Q',
-                                                      sampler='Qelimination', samplerargs=[], descriptor='', verbosity=1):
+                                                      sampler='Qelimination', samplerargs=[], descriptor='',
+                                                      verbosity=1):
     """
     Todo
 
@@ -1080,7 +1086,8 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, ci
     experiment_dict['probs'] = {}
 
     if circuits_per_subset**len(structure) >> 10000:
-        print("Warning: {} circuits are going to be generated by this function!".format(circuits_per_subset**len(structure)))
+        print("Warning: {} circuits are going to be generated by this function!".format(
+            circuits_per_subset**len(structure)))
 
     circuits = {}
 
@@ -1310,9 +1317,10 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     return outcircuit, idealout
 
 
-def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
-                         randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[],
-                         partitioned=False, descriptor='A DRB experiment', verbosity=1):
+def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[],
+                         addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
+                         citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
+                         verbosity=1):
     """
     Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
     arXiv:1807.07975 (2018). The set of lengths of the "core" sequence is given by `lengths` and may be
@@ -1470,13 +1478,15 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
-            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length, l, lnum + 1, len(lengths)))
+            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length, l,
+                                                                                      lnum + 1, len(lengths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             circuit, idealout = direct_rb_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs,
                                                   addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
                                                   cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
-                                                  citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
+                                                  citerations=citerations, compilerargs=compilerargs,
+                                                  partitioned=partitioned)
             experiment_dict['circuits'][l, j] = circuit
             experiment_dict['idealout'][l, j] = idealout
             if verbosity > 0: print(j + 1, end=',')
@@ -1485,9 +1495,9 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
     return experiment_dict
 
 
-def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
-                                   randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
-                                   compilerargs=[], partitioned=False):
+def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[],
+                                   addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
+                                   conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False):
     """
     Generates a simultansous "direct randomized benchmarking" (DRB) circuit, where DRB is the protocol introduced in
     arXiv:1807.07975 (2018). An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random
@@ -1662,8 +1672,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
 
             # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
             if conditionaltwirl:
-                subset_initial_circuit = _cmpl.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs, citerations,
-                                                                        *compilerargs)
+                subset_initial_circuit = _cmpl.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs,
+                                                                        citerations, *compilerargs)
             # If not conditionaltwirl, we do a full random Clifford.
             else:
                 subset_initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations,
@@ -1683,8 +1693,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
             # before handing it to the stabilizer measurement function.
             if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite, subset_n)
             else: p_for_measurement = p_composite
-            subset_inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec, subsetQs,
-                                                                            citerations, *compilerargs)
+            subset_inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec,
+                                                                            subsetQs, citerations, *compilerargs)
         else:
             # Find the Clifford that inverts the circuit so far. We
             s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
@@ -1741,9 +1751,10 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
     return outcircuit, idealout
 
 
-def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
-                                      randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[],
-                                      partitioned=False, set_isolated=True, setcomplement_isolated=False,
+def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, structure='1Q', sampler='Qelimination',
+                                      samplerargs=[], addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True,
+                                      conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False,
+                                      set_isolated=True, setcomplement_isolated=False,
                                       descriptor='A set of simultaneous DRB experiments', verbosity=1):
     """
     Generates a simultaneous "direct randomized benchmarking" (DRB) experiments, where DRB is the protocol introduced in
@@ -1942,13 +1953,17 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
-            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length, l, lnum + 1, len(lengths)))
+            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length, l,
+                                                                                      lnum + 1, len(lengths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
-            circuit, idealout = simultaneous_direct_rb_circuit(pspec, l, structure=structure, sampler=sampler, samplerargs=samplerargs,
-                                                               addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
-                                                               cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
-                                                               citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
+            circuit, idealout = simultaneous_direct_rb_circuit(pspec, l, structure=structure, sampler=sampler,
+                                                               samplerargs=samplerargs, addlocal=addlocal,
+                                                               lsargs=lsargs, randomizeout=randomizeout,
+                                                               cliffordtwirl=cliffordtwirl,
+                                                               conditionaltwirl=conditionaltwirl,
+                                                               citerations=citerations, compilerargs=compilerargs,
+                                                               partitioned=partitioned)
 
             if (not set_isolated) and (not setcomplement_isolated):
                 experiment_dict['circuits'][l, j] = circuit
@@ -1960,8 +1975,8 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                 experiment_dict['settings'][l, j] = {}
                 experiment_dict['circuits'][l, j][tuple(structure)] = circuit
                 experiment_dict['idealout'][l, j][tuple(structure)] = idealout
-                experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, lengths, circuits_per_length,
-                                                                                   structure)
+                experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, lengths,
+                                                                                   circuits_per_length, structure)
 
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
@@ -1972,8 +1987,8 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                     subset_circuit.done_editing()
                     experiment_dict['circuits'][l, j][(tuple(subset),)] = subset_circuit
                     experiment_dict['idealout'][l, j][(tuple(subset),)] = (idealout[subset_ind],)
-                    experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths, circuits_per_length,
-                                                                                       structure)
+                    experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths,
+                                                                                       circuits_per_length, structure)
 
             if setcomplement_isolated:
                 for subset_ind, subset in enumerate(structure):
@@ -1990,8 +2005,8 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                     subsetcomplement_idealout = tuple(subsetcomplement_idealout)
                     experiment_dict['circuits'][l, j][subsetcomplement] = subsetcomplement_circuit
                     experiment_dict['idealout'][l, j][subsetcomplement] = subsetcomplement_idealout
-                    experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths, circuits_per_length,
-                                                                                       structure)
+                    experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths,
+                                                                                       circuits_per_length, structure)
 
             if verbosity > 0: print(j + 1, end=',')
         if verbosity > 0: print('')
@@ -2112,8 +2127,8 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
     else: p_for_inversion = p_inverse
 
     # Compile the inversion circuit
-    inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs, iterations=citerations,
-                                               *compilerargs)
+    inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs,
+                                               iterations=citerations, *compilerargs)
     full_circuit.append_circuit(inversion_circuit)
     full_circuit.done_editing()
     # Find the expected outcome of the circuit.
@@ -2255,7 +2270,8 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
-            print('- Sampling {} circuits at CRB length {} ({} of {} lengths)'.format(circuits_per_length, l, lnum + 1, len(lengths)))
+            print('- Sampling {} circuits at CRB length {} ({} of {} lengths)'.format(circuits_per_length, l,
+                                                                                      lnum + 1, len(lengths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             c, iout = clifford_rb_circuit(pspec, l, subsetQs=subsetQs, randomizeout=randomizeout,
@@ -2490,8 +2506,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # We then append the "back" circuit to the "out" circuit. At length 0 this will be a length 0 circuit.
     circuit.append_circuit(circuit_inv)
 
-    # If we Pauli randomize, There should also be a random Pauli at the start of this circuit; so we add that. If we have a
-    # length 0 circuit we now end up with a length 1 circuit (or longer, if compiled Paulis). So, there is always
+    # If we Pauli randomize, There should also be a random Pauli at the start of this circuit; so we add that. If we
+    # have a length 0 circuit we now end up with a length 1 circuit (or longer, if compiled Paulis). So, there is always
     # a random Pauli.
     if paulirandomize:
         pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)

@@ -39,7 +39,12 @@ DEFAULT_BAD_FIT_THRESHOLD = 2.0
 def _errgen_formula(errgen_type, typ):
     assert(typ in ('html', 'latex'))
 
-    notDuringTxt = """This is <em>not</em> the Lindblad-type generator that would produce this noise if it acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that generates the ideal gate).  This choice is explicit; the authors of pyGSTi are concerned that reporting the continuous-time-generator would encourage a false sense of understanding the physics behind the noise, which is explicitly invalid if the gates were produced by anything other than a simple pulse."""
+    notDuringTxt = ("This is <em>not</em> the Lindblad-type generator that would produce this noise if it "
+                    "acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that "
+                    "generates the ideal gate).  This choice is explicit; the authors of pyGSTi are concerned that "
+                    "reporting the continuous-time-generator would encourage a false sense of understanding the "
+                    "physics behind the noise, which is explicitly invalid if the gates were produced by anything "
+                    "other than a simple pulse.")
 
     if errgen_type == "logTiG":  # G = T*exp(L) (pre-error)
         gen = '<span class="math">G = G_0 e^{\mathbb{L}}</span>'
@@ -971,8 +976,9 @@ def create_standard_report(results, filename, title="auto",
 
     addqty(4, 'progressBarPlot', ws.FitComparisonBarPlot,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
+    # just duplicate for now
     addqty(A, 'progressBarPlot_sum', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)  # just duplicate for now
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Don't display "Target" in model violation summary, as it's often
     # huge and messes up the plot scale.
@@ -1582,8 +1588,9 @@ def create_nqnoise_report(results, filename, title="auto",
 
     addqty(4, 'progressBarPlot', ws.FitComparisonBarPlot,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
+    # just duplicate for now
     addqty(A, 'progressBarPlot_sum', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)  # just duplicate for now
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Don't display "Target" in model violation summary, as it's often
     # huge and messes up the plot scale.
@@ -2052,8 +2059,9 @@ def find_std_clifford_compilation(model, verbosity=0):
                     return mod.clifford_compilation
     return None
 
-##Scratch: SAVE!!! this code generates "projected" models which can be sent to
-## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
+# # XXX this needs to be revised into a script
+# # Scratch: SAVE!!! this code generates "projected" models which can be sent to
+# # FitComparisonTable (with the same gss for each) to make a nice comparison plot.
 #        opLabels = list(model.operations.keys())  # operation labels
 #        basis = model.basis
 #
@@ -2104,13 +2112,6 @@ def find_std_clifford_compilation(model, verbosity=0):
 #                lnd_error_gen, targetOp, genType)
 #
 #            #CPTP projection
-#
-#            #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
-#            # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
-#            #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
-#            #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
-#            #gsHSCP.operations[gl] = _tools.operation_from_error_generator(
-#            #    ham_error_gen, targetOp, genType) #+sto_error_gen_cp
 #
 #            evals,U = _np.linalg.eig(OProj)
 #            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0

@@ -268,7 +268,9 @@ def make_rpe_string_list_d(log2kMax):
     alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
     epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
     thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
-    totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
+    totalStrList = alphaCosStrList + alphaSinStrList + \
+        epsilonCosStrList + epsilonSinStrList + \
+        thetaCosStrList + thetaSinStrList
     totalStrList = _tools.remove_duplicates(totalStrList)  # probably superfluous
 
     stringListD = {}
@@ -447,42 +449,3 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 #    outputDict['N'] = N
 
     return outputDict
-
-
-#def make_rpe_data_set(inputModel, log2kMax, N, seed = None, returnStringListDict = False):
-#    """
-#    Generate a fake RPE dataset.  At present, only works for kList of form [1,2,4,...,2**log2kMax]
-#
-#    Parameters
-#    ----------
-#    inputModel : The model used to generate the data.
-#    log2kMax : Maximum number of times to repeat an RPE "germ"
-#    N : Number of clicks per experiment.
-#    seed : Used to seed numpy's random number generator.  Default is None.
-#    returnStringListDict : Do we want a dictionary of the sin and cos experiments for the various angles?  Default is False.
-#
-#    Returns
-#    -------
-#    simDS
-#        The simulated dataset containing the RPE experiments.
-#    stringListD
-#        Dictionary of operation sequence lists for sin and cos experiments; is not returned by default.
-#    """
-#    kList = [2**k for k in range(log2kMax+1)]
-#    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
-#    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
-#    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
-#    totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
-#    totalStrList = _tools.remove_duplicates(totalStrList)#This step is probably superfluous.
-#    simDS = _dsc.generate_fake_data(inputModel,totalStrList,N,sampleError='binomial',seed=seed)
-#    if returnStringListDict:
-#        stringListD = {}
-#        stringListD['alpha','cos'] = alphaCosStrList
-#        stringListD['alpha','sin'] = alphaSinStrList
-#        stringListD['epsilon','cos'] = epsilonCosStrList
-#        stringListD['epsilon','sin'] = epsilonSinStrList
-#        stringListD['theta','cos'] = thetaCosStrList
-#        stringListD['theta','sin'] = thetaSinStrList
-#        return simDS, stringListD
-#    else:
-#        return simDS, None

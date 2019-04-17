@@ -280,7 +280,10 @@ class ModelMember(ModelChild):
         else:  # no sub-members
 
             #DEBUG def pp(x): return id(x) if (x is not None) else x
-            #DEBUG print(" >>> DB DEFAULT %d ALLOCATING: " % id(self), self.gpindices, " parents:", pp(self.parent), pp(parent))
+            #DEBUG
+            # print(" >>> DB DEFAULT %d ALLOCATING: " % id(self),
+            #       self.gpindices, " parents:",
+            #       pp(self.parent), pp(parent))
             if self.gpindices is None or parent is not self.parent:
                 #default behavior: assume num_params() works even with
                 # gpindices == None and allocate all our parameters as "new"

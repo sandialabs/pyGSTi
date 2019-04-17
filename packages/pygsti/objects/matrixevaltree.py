@@ -511,18 +511,19 @@ class MatrixEvalTree(EvalTree):
                     subTreeSetList.append(singleItemTreeSet)
 
         #TODO: improve tree efficiency via better splitting?
-        #print "DEBUG TREE SPLITTING:"
-        #for k,dbTreeSet in enumerate(subTreeSetList):
-        #    print "Tree %d (size %d): " % (k,len(dbTreeSet)), [ len(dbTreeSet.intersection(x)) for kk,x in enumerate(subTreeSetList) if kk != k ]
-        #cnts = [0]*len(self)
-        #for k,dbTreeSet in enumerate(subTreeSetList):
+        # print "DEBUG TREE SPLITTING:"
+        # for k,dbTreeSet in enumerate(subTreeSetList):
+        #    print "Tree %d (size %d): " % (k,len(dbTreeSet)), \
+        #        [ len(dbTreeSet.intersection(x)) for kk,x in enumerate(subTreeSetList) if kk != k ]
+        # cnts = [0]*len(self)
+        # for k,dbTreeSet in enumerate(subTreeSetList):
         #    for i in dbTreeSet:
         #        cnts[i] += 1
-        #sorted_cnts = sorted( list(enumerate(cnts)), key=lambda x: x[1], reverse=True)
-        #print "Top index : cnts"
-        #for ii,(i,cnt) in enumerate(sorted_cnts):
+        # sorted_cnts = sorted( list(enumerate(cnts)), key=lambda x: x[1], reverse=True)
+        # print "Top index : cnts"
+        # for ii,(i,cnt) in enumerate(sorted_cnts):
         #    print ii,":", i,", ",cnt
-        #raise ValueError("STOP")
+        # raise ValueError("STOP")
 
         #bDebug = False
         #if bDebug: print("Parent nFinal = ",self.num_final_strings(), " len=",len(self))
@@ -682,8 +683,11 @@ class MatrixEvalTree(EvalTree):
 
         analysis['SubtreeUsagePlot'] = {'xs': xs, 'ys': ys, 'title': "Indices used by the subtree rooted at each index",
                                         'xlabel': "Indices used", 'ylabel': 'Subtree root index'}
-        analysis['SubtreeSizePlot'] = {'xs': list(range(len(self))), 'ys': subTreeSize, 'title': "Size of subtree rooted at each index",
-                                       'xlabel': "Subtree root index", 'ylabel': 'Subtree size'}
+        analysis['SubtreeSizePlot'] = {'xs': list(range(len(self))),
+                                       'ys': subTreeSize,
+                                       'title': "Size of subtree rooted at each index",
+                                       'xlabel': "Subtree root index",
+                                       'ylabel': 'Subtree size'}
 
         xs = []; ys = []
         for i, rng in enumerate(zip(firstIndxSeen, lastIndxSeen)):

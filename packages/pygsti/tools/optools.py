@@ -74,14 +74,16 @@ def fidelity(A, B):
         The resulting fidelity.
     """
     evals, U = _np.linalg.eig(A)
-    if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:  # special case when A is rank 1
+    if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
+        # special case when A is rank 1
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
         F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(B, vec)).real  # vec^T * B * vec
         return float(F)
 
     evals, U = _np.linalg.eig(B)
-    if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:  # special case when B is rank 1 (recally fidelity is sym in args)
+    if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
+        # special case when B is rank 1 (recally fidelity is sym in args)
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
         F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
@@ -596,9 +598,10 @@ def fidelity_upper_bound(operationMx):
     iMax = _np.argmax([ev.real for ev in choi_evals])  # index of maximum eigenval
     closestVec = choi_evecs[:, iMax:(iMax + 1)]
 
-    ##print "DEBUG: closest evec = ", closestUnitaryVec
-    #new_evals = _np.zeros( len(closestUnitaryVec) ); new_evals[iClosestU] = 1.0
-    #closestUnitaryJmx = _np.dot(choi_evecs, _np.dot( _np.diag(new_evals), _np.linalg.inv(choi_evecs) ) ) #gives same result
+    # #print "DEBUG: closest evec = ", closestUnitaryVec
+    # new_evals = _np.zeros( len(closestUnitaryVec) ); new_evals[iClosestU] = 1.0
+    # # gives same result:
+    # closestUnitaryJmx = _np.dot(choi_evecs, _np.dot( _np.diag(new_evals), _np.linalg.inv(choi_evecs) ) )
     closestJmx = _np.kron(closestVec, _np.transpose(_np.conjugate(closestVec)))  # closest rank-1 Jmx
     closestJmx /= _mt.trace(closestJmx)  # normalize so trace of Jmx == 1.0
 
@@ -1404,15 +1407,17 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     for i, lindbladMx in enumerate(lindbladMxs):
         proj = _np.real_if_close(_np.vdot(errgen_std.flatten(), lindbladMx.flatten()), tol=1000)
 
-        #DEBUG - for checking why perfect gates gave weird projections --> log ambiguity
-        #print("DB: rawproj(%d) = " % i,proj)
-        #errgen_pp = errgen.copy()#_bt.change_basis(errgen_std,"std","pp")
-        #lindbladMx_pp = _bt.change_basis(lindbladMx,"std","pp")
-        #if proj > 1.0:
+        # # DEBUG - for checking why perfect gates gave weird projections --> log ambiguity
+        # print("DB: rawproj(%d) = " % i, proj)
+        # errgen_pp = errgen.copy() #_bt.change_basis(errgen_std,"std","pp")
+        # lindbladMx_pp = _bt.change_basis(lindbladMx,"std","pp")
+        # if proj > 1.0:
         #    for k in range(errgen_std.shape[0]):
         #        for j in range(errgen_std.shape[1]):
         #            if abs(errgen_pp[k,j].conjugate() * lindbladMx_pp[k,j]) > 1e-2:
-        #                print(" [%d,%d]: + " % (k,j),errgen_pp[k,j].conjugate(),"*",lindbladMx_pp[k,j],"=",(errgen_pp[k,j].conjugate() * lindbladMx_pp[i,j]))
+        #                print(" [%d,%d]: + " % (k,j), errgen_pp[k,j].conjugate(),
+        #                      "*", lindbladMx_pp[k,j],
+        #                      "=", (errgen_pp[k,j].conjugate() * lindbladMx_pp[i,j]))
 
         #assert(_np.isreal(proj)), "non-real projection: %s" % str(proj) #just a warning now
         if not _np.isreal(proj):

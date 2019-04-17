@@ -76,6 +76,12 @@ class CrosstalkResults(object):
         settings_and_regions = _np.zeros((sum(self.settings), self.number_of_regions))
         regions_and_regions = _np.zeros((self.number_of_regions, self.number_of_regions))
 
+        def _setting_range(x):
+            return range(
+                self.setting_indices[x],
+                self.setting_indices[x + 1] if x < (self.number_of_regions - 1) else self.number_of_columns
+            )
+
         for idx, edge in enumerate(self.graph.edges()):
             source = edge[0]
             dest = edge[1]
@@ -86,12 +92,12 @@ class CrosstalkResults(object):
 
             # edge between an outcome and a setting
             if source < self.number_of_regions and dest >= self.number_of_regions:
-                if dest not in range(self.setting_indices[source], (self.setting_indices[(source + 1)] if source < (self.number_of_regions - 1) else self.number_of_columns)):
+                if dest not in _setting_range(source):
                     settings_and_regions[dest - self.number_of_regions, source] = _np.max(self.edge_tvds[idx])
 
             # edge between an outcome and a setting
             if source >= self.number_of_regions and dest < self.number_of_regions:
-                if source not in range(self.setting_indices[dest], (self.setting_indices[(dest + 1)] if dest < (self.number_of_regions - 1) else self.number_of_columns)):
+                if source not in _setting_range(dest):
                     settings_and_regions[source - self.number_of_regions, dest] = _np.max(self.edge_tvds[idx])
 
         ax1.imshow(settings_and_regions, **kwargs)
@@ -293,7 +299,7 @@ class CrosstalkResults(object):
     def get_offset_label_posns(self, pos):
         """
             From https://stackoverflow.com/questions/11946005/label-nodes-outside-with-minimum-overlap-with-other-nodes-edges-in-networkx?
-        """
+        """ # noqa: E501
 
         label_ratio = 1.0 / 20.0
         pos_labels = {}
@@ -309,7 +315,8 @@ class CrosstalkResults(object):
             # Get the node's neighbourhood
             N = G[aNode]
 
-            # Find the centroid of the neighbourhood. The centroid is the average of the Neighbourhood's node's x and y coordinates respectively.
+            # Find the centroid of the neighbourhood. The centroid is the average of the Neighbourhood's node's x and y
+            # coordinates respectively.
             # Please note: This could be optimised further
 
             cx = sum(map(lambda x: pos[x][0], N)) / len(pos)
@@ -318,7 +325,8 @@ class CrosstalkResults(object):
             # Get the centroid's 'direction' or 'slope'. That is, the direction TOWARDS the centroid FROM aNode.
             slopeY = (y - cy)
             slopeX = (x - cx)
-            # Position the label at some distance along this line. Here, the label is positioned at about 1/8th of the distance.
+            # Position the label at some distance along this line. Here, the label is positioned at about 1/8th of the
+            # distance.
 
             pos_labels[aNode] = (x + slopeX * label_ratio, y + slopeY * label_ratio)
 

@@ -481,16 +481,15 @@ class DataComparator():
             triggers and `pass_alpha` is True).
 
         pass_alpha : Bool, optional (default is True)
-
             The aggregate test is implemented first, at the "local" significance defined by `aggregate_test_weighting`
-            and `significance` (see above). If `pass_alpha` is True, then when the aggregate test triggers all the
-            local significance for this test is passed on to the per-sequence tests (which are then jointly implemented
-            with significance `significance`, that is then locally corrected for the multi-test correction as specified
+            and `significance` (see above). If `pass_alpha` is True, then when the aggregate test triggers all the local
+            significance for this test is passed on to the per-sequence tests (which are then jointly implemented with
+            significance `significance`, that is then locally corrected for the multi-test correction as specified
             above), and when the aggregate test doesn't trigger this local significance isn't passed on. If `pass_alpha`
             is False then local significance of the aggregate test is never passed on from the aggregate test. See
-            "Probing context-dependent errors in quantum processors", by Rudinger et al. (or hypothesis testing literature)
-            for discussions of why this "significance passing" still maintains a (global) FWER of `significance`.
-            Note that The default value of True always results in a strictly more powerful test.
+            "Probing context-dependent errors in quantum processors", by Rudinger et al. (or hypothesis testing
+            literature) for discussions of why this "significance passing" still maintains a (global) FWER of
+            `significance`.  Note that The default value of True always results in a strictly more powerful test.
 
         verbosity : int, optional (default is 1)
             If > 0 then a summary of the results of the tests is printed to screen. Otherwise, the
@@ -566,19 +565,20 @@ class DataComparator():
             if self.inconsistent_datasets_detected:
                 print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
+                print("    - The aggregate log-likelihood ratio test is "
+                      "significant at {0:.2f} standard deviations.".format(self.aggregate_nsigma))
+                print("    - The aggregate log-likelihood ratio test "
+                      "standard deviations signficance threshold is {0:.2f}".format(self.aggregate_nsigma_threshold))
                 print(
-                    "    - The aggregate log-likelihood ratio test is significant at {0:.2f} standard deviations.".format(self.aggregate_nsigma))
-                print("    - The aggregate log-likelihood ratio test standard deviations signficance threshold is {0:.2f}".format(
-                    self.aggregate_nsigma_threshold))
-                print(
-                    "    - The number of sequences with data that is inconsistent is {0}".format(self.number_of_significant_sequences))
+                    "    - The number of sequences with data that is "
+                    "inconsistent is {0}".format(self.number_of_significant_sequences))
                 if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences > 0:
                     max_SSTVD_gs, max_SSTVD = self.get_maximum_SSTVD()
                     print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD))
                     print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
             else:
-                print("Statistical hypothesis tests did NOT find inconsistency between the datasets at {0:.2f}% significance.".format(
-                    self.significance * 100))
+                print("Statistical hypothesis tests did NOT find inconsistency "
+                      "between the datasets at {0:.2f}% significance.".format(self.significance * 100))
 
         return
 
@@ -687,7 +687,8 @@ class DataComparator():
         float
             The statistical significance pseudo-threshold for the per-sequence p-value.
         """
-        assert(self.pVal_pseudothreshold is not None), "This has not yet been calculated! Run the .implement() method first!"
+        assert(self.pVal_pseudothreshold is not None), \
+            "This has not yet been calculated! Run the .implement() method first!"
         return self.pVal_pseudothreshold
 
     def get_LLR(self, circuit):
@@ -720,7 +721,8 @@ class DataComparator():
         float
             The statistical significance pseudo-threshold for per-sequence LLR.
         """
-        assert(self.llr_pseudothreshold is not None), "This has not yet been calculated! Run the .implement() method first!"
+        assert(self.llr_pseudothreshold is not None), \
+            "This has not yet been calculated! Run the .implement() method first!"
         return self.llr_pseudothreshold
 
     def get_JSD(self, circuit):
@@ -761,8 +763,10 @@ class DataComparator():
         float
             The pseudo-threshold for the JSD of a circuit, if well-defined.
         """
-        assert(self.fixed_totalcount_data), "The JSD only has a pseudo-threshold when there is the same number of total counts per sequence!"
-        assert(self.jsd_pseudothreshold is not None), "This has not yet been calculated! Run the .implement() method first!"
+        assert(self.fixed_totalcount_data), \
+            "The JSD only has a pseudo-threshold when there is the same number of total counts per sequence!"
+        assert(self.jsd_pseudothreshold is not None), \
+            "This has not yet been calculated! Run the .implement() method first!"
         return self.jsd_pseudothreshold
 
     def get_SSJSD(self, circuit):
@@ -786,7 +790,8 @@ class DataComparator():
         float
             The JSD of the specified circuit.
         """
-        assert(self.llr_pseudothreshold is not None), "The hypothsis testing has not been implemented yet! Run the .implement() method first!"
+        assert(self.llr_pseudothreshold is not None), \
+            "The hypothsis testing has not been implemented yet! Run the .implement() method first!"
         if self.results.hypothesis_rejected[circuit]:
             return self.jsds[circuit]
         else:
@@ -820,7 +825,8 @@ class DataComparator():
         float
             The threshold above which the aggregate LLR is statistically significant.
         """
-        assert(self.aggregate_llr_threshold is not None), "This has not yet been calculated! Run the .implement() method first!"
+        assert(self.aggregate_llr_threshold is not None), \
+            "This has not yet been calculated! Run the .implement() method first!"
         return self.aggregate_llr_threshold
 
     def get_aggregate_pvalue(self):
@@ -853,7 +859,8 @@ class DataComparator():
         float
             The statistical significance threshold for the p-value of the "aggregate" LLR.
         """
-        assert(self.aggregate_pVal_threshold is not None), "This has not yet been calculated! Run the .implement() method first!"
+        assert(self.aggregate_pVal_threshold is not None), \
+            "This has not yet been calculated! Run the .implement() method first!"
         return self.aggregate_pVal_threshold
 
     def get_aggregate_nsigma(self):
@@ -882,7 +889,8 @@ class DataComparator():
             The statistical significance threshold above which the signed standard deviations
             of the aggregate LLR is significant.
         """
-        assert(self.aggregate_nsigma_threshold is not None), "This has not yet been calculated! Run the .implement() method first!"
+        assert(self.aggregate_nsigma_threshold is not None), \
+            "This has not yet been calculated! Run the .implement() method first!"
         return self.aggregate_nsigma_threshold
 
     def get_worst_circuits(self, number):
@@ -902,31 +910,3 @@ class DataComparator():
         """
         worst_strings = sorted(self.pVals.items(), key=lambda kv: kv[1])[:number]
         return worst_strings
-
-    # Commented out, as it doesn't work with Tim's updated DataComparator, and it
-    # seems not to be being used currently.
-    # def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
-    #     """
-    #     Todo
-    #     """
-    #     assert(False), "This method needs to be fixed by Tim!"
-    #     if target_score == 'dof':
-    #         target_score = self.dof
-    #     single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
-    #     single_thresh_violator_locs = _np.nonzero(_np.where(self.llrVals>single_string_thresh,1,0))[0]
-    #     self.alpha_dict = {}
-    #     if isinstance(self.dataset_list_or_multidataset,list):
-    #         dsList = [DS.copy_nonstatic() for DS in self.dataset_list_or_multidataset]
-    #     elif isinstance(self.dataset_list_or_multidataset,_MultiDataSet):
-    #         dsList = [self.dataset_list_or_multidataset[key].copy() for key in self.dataset_list_or_multidataset.keys()]
-    #     for violator_loc in single_thresh_violator_locs:
-    #         circuit = self.llrVals_and_strings[violator_loc][0]
-    #         llr = self.llrVals_and_strings[violator_loc][1]
-    #         datalineList = [ds[circuit] for ds in dsList]
-    #         nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList],'d')
-    #         self.alpha_dict[circuit] = target_score / llr
-    #         print('Rescaling counts for string '+str(circuit)+' by '+str(self.alpha_dict[circuit]))
-    #         print('|target score - new score| = '+str(loglikelihoodRatioObj(self.alpha_dict[circuit],nListList,target_score)))
-    #         for ds in dsList:
-    #             ds[circuit].scale(self.alpha_dict[circuit])
-    #     self.rectified_datasets = dsList

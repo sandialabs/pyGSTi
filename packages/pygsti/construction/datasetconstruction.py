@@ -213,7 +213,11 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                         counts[outcomeLabel] = float(nWeightedSamples * pc)
                     elif sampleError == "round":
                         counts[outcomeLabel] = int(round(nWeightedSamples * pc))
-                    else: raise ValueError("Invalid sample error parameter: '%s'  Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError)
+                    else:
+                        raise ValueError(
+                            "Invalid sample error parameter: '%s'  "
+                            "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
+                        )
 
             dataset.add_count_dict(s, counts)
         dataset.done_adding_data()
@@ -258,9 +262,11 @@ def merge_outcomes(dataset, label_merge_dict):
     merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
     if not set(dataset.get_outcome_labels()).issubset(merge_dict_old_outcomes):
-        raise ValueError(("`label_merge_dict` must account for all the outcomes in original dataset."
-                          " It's missing directives for:\n%s") %
-                         '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes))))
+        raise ValueError(
+            "`label_merge_dict` must account for all the outcomes in original dataset."
+            " It's missing directives for:\n%s" %
+            '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+        )
 
     for key in dataset.keys():
         linecounts = dataset[key].counts

@@ -88,7 +88,8 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
             nErrParams = 2 * basisSizeWoutId  # H+S terms
             if debug:
                 print(" -- wt%d, hops%d: inds=%s locs = %d, eparams=%d, total contrib = %d" %
-                      (wt, maxHops, str(possible_err_qubit_inds), nErrTargetLocations, nErrParams, nErrTargetLocations * nErrParams))
+                      (wt, maxHops, str(possible_err_qubit_inds), nErrTargetLocations,
+                       nErrParams, nErrTargetLocations * nErrParams))
             ret += nErrTargetLocations * nErrParams
         return ret
 
@@ -534,7 +535,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
             for itr, prep in enumerate(_itertools.product(*([singleQfiducials] * nQubits))):
                 # There's probably a cleaner way to do this,
                 if loc_itr < len(loc_Indices) and itr == loc_Indices[loc_itr]:
-                    loc_itr += 1                                            # but this limits us to this processor's local indices
+                    loc_itr += 1  # but this limits us to this processor's local indices
                 else:
                     continue
                 #print("DB: Rank %d: running itr=%d" % (comm.Get_rank(), itr))
@@ -903,7 +904,6 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
             #mod_tmpl_row = tmpl_row[:]
             #for ql in core_filter: mod_tmpl_row[qubit_filter.index(ql)] = 0 # zero out to remove duplicates on non-core
             instance_row = [gatename_fidpair_list[i] for i in tmpl_row]
-            #DEBUG for ql in core_filter: instance_row[qubit_filter.index(ql)] = ((),()) # zero out to remove duplicates on non-core
 
             gfp.append(tuple(instance_row))
 
@@ -1190,7 +1190,8 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                             gatename_fidpair_lists.append([(prep[i], meas[i]) for i in range(nQubits)])
                             added = True
                         #OLD selected_fidpairs.append( (prepFid, measFid) )
-                        if Jrank == Namped:  # then we've selected enough pairs to access all of the amplified directions
+                        if Jrank == Namped:
+                            # then we've selected enough pairs to access all of the amplified directions
                             return gatename_fidpair_lists  # (i.e. the rows of `amped_polyJ`)
 
     #DEBUG
@@ -1474,7 +1475,6 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
                 if core_ql in qubit_labels: new_qubit_labels.append(core_ql)  # same convention!
                 elif ("Q%d" % core_ql) in qubit_labels: new_qubit_labels.append("Q%d" % core_ql)  # HACK!
             ssl = _StateSpaceLabels(new_qubit_labels)
-            #DEBUG print("qubit_labels = ", qubit_labels, " new_qubit_labels = ",new_qubit_labels, "targets = ",g.targetLabels)
             assert(all([(tgt in new_qubit_labels) for tgt in g.targetLabels]))  # all target qubits should be kept!
             if len(new_qubit_labels) == len(g.targetLabels):
                 # embedded gate acts on entire core-qubit space:
@@ -2086,9 +2086,11 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
             nQubits = len(cloud['qubits'])
             cloud_to_template_map = {ql: i for i, ql in enumerate(
                 cloud['core'])}  # core qubits always first in template
-            cloud_to_template_map.update({ql: i for i, ql in
-                                          enumerate(filter(lambda x: x not in cloud['core'],
-                                                           cloud['qubits']), start=len(cloud['core']))})  # then non-core
+            # then non-core
+            cloud_to_template_map.update(
+                {ql: i for i, ql in
+                 enumerate(filter(lambda x: x not in cloud['core'], cloud['qubits']), start=len(cloud['core']))}
+            )
             template_glabels = [gl.map_state_space_labels(cloud_to_template_map)
                                 for gl in pure_op_labels]
             template_edges = []
@@ -2186,9 +2188,11 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                 #    cloud_qubits, syntheticIdle, model, singleQfiducials, prepLbl, effectLbls, J, Jrank, wrtParams)
 
                 nNewAmpedDirs = Jrank - old_Jrank  # OLD: not nec. equal to this: len(sidle_gatename_fidpair_lists)
-                if nNewAmpedDirs > 0:  # then there are some "directions" that this germ amplifies that previous ones didn't...
+                if nNewAmpedDirs > 0:
+                    # then there are some "directions" that this germ amplifies that previous ones didn't...
+                    # assume each cloud amplifies an independent set of params
                     printer.log("Germ amplifies %d additional parameters (so %d of %d amplified for this base cloud)" %
-                                (nNewAmpedDirs, Jrank, Ngp), 3)  # assume each cloud amplifies an independent set of params
+                                (nNewAmpedDirs, Jrank, Ngp), 3)
 
                     if template_germ not in germ_dict:
                         germ_dict[template_germ] = (sireps, {})  # germ_order, access_cache
@@ -2222,9 +2226,9 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                 template_gatename_fidpair_lists.append([
                                     gatename_fidpair_list[cloud_qubits.index(template_to_cloud_map[tl])]
                                     for tl in range(len(cloud_qubits))])  # tl ~= "Q0" is *label* of a template qubit
-                            #E.G if template qubit labels are [0,1,2] , cloud_qubits = [Q3,Q4,Q2] and map is 0->Q4, 1->Q2, 2->Q3
-                            # then we need to know what *index* Q4,Q2,Q3 are with the template, i.e the index of
-                            # template_to_cloud[0], template_to_cloud[1], ... in cloud_qubits
+                            #E.G if template qubit labels are [0,1,2] , cloud_qubits = [Q3,Q4,Q2] and map is 0->Q4,
+                            # 1->Q2, 2->Q3 then we need to know what *index* Q4,Q2,Q3 are with the template, i.e the
+                            # index of template_to_cloud[0], template_to_cloud[1], ... in cloud_qubits
 
                             access_fidpairs_cache[effective_reps] = gatename_fidpair_lists
                         else:
@@ -2449,7 +2453,8 @@ def get_kcoverage_template(n, k, verbosity=0):
 
                 #Best: find a row that already has the value we're looking for (set via previous iteration)
                 for m in matching_rows:
-                    if col_a[m] and col_a[m]['value'] == desired_row[k - 1]:  # a perfect match! - no need to take an open slot
+                    if col_a[m] and col_a[m]['value'] == desired_row[k - 1]:
+                        # a perfect match! - no need to take an open slot
                         updated_alts = [i for i in col_a[m]['alternate_rows'] if i in matching_rows]
                         if verbosity > 3: print("    -> existing row (index %d) perfectly matches!" % m)
                         col_a[m]['alternate_rows'] = updated_alts; placed = True; break

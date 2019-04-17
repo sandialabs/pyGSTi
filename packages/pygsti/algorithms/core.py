@@ -92,22 +92,22 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     """
 
     #Notes:
-    # We compute,
-    # I_tilde = AB   (trunc,trunc), where trunc <= K = min(nRhoSpecs,nESpecs)
-    # X_tilde = AXB  (trunc,trunc)
-    # and  A, B for *target* model. (but target model may need dimension increase to get to trunc... and then A,B are rank deficient)
-    # We would like to get X or it's gauge equivalent.
-    #  We do:       1)  (I^-1)*AXB ~= B^-1 X B := Xhat -- we solve Ii*A*B = identity for Ii
-    #               2) B * Xhat * B^-1 ==> X  (but what if B is non-invertible -- say rectangular) Want B*(something) ~ identity ??
-    # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model
-    # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)
-    #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)
-    #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)
-    # similarly, can get want "A^-1" such that "A^-1"(gsDim,nESpecs) A(nESpecs,gsDim) ~ Identity(gsDim)
-    # or do we want not Ii*A*B = I but B*Ii*A = I(gsDim), so something like Ii = (B^-1)(A^-1) using pseudoinversese above.
-    #   (but we can't do this, since we only have AB, not A and B separately)
-    # A is (trunc, gsDim)
-    # B is (gsDim, trunc)
+    # We compute,                                                                                                                                               # noqa
+    # I_tilde = AB   (trunc,trunc), where trunc <= K = min(nRhoSpecs,nESpecs)                                                                                   # noqa
+    # X_tilde = AXB  (trunc,trunc)                                                                                                                              # noqa
+    # and  A, B for *target* model. (but target model may need dimension increase to get to trunc... and then A,B are rank deficient)                           # noqa
+    # We would like to get X or it's gauge equivalent.                                                                                                          # noqa
+    #  We do:       1)  (I^-1)*AXB ~= B^-1 X B := Xhat -- we solve Ii*A*B = identity for Ii                                                                     # noqa
+    #               2) B * Xhat * B^-1 ==> X  (but what if B is non-invertible -- say rectangular) Want B*(something) ~ identity ??                             # noqa
+    # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model                                                   # noqa
+    # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)                                                                        # noqa
+    #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)                                                            # noqa
+    #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)                                                                                                       # noqa
+    # similarly, can get want "A^-1" such that "A^-1"(gsDim,nESpecs) A(nESpecs,gsDim) ~ Identity(gsDim)                                                         # noqa
+    # or do we want not Ii*A*B = I but B*Ii*A = I(gsDim), so something like Ii = (B^-1)(A^-1) using pseudoinversese above.                                      # noqa
+    #   (but we can't do this, since we only have AB, not A and B separately)                                                                                   # noqa
+    # A is (trunc, gsDim)                                                                                                                                       # noqa
+    # B is (gsDim, trunc)                                                                                                                                       # noqa
 
     # With no svd truncation (but we always truncate; this is just for reference)
     # AXB     = (nESpecs, nRhoSpecs)
@@ -171,8 +171,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     #print "DEBUG: Evals(ABmat) = \n",_np.linalg.eigvals(ABMat)
     rankAB = _np.linalg.matrix_rank(ABMat_p)
     if rankAB < ABMat_p.shape[0]:
-        raise ValueError("LGST AB matrix is rank %d < %d. Choose better prepStrs and/or effectStrs, or decrease svdTruncateTo"
-                         % (rankAB, ABMat_p.shape[0]))
+        raise ValueError("LGST AB matrix is rank %d < %d. Choose better prepStrs and/or effectStrs, "
+                         "or decrease svdTruncateTo" % (rankAB, ABMat_p.shape[0]))
 
     invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0 / s), Pj))  # (trunc,trunc)
     # check inverse is correct (TODO: comment out later)
@@ -274,7 +274,9 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         for sval in guess_s: printer.log(sval, 2)
         printer.log('', 2)
 
-        if guessTrunc < trunc:  # if the dimension of the gauge-guess model is smaller than the matrices being estimated, pad B with identity
+        if guessTrunc < trunc:
+            # if the dimension of the gauge-guess model is smaller than the matrices being estimated, pad B with
+            # identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
             printer.log(s[guessTrunc:trunc], 2)
 
@@ -343,7 +345,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             lgstModel._calcClass = guessModelForGauge._calcClass
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
-        #lgstModel.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstModel had dim trunc, so after transform is has dim gsDim
+        # # lgstModel had dim trunc, so after transform is has dim gsDim
+        #lgstModel.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p )
 
     printer.log("Resulting model:\n", 3)
     printer.log(lgstModel, 3)
@@ -632,7 +635,8 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     # (lgst_estimated_process - process_estimate_using_current_model)  difference is a least-squares
     # term and the optimization is over the elements of the "current_model".  Note that:
     #   lgst_estimated_process = LGST estimate for a operation sequence in circuitsToUseInEstimation
-    #   process_estimate_using_current_model = process mx you get from multiplying together the operation matrices of the current model
+    #   process_estimate_using_current_model = process mx you get from multiplying together the operation matrices of
+    #                                          the current model
 
     #Step 1: get the lgst estimates for each of the "operation sequences to use in estimation" list
     evTree, _, _ = mdl.bulk_evaltree(circuitsToUseInEstimation)
@@ -698,8 +702,10 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
                 ret = _np.concatenate((ret, gsVecNorm))
 
             retSq = sum(ret * ret)
-            printer.log(("%g: objfn vec in (%g,%g),  mdl in (%g,%g), maxLen = %d" %
-                         (retSq, _np.min(ret), _np.max(ret), _np.min(vectorGS), _np.max(vectorGS), maxCircuitLength)), 3)
+            printer.log(
+                ("%g: objfn vec in (%g,%g),  mdl in (%g,%g), maxLen = %d" %
+                 (retSq, _np.min(ret), _np.max(ret), _np.min(vectorGS), _np.max(vectorGS), maxCircuitLength))
+                , 3)
             #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
             return ret
 
@@ -911,7 +917,8 @@ def do_iterative_exlgst(
 
         #printer.log('', 2) #newline if we have more info to print
         extraMessages = ["(%s)" % circuitSetLabels[i]] if circuitSetLabels else []
-        printer.show_progress(i, nIters, prefix='--- Iterative eLGST: ', suffix='; %s operation sequences ---' % len(stringsToEstimate),
+        printer.show_progress(i, nIters, prefix='--- Iterative eLGST: ',
+                              suffix='; %s operation sequences ---' % len(stringsToEstimate),
                               verboseMessages=extraMessages)
 
         minErr, elgstModel = do_exlgst(
@@ -1297,7 +1304,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
     # Jacobian function
     if printer.verbosity < 4:  # Fast versions of functions
-        if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:  # Fast un-regularized version
+        if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:
+            # Fast un-regularized version
             def _jacobian(vectorGS):
                 tm = _time.time()
                 dprobs = jac.view()  # avoid mem copying: use jac mem for dprobs
@@ -1403,7 +1411,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                     off += _spam_penalty_jac_fill(jac[KM + off:, :], mdl, spam_penalty_factor,
                                                   opBasis)
 
-            #Zero-out insignificant entries in jacobian -- seemed to help some, but leaving this out, thinking less complicated == better
+            # Zero-out insignificant entries in jacobian -- seemed to help some, but leaving this out,
+            # thinking less complicated == better
             #absJac = _np.abs(jac);  maxabs = _np.max(absJac)
             #jac[ absJac/maxabs < 5e-8 ] = 0.0
 
@@ -1463,12 +1472,6 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     soln_gs = mdl.copy()
     profiler.add_time("do_mc2gst: leastsq", tm)
 
-    #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
-    #print "*** leastSQ TIME = ",(_time.time()-tm)
-
-    #opt_jac = _np.abs(jacobian(opt_x))
-    #print "DEBUG: Jacobian (shape %s) at opt_x: min=%g, max=%g" % (str(opt_jac.shape),_np.min(opt_jac), _np.max(opt_jac))
-    #print "DEBUG: leastsq finished with flag=%d: %s" % (flag,msg)
     tm = _time.time()
 
     if printer.verbosity > 0:
@@ -1685,8 +1688,10 @@ def do_mc2gst_with_model_selection(
             msResult = "Rejected"
             tryDecreasedDim = False
 
-        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)" %
-                    (msResult, curDim, chiSq, chiSq - (nStrings - nParams), nStrings, nParams, nStrings - nParams, chi2diff, 2 * paramDiff))
+        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) "
+                    "(dChi^2=%d, 2*dParams=%d)" %
+                    (msResult, curDim, chiSq, chiSq - (nStrings - nParams), nStrings, nParams, nStrings - nParams,
+                     chi2diff, 2 * paramDiff))
 
     #try increasing the dimension
     curDim = dim
@@ -1722,8 +1727,10 @@ def do_mc2gst_with_model_selection(
             msResult = "Rejected"
             tryIncreasedDim = False
 
-        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)" %
-                    (msResult, curDim, chiSq, chiSq - (nStrings - nParams), nStrings, nParams, nStrings - nParams, chi2diff, 2 * paramDiff))
+        printer.log("%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) "
+                    "(dChi^2=%d, 2*dParams=%d)" %
+                    (msResult, curDim, chiSq, chiSq - (nStrings - nParams), nStrings, nParams, nStrings - nParams,
+                     chi2diff, 2 * paramDiff))
 
     return bestMinErr, bestGS
 
@@ -2388,8 +2395,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             evaltree_cache['cntVecMx'] = cntVecMx
             evaltree_cache['totalCntVec'] = totalCntVec
 
+    # The theoretical upper bound on the log(likelihood)
     logL_upperbound = _tools.logl_max(mdl, dataset, dsCircuitsToUse,
-                                      poissonPicture, check, opLabelAliases, evaltree_cache)  # The theoretical upper bound on the log(likelihood)
+                                      poissonPicture, check, opLabelAliases, evaltree_cache)
     minusCntVecMx = -1.0 * cntVecMx
 
     freqs = cntVecMx / totalCntVec
@@ -2418,21 +2426,21 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     if poissonPicture:
 
-        # The log(Likelihood) within the Poisson picture is:
-        #
-        # L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!
-        #
-        # Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,
-        #  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and
-        #  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:
-        #
-        # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}
-        #       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)
-        #
-        # The objective function computes the negative log(Likelihood) as a vector of leastsq
-        #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )
-        #
-        # See LikelihoodFunctions.py for details on patching
+        # The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
+        #                                                                                                                                                       # noqa
+        # L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
+        #                                                                                                                                                       # noqa
+        # Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
+        #  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
+        #  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
+        #                                                                                                                                                       # noqa
+        # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
+        #       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
+        #                                                                                                                                                       # noqa
+        # The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
+        #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
+        #                                                                                                                                                       # noqa
+        # See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
 
         def _objective_func(vectorGS):
             tm = _time.time()
@@ -2449,10 +2457,13 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.maximum(v, 0)
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-            v = _np.where(minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs,
-                                                                      (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
-            #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
-            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
+            v = _np.where(minusCntVecMx == 0,
+                          totalCntVec * _np.where(probs >= a,
+                                                  probs,
+                                                  (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
+                          v)
+            # special handling for f == 0 terms
+            # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
             v = _np.sqrt(v)
             v.shape = [KM]  # reshape ensuring no copy is needed
             if cptp_penalty_factor != 0:
@@ -2498,11 +2509,15 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.maximum(v, 0)
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-            v = _np.where(minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs,
-                                                                      (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0), v)
+            v = _np.where(minusCntVecMx == 0,
+                          totalCntVec * _np.where(probs >= a,
+                                                  probs,
+                                                  (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
+                          v)
 
             v = _np.sqrt(v)
-            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero below
+            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
+            # below
             v = _np.maximum(v, 1e-100)
             dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs + totalCntVec)
             dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (probs - min_p))
@@ -2559,7 +2574,6 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
             v = _np.where(minusCntVecMx == 0, 0.0, v)
-            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
             v = _np.sqrt(v)
             assert(v.shape == (KM,))  # reshape ensuring no copy is needed
 
@@ -2608,7 +2622,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.where(minusCntVecMx == 0, 0.0, v)
             v = _np.sqrt(v)
 
-            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero below
+            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
+            # below
             v = _np.maximum(v, 1e-100)
             dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs)
             dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (probs - min_p))
@@ -2681,7 +2696,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
                     try:
                         nModelParams = mdl.num_nongauge_params()  # len(x0)
                     except:  # numpy can throw a LinAlgError
-                        printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+                        printer.warning("Could not obtain number of *non-gauge* parameters - "
+                                        "using total params instead")
                         nModelParams = mdl.num_params()
                 else:
                     printer.log("Finding num_nongauge_params is too expensive: using total params.")
@@ -2693,7 +2709,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             pvalue = 1.0 - _stats.chi2.cdf(2 * deltaLogL, nDataParams - nModelParams)
 
             printer.log("  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound), 1)
-            printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
+            printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; "
+                        "p-value = %g)" %
                         (2 * deltaLogL, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
             printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -2921,8 +2938,9 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 
             logL_ub = _tools.logl_max(mleModel, dataset, stringsToEstimate,
                                       poissonPicture, check, opLabelAliases, evt_cache)
+            # get maxLogL from chi2 estimate
             maxLogL = _tools.logl(mleModel, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, opLabelAliases, evt_cache, comm)  # get maxLogL from chi2 estimate
+                                  radius, poissonPicture, check, opLabelAliases, evt_cache, comm)
 
             printer.log("2*Delta(log(L)) = %g" % (2 * (logL_ub - maxLogL)), 2)
 
@@ -3207,7 +3225,8 @@ def find_closest_unitary_opmx(operationMx):
         initialBasisVec = [0, 0, 0]  # start with I until we figure out how to extract target unitary
         #getU = getu_1q
         getGateMx = _get_gate_mx_1q
-    #Note: seems like for 2 qubits bell = [1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 ]/sqrt(4) (4 zeros between 1's since state dimension is 4 ( == sqrt(gate dimension))
+    # Note: seems like for 2 qubits bell = [1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 ]/sqrt(4)
+    # (4 zeros between 1's since state dimension is 4 ( == sqrt(gate dimension))
     else:
         raise ValueError("Can't get closest unitary for > 1 qubits yet -- need to generalize.")
 

@@ -622,10 +622,10 @@ class ConfidenceRegionFactoryView(object):
             computed from `model` but they're passed in to save compuational time.
         """
 
-        #Scale projected Hessian for desired confidence level => quadratic form for confidence region
-        # assume hessian gives Fisher info, so asymptotically normal => confidence interval = +/- seScaleFctr * 1/sqrt(hessian)
-        # where seScaleFctr gives the scaling factor for a normal distribution, i.e. integrating the
-        # std normal distribution between -seScaleFctr and seScaleFctr == confidenceLevel/100 (as a percentage)
+        # Scale projected Hessian for desired confidence level => quadratic form for confidence region assume hessian
+        # gives Fisher info, so asymptotically normal => confidence interval = +/- seScaleFctr * 1/sqrt(hessian) where
+        # seScaleFctr gives the scaling factor for a normal distribution, i.e. integrating the std normal distribution
+        # between -seScaleFctr and seScaleFctr == confidenceLevel/100 (as a percentage)
         assert(confidenceLevel > 0.0 and confidenceLevel < 100.0)
         if confidenceLevel < 1.0:
             _warnings.warn("You've specified a %f%% confidence interval, " % confidenceLevel
@@ -634,7 +634,8 @@ class ConfidenceRegionFactoryView(object):
 
         # Get constants C such that xT*Hessian*x = C gives contour for the desired confidence region.
         #  C1 == Single DOF case: constant for a single-DOF likelihood, (or a profile likelihood in our case)
-        #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* model parameters
+        #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* model
+        #        parameters
         self.nonMarkRadiusSq = nonMarkRadiusSq
         if nonMarkRadiusSq == 0.0:  # use == to test for *exact* zero floating pt value as herald
             C1 = _stats.chi2.ppf(confidenceLevel / 100.0, 1)
@@ -959,7 +960,9 @@ class ConfidenceRegionFactoryView(object):
                     for i in range(f0.shape[0]):
                         for j in range(f0.shape[1]):
                             gradFdag = _np.transpose(gradF[i, j])  # conjugate?
-                            df[i, j] = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i, j].real)))) \
+                            df[i, j] = _np.sqrt(abs(_np.dot(
+                                gradFdag.real,
+                                _np.dot(self.invRegionQuadcForm, gradF[i, j].real)))) \
                                 + 1j * \
                                 _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(
                                     self.invRegionQuadcForm, gradF[i, j].imag))))

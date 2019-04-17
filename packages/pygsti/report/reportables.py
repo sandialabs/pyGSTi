@@ -172,44 +172,7 @@ class Gate_eigenvalues(_modf.ModelFunction):
         #evalsM = evals0 + Uinv * (M-M0) * U
         return _np.array([self.evals[k] + _np.dot(self.inv_evecs[k, :], _np.dot(dMx, self.evecs[:, k]))
                           for k in range(dMx.shape[0])])
-    # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
-
-
-#def gate_eigenvalues(gate, mxBasis):
-#    return _np.array(sorted(_np.linalg.eigvals(gate),
-#                            key=lambda ev: abs(ev), reverse=True))
-#Gate_eigenvalues = _modf.opfn_factory(gate_eigenvalues)
-## init args == (model, opLabel)
-
-
-#Example....
-#class Circuit_eigenvalues(_modf.ModelFunction):
-#    def __init__(self, modelA, modelB, circuit):
-#        self.circuit = circuit
-#        self.B = modelB.product(circuit)
-#        self.evB = _np.linalg.eigvals(B)
-#        self.circuit = circuit
-#        _modf.ModelFunction.__init__(self, modelA, ["all"])
-#
-#    def evaluate(self, model):
-#        Mx = model.product(self.circuit)
-#        return _np.array(sorted(_np.linalg.eigvals(),
-#                            key=lambda ev: abs(ev), reverse=True))
-#
-#        A = model.product(self.circuit)
-#        evA, evecsA = _np.linalg.eig(A)
-#        self.A0, self.evA0, self.evecsA0, self.ievecsA0 = A, evA, evecsA, _np.linalg.inv(evecsA) #save for evaluate_nearby...
-#        wts, self.pairs = _tools.minweight_match(evA, self.evB, lambda x,y: abs(x-y), return_pairs=True)
-#        return _np.max(wts)
-#
-#    def evaluate_nearby(self, nearby_model):
-#        #avoid calling minweight_match again
-#        A = nearby_model.product(self.circuit)
-#        dA = A - self.A0
-#        #evA = _np.linalg.eigvals(A)  # = self.evA0 + U * (A-A0) * Udag
-#        evA = _np.array( [ self.evA0 + _np.dot(self.ievecsA0[k,:], _np.dot(dA, self.evecsA0[:,k])) for k in range(dA.shape[0])] )
-#        return _np.max( [ abs(evA[i]-self.evB[j]) for i,j in self.pairs ] )
-
+    # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 class Circuit_eigenvalues(_modf.ModelFunction):
     """Circuit eigenvalues"""
@@ -243,7 +206,7 @@ class Circuit_eigenvalues(_modf.ModelFunction):
         #evalsM = evals0 + Uinv * (M-M0) * U
         return _np.array([self.evals[k] + _np.dot(self.inv_evecs[k, :], _np.dot(dMx, self.evecs[:, k]))
                           for k in range(dMx.shape[0])])
-    # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
+    # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 
 #def circuit_eigenvalues(model, circuit):
@@ -1026,22 +989,6 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
                 errgen, ptype, mxBasis, mxBasis)[1:])  # skip [0] == Identity
         return _np.concatenate(proj)
 
-    #def vec_to_projdict(vec):
-    #    ret = {}
-    #    off = 0 #current offset into vec
-    #    for gl in modelA.operations.keys():
-    #        ret['%s error generator' % gl] = _np.zeros((modelA.dim,modelA.dim),'d') # TODO: something here (just a placeholder now)
-    #        if gl in opLabels: # a non-identity gate
-    #            for ptype in ("hamiltonian","stochastic","affine"):
-    #                ret['%s %s projections' % (gl, ptype)] = vec[off:off+ptype_counts[ptype]]
-    #                ret['%s %s projections power' % (gl, ptype)] = 0 # TODO - use scale factor... vec[off:off+ptype_counts[ptype]]
-    #        else: # an identity gate - just put in zeros of now
-    #            for ptype in ("hamiltonian","stochastic","affine"):
-    #                ret['%s %s projections' % (gl, ptype)] = _np.zeros(ptype_counts[ptype], 'd')
-    #                ret['%s %s projections power' % (gl, ptype)] = 0
-    #
-    #    return ret
-
     def firstOrderNoise(opstr, errSupOp, glWithErr):
         noise = _np.zeros((modelB.dim, modelB.dim), 'd')
         for n, gl in enumerate(opstr):
@@ -1301,50 +1248,44 @@ def info_of_opfn_by_name(name):
     nicename : str
     tooltip : str
     """
-    if name == "inf":
-        niceName = "Entanglement|Infidelity"
-        tooltip = "1.0 - <psi| 1 x Lambda(psi) |psi>"
-    elif name == "agi":
-        niceName = "Avg. Gate|Infidelity"
-        tooltip = "d/(d+1) (entanglement infidelity)"
-    elif name == "trace":
-        niceName = "1/2 Trace|Distance"
-        tooltip = "0.5 | Chi(A) - Chi(B) |_tr"
-    elif name == "diamond":
-        niceName = "1/2 Diamond-Dist"
-        tooltip = "0.5 sup | (1 x (A-B))(rho) |_tr"
-    elif name == "nuinf":
-        niceName = "Non-unitary|Ent. Infidelity"
-        tooltip = "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"
-    elif name == "nuagi":
-        niceName = "Non-unitary|Avg. Gate Infidelity"
-        tooltip = "(d-1)/d [1 - sqrt( unitarity(A B^-1) )]"
-    elif name == "evinf":
-        niceName = "Eigenvalue|Ent. Infidelity"
-        tooltip = "min_P 1 - |lambda_a P lambda_b^dag|/d^2  [P = permutation, (lambda_a,lambda_b) = eigenvalues of A and B]"
-    elif name == "evagi":
-        niceName = "Eigenvalue|Avg. Gate Infidelity"
-        tooltip = "min_P (d^2 - |lambda_a P lambda_b^dag|)/d(d+1)  [P = permutation, (lambda_a,lambda_b) = eigenvalues of A and B]"
-    elif name == "evnuinf":
-        niceName = "Eigenvalue Non-U.|Ent. Infidelity"
-        tooltip = "(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
-    elif name == "evnuagi":
-        niceName = "Eigenvalue Non-U.|Avg. Gate Infidelity"
-        tooltip = "(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
-    elif name == "evdiamond":
-        niceName = "Eigenvalue|1/2 Diamond-Dist"
-        tooltip = "(d^2-1)/d^2 max_i { |a_i - b_i| } where (a_i,b_i) are corresponding eigenvalues of A and B."
-    elif name == "evnudiamond":
-        niceName = "Eigenvalue Non-U.|1/2 Diamond-Dist"
-        tooltip = "(d^2-1)/d^2 max_i { | |a_i| - |b_i| | } where (a_i,b_i) are corresponding eigenvalues of A and B."
-    elif name == "frob":
-        niceName = "Frobenius|Distance"
-        tooltip = "sqrt( sum( (A_ij - B_ij)^2 ) )"
-    elif name == "unmodeled":
-        niceName = "Un-modeled|Error"
-        tooltip = "The per-operation budget used to account for un-modeled errors (model violation)"
-    else: raise ValueError("Invalid name: %s" % name)
-    return niceName, tooltip
+    info = {
+        "inf": ("Entanglement|Infidelity",
+                "1.0 - <psi| 1 x Lambda(psi) |psi>"),
+        "agi": ("Avg. Gate|Infidelity",
+                "d/(d+1) (entanglement infidelity)"),
+        "trace": ("1/2 Trace|Distance",
+                  "0.5 | Chi(A) - Chi(B) |_tr"),
+        "diamond": ("1/2 Diamond-Dist",
+                    "0.5 sup | (1 x (A-B))(rho) |_tr"),
+        "nuinf": ("Non-unitary|Ent. Infidelity",
+                  "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),
+        "nuagi": ("Non-unitary|Avg. Gate Infidelity",
+                  "(d-1)/d [1 - sqrt( unitarity(A B^-1) )]"),
+        "evinf": ("Eigenvalue|Ent. Infidelity",
+                  "min_P 1 - |lambda_a P lambda_b^dag|/d^2  "
+                  "[P = permutation, (lambda_a,lambda_b) = eigenvalues of A and B]"),
+        "evagi": ("Eigenvalue|Avg. Gate Infidelity",
+                  "min_P (d^2 - |lambda_a P lambda_b^dag|)/d(d+1)  "
+                  "[P = permutation, (lambda_a,lambda_b) = eigenvalues of A and B]"),
+        "evnuinf": ("Eigenvalue Non-U.|Ent. Infidelity",
+                    "(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"),
+        "evnuagi": ("Eigenvalue Non-U.|Avg. Gate Infidelity",
+                    "(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"),
+        "evdiamond": ("Eigenvalue|1/2 Diamond-Dist",
+                      "(d^2-1)/d^2 max_i { |a_i - b_i| } "
+                      "where (a_i,b_i) are corresponding eigenvalues of A and B."),
+        "evnudiamond": ("Eigenvalue Non-U.|1/2 Diamond-Dist",
+                        "(d^2-1)/d^2 max_i { | |a_i| - |b_i| | } "
+                        "where (a_i,b_i) are corresponding eigenvalues of A and B."),
+        "frob": ("Frobenius|Distance",
+                 "sqrt( sum( (A_ij - B_ij)^2 ) )"),
+        "unmodeled": ("Un-modeled|Error",
+                      "The per-operation budget used to account for un-modeled errors (model violation)")
+    }
+    if name in info:
+        return info[name]
+    else:
+        raise ValueError("Invalid name: %s" % name)
 
 
 def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,

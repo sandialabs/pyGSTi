@@ -110,7 +110,8 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
         difference = fx - last_fx
         print("DEBUG: Max iter ", step, ": f=", fx, ", dexpct=", predicted_difference - difference,
               ", step=", stepsize, ", xopt_dot=", xopt_dot if xopt is not None else "--",
-              ", chg_dot=", _np.dot(change, lastchange) / (_np.linalg.norm(change) * _np.linalg.norm(lastchange) + 1e-6))
+              ", chg_dot=",
+              _np.dot(change, lastchange) / (_np.linalg.norm(change) * _np.linalg.norm(lastchange) + 1e-6))
 
         if abs(difference) < tol: break  # Convergence condition
 
@@ -235,7 +236,8 @@ def _finite_diff_dfdx_and_bdflag(f, x, DELTA):
         if fPlus is None: bd[k] = +1.0
         elif fMinus is None: bd[k] = -1.0
         else: dfdx[k] = (fPlus - fMinus) / (2 * DELTA)
-        #assert(fPlus is not None or fMinus is not None) #make sure we don't evaluate f somewhere it's completely undefined
+        #assert(fPlus is not None or fMinus is not None) #make sure we don't evaluate f somewhere it's
+        #completely undefined
 
     return dfdx, bd
 

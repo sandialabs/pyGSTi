@@ -111,10 +111,12 @@ def import_rb_summary_data(filenames, is_counts_data=True, contains_circuit_data
         except:
             raise ValueError("Date import failed! File does not exist or the format is incorrect.")
 
-    assert(number_of_qubits is not None), "The number of qubits was not specified as input to this function *or* found in the data file!"
+    assert(number_of_qubits is not None), \
+        "The number of qubits was not specified as input to this function *or* found in the data file!"
 
-    RBSdataset = _results.RBSummaryDataset(number_of_qubits, lengths, success_counts=scounts, success_probabilities=SPs, total_counts=tcounts,
-                                           circuit_depths=cdepths, circuit_twoQgate_counts=c2Qgc, sortedinput=False, finitesampling=finitesampling)
+    RBSdataset = _results.RBSummaryDataset(number_of_qubits, lengths, success_counts=scounts, success_probabilities=SPs,
+                                           total_counts=tcounts, circuit_depths=cdepths, circuit_twoQgate_counts=c2Qgc,
+                                           sortedinput=False, finitesampling=finitesampling)
 
     return RBSdataset
 
@@ -143,19 +145,21 @@ def write_rb_summary_data_to_file(RBSdataset, filename):
         if (RBSdataset.circuit_depths is not None) and (RBSdataset.circuit_twoQgate_counts is not None):
 
             if RBSdataset.success_counts is not None:
-                f.write('# RB length // Success counts // Total counts // Circuit depth // Circuit two-qubit gate count\n')
+                f.write('# RB length // Success counts // Total counts // '
+                        'Circuit depth // Circuit two-qubit gate count\n')
                 for i in range(len(RBSdataset.lengths)):
                     l = RBSdataset.lengths[i]
                     for j in range(len(RBSdataset.success_counts[i])):
-                        f.write('{} {} {} {} {}\n'.format(
-                            l, RBSdataset.success_counts[i][j], RBSdataset.total_counts[i][j], RBSdataset.circuit_depths[i][j], RBSdataset.circuit_twoQgate_counts[i][j]))
+                        f.write('{} {} {} {} {}\n'.format(l, RBSdataset.success_counts[i][j],
+                            RBSdataset.total_counts[i][j], RBSdataset.circuit_depths[i][j],
+                            RBSdataset.circuit_twoQgate_counts[i][j]))
             else:
                 f.write('# RB length // Success probability // Circuit depth // Circuit two-qubit gate count\n')
                 for i in range(len(RBSdataset.lengths)):
                     l = RBSdataset.lengths[i]
                     for j in range(len(RBSdataset.success_probabilities[i])):
-                        f.write('{} {} {} {}\n'.format(
-                            l, RBSdataset.success_probabilities[i][j], RBSdataset.circuit_depths[i][j], RBSdataset.circuit_twoQgate_counts[i][j]))
+                        f.write('{} {} {} {}\n'.format(l, RBSdataset.success_probabilities[i][j],
+                            RBSdataset.circuit_depths[i][j], RBSdataset.circuit_twoQgate_counts[i][j]))
 
         else:
             if RBSdataset.success_counts is not None:

@@ -276,16 +276,18 @@ class MatrixForwardSimulator(ForwardSimulator):
         revOpLabelList = tuple(reversed(tuple(circuit)))
         N = len(revOpLabelList)  # length of operation sequence
 
-        #  prod = G1 * G2 * .... * GN , a matrix
-        #  dprod/d(opLabel)_ij   = sum_{L s.t. G(L) == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
-        #  vec( dprod/d(opLabel)_ij ) = sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
-        #                               = [ sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] * vec( dG(L)/dij) )
-        #  if dG(L)/dij = E(i,j)
-        #                               = vec(i,j)-col of [ sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]]
-        # So for each opLabel the matrix [ sum_{L s.t. GL == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] has columns which
-        #  correspond to the vectorized derivatives of each of the product components (i.e. prod_kl) with respect to a given gateLabel_ij
-        # This function returns a concatenated form of the above matrices, so that each column corresponds to a (opLabel,i,j) tuple and
-        #  each row corresponds to an element of the product (els of prod.flatten()).
+        #  prod = G1 * G2 * .... * GN , a matrix                                                                                                                # noqa
+        #  dprod/d(opLabel)_ij   = sum_{L s.t. G(L) == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)                       # noqa
+        #  vec( dprod/d(opLabel)_ij ) = sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]                              # noqa
+        #                               = [ sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] * vec( dG(L)/dij) )                      # noqa
+        #  if dG(L)/dij = E(i,j)                                                                                                                                # noqa
+        #                               = vec(i,j)-col of [ sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]]                          # noqa
+        #
+        # So for each opLabel the matrix [ sum_{L s.t. GL == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] has
+        # columns which correspond to the vectorized derivatives of each of the product components (i.e. prod_kl) with
+        # respect to a given gateLabel_ij.  This function returns a concatenated form of the above matrices, so that
+        # each column corresponds to a (opLabel,i,j) tuple and each row corresponds to an element of the product (els of
+        # prod.flatten()).
         #
         # Note: if gate G(L) is just a matrix of parameters, then dG(L)/dij = E(i,j), an elementary matrix
 
@@ -374,23 +376,25 @@ class MatrixForwardSimulator(ForwardSimulator):
         # we do matrix multiplication in this order (easier to think about)
         revOpLabelList = tuple(reversed(tuple(circuit)))
 
-        #  prod = G1 * G2 * .... * GN , a matrix
-        #  dprod/d(opLabel)_ij   = sum_{L s.t. GL == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
-        #  d2prod/d(opLabel1)_kl*d(opLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L}
-        #                                                 [ G1 ... G(M-1) dG(M)/dkl G(M+1) ... G(L-1) dG(L)/dij G(L+1) ... GN ] + {similar with L < M}
-        #                                                 + sum{M==L} [ G1 ... G(M-1) d2G(M)/(dkl*dij) G(M+1) ... GN ]
-        #                                                 a matrix for each given (i,j,k,l)
-        #  vec( d2prod/d(opLabel1)_kl*d(opLabel2)_ij ) = sum{...} [ G1 ...  G(M-1) dG(M)/dkl G(M+1) ... G(L-1) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
-        #                                                  = sum{...} [ unvec( G1 ...  G(M-1) tensor (G(M+1) ... G(L-1))^T vec( dG(M)/dkl ) )
-        #                                                                tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
-        #                                                  + sum{ L < M} [ G1 ...  G(L-1) tensor
-        #                                                       ( unvec( G(L+1) ... G(M-1) tensor (G(M+1) ... GN)^T vec( dG(M)/dkl ) ) )^T vec( dG(L)/dij ) ]
-        #                                                  + sum{ L == M} [ G1 ...  G(M-1) tensor (G(M+1) ... GN)^T vec( d2G(M)/dkl*dji )
+        #  prod = G1 * G2 * .... * GN , a matrix                                                                                                                # noqa
+        #  dprod/d(opLabel)_ij   = sum_{L s.t. GL == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)                         # noqa
+        #  d2prod/d(opLabel1)_kl*d(opLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L}                                            # noqa
+        #                                                 [ G1 ... G(M-1) dG(M)/dkl G(M+1) ... G(L-1) dG(L)/dij G(L+1) ... GN ] + {similar with L < M}          # noqa
+        #                                                 + sum{M==L} [ G1 ... G(M-1) d2G(M)/(dkl*dij) G(M+1) ... GN ]                                          # noqa
+        #                                                 a matrix for each given (i,j,k,l)                                                                     # noqa
+        #  vec( d2prod/d(opLabel1)_kl*d(opLabel2)_ij ) = sum{...} [ G1 ...  G(M-1) dG(M)/dkl G(M+1) ... G(L-1) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]      # noqa
+        #                                                  = sum{...} [ unvec( G1 ...  G(M-1) tensor (G(M+1) ... G(L-1))^T vec( dG(M)/dkl ) )                   # noqa
+        #                                                                tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]                                            # noqa
+        #                                                  + sum{ L < M} [ G1 ...  G(L-1) tensor                                                                # noqa
+        #                                                       ( unvec( G(L+1) ... G(M-1) tensor (G(M+1) ... GN)^T vec( dG(M)/dkl ) ) )^T vec( dG(L)/dij ) ]   # noqa
+        #                                                  + sum{ L == M} [ G1 ...  G(M-1) tensor (G(M+1) ... GN)^T vec( d2G(M)/dkl*dji )                       # noqa
         #
-        #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each operation matrix element is at most
-        #        *linear* in each of the gate parameters.  If this is not the case, need LinearOperator objects to have a 2nd-deriv method in addition of deriv_wrt_params
+        #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each operation matrix element
+        #  is at most *linear* in each of the gate parameters.  If this is not the case, need LinearOperator objects to
+        #  have a 2nd-deriv method in addition of deriv_wrt_params
         #
-        #  Note: unvec( X ) can be done efficiently by actually computing X^T ( note (A tensor B)^T = A^T tensor B^T ) and using numpy's reshape
+        #  Note: unvec( X ) can be done efficiently by actually computing X^T ( note (A tensor B)^T = A^T tensor B^T )
+        #  and using numpy's reshape
 
         dim = self.dim
 
@@ -472,7 +476,8 @@ class MatrixForwardSimulator(ForwardSimulator):
                     y = _np.dot(_np.kron(xv, _np.transpose(prods[(l + 1, N - 1)])), dop_dopLabel2[opLabel2])
                     # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
                     flattened_d2prod[:, inds1, inds2] += _np.swapaxes(y, 0, 1)
-                    # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+                    # above: dim = (dim2, nDerivCols1, nDerivCols2);
+                    # swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
                 elif l < m:
                     x0 = _np.kron(_np.transpose(prods[(l + 1, m - 1)]), prods[(m + 1, N - 1)])  # (dim**2, dim**2)
                     x = _np.dot(_np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view()  # (nDerivCols1,dim**2)
@@ -483,9 +488,12 @@ class MatrixForwardSimulator(ForwardSimulator):
                     # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
 
                     flattened_d2prod[:, inds1, inds2] += _np.swapaxes(y, 0, 1)
-                    # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+                    # above: dim = (dim2, nDerivCols1, nDerivCols2);
+                    # swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
 
-                else:  # l==m, which we *used* to assume gave no contribution since we assume all gate elements are at most linear in the parameters
+                else:
+                    # l==m, which we *used* to assume gave no contribution since we assume all gate elements are at most
+                    # linear in the parameters
                     assert(opLabel1 == opLabel2)
                     if opLabel1 in hop_dopLabels:  # indicates a non-zero hessian
                         x0 = _np.kron(_np.transpose(prods[(0, m - 1)]), prods[(m + 1, N - 1)])  # (dim**2, dim**2)
@@ -1611,7 +1619,8 @@ class MatrixForwardSimulator(ForwardSimulator):
                 hGs = _np.swapaxes(_np.swapaxes(hGs, 0, 4) * scaleVals, 0, 4)
                 # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value, and we
                 hGs[_np.isnan(hGs)] = 0
-                # assume the zero hessian value trumps since we've renormed to keep all the products within decent bounds
+                # assume the zero hessian value trumps since we've renormed to keep all the products within decent
+                # bounds
                 #assert( len( (_np.isnan(hGs)).nonzero()[0] ) == 0 )
                 #assert( len( (_np.isinf(hGs)).nonzero()[0] ) == 0 )
                 #hGs = clip(hGs,-1e300,1e300)
@@ -1926,9 +1935,6 @@ class MatrixForwardSimulator(ForwardSimulator):
                                    (_nla.norm(prMxToFill[fInds]),
                                     _nla.norm(check_vp),
                                     _nla.norm(prMxToFill[fInds] - check_vp)))  # pragma: no cover
-                    #for i,mdl in enumerate(circuit_list):
-                    #    if abs(vp[i] - check_vp[i]) > 1e-7:
-                    #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(mdl),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
 
             if dprMxToFill is not None:
                 check_vdp = _np.concatenate(
@@ -2476,7 +2482,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than hessian elements(%d)!" % (self.Np**2)
-                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover
+                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
 
                 for iBlk1 in myBlk1Indices:
                     blk_wrtSlice1 = blocks1[iBlk1]

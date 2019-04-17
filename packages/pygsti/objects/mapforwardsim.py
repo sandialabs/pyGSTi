@@ -248,138 +248,8 @@ class MapForwardSimulator(ForwardSimulator):
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
         return replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm)
 
-        #DEPRECATED REPS - just call replib version now - but below (commented) version
-        # works for state-vec and stabilizer modes too - and we still need to essentially
-        # duplicate DM_compute_pr_cache to SV and SB modes...
-        ##tStart = _time.time()
-        #dim = self.dim
-        #cacheSize = evalTree.cache_size()
-        #rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
-        #ret = _np.empty((len(evalTree),len(elabels)),'d')
-        #
-        ##Get rho & rhoCache
-        #if self.evotype in ("statevec", "densitymx"):
-        #    #Scratch type (for holding spam/state vectors)
-        #    typ = complex if self.evotype == "statevec" else 'd'
-        #
-        #    if scratch is None:
-        #        rho_cache = _np.zeros((cacheSize, dim), typ)
-        #    else:
-        #        assert(scratch.shape == (cacheSize,dim))
-        #        rho_cache = scratch #to avoid reallocation
-        #
-        #    Escratch = _np.empty(dim,typ) # memory for E.todense() if it wants it
-        #    rho = rhoVec.todense(Escratch).copy() #rho can use same scratch space (enables fastkron)
-        #                                          # copy b/c use Escratch again (below)
-        #else: # CLIFFORD case
-        #    rho = rhoVec.todense()
-        #    if scratch is None:
-        #        rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
-        #    else:
-        #        assert(len(scratch) == cacheSize)
-        #        rho_cache = scratch
-        #
-        #
-        ##comm is currently ignored
-        ##TODO: if evalTree is split, distribute among processors
-        #for i in evalTree.get_evaluation_order():
-        #    iStart,remainder,iCache = evalTree[i]
-        #    if iStart is None:  init_state = rho
-        #    else:               init_state = rho_cache[iStart] #[:,None]
-        #
-        #    final_state = self.propagate_state(init_state, remainder)
-        #    if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
-        #
-        #    if self.evotype == "statevec":
-        #        for j,E in enumerate(EVecs):
-        #            ret[i,j] = _np.abs(_np.vdot(E.todense(Escratch),final_state))**2
-        #    elif self.evotype == "densitymx":
-        #        for j,E in enumerate(EVecs):
-        #            ret[i,j] = _np.vdot(E.todense(Escratch),final_state)
-        #            #OLD (slower): _np.dot(_np.conjugate(E.todense(Escratch)).T,final_state)
-        #            # FUTURE: optionally pre-compute todense() results for speed if mem is available?
-        #    else: # evotype == "stabilizer" case
-        #        #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
-        #        for j,E in enumerate(EVecs):
-        #            ret[i,j] = rho.measurement_probability(E.outcomes)
-        #
-        ##print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-        #
-        ##CHECK
-        ##print("DB: ",ret); print("DB: ",ret2)
-        #assert(_np.linalg.norm(ret-ret2) < 1e-6)
-        #
-        #return ret
-
     def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
         return replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
-
-        #DEPRECATED REPS - just call replib version now - but below (commented) version
-        # works for state-vec and stabilizer modes too - and we still need to essentially
-        # duplicate this function to SV and SB modes...
-        ##Compute finite difference derivatives, one parameter at a time.
-        #tStart = _time.time() #DEBUG
-        #param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-        #nDerivCols = len(param_indices) # *all*, not just locally computed ones
-        #
-        #dim = self.dim
-        #cacheSize = evalTree.cache_size()
-        #dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
-        #
-        ## Allocate cache space if needed
-        #if self.evotype in ("statevec", "densitymx"):
-        #    typ = complex if self.evotype == "statevec" else 'd'
-        #
-        #    if scratch is None:
-        #        rho_cache  = _np.zeros((cacheSize, dim), typ)
-        #    else:
-        #        assert(scratch.shape == (cacheSize,dim))
-        #        rho_cache  = scratch
-        #else: # evotype == "stabilizer" case
-        #    if scratch is None:
-        #        rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
-        #    else:
-        #        assert(len(scratch) == cacheSize)
-        #        rho_cache = scratch
-        #
-        #eps = 1e-7 #hardcoded?
-        #pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
-        #
-        #all_slices, my_slice, owners, subComm = \
-        #        _mpit.distribute_slice(slice(0,len(param_indices)), comm)
-        #
-        #my_param_indices = param_indices[my_slice]
-        #st = my_slice.start #beginning of where my_param_indices results
-        #                    # get placed into dpr_cache
-        #
-        ##Get a map from global parameter indices to the desired
-        ## final index within dpr_cache
-        #iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-        #
-        #orig_vec = self.to_vector().copy()
-        #for i in range(self.Np):
-        #    #print("dprobs cache %d of %d" % (i,self.Np))
-        #    if i in iParamToFinal:
-        #        iFinal = iParamToFinal[i]
-        #        vec = orig_vec.copy(); vec[i] += eps
-        #        self.from_vector(vec)
-        #        dpr_cache[:,:,iFinal] = ( self._compute_pr_cache(
-        #            rholabel,elabels,evalTree,subComm,rho_cache) - pCache)/eps
-        #self.from_vector(orig_vec)
-        #
-        ##Now each processor has filled the relavant parts of dpr_cache,
-        ## so gather together:
-        #_mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-        ## DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
-        ##print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-        ##      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-        #
-        ##CHECK
-        ##assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
-        #if _np.linalg.norm(dpr_cache-dpr_cache2) > 1e-6:
-        #    print("DPR_CACHE MISMATCH: ", _np.linalg.norm(dpr_cache-dpr_cache2), " shape=",dpr_cache.shape)
-        #
-        #return dpr_cache
 
     def _compute_hpr_cache(self, rholabel, elabels, evalTree, wrtSlice1, wrtSlice2, comm):
         #Compute finite difference hessians, one parameter at a time.
@@ -972,7 +842,7 @@ class MapForwardSimulator(ForwardSimulator):
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than hessian elements(%d)!" % (self.Np**2)
-                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover
+                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
                 fillComm = blk2Comm  # comm used by calc_and_fill
 
                 for iBlk1 in myBlk1Indices:

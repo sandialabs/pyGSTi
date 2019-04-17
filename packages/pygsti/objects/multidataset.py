@@ -515,7 +515,8 @@ class MultiDataSet(object):
                             comment=(self.comment + " copy") if self.comment else None)
 
     def __getstate__(self):
-        toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit, list(self.cirIndex.keys()))) if self.cirIndex else [],
+        toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit,
+                                             list(self.cirIndex.keys()))) if self.cirIndex else [],
                     'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
                     'olIndex': self.olIndex,
                     'oliDict': self.oliDict,
@@ -548,7 +549,8 @@ class MultiDataSet(object):
             filename ends in ".gz", the file will be gzip compressed.
         """
 
-        toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit, list(self.cirIndex.keys()))) if self.cirIndex else [],
+        toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit,
+                                             list(self.cirIndex.keys()))) if self.cirIndex else [],
                     'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
                     'olIndex': self.olIndex,
                     'oliKeys': list(self.oliDict.keys()),

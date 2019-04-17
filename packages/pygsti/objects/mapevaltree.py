@@ -669,8 +669,9 @@ class MapEvalTree(EvalTree):
             #t7 = _time.time() #REMOVE
             subTree.opLabels = self._get_opLabels(subTree.generate_circuit_list(permute=False))
             #t8 = _time.time() #REMOVE
-            #print("DB: create_subtree timing: t1=%.3fs, t2=%.3fs, t3=%.3fs, t4=%.3fs, t5=%.3fs, t6=%.3fs, t7=%.3fs, t8=%.3fs"
-            #      % (t1-t0,t2-t1,t3-t2,t4-t3,t5-t4,t6-t5,t7-t6,t8-t7))
+            # print("DB: create_subtree timing: "
+            #       "t1=%.3fs, t2=%.3fs, t3=%.3fs, t4=%.3fs, t5=%.3fs, t6=%.3fs, t7=%.3fs, t8=%.3fs"
+            #       % (t1-t0,t2-t1,t3-t2,t4-t3,t5-t4,t6-t5,t7-t6,t8-t7))
 
             return subTree
 
