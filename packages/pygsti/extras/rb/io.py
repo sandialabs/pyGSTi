@@ -58,7 +58,7 @@ def import_rb_summary_data(filenames, is_counts_data=True, contains_circuit_data
     -------
     None
     """
-    assert(not(is_counts_data and total_counts != None)
+    assert(not(is_counts_data and total_counts is not None)
            ), "For counts data, the total counts must be included in the data file, so should not be manually input!"
 
     lengths = []

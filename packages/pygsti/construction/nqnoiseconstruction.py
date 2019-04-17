@@ -2143,7 +2143,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                 for germ, (germ_order, access_cache) in germ_dict.items()])
         else: allLsExist = False
 
-        if len(germ_dict) == 0 or allLsExist == False:
+        if len(germ_dict) == 0 or not allLsExist:
 
             if len(germ_dict) == 0:  # we need to do the germ selection using a set of candidate germs
                 candidate_counts = {4: 'all upto', 5: 10, 6: 10}  # should be an arg? HARDCODED!
@@ -2495,7 +2495,7 @@ def get_kcoverage_template(n, k, verbosity=0):
                             shift_soln_found = True
                             break
 
-                if shift_soln_found == False:
+                if not shift_soln_found:
                     # no shifting can be performed to place v into an open row,
                     # so we just create a new row equal to desired_row on existing_cols.
                     # How do we choose the non-(existing & last) colums? For now, just

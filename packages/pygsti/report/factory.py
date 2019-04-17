@@ -2000,7 +2000,7 @@ def create_report_notebook(results, filename, title="auto",
     printer.log("Report Notebook created as %s" % filename)
 
     if auto_open:
-        port = "auto" if auto_open == True else int(auto_open)
+        port = "auto" if auto_open is True else int(auto_open)
         nb.launch(filename, port=port)
     else:
         nb.save_to(filename)

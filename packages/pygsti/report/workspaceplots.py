@@ -386,7 +386,7 @@ def generate_boxplot(subMxs,
     if sumUp:
         subMxSums = _np.array([[sum_up_mx(subMxs[iy][ix]) for ix in range(nXs)] for iy in range(nYs)], 'd')
 
-        if hoverInfo == True:
+        if hoverInfo is True:
             def hoverLabelFn(val, i, j):
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
@@ -409,7 +409,7 @@ def generate_boxplot(subMxs,
 
     else:  # not summing up
 
-        if hoverInfo == True:
+        if hoverInfo is True:
             def hoverLabelFn(val, i, j, ii, jj):
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
@@ -568,7 +568,7 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
 
     # Note: invert == True case not handled yet, and the below hover label
     # routines assume L,germ structure in particular
-    if hoverInfo and invert == False and isinstance(g, _objs.LsGermsStructure):
+    if hoverInfo and not invert and isinstance(g, _objs.LsGermsStructure):
         if sumUp:
             def hoverLabelFn(val, iy, ix):
                 """ Standard hover labels """
@@ -1610,7 +1610,7 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle = "error rate"
                 mx_fn = _mx_fn_errorrate  # use a *global* function so cache can tell it's the same
                 extra_arg = directGSTmodels
-                assert(sumUp == True), "Can only use 'errorrate' plot with sumUp == True"
+                assert(sumUp is True), "Can only use 'errorrate' plot with sumUp == True"
 
             elif ptyp == "directchi2":
                 colormapType = "linlog"

@@ -1159,7 +1159,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     z = _np.zeros(KM, 'd')  # for deriv below
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache \
-       and useFreqWeightedChiSq == False:  # b/c we don't cache fweights
+       and not useFreqWeightedChiSq:  # b/c we don't cache fweights
         cntVecMx = evaltree_cache['cntVecMx']
         N = evaltree_cache['totalCntVec']
         fweights = None

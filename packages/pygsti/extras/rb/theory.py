@@ -275,7 +275,7 @@ def rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weightin
         mxBasis = mdl.basis.name
     assert(mxBasis == 'pp' or mxBasis == 'gm' or mxBasis == 'std'), "mxBasis must be 'gm', 'pp' or 'std'."
 
-    if mxBasis is 'pp' or 'gm':
+    if mxBasis in ('pp', 'gm'):
         assert(_np.amax(vec_l_operator.imag) < 10**(-15)), "If 'gm' or 'pp' basis, RB gauge matrix should be real."
         vec_l_operator = vec_l_operator.real
 

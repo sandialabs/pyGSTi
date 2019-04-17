@@ -179,7 +179,7 @@ def compile_clifford(s, p, pspec=None, subsetQs=None, iterations=20, algorithm='
             assert(len(subsetQs) == n), "The subset of qubits to compile for is the wrong size for this CLifford!!"
             qubit_labels = subsetQs
     else:
-        assert(subsetQs == None), "subsetQs can only be specified if `pspec` is not None!"
+        assert(subsetQs is None), "subsetQs can only be specified if `pspec` is not None!"
         qubit_labels = list(range(n))
 
     # Create a circuit that implements a Clifford with symplectic matrix s. This is the core
@@ -327,7 +327,7 @@ def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=[
             assert(len(subsetQs) == n), \
                 "The subset of qubits to compile `s` for is the wrong size for this symplectic matrix!"
     else:
-        assert(subsetQs == None), "subsetQs can only be specified if `pspec` is not None!"
+        assert(subsetQs is None), "subsetQs can only be specified if `pspec` is not None!"
 
     all_algorithms = ['BGGE', 'ROGGE', 'iAGvGE']  # Future: ['AGvGE','AGvPMH','iAGvPMH']
     assert(set(algorithms).issubset(set(all_algorithms))), "One or more algorithms names are invalid!"
@@ -1508,7 +1508,7 @@ def compile_cnot_circuit_using_OCAGE_algorithm(s, pspec, qubitorder, subsetQs=No
                     dis[qqgraphindex] = _np.inf
 
             # It should always be possible to map s[i,i] -> 1, so if we haven't managed to something has gone wrong.
-            assert(found == True), 'CNOT compilation algorithm failed! Perhaps the input was invalid.'
+            assert(found is True), 'CNOT compilation algorithm failed! Perhaps the input was invalid.'
 
         # This is the list of all the qubits that qubit i will need to interact with this round. (except where
         # we resort to SWAP-like methods).
@@ -1716,7 +1716,7 @@ def compile_cnot_circuit_using_OiCAGE_algorithm(s, pspec, qubitorder, subsetQs=N
                     dis[qq_rQsgraph_index] = _np.inf
 
             # It should always be possible to map s[i,i] -> 1, so if we haven't managed to something has gone wrong.
-            assert(found == True), 'CNOT compilation algorithm failed! Perhaps the input was invalid.'
+            assert(found is True), 'CNOT compilation algorithm failed! Perhaps the input was invalid.'
 
         # This is the list of all the qubits that qubit i will need to interact with this round.
         remaining_Qs_for_round = _copy.copy(remaining_qubits)

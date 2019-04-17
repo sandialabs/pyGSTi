@@ -242,7 +242,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
                 del twoQgates_available[d - 1 - i]
 
     # If the `twoQprob` is not None, we specify a weighting towards 2-qubit gates
-    if twoQprob != None:
+    if twoQprob is not None:
         weighting = [1 - twoQprob, twoQprob]
 
     # Prep the sampling variables.

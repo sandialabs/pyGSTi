@@ -543,7 +543,7 @@ class OpModel(Model):
                     if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
                                     self._paramvec[obj.gpindices])
                     raise ValueError("%s is out of sync with paramvec!!!" % lbl)
-            if self.dirty == False and obj.dirty:
+            if not self.dirty and obj.dirty:
                 raise ValueError("%s is dirty but Model.dirty=False!!" % lbl)
 
     def _clean_paramvec(self):

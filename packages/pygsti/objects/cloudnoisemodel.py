@@ -386,7 +386,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         if availability is None:
             availability = {}
 
-        if independent_clouds != True:
+        if not independent_clouds:
             raise NotImplementedError("Non-independent noise clounds are not supported yet!")
 
         #Set members

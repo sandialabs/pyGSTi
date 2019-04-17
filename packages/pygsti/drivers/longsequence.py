@@ -1303,7 +1303,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
     ret.add_estimate(target_model, mdl_start, mdl_lsgst_list, parameters, estlbl)
 
     #Do final gauge optimization to *final* iteration result only
-    if gaugeOptParams != False:
+    if gaugeOptParams:
         gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
         if "targetModel" not in gaugeOptParams:
             gaugeOptParams["targetModel"] = target_model
@@ -1567,7 +1567,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                                      scale_params, estlbl + "." + scale_typ)
 
                 #Do final gauge optimization to data-scaled estimate also
-                if gaugeOptParams != False:
+                if gaugeOptParams:
                     if reopt and (opt_args is not None):
                         gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
                         if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']

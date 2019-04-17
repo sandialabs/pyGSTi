@@ -1379,7 +1379,7 @@ class DataSet(object):
             new_gstr = processor_fn(opstr)
             if new_gstr is None:
                 to_delete.append(indx)
-            elif new_gstr not in new_cirIndex or aggregate == False:
+            elif new_gstr not in new_cirIndex or not aggregate:
                 assert(isinstance(new_gstr, _cir.Circuit)), "`processor_fn` must return a Circuit!"
                 new_cirIndex[new_gstr] = indx
             else:  # aggregate data from indx --> new_cirIndex[new_gstr]
@@ -1410,7 +1410,7 @@ class DataSet(object):
             new_gstr = processor_fn(opstr)
             if new_gstr is None:
                 continue
-            elif new_gstr not in auxInfo or aggregate == False:
+            elif new_gstr not in auxInfo or not aggregate:
                 auxInfo[new_gstr] = self.auxInfo[opstr]
             else:  # "aggregate" auxinfo by merging dictionaries
                 #FUTURE: better merging - do something for key collisions?

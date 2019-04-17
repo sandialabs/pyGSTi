@@ -1676,7 +1676,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
         E_term_reps = [x[1] for x in E_term_indices_and_reps]
         E_indices = [x[0] for x in E_term_indices_and_reps]
-        E_foat_indices = [j for j, x in enumerate(E_term_indices_and_reps) if x[3] == True]
+        E_foat_indices = [j for j, x in enumerate(E_term_indices_and_reps) if x[3] is True]
         repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
 
     E_term_reps, E_indices, E_foat_indices = repcache[elabels]

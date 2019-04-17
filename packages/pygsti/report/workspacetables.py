@@ -2290,7 +2290,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         colHeadings = ('G-Opt Param', 'Value')
         formatters = ('Bold', 'Bold')
 
-        if gaugeOptArgs == False:  # signals *no* gauge optimization
+        if gaugeOptArgs is False:  # signals *no* gauge optimization
             goargs_list = [{'Method': "No gauge optimization was performed"}]
         else:
             goargs_list = [gaugeOptArgs] if hasattr(gaugeOptArgs, 'keys') \

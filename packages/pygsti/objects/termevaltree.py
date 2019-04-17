@@ -158,7 +158,7 @@ class TermEvalTree(EvalTree):
 
         #Permute to get final list:
         nFinal = self.num_final_strings()
-        if self.original_index_lookup is not None and permute == True:
+        if self.original_index_lookup is not None and permute:
             finalCircuits = [None] * nFinal
             for iorig, icur in self.original_index_lookup.items():
                 if iorig < nFinal: finalCircuits[iorig] = circuits[icur]

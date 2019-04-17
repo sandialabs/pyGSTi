@@ -2366,7 +2366,7 @@ class WorkspacePlot(WorkspaceOutput):
                         link_to=self.options['link_to'], link_to_id=plotDivID)
 
                 if switched_item_mode == 'separate files':
-                    assert(handlersOnly == False)  # doesn't make sense to put only handlers in a separate file
+                    assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file
                     divJS.append(self._form_plot_js(plotDivID, fig_dict['js'], None))
                 else:
                     divJS.append(fig_dict['js'])
@@ -2384,7 +2384,7 @@ class WorkspacePlot(WorkspaceOutput):
                     js = self._form_plot_js(plotID, '\n'.join(divJS), base['js'])
 
             elif switched_item_mode == 'separate files':
-                assert(handlersOnly == False)  # doesn't make sense to put only handlers in a separate file
+                assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file
                 assert('output_dir' in self.options and self.options['output_dir']), \
                     "Cannot render 'html' in separate files without a valid 'output_dir' render option"
                 base = self._render_html(plotID, divHTML, divJS, divIDs, self.switchpos_map,

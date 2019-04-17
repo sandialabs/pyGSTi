@@ -90,18 +90,18 @@ class RBSummaryDataset(object):
         descriptor :  str, optional
             A string that describes what the data is for.
         """
-        assert(not (success_counts == None and success_probabilities == None)
-               ), "Either success probabilities or success counts must be provided!"
-        assert(not (success_counts != None and success_probabilities != None)
-               ), "Success probabilities *and* success counts should not both be provided!"
-        assert(not (success_counts != None and total_counts == None)
-               ), "If success counts are provided total counts must be provided as well!"
+        assert(not (success_counts is None and success_probabilities is None)), \
+            "Either success probabilities or success counts must be provided!"
+        assert(not (success_counts is not None and success_probabilities is not None)), \
+            "Success probabilities *and* success counts should not both be provided!"
+        assert(not (success_counts is not None and total_counts is None)), \
+            "If success counts are provided total counts must be provided as well!"
 
-        if success_counts != None:
+        if success_counts is not None:
             assert(len(success_counts) == len(lengths)), "Input data shapes are inconsistent!"
-        if success_probabilities != None:
+        if success_probabilities is not None:
             assert(len(success_probabilities) == len(lengths)), "Input data shapes are inconsistent!"
-        if total_counts != None:
+        if total_counts is not None:
             # If total counts is an int, convert to a list.
             if isinstance(total_counts, int):
                 total_counts = [total_counts for i in range(len(lengths))]
@@ -171,7 +171,7 @@ class RBSummaryDataset(object):
             circuit_twoQgate_counts = c2Qgc
 
         # If they are not provided, create the success probabilities
-        if success_probabilities == None:
+        if success_probabilities is None:
             success_probabilities = []
             for i in range(0, len(lengths)):
                 SParray = _np.array(success_counts[i]) / _np.array(total_counts[i])
@@ -182,7 +182,7 @@ class RBSummaryDataset(object):
         for i in range(len(lengths)): ASPs.append(_np.mean(_np.array(success_probabilities[i])))
 
         # If data is provided as probabilities, but we know the total counts, we populate self.success_counts
-        if success_counts == None and total_counts != None:
+        if success_counts is None and total_counts is not None:
             success_counts = []
             for i in range(0, len(lengths)):
                 SCarray = _np.round(_np.array(success_probabilities[i]) * _np.array(total_counts[i]))
@@ -211,7 +211,7 @@ class RBSummaryDataset(object):
         -------
         None
         """
-        if self.finitesampling == True and self.total_counts is None:
+        if self.finitesampling is True and self.total_counts is None:
             print("Warning -- finite sampling is not taken into account!")
 
         if self.bootstraps is None:
@@ -270,15 +270,15 @@ class RBSummaryDataset(object):
         """
         newRBSdataset = _copy.deepcopy(self)
         for i in range(len(newRBSdataset.lengths)):
-            if newRBSdataset.success_counts != None:
+            if newRBSdataset.success_counts is not None:
                 newRBSdataset.success_counts[i] = newRBSdataset.success_counts[i][:numberofcircuits]
-            if newRBSdataset.success_probabilities != None:
+            if newRBSdataset.success_probabilities is not None:
                 newRBSdataset.success_probabilities[i] = newRBSdataset.success_probabilities[i][:numberofcircuits]
-            if newRBSdataset.total_counts != None:
+            if newRBSdataset.total_counts is not None:
                 newRBSdataset.total_counts[i] = newRBSdataset.total_counts[i][:numberofcircuits]
-            if newRBSdataset.circuit_depths != None:
+            if newRBSdataset.circuit_depths is not None:
                 newRBSdataset.circuit_depths[i] = newRBSdataset.circuit_depths[i][:numberofcircuits]
-            if newRBSdataset.circuit_twoQgate_counts != None:
+            if newRBSdataset.circuit_twoQgate_counts is not None:
                 newRBSdataset.circuit_twoQgate_counts[i] = newRBSdataset.circuit_twoQgate_counts[i][:numberofcircuits]
 
         return newRBSdataset

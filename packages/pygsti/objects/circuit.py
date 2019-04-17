@@ -190,7 +190,7 @@ class Circuit(object):
             #print("DB: Layer labels = ",layer_labels_objs)
 
         #Parse stringrep if needed
-        if stringrep is not None and (layer_labels is None or check == True):
+        if stringrep is not None and (layer_labels is None or check):
             cparser = _CircuitParser()
             cparser.lookup = None  # lookup - functionality removed as it wasn't used
             chk, chk_labels = cparser.parse(stringrep)  # tuple of Labels
@@ -418,7 +418,7 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines  # add line labels
-        if ntimes > 1 and expand == False:
+        if ntimes > 1 and expand is False:
             reppedCircuitLbl = self.as_label(nreps=ntimes)
             return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
         else:
@@ -2707,7 +2707,7 @@ class Circuit(object):
                 quil += 'PRAGMA PRESERVE_BLOCK\nPRAGMA END_PRESERVE_BLOCK\n'
 
         # Add in a measurement at the end.
-        if readout_conversion == None:
+        if readout_conversion is None:
             for q in self.line_labels:
                 #            quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
                 quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))

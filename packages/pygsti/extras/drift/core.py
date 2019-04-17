@@ -174,7 +174,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
         spectral analysis of this formatted time-series data.
     """
     if groupoutcomes is not None:
-        assert(not marginalize == True), \
+        assert(marginalize is not True), \
             "Cannot marginalize the data *and* format the data according to a `groupoutcomes` dictionary!"
 
     # Initialize an empty results object, with the name written in.
@@ -229,7 +229,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
         else:
             marginalize = False
 
-    assert(marginalize == True or marginalize == False)
+    assert(marginalize in (True, False))
 
     if marginalize:
         if verbosity > 0:
@@ -316,7 +316,7 @@ def calculate_power_spectra(results, transform='DCT', frequenciesInHz='auto'):
         # Regardless of the input, we write over that and use the DCT frequencies
         frequenciesInHz = _sig.frequencies_from_timestep(results.meantimestepGlobal, results.maxnumber_of_timesteps)
         # Todo : explain
-        assert(results.constNumTimes == True)
+        assert(results.constNumTimes is True)
         # We can store the modes and spectra in an array, because fixed-T must be enforced.
         modes = _np.zeros(shape, float)
         for qInd in range(results.number_of_entities):

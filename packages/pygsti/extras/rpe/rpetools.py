@@ -65,7 +65,7 @@ def extract_rotation_hat(xhat, yhat, k, Nx, Ny, angleName="epsilon",
     else:
         raise Exception('Need valid angle name!')
 
-    if k != 1 and previousAngle == None:
+    if k != 1 and previousAngle is None:
         raise Exception('Need previousAngle!')
     if k == 1:
         #        return _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
@@ -125,7 +125,7 @@ def est_angle_list(DS, angleSinStrs, angleCosStrs, angleName="epsilon", lengthLi
     up_labels = rpeconfig_inst.up_labels
     dn_labels = rpeconfig_inst.dn_labels
 
-    if lengthList == None:
+    if lengthList is None:
         lengthList = [2**k for k in range(genNum)]
     for i, length in enumerate(lengthList):
         xhatTemp = _np.sum(DS[angleSinStrs[i]][up_label] for up_label in up_labels)

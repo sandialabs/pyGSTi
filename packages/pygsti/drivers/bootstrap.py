@@ -183,7 +183,7 @@ def make_bootstrap_models(numModels, inputDataSet, generationMethod,
        returnData == True.
     """
 
-    if maxLengths == None:
+    if maxLengths is None:
         print("No maxLengths value specified; using [0,1,24,...,1024]")
         maxLengths = [0] + [2**k for k in range(10)]
 

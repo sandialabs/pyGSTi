@@ -368,7 +368,7 @@ class ProcessorSpec(object):
 
             # If we've failed to find a Hadamard gate, we try but we only need paulieq compilation, we try
             # to find a gate that is Pauli-equivalent to Hadamard.
-            if H_name is None and compile_type is 'paulieq':
+            if H_name is None and compile_type == 'paulieq':
                 for gn in self.root_gate_names:
                     if _symp.unitary_is_a_clifford(self.root_gate_unitaries[gn]):
                         if _itgs.is_gate_pauli_equivalent_to_this_standard_unitary(self.root_gate_unitaries[gn], 'H'):

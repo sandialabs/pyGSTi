@@ -445,7 +445,8 @@ class LinearOperator(_modelmember.ModelMember):
 
     @dirty.setter
     def dirty(self, value):
-        if value == True: self._cachedrep = None  # clear cached rep
+        if value:
+            self._cachedrep = None  # clear cached rep
         _modelmember.ModelMember.dirty.fset(self, value)  # call base class setter
 
     def __getstate__(self):
@@ -2241,15 +2242,15 @@ class LindbladOp(LinearOperator):
         self.errorgen = errorgen  # don't copy (allow object reuse)
 
         # make unitary postfactor sparse when sparse_expm == True and vice versa.
-        # (This doens't have to be the case, but we link these two "sparseness" noitions:
+        # (This doens't have to be the case, but we link these two "sparseness" notions:
         #  when we perform matrix exponentiation in a "sparse" way we assume the matrices
         #  are large and so the unitary postfactor (if present) should be sparse).
         # FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
         self.sparse_expm = sparse_expm
         if unitaryPostfactor is not None:
-            if self.sparse_expm == False and _sps.issparse(unitaryPostfactor):
+            if not self.sparse_expm and _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = unitaryPostfactor.toarray()  # sparse -> dense
-            elif self.sparse_expm == True and not _sps.issparse(unitaryPostfactor):
+            elif self.sparse_expm and not _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = _sps.csr_matrix(_np.asarray(unitaryPostfactor))  # dense -> sparse
 
         evotype = self.errorgen._evotype
@@ -4876,7 +4877,7 @@ class ComposedErrorgen(LinearOperator):
         """
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
-        assert(return_coeff_polys == False)
+        assert(return_coeff_polys is False)
         return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
 
     def num_params(self):
@@ -5785,7 +5786,7 @@ class LindbladErrorgen(LinearOperator):
         """
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
-        assert(return_coeff_polys == False)
+        assert(return_coeff_polys is False)
         return self.Lterms  # terms with local-index polynomial coefficients
 
     #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...

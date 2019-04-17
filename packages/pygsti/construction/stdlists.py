@@ -133,7 +133,7 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
     if germLengthLimits is None: germLengthLimits = {}
-    if nest == True and includeLGST == True and len(maxLengthList) > 0 and maxLengthList[0] == 0:
+    if nest and includeLGST and len(maxLengthList) > 0 and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
                        + " replaced by the `includeLGST` parameter which"
@@ -372,7 +372,7 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     printer = _VerbosityPrinter.build_printer(verbosity)
     if germLengthLimits is None: germLengthLimits = {}
 
-    if nest == True and includeLGST == True and len(maxLengthList) > 0 and maxLengthList[0] == 0:
+    if nest and includeLGST and len(maxLengthList) > 0 and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
                        + " replaced by the `includeLGST` parameter which"

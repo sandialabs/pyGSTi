@@ -218,7 +218,7 @@ class ConfidenceRegionFactory(object):
 
         assert(cptp_penalty_factor == 0), 'cptp_penalty_factor unsupported in hessian computation'
         assert(spam_penalty_factor == 0), 'spam_penalty_factor unsupported in hessian computation'
-        assert(useFreqWt == False), 'useFreqWeightedChiSq unsupported in hessian computation'
+        assert(useFreqWt is False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
         #Expand operation label aliases used in DataSet lookups
         ds_circuit_list = _tools.find_replace_tuple_list(

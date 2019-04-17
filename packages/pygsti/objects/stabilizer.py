@@ -726,7 +726,7 @@ class StabilizerFrame(object):
         float
         """
 
-        if qubit_filter is not None or return_state != False:
+        if qubit_filter is not None or return_state:
             raise NotImplementedError("`qubit_filter` and `return_state` args are not functional yet")
 
         # Could make this faster in the future by using anticommutator?
