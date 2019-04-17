@@ -93,7 +93,7 @@ class DriftResults(object):
             timesteps = []
             for i in range(self.number_of_sequences):
                 timesteps = timesteps \
-                    + list(_np.array(self.timestamps[i][1:]) \
+                    + list(_np.array(self.timestamps[i][1:])
                            - _np.array(self.timestamps[i][:self.number_of_timesteps[i] - 1]))
 
         else:

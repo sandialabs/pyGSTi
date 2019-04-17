@@ -822,7 +822,7 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
         _os.remove(report_base + ".log")
         _os.remove(report_base + ".aux")
     except _subprocess.CalledProcessError as e:
-        printer.error("pdflatex returned code %d " % e.returncode \
+        printer.error("pdflatex returned code %d " % e.returncode
                       + "Check %s.log to see details." % report_base)
     finally:
         _os.chdir(cwd)

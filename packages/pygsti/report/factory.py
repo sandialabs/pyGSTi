@@ -815,7 +815,7 @@ def create_standard_report(results, filename, title="auto",
         _create_master_switchboard(ws, results_dict, confidenceLevel,
                                    nmthreshold, printer, fmt,
                                    combine_robust, idt_results_dict)
-    if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 \
+    if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1
                            or len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset,"
                          " estimate, and gauge optimization.")
@@ -1438,7 +1438,7 @@ def create_nqnoise_report(results, filename, title="auto",
         _create_master_switchboard(ws, results_dict, confidenceLevel,
                                    nmthreshold, printer, fmt,
                                    combine_robust, idt_results_dict)
-    if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 \
+    if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1
                            or len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset,"
                          " estimate, and gauge optimization.")

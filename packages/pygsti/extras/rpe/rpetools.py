@@ -74,7 +74,7 @@ def extract_rotation_hat(xhat, yhat, k, Nx, Ny, angleName="epsilon",
     elif k > 1:
         #        angle_j = 1./k * _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
         angle_j = 1. / k * arctan2Val
-        while not (angle_j >= previousAngle - _np.pi / k \
+        while not (angle_j >= previousAngle - _np.pi / k
                    and angle_j <= previousAngle + _np.pi / k):
             if angle_j <= previousAngle - _np.pi / k:
                 angle_j += 2 * _np.pi / k
@@ -167,8 +167,8 @@ def sin_phi2_func(theta, Phi, epsilon, rpeconfig_inst=None):
 
     newEpsilon = rpeconfig_inst.new_epsilon_func(epsilon)
 
-    sinPhi2FuncVal = _np.abs(2 * _np.sin(theta) * _np.cos(_np.pi * newEpsilon / 2) \
-                             * _np.sqrt(1 - _np.sin(theta)**2 \
+    sinPhi2FuncVal = _np.abs(2 * _np.sin(theta) * _np.cos(_np.pi * newEpsilon / 2)
+                             * _np.sqrt(1 - _np.sin(theta)**2
                                         * _np.cos(_np.pi * newEpsilon / 2)**2)
                              - _np.sin(Phi / 2))
     return sinPhi2FuncVal

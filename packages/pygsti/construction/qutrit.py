@@ -38,7 +38,7 @@ def Y2qubit(theta):
 
 def ms2qubit(theta, phi):
     """ Returns Molmer-Sorensen gate for two qubits """
-    return _np.matrix(_linalg.expm(-1j / 2 * theta \
+    return _np.matrix(_linalg.expm(-1j / 2 * theta
                                    * _np.kron(
                                        _np.cos(phi) * X + _np.sin(phi) * Y,
                                        _np.cos(phi) * X + _np.sin(phi) * Y)

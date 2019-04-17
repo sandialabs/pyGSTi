@@ -152,7 +152,7 @@ class ReportableQty(object):
         # diff(x + dx) - diff(x) =  - (const.re * dx.re + const.im * dx.im)
         v = 1.0 - _np.real(_np.conjugate(constant_value) * self.value)
         if self.has_eb():
-            eb = abs(_np.real(constant_value) * _np.real(self.errbar) \
+            eb = abs(_np.real(constant_value) * _np.real(self.errbar)
                      + _np.imag(constant_value) * _np.real(self.errbar))
             return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:

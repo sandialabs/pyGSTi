@@ -1468,7 +1468,7 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
             qubit_labels = g.state_space_labels.labels[0]
 
             # for now - assume we know the form of qubit_labels
-            assert(list(qubit_labels) == [('Q%d' % i) for i in range(nqubits)] \
+            assert(list(qubit_labels) == [('Q%d' % i) for i in range(nqubits)]
                    or list(qubit_labels) == [i for i in range(nqubits)])
             new_qubit_labels = []
             for core_ql in core_qubits:

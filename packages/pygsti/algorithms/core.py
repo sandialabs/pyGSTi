@@ -1274,10 +1274,10 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             v = (probs - f) * weights; chisq = _np.sum(v * v)
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
                                            probs > (1 - minProbClipForWeighting))).nonzero()[0])
-            printer.log("MC2-OBJ: chi2=%g\n" % chisq \
-                        + "         p in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) \
-                        + "         weights in (%g,%g)\n" % (_np.min(weights), _np.max(weights)) \
-                        + "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) \
+            printer.log("MC2-OBJ: chi2=%g\n" % chisq
+                        + "         p in (%g,%g)\n" % (_np.min(probs), _np.max(probs))
+                        + "         weights in (%g,%g)\n" % (_np.min(weights), _np.max(weights))
+                        + "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS))
                         + "         maxLen = %d, nClipped=%d" % (maxCircuitLength, nClipped), 4)
 
             assert((cptp_penalty_factor == 0 and spam_penalty_factor == 0) or regularizeFactor == 0), \
@@ -1425,11 +1425,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
                                            probs > (1 - minProbClipForWeighting))).nonzero()[0])
-            printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac)) \
-                        + "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) \
-                        + "         dpr in (%g,%g)\n" % (_np.min(dprobs), _np.max(dprobs)) \
-                        + "         prefactor in (%g,%g)\n" % (_np.min(dPr_prefactor), _np.max(dPr_prefactor)) \
-                        + "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) \
+            printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac))
+                        + "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs))
+                        + "         dpr in (%g,%g)\n" % (_np.min(dprobs), _np.max(dprobs))
+                        + "         prefactor in (%g,%g)\n" % (_np.min(dPr_prefactor), _np.max(dPr_prefactor))
+                        + "         mdl in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS))
                         + "         maxLen = %d, nClipped = %d" % (maxCircuitLength, nClipped), 4)
 
             if check_jacobian:
@@ -2326,7 +2326,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         gthrMem = int(0.1 * (memLimit - persistentMem))
         mlim = memLimit - persistentMem - gthrMem - curMem
         assert mlim > 0, 'Not enough memory, exiting..'
-        printer.log("Memory: limit = %.2fGB" % (memLimit * C) \
+        printer.log("Memory: limit = %.2fGB" % (memLimit * C)
                     + "(cur, persist, gthr = %.2f, %.2f, %.2f GB)"
                     % (curMem * C, persistentMem * C, gthrMem * C))
     else: gthrMem = mlim = None

@@ -394,7 +394,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
     persistentMem = 8 * nP + 8 * len(circuit_list) * (nP + 1)  # in bytes
 
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C) \
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C)
                           + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
@@ -561,7 +561,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     C = 1.0 / 1024.0**3; nP = model.num_params()
     persistentMem = 8 * nP**2  # in bytes
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit * C) \
+        raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit * C)
                           + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
@@ -882,7 +882,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     persistentMem = 8 * nP**2 + 8 * len(circuit_list) * (nP + 1)  # in bytes
 
     if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C) \
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C)
                           + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
@@ -1219,7 +1219,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     twoDeltaLogL = 2 * (logl_max(model, dataset, circuit_list, poissonPicture,
-                                 check, opLabelAliases, evaltree_cache, smartc) \
+                                 check, opLabelAliases, evaltree_cache, smartc)
                         - logl(model, dataset, circuit_list,
                                minProbClip, probClipInterval, radius,
                                poissonPicture, check, opLabelAliases,
@@ -1262,7 +1262,7 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     twoDeltaLogL_terms = 2 * (logl_max_terms(model, dataset, circuit_list, poissonPicture,
-                                             opLabelAliases, evaltree_cache, smartc) \
+                                             opLabelAliases, evaltree_cache, smartc)
                               - logl_terms(model, dataset, circuit_list,
                                            minProbClip, probClipInterval, radius,
                                            poissonPicture, check, opLabelAliases,

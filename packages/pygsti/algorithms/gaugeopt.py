@@ -122,8 +122,8 @@ def gaugeopt_to_target(model, targetModel, itemWeights=None,
     """
     if itemWeights is None: itemWeights = {}
 
-    ls_mode_allowed = bool(targetModel is not None \
-                           and gatesMetric == "frobenius" \
+    ls_mode_allowed = bool(targetModel is not None
+                           and gatesMetric == "frobenius"
                            and spamMetric == "frobenius")
     #and model.dim < 64: # least squares optimization seems uneffective if more than 3 qubits
     #  -- observed by Lucas - should try to debug why 3 qubits seemed to cause trouble...

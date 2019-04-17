@@ -43,5 +43,5 @@ class rpeconfig:
             pass  # no error
         else:
             raise ValueError(("RPE configuration not fully specified.  "
-                              "Missing following keys:\n") \
+                              "Missing following keys:\n")
                              + '\n'.join(unspecified_keys))

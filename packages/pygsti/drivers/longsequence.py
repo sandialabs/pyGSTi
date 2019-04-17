@@ -598,7 +598,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
 
     #Starting Point - compute on rank 0 and distribute
     if isinstance(target_model, _objs.ExplicitOpModel):
-        LGSTcompatibleOps = all([(isinstance(g, _objs.FullDenseOp) \
+        LGSTcompatibleOps = all([(isinstance(g, _objs.FullDenseOp)
                                   or isinstance(g, _objs.TPDenseOp))
                                  for g in target_model.operations.values()])
     else:
@@ -614,7 +614,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         assert(isinstance(lsgstLists[0], validStructTypes)), \
             "Cannot run LGST: fiducials not specified!"
         opLabels = advancedOptions.get('opLabels',
-                                       list(target_model.operations.keys()) \
+                                       list(target_model.operations.keys())
                                        + list(target_model.instruments.keys()))
         mdl_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, target_model,
                                  opLabels, svdTruncateTo=op_dim,

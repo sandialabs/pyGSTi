@@ -400,8 +400,8 @@ class LinlogColormap(Colormap):
 
             return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
                                         lin_norm_value / (2 * norm_trans),
-                                        (log10_norm_trans \
-                                         - _np.ma.log10(lin_norm_value)) \
+                                        (log10_norm_trans
+                                         - _np.ma.log10(lin_norm_value))
                                         / (2 * log10_norm_trans) + 0.5)
             return_value = _np.ma.array(return_value.filled(-1),  # replace masked values with zeros for color mapping
                                         mask=_np.ma.getmask(return_value))

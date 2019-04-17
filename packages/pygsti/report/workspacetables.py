@@ -244,7 +244,7 @@ class SpamParametersTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         for gstitle, model in zip(titles, models):
-            cri = confidenceRegionInfo if (confidenceRegionInfo \
+            cri = confidenceRegionInfo if (confidenceRegionInfo
                                            and confidenceRegionInfo.model.frobeniusdist(model) < 1e-6) else None
             spamDotProdsQty = _ev(_reportables.Spam_dotprods(model), cri)
             DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()

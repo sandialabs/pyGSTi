@@ -114,13 +114,13 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
     cosStrList = []
     sinStrList = []
     for k in kList:
-        cosStrList += [_objs.Circuit(('Gi', 'Gx', 'Gx', 'Gz') \
-                                     + ('Gz',) * k \
+        cosStrList += [_objs.Circuit(('Gi', 'Gx', 'Gx', 'Gz')
+                                     + ('Gz',) * k
                                      + ('Gz', 'Gz', 'Gz', 'Gx', 'Gx'),
                                      'GiGxGxGzGz^' + str(k) + 'GzGzGzGxGx')]
 
-        sinStrList += [_objs.Circuit(('Gx', 'Gx', 'Gz', 'Gz') \
-                                     + ('Gz',) * k \
+        sinStrList += [_objs.Circuit(('Gx', 'Gx', 'Gz', 'Gz')
+                                     + ('Gz',) * k
                                      + ('Gz', 'Gz', 'Gz', 'Gx', 'Gx'),
                                      'GxGxGzGzGz^' + str(k) + 'GzGzGzGxGx')]
 
@@ -168,12 +168,12 @@ def make_rpe_epsilon_str_lists_gx_gz(kList):
     epsilonSinStrList = []
 
     for k in kList:
-        epsilonCosStrList += [_objs.Circuit(('Gx',) * k \
+        epsilonCosStrList += [_objs.Circuit(('Gx',) * k
                                             + ('Gx',) * 4,
                                             'Gx^' + str(k) + 'GxGxGxGx')]
 
-        epsilonSinStrList += [_objs.Circuit(('Gx', 'Gx', 'Gz', 'Gz') \
-                                            + ('Gx',) * k \
+        epsilonSinStrList += [_objs.Circuit(('Gx', 'Gx', 'Gz', 'Gz')
+                                            + ('Gx',) * k
                                             + ('Gx',) * 4,
                                             'GxGxGzGzGx^' + str(k) + 'GxGxGxGx')]
 
@@ -210,12 +210,12 @@ def make_rpe_theta_str_lists_gx_gz(kList):
 
     for k in kList:
         thetaCosStrList += [_objs.Circuit(
-            ('Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz') * k \
+            ('Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz') * k
             + ('Gx',) * 4, '(GzGxGxGxGxGzGzGxGxGxGxGz)^' + str(k) + 'GxGxGxGx')]
 
         thetaSinStrList += [_objs.Circuit(
-            ('Gx', 'Gx', 'Gz', 'Gz') \
-            + ('Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz') * k \
+            ('Gx', 'Gx', 'Gz', 'Gz')
+            + ('Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz') * k
             + ('Gx',) * 4,
             '(GxGxGzGz)(GzGxGxGxGxGzGzGxGxGxGxGz)^' + str(k) + 'GxGxGxGx')]
 
@@ -392,7 +392,7 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 
     for j in range(jMax):
         simDS = _dsc.generate_fake_data(
-            simModel, alphaCosStrList + alphaSinStrList + epsilonCosStrList \
+            simModel, alphaCosStrList + alphaSinStrList + epsilonCosStrList
             + epsilonSinStrList + thetaCosStrList + thetaSinStrList,
             N, sampleError='binomial', seed=j)
         alphaErrorList = []

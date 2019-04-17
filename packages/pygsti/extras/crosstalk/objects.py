@@ -60,7 +60,7 @@ class CrosstalkResults(object):
             raise ValueError("plot_crosstalk_matrix(...) requires you to install matplotlib")
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        fig, (ax1, ax2) = _plt.subplots(1, 2, figsize=(sum(self.settings) \
+        fig, (ax1, ax2) = _plt.subplots(1, 2, figsize=(sum(self.settings)
                                                        + self.number_of_regions + 6, self.number_of_regions + 4))
         fig.subplots_adjust(wspace=2, hspace=2)
 

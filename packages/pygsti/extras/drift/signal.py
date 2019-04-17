@@ -150,7 +150,7 @@ def DCT(x, counts=1, null_hypothesis=None):
     #    assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
     #    assert(len(null_hypothesis) == N), "The null hypothesis array must be the same length as the data array!"
 
-    return _dct((x - counts * null_hypothesis) \
+    return _dct((x - counts * null_hypothesis)
                 / _np.sqrt(counts * null_hypothesis * (1 - null_hypothesis)),
                 norm='ortho')
 

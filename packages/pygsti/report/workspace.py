@@ -1461,7 +1461,7 @@ class WorkspaceOutput(object):
             if key in self.options:
                 self.options[key] = val
             else:
-                raise ValueError("Invalid render option: %s\nValid options are:\n" % key \
+                raise ValueError("Invalid render option: %s\nValid options are:\n" % key
                                  + '\n'.join(self.options.keys()))
 
     def __getstate__(self):
@@ -2045,8 +2045,8 @@ class WorkspaceTable(WorkspaceOutput):
                             _os.remove("%s.log" % tableDivID)
                             _os.remove("%s.aux" % tableDivID)
                         except _subprocess.CalledProcessError as e:
-                            printer.error("%s returned code %d " % (latex_cmd, e.returncode) \
-                                          + "trying to render standalone %s.tex. " % tableDivID \
+                            printer.error("%s returned code %d " % (latex_cmd, e.returncode)
+                                          + "trying to render standalone %s.tex. " % tableDivID
                                           + "Check %s.log to see details." % tableDivID)
                         finally:
                             _os.chdir(cwd)
@@ -2738,8 +2738,8 @@ class WorkspaceText(WorkspaceOutput):
                             _os.remove("%s.log" % textDivID)
                             _os.remove("%s.aux" % textDivID)
                         except _subprocess.CalledProcessError as e:
-                            printer.error("%s returned code %d " % (latex_cmd, e.returncode) \
-                                          + "trying to render standalone %s.tex. " % textDivID \
+                            printer.error("%s returned code %d " % (latex_cmd, e.returncode)
+                                          + "trying to render standalone %s.tex. " % textDivID
                                           + "Check %s.log to see details." % textDivID)
                         finally:
                             _os.chdir(cwd)

@@ -1358,7 +1358,7 @@ class OpModel(Model):
                 wrtLen1 = (num_params + np1 - 1) // np1  # ceiling(num_params / np1)
                 wrtLen2 = (num_params + np2 - 1) // np2  # ceiling(num_params / np2)
                 nSubtreesPerProc = (ng + Ng - 1) // Ng  # ceiling(ng / Ng)
-                printer.log(" Memory estimate = %.2fGB" % (mem * C) \
+                printer.log(" Memory estimate = %.2fGB" % (mem * C)
                             + " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)."
                             % (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))

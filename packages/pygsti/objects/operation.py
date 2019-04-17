@@ -1143,7 +1143,7 @@ class TPDenseOp(DenseOperator):
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(M))
         mx = LinearOperator.convert_to_matrix(M)
         assert(_np.isrealobj(mx)), "TPDenseOp must have *real* values!"
-        if not (_np.isclose(mx[0, 0], 1.0) \
+        if not (_np.isclose(mx[0, 0], 1.0)
                 and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create TPDenseOp: "
                              "invalid form for 1st row!")
@@ -1736,9 +1736,9 @@ class EigenvalueParamDenseOp(DenseOperator):
                     for l in range(j, N):
                         # numpy normalizes but doesn't fix "phase" of evecs
                         if _np.isclose(conj, self.evals[l]) \
-                           and (_np.allclose(conjB, self.B[:, l]) \
-                                or _np.allclose(conjB, 1j * self.B[:, l]) \
-                                or _np.allclose(conjB, -1j * self.B[:, l]) \
+                           and (_np.allclose(conjB, self.B[:, l])
+                                or _np.allclose(conjB, 1j * self.B[:, l])
+                                or _np.allclose(conjB, -1j * self.B[:, l])
                                 or _np.allclose(conjB, -1 * self.B[:, l])):
                             self.params.append([  # real-part param
                                 (1.0, (k, k)),  # (prefactor, index)
@@ -3936,7 +3936,7 @@ class EmbeddedOp(LinearOperator):
         if evotype == "stabilizer":
             # assert that all state space labels == qubits, since we only know
             # how to embed cliffords on qubits...
-            assert(len(self.state_space_labels.labels) == 1 \
+            assert(len(self.state_space_labels.labels) == 1
                    and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
                 "All state space labels must correspond to *qubits*"
             if isinstance(self.embedded_op, CliffordOp):
