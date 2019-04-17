@@ -9,9 +9,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from .workspace import WorkspaceText
 from .textblock import ReportText as _ReportText
 
+
 class StdoutText(WorkspaceText):
     """A text block showing standard output recorded using
        VerbosityPrinter objects"""
+
     def __init__(self, ws, vbRecordedOutput):
         """
         A text block of standard output.
@@ -22,7 +24,7 @@ class StdoutText(WorkspaceText):
             A list of `(type,level,message)` tuples, one per line/message
             as returned by :method:`VerbosityPrinter.stop_recording`.
         """
-        super(StdoutText,self).__init__(ws, self._create, vbRecordedOutput)
+        super(StdoutText, self).__init__(ws, self._create, vbRecordedOutput)
 
     def _create(self, vbRecordedOutput):
         return _ReportText(vbRecordedOutput, "VerbosityPrinter")

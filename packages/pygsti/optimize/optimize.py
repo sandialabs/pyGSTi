@@ -13,14 +13,14 @@ import os as _os
 import scipy.optimize as _spo
 
 try:
-    from scipy.optimize import Result as _optResult #for earlier scipy versions
+    from scipy.optimize import Result as _optResult  # for earlier scipy versions
 except:
-    from scipy.optimize import OptimizeResult as _optResult #for later scipy versions
+    from scipy.optimize import OptimizeResult as _optResult  # for later scipy versions
 
 from .customcg import fmax_cg
 
 
-def minimize(fn,x0, method='cg', callback=None,
+def minimize(fn, x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
              stopval=None, jac=None):
     """
@@ -95,27 +95,28 @@ def minimize(fn,x0, method='cg', callback=None,
             def dfdx_and_bdflag(x):
                 """ Returns derivative and boundary flag """
                 j = -jac(x)
-                bd = _np.zeros(len(j)) #never say fn is on boundary, since this is an analytic derivative
+                bd = _np.zeros(len(j))  # never say fn is on boundary, since this is an analytic derivative
                 return j, bd
         else:
             dfdx_and_bdflag = None
 
-        solution = fmax_cg(fn_to_max, x0, maxiter, tol, dfdx_and_bdflag, None ) #Note: even though we maximize, return value is negated to conform to min routines
+        # Note: even though we maximize, return value is negated to conform to min routines
+        solution = fmax_cg(fn_to_max, x0, maxiter, tol, dfdx_and_bdflag, None)
 
     elif method == 'brute':
-        ranges = [ (0.0,1.0) ] * len(x0); Ns = 4  #params for 'brute' algorithm
-        xmin, _ = _spo.brute(fn, ranges, (), Ns) #jac=jac
+        ranges = [(0.0, 1.0)] * len(x0); Ns = 4  # params for 'brute' algorithm
+        xmin, _ = _spo.brute(fn, ranges, (), Ns)  # jac=jac
         #print "DEBUG: Brute fmin = ",fmin
-        solution = _spo.minimize(fn,xmin,method="Nelder-Mead", options={}, tol=tol, callback = callback, jac=jac)
+        solution = _spo.minimize(fn, xmin, method="Nelder-Mead", options={}, tol=tol, callback=callback, jac=jac)
 
     elif method == 'basinhopping':
         def _basin_callback(x, f, accept):
-            if callback is not None: callback(x,f=f,accepted=accept)
+            if callback is not None: callback(x, f=f, accepted=accept)
             if stopval is not None and f <= stopval:
-                return True #signals basinhopping to stop
+                return True  # signals basinhopping to stop
             return False
         solution = _spo.basinhopping(fn, x0, niter=maxiter, T=2.0, stepsize=1.0,
-                                               callback=_basin_callback, minimizer_kwargs={'method': "L-BFGS-B", 'jac': jac})
+                                     callback=_basin_callback, minimizer_kwargs={'method': "L-BFGS-B", 'jac': jac})
 
         #DEBUG -- follow with Nelder Mead to make sure basinhopping found a minimum. (It seems to)
         #print "DEBUG: running Nelder-Mead:"
@@ -123,31 +124,30 @@ def minimize(fn,x0, method='cg', callback=None,
         #solution = _spo.minimize(fn, solution.x, options=opts, method="Nelder-Mead", tol=1e-8, callback=callback)
         #print "DEBUG: done: best f = ",solution.fun
 
-        solution.success = True #basinhopping doesn't seem to set this...
+        solution.success = True  # basinhopping doesn't seem to set this...
 
     elif method == 'swarm':
-        solution = fmin_particle_swarm(fn, x0, tol, maxiter, popsize=1000) #, callback = callback)
+        solution = fmin_particle_swarm(fn, x0, tol, maxiter, popsize=1000)  # , callback = callback)
 
     elif method == 'evolve':
-        solution = fmin_evolutionary(fn, x0, num_generations = maxiter, num_individuals = 500)
+        solution = fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500)
 
 #    elif method == 'homebrew':
 #      solution = fmin_homebrew(fn, x0, maxiter)
 
     else:
         #Set options for different algorithms
-        opts = {'maxiter': maxiter, 'disp': False }
-        if method == "BFGS": opts['gtol'] = tol  #gradient norm tolerance
-        elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  #gradient norm and fractional y-tolerance
-        elif method == "Nelder-Mead": opts['maxfev'] = maxfev  #max fn evals (note: ftol and xtol can also be set)
+        opts = {'maxiter': maxiter, 'disp': False}
+        if method == "BFGS": opts['gtol'] = tol  # gradient norm tolerance
+        elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
+        elif method == "Nelder-Mead": opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
 
-        if method in ("BFGS","CG","Newton-CG","L-BFGS-B","TNC","SLSQP","dogleg","trust-ncg"): #use jacobian
+        if method in ("BFGS", "CG", "Newton-CG", "L-BFGS-B", "TNC", "SLSQP", "dogleg", "trust-ncg"):  # use jacobian
             solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)
         else:
             solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback)
 
     return solution
-
 
 
 def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_maxiter, max_inner_maxiter):
@@ -187,33 +187,33 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
         Includes members 'x', 'fun', 'success', and 'message'.
     """
     f_init = fn(x0)
-    f_final = f_init - 10*outer_tol #prime the loop
+    f_final = f_init - 10 * outer_tol  # prime the loop
     x_start = x0
 
     i = 1
     cnt_at_same_maxiter = 1
     inner_maxiter = min_inner_maxiter
 
-    while ( f_init-f_final > outer_tol or inner_maxiter < max_inner_maxiter) and i < max_outer_iter:
-        if f_init-f_final <= outer_tol and inner_maxiter < max_inner_maxiter:
+    while (f_init - f_final > outer_tol or inner_maxiter < max_inner_maxiter) and i < max_outer_iter:
+        if f_init - f_final <= outer_tol and inner_maxiter < max_inner_maxiter:
             inner_maxiter *= 10; cnt_at_same_maxiter = 1
         if cnt_at_same_maxiter > 10 and inner_maxiter > min_inner_maxiter:
             inner_maxiter /= 10; cnt_at_same_maxiter = 1
         f_init = f_final
 
-        print(">>> fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i,inner_maxiter))
+        print(">>> fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i, inner_maxiter))
         i += 1; cnt_at_same_maxiter += 1
 
-        opts = {'maxiter': inner_maxiter, 'maxfev': inner_maxiter, 'disp': False }
-        inner_solution = _spo.minimize(fn,x_start,options=opts, method='Nelder-Mead',callback=None, tol=inner_tol)
+        opts = {'maxiter': inner_maxiter, 'maxfev': inner_maxiter, 'disp': False}
+        inner_solution = _spo.minimize(fn, x_start, options=opts, method='Nelder-Mead', callback=None, tol=inner_tol)
 
         if not inner_solution.success:
-            print("WARNING: fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s" \
-                % (inner_tol,inner_maxiter,inner_solution.message))
+            print("WARNING: fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s"
+                  % (inner_tol, inner_maxiter, inner_solution.message))
 
         f_final = inner_solution.fun
         x_start = inner_solution.x
-        print(">>> fmin_supersimplex: outer iteration %d gives min = %f" % (i,f_final))
+        print(">>> fmin_supersimplex: outer iteration %d gives min = %f" % (i, f_final))
 
     solution = _optResult()
     solution.x = inner_solution.x
@@ -224,7 +224,6 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
         solution.success = False
         solution.message = "Maximum iterations exceeded"
     return solution
-
 
 
 def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
@@ -260,18 +259,18 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
 
     # Setup intial values
     n = len(x0)
-    f = _np.zeros(n+1)
-    x = _np.zeros((n+1,n))
+    f = _np.zeros(n + 1)
+    x = _np.zeros((n + 1, n))
 
     x[0] = x0
 
     # Setup intial X range
-    for i in range(1,n+1):
+    for i in range(1, n + 1):
         x[i] = x0
-        x[i,i-1] = x0[i-1] + slide
+        x[i, i - 1] = x0[i - 1] + slide
 
     # Setup intial functions based on x's just defined
-    for i in range(n+1):
+    for i in range(n + 1):
         f[i] = fn(x[i])
 
     # Main Loop operation, loops infinitly until break condition
@@ -282,10 +281,10 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
         counter += 1
 
         # Compute Migration
-        d = (-(n+1)*x[high]+sum(x))/n
+        d = (-(n + 1) * x[high] + sum(x)) / n
 
         # Break if value is close
-        if _np.sqrt(_np.dot(d,d)/n)<tol or counter == maxiter:
+        if _np.sqrt(_np.dot(d, d) / n) < tol or counter == maxiter:
             solution = _optResult()
             solution.x = x[low]; solution.fun = f[low]
             if counter < maxiter:
@@ -295,7 +294,7 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
                 solution.message = "Maximum iterations exceeded"
             return solution
 
-        newX = x[high] + 2.0*d
+        newX = x[high] + 2.0 * d
         newF = fn(newX)
 
         if newF <= f[low]:
@@ -319,17 +318,16 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
                 f[high] = newF
             else:
                 # Contraction
-                newX = x[high] + 0.5*d
+                newX = x[high] + 0.5 * d
                 newF = fn(newX)
                 if newF <= f[high]:
                     x[high] = newX
                     f[high] = newF
                 else:
                     for i in range(len(x)):
-                        if i!=low:
-                            x[i] = (x[i]-x[low])
+                        if i != low:
+                            x[i] = (x[i] - x[low])
                             f[i] = fn(x[i])
-
 
 
 #TODO err_crit is never used?
@@ -381,7 +379,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
         p = Particle()
         p.params = x0 + 2 * (_np.random.random(dimensions) - 0.5)
         p.best = p.params[:]
-        p.fitness = LARGE # large == bad fitness
+        p.fitness = LARGE  # large == bad fitness
         p.v = _np.zeros(dimensions)
         particles.append(p)
 
@@ -441,16 +439,15 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     #    exit()
     #END DEBUG
 
-
     #err = 1e10
     for iter_num in range(iter_max):
-        w = 1.0 #- i/iter_max
+        w = 1.0  # - i/iter_max
 
         #bDoLocalFitnessOpt = bool(iter_num > 20 and abs(lastBest-gbest.fitness) < 0.001 and iter_num % 10 == 0)
         # lastBest = gbest.fitness
         # minDistToBest = 1e10; minV = 1e10; maxV = 0 #DEBUG
 
-        for (ip,p) in enumerate(particles):
+        for (ip, p) in enumerate(particles):
             fitness = f(p.params)
 
             #if bDoLocalFitnessOpt:
@@ -459,18 +456,18 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
             #    p.params = local_soln.x
             #    fitness = local_soln.fun
 
-            if fitness < p.fitness:  #low 'fitness' is good b/c we're minimizing
+            if fitness < p.fitness:  # low 'fitness' is good b/c we're minimizing
                 p.fitness = fitness
                 p.best = p.params
 
             if fitness < gbest.fitness:
                 gbest = p; ibest = ip
 
-            v = w*p.v + c1 * _np.random.random() * (p.best - p.params) \
-                    + c2 * _np.random.random() * (gbest.params - p.params)
+            v = w * p.v + c1 * _np.random.random() * (p.best - p.params) \
+                + c2 * _np.random.random() * (gbest.params - p.params)
             p.params = p.params + v
-            for (i,pv) in enumerate(p.params):
-                p.params[i] = ((pv+1) % 2) - 1 #periodic b/c on box between -1 and 1
+            for (i, pv) in enumerate(p.params):
+                p.params[i] = ((pv + 1) % 2) - 1  # periodic b/c on box between -1 and 1
 
             #from .. import tools as tools_
             #matM = p.params.reshape( (4,4) )  #DEBUG
@@ -481,7 +478,6 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
 
         #print "DB: min diff from best = ", minDistToBest #DEBUG
         #print "DB: min,max v = ", (minV,maxV)
-
 
         #if False: #bDoLocalFitnessOpt:
         #    opts = {'maxiter': 100, 'maxfev': 100, 'disp': False }
@@ -508,7 +504,6 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
 #        solution.success = False
 #        solution.message = "Maximum iterations exceeded"
     return solution
-
 
 
 def fmin_evolutionary(f, x0, num_generations, num_individuals):
@@ -555,12 +550,13 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
     toolbox = _base.Toolbox()
     toolbox.register("random", _np.random.random)
     toolbox.register("individual", _tools.initRepeat, _creator.Individual,
-                     toolbox.random, n=numParams) # fn to init an individual from a list of numParams random numbers
-    toolbox.register("population", _tools.initRepeat, list, toolbox.individual) # fn to create a population (still need to specify n)
+                     toolbox.random, n=numParams)  # fn to init an individual from a list of numParams random numbers
+    # fn to create a population (still need to specify n)
+    toolbox.register("population", _tools.initRepeat, list, toolbox.individual)
 
     # Create operation functions
     def _evaluate(individual):
-        return f( _np.array(individual) ),  #note: must return a tuple
+        return f(_np.array(individual)),  # note: must return a tuple
 
     toolbox.register("mate", _tools.cxTwoPoint)
     toolbox.register("mutate", _tools.mutGaussian, mu=0, sigma=0.5, indpb=0.1)
@@ -590,7 +586,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
     for g in range(num_generations):
         record = stats.compile(pop)
         logbook.record(gen=g, **record)
-        print("Gen %d: %s" % (g,record))
+        print("Gen %d: %s" % (g, record))
 
         # Select the next generation individuals
         offspring = toolbox.select(pop, len(pop))
@@ -620,15 +616,13 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
         pop[:] = offspring
 
     #get best individual and return params
-    indx_min_fitness = _np.argmin( [ ind.fitness.values[0] for ind in pop ] )
+    indx_min_fitness = _np.argmin([ind.fitness.values[0] for ind in pop])
     best_params = _np.array(pop[indx_min_fitness])
 
     solution = _optResult()
     solution.x = best_params; solution.fun = pop[indx_min_fitness].fitness.values[0]
     solution.success = True
     return solution
-
-
 
 
 #def fmin_homebrew(f, x0, maxiter):
@@ -715,7 +709,6 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
 #    return solution
 
 
-
 def create_obj_func_printer(objFunc, startTime=None):
     """
     Create a callback function that prints the value of an objective function.
@@ -727,7 +720,7 @@ def create_obj_func_printer(objFunc, startTime=None):
 
     startTime : float (optional)
         A reference starting time to use when printing elapsed times. If None,
-        then the system time when this function is called is used (which is 
+        then the system time when this function is called is used (which is
         often what you want).
 
     Returns
@@ -736,28 +729,27 @@ def create_obj_func_printer(objFunc, startTime=None):
         A callback function which prints objFunc.
     """
     if startTime is None:
-        startTime = _time.time() #for reference point of obj func printer
+        startTime = _time.time()  # for reference point of obj func printer
 
-    def print_obj_func(x,f=None,accepted=None):
+    def print_obj_func(x, f=None, accepted=None):
         """Just print the objective function value (used to monitor convergence in a callback) """
         if f is not None and accepted is not None:
-            print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))
+            print("%5ds %22.10f %s" % (_time.time() - startTime, f, 'accepted' if accepted else 'not accepted'))
         else:
             result = objFunc(x)
             duration = _time.time() - startTime
             try:
                 print("%5ds %22.10f" % (duration, result))
-            except TypeError: # Objfun returns vector, not scalar
-                print('%5ds %s' % (duration,  result))
+            except TypeError:  # Objfun returns vector, not scalar
+                print('%5ds %s' % (duration, result))
     return print_obj_func
-
 
 
 def _fwd_diff_jacobian(f, x0, eps=1e-10):
     y0 = f(x0).copy()
     M = len(y0)
     N = len(x0)
-    jac = _np.empty( (M,N), 'd' )
+    jac = _np.empty((M, N), 'd')
 
     for j in range(N):
         #print('Adding eps to {}'.format(j))
@@ -766,11 +758,12 @@ def _fwd_diff_jacobian(f, x0, eps=1e-10):
         #print('y0, yj')
         #print(y0[48:52])
         #print(yj[48:52])
-        df = (yj-y0)/eps # df_dxj
-        jac[:,j] = df
+        df = (yj - y0) / eps  # df_dxj
+        jac[:, j] = df
         #print(df[48:52])
 
     return jac
+
 
 def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
               verbosity=1):
@@ -812,44 +805,44 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
     devnull = open(_os.devnull, 'w')
 
     try:
-        _sys.stdout = devnull #redirect stdout to null during the many f(x) calls
-        fd_jac = _fwd_diff_jacobian(f,x0,eps)
+        _sys.stdout = devnull  # redirect stdout to null during the many f(x) calls
+        fd_jac = _fwd_diff_jacobian(f, x0, eps)
     finally:
         _sys.stdout = orig_stdout
         devnull.close()
 
     assert(jacToCheck.shape == fd_jac.shape)
-    M,N = jacToCheck.shape
+    M, N = jacToCheck.shape
 
     errSum = 0; errs = []
     if errType == 'rel':
         for i in range(M):
             for j in range(N):
-                err = _np.abs(fd_jac[i,j]-jacToCheck[i,j]) / (_np.abs(fd_jac[i,j])+1e-10)
-                if err > tol: errs.append( (i,j,err) )
+                err = _np.abs(fd_jac[i, j] - jacToCheck[i, j]) / (_np.abs(fd_jac[i, j]) + 1e-10)
+                if err > tol: errs.append((i, j, err))
                 errSum += err
 
     elif errType == 'abs':
         for i in range(M):
             for j in range(N):
-                err = _np.abs(fd_jac[i,j]-jacToCheck[i,j])
-                if err > tol: 
-                    errs.append( (i,j,err) )
+                err = _np.abs(fd_jac[i, j] - jacToCheck[i, j])
+                if err > tol:
+                    errs.append((i, j, err))
                     if verbosity > 1:
                         print("JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
-                              (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
+                              (i, j, fd_jac[i, j], jacToCheck[i, j], fd_jac[i, j] - jacToCheck[i, j]))
                 errSum += err
 
     errs.sort(key=lambda x: -x[2])
 
     if len(errs) > 0:
         maxabs = _np.max(_np.abs(jacToCheck))
-        max_err_ratio = _np.max([ x[2]/maxabs for x in errs ])
+        max_err_ratio = _np.max([x[2] / maxabs for x in errs])
         if verbosity > 0:
-            if max_err_ratio > 0.01: 
-                print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+            if max_err_ratio > 0.01:
+                print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio, maxabs))
 
     if verbosity > 0:
-        print("check_jac %s [err = %g]" % (("ERROR" if len(errs) else "OK"),errSum))
+        print("check_jac %s [err = %g]" % (("ERROR" if len(errs) else "OK"), errSum))
 
     return errSum, errs, fd_jac

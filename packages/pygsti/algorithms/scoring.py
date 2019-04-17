@@ -58,12 +58,12 @@ class CompositeScore():
     is better. The score value is broken into two parts: 'major' and 'minor'.
     A CompositeScore with a smaller 'major' part is always smaller than one
     with a larger 'major' part.  The 'minor' parts are only compared when the
-    major parts are equal.  Typically, the negative of the number of non-zero 
+    major parts are equal.  Typically, the negative of the number of non-zero
     eigenvalues is used to as the major part so that a score that has more non-zero
     eigenvalues (higher `N`) will always compare as less than a score that has
     fewer non-zero eigenvalues (lower `N`), with ties for `N` being resolved by
     comparing the minor score in the straightforward manner (since the non-AC
-    `score` is assumed to be better for lower values).  For bookeeping, the 
+    `score` is assumed to be better for lower values).  For bookeeping, the
     CompositeScore object also separately holds the  number of non-zero eigenvalues,
     as this may not always be recovered from the major part of the score.
 
@@ -74,6 +74,7 @@ class CompositeScore():
     N : int
         The number of non-zero eigenvalues.
     """
+
     def __init__(self, major, minor, N):
         self.major = major
         self.minor = minor
@@ -96,6 +97,7 @@ class CompositeScore():
         return 'Score: major={} minor={}, N: {}'.format(
             self.major, self.minor, self.N)
 
+
 def composite_rcl_fn(candidateScores, alpha):
     """Create a restricted candidate list (RCL) based on CompositeScore objects.
 
@@ -115,8 +117,8 @@ def composite_rcl_fn(candidateScores, alpha):
         Intermediate values of alpha attempt to mimic the behavior of alpha for
         simple float scores. For those scores, the score that all elements must
         beat is ``(1 - alpha)*best + alpha*worst``. For CompositeScore objects,
-        thresholding is done on the major part of the score unless all the 
-        candidates have the same major score, in which case thresholding is 
+        thresholding is done on the major part of the score unless all the
+        candidates have the same major score, in which case thresholding is
         performed using only the minor score.
 
     Returns
@@ -128,14 +130,14 @@ def composite_rcl_fn(candidateScores, alpha):
     maxScore = max(candidateScores)
     minScore = min(candidateScores)
     if maxScore.major == minScore.major:
-        threshold = CompositeScore( maxScore.major, 
-                                    ((1-alpha) * minScore.minor
-                                     + alpha * maxScore.minor), None)
+        threshold = CompositeScore(maxScore.major,
+                                   ((1 - alpha) * minScore.minor
+                                    + alpha * maxScore.minor), None)
     else:
         maxMinorScore = max([s.minor for s in candidateScores])
-        threshold = CompositeScore( ((1-alpha) * minScore.major
-                                     + alpha * maxScore.major),
-                                    maxMinorScore, None)
-          # take *all* candidates with computed major score, so use
-          # maximal minor score
+        threshold = CompositeScore(((1 - alpha) * minScore.major
+                                    + alpha * maxScore.major),
+                                   maxMinorScore, None)
+        # take *all* candidates with computed major score, so use
+        # maximal minor score
     return _np.where(_np.array(candidateScores) <= threshold)[0]

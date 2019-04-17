@@ -78,7 +78,7 @@ def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
        just the single best-scoring element.
     3. Choose a random element from the reduced candidate list and add it
        to the solution subset.
-    
+
     Parameters
     ----------
     elements : list
@@ -118,14 +118,14 @@ def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
     list
         A sub-list of `elements`.
     """
-    
+
     if initialElements is None:
         weights = _np.zeros(len(elements))
     else:
         if len(initialElements) != len(elements):
             raise ValueError('initialElements must have the same length as '
                              'elements ({}), not {}!'.format(len(elements),
-                                                        len(initialElements)))
+                                                             len(initialElements)))
         weights = _np.array(initialElements)
 
     soln = [elements[idx] for idx in _np.nonzero(weights)[0]]
@@ -140,13 +140,13 @@ def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
 
     feasible = False
 
-    while _np.any(weights==0) and not feasible:
-        candidateIdxs = _np.where(weights==0)[0]
+    while _np.any(weights == 0) and not feasible:
+        candidateIdxs = _np.where(weights == 0)[0]
         candidateSolns = [soln + [elements[idx]] for idx in candidateIdxs]
         candidateScores = _np.array([scoreFn(candidateSoln)
                                      for candidateSoln in candidateSolns])
         rclIdxs = rclFn(candidateScores)
-        assert(len(rclIdxs)>0), "Empty reduced candidate list!"
+        assert(len(rclIdxs) > 0), "Empty reduced candidate list!"
         chosenIdx = _np.random.choice(rclIdxs)
         soln = candidateSolns[chosenIdx]
         weights[candidateIdxs[chosenIdx]] = 1
@@ -173,7 +173,7 @@ def grasp_local_search(initialSoln, scoreFn, elements, getNeighborsFn,
     ----------
     initialSoln : list
         A list of some (or all) of the items in `elements`, representing an
-        initial solution.  This solution must be "feasbile" as determined by 
+        initial solution.  This solution must be "feasbile" as determined by
         `feasibleThreshold` or `feasibleFn`.
 
     scoreFn : callable
@@ -333,7 +333,7 @@ def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
                                             feasibleThreshold, feasibleFn,
                                             initialElements)
     printer.log('Initial construction:', 1)
-    to_str = lambda x: x.str if isinstance(x,_objs.Circuit) else str(x)
+    def to_str(x): return x.str if isinstance(x, _objs.Circuit) else str(x)
     printer.log(str([to_str(element) for element in initialSoln]), 1)
 
     localSoln = grasp_local_search(initialSoln, localScoreFn, elements,
@@ -346,8 +346,8 @@ def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
 
 
 def do_grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
-          finalScoreFn, iterations, feasibleThreshold=None, feasibleFn=None,
-          initialElements=None, seed=None, verbosity=0):
+             finalScoreFn, iterations, feasibleThreshold=None, feasibleFn=None,
+             initialElements=None, seed=None, verbosity=0):
     """Perform GRASP to come up with an optimal feasible set of elements.
 
     Parameters
@@ -424,12 +424,12 @@ def do_grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
         _, localSoln = do_grasp_iteration(elements, greedyScoreFn,
-                                                    rclFn, localScoreFn,
-                                                    getNeighborsFn,
-                                                    feasibleThreshold,
-                                                    feasibleFn,
-                                                    initialElements, seed,
-                                                    verbosity)
+                                          rclFn, localScoreFn,
+                                          getNeighborsFn,
+                                          feasibleThreshold,
+                                          feasibleFn,
+                                          initialElements, seed,
+                                          verbosity)
         if bestSoln is None:
             bestSoln = localSoln
         elif finalScoreFn(localSoln) < finalScoreFn(bestSoln):

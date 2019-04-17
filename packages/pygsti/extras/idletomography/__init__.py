@@ -12,7 +12,7 @@ from . import pauliobjs
 #from . import idtreport
 
 #just import everything for now
-from .idtcore import * 
+from .idtcore import *
 from .idttools import *
 from .pauliobjs import NQPauliState, NQPauliOp, NQOutcome
 from .idtresults import IdleTomographyResults

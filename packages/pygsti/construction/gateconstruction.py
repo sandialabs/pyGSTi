@@ -13,27 +13,28 @@ from ..tools.optools import unitary_to_pauligate
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
-id2x2 = _np.array([[1,0],[0,1]])
-sigmax = _np.array([[0,1],[1,0]])
-sigmay = _np.array([[0,-1.0j],[1.0j,0]])
-sigmaz = _np.array([[1,0],[0,-1]])
+id2x2 = _np.array([[1, 0], [0, 1]])
+sigmax = _np.array([[0, 1], [1, 0]])
+sigmay = _np.array([[0, -1.0j], [1.0j, 0]])
+sigmaz = _np.array([[1, 0], [0, -1]])
 
-sigmaii = _np.kron(id2x2,id2x2)
-sigmaix = _np.kron(id2x2,sigmax)
-sigmaiy = _np.kron(id2x2,sigmay)
-sigmaiz = _np.kron(id2x2,sigmaz)
-sigmaxi = _np.kron(sigmax,id2x2)
-sigmaxx = _np.kron(sigmax,sigmax)
-sigmaxy = _np.kron(sigmax,sigmay)
-sigmaxz = _np.kron(sigmax,sigmaz)
-sigmayi = _np.kron(sigmay,id2x2)
-sigmayx = _np.kron(sigmay,sigmax)
-sigmayy = _np.kron(sigmay,sigmay)
-sigmayz = _np.kron(sigmay,sigmaz)
-sigmazi = _np.kron(sigmaz,id2x2)
-sigmazx = _np.kron(sigmaz,sigmax)
-sigmazy = _np.kron(sigmaz,sigmay)
-sigmazz = _np.kron(sigmaz,sigmaz)
+sigmaii = _np.kron(id2x2, id2x2)
+sigmaix = _np.kron(id2x2, sigmax)
+sigmaiy = _np.kron(id2x2, sigmay)
+sigmaiz = _np.kron(id2x2, sigmaz)
+sigmaxi = _np.kron(sigmax, id2x2)
+sigmaxx = _np.kron(sigmax, sigmax)
+sigmaxy = _np.kron(sigmax, sigmay)
+sigmaxz = _np.kron(sigmax, sigmaz)
+sigmayi = _np.kron(sigmay, id2x2)
+sigmayx = _np.kron(sigmay, sigmax)
+sigmayy = _np.kron(sigmay, sigmay)
+sigmayz = _np.kron(sigmay, sigmaz)
+sigmazi = _np.kron(sigmaz, id2x2)
+sigmazx = _np.kron(sigmaz, sigmax)
+sigmazy = _np.kron(sigmaz, sigmay)
+sigmazz = _np.kron(sigmaz, sigmaz)
+
 
 def single_qubit_gate(hx, hy, hz, noise=0):
     """
@@ -65,10 +66,9 @@ def single_qubit_gate(hx, hy, hz, noise=0):
         density matrix expressed as a vector in the
         Pauli basis ( {I,X,Y,Z}/sqrt(2) ).
     """
-    ex = -1j * (hx*sigmax + hy*sigmay + hz*sigmaz)
-    D = _np.diag( [1]+[1-noise]*(4-1) )
-    return _np.dot(D, unitary_to_pauligate( _spl.expm(ex) ))
-
+    ex = -1j * (hx * sigmax + hy * sigmay + hz * sigmaz)
+    D = _np.diag([1] + [1 - noise] * (4 - 1))
+    return _np.dot(D, unitary_to_pauligate(_spl.expm(ex)))
 
 
 def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0, ii=0):
@@ -121,7 +121,7 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
         density matrix expressed as a vector in the
         Pauli-Product basis.
     """
-    ex = ii * _np.identity(4, 'complex' )
+    ex = ii * _np.identity(4, 'complex')
     ex += ix * sigmaix
     ex += iy * sigmaiy
     ex += iz * sigmaiz
@@ -137,5 +137,5 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
     ex += zx * sigmazx
     ex += zy * sigmazy
     ex += zz * sigmazz
-    return unitary_to_pauligate( _spl.expm(-1j * ex) )
-      #TODO: fix noise op to depolarizing
+    return unitary_to_pauligate(_spl.expm(-1j * ex))
+    #TODO: fix noise op to depolarizing

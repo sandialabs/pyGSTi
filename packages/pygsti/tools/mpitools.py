@@ -75,12 +75,13 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     #el
     if nprocs > len(indices) and (comm is not None) and allow_split_comm:
         color = loc_indices[0] if isinstance(loc_indices[0], int) \
-                else (int(hash(loc_indices[0])) >> 32) # mpi4py only allows 32-bit ints
+            else (int(hash(loc_indices[0])) >> 32)  # mpi4py only allows 32-bit ints
         loc_comm = comm.Split(color=color, key=rank)
     else:
         loc_comm = None
 
     return loc_indices, owners, loc_comm
+
 
 def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     """
@@ -129,58 +130,58 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         results.
     """
     nIndices = len(indices)
-    if nIndices == 0: # special case when == 0
+    if nIndices == 0:  # special case when == 0
         return [], {}
 
     if nprocs >= nIndices:
         if allow_split_comm:
-            nloc_std =  nprocs // nIndices  # this many processors per index, w/out any "extra"
-            extra = nprocs - nloc_std*nIndices # extra procs
+            nloc_std = nprocs // nIndices  # this many processors per index, w/out any "extra"
+            extra = nprocs - nloc_std * nIndices  # extra procs
             # indices 0 to extra-1 get (nloc_std+1) processors each
             # incides extra to nIndices-1 get nloc_std processors each
-            if rank < extra*(nloc_std+1):
-                loc_indices = [ indices[rank // (nloc_std+1)] ]
+            if rank < extra * (nloc_std + 1):
+                loc_indices = [indices[rank // (nloc_std + 1)]]
             else:
-                loc_indices = [ indices[
-                        extra + (rank-extra*(nloc_std+1)) // nloc_std ] ]
+                loc_indices = [indices[
+                    extra + (rank - extra * (nloc_std + 1)) // nloc_std]]
 
             # owners dict gives rank of first (chief) processor for each index
             # (the "owner" of a given index is responsible for communicating
             #  results for that index to the other processors)
-            owners = { indices[i]: i*(nloc_std+1) for i in range(extra) }
-            owners.update( { indices[i]: extra*(nloc_std+1) + (i-extra)*nloc_std
-                             for i in range(extra, nIndices) } )
+            owners = {indices[i]: i * (nloc_std + 1) for i in range(extra)}
+            owners.update({indices[i]: extra * (nloc_std + 1) + (i - extra) * nloc_std
+                           for i in range(extra, nIndices)})
         else:
             #Not allowed to assign multiple procs the same local index
             # (presumably b/c there is no way to sub-divide the work
             #  performed for a single index among multiple procs)
             if rank < nIndices:
-                loc_indices = [ indices[rank] ]
+                loc_indices = [indices[rank]]
             else:
-                loc_indices = [ ] #extra procs do nothing
-            owners = { indices[i]: i for i in range(nIndices) }
+                loc_indices = []  # extra procs do nothing
+            owners = {indices[i]: i for i in range(nIndices)}
 
     else:
-        nloc_std =  nIndices // nprocs
-        extra = nIndices - nloc_std*nprocs # extra indices
-          # so assign (nloc_std+1) indices to first extra procs
+        nloc_std = nIndices // nprocs
+        extra = nIndices - nloc_std * nprocs  # extra indices
+        # so assign (nloc_std+1) indices to first extra procs
         if rank < extra:
-            nloc = nloc_std+1
-            nstart = rank * (nloc_std+1)
-            loc_indices = [ indices[rank // (nloc_std+1)] ]
+            nloc = nloc_std + 1
+            nstart = rank * (nloc_std + 1)
+            loc_indices = [indices[rank // (nloc_std + 1)]]
         else:
             nloc = nloc_std
-            nstart = extra * (nloc_std+1) + (rank-extra)*nloc_std
-        loc_indices = [ indices[i] for i in range(nstart,nstart+nloc)]
+            nstart = extra * (nloc_std + 1) + (rank - extra) * nloc_std
+        loc_indices = [indices[i] for i in range(nstart, nstart + nloc)]
 
-        owners = { } #which rank "owns" each index
+        owners = {}  # which rank "owns" each index
         for r in range(extra):
-            nstart = r * (nloc_std+1)
-            for i in range(nstart,nstart+(nloc_std+1)):
+            nstart = r * (nloc_std + 1)
+            for i in range(nstart, nstart + (nloc_std + 1)):
                 owners[indices[i]] = r
-        for r in range(extra,nprocs):
-            nstart = extra * (nloc_std+1) + (r-extra)*nloc_std
-            for i in range(nstart,nstart+nloc_std):
+        for r in range(extra, nprocs):
+            nstart = extra * (nloc_std + 1) + (r - extra) * nloc_std
+            for i in range(nstart, nstart + nloc_std):
                 owners[indices[i]] = r
 
     return loc_indices, owners
@@ -202,11 +203,11 @@ def slice_up_slice(slc, num_slices):
     -------
     list of slices
     """
-    assert(slc.step is None) #currently, no support for step != None slices
+    assert(slc.step is None)  # currently, no support for step != None slices
     if slc.start is None or slc.stop is None:
         return slice_up_range(0, num_slices)
     else:
-        return slice_up_range(slc.stop-slc.start, num_slices, slc.start)
+        return slice_up_range(slc.stop - slc.start, num_slices, slc.start)
 
 
 def slice_up_range(n, num_slices, start=0):
@@ -229,18 +230,17 @@ def slice_up_range(n, num_slices, start=0):
     -------
     list of slices
     """
-    base = n // num_slices # base slice size
-    m1 = n - base*num_slices # num base+1 size slices
+    base = n // num_slices  # base slice size
+    m1 = n - base * num_slices  # num base+1 size slices
     m2 = num_slices - m1     # num base size slices
-    assert( ((base+1)*m1 + base*m2) == n )
+    assert(((base + 1) * m1 + base * m2) == n)
 
     off = start
-    ret =  [slice(off+(base+1)*i,off+(base+1)*(i+1)) for i in range(m1)]
-    off += (base+1)*m1
-    ret += [slice(off+base*i,off+base*(i+1)) for i in range(m2)]
+    ret = [slice(off + (base + 1) * i, off + (base + 1) * (i + 1)) for i in range(m1)]
+    off += (base + 1) * m1
+    ret += [slice(off + base * i, off + base * (i + 1)) for i in range(m2)]
     assert(len(ret) == num_slices)
     return ret
-
 
 
 def distribute_slice(s, comm, allow_split_comm=True):
@@ -295,13 +295,13 @@ def distribute_slice(s, comm, allow_split_comm=True):
         nprocs = comm.Get_size()
         rank = comm.Get_rank()
 
-    slices = slice_up_slice(s, min(nprocs,_slct.length(s)))
+    slices = slice_up_slice(s, min(nprocs, _slct.length(s)))
     assert(len(slices) <= nprocs)
     loc_iSlices, slcOwners = \
-        distribute_indices_base( list(range(len(slices))), nprocs, rank,
-                                 allow_split_comm)
-    assert(len(loc_iSlices) <= 1) # should not assign more than one slice to
-                         # each proc by design (there are only nprocs slices)
+        distribute_indices_base(list(range(len(slices))), nprocs, rank,
+                                allow_split_comm)
+    assert(len(loc_iSlices) <= 1)  # should not assign more than one slice to
+    # each proc by design (there are only nprocs slices)
 
     if len(loc_iSlices) == 1:
         loc_slice = slices[loc_iSlices[0]]
@@ -319,8 +319,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
         loc_slice = slice(None)
         loc_comm = None
 
-    return slices, loc_slice,  slcOwners, loc_comm
-
+    return slices, loc_slice, slcOwners, loc_comm
 
 
 def gather_slices(slices, slice_owners, arToFill,
@@ -379,25 +378,25 @@ def gather_slices(slices, slice_owners, arToFill,
     -------
     None
     """
-    if comm is None: return #no gathering needed!
+    if comm is None: return  # no gathering needed!
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [ slice(None,None) ] * arToFill.ndim
+    arIndx = [slice(None, None)] * arToFill.ndim
     arIndx[0:len(arToFillInds)] = arToFillInds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
-    max_indices = [None]*len(axes)
-    if max_buffer_size is not None: #no maximum of buffer size
-        chunkBytes = arToFill.nbytes #start with the entire array as the "chunk"
-        for iaxis,axis in enumerate(axes):
+    max_indices = [None] * len(axes)
+    if max_buffer_size is not None:  # no maximum of buffer size
+        chunkBytes = arToFill.nbytes  # start with the entire array as the "chunk"
+        for iaxis, axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
             bytes_per_index = chunkBytes / arToFill.shape[axis]
-            max_inds = int(max_buffer_size/bytes_per_index)
+            max_inds = int(max_buffer_size / bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
                 chunkBytes /= arToFill.shape[axis]
@@ -407,34 +406,32 @@ def gather_slices(slices, slice_owners, arToFill,
         else:
             _warnings.warn("gather_slices: Could not achieve max_buffer_size")
 
-
-    for iSlice,slcOrSlcTup in enumerate(slices):
-        owner = slice_owners[iSlice] #owner's rank
-        slcTup =(slcOrSlcTup,) if isinstance(slcOrSlcTup,slice) else slcOrSlcTup
+    for iSlice, slcOrSlcTup in enumerate(slices):
+        owner = slice_owners[iSlice]  # owner's rank
+        slcTup = (slcOrSlcTup,) if isinstance(slcOrSlcTup, slice) else slcOrSlcTup
         assert(len(slcTup) == len(axes))
 
         #Get the a list of the (sub-)slices along each axis, whose product
         # (along the specified axes) gives the entire block given by slcTup
         axisSlices = []
-        for iaxis,axis in enumerate(axes):
+        for iaxis, axis in enumerate(axes):
             slc = slcTup[iaxis]
             if max_indices[iaxis] is None or max_indices[iaxis] >= _slct.length(slc):
-                axisSlices.append( [slc] ) #arIndx[axis] = slc
+                axisSlices.append([slc])  # arIndx[axis] = slc
             else:
-                axisSlices.append( _slct.divide(slc, max_indices[iaxis]) )
+                axisSlices.append(_slct.divide(slc, max_indices[iaxis]))
 
         for axSlcs in _itertools.product(*axisSlices):
             #create arIndx from per-axis (sub-)slices and broadcast
-            for iaxis,axis in enumerate(axes):
+            for iaxis, axis in enumerate(axes):
                 arIndx[axis] = axSlcs[iaxis]
 
             #broadcast arIndx slice
-            buf = _findx(arToFill,arIndx,True) if (my_rank == owner) \
-                  else _np.empty(_findx_shape(arToFill,arIndx), arToFill.dtype)
+            buf = _findx(arToFill, arIndx, True) if (my_rank == owner) \
+                else _np.empty(_findx_shape(arToFill, arIndx), arToFill.dtype)
             comm.Bcast(buf, root=owner)
             if my_rank != owner: _fas(arToFill, arIndx, buf)
-            buf = None #free buffer mem asap
-
+            buf = None  # free buffer mem asap
 
 
 def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
@@ -489,25 +486,25 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
     """
 
     #Note: same beginning as gather_slices (TODO: consolidate?)
-    if comm is None: return #no gathering needed!
+    if comm is None: return  # no gathering needed!
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [ slice(None,None) ] * arToFill.ndim
+    arIndx = [slice(None, None)] * arToFill.ndim
     arIndx[0:len(arToFillInds)] = arToFillInds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
-    max_indices = [None]*len(axes)
-    if max_buffer_size is not None: #no maximum of buffer size
-        chunkBytes = arToFill.nbytes #start with the entire array as the "chunk"
-        for iaxis,axis in enumerate(axes):
+    max_indices = [None] * len(axes)
+    if max_buffer_size is not None:  # no maximum of buffer size
+        chunkBytes = arToFill.nbytes  # start with the entire array as the "chunk"
+        for iaxis, axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
             bytes_per_index = chunkBytes / arToFill.shape[axis]
-            max_inds = int(max_buffer_size/bytes_per_index)
+            max_inds = int(max_buffer_size / bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
                 chunkBytes /= arToFill.shape[axis]
@@ -522,30 +519,30 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
     slices_by_owner = comm.allgather(slicesIOwn)
     for owner, slices in enumerate(slices_by_owner):
         for slcOrSlcTup in slices:
-            slcTup =(slcOrSlcTup,) if isinstance(slcOrSlcTup,slice) else slcOrSlcTup
+            slcTup = (slcOrSlcTup,) if isinstance(slcOrSlcTup, slice) else slcOrSlcTup
             assert(len(slcTup) == len(axes))
 
             #Get the a list of the (sub-)slices along each axis, whose product
             # (along the specified axes) gives the entire block given by slcTup
             axisSlices = []
-            for iaxis,axis in enumerate(axes):
+            for iaxis, axis in enumerate(axes):
                 slc = slcTup[iaxis]
                 if max_indices[iaxis] is None or max_indices[iaxis] >= _slct.length(slc):
-                    axisSlices.append( [slc] ) #arIndx[axis] = slc
+                    axisSlices.append([slc])  # arIndx[axis] = slc
                 else:
-                    axisSlices.append( _slct.divide(slc, max_indices[iaxis]) )
+                    axisSlices.append(_slct.divide(slc, max_indices[iaxis]))
 
             for axSlcs in _itertools.product(*axisSlices):
                 #create arIndx from per-axis (sub-)slices and broadcast
-                for iaxis,axis in enumerate(axes):
+                for iaxis, axis in enumerate(axes):
                     arIndx[axis] = axSlcs[iaxis]
 
                 #broadcast arIndx slice
-                buf = _findx(arToFill,arIndx,True) if (my_rank == owner) \
-                    else _np.empty(_findx_shape(arToFill,arIndx), arToFill.dtype)
+                buf = _findx(arToFill, arIndx, True) if (my_rank == owner) \
+                    else _np.empty(_findx_shape(arToFill, arIndx), arToFill.dtype)
                 comm.Bcast(buf, root=owner)
                 if my_rank != owner: _fas(arToFill, arIndx, buf)
-                buf = None #free buffer mem asap
+                buf = None  # free buffer mem asap
 
 
 def gather_indices(indices, index_owners, arToFill, arToFillInds,
@@ -604,25 +601,25 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
     -------
     None
     """
-    if comm is None: return #no gathering needed!
+    if comm is None: return  # no gathering needed!
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [ slice(None,None) ] * arToFill.ndim
+    arIndx = [slice(None, None)] * arToFill.ndim
     arIndx[0:len(arToFillInds)] = arToFillInds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
-    max_indices = [None]*len(axes)
-    if max_buffer_size is not None: #no maximum of buffer size
-        chunkBytes = arToFill.nbytes #start with the entire array as the "chunk"
-        for iaxis,axis in enumerate(axes):
+    max_indices = [None] * len(axes)
+    if max_buffer_size is not None:  # no maximum of buffer size
+        chunkBytes = arToFill.nbytes  # start with the entire array as the "chunk"
+        for iaxis, axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
             bytes_per_index = chunkBytes / arToFill.shape[axis]
-            max_inds = int(max_buffer_size/bytes_per_index)
+            max_inds = int(max_buffer_size / bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
                 chunkBytes /= arToFill.shape[axis]
@@ -632,37 +629,35 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
         else:
             _warnings.warn("gather_indices: Could not achieve max_buffer_size")
 
-
-    for iIndex,indOrIndTup in enumerate(indices):
-        owner = index_owners[iIndex] #owner's rank
-        indTup =(indOrIndTup,) if not isinstance(indOrIndTup,tuple) else indOrIndTup
+    for iIndex, indOrIndTup in enumerate(indices):
+        owner = index_owners[iIndex]  # owner's rank
+        indTup = (indOrIndTup,) if not isinstance(indOrIndTup, tuple) else indOrIndTup
         assert(len(indTup) == len(axes))
 
         def to_slice_list(indexArrayOrSlice):
             """Breaks a slice or index array into a list of slices"""
             if isinstance(indexArrayOrSlice, slice):
-                return [ indexArrayOrSlice ] # easy!
+                return [indexArrayOrSlice]  # easy!
 
             lst = indexArrayOrSlice
-            if len(lst) == 0: return [slice(0,0)]
+            if len(lst) == 0: return [slice(0, 0)]
 
             slc_lst = []
             i = 0; N = len(lst)
             while i < N:
                 start = lst[i]
-                step = lst[i+1]-lst[i] if i+1<N else None
-                while i+1<N and lst[i+1]-lst[i] == step: i += 1
-                stop = lst[i]+1
-                slc_lst.append( slice(start, stop, None if step==1 else step) )
+                step = lst[i + 1] - lst[i] if i + 1 < N else None
+                while i + 1 < N and lst[i + 1] - lst[i] == step: i += 1
+                stop = lst[i] + 1
+                slc_lst.append(slice(start, stop, None if step == 1 else step))
                 i += 1
 
             return slc_lst
 
-
         #Get the a list of the (sub-)indices along each axis, whose product
         # (along the specified axes) gives the entire block given by slcTup
         axisSlices = []
-        for iaxis,axis in enumerate(axes):
+        for iaxis, axis in enumerate(axes):
             ind = indTup[iaxis]
             sub_slices = []
 
@@ -672,23 +667,22 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
             # to obey max_buffer_size).
             for islice in to_slice_list(ind):
                 if max_indices[iaxis] is None or max_indices[iaxis] >= _slct.length(islice):
-                    sub_slices.append( islice ) #arIndx[axis] = slc
+                    sub_slices.append(islice)  # arIndx[axis] = slc
                 else:
                     sub_slices.extend(_slct.divide(islice, max_indices[iaxis]))
             axisSlices.append(sub_slices)
 
         for axSlcs in _itertools.product(*axisSlices):
             #create arIndx from per-axis (sub-)slices and broadcast
-            for iaxis,axis in enumerate(axes):
+            for iaxis, axis in enumerate(axes):
                 arIndx[axis] = axSlcs[iaxis]
 
             #broadcast arIndx slice
-            buf = _findx(arToFill,arIndx,True) if (my_rank == owner) \
-                else _np.empty(_findx_shape(arToFill,arIndx), arToFill.dtype)
+            buf = _findx(arToFill, arIndx, True) if (my_rank == owner) \
+                else _np.empty(_findx_shape(arToFill, arIndx), arToFill.dtype)
             comm.Bcast(buf, root=owner)
             if my_rank != owner: _fas(arToFill, arIndx, buf)
-            buf = None #free buffer mem asap
-
+            buf = None  # free buffer mem asap
 
 
 def distribute_for_dot(contracted_dim, comm):
@@ -712,15 +706,16 @@ def distribute_for_dot(contracted_dim, comm):
         The "local" slice specifying the indices belonging to the current
         processor.  Should be passed to :func:`mpidot` as `loc_slice`.
     """
-    loc_indices,_,_ = distribute_indices(
+    loc_indices, _, _ = distribute_indices(
         list(range(contracted_dim)), comm, False)
 
     #Make sure local columns are contiguous
-    start,stop = loc_indices[0], loc_indices[-1]+1
-    assert(loc_indices == list(range(start,stop)))
-    return slice(start, stop) # local column range as a slice
+    start, stop = loc_indices[0], loc_indices[-1] + 1
+    assert(loc_indices == list(range(start, stop)))
+    return slice(start, stop)  # local column range as a slice
 
-def mpidot(a,b,loc_slice,comm):
+
+def mpidot(a, b, loc_slice, comm):
     """
     Performs a distributed dot product, dot(a,b).
 
@@ -741,12 +736,12 @@ def mpidot(a,b,loc_slice,comm):
     numpy.ndarray
     """
     if comm is None or comm.Get_size() == 1:
-        assert(loc_slice == slice(0,b.shape[0]))
-        return _np.dot(a,b)
+        assert(loc_slice == slice(0, b.shape[0]))
+        return _np.dot(a, b)
 
-    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
-    loc_dot = _np.dot(a[:,loc_slice],b[loc_slice,:])
-    result = _np.empty( loc_dot.shape, loc_dot.dtype )
+    from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
+    loc_dot = _np.dot(a[:, loc_slice], b[loc_slice, :])
+    result = _np.empty(loc_dot.shape, loc_dot.dtype)
     comm.Allreduce(loc_dot, result, op=MPI.SUM)
 
     #DEBUG: assert(_np.linalg.norm( _np.dot(a,b) - result ) < 1e-6)
@@ -760,6 +755,7 @@ def mpidot(a,b,loc_slice,comm):
     #result = np.empty(displacements[-1], a.dtype)
     #comm.Allgatherv([CTelsLoc, size, MPI.F_DOUBLE_COMPLEX], \
     #                [CTels, (sizes,displacements[:-1]), MPI.F_DOUBLE_COMPLEX])
+
 
 def parallel_apply(f, l, comm):
     '''
@@ -779,12 +775,13 @@ def parallel_apply(f, l, comm):
         list of items after f has been applied
     '''
     locArgs, _, locComm = distribute_indices(l, comm)
-    if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group
-        locResults = [f(arg) for arg in locArgs] # needs to do anything
+    if locComm is None or locComm.Get_rank() == 0:  # only first proc in local comm group
+        locResults = [f(arg) for arg in locArgs]  # needs to do anything
     else: locResults = []
-    results = comm.allgather(locResults) # Certain there is a better way to do this (see above)
-    results = list(_itertools.chain.from_iterable(results)) # list-of-lists -> single list
+    results = comm.allgather(locResults)  # Certain there is a better way to do this (see above)
+    results = list(_itertools.chain.from_iterable(results))  # list-of-lists -> single list
     return results
+
 
 def get_comm():
     '''
@@ -795,5 +792,5 @@ def get_comm():
     MPI.Comm
         Comm object to be passed down to parallel pygsti routines
     '''
-    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
+    from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
     return MPI.COMM_WORLD

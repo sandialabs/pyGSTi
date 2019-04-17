@@ -11,6 +11,7 @@ import os as _os
 from . import stdinput as _stdinput
 from .. import objects as _objs
 
+
 def load_dataset(filename, cache=False, collisionAction="aggregate",
                  verbosity=1):
     """
@@ -57,13 +58,13 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         if cache:
             #bReadCache = False
             cache_filename = filename + ".cache"
-            if _os.path.exists( cache_filename ) and \
+            if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("WARNING: Failed to load from cache file") # pragma: no cover
+                except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
                 printer.log("Cache file not found or is tool old -- one will"
                             + "be created after loading is completed")
@@ -127,17 +128,17 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         #Parser functions don't take a VerbosityPrinter yet, and so
         # always output to stdout (TODO)
         bToStdout = (printer.verbosity > 0 and printer.filename is None)
-        
+
         if cache:
             # bReadCache = False
             cache_filename = filename + ".cache"
-            if _os.path.exists( cache_filename ) and \
+            if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("WARNING: Failed to load from cache file") # pragma: no cover
+                except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
                 printer.log("Cache file not found or is too old -- one will be"
                             + "created after loading is completed")
@@ -147,7 +148,7 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             mds = parser.parse_multidatafile(filename, bToStdout,
                                              collisionAction=collisionAction)
 
-            printer.log("Writing cache file (to speed future loads): %s" 
+            printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
             mds.save(cache_filename)
 
@@ -184,6 +185,7 @@ def load_model(filename):
     """
     return _stdinput.read_model(filename)
 
+
 def load_circuit_dict(filename):
     """
     Load a operation sequence dictionary from a file, formatted
@@ -202,6 +204,7 @@ def load_circuit_dict(filename):
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
 
+
 def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_lines=None):
     """
     Load a operation sequence list from a file, formatted
@@ -218,9 +221,9 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
 
     line_labels : iterable, optional
         The (string valued) line labels used to initialize :class:`Circuit`
-        objects when line label information is absent from the one-line text 
+        objects when line label information is absent from the one-line text
         representation contained in `filename`.  If `'auto'`, then line labels
-        are taken to be the list of all state-space labels present in the 
+        are taken to be the list of all state-space labels present in the
         circuit's layers.  If there are no such labels then the special value
         `'*'` is used as a single line label.
 
@@ -238,7 +241,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
             for line in circuitlist:
                 if len(line.strip()) == 0: continue
                 if len(line) == 0 or line[0] == '#': continue
-                rawList.append( line.strip() )
+                rawList.append(line.strip())
         return rawList
     else:
         std = _stdinput.StdInputParser()

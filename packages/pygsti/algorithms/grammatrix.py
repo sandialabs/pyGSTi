@@ -41,10 +41,10 @@ def get_max_gram_basis(opLabels, dataset, maxLength=0):
     """
 
     datasetStrings = list(dataset.keys())
-    minLength = min( [len(s) for s in datasetStrings] )
+    minLength = min([len(s) for s in datasetStrings])
     if maxLength <= 0:
-        maxLength = max( [len(s) for s in datasetStrings] )
-    possibleStrings = _construction.gen_all_circuits(opLabels, (minLength+1)//2, maxLength//2)
+        maxLength = max([len(s) for s in datasetStrings])
+    possibleStrings = _construction.gen_all_circuits(opLabels, (minLength + 1) // 2, maxLength // 2)
 
     def _have_all_data(strings):
         for a in strings:
@@ -53,7 +53,7 @@ def get_max_gram_basis(opLabels, dataset, maxLength=0):
                     return False
         return True
 
-    max_string_set = [ ]
+    max_string_set = []
     for p in possibleStrings:
         if _have_all_data(max_string_set + [p]):
             max_string_set.append(p)
@@ -97,6 +97,6 @@ def max_gram_rank_and_evals(dataset, targetModel, maxBasisStringLength=10,
         maxRhoStrs, maxEStrs = fixedLists
     else:
         maxRhoStrs = maxEStrs = get_max_gram_basis(dataset.get_gate_labels(),
-                                                  dataset, maxBasisStringLength)
+                                                   dataset, maxBasisStringLength)
 
     return _gramRankAndEvals(dataset, maxRhoStrs, maxEStrs, targetModel)

@@ -13,52 +13,52 @@ from . import basistools as _bt
 from . import matrixtools as _mt
 
 
-# Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)
-#            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP
-# Choi Mx J:     rho  --> sum_ij Jij Bi rho Bj^dag  where Bi is some basis of mxs for rho-space; independent of basis for rho and Bi
-#           vec(rhoS) --> sum_ij Jij (BSi x BSj^*) vec(rhoS)  where rhoS and BSi's are in std basis
-#  Now,
-#       Jkl = Trace( sum_ij Jij (BSi x BSj^*) , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )
-#           = Trace( GStd , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )
+# Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
+#            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP                                                # noqa
+# Choi Mx J:     rho  --> sum_ij Jij Bi rho Bj^dag  where Bi is some basis of mxs for rho-space; independent of basis for rho and Bi                            # noqa
+#           vec(rhoS) --> sum_ij Jij (BSi x BSj^*) vec(rhoS)  where rhoS and BSi's are in std basis                                                             # noqa
+#  Now,                                                                                                                                                         # noqa
+#       Jkl = Trace( sum_ij Jij (BSi x BSj^*) , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )                                                 # noqa
+#           = Trace( GStd , (BSk x BSl^*)^dag ) / Trace( (BSk x BSl^*), (BSk x BSl^*)^dag )                                                                     # noqa
 #  In below function, take Bi's to be Pauli matrices
 #  Note: vec(.) vectorization above is assumed to be done by-*rows* (as numpy.flatten does).
 
-#Note that in just the std basis, the construction of the Jamiolkowski representation of a process phi is
-#  J(Phi) = sum_(0<i,j<n) Phi(|i><j|) x |i><j|    where {|i>}_1^n spans the state space
+# Note that in just the std basis, the construction of the Jamiolkowski representation of a process phi is                                                      # noqa
+#  J(Phi) = sum_(0<i,j<n) Phi(|i><j|) x |i><j|    where {|i>}_1^n spans the state space                                                                         # noqa
 #
-#  Derivation: if we write:
-#    Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|
-#  and
-#    rho = sum_ij rho_ij |i><j|
-#  then
-#    Phi(rho) = sum_(ij)(kl) C[(kl)(ij)] rho_ij |k><l|
-#             = sum_(ij)(kl) C[(kl)(ij)] |k> rho_ij <l|
-#             = sum_(ij)(kl) C[(kl)(ij)] |k> <i| rho |j> <l|
-#             = sum_(ij)(kl) C[(ik)(jl)] |i> <j| rho |l> <k|  (just permute index labels)
-#  The definition of the Jamiolkoski matrix J is:
-#    Phi(rho) = sum_(ij)(kl) J(ij)(kl) |i><j| rho |l><k|
-#  so
-#    J(ij)(kl) == C[(ik)(jl)]
+#  Derivation: if we write:                                                                                                                                     # noqa
+#    Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|                                                                                                                    # noqa
+#  and                                                                                                                                                          # noqa
+#    rho = sum_ij rho_ij |i><j|                                                                                                                                 # noqa
+#  then                                                                                                                                                         # noqa
+#    Phi(rho) = sum_(ij)(kl) C[(kl)(ij)] rho_ij |k><l|                                                                                                          # noqa
+#             = sum_(ij)(kl) C[(kl)(ij)] |k> rho_ij <l|                                                                                                         # noqa
+#             = sum_(ij)(kl) C[(kl)(ij)] |k> <i| rho |j> <l|                                                                                                    # noqa
+#             = sum_(ij)(kl) C[(ik)(jl)] |i> <j| rho |l> <k|  (just permute index labels)                                                                       # noqa
+#  The definition of the Jamiolkoski matrix J is:                                                                                                               # noqa
+#    Phi(rho) = sum_(ij)(kl) J(ij)(kl) |i><j| rho |l><k|                                                                                                        # noqa
+#  so                                                                                                                                                           # noqa
+#    J(ij)(kl) == C[(ik)(jl)]                                                                                                                                   # noqa
 #
-#  Note: |i><j| x |k><l| is an object in "gate/process" space, since
-#    it maps a vectorized density matrix, e.g. |a><b| to another density matrix via:
-#    (|i><j| x |k><l|) vec(|a><b|) = [mx with 1 in (i*dmDim + k) row and (j*dmDim + l) col][vec with 1 in a*dmDim+b row]
-#                                  = vec(|i><k|) if |a><b| == |j><l| else 0
-#    so (|i><j| x |k><l|) vec(|j><l|) = vec(|i><k|)
-#    and could write as: (|ik><jl|) |jl> = |ik>
+#  Note: |i><j| x |k><l| is an object in "gate/process" space, since                                                                                            # noqa
+#    it maps a vectorized density matrix, e.g. |a><b| to another density matrix via:                                                                            # noqa
+#    (|i><j| x |k><l|) vec(|a><b|) = [mx with 1 in (i*dmDim + k) row and (j*dmDim + l) col][vec with 1 in a*dmDim+b row]                                        # noqa
+#                                  = vec(|i><k|) if |a><b| == |j><l| else 0                                                                                     # noqa
+#    so (|i><j| x |k><l|) vec(|j><l|) = vec(|i><k|)                                                                                                             # noqa
+#    and could write as: (|ik><jl|) |jl> = |ik>                                                                                                                 # noqa
 #
-# Now write J as:
-#    J  = sum_ijkl |ij> J(ij)(kl) <kl|
-#       = sum_ijkl J(ij)(kl) |ij> <kl|
-#       = sum_ijkl J(ij)(kl) (|i><k| x |j><l|)
-#       = sum_ijkl C(ik)(jl) (|i><k| x |j><l|)
-#       = sum_jl [ sum_ik C(ik)(jl) |i><k| ] x |j><l| (using Note above)
-#       = sum_jl Phi(|j><l|) x |j><l|   (using definition Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|)
-#  which is the original J(Phi) expression.
+# Now write J as:                                                                                                                                               # noqa
+#    J  = sum_ijkl |ij> J(ij)(kl) <kl|                                                                                                                          # noqa
+#       = sum_ijkl J(ij)(kl) |ij> <kl|                                                                                                                          # noqa
+#       = sum_ijkl J(ij)(kl) (|i><k| x |j><l|)                                                                                                                  # noqa
+#       = sum_ijkl C(ik)(jl) (|i><k| x |j><l|)                                                                                                                  # noqa
+#       = sum_jl [ sum_ik C(ik)(jl) |i><k| ] x |j><l| (using Note above)                                                                                        # noqa
+#       = sum_jl Phi(|j><l|) x |j><l|   (using definition Phi(|i><j|) = sum_kl C[(kl)(ij)] |k><l|)                                                              # noqa
+#  which is the original J(Phi) expression.                                                                                                                     # noqa
 #
-# This can be written equivalently as:
-#  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij
-#  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|
+# This can be written equivalently as:                                                                                                                          # noqa
+#  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij                                                                                                                   # noqa
+#  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|                                                              # noqa
 
 def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
     """
@@ -91,10 +91,11 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', opMxBasis.equivalent('std'), opMxBasis.simple_equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', opMxBasis.equivalent(
+        'std'), opMxBasis.simple_equivalent('std'))
 
-    N = opMxInStdBasis.shape[0] #dimension of the full-basis (expanded) gate
-    dmDim = int(round(_np.sqrt(N))) #density matrix dimension
+    N = opMxInStdBasis.shape[0]  # dimension of the full-basis (expanded) gate
+    dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
 
     #Note: we need to use the *full* basis of Matrix Unit, Gell-Mann, or Pauli-product matrices when
     # generating the Choi matrix, even when the original operation matrix doesn't include the entire basis.
@@ -103,25 +104,19 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim
     if not isinstance(choiMxBasis, _Basis):
-        choiMxBasis = _Basis.cast(choiMxBasis, N) # we'd like a basis of dimension N
-        
+        choiMxBasis = _Basis.cast(choiMxBasis, N)  # we'd like a basis of dimension N
+
     BVec = choiMxBasis.simple_equivalent().elements
-    M = len(BVec) # can be < N if basis has multiple block dims
+    M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
-    #TODO REMOVE - now we just use simple_equivalent above
-    #if M < N: # then try to make a complete basis based on the *name* of the desired basis
-    #    BVec = choiMxBasis.simple_equivalent().elements
-    #    M = len(BVec)
-    #    assert(M == N), 'Expected {}, got {}'.format(M, N)  #make sure the number of basis matrices matches the dim of the gate given
-
-    choiMx = _np.empty( (N,N), 'complex')
+    choiMx = _np.empty((N, N), 'complex')
     for i in range(M):
         for j in range(M):
-            BiBj = _np.kron( BVec[i], _np.conjugate(BVec[j]) )
+            BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
             BiBj_dag = _np.transpose(_np.conjugate(BiBj))
-            choiMx[i,j] = _mt.trace( _np.dot(opMxInStdBasis, BiBj_dag) ) \
-                        / _mt.trace( _np.dot( BiBj, BiBj_dag) )
+            choiMx[i, j] = _mt.trace(_np.dot(opMxInStdBasis, BiBj_dag)) \
+                / _mt.trace(_np.dot(BiBj, BiBj_dag))
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(operationMx.shape[0]) (dimension of density matrix)
     #  but we'd like a Jmx with trace == 1, so normalize:
@@ -129,6 +124,8 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
     return choiMx_normalized
 
 # GStd = sum_ij Jij (BSi x BSj^*)
+
+
 def jamiolkowski_iso_inv(choiMx, choiMxBasis='pp', opMxBasis='pp'):
     """
     Given a choi matrix, return the corresponding operation matrix.  This function
@@ -154,32 +151,32 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='pp', opMxBasis='pp'):
     numpy array
         operation matrix in the desired basis.
     """
-    choiMx = _np.asarray(choiMx) # will have "expanded" dimension even if bases are for reduced...
-    N = choiMx.shape[0] #dimension of full-basis (expanded) operation matrix
-    if not isinstance(choiMxBasis, _Basis):  #if we're not given a basis, build 
-        choiMxBasis = _Basis.cast(choiMxBasis,N) # one with the full dimension
+    choiMx = _np.asarray(choiMx)  # will have "expanded" dimension even if bases are for reduced...
+    N = choiMx.shape[0]  # dimension of full-basis (expanded) operation matrix
+    if not isinstance(choiMxBasis, _Basis):  # if we're not given a basis, build
+        choiMxBasis = _Basis.cast(choiMxBasis, N)  # one with the full dimension
 
-    dmDim = int(round(_np.sqrt(N))) #density matrix dimension
+    dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
 
     #get full list of basis matrices (in std basis)
     BVec = _basis_matrices(choiMxBasis.simple_equivalent(), N)
-    assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the choi matrix given
+    assert(len(BVec) == N)  # make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
     choiMx_unnorm = choiMx * dmDim
 
-    opMxInStdBasis = _np.zeros( (N,N), 'complex') #in matrix unit basis of entire density matrix
+    opMxInStdBasis = _np.zeros((N, N), 'complex')  # in matrix unit basis of entire density matrix
     for i in range(N):
         for j in range(N):
-            BiBj = _np.kron( BVec[i], _np.conjugate(BVec[j]) )
-            opMxInStdBasis += choiMx_unnorm[i,j] * BiBj
+            BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
+            opMxInStdBasis += choiMx_unnorm[i, j] * BiBj
 
     if not isinstance(opMxBasis, _Basis):
-        opMxBasis = _Basis.cast(opMxBasis,N) # make sure opMxBasis is a Basis; we'd like dimension to be N
-            
+        opMxBasis = _Basis.cast(opMxBasis, N)  # make sure opMxBasis is a Basis; we'd like dimension to be N
+
     #project operation matrix so it acts only on the space given by the desired state space blocks
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract', 
-            opMxBasis.simple_equivalent('std'), opMxBasis.equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
+                                       opMxBasis.simple_equivalent('std'), opMxBasis.equivalent('std'))
 
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, opMxBasis.equivalent('std'), opMxBasis)
@@ -222,15 +219,16 @@ def fast_jamiolkowski_iso_std(operationMx, opMxBasis):
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
-    assert(N*N == N2) #make sure N2 is a perfect square
-    Jmx = opMxInStdBasis.reshape((N,N,N,N))
-    Jmx = _np.swapaxes(Jmx,1,2).flatten()
-    Jmx = Jmx.reshape((N2,N2))
+    assert(N * N == N2)  # make sure N2 is a perfect square
+    Jmx = opMxInStdBasis.reshape((N, N, N, N))
+    Jmx = _np.swapaxes(Jmx, 1, 2).flatten()
+    Jmx = Jmx.reshape((N2, N2))
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(gateMxInPauliBasis.shape[0])
     #  but we'd like a Jmx with trace == 1, so normalize:
     Jmx_norm = Jmx / N
     return Jmx_norm
+
 
 def fast_jamiolkowski_iso_std_inv(choiMx, opMxBasis):
     """
@@ -256,15 +254,15 @@ def fast_jamiolkowski_iso_std_inv(choiMx, opMxBasis):
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = choiMx.shape[0]; N = int(_np.sqrt(N2))
-    assert(N*N == N2) #make sure N2 is a perfect square
-    opMxInStdBasis = choiMx.reshape((N,N,N,N)) * N
-    opMxInStdBasis = _np.swapaxes(opMxInStdBasis,1,2).flatten()
-    opMxInStdBasis = opMxInStdBasis.reshape((N2,N2))
+    assert(N * N == N2)  # make sure N2 is a perfect square
+    opMxInStdBasis = choiMx.reshape((N, N, N, N)) * N
+    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).flatten()
+    opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     opMxBasis = _bt.build_basis_for_matrix(opMxInStdBasis, opMxBasis)
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract', 
-            opMxBasis.simple_equivalent('std'), opMxBasis.equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
+                                       opMxBasis.simple_equivalent('std'), opMxBasis.equivalent('std'))
 
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, opMxBasis.equivalent('std'), opMxBasis)
@@ -291,10 +289,10 @@ def sum_of_negative_choi_evals(model, weights=None):
         the sum of negative eigenvalues of the Choi matrix for each gate.
     """
     if weights is not None:
-        default = weights.get('gates',1.0)
+        default = weights.get('gates', 1.0)
         sums = sums_of_negative_choi_evals(model)
-        return sum( [s*weights.get(gl,default) 
-                     for gl,s in zip(model.operations.keys(),sums)] )
+        return sum([s * weights.get(gl, default)
+                    for gl, s in zip(model.operations.keys(), sums)])
     else:
         return sum(sums_of_negative_choi_evals(model))
 
@@ -317,8 +315,8 @@ def sums_of_negative_choi_evals(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = fast_jamiolkowski_iso_std(gate, model.basis) #Choi mx basis doesn't matter
-        evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
+        J = fast_jamiolkowski_iso_std(gate, model.basis)  # Choi mx basis doesn't matter
+        evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:
             if ev.real < 0: sumOfNeg -= ev.real
@@ -345,8 +343,8 @@ def mags_of_negative_choi_evals(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = jamiolkowski_iso( gate, model.basis, choiMxBasis=model.basis.simple_equivalent('std'))
-        evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
+        J = jamiolkowski_iso(gate, model.basis, choiMxBasis=model.basis.simple_equivalent('std'))
+        evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
-            ret.append( -ev.real if ev.real < 0 else 0.0 )
+            ret.append(-ev.real if ev.real < 0 else 0.0)
     return ret

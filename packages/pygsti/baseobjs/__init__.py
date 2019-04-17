@@ -17,10 +17,10 @@ from .circuitparser import CircuitParser
 from .verbosityprinter import VerbosityPrinter
 from .label import Label, CircuitLabel
 
-from .basis import Basis,BuiltinBasis,ExplicitBasis,TensorProdBasis,DirectSumBasis
+from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
 from .parameterized import parameterized
 from .smartcache import SmartCache, CustomDigestError, smart_cached
 
 #Imported in tools instead, since this makes more logical sense
 #from .basisconstructors import *
-#from .opttools import *  
+#from .opttools import *

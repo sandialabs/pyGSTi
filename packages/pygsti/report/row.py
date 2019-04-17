@@ -7,16 +7,18 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .cell        import Cell
+from .cell import Cell
 from ..objects.reportableqty import ReportableQty as _ReportableQty
+
 
 class Row(object):
     '''
     Representation of a table row
     '''
+
     def __init__(self, rowData=None, formatters=None, labels=None, nonMarkovianEBs=False):
         '''
-        Create a row object 
+        Create a row object
 
         Parameters
         ----------
@@ -40,17 +42,17 @@ class Row(object):
 
         lendiff = max(abs(len(formatters) - len(rowData)), 0)
         formatters = list(formatters) + [None] * lendiff
-        
-        lendiff = max(abs(len(labels) - len(rowData)), 0)
-        labels = list(labels) + [None] * lendiff 
 
-        self.cells = [Cell(item, formatter, label) 
-                for item, formatter, label in 
-                zip(rowData, formatters, labels)]
+        lendiff = max(abs(len(labels) - len(rowData)), 0)
+        labels = list(labels) + [None] * lendiff
+
+        self.cells = [Cell(item, formatter, label)
+                      for item, formatter, label in
+                      zip(rowData, formatters, labels)]
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
-        return state_dict 
+        return state_dict
 
     def __setstate__(self, d):
         self.__dict__.update(d)
@@ -76,7 +78,7 @@ class Row(object):
         formattedItems = []
         for cell in self.cells:
             formattedItem = cell.render(fmt, specs)
-            if isinstance(formattedItem, list): #formatters can create multiple table cells by returning *lists* 
+            if isinstance(formattedItem, list):  # formatters can create multiple table cells by returning *lists*
                 formattedItems.extend(formattedItem)
             else:
                 formattedItems.append(formattedItem)
