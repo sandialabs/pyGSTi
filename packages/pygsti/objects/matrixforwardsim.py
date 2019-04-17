@@ -809,9 +809,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             if returnPr: return ret, p
             else: return ret
 
-
 ## BEGIN CACHE FUNCTIONS
-
 
     def _compute_product_cache(self, evalTree, comm=None):
         """
@@ -1133,9 +1131,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         return hProdCache
 
-
 ## END CACHE FUNCTIONS
-
 
     def default_distribute_method(self):
         """

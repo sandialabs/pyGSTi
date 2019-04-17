@@ -704,8 +704,8 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
             retSq = sum(ret * ret)
             printer.log(
                 ("%g: objfn vec in (%g,%g),  mdl in (%g,%g), maxLen = %d" %
-                 (retSq, _np.min(ret), _np.max(ret), _np.min(vectorGS), _np.max(vectorGS), maxCircuitLength))
-                , 3)
+                 (retSq, _np.min(ret), _np.max(ret), _np.min(vectorGS), _np.max(vectorGS), maxCircuitLength)),
+                3)
             #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
             return ret
 

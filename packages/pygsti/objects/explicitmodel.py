@@ -1208,12 +1208,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.instruments.items()):
             yield (lbl, obj)
 
-
 #TODO: how to handle these given possibility of different parameterizations...
 #  -- maybe only allow these methods to be called when using a "full" parameterization?
 #  -- or perhaps better to *move* them to the parameterization class
-
-
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """

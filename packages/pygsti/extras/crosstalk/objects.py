@@ -299,7 +299,7 @@ class CrosstalkResults(object):
     def get_offset_label_posns(self, pos):
         """
             From https://stackoverflow.com/questions/11946005/label-nodes-outside-with-minimum-overlap-with-other-nodes-edges-in-networkx?
-        """ # noqa: E501
+        """  # noqa: E501
 
         label_ratio = 1.0 / 20.0
         pos_labels = {}

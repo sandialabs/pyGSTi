@@ -54,10 +54,10 @@ def _remove_from_matrix(inputArr, columns, rows, outputType=_np.matrix):
     return outputType([
         [inputArr[row_num][col_num]
             for col_num in range(len(inputArr[row_num]))
-            if not col_num in columns]
+            if col_num not in columns]
 
         for row_num in range(len(inputArr))
-        if not row_num in rows])
+        if row_num not in rows])
 
 
 def to_qutrit_space(inputMat):

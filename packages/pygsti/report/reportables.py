@@ -174,6 +174,7 @@ class Gate_eigenvalues(_modf.ModelFunction):
                           for k in range(dMx.shape[0])])
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
+
 class Circuit_eigenvalues(_modf.ModelFunction):
     """Circuit eigenvalues"""
 

@@ -10,7 +10,6 @@ import numpy as _np
 import scipy.linalg as _spl
 from . import optools as _gts
 from . import symplectic as _symp
-from . import optools as _gts
 
 
 def get_internal_gate_unitaries():

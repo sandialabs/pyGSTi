@@ -20,7 +20,6 @@ from numpy.linalg import inv as _inv
 import numpy as _np
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-import copy as _copy
 
 import math
 

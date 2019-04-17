@@ -250,7 +250,7 @@ class ProcessorSpec(object):
                                                     self.qubit_labels,
                                                     parameterization='clifford',
                                                     sim_type=sim_type,
-                                                    on_construction_error='warn', # *drop* gates that aren't cliffords
+                                                    on_construction_error='warn',  # *drop* gates that aren't cliffords
                                                     independent_gates=False,
                                                     ensure_composed_gates=False)  # change these? add `geometry`?
 

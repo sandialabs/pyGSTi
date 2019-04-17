@@ -22,6 +22,7 @@ import warnings as _warnings
 import itertools as _itertools
 import copy as _copy
 
+
 def do_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
                               spectrafrequencies='auto', testFreqInds=None,
                               groupoutcomes=None, enforceConstNumTimes='auto',

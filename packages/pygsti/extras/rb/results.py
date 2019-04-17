@@ -432,7 +432,7 @@ class RBResults(object):
 
         if success_probabilities:
             _plt.violinplot(list(self.data.success_probabilities), self.data.lengths, points=10, widths=1.,
-                            showmeans=False, showextrema=False, showmedians=False) # , label='Success probabilities')
+                            showmeans=False, showextrema=False, showmedians=False)  # , label='Success probabilities')
 
         if title is not None: _plt.title(title)
         _plt.ylabel("Success probability")
