@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import numpy as _np
 import copy as _copy
 import uuid as _uuid
 import itertools as _itertools
@@ -903,7 +904,7 @@ class LsGermsSerialStructure(CircuitStructure):
                 
             if nMinorCols == "auto" and nMinorRows == "auto": 
                 #special behavior: make as square as possible
-                nMinorRows = nMinorCols = int(np.floor(np.sqrt(maxEls)))
+                nMinorRows = nMinorCols = int(_np.floor(_np.sqrt(maxEls)))
                 if nMinorRows*nMinorCols < maxEls: nMinorCols += 1
                 if nMinorRows*nMinorCols < maxEls: nMinorRows += 1
                 assert(nMinorRows*nMinorCols >= maxEls), "Logic Error!"

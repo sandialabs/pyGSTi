@@ -1229,15 +1229,18 @@ def compile_cnot_circuit_using_BGE_algorithm(s, pspec, subsetQs=None, clname=Non
         qubitlabels = list(subsetQs)
     else:
         qubitlabels = pspec.qubit_labels
-    assert(len(qubitlabels) == _np.shape(s)[0]//2), "The CNOT circuit is over the wrong number of qubits!"
+        
+    n = _np.shape(s)[0] // 2
+
+    assert(len(qubitlabels) == n), "The CNOT circuit is over the wrong number of qubits!"
     # We can just use this more general function for this task.
     sout, instructions, success = submatrix_gaussian_elimination_using_cnots(s, 'row', 'UL', qubitlabels)
-    assert(_np.array_equal(sout, _np.identity(2*n,int))), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
+    assert(_np.array_equal(sout, _np.identity(2 * n,int))), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
     # The instructions returned are for mapping s -> I, so we need to reverse them.
     instructions.reverse()
     circuit = _Circuit(gatesring=instructions, line_labels=qubitlabels).parallelize()
     if check:
-        s_implemented, p_implemented = _symp.symplectic_rep_of_clifford_circuit(cnot_circuit)
+        s_implemented, p_implemented = _symp.symplectic_rep_of_clifford_circuit(circuit)
         assert(_np.array_equal(s_implemented,s)), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
     return circuit 
 

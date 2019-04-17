@@ -559,9 +559,11 @@ class CloudNoiseModel(_ImplicitOpModel):
             _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
             basis1Q = _BuiltinBasis("pp",4)
             prep_factors = []; povm_factors = []
-    
-            v0 = _basis_build_vector("0", basis1Q)
-            v1 = _basis_build_vector("1", basis1Q)
+            
+            from ..construction import basis_build_vector
+
+            v0 = basis_build_vector("0", basis1Q)
+            v1 = basis_build_vector("1", basis1Q)
     
             # Historical use of TP for non-term-based cases?
             #  - seems we could remove this. FUTURE REMOVE?
@@ -576,24 +578,25 @@ class CloudNoiseModel(_ImplicitOpModel):
                     _povm.convert(_povm.UnconstrainedPOVM( ([
                         ('0',_sv.StaticSPAMVec(v0)),
                         ('1',_sv.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
-    
-            if prepNoise is not None:
-                if isinstance(prepNoise,tuple): # use as (seed, strength)
-                    seed,strength = prepNoise
-                    rndm = _np.random.RandomState(seed)
-                    depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
-                else:
-                    depolAmts = prepNoise[0:nQubits]
-                for amt,vec in zip(depolAmts,prep_factors): vec.depolarize(amt)
+
+            # # Noise logic refactored from construction.nqnoiseconstruction.build_nqnoise_model
+            # if prepNoise is not None:
+            #     if isinstance(prepNoise,tuple): # use as (seed, strength)
+            #         seed,strength = prepNoise
+            #         rndm = _np.random.RandomState(seed)
+            #         depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+            #     else:
+            #         depolAmts = prepNoise[0:nQubits]
+            #     for amt,vec in zip(depolAmts,prep_factors): vec.depolarize(amt)
         
-            if povmNoise is not None:
-                if isinstance(povmNoise,tuple): # use as (seed, strength)
-                    seed,strength = povmNoise
-                    rndm = _np.random.RandomState(seed)
-                    depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
-                else:
-                    depolAmts = povmNoise[0:nQubits]
-                for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
+            # if povmNoise is not None:
+            #     if isinstance(povmNoise,tuple): # use as (seed, strength)
+            #         seed,strength = povmNoise
+            #         rndm = _np.random.RandomState(seed)
+            #         depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+            #     else:
+            #         depolAmts = povmNoise[0:nQubits]
+            #     for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt)
         
             self.prep_blks['layers'][_Lbl('rho0')] = _sv.TensorProdSPAMVec('prep', prep_factors)
             self.povm_blks['layers'][_Lbl('Mdefault')] = _povm.TensorProdPOVM(povm_factors)

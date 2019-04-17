@@ -919,7 +919,7 @@ class PolyRep(dict):
         -------
         None
         """
-        coeffs = { self._int_to_vinds(i): v for k,v in self.items() }
+        coeffs = { self._int_to_vinds(k): v for k,v in self.items() }
         if max_num_vars is not None: self.max_num_vars = max_num_vars
         if max_order is not None: self.max_order = max_order
         int_coeffs = { self._vinds_to_int(k): v for k,v in coeffs.items() }
@@ -1184,7 +1184,7 @@ class PolyRep(dict):
     def __pow__(self,n):
         ret = PolyRep({0: 1.0}, self.max_order, self.max_num_vars, self.vindices_per_int)
         cur = self
-        for i in range(int(np.floor(np.log2(n)))+1):
+        for i in range(int(_np.floor(_np.log2(n)))+1):
             rem = n % 2 #gets least significant bit (i-th) of n
             if rem == 1: ret *= cur # add current power of x (2^i) if needed
             cur = cur*cur # current power *= 2

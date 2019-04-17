@@ -5,6 +5,7 @@ import numpy as _np
 import itertools as _itertools
 import time as _time
 import collections as _collections
+import warnings as _warnings
 
 from ... import construction as _cnst
 from ... import objects as _objs

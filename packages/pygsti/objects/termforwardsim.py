@@ -427,7 +427,7 @@ class TermForwardSimulator(ForwardSimulator):
         poly = self.pr_as_poly(spamTuple, circuit, comm=None, memLimit=None)
         for i in range(self.Np):
             dpoly_di = poly.deriv(i)
-            dp[0,i] = dpoly.evaluate(self.paramvec)
+            dp[0,i] = dpoly_di.evaluate(self.paramvec)
             
         if returnPr:
             p = poly.evaluate(self.paramvec)
@@ -1037,7 +1037,7 @@ class TermForwardSimulator(ForwardSimulator):
                 nP2 = self.Np if (paramSlice2 is None or paramSlice2.start is None) else _slct.length(paramSlice2)
                         
                 if deriv1MxToFill is not None:
-                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
+                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice1, fillComm)
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                         dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP1)) # ( nCircuits, nDerivCols)
                         dps1 = evalSubTree.final_view( dprCache, axis=0) # ( nCircuits, nDerivCols)
@@ -1049,7 +1049,7 @@ class TermForwardSimulator(ForwardSimulator):
                         for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                             _fas(deriv2MxToFill, [fInds,pslc2], dps2[gInds], add=sumInto)
                     else:
-                        dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
+                        dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice2, fillComm)
                         for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                             dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP2)) # ( nCircuits, nDerivCols)
                             dps2 = evalSubTree.final_view( dprCache, axis=0) # ( nCircuits, nDerivCols)

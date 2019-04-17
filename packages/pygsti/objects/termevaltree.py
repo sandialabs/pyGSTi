@@ -649,7 +649,7 @@ class TermEvalTree(EvalTree):
                 polys = [ calc.pr_as_poly((rholabel,elabel), opstr, comm)
                           for opstr in self.generate_circuit_list(permute=False) ]
                 dpolys = [ p.deriv(k) for p in polys for k in slcInds2 ]
-                tapes = [ dp.deriv(k).compact() for p in dpolys for k in slcInds1 ]
+                tapes = [ p.deriv(k).compact() for p in dpolys for k in slcInds1 ]
                 vtape = _np.concatenate( [ t[0] for t in tapes ] )
                 ctape = _np.concatenate( [ t[1] for t in tapes ] )
                 self.hp_polys[ (rholabel,elabel,slcTup1,slcTup2) ] = (vtape, ctape)

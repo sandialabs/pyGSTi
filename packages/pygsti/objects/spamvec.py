@@ -1874,7 +1874,7 @@ class TensorProdSPAMVec(SPAMVec):
                 return tuple(_modelmember._decompose_gpindices(
                     self.gpindices, _np.array(x,_np.int64)))
                              
-            poly_coeffs = [t.coeff.map_indices(mapper) for t in terms] #with *local* indices
+            poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms] #with *local* indices
             tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
             if len(tapes) > 0:
                 vtape = _np.concatenate( [ t[0] for t in tapes ] )
@@ -3335,7 +3335,7 @@ class ComputationalSPAMVec(SPAMVec):
         elif self._evotype in ("svterm","cterm"):
             raise NotImplementedError("todense() is not implemented for evotype %s!" %
                                       self._evotype)
-        else: raise ValueError("Invalid `evotype`: %s" % evotype)
+        else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
 
         v = (v0,v1)
         return _functools.reduce(_np.kron, [v[i] for i in self._zvals])

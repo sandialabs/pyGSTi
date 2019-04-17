@@ -159,7 +159,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """ Return the primitive instrument labels of this model"""
         return self._primitive_instrument_labels
 
-    def set_primitive_instrument_labels(self):
+    def set_primitive_instrument_labels(self, lbls):
         """ Set the primitive instrument labels of this model"""
         self._primitive_instrument_labels = tuple(lbls)
 

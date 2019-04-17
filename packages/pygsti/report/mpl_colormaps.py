@@ -343,7 +343,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 for y in range(plt_data.shape[0]):
                     for x in range(plt_data.shape[1]):
                         if _np.isnan(plt_data[y, x]): continue
-                        assert(_np.isfinite(plt_data[y, x])),"%s is not finite!" % str(plot_data[y,x])
+                        assert(_np.isfinite(plt_data[y, x])),"%s is not finite!" % str(plt_data[y,x])
                         axes.text(x + 0.5, y + 0.5, mpl_process_lbl(_eformat(plt_data[y, x], prec),math=True),
                                 horizontalalignment='center',
                                 verticalalignment='center',

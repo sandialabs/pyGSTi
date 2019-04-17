@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import itertools as _itertools
 import collections as _collections
 from scipy.sparse.csgraph import floyd_warshall as _fw
 
