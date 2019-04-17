@@ -6,8 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from past.builtins import xrange, unicode
-
 import sys as _sys
 import types as _types
 import importlib as _importlib
@@ -21,7 +19,7 @@ import pygsti.objects
 if _sys.version_info >= (3, 0):
     range_type = range
 else:
-    range_type = xrange
+    range_type = xrange  # noqa: F821
 
 
 def class_hasattr(instance, attr):

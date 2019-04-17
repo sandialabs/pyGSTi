@@ -6,8 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from past.builtins import unicode, basestring
-
 import numbers as _numbers
 import sys as _sys
 import itertools as _itertools
@@ -16,7 +14,7 @@ import os
 import inspect
 debug_record = {}
 
-try: basestring
+try: basestring  # noqa: F821
 except NameError: basestring = str
 
 
