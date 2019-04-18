@@ -61,8 +61,8 @@ stages:
   # Run tests on python 2.7 & 3.5, but only on master/beta
   - name: test-extra
     if: branch IN (master, beta)
-  # - name: deploy # only run deployment for master & develop branches
-  #   if: branch IN (master, develop)
+  - name: push
+    if: (branch = develop) AND (NOT (type = pull_request))
 
 jobs:
   include:
@@ -127,11 +127,12 @@ jobs:
       python: 2.7
       env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
 
-    # - stage: deploy
-    #   python: 3.7
-    #   env: NOSETESTS=none NOSEOPTS=$NOSEOPTS_DEFAULT
-    #   install: skip
-    #   script: python CI/deploy
+    - stage: push
+      env: PUSH_BRANCH="beta"
+      install: skip
+      before_install: skip
+      script:
+        - CI/push.sh
 
   allow_failures:
     - stage: lint
