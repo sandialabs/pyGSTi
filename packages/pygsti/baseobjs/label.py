@@ -6,8 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from past.builtins import unicode, basestring
-
 import numbers as _numbers
 import sys as _sys
 import itertools as _itertools
@@ -16,7 +14,7 @@ import os
 import inspect
 debug_record = {}
 
-try: basestring
+try: basestring  # noqa: F821
 except NameError: basestring = str
 
 
@@ -313,7 +311,7 @@ class LabelTup(Label, tuple):
 
 # We want LabelStr to act like the string literal type (not
 # 'str' when we import unicode_literals above)
-strlittype = str if _sys.version_info >= (3, 0) else unicode  # (a *native* python type)
+strlittype = str if _sys.version_info >= (3, 0) else unicode  # (a *native* python type)  # noqa: F821
 
 
 class LabelStr(Label, strlittype):
