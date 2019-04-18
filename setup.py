@@ -72,6 +72,25 @@ The primary goals of the pyGSTi project are to:
 - use modular design to make it easy for users to modify, customize, and extend GST functionality.
 """
 
+extras = {
+    'diamond norm computation':  ['cvxpy', 'cvxopt'],
+    'nose testing' : ['nose'],
+    'accurate memory profiling' : ['psutil'],
+    'multi-processor support' : ['mpi4py'],
+    'evolutionary optimization algorithm': ['deap'],
+    'pickling report tables': ['pandas'],
+    'generating PDFs of report figures': ['matplotlib'],
+    'generating report notebooks': ['ipython','notebook'],
+    'read/write message pack format': ['msgpack'],
+    'extension modules': ['cython'],
+    'linting': ['autopep8', 'flake8'],
+    'testing': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
+                'mpi4py','pandas','msgpack','coverage','zmq','rednose']
+}
+
+# Add `complete' target, which will install all extras listed above
+extras['complete'] = list({pkg for req in extras.values() for pkg in req})
+
 setup(name='pyGSTi',
       version=__version__,
       description='A python implementation of Gate Set Tomography',
@@ -92,24 +111,7 @@ setup(name='pyGSTi',
                                       'templates/offline/images/*']},
       requires=['numpy','scipy','plotly','ply'],
       install_requires=['numpy>=1.15.0','scipy','plotly','ply'],
-      extras_require = {
-           'diamond norm computation':  ['cvxpy', 'cvxopt'],
-           'nose testing' : ['nose'],
-           'accurate memory profiling' : ['psutil'],
-           'multi-processor support' : ['mpi4py'],
-           'evolutionary optimization algorithm': ['deap'],
-           'pickling report tables': ['pandas'],
-           'generating PDFs of report figures': ['matplotlib'],
-           'generating report notebooks': ['ipython','notebook'],
-           'read/write message pack format': ['msgpack'],
-           'extension modules': ['cython'],
-           'complete': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
-                        'mpi4py','pandas','matplotlib','ipython','notebook',
-                        'msgpack','coverage','zmq','rednose','autopep8','flake8'],
-           'linting': ['autopep8', 'flake8'],
-           'testing': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
-                        'mpi4py','pandas','msgpack','coverage','zmq','rednose']
-      },
+      extras_require=extras,
       platforms = ["any"],
       url = 'http://www.pygsti.info',
       download_url = 'https://github.com/pyGSTio/pyGSTi/tarball/master',
