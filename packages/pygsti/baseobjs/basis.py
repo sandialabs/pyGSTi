@@ -64,8 +64,8 @@ class Basis(object):
     '''
     TODO: docstrings in this module
     Base class = abstract notion of a basis with a certain size - no actual elements or labels
-     are stored though it *expects* to have .elements and .labels members to perform common
-     basis operations.
+     are stored though it *expects* to have .elements, .labels, and .ellookup members to perform
+     common basis operations.
 
     Encapsulates a basis - an ordered set of labelled matrices/vectors.
     '''
@@ -183,6 +183,8 @@ class Basis(object):
             self.longname, self.dim, self.size, self.elshape, ', '.join(self.labels))
 
     def __getitem__(self, index):
+        if _isstr(index) and self.ellookup is not None:
+            return self.ellookup[index]
         return self.elements[index]
 
     def __len__(self):
@@ -404,6 +406,7 @@ class LazyBasis(Basis):
     def __init__(self, name, longname, dim, size, elshape, real, sparse):
         self._elements = None        # "natural-shape" elements - can be vecs or matrices
         self._labels = None          # element labels
+        self._ellookup = None        # fast element lookup
         super(LazyBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
 
     def _lazy_build_elements(self):
@@ -412,6 +415,16 @@ class LazyBasis(Basis):
     def _lazy_build_labels(self):
         raise NotImplementedError("Derived classes must implement this function!")
 
+    @property
+    def ellookup(self):
+        if self._ellookup is None:
+            if self._elements is None:
+                self._lazy_build_elements()
+            if self._labels is None:
+                self._lazy_build_labels()
+            self._ellookup = {lbl: el for lbl, el in zip(self._labels, self._elements)}
+        return self._ellookup
+   
     @property
     def elements(self):
         if self._elements is None:
@@ -471,6 +484,7 @@ class ExplicitBasis(Basis):
                 else: assert(elshape == el.shape), "Inconsistent element shapes!"
                 self.elements.append(el)
             dim = int(_np.product(elshape))
+        self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
 
         super(ExplicitBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
 
@@ -841,6 +855,113 @@ class TensorProdBasis(LazyBasis):
                 first_comp_name = self.component_bases[0].name
                 if all([c.name == first_comp_name for c in self.component_bases]):
                     otherName = first_comp_name  # if all components have the same name
+        return BuiltinBasis(otherName, self.elsize, sparse=self.sparse)
+
+
+class EmbeddedBasis(LazyBasis):
+    '''
+    A basis that embeds a basis for a smaller state space within a larger state space
+    TODO: docstring (more?)
+    '''
+
+    @classmethod
+    def embed_label(cls, lbl, target_labels):
+        """Convenience method that gives the EmbeddedBasis label for `lbl` 
+           without needing to construct the `EmbeddedBasis` """
+        return "%s:%s" % (lbl, ",".join(map(str, target_labels)))
+    
+    def __init__(self, basis_to_embed, state_space_labels, target_labels, name=None, longname=None):
+        '''
+        TODO: docstring
+        '''
+        self.embedded_basis = basis_to_embed
+        self.target_labels = target_labels
+        self.state_space_labels = state_space_labels
+
+        if name is None:
+            name = ':'.join((basis_to_embed.name,) + tuple(map(str, target_labels)))
+        if longname is None:
+            longname = "Embedded %s basis as %s within %s" % \
+                (basis_to_embed.name, ':'.join(map(str, target_labels)), str(state_space_labels))
+
+        real = basis_to_embed.real
+        sparse = basis_to_embed.sparse
+        dim = state_space_labels.dim
+        size = basis_to_embed.size
+        elndim = basis_to_embed.elndim
+
+        if elndim == 2:  # a "matrix" basis
+            d = int(_np.sqrt(dim))
+            assert(d**2 == dim), \
+                "Dimension of `state_space_labels` must be a perfect square when embedding a matrix basis"
+            elshape = (d, d)
+        elif elndim == 1:
+            elshape = (dim,)
+        else:
+            raise ValueError("Can only embed bases with .elndim == 1 or 2 (received %d)!" % elndim)
+
+        super(EmbeddedBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+
+    def __hash__(self):
+        return hash(tuple(hash(self.embedded_basis), self.target_labels, self.state_space_labels.labels))
+
+    def _lazy_build_elements(self):
+        """ Take a dense or sparse basis matrix and embed it. """
+        #LAZY building of elements (in case we never need them)
+        if self.elndim == 2:  # then use EmbeddedOp to do matrix
+            from ..objects.operation import StaticDenseOp
+            from ..objects.operation import EmbeddedOp
+            sslbls = self.state_space_labels.copy()
+            sslbls.reduce_dims_densitymx_to_state()  # because we're working with basis matrices not gates
+
+            if self.sparse:
+                self._elements = []
+                for spmx in self.embedded_basis.elements:
+                    mxAsOp = StaticDenseOp(spmx.todense(), evotype='statevec')
+                    self._elements.append(EmbeddedOp(sslbls, self.target_labels,
+                                                     mxAsOp).tosparse())
+            else:
+                self._elements = _np.zeros((self.size,) + self.elshape, 'complex')
+                for i, mx in enumerate(self.embedded_basis.elements):
+                    self._elements[i] = EmbeddedOp(sslbls, self.target_labels,
+                                                   StaticDenseOp(mx, evotype='statevec')).todense()
+        else:
+            # we need to perform embedding using vectors rather than matrices - doable, but
+            # not needed yet, so defer implementation to later.
+            raise NotImplementedError("Embedding *vector*-type bases not implemented yet")        
+
+    def _lazy_build_labels(self):
+        self._labels = [EmbeddedBasis.embed_label(lbl, self.target_labels)
+                        for lbl in self.embedded_basis.labels]
+
+    def __eq__(self, other):
+        otherIsBasis = isinstance(other, EmbeddedBasis)
+        if not otherIsBasis: return False  # can't be equal to a non-EmbeddedBasis
+        if self.target_labels != other.target_labels or self.state_space_labels != other.state_space_labels:
+            return False
+        return self.embedded_basis == other.embedded_basis
+
+    def equivalent(self, otherName):
+        equiv_embedded = self.embedded_basis.equivalent(otherName)
+        return EmbeddedBasis(equiv_embedded, self.state_space_labels, self.target_labels)
+
+    def simple_equivalent(self, otherName=None):
+        """
+        Return a single-block `Basis` of the type given by `otherName` and
+        dimension given by the sum of the block dimensions of this `Basis`.
+
+        Parameters
+        ----------
+        otherName : {'std', 'gm', 'pp', 'qt', None}
+            A standard basis abbreviation.  If None, then this
+            `Basis`'s name is used.
+
+        Returns
+        -------
+        Basis
+        """
+        if otherName is None:
+            otherName = self.embedded_basis.name  # default
         return BuiltinBasis(otherName, self.elsize, sparse=self.sparse)
 
 

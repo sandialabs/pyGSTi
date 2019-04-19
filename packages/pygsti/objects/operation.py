@@ -31,6 +31,8 @@ from . import modelmember as _modelmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
+from ..baseobjs import EmbeddedBasis as _EmbeddedBasis
+from ..baseobjs import ExplicitBasis as _ExplicitBasis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
 from . import term as _term
@@ -2573,13 +2575,19 @@ class LindbladOp(LinearOperator):
             self._prepare_for_torep()
         self.dirty = True
 
-    def get_errgen_coeffs(self):
+    def get_errgen_coeffs(self, return_basis=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this operation.  Note that these are not
         necessarily the parameter values, as these coefficients are generally
         functions of the parameters (so as to keep the coefficients positive,
         for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
 
         Returns
         -------
@@ -2593,11 +2601,11 @@ class LindbladOp(LinearOperator):
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
-        return self.errorgen.get_coeffs()
+        return self.errorgen.get_coeffs(return_basis)
 
     def set_value(self, M):
         """
@@ -4598,13 +4606,19 @@ class ComposedErrorgen(LinearOperator):
 
         LinearOperator.__init__(self, dim, evotype)
 
-    def get_coeffs(self):
+    def get_coeffs(self, return_basis=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this error generator.  Note that these are
         not necessarily the parameter values, as these coefficients are
         generally functions of the parameters (so as to keep the coefficients
         positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
 
         Returns
         -------
@@ -4618,43 +4632,60 @@ class ComposedErrorgen(LinearOperator):
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
-        Ltermdict = {}; basisdict = {}; next_available = 0
+        Ltermdict = _collections.OrderedDict()
+        basisdict = _collections.OrderedDict()
+        first_nonempty_basis = None
+        constant_basis = None  # the single same Basis used for every factor with a nonempty basis
+
         for eg in self.factors:
-            ltdict, bdict = eg.get_coeffs()
+            factor_coeffs = eg.get_coeffs(return_basis)
 
-            # see if we need to update basisdict to avoid collisions
-            # and avoid duplicating basis elements
-            final_basisLbls = {}
-            for lbl, basisEl in bdict.items():
-                for existing_lbl, existing_basisEl in basisdict.values():
-                    if _mt.safenorm(basisEl - existing_basisEl) < 1e-6:
-                        final_basisLbls[lbl] = existing_lbl
-                        break
-                else:  # no existing basis element found - need a new element
-                    if lbl in basisdict:  # then can't keep current label
-                        final_basisLbls[lbl] = next_available
-                        next_available += 1
+            if return_basis:
+                ltdict, factor_basis = factor_coeffs
+                if len(factor_basis) > 0:
+                    if first_nonempty_basis is None:
+                        first_nonempty_basis = factor_basis
+                        constant_basis = factor_basis  # seed constant_basis
+                    elif factor_basis != constant_basis:
+                        constant_basis = None  # factors have different bases - no constant_basis!
+            
+                # see if we need to update basisdict and ensure we do so in a consistent
+                # way - if factors use the same basis labels these must refer to the same
+                # basis elements.
+                #FUTURE: maybe a way to do this without always accessing basis *elements*?
+                #  (maybe do a pass to check for a constant_basis without any .elements refs?)
+                for lbl, basisEl in zip(factor_basis.labels, factor_basis.elements):
+                    if lbl in basisdict:
+                        assert(_mt.safenorm(basisEl - basisdict[lbl]) < 1e-6), "Ambiguous basis label %s" % lbl
                     else:
-                        #fine to keep lbl since it's unused
-                        final_basisLbls[lbl] = lbl
-                        if isinstance(lbl, int):
-                            next_available = max(next_available, lbl + 1)
+                        basisdict[lbl] = basisEl
+            else:
+                ltdict = factor_coeffs
 
-                    #Add new basis element
-                    basisdict[final_basisLbls[lbl]] = basisEl
-
-            for key, coeff in ltdict:
-                new_key = tuple([key[0]] + [final_basisLbls[l] for l in key[1:]])
-                if new_key in Ltermdict:
-                    Ltermdict[new_key] += coeff
+            for key, coeff in ltdict.items():
+                if key in Ltermdict:
+                    Ltermdict[key] += coeff
                 else:
-                    Ltermdict[new_key] = coeff
+                    Ltermdict[key] = coeff
 
-        return Ltermdict, basisdict
+        if return_basis:
+            #Use constant_basis or turn basisdict into a Basis to return
+            if constant_basis is not None:
+                basis = constant_basis
+            elif first_nonempty_basis is not None:
+                #Create an ExplictBasis using the matrices in basisdict plus the identity
+                lbls = ['I'] + list(basisdict.keys())
+                mxs = [first_nonempty_basis[0]] + list(basisdict.values())
+                basis = _ExplicitBasis(mxs, lbls, name=None,
+                                       real=first_nonempty_basis.real,
+                                       sparse=first_nonempty_basis.sparse)
+            return Ltermdict, basis
+        else:
+            return Ltermdict
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5031,6 +5062,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         #else:
         #    self.err_gen_mx = None
 
+    #TODO REMOVE (UNUSED)
     #def _construct_errgen_matrix(self):
     #    #Always construct a sparse errgen matrix, so just use
     #    # base class's .tosparse() (which calls embedded errorgen's
@@ -5038,12 +5070,13 @@ class EmbeddedErrorgen(EmbeddedOp):
     #    # error generator, but this is fine).
     #    self.err_gen_mx = self.tosparse()
 
-    def _embed_basis_mx(self, mx):
-        """ Take a dense or sparse basis matrix and embed it. """
-        mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
-            else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
-        return EmbeddedOp(self.state_space_labels, self.targetLabels,
-                          mxAsGate).tosparse()  # always convert to *sparse* basis els
+    #TODO REMOVE (UNUSED)
+    #def _embed_basis_mx(self, mx):
+    #    """ Take a dense or sparse basis matrix and embed it. """
+    #    mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
+    #        else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
+    #    return EmbeddedOp(self.state_space_labels, self.targetLabels,
+    #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 
     def from_vector(self, v):
         """
@@ -5062,13 +5095,19 @@ class EmbeddedErrorgen(EmbeddedOp):
         EmbeddedOp.from_vector(self, v)
         self.dirty = True
 
-    def get_coeffs(self):
+    def get_coeffs(self, return_basis=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this operation.  Note that these are
         not necessarily the parameter values, as these coefficients are
         generally functions of the parameters (so as to keep the coefficients
         positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
 
         Returns
         -------
@@ -5082,18 +5121,31 @@ class EmbeddedErrorgen(EmbeddedOp):
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
-        Ltermdict, basisdict = self.embedded_op.get_coeffs()
+        embedded_coeffs = self.embedded_op.get_coeffs(return_basis)
+        embedded_Ltermdict = _collections.OrderedDict()
 
-        #go through basis and embed basis matrices
-        new_basisdict = {}
-        for lbl, basisEl in basisdict.items():
-            new_basisdict[lbl] = self._embed_basis_mx(basisEl)
+        if return_basis:
+            # embed basis
+            Ltermdict, basis = embedded_coeffs
+            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.targetLabels)
+            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
 
-        return Ltermdict, new_basisdict
+            #go through and embed Ltermdict labels
+            for k, val in Ltermdict.items():
+                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
+                embedded_Ltermdict[embedded_key] = val
+            return embedded_Ltermdict, embedded_basis
+        else:
+            #go through and embed Ltermdict labels
+            Ltermdict = embedded_coeffs
+            for k, val in Ltermdict.items():
+                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
+                embedded_Ltermdict[embedded_key] = val
+            return embedded_Ltermdict
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5246,15 +5298,15 @@ class LindbladErrorgen(LinearOperator):
                 errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
                 return_generators=False, other_mode=nonham_mode, sparse=sparse)
 
-        # coeffs + bases => Ltermdict, basisdict
-        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
+        # coeffs + bases => Ltermdict, basis
+        Ltermdict, basis = _gt.projections_to_lindblad_terms(
             hamC, otherC, ham_basis, nonham_basis, nonham_mode)
 
-        return cls(d2, Ltermdict, basisdict,
+        return cls(d2, Ltermdict, basis,
                    param_mode, nonham_mode, truncate,
                    matrix_basis, evotype)
 
-    def __init__(self, dim, Ltermdict, basisdict=None,
+    def __init__(self, dim, Ltermdict, basis=None,
                  param_mode="cptp", nonham_mode="all", truncate=True,
                  mxBasis="pp", evotype="densitymx"):
         """
@@ -5282,10 +5334,9 @@ class LindbladErrorgen(LinearOperator):
             "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
             strings or integers.  Values are complex coefficients (error rates).
 
-        basisdict : dict, optional
-            A dictionary mapping the basis labels (strings or ints) used in the
-            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
-            matrices).
+        basis : Basis, optional
+            A basis mapping the labels used in the keys of `Ltermdict` to
+            basis matrices (e.g. numpy arrays or Scipy sparse matrices).
 
         param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
             Describes how the Lindblad coefficients/projections relate to the
@@ -5336,11 +5387,11 @@ class LindbladErrorgen(LinearOperator):
         self.nonham_mode = nonham_mode
         self.param_mode = param_mode
 
-        # Ltermdict, basisdict => bases + parameter values
+        # Ltermdict, basis => bases + parameter values
         # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
         # since the latter is what set_errgen needs
-        hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
-            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d2, self.nonham_mode)
+        hamC, otherC, self.ham_basis, self.other_basis = \
+            _gt.lindblad_terms_to_projections(Ltermdict, basis, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -5401,8 +5452,7 @@ class LindbladErrorgen(LinearOperator):
             #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
 
-            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basisdict, hamBInds,
-                                                              otherBInds, termtype)
+            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, termtype)
             # Unused
             self.hamGens = self.other = self.Lmx = None
             self.err_gen_mx = None
@@ -5515,14 +5565,22 @@ class LindbladErrorgen(LinearOperator):
         assert(bsO == self.other_basis_size)
         return hamGens, otherGens
 
-    def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
+    def _init_terms(self, Ltermdict, basis, termtype):
 
         d2 = self.dim
+
+        # Lookup dictionaries for getting the *parameter* index associated
+        # with a particlar basis label.  The -1 to compensates for the fact
+        # that the identity element is the first element of each non-empty basis
+        # and this does not have a correponding parameter/projection.
+        hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.ham_basis.labels)}
+        otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.other_basis.labels)}
+
         tt = termtype  # shorthand - used to construct RankOneTerm objects below,
-        # as we expect `basisdict` will contain *dense* basis
+        # as we expect `basis` will contain *dense* basis
         # matrices (maybe change in FUTURE?)
-        numHamParams = len(hamBasisLabels)
-        numOtherBasisEls = len(otherBasisLabels)
+        numHamParams = len(hamBasisIndices) - 1  # compensate for first basis el
+        numOtherBasisEls = len(otherBasisIndices) - 1  # being the identity.
 
         # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
         # coeffs (w/ *local* variable indices) that get converted to per-order
@@ -5532,18 +5590,18 @@ class LindbladErrorgen(LinearOperator):
         for termLbl in Ltermdict:
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
-                k = hamBasisLabels[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basisdict[termLbl[1]], IDENT, tt))
+                k = hamBasisIndices[termLbl[1]]  # index of parameter
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basis[termLbl[1]], IDENT, tt))
                 Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}),
-                                                IDENT, basisdict[termLbl[1]].conjugate().T, tt))
+                                                IDENT, basis[termLbl[1]].conjugate().T, tt))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
                     if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
                         k = numHamParams + 0  # index of parameter
                     else:
-                        k = numHamParams + otherBasisLabels[termLbl[1]]  # index of parameter
-                    Lm = Ln = basisdict[termLbl[1]]
+                        k = numHamParams + otherBasisIndices[termLbl[1]]  # index of parameter
+                    Lm = Ln = basis[termLbl[1]]
                     # power to raise parameter to in order to get coeff
                     pw = 2 if self.param_mode in ("cptp", "depol") else 1
 
@@ -5555,9 +5613,9 @@ class LindbladErrorgen(LinearOperator):
                     Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), _np.dot(Lm_dag, Ln), IDENT, tt))
 
                 else:
-                    i = otherBasisLabels[termLbl[1]]  # index of row in "other" coefficient matrix
-                    j = otherBasisLabels[termLbl[2]]  # index of col in "other" coefficient matrix
-                    Lm, Ln = basisdict[termLbl[1]], basisdict[termLbl[2]]
+                    i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
+                    j = otherBasisIndices[termLbl[2]]  # index of col in "other" coefficient matrix
+                    Lm, Ln = basis[termLbl[1]], basis[termLbl[2]]
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
@@ -5594,15 +5652,15 @@ class LindbladErrorgen(LinearOperator):
             elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
                 if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
-                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]]  # index of parameter
+                    k = numHamParams + 1 + otherBasisIndices[termLbl[1]]  # index of parameter
                 else:
-                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]]  # index of parameter
+                    k = numHamParams + numOtherBasisEls + otherBasisIndices[termLbl[1]]  # index of parameter
 
-                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * sum{ P_i rho P_i } where Pi's
+                # rho -> basis[termLbl[1]] * I = basis[termLbl[1]] * sum{ P_i rho P_i } where Pi's
                 #  are the normalized paulis (including the identity), and rho has trace == 1
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-                L = basisdict[termLbl[1]]
+                L = basis[termLbl[1]]
                 # Note: only works when `d` corresponds to integral # of qubits!
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
 
@@ -5848,13 +5906,19 @@ class LindbladErrorgen(LinearOperator):
             self._construct_errgen_matrix()
         self.dirty = True
 
-    def get_coeffs(self):
+    def get_coeffs(self, return_basis=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this error generator.  Note that these are
         not necessarily the parameter values, as these coefficients are
         generally functions of the parameters (so as to keep the coefficients
         positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
 
         Returns
         -------
@@ -5868,17 +5932,17 @@ class LindbladErrorgen(LinearOperator):
             terms.  Basis labels are integers starting at 0.  Values are complex
             coefficients (error rates).
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
         hamC, otherC = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
 
-        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode)
-        return Ltermdict, basisdict
+        Ltermdict_and_maybe_basis = _gt.projections_to_lindblad_terms(
+            hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode, return_basis)
+        return Ltermdict_and_maybe_basis
 
     def transform(self, S):
         """

@@ -778,13 +778,15 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
                 continue  # TO UPDATE - check whether all wt indices are a connected subgraph
 
             errbasis = [basisEl_Id]
+            errbasis_lbls = ['I']
             for err_basis_inds in _iter_basis_inds(wt):
                 error = _np.array(err_basis_inds, _np.int64)  # length == wt
                 basisEl = basisProductMatrix(error, sparse)
                 errbasis.append(basisEl)
+                errbasis_lbls.append(''.join(["IXYZ"[i] for i in err_basis_inds]))
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds, len(errbasis)), 3)
-            errbasis = _ExplicitBasis(errbasis, real=True, sparse=sparse)  # single element basis (plus identity)
+            errbasis = _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse)
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis)
 
             err_qubit_global_inds = err_qubit_inds
@@ -913,14 +915,16 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
             #Future: check that err_qubit_inds marks qubits that are connected
 
             errbasis = [basisEl_Id]
+            errbasis_lbls = ['I']
             for err_basis_inds in _iter_basis_inds(wt):
                 error = _np.array(err_basis_inds, _np.int64)  # length == wt
                 basisEl = basisProductMatrix(error, sparse)
                 errbasis.append(basisEl)
+                errbasis_lbls.append(''.join(["IXYZ"[i] for i in err_basis_inds]))
 
             err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds, len(errbasis)), 4)
-            errbasis = _ExplicitBasis(errbasis, real=True, sparse=sparse)  # single element basis (plus identity)
+            errbasis = _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse)
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
 
             fullTermErr = Embedded(ssAllQ, ['Q%d' % i for i in err_qubit_global_inds], termErr)

@@ -17,7 +17,7 @@ from .circuitparser import CircuitParser
 from .verbosityprinter import VerbosityPrinter
 from .label import Label, CircuitLabel
 
-from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
+from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis, EmbeddedBasis
 from .parameterized import parameterized
 from .smartcache import SmartCache, CustomDigestError, smart_cached
 
