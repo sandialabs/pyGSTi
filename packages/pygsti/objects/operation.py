@@ -2607,6 +2607,21 @@ class LindbladOp(LinearOperator):
         """
         return self.errorgen.get_coeffs(return_basis)
 
+    def set_errgen_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in the error generator of this :class:`LindbladOp`.
+        The dictionary `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        self.errorgen.set_coeffs(Ltermdict, action, logscale_nonham)
+        if self._evotype == "densitymx":
+            self._prepare_for_torep()
+        self.dirty = True
+
     def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
@@ -4687,6 +4702,34 @@ class ComposedErrorgen(LinearOperator):
         else:
             return Ltermdict
 
+    def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in this error generator.  The dictionary
+        `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        factor_coeffs_list = [eg.get_coeffs() for eg in self.factors]
+        perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
+        unused_Lterm_keys = set(Ltermdict.keys())
+
+        #Divide Ltermdict in per-factor Ltermdicts
+        for k, val in Ltermdict.items():
+            for d, coeffs in zip(perfactor_Ltermdicts, factor_coeffs_list):
+                if k in coeffs:
+                    d[k] = val; unused_Lterm_keys.remove(k)
+                    break  # only apply a given Ltermdict entry once, even if it can be applied to multiple factors
+
+        if len(unused_Lterm_keys) > 0:
+            raise KeyError("Invalid L-term descriptor key(s): %s" % str(unused_Lterm_keys))
+
+        #Set the L-term coefficients of each factor separately
+        for d, eg in zip(perfactor_Ltermdicts, self.factors):
+            eg.set_coeffs(d, action, logscale_nonham)
+
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized derivatives of the
@@ -5146,6 +5189,22 @@ class EmbeddedErrorgen(EmbeddedOp):
                 embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
                 embedded_Ltermdict[embedded_key] = val
             return embedded_Ltermdict
+
+    def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in this error generator.  The dictionary
+        `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        unembedded_Ltermdict = _collections.OrderedDict()
+        for k, val in Ltermdict.items():
+            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
+            unembedded_Ltermdict[unembedded_key] = val
+        self.embedded_op.set_coeffs(unembedded_Ltermdict, action, logscale_nonham)
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5943,6 +6002,46 @@ class LindbladErrorgen(LinearOperator):
         Ltermdict_and_maybe_basis = _gt.projections_to_lindblad_terms(
             hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode, return_basis)
         return Ltermdict_and_maybe_basis
+
+    def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in this error generator.  The dictionary
+        `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        existing_Ltermdict, basis = self.get_coeffs(return_basis=True)
+
+        if action == "reset":
+            for k in existing_Ltermdict:
+                existing_Ltermdict[k] = 0.0
+
+        for k, v in Ltermdict.items():
+            if logscale_nonham and k[0] == "S":
+                # treat the value being set in Ltermdict as the *channel* stochastic error rate, and
+                # set the errgen coefficient to the value that would, in a depolarizing channel, give
+                # that per-Pauli (or basis-el general?) stochastic error rate. See lindbladtools.py also.
+                # errgen_coeff = -log(1-d^2*err_rate) / d^2
+                d2 = self.dim
+                v = -_np.log(1 - d2 * v) / d2
+            
+            if k not in existing_Ltermdict:
+                raise KeyError("Invalid L-term descriptor (key) `%s`" % str(k))
+            elif action == "update" or action == "reset":
+                existing_Ltermdict[k] = v
+            elif action == "add":
+                existing_Ltermdict[k] += v
+            else:
+                raise ValueError('Invalid `action` argument: must be one of "update", "add", or "reset"')
+
+        hamC, otherC, _, _ = \
+            _gt.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
+        pvec = _gt.lindblad_projections_to_paramvals(
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate=False)  # shouldn't need to truncate
+        self.from_vector(pvec)
 
     def transform(self, S):
         """

@@ -866,10 +866,19 @@ class EmbeddedBasis(LazyBasis):
 
     @classmethod
     def embed_label(cls, lbl, target_labels):
-        """Convenience method that gives the EmbeddedBasis label for `lbl` 
+        """Convenience method that gives the EmbeddedBasis label for `lbl`
            without needing to construct the `EmbeddedBasis` """
         return "%s:%s" % (lbl, ",".join(map(str, target_labels)))
-    
+
+    @classmethod
+    def unembed_label(cls, lbl, target_labels):
+        """Convenience method that performs the reverse of :method:`embed_label` """
+        suffix = ":" + ",".join(map(str, target_labels))
+        if lbl.endswith(suffix):
+            return lbl[:-len(suffix)]
+        else:
+            raise ValueError("Cannot unembed '%s' - doesn't end in '%s'!" % (lbl, suffix))
+
     def __init__(self, basis_to_embed, state_space_labels, target_labels, name=None, longname=None):
         '''
         TODO: docstring
