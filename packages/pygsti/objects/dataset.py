@@ -917,7 +917,7 @@ class DataSet(object):
 
 
     def add_count_dict(self, circuit, countDict, overwriteExisting=True,
-                       recordZeroCnts=False, aux=None):
+                       recordZeroCnts=True, aux=None):
         """
         Add a single circuit's counts to this DataSet
 
