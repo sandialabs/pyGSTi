@@ -2575,7 +2575,7 @@ class LindbladOp(LinearOperator):
             self._prepare_for_torep()
         self.dirty = True
 
-    def get_errgen_coeffs(self, return_basis=False):
+    def get_errgen_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this operation.  Note that these are not
@@ -2588,6 +2588,8 @@ class LindbladOp(LinearOperator):
         return_basis : bool
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
+
+        TODO docstring: logscale_nonham
 
         Returns
         -------
@@ -2605,7 +2607,7 @@ class LindbladOp(LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        return self.errorgen.get_coeffs(return_basis)
+        return self.errorgen.get_coeffs(return_basis, logscale_nonham)
 
     def set_errgen_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
         """
@@ -4621,7 +4623,7 @@ class ComposedErrorgen(LinearOperator):
 
         LinearOperator.__init__(self, dim, evotype)
 
-    def get_coeffs(self, return_basis=False):
+    def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this error generator.  Note that these are
@@ -4634,6 +4636,8 @@ class ComposedErrorgen(LinearOperator):
         return_basis : bool
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
+
+        TODO docstring: locscale_nonham
 
         Returns
         -------
@@ -4657,7 +4661,7 @@ class ComposedErrorgen(LinearOperator):
         constant_basis = None  # the single same Basis used for every factor with a nonempty basis
 
         for eg in self.factors:
-            factor_coeffs = eg.get_coeffs(return_basis)
+            factor_coeffs = eg.get_coeffs(return_basis, logscale_nonham)
 
             if return_basis:
                 ltdict, factor_basis = factor_coeffs
@@ -4712,7 +4716,7 @@ class ComposedErrorgen(LinearOperator):
         ----------
         TODO: docstring
         """
-        factor_coeffs_list = [eg.get_coeffs() for eg in self.factors]
+        factor_coeffs_list = [eg.get_coeffs(False,logscale_nonham) for eg in self.factors]
         perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
         unused_Lterm_keys = set(Ltermdict.keys())
 
@@ -5138,7 +5142,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         EmbeddedOp.from_vector(self, v)
         self.dirty = True
 
-    def get_coeffs(self, return_basis=False):
+    def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this operation.  Note that these are
@@ -5151,6 +5155,8 @@ class EmbeddedErrorgen(EmbeddedOp):
         return_basis : bool
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
+
+        TODO docstring: locscale_nonham
 
         Returns
         -------
@@ -5168,7 +5174,7 @@ class EmbeddedErrorgen(EmbeddedOp):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        embedded_coeffs = self.embedded_op.get_coeffs(return_basis)
+        embedded_coeffs = self.embedded_op.get_coeffs(return_basis, logscale_nonham)
         embedded_Ltermdict = _collections.OrderedDict()
 
         if return_basis:
@@ -5965,7 +5971,7 @@ class LindbladErrorgen(LinearOperator):
             self._construct_errgen_matrix()
         self.dirty = True
 
-    def get_coeffs(self, return_basis=False):
+    def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
         (i.e. the "error rates") of this error generator.  Note that these are
@@ -5978,6 +5984,8 @@ class LindbladErrorgen(LinearOperator):
         return_basis : bool
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
+
+        TODO docstring: locscale_nonham
 
         Returns
         -------
@@ -6001,6 +6009,14 @@ class LindbladErrorgen(LinearOperator):
 
         Ltermdict_and_maybe_basis = _gt.projections_to_lindblad_terms(
             hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode, return_basis)
+
+        if logscale_nonham:
+            Ltermdict = Ltermdict_and_maybe_basis if return_basis else Ltermdict_and_maybe_basis
+            d2 = self.dim
+            for k in Ltermdict.keys():
+                if k[0] == "S":  # reverse mapping: err_coeff -> err_rate
+                    Ltermdict[k] = (1 - _np.exp(-d2 * Ltermdict[k])) / d2  # err_rate = (1-exp(-d^2*errgen_coeff))/d^2
+
         return Ltermdict_and_maybe_basis
 
     def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
@@ -6013,7 +6029,7 @@ class LindbladErrorgen(LinearOperator):
         ----------
         TODO: docstring
         """
-        existing_Ltermdict, basis = self.get_coeffs(return_basis=True)
+        existing_Ltermdict, basis = self.get_coeffs(return_basis=True, logscale_nonham=False)
 
         if action == "reset":
             for k in existing_Ltermdict:
