@@ -18,7 +18,7 @@ Found a bug in pyGSTi? We'd appreciate letting us know!
   Github under [Issues][issues].
 
 * If you can't find an open issue about the problem,
-  [open a new one][issues:new]! Be sure to include a **title**, a
+  [open a new one][issues:bug]! Be sure to include a **title**, a
   **clear description** of what went wrong, and **as much relevant
   information as possible.** If you can, try to include detailed steps
   to reproduce the problem.
@@ -34,7 +34,7 @@ Want to add a new feature or change an existing one?
   suggested** by searching on Github under [Issues][issues].
 
 * If you can't find a similar suggestion in the issue tracker,
-  [open a new issue][issues:new] for your feature suggestion.
+  [open a new issue][issues:feature] for your feature suggestion.
 
 ### Making a Contribution
 
@@ -60,6 +60,8 @@ back later!
 
 [contributing]: https://github.com/pyGSTio/pyGSTi/wiki/Contributing
 [email]: mailto:pygsti@sandia.gov
+[issues:bug]: https://github.com/pyGSTio/pyGSTi/issues/new?labels=bug&template=bug_report.md
+[issues:feature]: https://github.com/pyGSTio/pyGSTi/issues/new?labels=enhancement&template=feature_request.md
 [issues:new]: https://github.com/pyGSTio/pyGSTi/issues/new
 [issues]: https://github.com/pyGSTio/pyGSTi/issues
 [pygstio]: https://github.com/pyGSTio
