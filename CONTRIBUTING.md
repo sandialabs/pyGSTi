@@ -58,8 +58,8 @@ back later!
 
 * **Follow the guidelines** [on the project wiki][contributing].
 
-[contributing]: /pyGSTio/pyGSTi/wiki/Contributing
+[contributing]: https://github.com/pyGSTio/pyGSTi/wiki/Contributing
 [email]: mailto:pygsti@sandia.gov
-[issues:new]: /pyGSTio/pyGSTi/issues/new
-[issues]: /pyGSTio/pyGSTi/issues
-[pygstio]: /pyGSTio
+[issues:new]: https://github.com/pyGSTio/pyGSTi/issues/new
+[issues]: https://github.com/pyGSTio/pyGSTi/issues
+[pygstio]: https://github.com/pyGSTio
