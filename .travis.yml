@@ -5,10 +5,6 @@ python: 3.7
 
 if: (branch IN (master, beta, develop, ci-fixes)) OR (tag IS present)
 
-# Hold off testing feature & bugfix branches in case this competes w/other testing.
-#    - /^feature-.*$/
-#    - /^bugfix-.*$/
-
 env:
   global:
     - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
