@@ -30,25 +30,30 @@ echo "TRAVIS_PULL_REQUEST = $TRAVIS_PULL_REQUEST"
 
 if [ "$TRAVIS_BRANCH" = "$TRIGGER_BRANCH" ] && [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
     # setup git user
-    git config --global user.email "$GIT_EMAIL"
-    git config --global user.name "$GIT_USER"
+    git config user.email "$GIT_EMAIL"
+    git config user.name "$GIT_USER"
 
     # branch develop head to beta
     git checkout -b "$PUSH_BRANCH"
 
-    # # TODO create deployment token
-    # PUSH_URI="https://$GH_TOKEN@github.com/$TRAVIS_REPO_SLUG.git"
-    PUSH_URI="https://$USER:$PUSHKEY@github.com/$TRAVIS_REPO_SLUG.git"
-
-    # suppress output to avoid leaking token
-    echo "Pushing to $TRAVIS_REPO_SLUG:$PUSH_BRANCH..."
-    git push --quiet "$PUSH_URI" "$PUSH_BRANCH" > /dev/null 2>&1
-    check=$?
-    if [ "$check" -eq 0 ]; then
-        echo "Done."
-    else
-        echo "Push failed with exit status $check!"
-        echo "You will most likely need to manually merge $TRIGGER_BRANCH into $PUSH_BRANCH"
-        exit $check
+    # if branch exists upstream, apply it on top of this one
+    UPSTREAM_URI="git@github.com:$TRAVIS_REPO_SLUG.git"
+    UPSTREAM_BRANCH=$(git ls-remote --heads "$UPSTREAM_URI" "$PUSH_BRANCH")
+    if [ "$?" -eq 0 ] && [ -n "$UPSTREAM_BRANCH" ]; then
+        git pull --rebase "$UPSTREAM_URI" "$PUSH_BRANCH"
+        if [ "$?" -eq 0 ]; then
+            echo "Cleanly applied upstream $PUSH_BRANCH on to $TRIGGER_BRANCH."
+        else
+            echo "ERROR: couldn't cleanly apply upstream $PUSH_BRANCH on to $TRIGGER_BRANCH!"
+            echo "These branches must be merged manually."
+            echo "hint: If you wish to merge these branches automatically in the future,"
+            echo "hint: add the conflicting refs from $PUSH BRANCH to $DEVELOP BRANCH."
+            exit 2
+        fi
     fi
+
+    # push branch to remote repo
+    # this requires the Travis CI pubkey be added as a write-access
+    # deployment key to the repo
+    git push "$UPSTREAM_URI" "$PUSH_BRANCH"
 fi
