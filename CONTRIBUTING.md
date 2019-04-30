@@ -48,8 +48,10 @@ contributors working at Sandia.
 
 Unfortunately, **we can't currently accept pull requests from
 contributors outside of SNL.** We're working on setting up a
-contributor license agreement, so, someday, this may change. Check
-back later!
+contributor license agreement, so, someday, this may change.  If you're
+interested in making contributions please let us know by email at
+[pygsti@sandia.gov][email] so we can make a strong case to our lawyers for
+getting this done!
 
 #### For Sandians
 
