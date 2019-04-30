@@ -903,7 +903,7 @@ class DataSet(object):
             self.repData.append(_np.ones(len(oliAr), self.repType))
 
     def add_count_dict(self, circuit, countDict, overwriteExisting=True,
-                       recordZeroCnts=False, aux=None):
+                       recordZeroCnts=True, aux=None):
         """
         Add a single circuit's counts to this DataSet
 
