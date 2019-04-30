@@ -121,7 +121,17 @@ jobs:
     - stage: push
       env: PUSH_BRANCH="beta"
       install: skip
-      before_install: skip
+      before_install:
+        - >-
+          openssl aes-256-cbc
+          -K $encrypted_8f2a7a9a4246_key
+          -iv $encrypted_8f2a7a9a4246_iv
+          -in CI/github_deploy_key.enc
+          -out CI/github_deploy_key
+          -d
+        - chmod 600 CI/github_deploy_key
+        - eval $(ssh-agent -s)
+        - ssh-add CI/github_deploy_key
       script:
         - CI/push.sh
 
