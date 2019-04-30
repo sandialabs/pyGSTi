@@ -95,18 +95,22 @@ def chi2_terms(model, dataset, circuits=None,
         if 0 < lklen < model.get_num_outcomes(c):
             firsts.append(_slct.as_array(lookup[i])[0])
             indicesOfCircuitsWithOmittedData.append(i)
-    firsts = _np.array(firsts, 'i')
-    indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
-        
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+    else:
+        firsts = None
+
     smart(model.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
     cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
     v = N * ((probs - f)**2 / cprobs)
 
     #account for omitted probs (sparse data)
-    omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
-    clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
-    v[firsts] = v[firsts] + N[firsts] * omitted_probs**2 / clipped_oprobs
+    if firsts is not None:
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
+        clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
+        v[firsts] = v[firsts] + N[firsts] * omitted_probs**2 / clipped_oprobs
 
     #Aggregate over outcomes:
     # v[iElement] contains all chi2 contributions - now aggregate over outcomes
@@ -310,9 +314,12 @@ def chi2(model, dataset, circuits=None,
         if 0 < lklen < model.get_num_outcomes(c):
             firsts.append(_slct.as_array(lookup[i])[0])
             indicesOfCircuitsWithOmittedData.append(i)
-    firsts = _np.array(firsts, 'i')
-    indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
-    dprobs_omitted_rowsum = _np.empty((len(firsts), vec_gs_len), 'd')
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+        dprobs_omitted_rowsum = _np.empty((len(firsts), vec_gs_len), 'd')
+    else:
+        firsts = None
 
     if compute_hprobs:
         smart(model.bulk_fill_hprobs, hprobs, evTree,
@@ -333,9 +340,10 @@ def chi2(model, dataset, circuits=None,
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
 
     #account for omitted probs (sparse data)
-    omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
-    clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
-    v[firsts] = v[firsts] + N[firsts] * omitted_probs**2 / clipped_oprobs
+    if firsts is not None:
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
+        clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
+        v[firsts] = v[firsts] + N[firsts] * omitted_probs**2 / clipped_oprobs
 
     chi2 = _np.sum(v, axis=0)  # Note 0 is only axis in this case
 
@@ -344,13 +352,14 @@ def chi2(model, dataset, circuits=None,
         dchi2 = N[:, None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
 
         #account for omitted probs
-        t_firsts = (omitted_probs / clipped_oprobs)[:, None]
-        dchi2[firsts, :] -= N[firsts, None] * t_firsts * (2 - t_firsts) * dprobs_omitted_rowsum
+        if firsts is not None:
+            t_firsts = (omitted_probs / clipped_oprobs)[:, None]
+            dchi2[firsts, :] -= N[firsts, None] * t_firsts * (2 - t_firsts) * dprobs_omitted_rowsum
 
         dchi2 = _np.sum(dchi2, axis=0)  # sum over operation sequences and spam labels => (N)
 
     if returnHessian:
-        if len(firsts) > 0:
+        if firsts is not None:
             raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
         
         dprobs_p = dprobs[:, None, :]  # (KM,1,N)

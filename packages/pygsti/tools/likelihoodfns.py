@@ -187,8 +187,11 @@ def logl_terms(model, dataset, circuit_list=None,
         if 0 < lklen < model.get_num_outcomes(c):
             firsts.append(_slct.as_array(lookup[i])[0])
             indicesOfCircuitsWithOmittedData.append(i)
-    firsts = _np.array(firsts, 'i')
-    indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+    else:
+        firsts = None
 
     smart(model.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm, _filledarrays=(0,))
     if wildcard:
@@ -212,10 +215,12 @@ def logl_terms(model, dataset, circuit_list=None,
         #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum:
         #max(0,(a-p))^2/(2a) + p
 
-        omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
-        v[firsts] += totalCntVec[firsts] * \
-            _np.where(omitted_probs >= a, omitted_probs,
-                      (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
+        if firsts is not None:
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
+                                             for i in indicesOfCircuitsWithOmittedData])
+            v[firsts] += totalCntVec[firsts] * \
+                _np.where(omitted_probs >= a, omitted_probs,
+                          (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
     else:
         # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
@@ -455,9 +460,12 @@ def logl_jacobian(model, dataset, circuit_list=None,
         if 0 < lklen < model.get_num_outcomes(c):
             firsts.append(_slct.as_array(lookup[i])[0])
             indicesOfCircuitsWithOmittedData.append(i)
-    firsts = _np.array(firsts, 'i')
-    indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
-    dprobs_omitted_rowsum = _np.empty((len(firsts), nP), 'd')
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+        dprobs_omitted_rowsum = _np.empty((len(firsts), nP), 'd')
+    else:
+        firsts = None
 
     smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
           clipTo=probClipInterval, check=check, comm=comm,
@@ -482,10 +490,12 @@ def logl_jacobian(model, dataset, circuit_list=None,
         #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum:
         #max(0,(a-p))^2/(2a) + p
 
-        omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
-        v[firsts] += totalCntVec[firsts] * \
-            _np.where(omitted_probs >= a, omitted_probs,
-                      (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
+        if firsts is not None:
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
+                                             for i in indicesOfCircuitsWithOmittedData])
+            v[firsts] += totalCntVec[firsts] * \
+                _np.where(omitted_probs >= a, omitted_probs,
+                          (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
         dprobs_factor_pos = (countVecMx / pos_probs - totalCntVec)
         dprobs_factor_neg = S + 2 * S2 * (probs - min_p)
@@ -493,18 +503,21 @@ def logl_jacobian(model, dataset, circuit_list=None,
         dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
         dprobs_factor = _np.where(countVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
 
-        dprobs_factor_omitted = totalCntVec[firsts] * _np.where(
-            omitted_probs >= a, 1.0,
-            (-1.0 / a**2) * omitted_probs**2 + 2 * omitted_probs / a)
-
-        for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
-            dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[lookup[i], :], axis=0)
+        if firsts is not None:
+            dprobs_factor_omitted = totalCntVec[firsts] * _np.where(
+                omitted_probs >= a, 1.0,
+                (-1.0 / a**2) * omitted_probs**2 + 2 * omitted_probs / a)
+    
+            for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
+                dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[lookup[i], :], axis=0)
 
         jac = dprobs * dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
 
         # need to multipy dprobs_factor_omitted[i] * dprobs[k] for k in lookup[i] and
         # add to dprobs[firsts[i]] for i in indicesOfCircuitsWithOmittedData
-        jac[firsts, :] += dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum  # nCircuitsWithOmittedData x N
+        if firsts is not None:
+            jac[firsts, :] += dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum
+            # nCircuitsWithOmittedData x N
 
     else:
         # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
@@ -645,8 +658,11 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         if 0 < lklen < model.get_num_outcomes(c):
             firsts.append(_slct.as_array(lookup[i])[0])
             indicesOfCircuitsWithOmittedData.append(i)
-    firsts = _np.array(firsts, 'i')
-    indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+    else:
+        firsts = None
 
     if poissonPicture:
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
@@ -658,8 +674,9 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
-            dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')
-            hprobs_omitted_rowsum = _np.empty((len(firsts),) + hprobs.shape[1:], 'd')
+            if firsts is not None:
+                dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')
+                hprobs_omitted_rowsum = _np.empty((len(firsts),) + hprobs.shape[1:], 'd')
 
             # # (K,M,1,1) * (K,M,N,N')
             # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
@@ -687,8 +704,6 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
                 _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
             zfc = _np.where(probs >= a, 0.0, -totCnts * ((-2.0 / a**2) * probs + 2.0 / a))
             dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
-            dprobs12_omitted_coeffs = totCnts[firsts] * _np.where(
-                omitted_probs >= a, 0.0, (-2.0 / a**2) * omitted_probs + 2.0 / a)
             
             hprobs_coeffs = \
                 _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
@@ -696,16 +711,21 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             zfc = _np.where(probs >= a, -totCnts,
                             -totCnts * ((-1.0 / a**2) * probs**2 + 2 * probs / a))
             hprobs_coeffs = _np.where(cntVecMx == 0, zfc, hprobs_coeffs)
-            hprobs_omitted_coeffs = totCnts[firsts] * _np.where(
-                omitted_probs >= a, 1.0,
-                (-1.0 / a**2) * omitted_probs**2 + 2 * omitted_probs / a)
+
+            if firsts is not None:
+                dprobs12_omitted_coeffs = totCnts[firsts] * _np.where(
+                    omitted_probs >= a, 0.0, (-2.0 / a**2) * omitted_probs + 2.0 / a)
+                hprobs_omitted_coeffs = totCnts[firsts] * _np.where(
+                    omitted_probs >= a, 1.0,
+                    (-1.0 / a**2) * omitted_probs**2 + 2 * omitted_probs / a)
 
             # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
             #  but re-using dprobs12 and hprobs memory (which is overwritten!)
             hprobs *= hprobs_coeffs[:, None, None]
-            hprobs[firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
             dprobs12 *= dprobs12_coeffs[:, None, None]
-            dprobs12[firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
+            if firsts is not None:
+                hprobs[firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
+                dprobs12[firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
             hessian = dprobs12; hessian += hprobs
 
             # hessian[iSpamLabel,iCircuit,iModelParam1,iModelParams2] contains all
