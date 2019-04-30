@@ -2692,47 +2692,127 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     else:  # standard (non-Poisson-picture) logl
 
-        # The log(Likelihood) within the standard picture is:
-        #
-        # L = prod_{i,sl} p_{i,sl}^N_{i,sl}
-        #
-        # Where i indexes the operation sequence, and sl indexes the spam label.
-        #  N[i] is the total counts for the i-th circuit, and
-        #  so sum_{sl} N_{i,sl} == N[i]. We take the log:
-        #
-        # log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
-        #
-        # The objective function computes the negative log(Likelihood) as a vector of leastsq
-        #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
-        #
-        # See LikelihoodFunction.py for details on patching
+        raise NotImplementedError(("Non-poisson-picture optimization must be done with something other than a "
+                                   "least-squares optimizer and isn't implemented yet."))
 
-        #DEBUG TODO REMOVE
-        #def temp_poissonpic_objective_func(vectorGS):
+        ## The log(Likelihood) within the standard picture is:
+        ##
+        ## L = prod_{i,sl} p_{i,sl}^N_{i,sl}
+        ##
+        ## Where i indexes the operation sequence, and sl indexes the spam label.
+        ##  N[i] is the total counts for the i-th circuit, and
+        ##  so sum_{sl} N_{i,sl} == N[i]. We take the log:
+        ##
+        ## log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
+        ##
+        ## The objective function computes the negative log(Likelihood) as a vector of leastsq
+        ##  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
+        ##
+        ## See LikelihoodFunction.py for details on patching
+        #
+        ##DEBUG TODO REMOVE
+        ##def temp_poissonpic_objective_func(vectorGS):
+        ##    tm = _time.time()
+        ##    mdl.from_vector(vectorGS)
+        ##    mdl.bulk_fill_probs(probs, evTree, probClipInterval,
+        ##                        check, comm)
+        ##
+        ##
+        ##    pos_probs = _np.where(probs < min_p, min_p, probs)
+        ##    S = minusCntVecMx / min_p + totalCntVec
+        ##    S2 = -0.5 * minusCntVecMx / (min_p**2)
+        ##    v = DB_freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec * \
+        ##        pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+        ##    # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+        ##    v = _np.maximum(v, 0)
+        ##    # quadratic extrapolation of logl at min_p for probabilities < min_p
+        ##    v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        ##    v = _np.where(minusCntVecMx == 0,
+        ##                  totalCntVec * _np.where(probs >= a,
+        ##                                          probs,
+        ##                                          (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
+        ##                  v)
+        ##    # special handling for f == 0 terms
+        ##    # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+        ##    v = _np.sqrt(v)
+        ##    v.shape = [KM]  # reshape ensuring no copy is needed
+        ##    if cptp_penalty_factor != 0:
+        ##        cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
+        ##    else: cpPenaltyVec = []
+        ##
+        ##    if spam_penalty_factor != 0:
+        ##        spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, opBasis)
+        ##    else: spamPenaltyVec = []
+        ##
+        ##    v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
+        ##
+        ##    if forcefn_grad is not None:
+        ##        forceVec = forceShift - _np.dot(forcefn_grad, vectorGS)
+        ##        assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
+        ##        v = _np.concatenate((v, _np.sqrt(forceVec)))
+        ##
+        ##    profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        ##    return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+        #
+        #def _objective_func(vectorGS):
         #    tm = _time.time()
         #    mdl.from_vector(vectorGS)
-        #    mdl.bulk_fill_probs(probs, evTree, probClipInterval,
-        #                        check, comm)
-        #
+        #    mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
         #
         #    pos_probs = _np.where(probs < min_p, min_p, probs)
-        #    S = minusCntVecMx / min_p + totalCntVec
+        #
+        #    #DEBUG TODO REMOVE
+        #    #manual_v1 = _np.zeros(len(pos_probs),'d')
+        #    #manual_v2 = _np.zeros(len(pos_probs),'d')
+        #    #even = None; evenstuff = None
+        #    #for i,(p,f,dbf,mc,tc) in enumerate(zip(pos_probs,freqTerm,DB_freqTerm,minusCntVecMx,totalCntVec)):
+        #    #    nonp = f + mc * _np.log(p) # Ni*log(f) -Ni*log(p) = Ni*(log(f)-log(p))
+        #    #    pois = dbf + mc * _np.log(p) + tc * p # Ni*log(f) - Ni + -Ni*log(p) + Ntot*p (note Ni == Ntot*f)
+        #    #    manual_v1[i] = nonp
+        #    #    manual_v2[i] = pois
+        #    #    # diff = Ntot(f - p) ; next diff will be Ntot(p - f)
+        #    #    # so sum of both spam labels for a given circuit should give the same amount...
+        #    #    #print(i,"p=",p,"f=",f,"dbf=",dbf,"mc=",mc,"tc=",tc,"nonp=",nonp,"pois=",pois," diff = ",nonp-pois)
+        #    #    if i%2 == 0:
+        #    #        evenstuff = (p,f,dbf,mc,tc)
+        #    #        even = (nonp,pois)
+        #    #    elif abs(nonp-pois + even[0]-even[1]) > 1e-4:
+        #    #        print(i,"p=",p,"f=",f,"dbf=",dbf,"mc=",mc,"tc=",tc,"nonp=",nonp,"pois=",pois," diff = ",nonp-pois)
+        #    #        (p,f,dbf,mc,tc) = evenstuff
+        #    #        print(i-1,"p=",p,"f=",f,"dbf=",dbf,"mc=",mc,"tc=",tc,"nonp=",even[0],"pois=",even[1],
+        #    #              " diff = ",even[0]-even[1])
+        #    #
+        #    #    # Ni*log(f) - Ni + -Ni*log(p) + Ntot*p (note Ni == Ntot*f)  ==> Ni*(log(f)-log(p)) + Ntot*(p-f)
+        #    #    #Scratch - check why the  can't be negative (as a fn of p)... -- it's minimum is at
+        #    #    # -Ni/p + Ntot = 0 => p = Ni/Ntot = f, at which it's value is 0.
+        #    #    # what about Ni*(log(f)-log(p))?  - as p gets large it goes < 0 (as soon as p>f)!!
+        #    #    # what about adding Ntot terms for f's that are zero:
+        #    #    # Ni*(log(f)-log(p)) + Ntot*(p-f) + Ntot*p_other
+        #    #    # this cannot make the term < 0, assuming p_other > 0
+        #    #    # what about Ni*(log(f)-log(p)) - Ni*log(min_nonzero_freq)? maybe this works, but probably bad
+        #    #    # to optimize
+        #    #
+        #    #    #Summary:
+        #    #    # - when p > 0 (CPTP but not TP), then non-poisson logl is very close to poisson logl (equal except up to truncations?)
+        #    #    # - when p can be < 0 (e.g. TP) then the non-poisson logl can differ from the poisson logl significantly from truncation (p < pmin) effects.
+        #    #    # - can't use poissonPicture=False for leastsq opt (needed to keep terms positive!)
+        #    #    # - poissonPicture=True can't just drop terms with f=0 b/c there's a Ntot*p term.
+        #
+        #    S = minusCntVecMx / min_p
         #    S2 = -0.5 * minusCntVecMx / (min_p**2)
-        #    v = DB_freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec * \
-        #        pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+        #    v = freqTerm + minusCntVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        #    #REMOVE chk1 = _np.linalg.norm(v-manual_v1)
         #    # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
         #    v = _np.maximum(v, 0)
+        #    #REMOVE chk2 = _np.linalg.norm(v-manual_v1)
         #    # quadratic extrapolation of logl at min_p for probabilities < min_p
         #    v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-        #    v = _np.where(minusCntVecMx == 0,
-        #                  totalCntVec * _np.where(probs >= a,
-        #                                          probs,
-        #                                          (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
-        #                  v)
-        #    # special handling for f == 0 terms
-        #    # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+        #    #REMOVE chk3 = _np.linalg.norm(v-manual_v1)
+        #    v = _np.where(minusCntVecMx == 0, 0.0, v)
+        #    #REMOVE chk4 = _np.linalg.norm(v-manual_v1)
         #    v = _np.sqrt(v)
-        #    v.shape = [KM]  # reshape ensuring no copy is needed
+        #    assert(v.shape == (KM,))  # reshape ensuring no copy is needed
+        #
         #    if cptp_penalty_factor != 0:
         #        cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
         #    else: cpPenaltyVec = []
@@ -2748,149 +2828,72 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         #        assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
         #        v = _np.concatenate((v, _np.sqrt(forceVec)))
         #
+        #    #TODO REMOVE (Debugging)
+        #    #check_v = temp_poissonpic_objective_func(vectorGS)
+        #    #if _np.linalg.norm(v-check_v) >= 1e-6:
+        #    #    print("WARNING: Check = ",_np.linalg.norm(v-check_v))
+        #    #    print("sum check = ",sum(v**2), sum(check_v**2), sum(v**2)-sum(check_v**2))
+        #    #    print("manual sum check = ",sum(manual_v1)-sum(manual_v2))
+        #    #    print("checks = ",chk1,chk2,chk3,chk4)
+        #    ##    print("v = ",v)
+        #    ##    print("check_v = ",check_v)
+        #    #assert(_np.linalg.norm(v-check_v) < 1e-4)
+        #
         #    profiler.add_time("do_mlgst: OBJECTIVE", tm)
         #    return v  # Note: no test for whether probs is in [0,1] so no guarantee that
-
-        def _objective_func(vectorGS):
-            tm = _time.time()
-            mdl.from_vector(vectorGS)
-            mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-
-            pos_probs = _np.where(probs < min_p, min_p, probs)
-
-            #DEBUG TODO REMOVE
-            #manual_v1 = _np.zeros(len(pos_probs),'d')
-            #manual_v2 = _np.zeros(len(pos_probs),'d')
-            #even = None; evenstuff = None
-            #for i,(p,f,dbf,mc,tc) in enumerate(zip(pos_probs,freqTerm,DB_freqTerm,minusCntVecMx,totalCntVec)):
-            #    nonp = f + mc * _np.log(p) # Ni*log(f) -Ni*log(p) = Ni*(log(f)-log(p))
-            #    pois = dbf + mc * _np.log(p) + tc * p # Ni*log(f) - Ni + -Ni*log(p) + Ntot*p (note Ni == Ntot*f)
-            #    manual_v1[i] = nonp
-            #    manual_v2[i] = pois
-            #    # diff = Ntot(f - p) ; next diff will be Ntot(p - f)
-            #    # so sum of both spam labels for a given circuit should give the same amount...
-            #    #print(i,"p=",p,"f=",f,"dbf=",dbf,"mc=",mc,"tc=",tc,"nonp=",nonp,"pois=",pois," diff = ",nonp-pois)
-            #    if i%2 == 0:
-            #        evenstuff = (p,f,dbf,mc,tc)
-            #        even = (nonp,pois)
-            #    elif abs(nonp-pois + even[0]-even[1]) > 1e-4:
-            #        print(i,"p=",p,"f=",f,"dbf=",dbf,"mc=",mc,"tc=",tc,"nonp=",nonp,"pois=",pois," diff = ",nonp-pois)
-            #        (p,f,dbf,mc,tc) = evenstuff
-            #        print(i-1,"p=",p,"f=",f,"dbf=",dbf,"mc=",mc,"tc=",tc,"nonp=",even[0],"pois=",even[1],
-            #              " diff = ",even[0]-even[1])
-            #
-            #    # Ni*log(f) - Ni + -Ni*log(p) + Ntot*p (note Ni == Ntot*f)  ==> Ni*(log(f)-log(p)) + Ntot*(p-f)
-            #    #Scratch - check why the  can't be negative (as a fn of p)... -- it's minimum is at
-            #    # -Ni/p + Ntot = 0 => p = Ni/Ntot = f, at which it's value is 0.
-            #    # what about Ni*(log(f)-log(p))?  - as p gets large it goes < 0 (as soon as p>f)!!
-            #    # what about adding Ntot terms for f's that are zero:
-            #    # Ni*(log(f)-log(p)) + Ntot*(p-f) + Ntot*p_other
-            #    # this cannot make the term < 0, assuming p_other > 0
-            #    # what about Ni*(log(f)-log(p)) - Ni*log(min_nonzero_freq)? maybe this works, but probably bad
-            #    # to optimize
-            #
-            #    #Summary:
-            #    # - when p > 0 (CPTP but not TP), then non-poisson logl is very close to poisson logl (equal except up to truncations?)
-            #    # - when p can be < 0 (e.g. TP) then the non-poisson logl can differ from the poisson logl significantly from truncation (p < pmin) effects.
-            #    # - can't use poissonPicture=False for leastsq opt (needed to keep terms positive!)
-            #    # - poissonPicture=True can't just drop terms with f=0 b/c there's a Ntot*p term.
-
-            S = minusCntVecMx / min_p
-            S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
-            #REMOVE chk1 = _np.linalg.norm(v-manual_v1)
-            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-            v = _np.maximum(v, 0)
-            #REMOVE chk2 = _np.linalg.norm(v-manual_v1)
-            # quadratic extrapolation of logl at min_p for probabilities < min_p
-            v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-            #REMOVE chk3 = _np.linalg.norm(v-manual_v1)
-            v = _np.where(minusCntVecMx == 0, 0.0, v)
-            #REMOVE chk4 = _np.linalg.norm(v-manual_v1)
-            v = _np.sqrt(v)
-            assert(v.shape == (KM,))  # reshape ensuring no copy is needed
-
-            if cptp_penalty_factor != 0:
-                cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, opBasis)
-            else: cpPenaltyVec = []
-
-            if spam_penalty_factor != 0:
-                spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, opBasis)
-            else: spamPenaltyVec = []
-
-            v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
-
-            if forcefn_grad is not None:
-                forceVec = forceShift - _np.dot(forcefn_grad, vectorGS)
-                assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
-                v = _np.concatenate((v, _np.sqrt(forceVec)))
-
-            #TODO REMOVE (Debugging)
-            #check_v = temp_poissonpic_objective_func(vectorGS)
-            #if _np.linalg.norm(v-check_v) >= 1e-6:
-            #    print("WARNING: Check = ",_np.linalg.norm(v-check_v))
-            #    print("sum check = ",sum(v**2), sum(check_v**2), sum(v**2)-sum(check_v**2))
-            #    print("manual sum check = ",sum(manual_v1)-sum(manual_v2))
-            #    print("checks = ",chk1,chk2,chk3,chk4)
-            ##    print("v = ",v)
-            ##    print("check_v = ",check_v)
-            #assert(_np.linalg.norm(v-check_v) < 1e-4)
-
-            profiler.add_time("do_mlgst: OBJECTIVE", tm)
-            return v  # Note: no test for whether probs is in [0,1] so no guarantee that
-            #      sqrt is well defined unless probClipInterval is set within [0,1].
-
-        #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
-        #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
-        #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
-        #   and deriv == 0.5 / sqrt(...) * S * dp
-
-        def _jacobian(vectorGS):
-            tm = _time.time()
-            dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
-            dprobs.shape = (KM, vec_gs_len)
-            mdl.from_vector(vectorGS)
-            mdl.bulk_fill_dprobs(dprobs, evTree,
-                                 prMxToFill=probs, clipTo=probClipInterval,
-                                 check=check, comm=comm, wrtBlockSize=wrtBlkSize,
-                                 profiler=profiler, gatherMemLimit=gthrMem)
-
-            pos_probs = _np.where(probs < min_p, min_p, probs)
-            S = minusCntVecMx / min_p
-            S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs)  # dim KM (K = nSpamLabels, M = nCircuits)
-            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-            v = _np.maximum(v, 0)
-            # quadratic extrapolation of logl at min_p for probabilities < min_p
-            v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
-            v = _np.where(minusCntVecMx == 0, 0.0, v)
-            v = _np.sqrt(v)
-
-            # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
-            # below
-            v = _np.maximum(v, 1e-100)
-            dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs)
-            dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (probs - min_p))
-            dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
-            dprobs_factor = _np.where(minusCntVecMx == 0, 0.0, dprobs_factor)
-            dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
-            #Note: this also sets jac[0:KM,:]
-
-            off = 0
-            if cptp_penalty_factor != 0:
-                off += _cptp_penalty_jac_fill(jac[KM + off:, :], mdl, cptp_penalty_factor,
-                                              opBasis)
-
-            if spam_penalty_factor != 0:
-                off += _spam_penalty_jac_fill(jac[KM + off:, :], mdl, spam_penalty_factor,
-                                              opBasis)
-
-            if forcefn_grad is not None:
-                jac[forceOffset:, :] = -forcefn_grad
-
-            if check: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-            profiler.add_time("do_mlgst: JACOBIAN", tm)
-            return jac
+        #    #      sqrt is well defined unless probClipInterval is set within [0,1].
+        #
+        ##  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
+        ##   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
+        ##  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
+        ##   and deriv == 0.5 / sqrt(...) * S * dp
+        #
+        #def _jacobian(vectorGS):
+        #    tm = _time.time()
+        #    dprobs = jac[0:KM, :]  # avoid mem copying: use jac mem for dprobs
+        #    dprobs.shape = (KM, vec_gs_len)
+        #    mdl.from_vector(vectorGS)
+        #    mdl.bulk_fill_dprobs(dprobs, evTree,
+        #                         prMxToFill=probs, clipTo=probClipInterval,
+        #                         check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+        #                         profiler=profiler, gatherMemLimit=gthrMem)
+        #
+        #    pos_probs = _np.where(probs < min_p, min_p, probs)
+        #    S = minusCntVecMx / min_p
+        #    S2 = -0.5 * minusCntVecMx / (min_p**2)
+        #    v = freqTerm + minusCntVecMx * _np.log(pos_probs)  # dim KM (K = nSpamLabels, M = nCircuits)
+        #    # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+        #    v = _np.maximum(v, 0) HERE - THIS IS DESTRUCTIVE - we don't have this guarantee in the non-Poisson case
+        #    # quadratic extrapolation of logl at min_p for probabilities < min_p
+        #    v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        #    v = _np.where(minusCntVecMx == 0, 0.0, v)
+        #    v = _np.sqrt(v)
+        #
+        #    # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
+        #    # below
+        #    v = _np.maximum(v, 1e-100)
+        #    dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs)
+        #    dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (probs - min_p))
+        #    dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
+        #    dprobs_factor = _np.where(minusCntVecMx == 0, 0.0, dprobs_factor)
+        #    dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        #    #Note: this also sets jac[0:KM,:]
+        #
+        #    off = 0
+        #    if cptp_penalty_factor != 0:
+        #        off += _cptp_penalty_jac_fill(jac[KM + off:, :], mdl, cptp_penalty_factor,
+        #                                      opBasis)
+        #
+        #    if spam_penalty_factor != 0:
+        #        off += _spam_penalty_jac_fill(jac[KM + off:, :], mdl, spam_penalty_factor,
+        #                                      opBasis)
+        #
+        #    if forcefn_grad is not None:
+        #        jac[forceOffset:, :] = -forcefn_grad
+        #
+        #    if check: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+        #    profiler.add_time("do_mlgst: JACOBIAN", tm)
+        #    return jac
 
     profiler.add_time("do_mlgst: pre-opt", tStart)
 
