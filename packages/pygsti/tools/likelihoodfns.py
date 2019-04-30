@@ -507,7 +507,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
             dprobs_factor_omitted = totalCntVec[firsts] * _np.where(
                 omitted_probs >= a, 1.0,
                 (-1.0 / a**2) * omitted_probs**2 + 2 * omitted_probs / a)
-    
+
             for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
                 dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[lookup[i], :], axis=0)
 
@@ -697,14 +697,14 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
                 dprobs12_omitted_rowsum[ii, :, :] = _np.sum(dprobs12[lookup[i], :, :], axis=0)
                 hprobs_omitted_rowsum[ii, :, :] = _np.sum(hprobs[lookup[i], :, :], axis=0)
-            
+
             #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
                 _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
             zfc = _np.where(probs >= a, 0.0, -totCnts * ((-2.0 / a**2) * probs + 2.0 / a))
             dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
-            
+
             hprobs_coeffs = \
                 _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
                           cntVecMx / pos_probs - totCnts)

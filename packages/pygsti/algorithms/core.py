@@ -2588,8 +2588,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             #for i in range(ng): # len(circuitsToUse)
             #    ps = pos_probs[lookup[i]]
             #    if len(ps) < nExpectedOutcomes:
-            #        #omitted_prob = max(1.0-sum(ps),0) # must be positive, if existing probs add to >1 just forget correction
-            #        #iFirst = lookup[i].start #assumes lookup holds slices - need a firstIndex function in case this is an array (TODO)
+            #        #omitted_prob = max(1.0-sum(ps),0) # if existing probs add to >1 just forget correction
+            #        #iFirst = lookup[i].start #assumes lookup holds slices
             #        #v[iFirst] += totalCntVec[iFirst] * omitted_prob #accounts for omitted terms (sparse data)
             #        for j in range(lookup[i].start,lookup[i].stop):
             #            v[j] += totalCntVec[j]*(1.0/len(ps) - pos_probs[j])
@@ -2638,9 +2638,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
         #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
         #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
-        #  with ommitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)
-        #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp_{i,sl} +
-        #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)
+        #  with ommitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)  # noqa
+        #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp_{i,sl} +                   # noqa
+        #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)      # noqa
 
         #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
         #   and deriv == 0.5 / sqrt(...) * S * dp
@@ -2824,8 +2824,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         #    #    # to optimize
         #    #
         #    #    #Summary:
-        #    #    # - when p > 0 (CPTP but not TP), then non-poisson logl is very close to poisson logl (equal except up to truncations?)
-        #    #    # - when p can be < 0 (e.g. TP) then the non-poisson logl can differ from the poisson logl significantly from truncation (p < pmin) effects.
+        #    #    # - when p > 0 (CPTP but not TP), then non-poisson logl is very close to poisson logl (equal except up to truncations?)                      # noqa
+        #    #    # - when p can be < 0 (e.g. TP) then the non-poisson logl can differ from the poisson logl significantly from truncation (p < pmin) effects. # noqa
         #    #    # - can't use poissonPicture=False for leastsq opt (needed to keep terms positive!)
         #    #    # - poissonPicture=True can't just drop terms with f=0 b/c there's a Ntot*p term.
         #
@@ -2900,7 +2900,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         #    v = _np.where(minusCntVecMx == 0, 0.0, v)
         #    v = _np.sqrt(v)
         #
-        #    # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
+        #    # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by 0
         #    # below
         #    v = _np.maximum(v, 1e-100)
         #    dprobs_factor_pos = (0.5 / v) * (minusCntVecMx / pos_probs)

@@ -361,7 +361,7 @@ def chi2(model, dataset, circuits=None,
     if returnHessian:
         if firsts is not None:
             raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
-        
+
         dprobs_p = dprobs[:, None, :]  # (KM,1,N)
         t = ((probs - f) / cprobs)[:, None, None]  # (iElement, 0,0) = (KM,1,1)
         dt = ((1.0 / cprobs - (probs - f) / cprobs**2)[:, None]
