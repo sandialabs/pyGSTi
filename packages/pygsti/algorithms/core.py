@@ -1197,7 +1197,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['cntVecMx'] = cntVecMx
             evaltree_cache['totalCntVec'] = N
 
-    #Detect omitted frequences (assumed to be 0) so we can compute liklihood correctly
+    #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
     firsts = []; indicesOfCircuitsWithOmittedData = []
     for i, c in enumerate(circuitsToUse):
         lklen = _tools.slicetools.length(lookup[i])
