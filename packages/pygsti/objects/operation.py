@@ -2578,10 +2578,9 @@ class LindbladOp(LinearOperator):
     def get_errgen_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this operation.  Note that these are not
-        necessarily the parameter values, as these coefficients are generally
-        functions of the parameters (so as to keep the coefficients positive,
-        for instance).
+        of this operation.  Note that these are not  necessarily the parameter
+        values, as these coefficients are generally functions of the parameters
+        (so as to keep the coefficients positive, for instance).
 
         Parameters
         ----------
@@ -2601,13 +2600,51 @@ class LindbladOp(LinearOperator):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
         basis : Basis
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
         return self.errorgen.get_coeffs(return_basis, logscale_nonham)
+
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        operation.
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_errgen_coeffs(return_basis=False, logscale_nonham=True)
 
     def set_errgen_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
         """
@@ -2623,6 +2660,34 @@ class LindbladOp(LinearOperator):
         if self._evotype == "densitymx":
             self._prepare_for_torep()
         self.dirty = True
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in the error generator of this :class:`LindbladOp`
+        so that the contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_errgen_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def set_value(self, M):
         """
@@ -4626,10 +4691,9 @@ class ComposedErrorgen(LinearOperator):
     def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this error generator.  Note that these are
-        not necessarily the parameter values, as these coefficients are
-        generally functions of the parameters (so as to keep the coefficients
-        positive, for instance).
+        of this error generator.  Note that these are not necessarily the
+        parameter values, as these coefficients are generally functions of
+        the parameters (so as to keep the coefficients positive, for instance).
 
         Parameters
         ----------
@@ -4649,7 +4713,7 @@ class ComposedErrorgen(LinearOperator):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
         basis : Basis
             A Basis mapping the basis labels used in the
@@ -4706,6 +4770,45 @@ class ComposedErrorgen(LinearOperator):
         else:
             return Ltermdict
 
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        error generator (pertaining to the *channel* formed by
+        exponentiating this object).
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+
     def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
         """
         Sets the coefficients of terms in this error generator.  The dictionary
@@ -4733,6 +4836,34 @@ class ComposedErrorgen(LinearOperator):
         #Set the L-term coefficients of each factor separately
         for d, eg in zip(perfactor_Ltermdicts, self.factors):
             eg.set_coeffs(d, action, logscale_nonham)
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in this error generator so that the
+        contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5145,10 +5276,9 @@ class EmbeddedErrorgen(EmbeddedOp):
     def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this operation.  Note that these are
-        not necessarily the parameter values, as these coefficients are
-        generally functions of the parameters (so as to keep the coefficients
-        positive, for instance).
+        of this operation.  Note that these are not necessarily the parameter
+        values, as these coefficients are generally functions of the parameters
+        (so as to keep the coefficients positive, for instance).
 
         Parameters
         ----------
@@ -5168,7 +5298,7 @@ class EmbeddedErrorgen(EmbeddedOp):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
         basis : Basis
             A Basis mapping the basis labels used in the
@@ -5196,6 +5326,45 @@ class EmbeddedErrorgen(EmbeddedOp):
                 embedded_Ltermdict[embedded_key] = val
             return embedded_Ltermdict
 
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        error generator (pertaining to the *channel* formed by
+        exponentiating this object).
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+
     def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
         """
         Sets the coefficients of terms in this error generator.  The dictionary
@@ -5211,6 +5380,34 @@ class EmbeddedErrorgen(EmbeddedOp):
             unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
             unembedded_Ltermdict[unembedded_key] = val
         self.embedded_op.set_coeffs(unembedded_Ltermdict, action, logscale_nonham)
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in this error generator so that the
+        contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5397,7 +5594,7 @@ class LindbladErrorgen(LinearOperator):
             only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
             Stochastic term tuples can include 2 basis labels to specify
             "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
-            strings or integers.  Values are complex coefficients (error rates).
+            strings or integers.  Values are complex coefficients.
 
         basis : Basis, optional
             A basis mapping the labels used in the keys of `Ltermdict` to
@@ -5974,10 +6171,9 @@ class LindbladErrorgen(LinearOperator):
     def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this error generator.  Note that these are
-        not necessarily the parameter values, as these coefficients are
-        generally functions of the parameters (so as to keep the coefficients
-        positive, for instance).
+        of this error generator.  Note that these are not necessarily the
+        parameter values, as these coefficients are generally functions of
+        the parameters (so as to keep the coefficients positive, for instance).
 
         Parameters
         ----------
@@ -5997,7 +6193,7 @@ class LindbladErrorgen(LinearOperator):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
         basis : Basis
             A Basis mapping the basis labels used in the
@@ -6018,6 +6214,45 @@ class LindbladErrorgen(LinearOperator):
                     Ltermdict[k] = (1 - _np.exp(-d2 * Ltermdict[k])) / d2  # err_rate = (1-exp(-d^2*errgen_coeff))/d^2
 
         return Ltermdict_and_maybe_basis
+
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        error generator (pertaining to the *channel* formed by
+        exponentiating this object).
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_coeffs(return_basis=False, logscale_nonham=True)
 
     def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
         """
@@ -6058,6 +6293,34 @@ class LindbladErrorgen(LinearOperator):
         pvec = _gt.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate=False)  # shouldn't need to truncate
         self.from_vector(pvec)
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in this error generator so that the
+        contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def transform(self, S):
         """
