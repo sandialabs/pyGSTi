@@ -121,8 +121,16 @@ extras = {
 # Add `complete' target, which will install all extras listed above
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 
+
+# Configure setuptools_scm to build the post-release version number
+def custom_version():
+    from setuptools_scm.version import postrelease_version
+
+    return {'version_scheme': postrelease_version}
+
+
 setup(name='pyGSTi',
-      use_scm_version=True,
+      use_scm_version=custom_version,
       description='A python implementation of Gate Set Tomography',
       long_description=descriptionTxt,
       author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
