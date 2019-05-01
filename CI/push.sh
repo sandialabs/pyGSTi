@@ -40,11 +40,11 @@ if [ "$TRAVIS_BRANCH" = "$TRIGGER_BRANCH" ] && [ "$TRAVIS_PULL_REQUEST" = "false
     UPSTREAM_URI="git@github.com:$TRAVIS_REPO_SLUG.git"
     UPSTREAM_BRANCH=$(git ls-remote --heads "$UPSTREAM_URI" "$PUSH_BRANCH")
     if [ "$?" -eq 0 ] && [ -n "$UPSTREAM_BRANCH" ]; then
-        git pull --rebase "$UPSTREAM_URI" "$PUSH_BRANCH"
+        git pull --ff-only "$UPSTREAM_URI" "$PUSH_BRANCH"
         if [ "$?" -eq 0 ]; then
-            echo "Cleanly applied upstream $PUSH_BRANCH on to $TRIGGER_BRANCH."
+            echo "Fast-forwarded $PUSH_BRANCH to $TRIGGER_BRANCH."
         else
-            echo "ERROR: couldn't cleanly apply upstream $PUSH_BRANCH on to $TRIGGER_BRANCH!"
+            echo "ERROR: couldn't fast-forward $PUSH_BRANCH to $TRIGGER_BRANCH!"
             echo "These branches must be merged manually."
             echo "hint: If you wish to merge these branches automatically in the future,"
             echo "hint: add the conflicting refs from $PUSH BRANCH to $DEVELOP BRANCH."
