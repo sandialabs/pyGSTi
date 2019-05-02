@@ -26,6 +26,7 @@ from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
+from ..tools import lindbladtools as _lbt
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
@@ -1912,6 +1913,257 @@ class EigenvalueParamDenseOp(DenseOperator):
         return False
 
 
+class StochasticNoiseOp(LinearOperator):
+    """
+    A stocastic noise map:
+    rho -> (1-sum(p_i))rho + sum_(i>0) p_i * B_i * rho * B_i^dagger
+    where p_i > 0 and sum(p_i) < 1, and B_i is basis where B_0 == I
+    """
+    # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
+    # and don't bother restricting their sum to be < 1?
+
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None):
+        """ TODO: docstring - note: assume the first element of `basis` is the identity"""
+        self.basis = _Basis.cast(basis, dim, sparse=False)  # sparse??
+        assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
+
+        self.stochastic_superops = []
+        for b in self.basis.elements[1:]:
+            std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
+            self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+
+        #Setup initial parameters
+        self.params = _np.zeros(self.basis.size - 1, 'd')  # note that basis.dim can be < self.dim (OK)
+        if initial_rates is not None:
+            assert(len(initial_rates) == self.basis.size - 1), \
+                "Expected %d initial rates but got %d!" % (len(initial_rates), self.basis.size - 1)
+            self.params[:] = self._rates_to_params(initial_rates)
+
+        assert(evotype in ("densitymx", "svterm", "cterm"))
+        LinearOperator.__init__(self, dim, evotype)
+
+    def _rates_to_params(self, rates):
+        return _np.sqrt(_np.array(rates))
+
+    def _params_to_rates(self, params):
+        return params**2
+
+    def _get_rate_poly_dicts(self):
+        """ Return a list of dicts, one per rate, expressing the
+            rate as a polynomial of the local parameters (tuple
+            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
+        return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        StochasticNoiseOp
+            A copy of this object.
+        """
+        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector()))
+        return self._copy_gpindices(copyOfMe, parent)
+
+    #to_dense / to_sparse?
+    def todense(self):
+        """
+        Return this operation as a dense matrix.
+        """
+        # Create dense error superoperator from paramvec
+        errormap = _np.identity(self.dim)
+        for rate, ss in zip(self._params_to_rates(self.to_vector()), self.stochastic_superops):
+            errormap += rate * ss
+        return errormap
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        OpRep
+        """
+        if self._evotype == "densitymx":
+            return replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(), 'd'))
+        else:
+            raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
+                             (self._evotype, self.__class__.__name__))
+
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`Model`), not the
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
+            to retrieve.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+
+        def _compose_poly_indices(terms):
+            for term in terms:
+                term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
+                    self.gpindices, _np.array(x, _np.int64))))
+            return terms
+
+        if self._evotype == "svterm": tt = "dense"
+        elif self._evotype == "cterm": tt = "clifford"
+        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
+
+        IDENT = None  # sentinel for the do-nothing identity op
+        if order == 0:
+            polydict = {(): 1.0}
+            for pd in self._get_rate_poly_dicts():
+                polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
+            loc_terms = [_term.RankOneTerm(_Polynomial(polydict), IDENT, IDENT, tt)]
+
+        elif order == 1:
+            loc_terms = [_term.RankOneTerm(_Polynomial(pd), bel, bel, tt)
+                         for i, (pd, bel) in enumerate(zip(self._get_rate_poly_dicts(), self.basis.elements[1:]))]
+        else:
+            loc_terms = []  # only first order "taylor terms"
+
+        poly_coeffs = [t.coeff for t in loc_terms]
+        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+        else:
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+
+        local_term_poly_coeffs = coeffs_as_compact_polys
+        global_param_terms = _compose_poly_indices(loc_terms)
+
+        if return_coeff_polys:
+            return global_param_terms, local_term_poly_coeffs
+        else:
+            return global_param_terms
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
+        # (unitary postfactor has weight == 1.0 so doesn't enter)
+        rates = self._params_to_rates(self.to_vector())
+        return _np.sum(_np.abs(rates))
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.to_vector())
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.params
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        self.params[:] = v
+        self.dirty = True
+
+    #Transform functions? (for gauge opt)
+
+    def __str__(self):
+        s = "Stochastic noise gate map with dim = %d, num params = %d\n" % \
+            (self.dim, self.num_params())
+        return s
+
+
+class DepolarizeOp(StochasticNoiseOp):
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0):
+        """ TODO: docstring - note: assume the first element of `basis` is the identity"""
+        num_rates = dim - 1
+        initial_sto_rates = [initial_rate / num_rates] * num_rates
+        StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
+
+    def _rates_to_params(self, rates):
+        """Note: requires rates to all be the same"""
+        assert(all([rates[0] == r for r in rates[1:]]))
+        return _np.array([_np.sqrt(rates[0])], 'd')
+
+    def _params_to_rates(self, params):
+        return _np.array([params[0]**2] * (self.basis.size - 1), 'd')
+
+    def _get_rate_poly_dicts(self):
+        """ Return a list of dicts, one per rate, expressing the
+            rate as a polynomial of the local parameters (tuple
+            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
+        return [{(0, 0): 1.0} for i in range(self.basis.size - 1)]  # rates are all just param0 squared
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        DepolarizeOp
+            A copy of this object.
+        """
+        copyOfMe = DepolarizeOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector())[0])
+        return self._copy_gpindices(copyOfMe, parent)
+
+
 class LindbladOp(LinearOperator):
     """
     A gate parameterized by the coefficients of Lindblad-like terms, which are
@@ -2396,7 +2648,7 @@ class LindbladOp(LinearOperator):
         Return the operation as a sparse matrix.
         """
         _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
-                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
+                        "  Usually this is *NOT* acutally sparse (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self.sparse_expm:
             exp_err_gen = _spsl.expm(self.errorgen.tosparse().tocsc()).tocsr()
@@ -4735,7 +4987,7 @@ class ComposedErrorgen(LinearOperator):
                         constant_basis = factor_basis  # seed constant_basis
                     elif factor_basis != constant_basis:
                         constant_basis = None  # factors have different bases - no constant_basis!
-            
+
                 # see if we need to update basisdict and ensure we do so in a consistent
                 # way - if factors use the same basis labels these must refer to the same
                 # basis elements.
@@ -4819,7 +5071,7 @@ class ComposedErrorgen(LinearOperator):
         ----------
         TODO: docstring
         """
-        factor_coeffs_list = [eg.get_coeffs(False,logscale_nonham) for eg in self.factors]
+        factor_coeffs_list = [eg.get_coeffs(False, logscale_nonham) for eg in self.factors]
         perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
         unused_Lterm_keys = set(Ltermdict.keys())
 
@@ -6278,7 +6530,7 @@ class LindbladErrorgen(LinearOperator):
                 # errgen_coeff = -log(1-d^2*err_rate) / d^2
                 d2 = self.dim
                 v = -_np.log(1 - d2 * v) / d2
-            
+
             if k not in existing_Ltermdict:
                 raise KeyError("Invalid L-term descriptor (key) `%s`" % str(k))
             elif action == "update" or action == "reset":

@@ -35,6 +35,8 @@ from .operation import CliffordOp
 from .operation import LindbladErrorgen
 from .operation import ComposedErrorgen
 from .operation import EmbeddedErrorgen
+from .operation import StochasticNoiseOp
+from .operation import DepolarizeOp
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullSPAMVec
