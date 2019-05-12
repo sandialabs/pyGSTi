@@ -1136,7 +1136,6 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
     profiler.add_time("do_mc2gst: pre-opt treegen", tStart)
-
     KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
 
     #Expand operation label aliases used in DataSet lookups
@@ -1358,11 +1357,13 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                                      prMxToFill=probs, clipTo=probClipInterval,
                                      check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                      profiler=profiler, gatherMemLimit=gthrMem)
-                for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
-                    dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[lookup[i], :], axis=0)
+                if firsts is not None:
+                    for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
+                        dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[lookup[i], :], axis=0)
 
                 weights = _get_weights(probs)
                 dprobs *= (weights + (probs - f) * _get_dweights(probs, weights))[:, None]
+
                 # (KM,N) * (KM,1)   (N = dim of vectorized model)
                 # this multiply also computes jac, which is just dprobs
                 # with a different shape (jac.shape == [KM,vec_gs_len])
@@ -1370,16 +1371,15 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                 # with omitted terms, new_obj = sqrt( obj^2 + corr ) where corr = N*omitted_p^2/clipped_omitted_p
                 # so then d(new_obj) = 1/(2*new_obj) *( 2*obj*dobj + dcorr )*domitted_p where dcorr = N when not clipped
                 #    and 2*N*omitted_p/clip_bound * domitted_p when clipped
-                mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-                v = (probs - f) * weights
                 if firsts is not None:
+                    v = (probs - f) * weights
                     omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]])
                                                      for i in indicesOfCircuitsWithOmittedData])
                     clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
                     dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, N[firsts],
                                                       2 * N[firsts] * omitted_probs / clipped_oprobs)
-                    v[firsts] = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
-                    dprobs[firsts, :] = (0.5 / v[firsts, None]) * (
+                    fullv = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
+                    dprobs[firsts, :] = (0.5 / fullv[:,None]) * (
                         2 * v[firsts, None] * dprobs[firsts, :]
                         - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
 
@@ -1417,8 +1417,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                     clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
                     dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, N[firsts],
                                                       2 * N[firsts] * omitted_probs / clipped_oprobs)
-                    v[firsts] = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
-                    dprobs[firsts, :] = (0.5 / v[firsts, None]) * (
+                    fullv = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
+                    dprobs[firsts, :] = (0.5 / fullv[:,None]) * (
                         2 * v[firsts, None] * dprobs[firsts, :]
                         - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
 
@@ -1452,16 +1452,15 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                 # Note: this also computes jac[0:KM,:]
 
                 #Omitted probs
-                mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-                v = (probs - f) * weights
                 if firsts is not None:
+                    v = (probs - f) * weights
                     omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]])
                                                      for i in indicesOfCircuitsWithOmittedData])
                     clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
                     dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, N[firsts],
                                                       2 * N[firsts] * omitted_probs / clipped_oprobs)
-                    v[firsts] = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
-                    dprobs[firsts, :] = (0.5 / v[firsts, None]) * (
+                    fullv = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
+                    dprobs[firsts, :] = (0.5 / fullv[:,None]) * (
                         2 * v[firsts, None] * dprobs[firsts, :]
                         - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
 
@@ -1499,18 +1498,17 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             dprobs *= dPr_prefactor[:, None]  # (KM,N) * (KM,1) = (KM,N)  (N = dim of vectorized model)
 
             #Omitted probs
-            mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-            v = (probs - f) * weights
             if firsts is not None:
+                v = (probs - f) * weights
                 omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]])
                                                  for i in indicesOfCircuitsWithOmittedData])
                 clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
                 dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, N[firsts],
                                                   2 * N[firsts] * omitted_probs / clipped_oprobs)
-                v[firsts] = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
-                dprobs[firsts, :] = (0.5 / v[firsts, None]) * (
-                    2 * v[firsts, None] * dprobs[firsts, :]
-                    - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
+                fullv = _np.sqrt(v[firsts]**2 + N[firsts] * omitted_probs**2 / clipped_oprobs)
+                dprobs[firsts, :] = (0.5 / fullv[:,None]) * (
+                        2 * v[firsts, None] * dprobs[firsts, :]
+                        - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
 
             if regularizeFactor != 0:
                 gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])

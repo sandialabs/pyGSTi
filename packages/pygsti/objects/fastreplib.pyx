@@ -1104,7 +1104,7 @@ cdef class PolyRep:
 
         return vtape, ctape
 
-cdef bool compare_pair(pair[PolyVarsIndex, vector[INT]]& a, pair[PolyVarsIndex, vector[INT]]& b):
+cdef bool compare_pair(const pair[PolyVarsIndex, vector[INT]]& a, const pair[PolyVarsIndex, vector[INT]]& b):
     return a.first < b.first
     
 cdef class SVTermRep:
@@ -1435,7 +1435,6 @@ cdef dm_compute_pr_cache(double[:,:] ret,
     
 def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
     # can remove unused 'scratch' arg once we move hpr_cache to replibs
-
     cdef double eps = 1e-7 #hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
@@ -1445,6 +1444,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
     pCache = np.empty((len(evalTree),len(elabels)),'d')
     dpr_cache  = np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
+    #print("BEGIN dpr_cache")
 
     #Get (extension-type) representation objects
     rhorep = calc.sos.get_prep(rholabel).torep('prep')
@@ -1464,8 +1464,11 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     # create rho_cache = vector of DMStateCReps
     cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
 
+    #print("DB: params = ", calc.paramvec)
     dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
     pCache_delta = pCache.copy() # for taking finite differences
+    #print("DB: Initial = ", np.linalg.norm(pCache), np.linalg.norm(pCache_delta))
+    #print("p = ",pCache)
 
     all_slices, my_slice, owners, subComm = \
             _mpit.distribute_slice(slice(0,len(param_indices)), comm)
@@ -1483,10 +1486,10 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #time_dict = {'expon':0.0, 'composed': 0.0, 'dense':0.0, 'lind': 0.0} #REMOVE
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
-        #print("dprobs cache %d of %d" % (i,self.Np))
+        #print("dprobs cache %d of %d" % (i,calc.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
-            # t1 = pytime.time() # REMOVE
+            #t1 = pytime.time() # REMOVE
             vec = orig_vec.copy(); vec[i] += eps
             #t_copy += pytime.time()-t1; t1 = pytime.time() # REMOVE
             calc.from_vector(vec)
@@ -1495,7 +1498,9 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             #rebuild reps (not evaltree or operation_lookup)
             rhorep = calc.sos.get_prep(rholabel).torep('prep')
             ereps = [ calc.sos.get_effect(el).torep('effect') for el in elabels]
-            operationreps = { i:op.torep() for i,op in operations.items() } 
+            operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
+            operationreps = { k:op.torep() for k,op in operations.items() } 
+            
             #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
             #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
             #t_reps += pytime.time()-t1; t1 = pytime.time() #REMOVE
@@ -1522,7 +1527,9 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), pytime.time()-tStart)) #DEBUG
 
     # DEBUG FOR PROFILING THIS FUNCTION
-    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs" % (pytime.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
+    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs" % (pytime.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather))
+#, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs"
+#, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
 
     return dpr_cache
 
