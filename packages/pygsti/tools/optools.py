@@ -2439,6 +2439,8 @@ def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
             otherParams = paramvals[nHam:]
             expected_shape = (1,) if (param_mode in ("depol", "reldepol")) else (bsO - 1,)
             assert(otherParams.shape == expected_shape)
+            if param_mode in ("depol", "reldepol"):
+                otherParams = otherParams[0] * _np.ones(bsO - 1, 'd') # replicate single param bsO-1 times
 
             if param_mode in ("cptp", "depol"):
                 otherCoeffs = otherParams**2  # Analagous to L*L_dagger
