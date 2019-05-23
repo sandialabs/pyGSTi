@@ -67,7 +67,6 @@ class DataSet_KeyValIterator(object):
 
     next = __next__
 
-
 class DataSet_ValIterator(object):
     """ Iterator class for DataSetRow values of a DataSet """
 
@@ -165,6 +164,168 @@ class DataSetRow(object):
                 times.extend([time] * nreps)
             return _np.array(times, dtype=self.dataset.timeType)
         else: return self.time.copy()
+
+    def get_times(self):
+        """
+        Returns the a list containing the unique data collection times
+        at which there is at least one measurement result.
+        """
+        times = []
+        last_time = None
+        for t in self.time:
+            if t != last_time:
+                times.append(t)
+                last_time = t
+
+        return times
+
+    def get_timeseries_for_outcomes(self):
+        """
+        Returns data in a time-series format. This can be a much less
+        succinct format than returned by `get_timeseries`. E.g., it is
+        highly inefficient for many-qubit data.
+
+        Returns
+        -------
+        times : list
+            The time steps, containing the unique data collection times.
+
+        reps : dict
+            A dictionary of lists containing the number of times each
+            measurement outcome was observed at the unique data collection
+            times in `times`.
+        """
+        times = []
+        last_time = None
+        seriesDict = {}
+        for outcome_label in self.outcomes:
+            if outcome_label not in self.outcomes.keys():
+                seriesDict[outcome_label] = []
+
+        if self.reps is None:
+            reps = list(_np.ones(len(self.time), int))
+        else: reps = self.reps
+
+        for t, outcome_label, rep in zip(self.time, self.outcomes, reps):
+
+            if t != last_time:
+                times.append(t)
+                last_time = t
+
+                for ol in seriesDict.keys():
+                    if ol == outcome_label: seriesDict[ol].append(rep)
+                    else: seriesDict[ol].append(0)
+
+            else:
+                seriesDict[outcome_label][-1] += rep
+
+        return times, seriesDict
+
+    def get_timeseries(self):
+        """
+        Returns data in a time-series format.
+
+        Returns
+        -------
+        times : list
+            The time steps, containing the unique data collection times.
+
+        reps : list
+            A list of dictionaries containing the counts dict corresponding
+            to the list of unique data collection times in `times`.
+        """
+        times = []
+        series = []
+        last_time = None
+
+        if self.reps is None:
+            reps = list(_np.ones(len(self.time), int))
+        else: reps = self.reps
+
+        for t, outcome_label, rep in zip(self.time, self.outcomes, reps):
+
+            if t != last_time:
+                times.append(t)
+                last_time = t
+                series.append({outcome_label: rep})
+
+            else:
+                if outcome_label in series[-1]:
+                    series[-1][outcome_label] += rep
+                else:
+                    series[-1][outcome_label] = rep
+
+        return times, series
+
+    def get_reps_timeseries(self):
+        """
+        Tthe number of measurement results at each
+        data collection time.
+
+        Returns
+        -------
+        times : list
+            The time steps.
+
+        reps : list
+            The total number of counts at each time step.
+        """
+        times = []
+        reps = []
+        last_time = None
+
+        if self.reps is None:
+            return list(self.time), list(_np.ones(len(self.time), int))
+
+        else:
+            for t, rep in zip(self.time, self.reps):
+                if t != last_time:
+                    times.append(t)
+                    last_time = t
+                    reps.append(rep)
+                else:
+                    reps[-1] += rep
+
+            return times, reps
+
+    def get_number_of_times(self):
+        """
+        Returns the number of data collection times.
+        """
+        return len(self.get_times())
+
+    def has_constant_totalcounts(self):
+        """
+        Returns True if the numbers of counts is the same at
+        all data collection times. Otherwise returns False.
+        """
+        times, reps = self.get_reps_timeseries()
+        firstrep = reps[0]
+        fixedtotalcounts = all([firstrep == i for i in reps])
+
+        return fixedtotalcounts
+
+    def get_totalcounts_per_timestep(self):
+        """
+        Returns the number of total counts per time-step, when this
+        is constant. If it varies over the times that there is at least
+        one measurement result for then this function will raise an error.
+        """
+        times, reps = self.get_reps_timeseries()
+        firstrep = reps[0]
+        assert(all([firstrep == i for i in reps])), "The total counts is not the same at all time steps!"
+
+        return firstrep
+
+    def get_mean_timestep(self):
+        """
+        Returns the mean time-step. Will raise an error for data that is
+        a trivial time-series (i.e., data all at one time).
+        """
+        times = self.get_times()
+        assert(len(times) >= 2), "Mean time-step is ill-defined when there is not multiple data times!"
+
+        return _np.mean(times[1:] - times[0:len(times) - 1])
 
     def __iter__(self):
         if self.reps is not None:
@@ -1169,6 +1330,64 @@ class DataSet(object):
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
         for circuit, dsRow in otherDataSet.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
+
+    def get_mean_timestep(self):
+        """
+        Returns the mean time-step, averaged over the time-step for each
+        circuit and over circuits.
+        """
+        timesteps = []
+        for key in self.keys():
+            timesteps.append(self[key].get_mean_timestep())
+
+        return _np.mean(timesteps)
+
+    def has_constant_totalcounts_pertime(self):
+        """
+        Returns True if the data for every circuit has the same number of
+        total counts at every data collection time. Otherwise, returns False.
+
+        This will return True if there is a different number of total counts
+        per circuit (i.e., after aggregating over time), as long as every
+        circuit has the same total counts per time step (this will happen
+        when the number of time-steps varies between circuit).
+        """
+        for key in self.keys():
+            numtotalcountspertime = None
+            dsrow = self[key]
+            if not dsrow.has_constant_totalcounts():
+                return False
+            if numtotalcountspertime is None:
+                numtotalcountspertime = dsrow.get_totalcounts_per_timestep()
+            else:
+                if numtotalcountspertime != dsrow.get_totalcounts_per_timestep():
+                    return False
+
+        return True
+
+    def totalcounts_pertime(self):
+        """
+        Returns the total counts per time, if this is constant over times
+        and circuits. When that doesn't hold, an error is raised.
+        """
+        self.has_constant_totalcounts_pertime()
+        key = list(self.keys())[0]
+        totalcountspertime = self[key].get_totalcounts_per_timestep()
+
+        return totalcountspertime
+
+    def has_constant_totalcounts(self):
+        """
+        Returns True if the data for every circuit has the same number of
+        total counts.
+        """
+        reps = []
+        for key in self.keys():
+            reps.append(sum(list(self[key].counts.values())))
+        firstrep = reps[0]
+        fixedtotalcounts = all([firstrep == i for i in reps])
+
+        return fixedtotalcounts
 
     def __str__(self):
         return self.to_str()
