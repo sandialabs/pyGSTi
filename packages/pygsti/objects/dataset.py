@@ -818,7 +818,7 @@ class DataSet(object):
                     if opLabel not in opLabels: opLabels.append(opLabel)
         return opLabels
 
-    def get_degrees_of_freedom(self, circuitList=None, method="all_outcomes-1",
+    def get_degrees_of_freedom(self, circuitList=None, method="present_outcomes-1",
                                aggregate_times=True):
         """
         Returns the number of independent degrees of freedom in the data for
