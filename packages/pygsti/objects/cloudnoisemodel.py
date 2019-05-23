@@ -576,7 +576,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         if global_idle_layer is None:
             self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
-        elif hasattr(global_idle_layer, '__call__'): #TODO: how to test if a function iscallable?
+        elif callable(global_idle_layer):
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle_layer()
         else:
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle_layer

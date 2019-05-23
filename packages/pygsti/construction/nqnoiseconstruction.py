@@ -35,6 +35,7 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl
+from ..baseobjs import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
 from .modelconstruction import basis_build_vector as _basis_build_vector
@@ -397,6 +398,22 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
     nQubit_dim = 2**nQubits if evotype in ('statevec', 'stabilizer') else 4**nQubits
 
+    orig_error_rates = error_rates.copy()
+    cparser = _CircuitParser()
+    cparser.lookup = None  # lookup - functionality removed as it wasn't used
+    for k, v in orig_error_rates.items():
+        if _compat.isstr(k) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
+            lbls, _ = cparser.parse(k)
+            assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
+            assert(all([sslbl in qubitGraph.get_node_names() for sslbl in lbls[0].sslbls])), \
+                "One or more invalid qubit names in: %s" % k
+            del error_rates[k]
+            error_rates[lbls[0]] = v
+        elif isinstance(k, _Lbl):
+            if k.sslbls is not None:
+                assert(all([sslbl in qubitGraph.get_node_names() for sslbl in k.sslbls])), \
+                    "One or more invalid qubit names in the label: %s" % str(k)
+
     def _parameterization_from_errgendict(errs):
         paramtypes = []
         if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
@@ -443,12 +460,13 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                 errgen = _op.ComposedErrorgen(embedded_errgens, nQubit_dim, evotype)
         else:
             #We need to build a stencil (which may contain QubitGraph directions) or an effective stencil
-            assert(stencil is None) # checked by above assert too
+            assert(stencil is None)  # checked by above assert too
 
             distinct_errorqubits = _collections.OrderedDict() # distinct sets of qubits upon which a single (high-weight) error term acts
-            if isinstance(errs, dict): # either for creating a stencil or an error
+            if isinstance(errs, dict):  # either for creating a stencil or an error
                 for nm, val in errs.items():
                     #REMOVE print("DB: Processing: ",nm, val)
+                    if _compat.isstr(nm): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
                     err_typ, basisEls = nm[0], nm[1:]
                     sslbls = None
                     local_nm = [err_typ]

@@ -2112,6 +2112,7 @@ def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
     hamBasisLabels = []
     otherBasisLabels = []
     for termLbl, coeff in Ltermdict.items():
+        if _compat.isstr(termLbl): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
         termType = termLbl[0]
         if termType == "H":  # Hamiltonian
             assert(len(termLbl) == 2), "Hamiltonian term labels should have form ('H',<basis element label>)"
@@ -2186,6 +2187,7 @@ def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
     hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(ham_basis.labels)}      # -1 to compensate for identity as
     otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(other_basis.labels)}  # first element (not in projections).
     for termLbl, coeff in Ltermdict.items():
+        if _compat.isstr(termLbl): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
         termType = termLbl[0]
         if termType == "H":  # Hamiltonian
             k = hamBasisIndices[termLbl[1]]  # index of coefficient in array
