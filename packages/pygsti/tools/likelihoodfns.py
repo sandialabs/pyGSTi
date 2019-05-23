@@ -218,7 +218,7 @@ def logl_terms(model, dataset, circuit_list=None,
         if firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
                                              for i in indicesOfCircuitsWithOmittedData])
-            v[firsts] += totalCntVec[firsts] * \
+            v[firsts] -= totalCntVec[firsts] * \
                 _np.where(omitted_probs >= a, omitted_probs,
                           (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
@@ -493,7 +493,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         if firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
                                              for i in indicesOfCircuitsWithOmittedData])
-            v[firsts] += totalCntVec[firsts] * \
+            v[firsts] -= totalCntVec[firsts] * \
                 _np.where(omitted_probs >= a, omitted_probs,
                           (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
