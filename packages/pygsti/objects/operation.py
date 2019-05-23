@@ -3502,6 +3502,16 @@ class ComposedOp(LinearOperator):
         else:
             return self.terms[order]
 
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since the taylor expansions are composed (~multiplied),
+        # the total term magnitude is just the product of those of the components.
+        return _np.product([f.get_total_term_magnitude() for f in self.factorops])
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -4161,6 +4171,17 @@ class EmbeddedOp(LinearOperator):
         else:
             return [_term.embed_term(t, sslbls, self.targetLabels)
                     for t in self.embedded_op.get_taylor_order_terms(order, False)]
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
+        # of the operator being embedded, the total term magnitude is the same:
+        return self.embedded_op.get_total_term_magnitude()
+
 
     def num_params(self):
         """
@@ -4880,6 +4901,16 @@ class ComposedErrorgen(LinearOperator):
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys is False)
         return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since composed error generators are just summed, the total term
+        # magnitude is just the sum of the components
+        return sum([eg.get_total_term_magnitude() for eg in self.factors])
 
     def num_params(self):
         """
