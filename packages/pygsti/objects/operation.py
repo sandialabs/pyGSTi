@@ -2214,6 +2214,8 @@ class LindbladOp(LinearOperator):
 
         if bTyp == "CPTP":
             nonham_mode = "all"; param_mode = "cptp"
+        elif bTyp == "H":
+            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
         elif bTyp in ("H+S", "S"):
             nonham_mode = "diagonal"; param_mode = "cptp"
         elif bTyp in ("H+s", "s"):

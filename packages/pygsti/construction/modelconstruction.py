@@ -10,12 +10,14 @@ import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import scipy.linalg as _spl
+import scipy.sparse as _sps
 import warnings as _warnings
 
 
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import compattools as _compat
+from ..tools import internalgates as _itgs
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
@@ -27,6 +29,7 @@ from ..objects.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..baseobjs import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import DirectSumBasis as _DirectSumBasis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 
 
 #############################################
@@ -833,7 +836,125 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         `availability`).  For instance, the operation label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    return _LocalNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
-                                           qubit_labels, geometry, parameterization, evotype,
-                                           sim_type, on_construction_error, independent_gates,
-                                           ensure_composed_gates, globalIdle)
+    return _LocalNoiseModel.build_standard_from_parameterization(
+        nQubits, gate_names, nonstd_gate_unitaries, availability,
+        qubit_labels, geometry, parameterization, evotype,
+        sim_type, on_construction_error, independent_gates,
+        ensure_composed_gates, globalIdle)
+
+
+def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, availability=None,
+                               qubit_labels=None, geometry="line", parameterization='auto',
+                               evotype="auto", sim_type="auto", on_construction_error='raise',
+                               independent_gates=False, ensure_composed_gates=False):
+    """
+    TODO: docstring
+    """
+    # E.g. error_rates could == {'Gx': {('H','X'): 0.1, ('S','Y'): 0.2} } # Lindblad, b/c val is dict
+    #                        or {'Gx': 0.1 } # Depolarization b/c val is a float
+    #                        or {'Gx': (0.1,0.2,0.2) } # Pauli-Stochastic b/c val is a tuple
+
+    if parameterization != "auto":
+        raise NotImplementedError(("Future versions of pyGSTi may allow you to specify a non-automatic "
+                                   "parameterization - for instance building DepolarizeOp objects "
+                                   "instead of LindbladOps for depolarization errors."))
+
+    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+    std_unitaries = _itgs.get_standard_gatename_unitaries()
+
+    if evotype == "auto":
+        evotype = "densitymx"  # FUTURE: do something more sophisticated?
+
+    def _parameterization_from_errgendict(errs):  # TODO: consolidate with same method in nqnoiseconstruction.py
+        paramtypes = []
+        if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
+        if any([nm[0] == 'S' for nm in errs]): paramtypes.append('S')
+        if any([nm[0] == 'A' for nm in errs]): paramtypes.append('A')
+        if any([nm[0] == 'S' and isinstance(nm, tuple) and len(nm) == 3 for nm in errs]):
+            # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
+            parameterization = "CPTP"
+        else:
+            parameterization = '+'.join(paramtypes)
+        return parameterization
+
+    def create_gate(name, gateMx):
+        """Create a gate object corresponding to a name with appropriate parameterization"""
+        errs = error_rates.get(name, None)
+        if errs is None:
+            return _op.StaticDenseOp(gateMx, evotype)
+
+        elif isinstance(errs, dict):
+            parameterization = _parameterization_from_errgendict(errs)
+            _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(parameterization)
+            gate_dim = gateMx.shape[0]
+            basis = _BuiltinBasis('pp', gate_dim)  # assume we're always given basis els in a Pauli basis?
+            errgen = _op.LindbladErrorgen(gate_dim, errs, basis, param_mode,
+                                          nonham_mode, truncate=False, mxBasis="pp", evotype=evotype)
+            gate = _op.LindbladOp(gateMx, errgen, sparse_expm=_sps.issparse(gateMx))
+
+            #OLD TODO REMOVE
+            #gate = _op.LindbladOp.from_operation_matrix(gateMx, gateMx, ham_basis="pp", nonham_basis="pp",
+            #                                            param_mode=param_mode, nonham_mode=nonham_mode,
+            #                                            truncate=True, mxBasis="pp", evotype=evotype)
+            #gate.set_error_rates(errs)
+
+        elif isinstance(errs, tuple):
+            #tuple should have length 4^k-1 for a k-qubit gate (with dimension 4^k)
+            assert(len(errs) + 1 == gateMx.shape[0]), \
+                "Invalid number of Pauli stochastic rates: got %d but expected %d" % (len(errs), gateMx.shape[0] - 1)
+            gate = _op.StochasticNoiseOp(len(errs) + 1, "pp", evotype, initial_rates=errs)
+
+        elif isinstance(errs, float):
+            #Make a depolarization operator:
+            gate = _op.LindbladOp.from_operation_matrix(gateMx, ham_basis=None, nonham_basis="pp",
+                                                        param_mode="depol", nonham_mode="diagonal",
+                                                        truncate=True, mxBasis="pp", evotype=evotype)
+            perPauliRate = errs / len(gate.errorgen.other_basis.labels)
+            errdict = {('S', bl): perPauliRate for bl in gate.errorgen.other_basis.labels[1:]}  # skip identity el
+            gate.set_error_rates(errdict)
+
+        else:
+            raise ValueError("Invalid `error_rates` value: %s (type %s)" % (str(errs), type(errs)))
+
+        return gate
+
+    gatedict = _collections.OrderedDict()
+    for name in gate_names:
+        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+        if evotype in ("densitymx", "svterm", "cterm"):
+            gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+        else:  # we just store the unitaries
+            raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+            #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
+            #gateMx = U
+        gatedict[name] = create_gate(name, gateMx)
+
+    if 'idle' in error_rates:
+        idleOp = create_gate('idle', _np.identity(4))  # 1-qubit idle op
+    else:
+        idleOp = None
+
+    prep_layers = {}
+    if 'prep' in error_rates:
+        assert(isinstance(error_rates['prep'], (dict, float))), "error_rates['prep'] can only be a dict or float!"
+        rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype)
+        prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, create_gate('prep', _np.identity(4)), "prep")
+        prep_factors = [prep1Q.copy() for i in range(nQubits)] if independent_gates else [prep1Q] * nQubits
+        prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+    else:
+        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * nQubits, evotype)
+
+    povm_layers = {}
+    if 'povm' in error_rates:
+        assert(isinstance(error_rates['povm'], (dict, float))), "error_rates['povm'] can only be a dict or float!"
+        Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
+        povm1Q = _povm.LindbladPOVM(create_gate('povm', _np.identity(4)), Mdefault_base1Q, "pp")
+        povm_factors = [povm1Q.copy() for i in range(nQubits)] if independent_gates else [povm1Q] * nQubits
+        povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+    else:
+        povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
+
+    return _LocalNoiseModel(nQubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
+                            geometry, evotype, sim_type, on_construction_error,
+                            independent_gates, ensure_composed_gates, global_idle=idleOp)
