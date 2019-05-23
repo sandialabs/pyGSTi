@@ -539,11 +539,19 @@ class CloudNoiseModel(_ImplicitOpModel):
         #if sim_type == "auto":
         #    if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
         #    else: sim_type = "map" if nQubits > 2 else "matrix"
-        
+
         assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
 
+        qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
+        if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
+            qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
+        else:
+            qubit_sslbls = qubit_labels
+            qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
+            #Only extract qubit labels from the first tensor-product block...
+
         lizardArgs = {'add_idle_noise': addIdleNoiseToAllGates, 'errcomp_type': errcomp_type, 'sparse_expm': sparse}
-        super(CloudNoiseModel, self).__init__(self.qubit_labels, "pp", {}, CloudNoiseLayerLizard,
+        super(CloudNoiseModel, self).__init__(qubit_sslbls, "pp", {}, CloudNoiseLayerLizard,
                                               lizardArgs, sim_type=sim_type, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
@@ -612,7 +620,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #                           [(1 + x, maxhops) for x in range(1, extraGateWeight + 1)]
         #cloud_maxhops = max([mx for wt, mx in weight_maxhops_tuples_1Q])  # max of max-hops
 
-        ssAllQ = [tuple(qubit_labels)]  # also node-names of qubitGraph ?
+        ssAllQ = qubit_sslbls  # labls should also be node-names of qubitGraph
 
         EmbeddedDenseOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
         StaticDenseOp = _get_Static_factory(sim_type, evotype)  # always a *gate*

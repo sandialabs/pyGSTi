@@ -189,7 +189,7 @@ class QubitGraph(object):
 
         # effectively maps node index -> node name
         self._nodes = tuple(qubit_labels)
-        
+
         # Mapping: node labels -> connectivity matrix index (fixed from here forward)
         self._nodeinds = _collections.OrderedDict([(lbl, i) for i, lbl in enumerate(qubit_labels)])
 

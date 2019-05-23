@@ -569,7 +569,15 @@ class LocalNoiseModel(_ImplicitOpModel):
                 sim_type = "map"  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
 
-        super(LocalNoiseModel, self).__init__(qubit_labels, basis1Q.name, {}, SimpleCompLayerLizard, {},
+        qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
+        if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
+            qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
+        else:
+            qubit_sslbls = qubit_labels
+            qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
+            #Only extract qubit labels from the first tensor-product block...
+
+        super(LocalNoiseModel, self).__init__(qubit_sslbls, basis1Q.name, {}, SimpleCompLayerLizard, {},
                                               sim_type=sim_type, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,

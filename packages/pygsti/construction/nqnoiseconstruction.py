@@ -27,6 +27,7 @@ from ..objects import operation as _op
 from ..objects import spamvec as _sv
 from ..objects import povm as _povm
 from ..objects import qubitgraph as _qgraph
+from ..objects import labeldicts as _ld
 from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
@@ -378,7 +379,14 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
     if qubit_labels is None:
         qubit_labels = tuple(range(nQubits))
-    all_sslbls = qubit_labels
+
+    qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
+    if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
+        all_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
+    else:
+        all_sslbls = qubit_labels
+        qubit_labels = [lbl for lbl in all_sslbls.labels[0] if all_sslbls.labeldims[lbl] == qubit_dim]
+        #Only extract qubit labels from the first tensor-product block...
 
     if isinstance(geometry, _qgraph.QubitGraph):
         qubitGraph = geometry
@@ -457,7 +465,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                             bel_sslbls = tuple(integerized_sslbls)
                         else:
                             bel_name = bel
-                            bel_sslbls = tuple(range(target_nQubits))
+                            bel_sslbls = target_labels
                         #REMOVE print("DB: Nm + sslbls: ",bel_name,bel_sslbls)
                             
                         if sslbls is None:
