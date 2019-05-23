@@ -360,10 +360,11 @@ def create_merge_dict(indices_to_keep, outcome_labels):
 
 
 def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle='Gi', recordZeroCnts=True):
+                   new_sectors=None, idle='Gi', recordZeroCnts=True,
+                   filtercircuits=True):
     """
-    Creates a DataSet that restricts is the restriction of `dataset`
-    to the sectors identified by `sectors_to_keep`.
+    Creates a DataSet is the restriction of `dataset`to the sectors 
+    identified by `sectors_to_keep`.
 
     More specifically, this function aggregates (sums) outcomes in `dataset`
     which differ only in sectors (usually qubits - see below)  *not* in
@@ -424,6 +425,10 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
         zero counts are ignored, except for potentially registering new
         outcome labels.
 
+    filtercircuits : bool, optional
+        Whether or not to "filter" the circuit, by removing gates that act
+        outside of the `sectors_to_keep`.
+
     Returns
     -------
     filtered_dataset : DataSet object
@@ -436,7 +441,42 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
                                                           dataset.get_outcome_labels()),
                                recordZeroCnts=recordZeroCnts)
     ds_merged = ds_merged.copy_nonstatic()
-    ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
-        s, sectors_to_keep, new_sectors, idle), aggregate=True)
+    if filtercircuits:
+        ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
+            s, sectors_to_keep, new_sectors, idle), aggregate=True)
     ds_merged.done_adding_data()
     return ds_merged
+
+
+def trim_to_constant_numtimesteps(ds):
+    """
+    Returns a new dataset that has data for the same number of time steps for
+    every circuit. This is achieved by discarding all time-series data for every
+    circuit with a time step index beyond 'min-time-step-index', where
+    'min-time-step-index' is the minimum number of time steps over circuits.
+
+    Parameters
+    ----------
+    ds : DataSet
+        The dataset to trim.
+
+    Returns
+    -------
+    DataSet
+        The trimmed dataset, obtained by potentially discarding some of the data.
+    """
+    trimmedds = ds.copy_nonstatic()
+    numtimes = []
+    for circuit in ds.keys():
+        numtimes.append(ds[circuit].get_number_of_times())
+    minnumtimes = min(numtimes)
+
+    for circuit in ds.keys():
+        times, series = ds[circuit].get_timeseries()
+        trimmedtimes = times[0:minnumtimes]
+        trimmedseries = series[0:minnumtimes]
+        trimmedds.add_series_data(circuit, trimmedseries, trimmedtimes, aux=ds.auxInfo[circuit])
+
+    trimmedds.done_adding_data()
+
+    return trimmedds
