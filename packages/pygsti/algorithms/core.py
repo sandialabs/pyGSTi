@@ -1207,6 +1207,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         firsts = _np.array(firsts, 'i')
         indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
         dprobs_omitted_rowsum = _np.empty((len(firsts), vec_gs_len), 'd')
+        printer.log("SPARSE DATA: %d of %d rows have sparse data" % (len(firsts), len(circuitsToUse)))
     else:
         firsts = None  # no omitted probs
 
@@ -2537,6 +2538,11 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
     #freqTerm[cntVecMx == 0] = 0.0
 
+    #CHECK OBJECTIVE FN
+    #max_logL_terms = _tools.logl_max_terms(mdl, dataset, dsCircuitsToUse,
+    #                                             poissonPicture, opLabelAliases, evaltree_cache)
+    #print("DIFF1 = ",abs(_np.sum(max_logL_terms) - _np.sum(freqTerm)))
+
     min_p = minProbClip
     a = radius  # parameterizes "roundness" of f == 0 terms
 
@@ -2612,6 +2618,12 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
                 v[firsts] += totalCntVec[firsts] * \
                     _np.where(omitted_probs >= a, omitted_probs,
                               (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
+
+            #CHECK OBJECTIVE FN
+            #logL_terms = _tools.logl_terms(mdl, dataset, circuitsToUse,
+            #                                     min_p, probClipInterval, a, poissonPicture, False,
+            #                                     opLabelAliases, evaltree_cache) # v = maxL - L so L + v - maxL should be 0
+            #print("DIFF2 = ",_np.sum(logL_terms), _np.sum(v), _np.sum(freqTerm), abs(_np.sum(logL_terms) + _np.sum(v)-_np.sum(freqTerm)))
 
             v = _np.sqrt(v)
             v.shape = [KM]  # reshape ensuring no copy is needed
