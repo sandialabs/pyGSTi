@@ -2014,7 +2014,7 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 
 # State-vector pruned-poly-term calcs -------------------------
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
+def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
                            current_threshold=None):
 
     #t0 = pytime.time()
@@ -2057,8 +2057,24 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
             op_foat_indices[ glmap[glbl] ] = repcel.foat_indices
         else:
             repcel = RepCacheEl()
-            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+            if glbl in opcache:
+                op = opcache[glbl]
+                db_made_op = False
+            else:
+                op = calc.sos.get_operation(glbl)
+                opcache[glbl] = op
+                db_made_op = True
+
+            hmterms, foat_indices = op.get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
+            
+            #DEBUG CHECK TERM MAGNITUDES make sense
+            #chk_tot_mag = sum([t.magnitude for t in hmterms])
+            #chk_tot_mag2 = op.get_total_term_magnitude()
+            #if chk_tot_mag > chk_tot_mag2+1e-5: # give a tolerance here
+            #    print "Warning: highmag terms for ",str(glbl),": ",len(hmterms)," have total mag = ",chk_tot_mag," but max should be ",chk_tot_mag2,"!!"
+            #else:
+            #    print "Highmag terms recomputed (OK) - made op = ", db_made_op
 
             for t in hmterms:
                 rep = (<SVTermRep?>t.torep(mpo,mpv,"gate"))
@@ -2134,7 +2150,8 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
     cdef double max_partial_sopm = calc.sos.get_prep(rholabel).get_total_term_magnitude()
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        max_partial_sopm *= calc.sos.get_operation(glbl).get_total_term_magnitude()
+        op = opcache.get(glbl, calc.sos.get_operation(glbl))
+        max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
         target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() - pathmagnitude_gap
     
@@ -2148,6 +2165,9 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices,
         numEs, calc.max_order, stateDim, <bool>fastmode, pathmagnitude_gap, min_term_mag,
         current_threshold, target_sum_of_pathmags, mpo, mpv, vpi, returnvec)
+
+    if returnvec[2]+pathmagnitude_gap+1e-5 < returnvec[3]: # index 2 = Target, index 3 = Achieved
+        print "Warning: Achieved sum(path mags) exceeds max by ", returnvec[3]-(returnvec[2]+pathmagnitude_gap),"!!!"
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ], int(returnvec[0]), returnvec[1], returnvec[2], returnvec[3]
 
@@ -2185,6 +2205,19 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     factor_lists[N+1] = &E_term_reps
     foat_indices_per_op[N+1] = &E_foat_indices
 
+    #print "CHECK: ",N+2, " op lists"
+    #running=1.0
+    #for i in range(N+1):
+    #    nTerms = deref(factor_lists[i]).size()
+    #    mags = [ deref(factor_lists[i])[j]._magnitude for j in range(nTerms) ]
+    #    running *= sum(mags)
+    #    print i,": ",nTerms,"terms: "," sum=",sum(mags)," running=",running
+    #nETerms = deref(factor_lists[N+1]).size()
+    #mags0 = [ deref(factor_lists[N+1])[j]._magnitude for j in range(nETerms) if E_indices[j] == 0]
+    #mags1 = [ deref(factor_lists[N+1])[j]._magnitude for j in range(nETerms) if E_indices[j] == 1]
+    #print "Final check E0: * ",sum(mags0)," = ",running*sum(mags0)
+    #print "Final check E1: * ",sum(mags1)," = ",running*sum(mags1)
+        
 
     cdef vector[double] achieved_sum_of_pathmags = vector[double](numEs)
     cdef vector[INT] npaths = vector[INT](numEs)
@@ -2661,6 +2694,9 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
         try_larger_threshold = 1 # True
         for i in range(nEffects):
+            #if(mags[i] > target_sum_of_pathmags[i]): #DEBUG TODO REMOVE
+            #    print "MAGS TOO LARGE!!! mags=",mags[i]," target_sum=",target_sum_of_pathmags[i]
+
             if(mags[i] < target_sum_of_pathmags[i]):
                 try_larger_threshold = 0 # False
                 break
