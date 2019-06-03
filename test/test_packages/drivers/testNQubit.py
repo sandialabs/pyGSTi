@@ -139,7 +139,7 @@ class NQubitTestCase(BaseTestCase):
         print(len(expList)," sequences")   
 
         nQubits = 2
-        maxLengths = [1,2]
+        maxLengths = [1] #,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
 
         #OLD
