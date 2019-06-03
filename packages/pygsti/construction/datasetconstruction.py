@@ -360,7 +360,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
 
 
 def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle='Gi', recordZeroCnts=True):
+                   new_sectors=None, idle=((),), recordZeroCnts=True):
     """
     Creates a DataSet that restricts is the restriction of `dataset`
     to the sectors identified by `sectors_to_keep`.
