@@ -82,7 +82,7 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
             if requireConnected:
                 nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds, wt)
             else:
-                nErrTargetLocations = _scipy.misc.comb(len(possible_err_qubit_inds), wt)  # matches actual initial stud
+                nErrTargetLocations = _scipy.special.comb(len(possible_err_qubit_inds), wt)  # matches actual initial stud
             if ZZonly and wt > 1: basisSizeWoutId = 1**wt  # ( == 1)
             else: basisSizeWoutId = 3**wt  # (X,Y,Z)^wt
             nErrParams = 2 * basisSizeWoutId  # H+S terms

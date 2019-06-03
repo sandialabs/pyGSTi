@@ -160,7 +160,8 @@ def mpl_color(plotly_color):
         return plotly_color  # hope this is a color name matplotlib understands
 
 
-def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'):
+def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp',
+                        boxLabels_fontsize=6):
     """
     Convert a pygsti (plotly) figure to a matplotlib figure.
 
@@ -173,11 +174,15 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         Output filename.  Extension determines type.  If None, then the
         matplotlib figure is returned instead of saved.
 
-    fontsize : int
+    fontsize : int, optional
         Base fontsize to use for converted figure.
 
     prec : int or {"compact","compacth"}
         Digits of precision to include in labels.
+       
+    boxLabels_fontsize : int, optional
+        The size for labels on the boxes. If 0 then no labels are
+        put on the boxes
 
     Returns
     -------
@@ -344,8 +349,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
             #print("DB ann = ", len(annotations))
             #boxLabels = bool( len(annotations) >= 1 ) #TODO: why not plt_data.size instead of 1?
-            boxLabels = True  # maybe should always be true?
-            if boxLabels:
+            #boxLabels = True  # maybe should always be true?
+            if boxLabels_fontsize > 0:
                 # Write values on colored squares
                 for y in range(plt_data.shape[0]):
                     for x in range(plt_data.shape[1]):
@@ -355,10 +360,11 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                                   horizontalalignment='center',
                                   verticalalignment='center',
                                   color=mpl_besttxtcolor(plt_data[y, x], cmap, norm),
-                                  fontsize=(fontsize - 6))
+                                  fontsize=boxLabels_fontsize)
 
             if show_colorscale:
-                _plt.colorbar(heatmap)
+                cbar = _plt.colorbar(heatmap)
+                cbar.ax.tick_params(labelsize=(fontsize-2)) 
 
         elif typ == "scatter":
             mode = get(traceDict, 'mode', 'lines')
