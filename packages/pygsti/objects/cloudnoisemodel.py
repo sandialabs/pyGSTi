@@ -857,7 +857,7 @@ def _get_Static_factory(sim_type, evotype):
             # a LindbladDenseOp with None as ham_basis and nonham_basis => no parameters
 
         return _f
-    raise ValueError("Cannot create Static gate factory for ", sim_type, parameterization)
+    raise ValueError("Cannot create Static gate factory for ", sim_type, evotype)
 
 
 def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matrix",
