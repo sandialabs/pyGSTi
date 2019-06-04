@@ -1885,10 +1885,10 @@ def lindblad_errgen_projections(errgen, ham_basis,
 
 
 def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
-                                  other_mode="all"):
+                                  other_mode="all", return_basis=True):
     """
     Converts the projections of an error generator onto basis elements into
-    the Lindblad-term and basis dictionaries used to individually specify
+    the Lindblad-term dictionary and basis used to individually specify
     Lindblad terms.
 
     Parameters
@@ -1915,10 +1915,14 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
         list of numpy arrays, or a custom basis object.
 
     other_mode : {"diagonal", "diag_affine", "all"}
-      Which non-Hamiltonian Lindblad error projections `otherProjs` includes.
-      Allowed values are: `"diagonal"` (only the diagonal Stochastic),
-      `"diag_affine"` (diagonal + affine generators), and `"all"`
-      (all generators).
+        Which non-Hamiltonian Lindblad error projections `otherProjs` includes.
+        Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+        `"diag_affine"` (diagonal + affine generators), and `"all"`
+        (all generators).
+
+    return_basis : bool, optional
+        Whether to return a :class:`Basis` containing the elements
+        corresponding to labels within the returned `Ltermdict`.
 
 
     Returns
@@ -1930,15 +1934,16 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
         label (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
         to indicate a *diagonal* term and otherwise have 2 basis labels to
         specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
-        are integers starting at 0.  Values are complex coefficients (the
-        projections).
+        are taken from `ham_basis` and `other_basis`.  Values are complex
+        coefficients (the projections).
 
-    basisdict : dict
-        A dictionary mapping the integer basis labels used in the
-        keys of `Ltermdict` to basis matrices (elements of `ham_basis` and
-        `other_basis`).
+    basis : Basis
+        A single basis containing all the basis labels used in `Ltermdict` (and 
+        *only* those elements).  Only returned when `return_basis == True`.
     """
-
+    assert(not (ham_basis is None and other_basis is None)), \
+        "At least one of `ham_basis` and `other_basis` must be non-None"
+    
     # Make None => length-0 arrays so iteration code works below (when basis is None)
     if hamProjs is None: hamProjs = _np.empty(0, 'd')
     if otherProjs is None:
@@ -1953,58 +1958,92 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     #             vals= basis matrices - can be either sparse or dense
     Ltermdict = _collections.OrderedDict()
     basisdict = _collections.OrderedDict()
-    nextLbl = 0
 
-    def get_basislbl(bmx, nxt_blbl):
-        """ Retrieves or creates a basis-element "label" (just an integer) from `basisdict` """
-        for l, b in basisdict.items():
-            if _mt.safenorm(b - bmx) < 1e-8: return l, nxt_blbl
-        basisdict[nxt_blbl] = bmx
-        nxt_blbl += 1
-        return nxt_blbl - 1, nxt_blbl  # <assigned basis lbl>, <new next-basis-label>
+    if return_basis:
+        def set_basis_el(blbl, bel):
+            """ Sets an elment of basisdict, checking for consistency """
+            if blbl in basisdict:
+                assert(_mt.safenorm(basisdict[blbl] - bel) < 1e-8), "Ambiguous basis el label %s" % blbl
+            else:
+                basisdict[blbl] = bel
+    else:
+        def set_basis_el(blbl, bel):
+            pass
 
     #Add Hamiltonian error elements
-    ham_mxs = ham_basis.elements  # can be sparse
-    assert(len(ham_mxs[1:]) == len(hamProjs))
-    for coeff, bmx in zip(hamProjs, ham_mxs[1:]):  # skip identity
-        Ltermdict[('H', nextLbl)] = coeff
-        basisdict[nextLbl] = bmx  # no need to call get_basislbl yet
-        nextLbl += 1
+    if ham_basis is not None:
+        ham_lbls = ham_basis.labels
+        ham_mxs = ham_basis.elements  # can be sparse
+        assert(len(ham_mxs[1:]) == len(hamProjs))
+        for coeff, lbl, bmx in zip(hamProjs, ham_lbls[1:], ham_mxs[1:]):  # skip identity
+            Ltermdict[('H', lbl)] = coeff
+            set_basis_el(lbl, bmx)
+    else:
+        ham_lbls = []  
 
     #Add "other" error elements
-    other_mxs = other_basis.elements  # can be sparse
-    if other_mode == "diagonal":
-        assert(len(other_mxs[1:]) == len(otherProjs))
-        for coeff, bmx in zip(otherProjs, other_mxs[1:]):  # skip identity
-            blbl, nextLbl = get_basislbl(bmx, nextLbl)
-            Ltermdict[('S', blbl)] = coeff
-
-    elif other_mode == "diag_affine":
-        assert((2, len(other_mxs[1:])) == otherProjs.shape)
-        for coeff, bmx in zip(otherProjs[0], other_mxs[1:]):  # skip identity
-            blbl, nextLbl = get_basislbl(bmx, nextLbl)
-            Ltermdict[('S', blbl)] = coeff
-        for coeff, bmx in zip(otherProjs[1], other_mxs[1:]):  # skip identity
-            blbl, nextLbl = get_basislbl(bmx, nextLbl)
-            Ltermdict[('A', blbl)] = coeff
-
+    if other_basis is not None:
+        other_lbls = other_basis.labels
+        other_mxs = other_basis.elements  # can be sparse
+        if other_mode == "diagonal":
+            assert(len(other_mxs[1:]) == len(otherProjs))
+            for coeff, lbl, bmx in zip(otherProjs, other_lbls[1:], other_mxs[1:]):  # skip identity
+                Ltermdict[('S', lbl)] = coeff
+                set_basis_el(lbl, bmx)
+    
+        elif other_mode == "diag_affine":
+            assert((2, len(other_mxs[1:])) == otherProjs.shape)
+            for coeff, lbl, bmx in zip(otherProjs[0], other_lbls[1:], other_mxs[1:]):  # skip identity
+                Ltermdict[('S', lbl)] = coeff
+                set_basis_el(lbl, bmx)
+            for coeff, lbl, bmx in zip(otherProjs[1], other_lbls[1:], other_mxs[1:]):  # skip identity
+                Ltermdict[('A', lbl)] = coeff
+                set_basis_el(lbl, bmx)
+    
+        else:
+            assert((len(other_mxs[1:]), len(other_mxs[1:])) == otherProjs.shape)
+            for i, (lbl1, bmx1) in enumerate(zip(other_lbls[1:], other_mxs[1:])):  # skip identity
+                set_basis_el(lbl1, bmx1)
+                for j, (lbl2, bmx2) in enumerate(zip(other_lbls[1:], other_mxs[1:])):  # skip identity
+                    set_basis_el(lbl2, bmx2)
+                    Ltermdict[('S', lbl1, lbl2)] = otherProjs[i, j]
     else:
-        assert((len(other_mxs[1:]), len(other_mxs[1:])) == otherProjs.shape)
-        for i, bmx1 in enumerate(other_mxs[1:]):  # skip identity
-            blbl1, nextLbl = get_basislbl(bmx1, nextLbl)
-            for j, bmx2 in enumerate(other_mxs[1:]):  # skip identity
-                blbl2, nextLbl = get_basislbl(bmx2, nextLbl)
-                Ltermdict[('S', blbl1, blbl2)] = otherProjs[i, j]
+        other_lbls = []
 
-    #DEBUG: print("DB: Ltermdict = ",Ltermdict)
-    #DEBUG: print("DB: basisdict = ")
-    #DEBUG: for k,v in basisdict.items():
-    #DEBUG:     print(k,":")
-    #DEBUG:     print(v)
-    return Ltermdict, basisdict
+    #Turn basisdict into a Basis to return
+    if return_basis:
+        if ham_basis == other_basis:
+            basis = ham_basis
+        elif ham_basis is None or set(ham_lbls).issubset(set(other_lbls)):
+            basis = other_basis
+        elif other_basis is None or set(other_lbls).issubset(set(ham_lbls)):
+            basis = ham_basis
+        else:
+            #Create an ExplictBasis using the matrices in basisdict plus the identity
+            sparse = True; real = True
+            if ham_basis is not None:
+                elshape = ham_basis.elshape
+                sparse = sparse and ham_basis.sparse
+                real = real and ham_basis.real
+            if other_basis is not None:
+                elshape = other_basis.elshape
+                sparse = sparse and other_basis.sparse
+                real = real and other_basis.real
+    
+            d = elshape[0]
+            Id = _sps.identity(d, 'complex', 'csr') / _np.sqrt(d) if sparse \
+                else _np.identity(d, 'complex') / _np.sqrt(d)
+    
+            lbls = ['I'] + list(basisdict.keys())
+            mxs = [Id] + list(basisdict.values())
+            basis = _ExplicitBasis(mxs, lbls, name=None,
+                                   real=real, sparse=sparse)
+        return Ltermdict, basis
+    else:
+        return Ltermdict
 
 
-def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="all"):
+def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
     """
     Convert a set of Lindblad terms into a dense matrix/grid of projections.
 
@@ -2024,14 +2063,11 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
         Basis labels can be strings or integers.  Values are complex
         coefficients (error rates).
 
-    basisdict : dict
-        A dictionary mapping the basis labels (strings or ints) used in the
-        keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
-        matrices).
-
-    basisdim : int
-        The dimension of the basis elements (4 for single-qubit).  Required
-        for the case when `basisdict` is empty.
+    basis : Basis, optional
+        A basis mapping the labels used in the keys of `Ltermdict` to
+        basis matrices (e.g. numpy arrays or Scipy sparse matrices).  The
+        first element of this basis should be an identity element, and
+        will be propagated to the returned `ham_basis` and `other_basis`.
 
     other_mode : {"diagonal", "diag_affine", "all"}
       Which non-Hamiltonian terms are allowed in `Ltermdict`.
@@ -2071,73 +2107,70 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
         pair of "other" basis elements (or single basis element if
         `other_mode!="all"`).
     """
-
-    d2 = basisdim
-
     #Separately enumerate the (distinct) basis elements used for Hamiltonian
-    # and Stochasitic error terms
-    hamBasisIndices = _collections.OrderedDict()  # holds index of each basis element
-    otherBasisIndices = _collections.OrderedDict()  # in coefficient/projection arrays
+    # and non-Hamiltonian error terms
+    #print("DB: lindblad term to proj: \n",Ltermdict,"\n",basis) 
+    hamBasisLabels = []
+    otherBasisLabels = []
     for termLbl, coeff in Ltermdict.items():
+        if _compat.isstr(termLbl): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
         termType = termLbl[0]
         if termType == "H":  # Hamiltonian
             assert(len(termLbl) == 2), "Hamiltonian term labels should have form ('H',<basis element label>)"
-            if termLbl[1] not in hamBasisIndices:
-                hamBasisIndices[termLbl[1]] = len(hamBasisIndices)
+            if termLbl[1] not in hamBasisLabels:
+                hamBasisLabels.append(termLbl[1])
 
         elif termType == "S":  # Stochastic
             if other_mode in ("diagonal", "diag_affine"):
                 assert(len(termLbl) == 2), "Stochastic term labels should have form ('S',<basis element label>)"
-                if termLbl[1] not in otherBasisIndices:
-                    otherBasisIndices[termLbl[1]] = len(otherBasisIndices)
+                if termLbl[1] not in otherBasisLabels:
+                    otherBasisLabels.append(termLbl[1])
             else:
                 assert(len(termLbl) == 3), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-                if termLbl[1] not in otherBasisIndices:
-                    otherBasisIndices[termLbl[1]] = len(otherBasisIndices)
-                if termLbl[2] not in otherBasisIndices:
-                    otherBasisIndices[termLbl[2]] = len(otherBasisIndices)
+                if termLbl[1] not in otherBasisLabels:
+                    otherBasisLabels.append(termLbl[1])
+                if termLbl[2] not in otherBasisLabels:
+                    otherBasisLabels.append(termLbl[2])
 
         elif termType == "A":  # Affine
             assert(other_mode == "diag_affine"), "Affine labels are only allowed in an affine mode"
             assert(len(termLbl) == 2), "Affine term labels should have form ('A',<basis element label>)"
-            if termLbl[1] not in otherBasisIndices:
-                otherBasisIndices[termLbl[1]] = len(otherBasisIndices)
+            if termLbl[1] not in otherBasisLabels:
+                otherBasisLabels.append(termLbl[1])
 
     #Construct bases
-    ham_basis_mxs = [basisdict[bl] for bl in hamBasisIndices]  # requires OrderedDict
-    other_basis_mxs = [basisdict[bl] for bl in otherBasisIndices]  # requires OrderedDict
-
-    if len(ham_basis_mxs) > 0: sparse = _sps.issparse(ham_basis_mxs[0])
-    elif len(other_basis_mxs) > 0: sparse = _sps.issparse(other_basis_mxs[0])
-    else: sparse = False
-
-    # Note: these lists of basis matrices shouldn't contain the identity, since
-    # the terms above shouldn't contain identity terms - so add identity els
+    # Note: the lists of basis matrices shouldn't contain the identity, since
+    # the terms above shouldn't contain identity terms - but `basis` should
+    # contain an identity element as it's first element, so add this identity el
     # to non-empty bases (empty bases stay empty!) to be consistent with the
     # rest of the framework (bases *have* Ids)
-    # TODO: could assert this?
-    d = int(round(_np.sqrt(d2)))
-    assert(d * d == d2), "Dimension must be a perfect square"
-    Id = _sps.identity(d, 'complex', 'csr') / _np.sqrt(d) if sparse \
-        else _np.identity(d, 'complex') / _np.sqrt(d)
-    if len(ham_basis_mxs) > 0: ham_basis_mxs = [Id] + ham_basis_mxs
-    if len(other_basis_mxs) > 0: other_basis_mxs = [Id] + other_basis_mxs
 
-    #Special check: update basis name to "pp" if we have a Pauli Basis
-    # (for small d when this isn't too expensive)
-    if d in (2, 4, 8, 16) and all([_mt.safenorm(b0 - b1) < 1e-8 for b0, b1 in
-                                   zip(_basis_matrices("pp", d2, sparse), ham_basis_mxs)]):
-        ham_name = "pp"
-    else: ham_name = None
+    sparse = basis.sparse
+    if set(hamBasisLabels) == set(basis.labels):
+        ham_basis = basis
+    else:
+        Id = basis[0]
+        ham_basis_mxs = [basis[bl] for bl in hamBasisLabels]
+        if len(ham_basis_mxs) > 0:
+            ham_basis = _ExplicitBasis([Id] + ham_basis_mxs, ['I'] + hamBasisLabels,
+                                       name=None, real=True, sparse=sparse)
+        else:
+            ham_basis = _ExplicitBasis(ham_basis_mxs, name=None, real=True, sparse=sparse)
 
-    if d in (2, 4, 8, 16) and all([_mt.safenorm(b0 - b1) < 1e-8 for b0, b1 in
-                                   zip(_basis_matrices("pp", d2, sparse), other_basis_mxs)]):
-        other_name = "pp"
-    else: other_name = None
+    if set(otherBasisLabels) == set(basis.labels):
+        other_basis = basis
+    else:
+        Id = basis[0]
+        other_basis_mxs = [basis[bl] for bl in otherBasisLabels]
+        if len(other_basis_mxs) > 0:
+            other_basis = _ExplicitBasis([Id] + other_basis_mxs, ['I'] + otherBasisLabels,
+                                         name=None, real=True, sparse=sparse)
+        else:
+            other_basis = _ExplicitBasis(other_basis_mxs, name=None, real=True, sparse=sparse)
 
-    ham_basis = _ExplicitBasis(ham_basis_mxs, name=ham_name, real=True, sparse=sparse)
-    other_basis = _ExplicitBasis(other_basis_mxs, name=other_name, real=True, sparse=sparse)
     bsH, bsO = len(ham_basis), len(other_basis)
+    #print("DB: constructed ham_basis = ",ham_basis) 
+    #print("DB: other basis = ",other_basis) 
 
     #Create projection (term coefficient) arrays - or return None if
     # the corresponding basis is empty (as per our convention)
@@ -2152,7 +2185,10 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
     else: otherProjs = None
 
     #Fill arrays
+    hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(ham_basis.labels)}      # -1 to compensate for identity as
+    otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(other_basis.labels)}  # first element (not in projections).
     for termLbl, coeff in Ltermdict.items():
+        if _compat.isstr(termLbl): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
         termType = termLbl[0]
         if termType == "H":  # Hamiltonian
             k = hamBasisIndices[termLbl[1]]  # index of coefficient in array
@@ -2173,7 +2209,7 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
             k = otherBasisIndices[termLbl[1]]  # index of coefficient in array
             otherProjs[1, k] = coeff
 
-    return hamProjs, otherProjs, ham_basis, other_basis, hamBasisIndices, otherBasisIndices
+    return hamProjs, otherProjs, ham_basis, other_basis
 
 
 def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
@@ -2406,6 +2442,8 @@ def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
             otherParams = paramvals[nHam:]
             expected_shape = (1,) if (param_mode in ("depol", "reldepol")) else (bsO - 1,)
             assert(otherParams.shape == expected_shape)
+            if param_mode in ("depol", "reldepol"):
+                otherParams = otherParams[0] * _np.ones(bsO - 1, 'd') # replicate single param bsO-1 times
 
             if param_mode in ("cptp", "depol"):
                 otherCoeffs = otherParams**2  # Analagous to L*L_dagger

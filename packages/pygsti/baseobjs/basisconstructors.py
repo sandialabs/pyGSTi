@@ -108,6 +108,17 @@ class MatrixBasisConstructor(object):
         return nElements, basisDim, elshape
 
 
+class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
+    def sizes(self, dim, sparse):
+        """ TODO: docstring - dim is dimension of vector space basis spans,
+             i.e. 4 for a basis of 2x2 matrices and 2 for a basis of length=2 vectors"""
+        nElements = 1   # the number of matrices in the basis
+        basisDim = dim  # the dimension of the vector space this basis is for
+        # (== size for a full basis, > size for a partial basis)
+        d = self.matrix_dim(dim); elshape = (d, d)
+        return nElements, basisDim, elshape
+    
+
 class VectorBasisConstructor(object):
     def __init__(self, longname, vectorgen_fn, labelgen_fn, real):
         """ TODO: docstring - note function expect *matrix* dimension as arg"""
@@ -469,6 +480,17 @@ def qt_labels(matrix_dim):
     return ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
 
 
+def identity_matrices(matrix_dim):
+    if matrix_dim == 0: return []
+    assert(isinstance(matrix_dim, _numbers.Integral))
+    d = matrix_dim
+    return [_np.identity(d, 'complex')]
+
+
+def identity_labels(dim):
+    return ['I']
+
+
 def cl_vectors(dim):
     """
     Get the elements (vectors) of the classical basis with
@@ -545,6 +567,8 @@ _basisConstructorDict['gm_unnormalized'] = MatrixBasisConstructor(
 _basisConstructorDict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
 _basisConstructorDict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
 _basisConstructorDict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
+_basisConstructorDict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
+                                                                  identity_labels, True)
 _basisConstructorDict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
 _basisConstructorDict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
 _basisConstructorDict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)

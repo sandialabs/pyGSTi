@@ -26,11 +26,14 @@ from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
+from ..tools import lindbladtools as _lbt
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
+from ..baseobjs import EmbeddedBasis as _EmbeddedBasis
+from ..baseobjs import ExplicitBasis as _ExplicitBasis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
 from . import term as _term
@@ -1926,6 +1929,257 @@ class EigenvalueParamDenseOp(DenseOperator):
         return False
 
 
+class StochasticNoiseOp(LinearOperator):
+    """
+    A stocastic noise map:
+    rho -> (1-sum(p_i))rho + sum_(i>0) p_i * B_i * rho * B_i^dagger
+    where p_i > 0 and sum(p_i) < 1, and B_i is basis where B_0 == I
+    """
+    # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
+    # and don't bother restricting their sum to be < 1?
+
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None):
+        """ TODO: docstring - note: assume the first element of `basis` is the identity"""
+        self.basis = _Basis.cast(basis, dim, sparse=False)  # sparse??
+        assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
+
+        self.stochastic_superops = []
+        for b in self.basis.elements[1:]:
+            std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
+            self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+
+        #Setup initial parameters
+        self.params = _np.zeros(self.basis.size - 1, 'd')  # note that basis.dim can be < self.dim (OK)
+        if initial_rates is not None:
+            assert(len(initial_rates) == self.basis.size - 1), \
+                "Expected %d initial rates but got %d!" % (len(initial_rates), self.basis.size - 1)
+            self.params[:] = self._rates_to_params(initial_rates)
+
+        assert(evotype in ("densitymx", "svterm", "cterm"))
+        LinearOperator.__init__(self, dim, evotype)
+
+    def _rates_to_params(self, rates):
+        return _np.sqrt(_np.array(rates))
+
+    def _params_to_rates(self, params):
+        return params**2
+
+    def _get_rate_poly_dicts(self):
+        """ Return a list of dicts, one per rate, expressing the
+            rate as a polynomial of the local parameters (tuple
+            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
+        return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        StochasticNoiseOp
+            A copy of this object.
+        """
+        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
+        return self._copy_gpindices(copyOfMe, parent)
+
+    #to_dense / to_sparse?
+    def todense(self):
+        """
+        Return this operation as a dense matrix.
+        """
+        # Create dense error superoperator from paramvec
+        errormap = _np.identity(self.dim)
+        for rate, ss in zip(self._params_to_rates(self.to_vector()), self.stochastic_superops):
+            errormap += rate * ss
+        return errormap
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        OpRep
+        """
+        if self._evotype == "densitymx":
+            return replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(), 'd'))
+        else:
+            raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
+                             (self._evotype, self.__class__.__name__))
+
+    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`Model`), not the
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
+            to retrieve.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+
+        def _compose_poly_indices(terms):
+            for term in terms:
+                term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
+                    self.gpindices, _np.array(x, _np.int64))))
+            return terms
+
+        if self._evotype == "svterm": tt = "dense"
+        elif self._evotype == "cterm": tt = "clifford"
+        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
+
+        IDENT = None  # sentinel for the do-nothing identity op
+        if order == 0:
+            polydict = {(): 1.0}
+            for pd in self._get_rate_poly_dicts():
+                polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
+            loc_terms = [_term.RankOneTerm(_Polynomial(polydict), IDENT, IDENT, tt)]
+
+        elif order == 1:
+            loc_terms = [_term.RankOneTerm(_Polynomial(pd), bel, bel, tt)
+                         for i, (pd, bel) in enumerate(zip(self._get_rate_poly_dicts(), self.basis.elements[1:]))]
+        else:
+            loc_terms = []  # only first order "taylor terms"
+
+        poly_coeffs = [t.coeff for t in loc_terms]
+        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+        else:
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+
+        local_term_poly_coeffs = coeffs_as_compact_polys
+        global_param_terms = _compose_poly_indices(loc_terms)
+
+        if return_coeff_polys:
+            return global_param_terms, local_term_poly_coeffs
+        else:
+            return global_param_terms
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
+        # (unitary postfactor has weight == 1.0 so doesn't enter)
+        rates = self._params_to_rates(self.to_vector())
+        return _np.sum(_np.abs(rates))
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.to_vector())
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.params
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        self.params[:] = v
+        self.dirty = True
+
+    #Transform functions? (for gauge opt)
+
+    def __str__(self):
+        s = "Stochastic noise gate map with dim = %d, num params = %d\n" % \
+            (self.dim, self.num_params())
+        return s
+
+
+class DepolarizeOp(StochasticNoiseOp):
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0):
+        """ TODO: docstring - note: assume the first element of `basis` is the identity"""
+        num_rates = dim - 1
+        initial_sto_rates = [initial_rate / num_rates] * num_rates
+        StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
+
+    def _rates_to_params(self, rates):
+        """Note: requires rates to all be the same"""
+        assert(all([rates[0] == r for r in rates[1:]]))
+        return _np.array([_np.sqrt(rates[0])], 'd')
+
+    def _params_to_rates(self, params):
+        return _np.array([params[0]**2] * (self.basis.size - 1), 'd')
+
+    def _get_rate_poly_dicts(self):
+        """ Return a list of dicts, one per rate, expressing the
+            rate as a polynomial of the local parameters (tuple
+            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
+        return [{(0, 0): 1.0} for i in range(self.basis.size - 1)]  # rates are all just param0 squared
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        DepolarizeOp
+            A copy of this object.
+        """
+        copyOfMe = DepolarizeOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector())[0])
+        return self._copy_gpindices(copyOfMe, parent)
+
+
 class LindbladOp(LinearOperator):
     """
     A gate parameterized by the coefficients of Lindblad-like terms, which are
@@ -1976,6 +2230,8 @@ class LindbladOp(LinearOperator):
 
         if bTyp == "CPTP":
             nonham_mode = "all"; param_mode = "cptp"
+        elif bTyp == "H":
+            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
         elif bTyp in ("H+S", "S"):
             nonham_mode = "diagonal"; param_mode = "cptp"
         elif bTyp in ("H+s", "s"):
@@ -2081,8 +2337,8 @@ class LindbladOp(LinearOperator):
 
         def beq(b1, b2):
             """ Check if bases have equal names """
-            b1 = b1.name if isinstance(b1, _Basis) else b1
-            b2 = b2.name if isinstance(b2, _Basis) else b2
+            if not isinstance(b1, _Basis):  # b1 may be a string, in which case create a Basis
+                b1 = _BuiltinBasis(b1, b2.dim, b2.sparse)  # from b2, which *will* be a Basis
             return b1 == b2
 
         def normeq(a, b):
@@ -2090,12 +2346,12 @@ class LindbladOp(LinearOperator):
             if a is None or b is None: return False
             return _mt.safenorm(a - b) < 1e-6  # what about possibility of Clifford gates?
 
-        if isinstance(gate, LindbladOp) and \
+        if lazy and isinstance(gate, LindbladOp) and \
            normeq(gate.unitary_postfactor, unitary_postfactor) and \
            isinstance(gate.errorgen, LindbladErrorgen) \
            and beq(ham_basis, gate.errorgen.ham_basis) and beq(nonham_basis, gate.errorgen.other_basis) \
            and param_mode == gate.errorgen.param_mode and nonham_mode == gate.errorgen.nonham_mode \
-           and beq(mxBasis, gate.errorgen.matrix_basis) and gate._evotype == evotype and lazy:
+           and beq(mxBasis, gate.errorgen.matrix_basis) and gate._evotype == evotype:
             return gate  # no creation necessary!
         else:
             return cls.from_operation_matrix(
@@ -2410,7 +2666,7 @@ class LindbladOp(LinearOperator):
         Return the operation as a sparse matrix.
         """
         _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
-                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
+                        "  Usually this is *NOT* acutally sparse (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self.sparse_expm:
             exp_err_gen = _spsl.expm(self.errorgen.tosparse().tocsc()).tocsr()
@@ -2590,13 +2846,20 @@ class LindbladOp(LinearOperator):
             self._prepare_for_torep()
         self.dirty = True
 
-    def get_errgen_coeffs(self):
+    def get_errgen_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this operation.  Note that these are not
-        necessarily the parameter values, as these coefficients are generally
-        functions of the parameters (so as to keep the coefficients positive,
-        for instance).
+        of this operation.  Note that these are not  necessarily the parameter
+        values, as these coefficients are generally functions of the parameters
+        (so as to keep the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        TODO docstring: logscale_nonham
 
         Returns
         -------
@@ -2608,13 +2871,94 @@ class LindbladOp(LinearOperator):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
-        return self.errorgen.get_coeffs()
+        return self.errorgen.get_coeffs(return_basis, logscale_nonham)
+
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        operation.
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_errgen_coeffs(return_basis=False, logscale_nonham=True)
+
+    def set_errgen_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in the error generator of this :class:`LindbladOp`.
+        The dictionary `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        self.errorgen.set_coeffs(Ltermdict, action, logscale_nonham)
+        if self._evotype == "densitymx":
+            self._prepare_for_torep()
+        self.dirty = True
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in the error generator of this :class:`LindbladOp`
+        so that the contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_errgen_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def set_value(self, M):
         """
@@ -4654,13 +4998,20 @@ class ComposedErrorgen(LinearOperator):
 
         LinearOperator.__init__(self, dim, evotype)
 
-    def get_coeffs(self):
+    def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this error generator.  Note that these are
-        not necessarily the parameter values, as these coefficients are
-        generally functions of the parameters (so as to keep the coefficients
-        positive, for instance).
+        of this error generator.  Note that these are not necessarily the
+        parameter values, as these coefficients are generally functions of
+        the parameters (so as to keep the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        TODO docstring: locscale_nonham
 
         Returns
         -------
@@ -4672,45 +5023,157 @@ class ComposedErrorgen(LinearOperator):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
-        Ltermdict = {}; basisdict = {}; next_available = 0
+        Ltermdict = _collections.OrderedDict()
+        basisdict = _collections.OrderedDict()
+        first_nonempty_basis = None
+        constant_basis = None  # the single same Basis used for every factor with a nonempty basis
+
         for eg in self.factors:
-            ltdict, bdict = eg.get_coeffs()
+            factor_coeffs = eg.get_coeffs(return_basis, logscale_nonham)
 
-            # see if we need to update basisdict to avoid collisions
-            # and avoid duplicating basis elements
-            final_basisLbls = {}
-            for lbl, basisEl in bdict.items():
-                for existing_lbl, existing_basisEl in basisdict.values():
-                    if _mt.safenorm(basisEl - existing_basisEl) < 1e-6:
-                        final_basisLbls[lbl] = existing_lbl
-                        break
-                else:  # no existing basis element found - need a new element
-                    if lbl in basisdict:  # then can't keep current label
-                        final_basisLbls[lbl] = next_available
-                        next_available += 1
+            if return_basis:
+                ltdict, factor_basis = factor_coeffs
+                if len(factor_basis) > 0:
+                    if first_nonempty_basis is None:
+                        first_nonempty_basis = factor_basis
+                        constant_basis = factor_basis  # seed constant_basis
+                    elif factor_basis != constant_basis:
+                        constant_basis = None  # factors have different bases - no constant_basis!
+
+                # see if we need to update basisdict and ensure we do so in a consistent
+                # way - if factors use the same basis labels these must refer to the same
+                # basis elements.
+                #FUTURE: maybe a way to do this without always accessing basis *elements*?
+                #  (maybe do a pass to check for a constant_basis without any .elements refs?)
+                for lbl, basisEl in zip(factor_basis.labels, factor_basis.elements):
+                    if lbl in basisdict:
+                        assert(_mt.safenorm(basisEl - basisdict[lbl]) < 1e-6), "Ambiguous basis label %s" % lbl
                     else:
-                        #fine to keep lbl since it's unused
-                        final_basisLbls[lbl] = lbl
-                        if isinstance(lbl, int):
-                            next_available = max(next_available, lbl + 1)
+                        basisdict[lbl] = basisEl
+            else:
+                ltdict = factor_coeffs
 
-                    #Add new basis element
-                    basisdict[final_basisLbls[lbl]] = basisEl
-
-            for key, coeff in ltdict:
-                new_key = tuple([key[0]] + [final_basisLbls[l] for l in key[1:]])
-                if new_key in Ltermdict:
-                    Ltermdict[new_key] += coeff
+            for key, coeff in ltdict.items():
+                if key in Ltermdict:
+                    Ltermdict[key] += coeff
                 else:
-                    Ltermdict[new_key] = coeff
+                    Ltermdict[key] = coeff
 
-        return Ltermdict, basisdict
+        if return_basis:
+            #Use constant_basis or turn basisdict into a Basis to return
+            if constant_basis is not None:
+                basis = constant_basis
+            elif first_nonempty_basis is not None:
+                #Create an ExplictBasis using the matrices in basisdict plus the identity
+                lbls = ['I'] + list(basisdict.keys())
+                mxs = [first_nonempty_basis[0]] + list(basisdict.values())
+                basis = _ExplicitBasis(mxs, lbls, name=None,
+                                       real=first_nonempty_basis.real,
+                                       sparse=first_nonempty_basis.sparse)
+            return Ltermdict, basis
+        else:
+            return Ltermdict
+
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        error generator (pertaining to the *channel* formed by
+        exponentiating this object).
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+
+    def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in this error generator.  The dictionary
+        `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        factor_coeffs_list = [eg.get_coeffs(False, logscale_nonham) for eg in self.factors]
+        perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
+        unused_Lterm_keys = set(Ltermdict.keys())
+
+        #Divide Ltermdict in per-factor Ltermdicts
+        for k, val in Ltermdict.items():
+            for d, coeffs in zip(perfactor_Ltermdicts, factor_coeffs_list):
+                if k in coeffs:
+                    d[k] = val; unused_Lterm_keys.remove(k)
+                    break  # only apply a given Ltermdict entry once, even if it can be applied to multiple factors
+
+        if len(unused_Lterm_keys) > 0:
+            raise KeyError("Invalid L-term descriptor key(s): %s" % str(unused_Lterm_keys))
+
+        #Set the L-term coefficients of each factor separately
+        for d, eg in zip(perfactor_Ltermdicts, self.factors):
+            eg.set_coeffs(d, action, logscale_nonham)
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in this error generator so that the
+        contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5125,6 +5588,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         #else:
         #    self.err_gen_mx = None
 
+    #TODO REMOVE (UNUSED)
     #def _construct_errgen_matrix(self):
     #    #Always construct a sparse errgen matrix, so just use
     #    # base class's .tosparse() (which calls embedded errorgen's
@@ -5132,12 +5596,13 @@ class EmbeddedErrorgen(EmbeddedOp):
     #    # error generator, but this is fine).
     #    self.err_gen_mx = self.tosparse()
 
-    def _embed_basis_mx(self, mx):
-        """ Take a dense or sparse basis matrix and embed it. """
-        mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
-            else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
-        return EmbeddedOp(self.state_space_labels, self.targetLabels,
-                          mxAsGate).tosparse()  # always convert to *sparse* basis els
+    #TODO REMOVE (UNUSED)
+    #def _embed_basis_mx(self, mx):
+    #    """ Take a dense or sparse basis matrix and embed it. """
+    #    mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
+    #        else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
+    #    return EmbeddedOp(self.state_space_labels, self.targetLabels,
+    #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 
     def from_vector(self, v):
         """
@@ -5156,13 +5621,20 @@ class EmbeddedErrorgen(EmbeddedOp):
         EmbeddedOp.from_vector(self, v)
         self.dirty = True
 
-    def get_coeffs(self):
+    def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this operation.  Note that these are
-        not necessarily the parameter values, as these coefficients are
-        generally functions of the parameters (so as to keep the coefficients
-        positive, for instance).
+        of this operation.  Note that these are not necessarily the parameter
+        values, as these coefficients are generally functions of the parameters
+        (so as to keep the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        TODO docstring: locscale_nonham
 
         Returns
         -------
@@ -5174,20 +5646,116 @@ class EmbeddedErrorgen(EmbeddedOp):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
-        Ltermdict, basisdict = self.embedded_op.get_coeffs()
+        embedded_coeffs = self.embedded_op.get_coeffs(return_basis, logscale_nonham)
+        embedded_Ltermdict = _collections.OrderedDict()
 
-        #go through basis and embed basis matrices
-        new_basisdict = {}
-        for lbl, basisEl in basisdict.items():
-            new_basisdict[lbl] = self._embed_basis_mx(basisEl)
+        if return_basis:
+            # embed basis
+            Ltermdict, basis = embedded_coeffs
+            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.targetLabels)
+            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
 
-        return Ltermdict, new_basisdict
+            #go through and embed Ltermdict labels
+            for k, val in Ltermdict.items():
+                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
+                embedded_Ltermdict[embedded_key] = val
+            return embedded_Ltermdict, embedded_basis
+        else:
+            #go through and embed Ltermdict labels
+            Ltermdict = embedded_coeffs
+            for k, val in Ltermdict.items():
+                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
+                embedded_Ltermdict[embedded_key] = val
+            return embedded_Ltermdict
+
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        error generator (pertaining to the *channel* formed by
+        exponentiating this object).
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+
+    def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in this error generator.  The dictionary
+        `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        unembedded_Ltermdict = _collections.OrderedDict()
+        for k, val in Ltermdict.items():
+            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
+            unembedded_Ltermdict[unembedded_key] = val
+        self.embedded_op.set_coeffs(unembedded_Ltermdict, action, logscale_nonham)
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in this error generator so that the
+        contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5340,15 +5908,15 @@ class LindbladErrorgen(LinearOperator):
                 errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
                 return_generators=False, other_mode=nonham_mode, sparse=sparse)
 
-        # coeffs + bases => Ltermdict, basisdict
-        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
+        # coeffs + bases => Ltermdict, basis
+        Ltermdict, basis = _gt.projections_to_lindblad_terms(
             hamC, otherC, ham_basis, nonham_basis, nonham_mode)
 
-        return cls(d2, Ltermdict, basisdict,
+        return cls(d2, Ltermdict, basis,
                    param_mode, nonham_mode, truncate,
                    matrix_basis, evotype)
 
-    def __init__(self, dim, Ltermdict, basisdict=None,
+    def __init__(self, dim, Ltermdict, basis=None,
                  param_mode="cptp", nonham_mode="all", truncate=True,
                  mxBasis="pp", evotype="densitymx"):
         """
@@ -5374,12 +5942,11 @@ class LindbladErrorgen(LinearOperator):
             only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
             Stochastic term tuples can include 2 basis labels to specify
             "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
-            strings or integers.  Values are complex coefficients (error rates).
+            strings or integers.  Values are complex coefficients.
 
-        basisdict : dict, optional
-            A dictionary mapping the basis labels (strings or ints) used in the
-            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
-            matrices).
+        basis : Basis, optional
+            A basis mapping the labels used in the keys of `Ltermdict` to
+            basis matrices (e.g. numpy arrays or Scipy sparse matrices).
 
         param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
             Describes how the Lindblad coefficients/projections relate to the
@@ -5430,11 +5997,11 @@ class LindbladErrorgen(LinearOperator):
         self.nonham_mode = nonham_mode
         self.param_mode = param_mode
 
-        # Ltermdict, basisdict => bases + parameter values
+        # Ltermdict, basis => bases + parameter values
         # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
         # since the latter is what set_errgen needs
-        hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
-            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d2, self.nonham_mode)
+        hamC, otherC, self.ham_basis, self.other_basis = \
+            _gt.lindblad_terms_to_projections(Ltermdict, basis, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -5495,8 +6062,7 @@ class LindbladErrorgen(LinearOperator):
             #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
 
-            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basisdict, hamBInds,
-                                                              otherBInds, termtype)
+            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, termtype)
             # Unused
             self.hamGens = self.other = self.Lmx = None
             self.err_gen_mx = None
@@ -5609,14 +6175,22 @@ class LindbladErrorgen(LinearOperator):
         assert(bsO == self.other_basis_size)
         return hamGens, otherGens
 
-    def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
+    def _init_terms(self, Ltermdict, basis, termtype):
 
         d2 = self.dim
+
+        # Lookup dictionaries for getting the *parameter* index associated
+        # with a particlar basis label.  The -1 to compensates for the fact
+        # that the identity element is the first element of each non-empty basis
+        # and this does not have a correponding parameter/projection.
+        hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.ham_basis.labels)}
+        otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.other_basis.labels)}
+
         tt = termtype  # shorthand - used to construct RankOneTerm objects below,
-        # as we expect `basisdict` will contain *dense* basis
+        # as we expect `basis` will contain *dense* basis
         # matrices (maybe change in FUTURE?)
-        numHamParams = len(hamBasisLabels)
-        numOtherBasisEls = len(otherBasisLabels)
+        numHamParams = len(hamBasisIndices) - 1  # compensate for first basis el
+        numOtherBasisEls = len(otherBasisIndices) - 1  # being the identity.
 
         # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
         # coeffs (w/ *local* variable indices) that get converted to per-order
@@ -5626,18 +6200,18 @@ class LindbladErrorgen(LinearOperator):
         for termLbl in Ltermdict:
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
-                k = hamBasisLabels[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basisdict[termLbl[1]], IDENT, tt))
+                k = hamBasisIndices[termLbl[1]]  # index of parameter
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basis[termLbl[1]], IDENT, tt))
                 Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}),
-                                                IDENT, basisdict[termLbl[1]].conjugate().T, tt))
+                                                IDENT, basis[termLbl[1]].conjugate().T, tt))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
                     if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
                         k = numHamParams + 0  # index of parameter
                     else:
-                        k = numHamParams + otherBasisLabels[termLbl[1]]  # index of parameter
-                    Lm = Ln = basisdict[termLbl[1]]
+                        k = numHamParams + otherBasisIndices[termLbl[1]]  # index of parameter
+                    Lm = Ln = basis[termLbl[1]]
                     # power to raise parameter to in order to get coeff
                     pw = 2 if self.param_mode in ("cptp", "depol") else 1
 
@@ -5649,9 +6223,9 @@ class LindbladErrorgen(LinearOperator):
                     Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), _np.dot(Lm_dag, Ln), IDENT, tt))
 
                 else:
-                    i = otherBasisLabels[termLbl[1]]  # index of row in "other" coefficient matrix
-                    j = otherBasisLabels[termLbl[2]]  # index of col in "other" coefficient matrix
-                    Lm, Ln = basisdict[termLbl[1]], basisdict[termLbl[2]]
+                    i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
+                    j = otherBasisIndices[termLbl[2]]  # index of col in "other" coefficient matrix
+                    Lm, Ln = basis[termLbl[1]], basis[termLbl[2]]
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
@@ -5688,15 +6262,15 @@ class LindbladErrorgen(LinearOperator):
             elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
                 if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
-                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]]  # index of parameter
+                    k = numHamParams + 1 + otherBasisIndices[termLbl[1]]  # index of parameter
                 else:
-                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]]  # index of parameter
+                    k = numHamParams + numOtherBasisEls + otherBasisIndices[termLbl[1]]  # index of parameter
 
-                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * sum{ P_i rho P_i } where Pi's
+                # rho -> basis[termLbl[1]] * I = basis[termLbl[1]] * sum{ P_i rho P_i } where Pi's
                 #  are the normalized paulis (including the identity), and rho has trace == 1
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-                L = basisdict[termLbl[1]]
+                L = basis[termLbl[1]]
                 # Note: only works when `d` corresponds to integral # of qubits!
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
 
@@ -5952,13 +6526,20 @@ class LindbladErrorgen(LinearOperator):
             self._construct_errgen_matrix()
         self.dirty = True
 
-    def get_coeffs(self):
+    def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients
-        (i.e. the "error rates") of this error generator.  Note that these are
-        not necessarily the parameter values, as these coefficients are
-        generally functions of the parameters (so as to keep the coefficients
-        positive, for instance).
+        of this error generator.  Note that these are not necessarily the
+        parameter values, as these coefficients are generally functions of
+        the parameters (so as to keep the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        TODO docstring: locscale_nonham
 
         Returns
         -------
@@ -5970,19 +6551,134 @@ class LindbladErrorgen(LinearOperator):
             have 1 basis label to indicate a *diagonal* term and otherwise have
             2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
             terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients (error rates).
+            coefficients.
 
-        basisdict : dict
-            A dictionary mapping the integer basis labels used in the
-            keys of `Ltermdict` to basis matrices..
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `Ltermdict` to basis matrices.
         """
         hamC, otherC = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
 
-        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode)
-        return Ltermdict, basisdict
+        Ltermdict_and_maybe_basis = _gt.projections_to_lindblad_terms(
+            hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode, return_basis)
+
+        if logscale_nonham:
+            Ltermdict = Ltermdict_and_maybe_basis if return_basis else Ltermdict_and_maybe_basis
+            d2 = self.dim
+            for k in Ltermdict.keys():
+                if k[0] == "S":  # reverse mapping: err_coeff -> err_rate
+                    Ltermdict[k] = (1 - _np.exp(-d2 * Ltermdict[k])) / d2  # err_rate = (1-exp(-d^2*errgen_coeff))/d^2
+
+        return Ltermdict_and_maybe_basis
+
+    def get_error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this
+        error generator (pertaining to the *channel* formed by
+        exponentiating this object).
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+
+    def set_coeffs(self, Ltermdict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in this error generator.  The dictionary
+        `Ltermdict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        TODO: docstring
+        """
+        existing_Ltermdict, basis = self.get_coeffs(return_basis=True, logscale_nonham=False)
+
+        if action == "reset":
+            for k in existing_Ltermdict:
+                existing_Ltermdict[k] = 0.0
+
+        for k, v in Ltermdict.items():
+            if logscale_nonham and k[0] == "S":
+                # treat the value being set in Ltermdict as the *channel* stochastic error rate, and
+                # set the errgen coefficient to the value that would, in a depolarizing channel, give
+                # that per-Pauli (or basis-el general?) stochastic error rate. See lindbladtools.py also.
+                # errgen_coeff = -log(1-d^2*err_rate) / d^2
+                d2 = self.dim
+                v = -_np.log(1 - d2 * v) / d2
+
+            if k not in existing_Ltermdict:
+                raise KeyError("Invalid L-term descriptor (key) `%s`" % str(k))
+            elif action == "update" or action == "reset":
+                existing_Ltermdict[k] = v
+            elif action == "add":
+                existing_Ltermdict[k] += v
+            else:
+                raise ValueError('Invalid `action` argument: must be one of "update", "add", or "reset"')
+
+        hamC, otherC, _, _ = \
+            _gt.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
+        pvec = _gt.lindblad_projections_to_paramvals(
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate=False)  # shouldn't need to truncate
+        self.from_vector(pvec)
+
+    def set_error_rates(self, Ltermdict, action="update"):
+        """
+        Sets the coeffcients of terms in this error generator so that the
+        contributions of the resulting channel's error rate are given by
+        the values in `Ltermdict`.  See :method:`get_error_rates` for more details.
+
+        Parameters
+        ----------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_coeffs(Ltermdict, action, logscale_nonham=True)
 
     def transform(self, S):
         """

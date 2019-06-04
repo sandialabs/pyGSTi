@@ -24,12 +24,13 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pc.build_standard_cloudnoise_model(nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability,
-                                              None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
-                                              extraWeight1Hops, extraGateWeight, sparse,
-                                              roughNoise, sim_type, parameterization,
-                                              spamtype, addIdleNoiseToAllGates,
-                                              errcomp_type, True, return_clouds, verbosity)
+    return pc.build_standard_cloudnoise_model_from_hops_and_weights(
+        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability,
+        None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+        extraWeight1Hops, extraGateWeight, sparse,
+        roughNoise, sim_type, parameterization,
+        spamtype, addIdleNoiseToAllGates,
+        errcomp_type, True, return_clouds, verbosity)
 
 
 class NQubitTestCase(BaseTestCase):
