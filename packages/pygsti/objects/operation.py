@@ -2321,8 +2321,8 @@ class LindbladOp(LinearOperator):
 
         def beq(b1, b2):
             """ Check if bases have equal names """
-            b1 = b1.name if isinstance(b1, _Basis) else b1
-            b2 = b2.name if isinstance(b2, _Basis) else b2
+            if not isinstance(b1, _Basis):  # b1 may be a string, in which case create a Basis
+                b1 = _BuiltinBasis(b1, b2.dim, b2.sparse)  # from b2, which *will* be a Basis
             return b1 == b2
 
         def normeq(a, b):
@@ -2330,12 +2330,12 @@ class LindbladOp(LinearOperator):
             if a is None or b is None: return False
             return _mt.safenorm(a - b) < 1e-6  # what about possibility of Clifford gates?
 
-        if isinstance(gate, LindbladOp) and \
+        if lazy and isinstance(gate, LindbladOp) and \
            normeq(gate.unitary_postfactor, unitary_postfactor) and \
            isinstance(gate.errorgen, LindbladErrorgen) \
            and beq(ham_basis, gate.errorgen.ham_basis) and beq(nonham_basis, gate.errorgen.other_basis) \
            and param_mode == gate.errorgen.param_mode and nonham_mode == gate.errorgen.nonham_mode \
-           and beq(mxBasis, gate.errorgen.matrix_basis) and gate._evotype == evotype and lazy:
+           and beq(mxBasis, gate.errorgen.matrix_basis) and gate._evotype == evotype:
             return gate  # no creation necessary!
         else:
             return cls.from_operation_matrix(

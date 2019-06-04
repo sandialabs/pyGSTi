@@ -287,7 +287,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                 _warnings.warn(("`spamtype == 'static'` ignores the supplied "
                                 "`maxSpamWeight=%d > 0`") % maxSpamWeight)
             prep_layers = [_sv.ComputationalSPAMVec([0] * nQubits, evotype)]
-            povm_layers = [_povm.ComputationalBasisPOVM(nQubits, evotype)]
+            povm_layers = {'Mdefault': _povm.ComputationalBasisPOVM(nQubits, evotype)}
 
         elif spamtype == "tensorproduct":
 
@@ -315,7 +315,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                         ('1', _sv.StaticSPAMVec(v1))])), povmtyp, basis1Q))
 
             prep_layers = [_sv.TensorProdSPAMVec('prep', prep_factors)]
-            povm_layers = [_povm.TensorProdPOVM(povm_factors)]
+            povm_layers = {'Mdefault': _povm.TensorProdPOVM(povm_factors)}
 
         elif spamtype == "lindblad":
 
@@ -326,7 +326,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
             povmNoiseMap = _build_nqn_global_noise(
                 qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
-            povm_layers = [_povm.LindbladPOVM(povmNoiseMap, None, "pp")]
+            povm_layers = {'Mdefault': _povm.LindbladPOVM(povmNoiseMap, None, "pp")}
 
         else:
             raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
@@ -700,14 +700,14 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         if povm_layers is None:
             pass  # no povms
+        elif isinstance(povm_layers, _povm.POVM):  # just a single povm - must precede 'dict' test!
+            self.povm_blks['layers'][_Lbl('Mdefault')] = povm_layers
         elif isinstance(povm_layers, dict):
-            for rhoname, layerop in povm_layers.items():
-                self.povm_blks['layers'][_Lbl(rhoname)] = layerop
-        elif isinstance(povm_layers, _op.LinearOperator): # just a single layer op
-            self.povm_blks['layers'][_Lbl('rho0')] = povm_layers
+            for povmname, layerop in povm_layers.items():
+                self.povm_blks['layers'][_Lbl(povmname)] = layerop
         else: # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
             for i, layerop in enumerate(povm_layers):
-                self.povm_blks['layers'][_Lbl("rho%d" % i)] = layerop
+                self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
         #REMOVE
         #if spamtype == "static" or maxSpamWeight == 0:

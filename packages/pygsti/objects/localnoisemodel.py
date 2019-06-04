@@ -408,9 +408,9 @@ class LocalNoiseModel(_ImplicitOpModel):
                 else:
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
 
-        cls(nQubits, gatedict, prep_layers, povm_layers, availability,
-            qubit_labels, geometry, evotype, sim_type, on_construction_error,
-            independent_gates, ensure_composed_gates, global_idle)
+        return cls(nQubits, gatedict, prep_layers, povm_layers, availability,
+                   qubit_labels, geometry, evotype, sim_type, on_construction_error,
+                   independent_gates, ensure_composed_gates, global_idle)
 
     def __init__(self, nQubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
                  qubit_labels=None, geometry="line", evotype="densitymx",
@@ -602,14 +602,14 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         if povm_layers is None:
             pass  # no povms
+        elif isinstance(povm_layers, _povm.POVM):  # just a single povm - must precede 'dict' test!
+            self.povm_blks['layers'][_Lbl('Mdefault')] = povm_layers
         elif isinstance(povm_layers, dict):
-            for rhoname, layerop in povm_layers.items():
-                self.povm_blks['layers'][_Lbl(rhoname)] = layerop
-        elif isinstance(povm_layers, _op.LinearOperator): # just a single layer op
-            self.povm_blks['layers'][_Lbl('rho0')] = povm_layers
+            for povmname, layerop in povm_layers.items():
+                self.povm_blks['layers'][_Lbl(povmname)] = layerop
         else: # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
             for i, layerop in enumerate(povm_layers):
-                self.povm_blks['layers'][_Lbl("rho%d" % i)] = layerop
+                self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
         Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
         primitive_ops = []
