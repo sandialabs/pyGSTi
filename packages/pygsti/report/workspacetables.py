@@ -1139,16 +1139,14 @@ class NQubitErrgenTable(WorkspaceTable):
                 if not params.issubset(displayed_params):
                     displayed_params.update(params)
 
-                    Ldict, basisDict = gate.get_errgen_coeffs()
-                    if len(basisDict) > 0:
-                        sparse = _sps.issparse(list(basisDict.values())[0])
-                    else: sparse = False
+                    Ldict, basis = gate.get_errgen_coeffs(return_basis=True)
+                    sparse = basis.sparse
 
                     #Try to find good labels for these basis elements
                     # (so far, just try to match with "pp" basis els)
                     ref_basis = _objs.BuiltinBasis("pp", gate.dim, sparse=sparse)
                     basisLbls = {}
-                    for bl1, mx in basisDict.items():
+                    for bl1, mx in zip(basis.labels, basis.elements):
                         for bl2, mx2 in zip(ref_basis.labels, ref_basis.elements):
                             if (sparse and _tools.sparse_equal(mx, mx2)) or (not sparse and _np.allclose(mx, mx2)):
                                 basisLbls[bl1] = bl2; break

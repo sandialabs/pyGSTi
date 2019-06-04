@@ -243,23 +243,24 @@ class ProcessorSpec(object):
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto', 'map')), "Clifford model must use 'map' simulation type"
-            model = _LocalNoiseModel.build_standard(self.number_of_qubits,
-                                                    self.root_gate_names,
-                                                    self.nonstd_gate_unitaries,
-                                                    self.availability,
-                                                    self.qubit_labels,
-                                                    parameterization='clifford',
-                                                    sim_type=sim_type,
-                                                    on_construction_error='warn',  # *drop* gates that aren't cliffords
-                                                    independent_gates=False,
-                                                    ensure_composed_gates=False)  # change these? add `geometry`?
+            model = _LocalNoiseModel.build_standard_from_parameterization(
+                self.number_of_qubits,
+                self.root_gate_names,
+                self.nonstd_gate_unitaries,
+                self.availability,
+                self.qubit_labels,
+                parameterization='clifford',
+                sim_type=sim_type,
+                on_construction_error='warn',  # *drop* gates that aren't cliffords
+                independent_gates=False,
+                ensure_composed_gates=False)  # change these? add `geometry`?
 
         elif model_name in ('target', 'Target', 'static', 'TP', 'full'):
             param = model_name if (parameterization == 'auto') \
                 else parameterization
             if param in ('target', 'Target'): param = 'static'  # special case for 'target' model
 
-            model = _LocalNoiseModel.build_standard(
+            model = _LocalNoiseModel.build_standard_from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, self.availability,
                 self.qubit_labels, parameterization=param, sim_type=sim_type,
@@ -269,7 +270,7 @@ class ProcessorSpec(object):
             if parameterization == 'auto':
                 raise ValueError(
                     "Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
-            model = _LocalNoiseModel.build_standard(
+            model = _LocalNoiseModel.build_standard_from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, self.availability,
                 self.qubit_labels, parameterization=parameterization, sim_type=sim_type,

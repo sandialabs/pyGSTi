@@ -21,14 +21,21 @@ from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from ..tools import internalgates as _itgs
 from ..tools import mpitools as _mpit
+from ..tools import compattools as _compat
 from ..objects import model as _mdl
 from ..objects import operation as _op
+from ..objects import spamvec as _sv
+from ..objects import povm as _povm
+from ..objects import qubitgraph as _qgraph
+from ..objects import labeldicts as _ld
 from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl
+from ..baseobjs import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
 from .modelconstruction import basis_build_vector as _basis_build_vector
@@ -47,7 +54,7 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
 
     Parameters
     ----------
-    Subset of those of :function:`build_standard_cloudnoise_model`.
+    Subset of those of :function:`build_standard_cloudnoise_model_from_hops_and_weights`.
 
     Returns
     -------
@@ -128,14 +135,15 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
     return nParams, sum(nParams.values())
 
 
-def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
-                                    qubit_labels=None, geometry="line",
-                                    maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                    extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                                    roughNoise=None, sim_type="auto", parameterization="H+S",
-                                    spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                    errcomp_type="gates", independent_clouds=True,
-                                    return_clouds=False, verbosity=0):  # , debug=False):
+def build_standard_cloudnoise_model_from_hops_and_weights(
+        nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
+        qubit_labels=None, geometry="line",
+        maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+        extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+        roughNoise=None, sim_type="auto", parameterization="H+S",
+        spamtype="lindblad", addIdleNoiseToAllGates=True,
+        errcomp_type="gates", independent_clouds=True,
+        return_clouds=False, verbosity=0):  # , debug=False):
     """
     Create a "standard" n-qubit model using a low-weight and geometrically local
     error model with a common "global idle" operation.
@@ -312,13 +320,14 @@ def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
     -------
     Model
     """
-    mdl = _CloudNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
-                                          qubit_labels, geometry,
-                                          maxIdleWeight, maxSpamWeight, maxhops,
-                                          extraWeight1Hops, extraGateWeight, sparse,
-                                          sim_type, parameterization, spamtype,
-                                          addIdleNoiseToAllGates, errcomp_type,
-                                          independent_clouds, verbosity)
+    mdl = _CloudNoiseModel.build_standard_from_hops_and_weights(
+        nQubits, gate_names, nonstd_gate_unitaries, availability,
+        qubit_labels, geometry,
+        maxIdleWeight, maxSpamWeight, maxhops,
+        extraWeight1Hops, extraGateWeight, sparse,
+        sim_type, parameterization, spamtype,
+        addIdleNoiseToAllGates, errcomp_type,
+        independent_clouds, verbosity)
 
     #Insert noise on everything using roughNoise (really shouldn't be used!)
     if roughNoise is not None:
@@ -339,6 +348,281 @@ def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         return mdl, mdl.get_clouds()
     else:
         return mdl
+
+
+def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, availability=None,
+                                qubit_labels=None, geometry="line", parameterization='auto',
+                                evotype="auto", sim_type="auto", on_construction_error='raise',
+                                independent_gates=False, ensure_composed_gates=False, sparse=True,
+                                errcomp_type="errorgens", addIdleNoiseToAllGates=True, verbosity=0):
+    """
+    TODO: docstring
+    """
+    # E.g. error_rates could == {'Gx': {('H','X'): 0.1, ('S','Y'): 0.2} } # Lindblad, b/c val is dict
+    #                        or {'Gx': 0.1 } # Depolarization b/c val is a float
+    #                        or {'Gx': (0.1,0.2,0.2) } # Pauli-Stochastic b/c val is a tuple
+    # (same as those of a crosstalk-free model) PLUS additional ones which specify which
+    # qubits the error operates (not necessarily the target qubits of the gate in question)
+    # for example: { 'Gx:Q0': { ('H','X:Q1'): 0.01, ('S','XX:Q0,Q1'): 0.01} }
+
+    #NOTE: to have "independent_gates=False" and specify error rates for "Gx" vs "Gx:Q0", we
+    # need to have some ability to stencil a gate's cloud based on different target-qubits in
+    # the qubit graph.
+    printer = _VerbosityPrinter.build_printer(verbosity)
+
+    if parameterization != "auto":
+        raise NotImplementedError(("Future versions of pyGSTi may allow you to specify a non-automatic "
+                                   "parameterization - for instance building DepolarizeOp objects "
+                                   "instead of LindbladOps for depolarization errors."))
+
+    if evotype == "auto":
+        evotype = "densitymx"  # FUTURE: do something more sophisticated?
+
+    if qubit_labels is None:
+        qubit_labels = tuple(range(nQubits))
+
+    qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
+    if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
+        all_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
+    else:
+        all_sslbls = qubit_labels
+        qubit_labels = [lbl for lbl in all_sslbls.labels[0] if all_sslbls.labeldims[lbl] == qubit_dim]
+        #Only extract qubit labels from the first tensor-product block...
+
+    if isinstance(geometry, _qgraph.QubitGraph):
+        qubitGraph = geometry
+    else:
+        qubitGraph = _qgraph.QubitGraph.common_graph(nQubits, geometry, directed=True,
+                                                     qubit_labels=qubit_labels, all_directions=True)
+        printer.log("Created qubit graph:\n" + str(qubitGraph))
+
+    nQubit_dim = 2**nQubits if evotype in ('statevec', 'stabilizer') else 4**nQubits
+
+    orig_error_rates = error_rates.copy()
+    cparser = _CircuitParser()
+    cparser.lookup = None  # lookup - functionality removed as it wasn't used
+    for k, v in orig_error_rates.items():
+        if _compat.isstr(k) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
+            lbls, _ = cparser.parse(k)
+            assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
+            assert(all([sslbl in qubitGraph.get_node_names() for sslbl in lbls[0].sslbls])), \
+                "One or more invalid qubit names in: %s" % k
+            del error_rates[k]
+            error_rates[lbls[0]] = v
+        elif isinstance(k, _Lbl):
+            if k.sslbls is not None:
+                assert(all([sslbl in qubitGraph.get_node_names() for sslbl in k.sslbls])), \
+                    "One or more invalid qubit names in the label: %s" % str(k)
+
+    def _parameterization_from_errgendict(errs):
+        paramtypes = []
+        if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
+        if any([nm[0] == 'S' for nm in errs]): paramtypes.append('S')
+        if any([nm[0] == 'A' for nm in errs]): paramtypes.append('A')
+        if any([nm[0] == 'S' and isinstance(nm, tuple) and len(nm) == 3 for nm in errs]):
+            # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
+            parameterization = "CPTP"
+        else:
+            parameterization = '+'.join(paramtypes)
+        return parameterization
+
+    def _map_stencil_sslbls(stencil_sslbls, target_lbls): # deals with graph directions
+        ret = [qubitGraph.resolve_relative_nodelabel(s, target_lbls) for s in stencil_sslbls]
+        if any([x is None for x in ret]): return None  # signals there is a non-present dirs, e.g. end of chain
+        return ret
+
+    def create_error(target_labels, errs=None, stencil=None, return_what="auto"):  # err = an error rates dict
+        """TODO: docstring """
+        target_nQubits = len(target_labels)
+        
+        if return_what == "auto": # then just base return type on errcomp_type
+            return_what == "errgen" if errcomp_type == "errorgens" else "errmap"
+
+        assert(stencil is None or errs is None), "Cannot specify both `errs` and `stencil`!"
+        
+        if errs is None:
+            if stencil is None:
+                if return_what == "stencil":
+                    new_stencil = _collections.OrderedDict()  # return an empty stencil
+                    return new_stencil
+                errgen = _op.ComposedErrorgen([], nQubit_dim, evotype)
+            else:
+                # stencil is valid: apply it to create errgen
+                embedded_errgens = []
+                for stencil_sslbls, lind_errgen in stencil.items():
+                    # Note: stencil_sslbls should contain directions like "up" or integer indices of target qubits.
+                    error_sslbls = _map_stencil_sslbls(stencil_sslbls, target_labels) # deals with graph directions
+                    if error_sslbls is None: continue  # signals not all direction were present => skip this term
+                    op_to_embed = lind_errgen.copy() if independent_gates else lind_errgen # copy() for independent gates
+                    #REMOVE print("DB: Applying stencil: ",all_sslbls, error_sslbls,op_to_embed.dim)
+                    embedded_errgen = _op.EmbeddedErrorgen(all_sslbls, error_sslbls, op_to_embed)
+                    embedded_errgens.append(embedded_errgen)
+                errgen = _op.ComposedErrorgen(embedded_errgens, nQubit_dim, evotype)
+        else:
+            #We need to build a stencil (which may contain QubitGraph directions) or an effective stencil
+            assert(stencil is None)  # checked by above assert too
+
+            distinct_errorqubits = _collections.OrderedDict() # distinct sets of qubits upon which a single (high-weight) error term acts
+            if isinstance(errs, dict):  # either for creating a stencil or an error
+                for nm, val in errs.items():
+                    #REMOVE print("DB: Processing: ",nm, val)
+                    if _compat.isstr(nm): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
+                    err_typ, basisEls = nm[0], nm[1:]
+                    sslbls = None
+                    local_nm = [err_typ]
+                    for bel in basisEls: # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
+                        #REMOVE print("Basis el: ",bel)
+                        # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates a graph *direction*, e.g. "up"
+                        if ':' in bel:
+                            bel_name, bel_sslbls = bel.split(':')  # should be of the form <name>:<comma-separated-sslbls>
+                            bel_sslbls = bel_sslbls.split(',')  # e.g. ('Q0','Q1')
+                            integerized_sslbls = []
+                            for ssl in bel_sslbls:
+                                try: integerized_sslbls.append(int(ssl))
+                                except: integerized_sslbls.append(ssl)
+                            bel_sslbls = tuple(integerized_sslbls)
+                        else:
+                            bel_name = bel
+                            bel_sslbls = target_labels
+                        #REMOVE print("DB: Nm + sslbls: ",bel_name,bel_sslbls)
+                            
+                        if sslbls is None:
+                            sslbls = bel_sslbls
+                        else:
+                            #Note: sslbls should always be the same if there are multiple basisEls, i.e for nm == ('S',bel1,bel2)
+                            assert(sslbls == bel_sslbls), \
+                                "All basis elements of the same error term must operate on the *same* state!"
+                        local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
+                            
+                    # keep track of errors by the qubits they act on, as only each such set will have it's own LindbladErrorgen
+                    sslbls = tuple(sorted(sslbls))
+                    local_nm = tuple(local_nm) # so it's hashable
+                    if sslbls not in distinct_errorqubits:
+                        distinct_errorqubits[sslbls] = _collections.OrderedDict()
+                    if local_nm in distinct_errorqubits[sslbls]:
+                        distinct_errorqubits[sslbls][local_nm] += val
+                    else:
+                        distinct_errorqubits[sslbls][local_nm] = val
+
+            elif isinstance(errs, float): # depolarization, action on only target qubits
+                sslbls = tuple(range(target_nQubits)) if return_what == "stencil" else target_labels # use relative target indices in a stencil
+                basis = _BuiltinBasis('pp',4**target_nQubits) # assume we always use Pauli basis?
+                distinct_errorqubits[sslbls] = _collections.OrderedDict()
+                perPauliRate = errs / len(basis.labels)
+                for bl in basis.labels:
+                    distinct_errorqubits[sslbls][('S', bl)] = perPauliRate
+            else:
+                raise ValueError("Invalid `error_rates` value: %s (type %s)" % (str(errs), type(errs)))
+
+            new_stencil = _collections.OrderedDict()
+            for error_sslbls, local_errs_for_these_sslbls in distinct_errorqubits.items():
+                local_nQubits = len(error_sslbls)  # weight of this group of errors which act on the same qubits
+                local_dim = 4**local_nQubits
+                basis = _BuiltinBasis('pp', local_dim)  # assume we're always given basis els in a Pauli basis?
+
+                #Sanity check to catch user errors that would be hard to interpret if they get caught further down
+                for nm in local_errs_for_these_sslbls:
+                    for bel in nm[1:]:  # bel should be a *local* (bare) basis el name, e.g. "XX" but not "XX:Q0,Q1"
+                        if bel not in basis.labels:
+                            raise ValueError("In %s: invalid basis element label `%s` where one of {%s} was expected" %
+                                             (str(errs), str(bel), ', '.join(basis.labels)))
+                        
+                parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
+                #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
+                _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(parameterization)
+                lind_errgen = _op.LindbladErrorgen(local_dim, local_errs_for_these_sslbls, basis, param_mode,
+                                                   nonham_mode, truncate=False, mxBasis="pp", evotype=evotype)
+                #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_dim)
+                new_stencil[error_sslbls] = lind_errgen
+
+            if return_what == "stencil":  # then we just return the stencil, not the error map or generator
+                return new_stencil
+
+            #Use stencil to create error map or generator.  Here `new_stencil` is not a "true" stencil
+            # in that it should contain only absolute labels (it wasn't created in stencil="create" mode)
+            embedded_errgens = []
+            for error_sslbls, lind_errgen in new_stencil.items():
+                #Then use the stencils for these steps later (if independent errgens is False especially?)
+                #REMOVE print("DB: Creating from stencil: ",all_sslbls, error_sslbls)
+                embedded_errgen = _op.EmbeddedErrorgen(all_sslbls, error_sslbls, lind_errgen)
+                embedded_errgens.append(embedded_errgen)
+            errgen = _op.ComposedErrorgen(embedded_errgens, nQubit_dim, evotype)
+
+        #If we get here, we've created errgen, which we either return or package into a map:
+        if return_what == "errormap":
+            return _op.LindbladOp(None, errgen, sparse_expm=sparse)
+        else:
+            return errgen
+        
+    #Process "auto" sim_type
+    _, evotype = _gt.split_lindblad_paramtype(parameterization) #what about "auto" parameterization?
+    assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
+    if sim_type == "auto":
+        if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
+        else: sim_type = "map" if nQubits > 2 else "matrix"
+    assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
+
+    #Global Idle
+    if 'idle' in error_rates:
+        printer.log("Creating Idle:")
+        global_idle_layer = create_error(qubit_labels, error_rates['idle'], return_what="errmap")
+    else:
+        global_idle_layer = None
+
+    #SPAM
+    if 'prep' in error_rates:
+        prepPure = _sv.ComputationalSPAMVec([0] * nQubits, evotype)
+        prepNoiseMap = create_error(qubit_labels, error_rates['prep'], return_what="errmap")
+        prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
+    else:
+        prep_layers = [_sv.ComputationalSPAMVec([0] * nQubits, evotype)]
+
+    if 'povm' in error_rates:
+        povmNoiseMap = create_error(qubit_labels, error_rates['povm'], return_what="errmap")
+        povm_layers = [_povm.LindbladPOVM(povmNoiseMap, None, "pp")]
+    else:
+        povm_layers = [_povm.ComputationalBasisPOVM(nQubits, evotype)]
+
+    stencils = _collections.OrderedDict()
+        
+    def build_cloudnoise_fn(lbl):
+        # lbl will be for a particular gate and target qubits.  If we have error rates for this specific gate
+        # and target qubits (i.e this primitive layer op) then we should build it directly (and independently,
+        # regardless of the value of `independent_gates`) using these rates.  Otherwise, if we have a stencil
+        # for this gate, then we should use it to construct the output, using a copy when gates are independent
+        # and a reference to the *same* stencil operations when `independent_gates==False`.
+        if lbl in error_rates:
+            return create_error(lbl.sslbls, errs=error_rates[lbl]) # specific instructions for this primitive layer
+        elif lbl.name in stencils:
+            return create_error(lbl.sslbls, stencil=stencils[lbl.name]) # use existing stencil
+        elif lbl.name in error_rates:
+            stencils[lbl.name] = create_error(lbl.sslbls, error_rates[lbl.name], return_what='stencil') # create stencil
+            return create_error(lbl.sslbls, stencil=stencils[lbl.name]) # and then use it
+        else:
+            return create_error(lbl, None)
+
+    def build_cloudkey_fn(lbl):
+        #FUTURE: Get a list of all the qubit labels `lbl`'s cloudnoise error touches and form this into a key
+        # For now, we just punt and return a key based on the target labels
+        cloud_key = tuple(lbl.sslbls)
+        return cloud_key
+
+    # gate_names => gatedict
+    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+    std_unitaries = _itgs.get_standard_gatename_unitaries()
+
+    gatedict = _collections.OrderedDict()
+    for name in gate_names:
+        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+        gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+        # assume evotype is a densitymx or term type
+    
+    return _CloudNoiseModel(nQubits, gatedict, availability, qubit_labels, geometry,
+                            global_idle_layer, prep_layers, povm_layers,
+                            build_cloudnoise_fn, build_cloudkey_fn,
+                            sim_type, evotype, errcomp_type,
+                            addIdleNoiseToAllGates, sparse, printer)
 
 
 # -----------------------------------------------------------------------------------
@@ -1610,7 +1894,8 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
-    arguments of this function to :function:`build_standard_cloudnoise_model`.
+    arguments of this function to
+    :function:`build_standard_cloudnoise_model_from_hops_and_weights`.
 
     Note that this function essentialy performs fiducial selection, germ
     selection, and fiducial-pair reduction simultaneously.  It is used to
@@ -1648,7 +1933,8 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     gate_names, nonstd_gate_unitaries, availability, geometry,
     maxIdleWeight, maxhops, extraWeight1Hops, extraGateWeight, sparse : various
         Cloud-noise model parameters specifying the model to create sequences
-        for. See function:`build_standard_cloudnoise_model` for details.
+        for. See function:`build_standard_cloudnoise_model_from_hops_and_weights`
+        for details.
 
     paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
         The "root" (no trailing " terms", etc.) parameterization used for the
@@ -1714,7 +2000,8 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
-    arguments of this function to :function:`build_standard_cloudnoise_model`.
+    arguments of this function to
+    function:`build_standard_cloudnoise_model_from_hops_and_weights`.
 
     Note that this function essentialy performs fiducial selection, germ
     selection, and fiducial-pair reduction simultaneously.  It is used to
@@ -1828,10 +2115,11 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         printer.log("Created qubit graph:\n" + str(qubitGraph))
     all_qubit_labels = qubitGraph.get_node_names()
 
-    model = _CloudNoiseModel(nQubits, gatedict, availability, None, qubitGraph,
-                             maxIdleWeight, 0, maxhops, extraWeight1Hops,
-                             extraGateWeight, sparse, verbosity=printer - 5,
-                             sim_type="termorder:1", parameterization=ptermstype)
+    model = _CloudNoiseModel.build_from_hops_and_weights(
+        nQubits, gatedict, availability, None, qubitGraph,
+        maxIdleWeight, 0, maxhops, extraWeight1Hops,
+        extraGateWeight, sparse, verbosity=printer - 5,
+        sim_type="termorder:1", parameterization=ptermstype)
     clouds = model.get_clouds()
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
@@ -1844,9 +2132,10 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # The 'qubits' of a cloud are all the qubits that have any action -
     # ideal or error - except that which is the same as the Gi gate.
 
-    ideal_model = _CloudNoiseModel(nQubits, gatedict, availability, None, qubitGraph,
-                                   0, 0, 0, 0, 0, False, verbosity=printer - 5,
-                                   sim_type="map", parameterization=paramroot)
+    ideal_model = _CloudNoiseModel.build_from_hops_and_weights(
+        nQubits, gatedict, availability, None, qubitGraph,
+        0, 0, 0, 0, 0, False, verbosity=printer - 5,
+        sim_type="map", parameterization=paramroot)
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params()
@@ -1859,10 +2148,11 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
     # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graphO
     printer.log("Creating \"idle error\" model on %d qubits" % maxIdleWeight)
-    idle_model = _CloudNoiseModel(maxIdleWeight, gatedict, {}, None, qubitGraph,
-                                  maxIdleWeight, 0, maxhops, extraWeight1Hops,
-                                  extraGateWeight, sparse, verbosity=printer - 5,
-                                  sim_type="termorder:1", parameterization=ptermstype)
+    idle_model = _CloudNoiseModel.build_from_hops_and_weights(
+        maxIdleWeight, gatedict, {}, None, qubitGraph,
+        maxIdleWeight, 0, maxhops, extraWeight1Hops,
+        extraGateWeight, sparse, verbosity=printer - 5,
+        sim_type="termorder:1", parameterization=ptermstype)
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -1936,10 +2226,11 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
             printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
             printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-            sidle_model = _CloudNoiseModel(maxSyntheticIdleWt, gatedict, {}, None, 'line',
-                                           maxIdleWeight, 0, maxhops, extraWeight1Hops,
-                                           extraGateWeight, sparse, verbosity=printer - 5,
-                                           sim_type="termorder:1", parameterization=ptermstype)
+            sidle_model = _CloudNoiseModel.build_from_hops_and_weights(
+                maxSyntheticIdleWt, gatedict, {}, None, 'line',
+                maxIdleWeight, 0, maxhops, extraWeight1Hops,
+                extraGateWeight, sparse, verbosity=printer - 5,
+                sim_type="termorder:1", parameterization=ptermstype)
             sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
             # these are the params we want to amplify...
             idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
