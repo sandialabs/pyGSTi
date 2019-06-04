@@ -168,7 +168,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         gsEstimate.set_all_parameterizations("full")
         gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         print(gsEstimate.strdiff(mdl_compare))
-        self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=2)
+        self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=1)
 
 
     def test_stdgst_map(self):
