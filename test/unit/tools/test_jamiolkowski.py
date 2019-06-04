@@ -1,13 +1,15 @@
-import unittest
 import pygsti
 import os
 import numpy as np
+
+from ..util import BaseCase
+
 from pygsti.construction import std1Q_XYI as std1Q
 import pygsti.tools.basistools as bt
 from pygsti.baseobjs import Basis
 
 
-class JamiolkowskiTestCase(unittest.TestCase):
+class JamiolkowskiTestCase(BaseCase):
 
     def setUp(self):
         # move working directories
@@ -68,10 +70,6 @@ class JamiolkowskiTestCase(unittest.TestCase):
                                                                       opMxBasis=self.std)
         self.assertArraysAlmostEqual( bt.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
                                       self.testGate)
-
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
 
 class TestJamiolkowskiMethods(JamiolkowskiTestCase):
 
