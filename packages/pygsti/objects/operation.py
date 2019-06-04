@@ -1963,7 +1963,7 @@ class StochasticNoiseOp(LinearOperator):
         StochasticNoiseOp
             A copy of this object.
         """
-        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector()))
+        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
         return self._copy_gpindices(copyOfMe, parent)
 
     #to_dense / to_sparse?
