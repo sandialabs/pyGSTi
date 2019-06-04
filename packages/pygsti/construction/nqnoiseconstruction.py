@@ -89,7 +89,7 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
             if requireConnected:
                 nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds, wt)
             else:
-                nErrTargetLocations = _scipy.misc.comb(len(possible_err_qubit_inds), wt)  # matches actual initial stud
+                nErrTargetLocations = _scipy.special.comb(len(possible_err_qubit_inds), wt)  # matches actual initial stud
             if ZZonly and wt > 1: basisSizeWoutId = 1**wt  # ( == 1)
             else: basisSizeWoutId = 3**wt  # (X,Y,Z)^wt
             nErrParams = 2 * basisSizeWoutId  # H+S terms
@@ -3070,13 +3070,13 @@ def stdmodule_to_smqmodule(std_module):
     dim = std_target_model.dim
     if dim == 4:
         sslbls = [0]
-        find_replace_labels = {'Gx': ('Gx', 0), 'Gy': ('Gy', 0),
+        find_replace_labels = {'Gi': (), 'Gx': ('Gx', 0), 'Gy': ('Gy', 0),
                                'Gz': ('Gz', 0), 'Gn': ('Gn', 0)}
         find_replace_strs = [((oldgl,), (newgl,)) for oldgl, newgl
                              in find_replace_labels.items()]
     elif dim == 16:
         sslbls = [0, 1]
-        find_replace_labels = {'Gii': 'Gi',
+        find_replace_labels = {'Gii': (),
                                'Gxi': ('Gx', 0), 'Gyi': ('Gy', 0), 'Gzi': ('Gz', 0),
                                'Gix': ('Gx', 1), 'Giy': ('Gy', 1), 'Giz': ('Gz', 1),
                                'Gxx': ('Gxx', 0, 1), 'Gxy': ('Gxy', 0, 1),

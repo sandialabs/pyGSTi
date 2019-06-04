@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from . import listtools as _lt
+from . import slicetools as _slct
 
 
 def chi2_terms(model, dataset, circuits=None,
@@ -87,10 +88,29 @@ def chi2_terms(model, dataset, circuits=None,
         N[lookup[i]] = dataset[opStr].total
         f[lookup[i]] = [dataset[opStr].fraction(x) for x in outcomes_lookup[i]]
 
+    #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
+    firsts = []; indicesOfCircuitsWithOmittedData = []
+    for i, c in enumerate(circuits):
+        lklen = _slct.length(lookup[i])
+        if 0 < lklen < model.get_num_outcomes(c):
+            firsts.append(_slct.as_array(lookup[i])[0])
+            indicesOfCircuitsWithOmittedData.append(i)
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+    else:
+        firsts = None
+
     smart(model.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
     cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
     v = N * ((probs - f)**2 / cprobs)
+
+    #account for omitted probs (sparse data)
+    if firsts is not None:
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
+        clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
+        v[firsts] = v[firsts] + N[firsts] * omitted_probs**2 / clipped_oprobs
 
     #Aggregate over outcomes:
     # v[iElement] contains all chi2 contributions - now aggregate over outcomes
@@ -287,12 +307,28 @@ def chi2(model, dataset, circuits=None,
         N[lookup[i]] = dataset[opStr].total
         f[lookup[i]] = [dataset[opStr].fraction(x) for x in outcomes_lookup[i]]
 
+    #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
+    firsts = []; indicesOfCircuitsWithOmittedData = []
+    for i, c in enumerate(circuits):
+        lklen = _slct.length(lookup[i])
+        if 0 < lklen < model.get_num_outcomes(c):
+            firsts.append(_slct.as_array(lookup[i])[0])
+            indicesOfCircuitsWithOmittedData.append(i)
+    if len(firsts) > 0:
+        firsts = _np.array(firsts, 'i')
+        indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+        dprobs_omitted_rowsum = _np.empty((len(firsts), vec_gs_len), 'd')
+    else:
+        firsts = None
+
     if compute_hprobs:
         smart(model.bulk_fill_hprobs, hprobs, evTree,
               probs, dprobs, clipTo, check, comm, _filledarrays=(0, 2, 3))
     elif returnGradient:
         smart(model.bulk_fill_dprobs, dprobs, evTree,
               probs, clipTo, check, comm, _filledarrays=(0, 2))
+        for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
+            dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[lookup[i], :], axis=0)
     else:
         smart(model.bulk_fill_probs, probs, evTree,
               clipTo, check, comm, _filledarrays=(0,))
@@ -300,15 +336,32 @@ def chi2(model, dataset, circuits=None,
     # # clipped probabilities (also clip derivs to 0?)
     # cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting)
     cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
-    chi2 = _np.sum(N * ((probs - f)**2 / cprobs), axis=0)  # Note 0 is only axis in this case
+    v = N * ((probs - f)**2 / cprobs)
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
+
+    #account for omitted probs (sparse data)
+    if firsts is not None:
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
+        clipped_oprobs = _np.clip(omitted_probs, minProbClipForWeighting, 1 - minProbClipForWeighting)
+        v[firsts] = v[firsts] + N[firsts] * omitted_probs**2 / clipped_oprobs
+
+    chi2 = _np.sum(v, axis=0)  # Note 0 is only axis in this case
 
     if returnGradient:
         t = ((probs - f) / cprobs)[:, None]  # (iElement, 0) = (KM,1)
         dchi2 = N[:, None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
+
+        #account for omitted probs
+        if firsts is not None:
+            t_firsts = (omitted_probs / clipped_oprobs)[:, None]
+            dchi2[firsts, :] -= N[firsts, None] * t_firsts * (2 - t_firsts) * dprobs_omitted_rowsum
+
         dchi2 = _np.sum(dchi2, axis=0)  # sum over operation sequences and spam labels => (N)
 
     if returnHessian:
+        if firsts is not None:
+            raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
+
         dprobs_p = dprobs[:, None, :]  # (KM,1,N)
         t = ((probs - f) / cprobs)[:, None, None]  # (iElement, 0,0) = (KM,1,1)
         dt = ((1.0 / cprobs - (probs - f) / cprobs**2)[:, None]

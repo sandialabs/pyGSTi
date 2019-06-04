@@ -1136,6 +1136,23 @@ class OpModel(Model):
         assert(len(outcomes[0]) == nEls)
         return raw_dict, outcomes[0]
 
+    def get_num_outcomes(self, circuit):
+        """
+        Returns the number of outcomes of `circuit`, given by it's existing
+        or implied POVM label.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The operation sequence to simplify
+
+        Returns
+        -------
+        int
+        """
+        _, outcomes = self.simplify_circuit(circuit)
+        return len(outcomes)
+
     def probs(self, circuit, clipTo=None):
         """
         Construct a dictionary containing the probabilities of every spam label

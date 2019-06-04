@@ -533,6 +533,22 @@ class LinearOperator(_modelmember.ModelMember):
         #Sort terms based on magnitude
         sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
         first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
+
+        #DEBUG TODO REMOVE
+        #chk1 = sum([t[1].magnitude for t in sorted_terms])
+        #chk2 = self.get_total_term_magnitude()
+        #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order, " minmag=",min_term_mag)
+        #print("  sum of magnitudes =",chk1, " <?= ", chk2)
+        #if chk1 > chk2:
+        #    print("Term magnitudes = ", [t[1].magnitude for t in sorted_terms])
+        #    egterms = self.errorgen.get_taylor_order_terms(0)
+        #    #vtape, ctape = self.errorgen.Lterm_coeffs
+        #    #coeffs = [ abs(x) for x in _bulk_eval_complex_compact_polys(vtape, ctape, self.errorgen.to_vector(), (len(self.errorgen.Lterms),)) ]
+        #    mags = [ abs(t.evaluate_coeff(self.errorgen.to_vector()).coeff) for t in egterms ]
+        #    print("Errorgen ", self.errorgen.__class__.__name__, " term magnitudes (%d): " % len(egterms), "\n",list(sorted(mags, reverse=True)))
+        #    print("Errorgen sum = ",sum(mags), " vs ", self.errorgen.get_total_term_magnitude())
+        #assert(chk1 <= chk2)
+
         return [t[1] for t in sorted_terms], first_order_indices
 
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
@@ -2786,6 +2802,7 @@ class LindbladOp(LinearOperator):
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
+        #TODO REMOVE: print("DB: LindbladOp.get_totat_term_magnitude is exp(",self.errorgen.get_total_term_magnitude(),") - ",self.errorgen.__class__.__name__)
         return _np.exp(self.errorgen.get_total_term_magnitude())
 
     def num_params(self):
@@ -3818,6 +3835,14 @@ class ComposedOp(LinearOperator):
         """
         if order not in self.terms:
             terms = []
+            
+            #DEBUG TODO REMOVE
+            #print("Composed op getting order",order,"terms:")
+            #for i,fop in enumerate(self.factorops):
+            #    print(" ",i,fop.__class__.__name__,"totalmag = ",fop.get_total_term_magnitude())
+            #    hmdebug,_ = fop.get_highmagnitude_terms(0.00001, True, order)
+            #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
+
             for p in _lt.partition_into(order, len(self.factorops)):
                 factor_lists = [self.factorops[i].get_taylor_order_terms(pi) for i, pi in enumerate(p)]
                 for factors in _itertools.product(*factor_lists):
@@ -3845,6 +3870,16 @@ class ComposedOp(LinearOperator):
             return self.terms[order], self.local_term_poly_coeffs[order]
         else:
             return self.terms[order]
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since the taylor expansions are composed (~multiplied),
+        # the total term magnitude is just the product of those of the components.
+        return _np.product([f.get_total_term_magnitude() for f in self.factorops])
 
     def num_params(self):
         """
@@ -3926,6 +3961,7 @@ class ComposedOp(LinearOperator):
         return s
 
 
+#TODO: check if we need this at all?
 class ExponentiatedOp(ComposedOp):
     """
     A gate map that is the composition of a number of map-like factors (possibly
@@ -4505,6 +4541,26 @@ class EmbeddedOp(LinearOperator):
         else:
             return [_term.embed_term(t, sslbls, self.targetLabels)
                     for t in self.embedded_op.get_taylor_order_terms(order, False)]
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
+        # of the operator being embedded, the total term magnitude is the same:
+        
+        #DEBUG TODO REMOVE
+        #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",self.embedded_op.__class__.__name__)
+        #ret = self.embedded_op.get_total_term_magnitude()
+        #egterms = self.get_taylor_order_terms(0)
+        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
+        #print("EmbeddedErrorgen CHECK = ",sum(mags), " vs ", ret)
+        #assert(sum(mags) <= ret+1e-4)
+
+        return self.embedded_op.get_total_term_magnitude()
+
 
     def num_params(self):
         """
@@ -5342,7 +5398,45 @@ class ComposedErrorgen(LinearOperator):
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys is False)
-        return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
+
+        #Need to adjust indices b/c in error generators we (currently) expect terms to have local indices
+        ret = []
+        for eg in self.factors:
+            eg_terms = [t.copy() for t in eg.get_taylor_order_terms(order, return_coeff_polys)]
+            for t in eg_terms:
+                t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
+                    self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.array(x, _np.int64)))))
+            ret.extend(eg_terms)
+        return ret
+        #return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
+
+    def get_total_term_magnitude(self):
+        """
+        TODO: docstring
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since composed error generators are just summed, the total term
+        # magnitude is just the sum of the components
+
+        #DEBUG TODO REMOVE
+        #factor_ttms = [eg.get_total_term_magnitude() for eg in self.factors]
+        #print("DB: ComposedErrorgen.total_term_magnitude = sum(",factor_ttms,") -- ",[eg.__class__.__name__ for eg in self.factors])
+        #for k,eg in enumerate(self.factors):
+        #    sub_egterms = eg.get_taylor_order_terms(0)
+        #    sub_mags = [ abs(t.evaluate_coeff(eg.to_vector()).coeff) for t in sub_egterms ]
+        #    print(" -> ",k,": total terms mag = ",sum(sub_mags), "(%d)" % len(sub_mags),"\n", sub_mags)
+        #    print("     gpindices = ",eg.gpindices)
+        #    
+        #ret = sum(factor_ttms)
+        #egterms = self.get_taylor_order_terms(0)
+        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
+        #print("ComposedErrgen term mags (should concat above) ",len(egterms),":\n",mags)
+        #print("gpindices = ",self.gpindices)
+        #print("ComposedErrorgen CHECK = ",sum(mags), " vs ", ret)
+        #assert(sum(mags) <= ret+1e-4)
+
+        return sum([eg.get_total_term_magnitude() for eg in self.factors])
 
     def num_params(self):
         """
@@ -6378,6 +6472,16 @@ class LindbladErrorgen(LinearOperator):
         # return (sum of absvals of term coeffs)
         vtape, ctape = self.Lterm_coeffs
         coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+
+        #DEBUG TODO REMOVE
+        #coeffs_chk = _np.array([ x.evaluate_coeff(self.to_vector()).coeff for x in self.Lterms])
+        #assert(_np.allclose(coeffs, coeffs_chk))
+        #ret = _np.sum(_np.abs(coeffs))
+        #egterms = self.get_taylor_order_terms(0)
+        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
+        #print("LindbladErrorgen CHECK = ",sum(mags), " vs ", ret)
+        #assert(sum(mags) <= ret+1e-4)
+
         return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
 
     def num_params(self):
