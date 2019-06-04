@@ -11,7 +11,7 @@ import pygsti.tools.lindbladtools as lindbladtools
 from pygsti.baseobjs import Basis, ExplicitBasis, DirectSumBasis
 
 
-class BasisBaseTestCase(BaseCase):
+class BasisToolsTester(BaseCase):
     def test_expand_contract(self):
         # matrix that operates on 2x2 density matrices, but only on the 0-th and 3-rd
         # elements which correspond to the diagonals of the 2x2 density matrix.

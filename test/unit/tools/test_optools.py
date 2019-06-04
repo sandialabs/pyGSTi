@@ -7,7 +7,7 @@ import pygsti.tools.optools as ot
 import pygsti.tools.basistools as bt
 
 
-class OpToolsTests(BaseCase):
+class OpToolsTester(BaseCase):
     def test_unitary_to_pauligate(self):
         theta = np.pi
         ex = 1j * theta * bt.sigmax / 2

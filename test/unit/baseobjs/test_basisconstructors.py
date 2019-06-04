@@ -5,7 +5,7 @@ from ..util import BaseCase
 import pygsti.baseobjs.basisconstructors as bc
 
 
-class BasisConstructorsTests(BaseCase):
+class BasisConstructorsTester(BaseCase):
     def test_GellMann(self):
         id2x2 = np.array([[1, 0], [0, 1]])
         sigmax = np.array([[0, 1], [1, 0]])
