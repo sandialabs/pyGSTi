@@ -241,7 +241,7 @@ class QubitGraph(object):
         elif self.directions is None:
             self._connectivity[i, j] = bool(val)
         else:  # directions are being used, so connectivity matrix contains ints
-            dir_index = val if isinstance(direction, int) else self.directions.index(direction)
+            dir_index = val if isinstance(val, int) else self.directions.index(val)
             self._connectivity[i, j] = dir_index
         self._dirty = True
 
