@@ -24,7 +24,7 @@ from pprint import pprint
 def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                        sampleError="multinomial", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate",
-                       comm=None, memLimit=None):
+                       recordZeroCnts=True, comm=None, memLimit=None):
     """Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
@@ -83,6 +83,11 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
     collisionAction : {"aggregate", "keepseparate"}
         Determines how duplicate operation sequences are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -219,7 +224,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                             "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
                         )
 
-            dataset.add_count_dict(s, counts)
+            dataset.add_count_dict(s, counts, recordZeroCnts=recordZeroCnts)
         dataset.done_adding_data()
 
     if comm is not None:  # broadcast to non-root procs
@@ -228,7 +233,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
     return dataset
 
 
-def merge_outcomes(dataset, label_merge_dict):
+def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
     """
     Creates a DataSet which merges certain outcomes in input DataSet;
     used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
@@ -247,6 +252,11 @@ def merge_outcomes(dataset, label_merge_dict):
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
         to use :function:`filter_qubits` which also updates the operation sequences.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        (merged) DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
 
     Returns
     -------
@@ -275,7 +285,8 @@ def merge_outcomes(dataset, label_merge_dict):
             count_dict[new_outcome] = 0
             for old_outcome in label_merge_dict[new_outcome]:
                 count_dict[new_outcome] += linecounts.get(old_outcome, 0)
-        merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux)
+        merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux,
+                                      recordZeroCnts=recordZeroCnts)
     merged_dataset.done_adding_data()
     return merged_dataset
 
@@ -349,7 +360,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
 
 
 def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle='Gi'):
+                   new_sectors=None, idle=((),), recordZeroCnts=True):
     """
     Creates a DataSet that restricts is the restriction of `dataset`
     to the sectors identified by `sectors_to_keep`.
@@ -407,6 +418,11 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
         The operation label to be used when there are no kept components of a
         "layer" (element) of a circuit.
 
+    recordZeroCnts : bool, optional
+        Whether zero-counts present in the original `dataset` are recorded
+        (stored) in the returned (filtered) DataSet.  If False, then such
+        zero counts are ignored, except for potentially registering new
+        outcome labels.
 
     Returns
     -------
@@ -417,7 +433,8 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
         sindices_to_keep = sectors_to_keep
 
     ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
-                                                          dataset.get_outcome_labels()))
+                                                          dataset.get_outcome_labels()),
+                               recordZeroCnts=recordZeroCnts)
     ds_merged = ds_merged.copy_nonstatic()
     ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
         s, sectors_to_keep, new_sectors, idle), aggregate=True)

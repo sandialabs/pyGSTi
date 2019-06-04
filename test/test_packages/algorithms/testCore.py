@@ -403,25 +403,29 @@ class TestCoreMethods(AlgorithmsBase):
             ds, mdl_clgst, self.lsgstStrings[0], verbosity=0,
             minProbClip=1e-4, probClipInterval=(-1e2,1e2),
             forcefn_grad=forcingfn_grad)
-        mdl_lsgst_chk_opts4 = pygsti.algorithms.core._do_mlgst_base(
-            ds, mdl_clgst, self.lsgstStrings[0], verbosity=0, poissonPicture=False, 
-            minProbClip=1e-4, probClipInterval=(-1e2,1e2),
-            forcefn_grad=forcingfn_grad) # non-poisson picture
+        with self.assertRaises(NotImplementedError):
+            # Non-poisson picture needs support for a non-leastsq solver (not impl yet)
+            mdl_lsgst_chk_opts4 = pygsti.algorithms.core._do_mlgst_base(
+                ds, mdl_clgst, self.lsgstStrings[0], verbosity=0, poissonPicture=False, 
+                minProbClip=1e-4, probClipInterval=(-1e2,1e2),
+                forcefn_grad=forcingfn_grad) # non-poisson picture
 
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust
         #self.runSilent(pygsti.do_mlgst, ds, mdl_clgst, self.lsgstStrings[0], minProbClip=1e-6,
         #                probClipInterval=(-1e2,1e2), verbosity=4, memLimit=curMem+8500000) #invoke memory control
 
         #non-Poisson picture - should use (-1,-1) model for consistency?
-        pygsti.do_mlgst(ds, mdl_clgst, self.lsgstStrings[0], minProbClip=1e-4,
-                        probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False)
-        try:
-            pygsti.do_mlgst(ds, mdl_clgst, self.lsgstStrings[0], minProbClip=1e-1, # 1e-1 b/c get inf Jacobians...
-                            probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False,
-                            spam_penalty_factor=1.0, cptp_penalty_factor=1.0)
-        except ValueError: pass # ignore when assertions in customlm.py are disabled
-        except AssertionError:
-            pass # just ignore for now.  FUTURE: see what we can do in custom LM about scaling large jacobians...
+        with self.assertRaises(NotImplementedError):
+            # Non-poisson picture needs support for a non-leastsq solver (not impl yet)
+            pygsti.do_mlgst(ds, mdl_clgst, self.lsgstStrings[0], minProbClip=1e-4,
+                            probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False)
+            try:
+                pygsti.do_mlgst(ds, mdl_clgst, self.lsgstStrings[0], minProbClip=1e-1, # 1e-1 b/c get inf Jacobians...
+                                probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False,
+                                spam_penalty_factor=1.0, cptp_penalty_factor=1.0)
+            except ValueError: pass # ignore when assertions in customlm.py are disabled
+            except AssertionError:
+                pass # just ignore for now.  FUTURE: see what we can do in custom LM about scaling large jacobians...
 
 
 

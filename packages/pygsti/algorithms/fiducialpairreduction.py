@@ -10,7 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import random as _random
-import scipy.misc as _spmisc
+import scipy.special as _spspecial
 from ..construction import circuitconstruction as _gsc
 from ..tools import remove_duplicates as _remove_duplicates
 from ..tools import slicetools as _slct
@@ -21,7 +21,7 @@ from .. import objects as _objs
 def _nCr(n, r):
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
     #f = _math.factorial; return f(n) / f(r) / f(n-r)
-    return _spmisc.comb(n, r)
+    return _spspecial.comb(n, r)
 
 
 def _random_combination(indices_tuple, r):

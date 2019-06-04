@@ -19,6 +19,7 @@ hooks/etc/permissions.yml
 **tutorial_files
 *.lprof
 *.cache
+/.eggs/
 
 # Test Metadata #
 #################

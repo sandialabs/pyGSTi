@@ -7,11 +7,6 @@ except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
 
-# 3.0 changes the way exec has to be called
-with open("packages/pygsti/_version.py") as f:
-    code = compile(f.read(), "packages/pygsti/_version.py", 'exec')
-    exec(code)
-
 try:
     import numpy as np
     from Cython.Build import cythonize
@@ -126,8 +121,16 @@ extras = {
 # Add `complete' target, which will install all extras listed above
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 
+
+# Configure setuptools_scm to build the post-release version number
+def custom_version():
+    from setuptools_scm.version import postrelease_version
+
+    return {'version_scheme': postrelease_version}
+
+
 setup(name='pyGSTi',
-      version=__version__,  # noqa: F821
+      use_scm_version=custom_version,
       description='A python implementation of Gate Set Tomography',
       long_description=descriptionTxt,
       author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
@@ -142,6 +145,7 @@ setup(name='pyGSTi',
           'pygsti.extras.rb',
           'pygsti.extras.rpe',
           'pygsti.extras.drift',
+          'pygsti.extras.idletomography',
           'pygsti.io',
           'pygsti.objects',
           'pygsti.optimize',
@@ -170,6 +174,7 @@ setup(name='pyGSTi',
               'templates/offline/images/*'
           ]
       },
+      setup_requires=['setuptools_scm'],
       install_requires=[
           'numpy>=1.15.0',
           'scipy',

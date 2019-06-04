@@ -89,6 +89,7 @@ def fidelity(A, B):
         F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
         return float(F)
 
+    #if _np.array_equal(A, B): return 1.0  # HACK - some cases when A and B are perfecty equal sqrtm(A) fails...
     sqrtA = _hack_sqrtm(A)  # _spl.sqrtm(A)
     assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) < 1e-8)  # test the scipy sqrtm function
     F = (_mt.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(B, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2

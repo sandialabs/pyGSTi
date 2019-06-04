@@ -357,6 +357,7 @@ class TermEvalTree(EvalTree):
             subTree.p_polys = {}
             subTree.dp_polys = {}
             subTree.hp_polys = {}
+            subTree.repcache = {}
 
             for ik in fullEvalOrder:  # includes any initial indices
                 k = parentIndices[ik]  # original tree index
@@ -421,7 +422,8 @@ class TermEvalTree(EvalTree):
         polys = []
         tot_npaths = 0
         tot_target_sopm = 0; tot_achieved_sopm = 0  # "sum of path magnitudes"
-        #repcache = {}
+        repcache = {}
+        opcache = {}
         for opstr in circuit_list:
             if (rholabel, elabels, opstr) in self.p_polys:
                 current_threshold, current_polys = self.p_polys[(rholabel, elabels, opstr)]
@@ -433,7 +435,8 @@ class TermEvalTree(EvalTree):
                     calc.prs_as_pruned_polyreps(rholabel,
                                                 elabels,
                                                 opstr,
-                                                self.repcache,
+                                                repcache, #self.repcache,
+                                                self.repcache, #opcache,
                                                 comm,
                                                 memLimit,
                                                 pathmagnitude_gap,
@@ -467,10 +470,10 @@ class TermEvalTree(EvalTree):
             #if comm is None or comm.Get_rank() == 0:
             rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
             nC = len(circuit_list)
-            print("%sPruned path-integral: kept %d paths w/magnitude %.2g (target=%.2g, #circuits=%d)" %
+            print("%sPruned path-integral: kept %d paths w/magnitude %.4g (target=%.4g, #circuits=%d)" %
                   (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC))
-            print("%s  (avg per circuit paths=%d, magnitude=%.3g, target=%.3g)" %
-                  (rankStr, tot_npaths // nC, tot_target_sopm / nC, tot_achieved_sopm / nC))
+            print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
+                  (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
         return ret
 
     def get_p_polys(self, calc, rholabel, elabels, comm):

@@ -22,7 +22,7 @@ colorScatterPlot = ws.ColorBoxPlot(
 
 @@markdown
 ### $2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset.
-Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most *linlg_pcntle* if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.
+Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most ($1-$*linlg_pcntle*) if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.
 @@code
 k = -1 #iteration index
 colorBoxPlot = ws.ColorBoxPlot(

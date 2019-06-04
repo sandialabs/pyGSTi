@@ -21,12 +21,12 @@ class StdModuleTestCase(BaseTestCase):
             germStrs = newmod.germs
 
             for gl in opLabels:
-                if gl != "Gi": 
+                if gl != "Gi" and gl != ():
                     self.assertGreater(len(gl.sslbls),0)
 
             for str in germStrs:
                 for gl in str:
-                    if gl != "Gi": 
+                    if gl != "Gi" and gl != ():
                         self.assertGreater(len(gl.sslbls),0)
                     
         #Test upgrade of 2Q dataset

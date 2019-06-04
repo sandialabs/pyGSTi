@@ -125,6 +125,7 @@ class TermForwardSimulator(ForwardSimulator):
                               "term-based calculations" % self.evotype))
 
         #DEBUG - for profiling cython routines TODO REMOVE (& references)
+        #print("DEBUG: termfwdsim: ",self.max_order, self.pathmagnitude_gap, self.min_term_mag)
         self.times_debug = {'tstartup': 0.0, 'total': 0.0,
                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0}
@@ -202,6 +203,7 @@ class TermForwardSimulator(ForwardSimulator):
                                elabels,
                                circuit,
                                repcache,
+                               opcache,
                                comm=None,
                                memLimit=None,
                                pathmagnitude_gap=0.0,
@@ -221,13 +223,13 @@ class TermForwardSimulator(ForwardSimulator):
 
         if self.evotype == "svterm":
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
+                replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
                                               fastmode, pathmagnitude_gap, min_term_mag,
                                               current_threshold)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
+                replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
                                               fastmode, pathmagnitude_gap, min_term_mag)
 
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
