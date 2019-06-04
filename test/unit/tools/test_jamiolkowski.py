@@ -6,6 +6,7 @@ from pygsti.construction import std1Q_XYI as std1Q
 import pygsti.tools.basistools as bt
 from pygsti.baseobjs import Basis
 
+
 class JamiolkowskiTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -85,10 +86,10 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         self.checkBasis(cmb)
 
     def test_jamiolkowski_ops(self):
-        gm  = Basis.cast('gm', 4)
-        pp  = Basis.cast('pp', 4)
+        gm = Basis.cast('gm', 4)
+        pp = Basis.cast('pp', 4)
         std = Basis.cast('std', 4)
-        mxGM  = np.array([[1, 0, 0, 0],
+        mxGM = np.array([[1, 0, 0, 0],
                           [0, 0, 1, 0],
                           [0,-1, 0, 0],
                           [0, 0, 0, 1]], 'complex')
@@ -152,18 +153,6 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         self.assertArraysAlmostEqual(gatePP3, mxPP)
         self.assertArraysAlmostEqual(fastGatePP, mxPP)
 
-
-        '''
-        with self.assertRaises(NotImplementedError):
-            pygsti.jamiolkowski_iso(mxStd, "foobar", gm) #invalid gate basis
-        with self.assertRaises(NotImplementedError):
-            pygsti.jamiolkowski_iso(mxStd, std, "foobar") #invalid choi basis
-        with self.assertRaises(NotImplementedError):
-            pygsti.jamiolkowski_iso_inv(choiStd, "foobar", gm) #invalid choi basis
-        with self.assertRaises(NotImplementedError):
-            pygsti.jamiolkowski_iso_inv(choiStd, std, "foobar") #invalid gate basis
-        '''
-
         sumOfNeg  = pygsti.sum_of_negative_choi_evals(std1Q.target_model())
         sumOfNegWt= pygsti.sum_of_negative_choi_evals(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5} )
         sumsOfNeg = pygsti.sums_of_negative_choi_evals(std1Q.target_model())
@@ -171,6 +160,3 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         self.assertAlmostEqual(sumOfNeg, 0.0)
         self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3,'d')) # 3 gates in std.target_model()
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12,'d')) # 3 gates * 4 evals each = 12
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
