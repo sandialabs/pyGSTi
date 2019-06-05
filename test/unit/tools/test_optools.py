@@ -1,11 +1,10 @@
 import os
 import unittest
 import functools
-from unittest import mock
 import numpy as np
 import scipy
 
-from ..util import BaseCase
+from ..util import BaseCase, mock
 
 from pygsti.construction import std2Q_XXYYII
 import pygsti.tools.optools as ot

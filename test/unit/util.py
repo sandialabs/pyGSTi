@@ -4,7 +4,20 @@ from unittest import TestCase
 import sys
 import numpy as np
 import numbers
-from pathlib import Path
+
+# Test modules should import these generic names rather than importing the modules directly:
+
+# `pathlib' is standard as of 3.4, but has been backported as pathlib2
+try:
+    from pathlib import Path
+except ImportError:
+    from pathlib2 import Path
+
+# `mock' was refactored into unittest in 3.3
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 _TEST_ROOT_PATH = Path(__file__).parent.parent.absolute()
 _TEST_DATA_PATH = _TEST_ROOT_PATH / "data"

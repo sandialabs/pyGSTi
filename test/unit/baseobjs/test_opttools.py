@@ -1,9 +1,8 @@
-from unittest import mock
 from time import sleep
 import numbers
 from collections import defaultdict
 
-from ..util import BaseCase
+from ..util import BaseCase, mock
 
 from pygsti.baseobjs import opttools as opt
 

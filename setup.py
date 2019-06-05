@@ -114,12 +114,15 @@ extras = {
         'msgpack',
         'coverage',
         'zmq',
-        'rednose'
+        'rednose',
+        'pathlib2;python_version<"3.0"',
+        'mock;python_version<"3.0"'
     ]
 }
 
 # Add `complete' target, which will install all extras listed above
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
+
 
 
 # Configure setuptools_scm to build the post-release version number

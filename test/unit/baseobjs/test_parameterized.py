@@ -1,17 +1,16 @@
 """ Unit tests covering pygsti.baseobjs.parameterized """
-from ..util import BaseCase
+from ..util import BaseCase, mock
 
 from pygsti.baseobjs.parameterized import parameterized
 
 
 class ParameterizedTester(BaseCase):
     def test_decorator_args(self):
-        decorator_args = None
+        mock_sink = mock.MagicMock()
 
         @parameterized
         def decorated(fn, a, b):
-            nonlocal decorator_args
-            decorator_args = (a, b)
+            mock_sink(a, b)
 
             def inner(*args, **kwargs):
                 return fn(*args, **kwargs)
@@ -24,4 +23,4 @@ class ParameterizedTester(BaseCase):
 
         result = func(3, 4)
         self.assertEqual(result, 7, "unexpected side effect in decorated function")
-        self.assertEqual(decorator_args, (1, 2), "args not passed to decorator")
+        mock_sink.assert_called_once_with(1, 2)

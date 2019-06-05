@@ -206,9 +206,11 @@ class BasisToolsTester(BaseCase):
         sparsePP = Basis.cast("pp", 16, sparse=True)
         mxs = sparsePP.elements
         for lbl, mx in zip(sparsePP.labels, mxs):
-            print(f"{lbl}: {mx.shape} matrix with {mx.nnz} nonzero entries (of {mx.shape[0]*mx.shape[1]} total)")
+            print("{}: {} matrix with {} nonzero entries (of {} total)".format(
+                lbl, mx.shape, mx.nnz, mx.shape[0] * mx.shape[1]
+            ))
             print(mx.toarray())
-        print(f"{len(sparsePP)} basis elements")
+        print("{} basis elements".format(len(sparsePP)))
         self.assertEqual(len(sparsePP), 16)
 
         # TODO assert correctness
@@ -221,9 +223,9 @@ class BasisToolsTester(BaseCase):
         Mout = bt.change_basis(M, sparsePP, 'std')
         vout = bt.change_basis(v, sparsePP, 'std')
         Sout = bt.change_basis(S, sparsePP, 'std')
-        print(f"{type(M)} -> {type(Mout)}")
-        print(f"{type(v)} -> {type(vout)}")
-        print(f"{type(S)} -> {type(Sout)}")
+        print("{} -> {}".format(type(M), type(Mout)))
+        print("{} -> {}".format(type(v), type(vout)))
+        print("{} -> {}".format(type(S), type(Sout)))
         self.assertIsInstance(Mout, np.ndarray)
         self.assertIsInstance(vout, np.ndarray)
         self.assertIsInstance(Sout, scipy.sparse.csr_matrix)
