@@ -1,8 +1,13 @@
 """Utilities shared by unit tests"""
 from unittest import TestCase
 
+import sys
 import numpy as np
 import numbers
+from pathlib import Path
+
+_TEST_ROOT_PATH = Path(__file__).parent.parent.absolute()
+_TEST_DATA_PATH = _TEST_ROOT_PATH / "data"
 
 
 class BaseCase(TestCase):
@@ -26,6 +31,21 @@ class BaseCase(TestCase):
                 self.assertAlmostEqual(v, e, places=7, msg=msg)
             else:
                 self.assertEqual(v, e, msg=msg)
+
+    def fixture_data(self, data_file_name):
+        """Returns the absolute path to a test fixture data file"""
+        # First try without a version or architecture
+        noarch_file = _TEST_DATA_PATH / data_file_name
+        if not noarch_file.exists():
+            # If the no-arch data file doesn't exist, try looking in a python version-specific data path
+            version_path = _TEST_DATA_PATH / "v{}".format(sys.version_info.major)
+            if version_path.exists():
+                version_file = version_path / data_file_name
+                if version_file.exists():
+                    return str(version_file)
+
+        # As fallback, just return the no-arch filename and let the caller deal with it
+        return str(noarch_file)
 
     def debug(self, debugger=None):
         """Helper factory for debugger breakpoints.
