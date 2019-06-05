@@ -1,5 +1,6 @@
 import os
 import unittest
+import functools
 from unittest import mock
 import numpy as np
 import scipy
@@ -9,7 +10,20 @@ from ..util import BaseCase
 from pygsti.construction import std2Q_XXYYII
 import pygsti.tools.optools as ot
 import pygsti.tools.basistools as bt
-from pygsti.baseobjs.basis import Basis
+from pygsti.baseobjs.basis import Basis, basis_matrices
+
+
+def fake_minimize(fn):
+    """Mock scipy.optimize.minimize in the underlying function call to reduce optimization overhead"""
+    def side_effect(o, mx, **kwargs):
+        return mock.MagicMock(x=mx)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with mock.patch.object(scipy.optimize, 'minimize', side_effect=side_effect):
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 class OpToolsTester(BaseCase):
@@ -89,21 +103,16 @@ class ProjectModelTester(BaseCase):
         self.target_model = std2Q_XXYYII.target_model()
         self.model = self.target_model.depolarize(op_noise=0.01)
 
+    @fake_minimize
     def test_log_diff_model_projection(self):
-        # Optimization is expensive, fake it
-        def side_effect(o, mx, **kwargs):
-            return mock.MagicMock(x=mx)
-        with mock.patch.object(scipy.optimize, 'minimize', side_effect=side_effect):
-            proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logG-logT')
-            # TODO assert correctness
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logG-logT')
+        # TODO assert correctness
 
     def test_logTiG_model_projection(self):
-        # TODO mock expensive calls
         proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logTiG')
         # TODO assert correctness
 
     def test_logGTi_model_projection(self):
-        # TODO mock expensive calls
         proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logGTi')
         # TODO assert correctness
 
@@ -112,6 +121,125 @@ class ProjectModelTester(BaseCase):
             mdl_target_gm = std2Q_XXYYII.target_model()
             mdl_target_gm.basis = Basis.cast("gm", 16)
             ot.project_model(self.model, mdl_target_gm, self.projectionTypes, 'logGti')  # basis mismatch
+
+
+class ErrorGenTester(BaseCase):
+    def setUp(self):
+        self.target_model = std2Q_XXYYII.target_model()
+        self.mdl_datagen = self.target_model.depolarize(op_noise=0.1, spam_noise=0.001)
+
+    def test_std_errgens(self):
+        projectionTypes = ['hamiltonian', 'stochastic', 'affine']
+        basisNames = ['std', 'gm', 'pp']  # , 'qt'] #dim must == 3 for qt
+
+        for projectionType in projectionTypes:
+            ot.std_scale_factor(4, projectionType)
+            for basisName in basisNames:
+                ot.std_error_generators(4, projectionType, basisName)
+
+    def test_std_errgens_raise_on_bad_projection_type(self):
+        with self.assertRaises(ValueError):
+            ot.std_scale_factor(4, "foobar")
+        with self.assertRaises(ValueError):
+            ot.std_error_generators(4, "foobar", 'gm')
+
+    def test_lind_errgens(self):
+        basis = Basis.cast('gm', 4)
+
+        normalize = False
+        other_mode = "all"
+        ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        ot.lindblad_error_generators(None, None, normalize, other_mode)
+
+        normalize = True
+        other_mode = "all"
+        ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        ot.lindblad_error_generators(None, None, normalize, other_mode)
+
+        normalize = True
+        other_mode = "diagonal"
+        ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        ot.lindblad_error_generators(None, None, normalize, other_mode)
+
+        basis = Basis.cast('gm', 16)
+        mxBasis = Basis.cast('gm', 16)
+        errgen = np.identity(16, 'd')
+        ot.lindblad_errgen_projections(errgen, basis, basis, mxBasis,
+                                       normalize=True, return_generators=False,
+                                       other_mode="all", sparse=False)
+
+        ot.lindblad_errgen_projections(errgen, None, 'gm', mxBasis,
+                                       normalize=True, return_generators=False,
+                                       other_mode="all", sparse=False)
+        ot.lindblad_errgen_projections(errgen, 'gm', None, mxBasis,
+                                       normalize=True, return_generators=True,
+                                       other_mode="diagonal", sparse=False)
+
+        basisMxs = basis_matrices('gm', 16, sparse=False)
+        ot.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis,
+                                       normalize=True, return_generators=False,
+                                       other_mode="all", sparse=False)
+
+        ot.lindblad_errgen_projections(errgen, None, None, mxBasis,
+                                       normalize=True, return_generators=False,
+                                       other_mode="all", sparse=False)
+
+        # TODO assert correctness
+
+    @fake_minimize
+    def test_err_gen(self):
+        projectionTypes = ['hamiltonian', 'stochastic', 'affine']
+        basisNames = ['std', 'gm', 'pp']  # , 'qt'] #dim must == 3 for qt
+
+        for (lbl, gateTarget), gate in zip(self.target_model.operations.items(), self.mdl_datagen.operations.values()):
+            errgen = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logG-logT')
+            altErrgen = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logTiG')
+            altErrgen2 = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logGTi')
+            with self.assertRaises(ValueError):
+                ot.error_generator(gate, gateTarget, self.target_model.basis, 'adsf')
+
+            for projectionType in projectionTypes:
+                for basisName in basisNames:
+                    ot.std_errgen_projections(errgen, projectionType, basisName)
+
+            originalGate = ot.operation_from_error_generator(errgen, gateTarget, 'logG-logT')
+            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, 'logTiG')
+            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, 'logGTi')
+            with self.assertRaises(ValueError):
+                ot.operation_from_error_generator(errgen, gateTarget, 'adsf')
+            #self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
+            self.assertArraysAlmostEqual(altOriginalGate, gate)
+            self.assertArraysAlmostEqual(altOriginalGate2, gate)
+
+    @fake_minimize
+    def test_err_gen_nonunitary(self):
+        errgen_nonunitary = ot.error_generator(self.mdl_datagen.operations['Gxi'],
+                                               self.mdl_datagen.operations['Gxi'],
+                                               self.mdl_datagen.basis)
+        # TODO assert correctness
+
+    def test_err_gen_not_near_gate(self):
+        errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+                                             self.target_model.basis, 'logTiG')
+        errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+                                             self.target_model.basis, 'logGTi')
+        # TODO assert correctness
+
+    def test_err_gen_raises_on_bad_type(self):
+        with self.assertRaises(ValueError):
+            ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gxi'],
+                               self.target_model.basis, 'foobar')
+
+    def test_err_gen_assert_shape_raises_on_ndims_too_high(self):
+        # Check helper routine _assert_shape
+        with self.assertRaises(NotImplementedError):  # boundary case
+            ot._assert_shape(np.zeros((2, 2, 2, 2, 2), 'd'), (2, 2, 2, 2, 2), sparse=True)  # ndims must be <= 4
 
 
 class GateOpsTester(BaseCase):
