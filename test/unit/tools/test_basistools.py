@@ -4,7 +4,6 @@ from functools import partial
 
 from ..util import BaseCase
 
-import pygsti
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lindbladtools
 
@@ -104,16 +103,16 @@ class BasisToolsTester(BaseCase):
             change(rank3tensor, 'pp', 'gm')  # only convert rank 1 & 2 objects
 
         densityMx = np.array([[1, 0], [0, -1]], 'complex')
-        gmVec = pygsti.stdmx_to_gmvec(densityMx)
-        ppVec = pygsti.stdmx_to_ppvec(densityMx)
-        stdVec = pygsti.stdmx_to_stdvec(densityMx)
+        gmVec = bt.stdmx_to_gmvec(densityMx)
+        ppVec = bt.stdmx_to_ppvec(densityMx)
+        stdVec = bt.stdmx_to_stdvec(densityMx)
         self.assertArraysAlmostEqual(gmVec, np.array([[0], [0], [0], [np.sqrt(2)]], 'd'))
         self.assertArraysAlmostEqual(ppVec, np.array([[0], [0], [0], [np.sqrt(2)]], 'd'))
         self.assertArraysAlmostEqual(stdVec, np.array([[1], [0], [0], [-1]], 'complex'))
 
-        mxFromGM = pygsti.gmvec_to_stdmx(gmVec)
-        mxFromPP = pygsti.ppvec_to_stdmx(ppVec)
-        mxFromStd = pygsti.stdvec_to_stdmx(stdVec)
+        mxFromGM = bt.gmvec_to_stdmx(gmVec)
+        mxFromPP = bt.ppvec_to_stdmx(ppVec)
+        mxFromStd = bt.stdvec_to_stdmx(stdVec)
         self.assertArraysAlmostEqual(mxFromGM, densityMx)
         self.assertArraysAlmostEqual(mxFromPP, densityMx)
         self.assertArraysAlmostEqual(mxFromStd, densityMx)
@@ -202,3 +201,29 @@ class BasisToolsTester(BaseCase):
         mxInReducedBasis = bt.resize_std_mx(mxInStdBasis, 'contract', end, begin)
         original = bt.resize_std_mx(mxInReducedBasis, 'expand', begin, end)
         # TODO assert correctness
+
+    def test_sparse_lindblad_bases(self):
+        sparsePP = Basis.cast("pp", 16, sparse=True)
+        mxs = sparsePP.elements
+        for lbl, mx in zip(sparsePP.labels, mxs):
+            print(f"{lbl}: {mx.shape} matrix with {mx.nnz} nonzero entries (of {mx.shape[0]*mx.shape[1]} total)")
+            print(mx.toarray())
+        print(f"{len(sparsePP)} basis elements")
+        self.assertEqual(len(sparsePP), 16)
+
+        # TODO assert correctness
+
+        M = np.ones((16, 16), 'd')
+        v = np.ones(16, 'd')
+        S = scipy.sparse.identity(16, 'd', 'csr')
+
+        print("Test types after basis change by sparse basis:")
+        Mout = bt.change_basis(M, sparsePP, 'std')
+        vout = bt.change_basis(v, sparsePP, 'std')
+        Sout = bt.change_basis(S, sparsePP, 'std')
+        print(f"{type(M)} -> {type(Mout)}")
+        print(f"{type(v)} -> {type(vout)}")
+        print(f"{type(S)} -> {type(Sout)}")
+        self.assertIsInstance(Mout, np.ndarray)
+        self.assertIsInstance(vout, np.ndarray)
+        self.assertIsInstance(Sout, scipy.sparse.csr_matrix)
