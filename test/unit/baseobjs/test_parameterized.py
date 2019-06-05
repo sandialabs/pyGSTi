@@ -1,14 +1,14 @@
 """ Unit tests covering pygsti.baseobjs.parameterized """
-from ..unit import BaseCase
+from ..util import BaseCase
 
-from pygsti.baseobjs import parameterized as p
+from pygsti.baseobjs.parameterized import parameterized
 
 
 class ParameterizedTester(BaseCase):
     def test_decorator_args(self):
         decorator_args = None
 
-        @p.parameterized
+        @parameterized
         def decorated(fn, a, b):
             nonlocal decorator_args
             decorator_args = (a, b)
