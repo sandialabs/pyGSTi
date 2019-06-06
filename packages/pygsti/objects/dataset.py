@@ -868,7 +868,7 @@ class DataSet(object):
                 else:
                     #assume final outcome at each time is constrained
                     nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
-                    nDOF += nOutcomes - 1; cur_outcomes = set()
+                    nDOF += nOutcomes - 1; cur_outcomes = set([ol])
                     cur_t = t
             nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
             nDOF += nOutcomes - 1  # last time stamp

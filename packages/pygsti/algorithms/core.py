@@ -1235,7 +1235,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     tm = _time.time()
 
     if printer.verbosity > 0:
-        nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse)  # number of independent parameters
+        nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
         # in dataset (max. model # of params)
 
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
@@ -2224,7 +2224,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     if printer.verbosity > 0:
         if _np.isfinite(deltaLogL):
-            nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse)  # number of independent parameters
+            nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
             # in dataset (max. model # of params)
 
             #Don't compute num gauge params if it's expensive (>10% of mem limit)
