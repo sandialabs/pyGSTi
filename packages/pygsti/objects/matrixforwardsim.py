@@ -509,7 +509,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             return _np.rollaxis(flattened_d2prod, 0, 3).reshape((vec_kl_size, vec_ij_size, dim, dim))
             # axes = (model_parameter1, model_parameter2, model_element_row, model_element_col)
 
-    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False):
+    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
         operation sequence.  The spam tuples may only vary in their effect-label (their
@@ -537,12 +537,16 @@ class MatrixForwardSimulator(ForwardSimulator):
           product will overflow and the subsequent trace operation will
           yield nan as the returned probability.
 
+        time : float, optional
+          The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         numpy.ndarray
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
+        assert(time is None), "MatrixForwardSimulator cannot be used to simulate time-dependent circuits"
         rho, Es = self._rhoEs_from_spamTuples(rholabel, elabels)
         #shapes: rho = (N,1), Es = (len(elabels),N)
 

@@ -356,6 +356,22 @@ class SPAMVec(_modelmember.ModelMember):
         """
         raise ValueError("Cannot set the value of a %s directly!" % self.__class__.__name__)
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.  For time-independent
+        operators (the default), this function does absolutely nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        pass
+
     def todense(self, scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.  The memory

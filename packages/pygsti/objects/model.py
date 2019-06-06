@@ -45,6 +45,18 @@ from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Label
 
 
+# Helper fn: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
+# TODO: move this somewhere better?  used in circuit simplification but also in fwdsims...
+def spamTupleToOutcome(spamTuple):
+    if spamTuple is None:
+        return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
+    else:
+        prep_lbl, povm_and_effect_lbl = spamTuple
+        last_underscore = povm_and_effect_lbl.rindex('_')
+        effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
+        return (effect_lbl,)  # effect label *is* the outcome
+
+    
 class Model(object):
     """
     A predictive model for a Quantum Information Processor (QIP).
@@ -913,16 +925,6 @@ class OpModel(Model):
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
-        # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-        def spamTupleToOutcome(spamTuple):
-            if spamTuple is None:
-                return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
-            else:
-                prep_lbl, povm_and_effect_lbl = spamTuple
-                last_underscore = povm_and_effect_lbl.rindex('_')
-                effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
-                return (effect_lbl,)  # effect label *is* the outcome
-
         def resolveSPAM(circuit):
             """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
@@ -1153,7 +1155,7 @@ class OpModel(Model):
         _, outcomes = self.simplify_circuit(circuit)
         return len(outcomes)
 
-    def probs(self, circuit, clipTo=None):
+    def probs(self, circuit, clipTo=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -1166,6 +1168,9 @@ class OpModel(Model):
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
+        time : float, optional
+            The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         probs : dictionary
@@ -1173,7 +1178,7 @@ class OpModel(Model):
             probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
-        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo)
+        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo, time)
 
     def dprobs(self, circuit, returnPr=False, clipTo=None):
         """

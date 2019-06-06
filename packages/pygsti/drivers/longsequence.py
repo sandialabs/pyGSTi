@@ -377,6 +377,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - stringManipRules = list of (find,replace) tuples
         - germLengthLimits = dict of form {germ: maxlength}
         - recordOutput = bool (default = True)
+        - timeDependent = bool (default = False)
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -699,7 +700,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         comm=comm, distributeMethod=advancedOptions.get(
             'distributeMethod', "default"),
         check=advancedOptions.get('check', False),
-        evaltree_cache={})
+        evaltree_cache={},
+        time_dependent=advancedOptions.get('timeDependent', False))
 
     if objective == "chi2":
         args['useFreqWeightedChiSq'] = advancedOptions.get(

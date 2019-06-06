@@ -24,7 +24,7 @@ from pprint import pprint
 def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                        sampleError="multinomial", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate",
-                       recordZeroCnts=True, comm=None, memLimit=None):
+                       recordZeroCnts=True, comm=None, memLimit=None, times=None):
     """Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
@@ -98,6 +98,13 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         A rough memory limit in bytes which is used to determine job allocation
         when there are multiple processors.
 
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `nSamples` samples will be simulated at each time value, meaning that
+        each circuit in `circuit_list` will be evaluated with the given time
+        value as its *start time*.
+
+
     Returns
     -------
     DataSet
@@ -121,7 +128,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         aliasDict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                      for ky, val in aliasDict.items()}  # convert to use Labels
 
-    if gsGen:
+    if gsGen and times is None:
         trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
                               for s in circuit_list]
         all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
@@ -139,92 +146,105 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
 
             #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
             trans_s = _gstrc.translate_circuit(s, aliasDict)
-            if gsGen:
-                ps = all_probs[trans_s]
-
-                if sampleError in ("binomial", "multinomial"):
-                    #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                    for ol in ps:
-                        if ps[ol] < 0:
-                            if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
-                            ps[ol] = 0.0
-                        elif ps[ol] > 1:
-                            if ps[ol] > (1 + TOL): _warnings.warn("Clipping probs > 1 to 1")
-                            ps[ol] = 1.0
-            else:
-                ps = _collections.OrderedDict([(ol, frac) for ol, frac
-                                               in dsGen[trans_s].fractions.items()])
-
-            if gsGen and sampleError in ("binomial", "multinomial"):
-                #Check that sum ~= 1 (and nudge if needed) since binomial and
-                #  multinomial random calls assume this.
-                psum = sum(ps.values())
-                adjusted = False
-                if psum > 1 + TOL:
-                    adjusted = True
-                    _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                if psum < 1 - TOL:
-                    adjusted = True
-                    _warnings.warn("Adjusting sum(probs) < 1 to 1")
-
-                # A cleaner probability cleanup.. lol
-                OVERTOL = 1.0 + TOL
-                UNDERTOL = 1.0 - TOL
-                def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
-                if not normalized():
-                    m = max(ps.values())
-                    ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
-                    print(sum(ps.values()))
-
-                assert normalized(), 'psum={}'.format(sum(ps.values()))
-                if adjusted:
-                    _warnings.warn('Adjustment finished')
-
-            if nSamples is None and dsGen is not None:
-                N = dsGen[trans_s].total  # use the number of samples from the generating dataset
-                #Note: total() accounts for other intermediate-measurment branches automatically
-            else:
-                try:
-                    N = nSamples[k]  # try to treat nSamples as a list
-                except:
-                    N = nSamples  # if not indexable, nSamples should be a single number
-
-            nWeightedSamples = N
-
-            counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
-            labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
-            # "outcome labels" - sort by prob for consistent generation
-            if sampleError == "binomial":
-
-                if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
-                    counts[labels[0]] = nWeightedSamples
-                else:
-                    assert(len(labels) == 2)
-                    ol0, ol1 = labels[0], labels[1]
-                    counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
-                    counts[ol1] = nWeightedSamples - counts[ol0]
-
-            elif sampleError == "multinomial":
-                countsArray = rndm.multinomial(nWeightedSamples,
-                                               [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
-                for i, ol in enumerate(labels):
-                    counts[ol] = countsArray[0, i]
-            else:
-                for outcomeLabel, p in ps.items():
-                    pc = _np.clip(p, 0, 1)  # Note: *not* used in "none" case
-                    if sampleError == "none":
-                        counts[outcomeLabel] = float(nWeightedSamples * p)
-                    elif sampleError == "clip":
-                        counts[outcomeLabel] = float(nWeightedSamples * pc)
-                    elif sampleError == "round":
-                        counts[outcomeLabel] = int(round(nWeightedSamples * pc))
+            circuit_times = times if times is not None else ["N/A dummy"]
+            
+            counts_list = []
+            for tm in circuit_times:
+                if gsGen:
+                    if times is None:
+                        ps = all_probs[trans_s]
                     else:
-                        raise ValueError(
-                            "Invalid sample error parameter: '%s'  "
-                            "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
-                        )
-
-            dataset.add_count_dict(s, counts, recordZeroCnts=recordZeroCnts)
+                        ps = gsGen.probs(trans_s, time=tm)
+    
+                    if sampleError in ("binomial", "multinomial"):
+                        #Adjust to probabilities if needed (and warn if not close to in-bounds)
+                        for ol in ps:
+                            if ps[ol] < 0:
+                                if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                                ps[ol] = 0.0
+                            elif ps[ol] > 1:
+                                if ps[ol] > (1 + TOL): _warnings.warn("Clipping probs > 1 to 1")
+                                ps[ol] = 1.0
+                else:
+                    ps = _collections.OrderedDict([(ol, frac) for ol, frac
+                                                   in dsGen[trans_s].fractions.items()])
+    
+                if gsGen and sampleError in ("binomial", "multinomial"):
+                    #Check that sum ~= 1 (and nudge if needed) since binomial and
+                    #  multinomial random calls assume this.
+                    psum = sum(ps.values())
+                    adjusted = False
+                    if psum > 1 + TOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                    if psum < 1 - TOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) < 1 to 1")
+    
+                    # A cleaner probability cleanup.. lol
+                    OVERTOL = 1.0 + TOL
+                    UNDERTOL = 1.0 - TOL
+                    def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
+                    if not normalized():
+                        m = max(ps.values())
+                        ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
+                        print(sum(ps.values()))
+    
+                    assert normalized(), 'psum={}'.format(sum(ps.values()))
+                    if adjusted:
+                        _warnings.warn('Adjustment finished')
+    
+                if nSamples is None and dsGen is not None:
+                    N = dsGen[trans_s].total  # use the number of samples from the generating dataset
+                    #Note: total() accounts for other intermediate-measurment branches automatically
+                else:
+                    try:
+                        N = nSamples[k]  # try to treat nSamples as a list
+                    except:
+                        N = nSamples  # if not indexable, nSamples should be a single number
+    
+                nWeightedSamples = N
+    
+                counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
+                labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
+                # "outcome labels" - sort by prob for consistent generation
+                if sampleError == "binomial":
+    
+                    if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
+                        counts[labels[0]] = nWeightedSamples
+                    else:
+                        assert(len(labels) == 2)
+                        ol0, ol1 = labels[0], labels[1]
+                        counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
+                        counts[ol1] = nWeightedSamples - counts[ol0]
+    
+                elif sampleError == "multinomial":
+                    countsArray = rndm.multinomial(nWeightedSamples,
+                                                   [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
+                    for i, ol in enumerate(labels):
+                        counts[ol] = countsArray[0, i]
+                else:
+                    for outcomeLabel, p in ps.items():
+                        pc = _np.clip(p, 0, 1)  # Note: *not* used in "none" case
+                        if sampleError == "none":
+                            counts[outcomeLabel] = float(nWeightedSamples * p)
+                        elif sampleError == "clip":
+                            counts[outcomeLabel] = float(nWeightedSamples * pc)
+                        elif sampleError == "round":
+                            counts[outcomeLabel] = int(round(nWeightedSamples * pc))
+                        else:
+                            raise ValueError(
+                                "Invalid sample error parameter: '%s'  "
+                                "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
+                            )
+                counts_list.append(counts)
+                
+            if times is None:
+                assert(len(counts_list) == 1)
+                dataset.add_count_dict(s, counts_list[0], recordZeroCnts=recordZeroCnts)
+            else:
+                dataset.add_series_data(s, counts_list, times)
+                
         dataset.done_adding_data()
 
     if comm is not None:  # broadcast to non-root procs

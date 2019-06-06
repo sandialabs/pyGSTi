@@ -412,6 +412,22 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise ValueError("Cannot set the value of a %s directly!" % self.__class__.__name__)
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.  For time-independent
+        operators (the default), this function does absolutely nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        pass
+
     def todense(self):
         """
         Return this operation as a dense matrix.
@@ -843,7 +859,7 @@ class LinearOperator(_modelmember.ModelMember):
             raise ValueError("%s is not a *square* 2D array" % M)  # pragma: no cover
 
         return matrix
-
+    
 
 #class MapOperator(LinearOperator):
 #    def __init__(self, dim, evotype):

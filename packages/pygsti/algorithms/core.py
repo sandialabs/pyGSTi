@@ -950,7 +950,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
               check_jacobian=False, circuitWeights=None,
               opLabelAliases=None, memLimit=None, comm=None,
               distributeMethod="deriv", profiler=None,
-              evaltree_cache=None):
+              evaltree_cache=None, time_dependent=False):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -1059,6 +1059,10 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         with cached values to speed up subsequent executions of this function
         which use the *same* `startModel`, `circuitsToUse`, `memLimit`,
         `comm`, and `distributeMethod`.
+
+    time_dependent : bool, optional
+        Whether any timestamps in the data should be taken seriously and used
+        to compare with a potentially time-dependent model.
 
 
     Returns
@@ -1186,15 +1190,22 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['totalCntVec'] = N
 
     if useFreqWeightedChiSq:
+        assert(not time_dependent), "Cannot use frequency-weighted chi2 with `time_dependent` == True!"
         objective = _objfns.FreqWeightedChi2Function(
             mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
             spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
             gthrMem, check, check_jacobian, comm, profiler, printer)
     else:
-        objective = _objfns.Chi2Function(
-            mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-            spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
-            gthrMem, check, check_jacobian, comm, profiler, printer)
+        if time_dependent:
+            objective = _objfns.TimeDependentChi2Function(
+                mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
+                spam_penalty_factor, dataset, dsCircuitsToUse, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+                gthrMem, check, check_jacobian, comm, profiler, printer)
+        else:
+            objective = _objfns.Chi2Function(
+                mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
+                spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+                gthrMem, check, check_jacobian, comm, profiler, printer)
     objective_func = objective.fn
     jacobian = objective.jfn
 
@@ -1493,7 +1504,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
                         check=False, check_jacobian=False,
                         circuitWeightsDict=None, opLabelAliases=None,
                         memLimit=None, profiler=None, comm=None,
-                        distributeMethod="deriv", evaltree_cache=None):
+                        distributeMethod="deriv", evaltree_cache=None, time_dependent=False):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
@@ -1611,6 +1622,10 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         An empty dictionary which gets filled with the *final* computed EvalTree
         (and supporting info) used in this computation.
 
+    time_dependent : bool, optional
+        Whether any timestamps in the data should be taken seriously and used
+        to compare with a potentially time-dependent model.
+
 
     Returns
     -------
@@ -1668,7 +1683,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
                           useFreqWeightedChiSq, regularizeFactor,
                           printer - 1, check, check_jacobian,
                           circuitWeights, opLabelAliases, memLimit, comm,
-                          distributeMethod, profiler, evt_cache)
+                          distributeMethod, profiler, evt_cache, time_dependent)
             if returnAll:
                 lsgstModels.append(lsgstModel)
                 minErrs.append(minErr)
@@ -1879,7 +1894,7 @@ def do_mlgst(dataset, startModel, circuitsToUse,
              circuitWeights=None, opLabelAliases=None,
              memLimit=None, comm=None,
              distributeMethod="deriv", profiler=None,
-             evaltree_cache=None):
+             evaltree_cache=None, time_dependent=False):
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -1976,6 +1991,10 @@ def do_mlgst(dataset, startModel, circuitsToUse,
         which use the *same* `startModel`, `circuitsToUse`, `memLimit`,
         `comm`, and `distributeMethod`.
 
+    time_dependent : bool, optional
+        Whether any timestamps in the data should be taken seriously and used
+        to compare with a potentially time-dependent model.
+
 
     Returns
     -------
@@ -1988,7 +2007,8 @@ def do_mlgst(dataset, startModel, circuitsToUse,
                           fditer, tol, cptp_penalty_factor, spam_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
                           check, circuitWeights, opLabelAliases, memLimit,
-                          comm, distributeMethod, profiler, evaltree_cache, None)
+                          comm, distributeMethod, profiler, evaltree_cache, None,
+                          100, time_dependent)
 
 
 def _do_mlgst_base(dataset, startModel, circuitsToUse,
@@ -1999,7 +2019,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
                    circuitWeights=None, opLabelAliases=None,
                    memLimit=None, comm=None,
                    distributeMethod="deriv", profiler=None,
-                   evaltree_cache=None, forcefn_grad=None, shiftFctr=100):
+                   evaltree_cache=None, forcefn_grad=None, shiftFctr=100,
+                   time_dependent=False):
     """
     Same args and behavior as do_mlgst, but with additional:
 
@@ -2135,10 +2156,35 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     logL_upperbound = _tools.logl_max(mdl, dataset, dsCircuitsToUse,
                                       poissonPicture, check, opLabelAliases, evaltree_cache)
 
-    objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                                     spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval,
-                                     wrtBlkSize, gthrMem, forcefn_grad, poissonPicture, shiftFctr, check, comm,
-                                     profiler, printer)
+    if time_dependent:
+        objective = _objfns.TimeDependentLogLFunction(
+            mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
+            spam_penalty_factor, dsCircuitsToUse, dataset, minProbClip, radius, probClipInterval,
+            wrtBlkSize, gthrMem, forcefn_grad, poissonPicture, shiftFctr,
+            check, comm, profiler, printer)
+
+        #DEBUG TODO REMOVE (to use, also need to indent objective_func assignment below)
+        #objective2 = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
+        #                                  spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval,
+        #                                  wrtBlkSize, gthrMem, forcefn_grad, poissonPicture, shiftFctr, check, comm,
+        #                                  profiler, printer)
+        #
+        #def objective_func(v):
+        #    ret1 = objective.fn(v)
+        #    ret2 = objective2.fn(v)
+        #    maxdiff = max(_np.abs(ret1-ret2).flatten())
+        #    print("MAX DIFF = ",max(_np.abs(ret1-ret2).flatten()))
+        #    if maxdiff > 1e-1: #not _np.allclose(ret1,ret2):
+        #        print("DIFF TD-BASE: = ",ret1-ret2)
+        #        #print("BASE = ",ret2)
+        #        assert(False),"STOP"
+        #    return ret1
+
+    else:
+        objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
+                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval,
+                                         wrtBlkSize, gthrMem, forcefn_grad, poissonPicture, shiftFctr, check, comm,
+                                         profiler, printer)
     objective_func = objective.fn
     jacobian = objective.jfn
 
@@ -2226,7 +2272,8 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                        verbosity=0, check=False, circuitWeightsDict=None,
                        opLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod="deriv",
-                       alwaysPerformMLE=False, onlyPerformMLE=False, evaltree_cache=None):
+                       alwaysPerformMLE=False, onlyPerformMLE=False, evaltree_cache=None,
+                       time_dependent=False):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -2353,6 +2400,10 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         An empty dictionary which gets filled with the *final* computed EvalTree
         (and supporting info) used in this computation.
 
+    time_dependent : bool, optional
+        Whether any timestamps in the data should be taken seriously and used
+        to compare with a potentially time-dependent model.
+
 
     Returns
     -------
@@ -2415,7 +2466,8 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                                         spam_penalty_factor, minProbClip, probClipInterval,
                                         useFreqWeightedChiSq, 0, printer - 1, check,
                                         check, circuitWeights, opLabelAliases,
-                                        memLimit, comm, distributeMethod, profiler, evt_cache)
+                                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                                        time_dependent)
 
             if alwaysPerformMLE:
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
@@ -2423,7 +2475,8 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                                        cptp_penalty_factor, spam_penalty_factor,
                                        minProbClip, probClipInterval, radius,
                                        poissonPicture, printer - 1, check, circuitWeights,
-                                       opLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
+                                       opLabelAliases, memLimit, comm, distributeMethod, profiler,
+                                       evt_cache, time_dependent)
 
             tNxt = _time.time()
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt' % (i + 1), tRef)
@@ -2452,7 +2505,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                     dataset, mleModel, stringsToEstimate, maxiter, maxfev, 0, tol,
                     cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
                     poissonPicture, printer - 1, check, circuitWeights, opLabelAliases,
-                    memLimit, comm, distributeMethod, profiler, evt_cache)
+                    memLimit, comm, distributeMethod, profiler, evt_cache, time_dependent)
 
                 printer.log("2*Delta(log(L)) = %g" % (2 * (logL_ub - maxLogL_p)), 2)
 

@@ -169,7 +169,7 @@ class LabelTup(Label, tuple):
 
     @property
     def time(self):
-        return None
+        return 0
 
     @property
     def components(self):
@@ -347,7 +347,7 @@ class LabelStr(Label, strlittype):
 
     @property
     def time(self):
-        return None
+        return 0
 
     @property
     def components(self):
@@ -474,12 +474,15 @@ class LabelTupTup(Label, tuple):
 
     @property
     def time(self):
-        t = None
-        for lbl in self:
-            if lbl.time is not None: t = lbl.time
-            else: assert(lbl.time == t), "Components occur at different times!"
+        return max([lbl.time for lbl in self])
         #FUTURE: could cache this value since it shouldn't change?
-        return t
+
+        #OLD: for *absolute* times:
+        #t = 0
+        #for lbl in self:
+        #    if lbl.time is not None: t = lbl.time
+        #    else: assert(lbl.time == t), "Components occur at different times!"
+        #return t
 
     @property
     def components(self):

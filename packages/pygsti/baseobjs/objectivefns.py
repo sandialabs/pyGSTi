@@ -429,11 +429,20 @@ class TimeDependentChi2Function(ObjectiveFunction):
     #This objective function can handle time-dependent circuits - that is, circuitsToUse are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
-    def __init__(self, mdl, evTree, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                 spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+    def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
+                 spam_penalty_factor, dataset, dsCircuitsToUse, minProbClipForWeighting, probClipInterval, wrtBlkSize,
                  gthrMem, check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
 
+        assert(regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
+            "Cannot apply regularization or penalization in time-dependent chi2 case (yet)"
+
+        from ..tools import slicetools as _slct
+
+        self.mdl = mdl
         self.evTree = evTree
+        self.lookup = lookup
+        self.dataset = dataset
+        self.dsCircuitsToUse = dsCircuitsToUse
         self.circuitsToUse = circuitsToUse
         self.comm = comm
         self.profiler = profiler
@@ -444,10 +453,9 @@ class TimeDependentChi2Function(ObjectiveFunction):
         vec_gs_len = mdl.num_params()
         self.printer = _VerbosityPrinter.build_printer(verbosity, comm)
         self.opBasis = mdl.basis
-
-        assert(regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
-            "Cannot apply regularization or penalization in time-dependent chi2 case (yet)"
-
+            
+        #Compute "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
+        self.ex = 0
         self.KM = KM
         self.vec_gs_len = vec_gs_len
         #self.regularizeFactor = regularizeFactor
@@ -461,14 +469,28 @@ class TimeDependentChi2Function(ObjectiveFunction):
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
         #   tree and initialization of dsCircuitsToUse)
-        self.probs = _np.empty(KM, 'd')
-        self.jac = _np.empty((KM, vec_gs_len), 'd')
+        self.v = _np.empty(KM, 'd')
+        self.jac = _np.empty((KM + self.ex, vec_gs_len), 'd')
+
+        #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
+        self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
+        for i, c in enumerate(circuitsToUse):
+            lklen = _slct.length(lookup[i])
+            if 0 < lklen < mdl.get_num_outcomes(c):
+                self.firsts.append(_slct.as_array(lookup[i])[0])
+                self.indicesOfCircuitsWithOmittedData.append(i)
+        if len(self.firsts) > 0:
+            self.firsts = _np.array(self.firsts, 'i')
+            self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
+            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), vec_gs_len), 'd')
+            self.printer.log("SPARSE DATA: %d of %d rows have sparse data" % (len(self.firsts), len(circuitsToUse)))
+        else:
+            self.firsts = None  # no omitted probs
 
         #REMOVE: these are time dependent now...
         #self.cntVecMx = cntVecMx
         #self.N = N
         #self.f = cntVecMx / N
-        
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
 
         # Fast un-regularized version
@@ -487,28 +509,36 @@ class TimeDependentChi2Function(ObjectiveFunction):
 
     #Objective Function
     def simple_chi2(self, vectorGS):
+        assert(self.firsts is None), "Sparse data not supported yet"
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         fsim = self.mdl._fwdsim()
-        v = fsim.bulk_timedep_chi2(scratch, self.evTree, self.f, self.minProbClipForWeighting, self.probClipInterval, self.comm)
+        v = self.v
+        fsim.bulk_fill_timedep_chi2(v, self.evTree, self.dsCircuitsToUse, self.dataset, self.minProbClipForWeighting, self.probClipInterval, self.comm)
         #self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
         #v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
-        return v
+        return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
     # Jacobian function
     def simple_jac(self, vectorGS):
+        assert(self.firsts is None), "Sparse data not supported yet"
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.KM, self.vec_gs_len)
         self.mdl.from_vector(vectorGS)
-        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
-                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
-                                  check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
-                                  profiler=self.profiler, gatherMemLimit=self.gthrMem)
-        weights = self.get_weights(self.probs)
-        dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None]
+        #self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+        #                          prMxToFill=self.probs, clipTo=self.probClipInterval,
+        #                          check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
+        #                          profiler=self.profiler, gatherMemLimit=self.gthrMem)
+        #weights = self.get_weights(self.probs)
+        #dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None]
+        fsim = self.mdl._fwdsim()
+        fsim.bulk_fill_timedep_dchi2(dprobs, self.evTree, self.dsCircuitsToUse, self.dataset,
+                                     self.minProbClipForWeighting, self.probClipInterval, None,
+                                     self.comm, wrtBlockSize=self.wrtBlkSize, profiler=self.profiler,
+                                     gatherMemLimit=self.gthrMem)
         # (KM,N) * (KM,1)   (N = dim of vectorized model)
         # this multiply also computes jac, which is just dprobs
         # with a different shape (jac.shape == [KM,vec_gs_len])
@@ -558,7 +588,6 @@ class LogLFunction(ObjectiveFunction):
                  gthrMem, forcefn_grad, poissonPicture, shiftFctr=100,
                  check=False, comm=None, profiler=None, verbosity=0):
         from .. import tools as _tools
-        #need dsCircuitsToUse, dataset
 
         self.mdl = mdl
         self.evTree = evTree
@@ -805,7 +834,120 @@ class LogLFunction(ObjectiveFunction):
         return self.jac
 
 
+class TimeDependentLogLFunction(ObjectiveFunction):
+    def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
+                 spam_penalty_factor, dsCircuitsToUse, dataset, minProbClip, radius, probClipInterval, wrtBlkSize,
+                 gthrMem, forcefn_grad, poissonPicture, shiftFctr=100,
+                 check=False, comm=None, profiler=None, verbosity=0):
+        from .. import tools as _tools
+        assert(cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
+            "Cannot apply CPTP or SPAM penalization in time-dependent logl case (yet)"
+        assert(forcefn_grad is None), "forcing functions not supported with time-dependent logl function yet"
 
+        self.mdl = mdl
+        self.evTree = evTree
+        self.lookup = lookup
+        self.circuitsToUse = circuitsToUse
+        self.comm = comm
+        self.profiler = profiler
+        self.check = check
+
+        self.KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        self.vec_gs_len = mdl.num_params()
+        self.wrtBlkSize = wrtBlkSize
+        self.gthrMem = gthrMem
+
+        self.printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        self.opBasis = mdl.basis
+        #self.cptp_penalty_factor = cptp_penalty_factor
+        #self.spam_penalty_factor = spam_penalty_factor
+
+        #Compute "extra" (i.e. beyond the (circuit,spamlable)) rows of jacobian
+        self.ex = 0
+    
+        #Allocate peristent memory
+        self.v = _np.empty(self.KM, 'd')
+        self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
+    
+        #Detect omitted frequences (assumed to be 0) so we can compute liklihood correctly
+        self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
+        for i, c in enumerate(circuitsToUse):
+            lklen = _tools.slicetools.length(lookup[i])
+            if 0 < lklen < mdl.get_num_outcomes(c):
+                self.firsts.append(_tools.slicetools.as_array(lookup[i])[0])
+                self.indicesOfCircuitsWithOmittedData.append(i)
+        if len(self.firsts) > 0:
+            self.firsts = _np.array(self.firsts, 'i')
+            self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
+            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.vec_gs_len), 'd')
+        else:
+            self.firsts = None
+        assert(self.firsts is None), "Sparse data not supported yet"
+
+        self.dataset = dataset
+        self.dsCircuitsToUse = dsCircuitsToUse
+
+        self.min_p = minProbClip
+        self.a = radius  # parameterizes "roundness" of f == 0 terms
+        self.probClipInterval = probClipInterval
+    
+        if poissonPicture:
+            self.fn = self.poisson_picture_logl
+            self.jfn = self.poisson_picture_jacobian
+        else:
+            self.fn = None
+            self.jfn = None
+
+            raise NotImplementedError(("Non-poisson-picture optimization must be done with something other than a "
+                                       "least-squares optimizer and isn't implemented yet."))
+
+    def poisson_picture_logl(self, vectorGS):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        fsim = self.mdl._fwdsim()
+        v = self.v
+        fsim.bulk_fill_timedep_loglpp(v, self.evTree, self.dsCircuitsToUse, self.dataset, self.min_p, self.a,
+                                      self.probClipInterval, self.comm)
+        v = _np.sqrt(v)
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+
+        self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+        #      sqrt is well defined unless probClipInterval is set within [0,1].
+
+        
+    #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
+    #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
+    #  with ommitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)  # noqa
+    #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp_{i,sl} +                   # noqa
+    #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)      # noqa
+    
+    #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
+    #   and deriv == 0.5 / sqrt(...) * S * dp
+    def poisson_picture_jacobian(self, vectorGS):
+        tm = _time.time()
+        dlogl = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dlogl
+        dlogl.shape = (self.KM, self.vec_gs_len)
+        self.mdl.from_vector(vectorGS)
+        
+        fsim = self.mdl._fwdsim()
+        fsim.bulk_fill_timedep_dloglpp(dlogl, self.evTree, self.dsCircuitsToUse, self.dataset,
+                                       self.min_p, self.a, self.probClipInterval, self.v,
+                                       self.comm, wrtBlockSize=self.wrtBlkSize, profiler=self.profiler,
+                                       gatherMemLimit=self.gthrMem)
+
+        # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
+        v = _np.sqrt(self.v)
+        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
+        # below
+        v = _np.maximum(v, 1e-100)
+        dlogl_factor = (0.5 / v)
+        dlogl *= dlogl_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+
+        if self.check: _opt.check_jac(lambda v: self.poisson_picture_logl(v), vectorGS, self.jac,
+                                      tol=1e-3, eps=1e-6, errType='abs')
+        self.profiler.add_time("do_mlgst: JACOBIAN", tm)
+        return self.jac
 
 
 def _cptp_penalty_size(mdl):
