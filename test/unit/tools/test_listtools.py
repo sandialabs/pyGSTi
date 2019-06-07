@@ -1,7 +1,5 @@
 from ..util import BaseCase
 
-import pygsti
-
 from copy import deepcopy
 
 import pygsti.tools.listtools as lt
