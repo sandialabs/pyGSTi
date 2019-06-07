@@ -199,7 +199,7 @@ class DataSetRow(object):
         last_time = None
         seriesDict = {}
         for outcome_label in self.outcomes:
-            if outcome_label not in self.outcomes.keys():
+            if outcome_label not in seriesDict.keys():
                 seriesDict[outcome_label] = []
 
         if self.reps is None:
@@ -317,15 +317,15 @@ class DataSetRow(object):
 
         return firstrep
 
-    def get_mean_timestep(self):
+    def get_meantimestep(self):
         """
         Returns the mean time-step. Will raise an error for data that is
         a trivial time-series (i.e., data all at one time).
         """
-        times = self.get_times()
+        times = _np.array(self.get_times())
         assert(len(times) >= 2), "Mean time-step is ill-defined when there is not multiple data times!"
 
-        return _np.mean(times[1:] - times[0:len(times) - 1])
+        return _np.mean(_np.diff(times))
 
     def __iter__(self):
         if self.reps is not None:
@@ -1331,14 +1331,14 @@ class DataSet(object):
         for circuit, dsRow in otherDataSet.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 
-    def get_mean_timestep(self):
+    def get_meantimestep(self):
         """
         Returns the mean time-step, averaged over the time-step for each
         circuit and over circuits.
         """
         timesteps = []
         for key in self.keys():
-            timesteps.append(self[key].get_mean_timestep())
+            timesteps.append(self[key].get_meantimestep())
 
         return _np.mean(timesteps)
 
