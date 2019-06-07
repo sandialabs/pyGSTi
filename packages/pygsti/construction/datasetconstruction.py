@@ -278,15 +278,35 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
             '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
         )
 
+    # New code that works for time-series data.
     for key in dataset.keys():
-        linecounts = dataset[key].counts
-        count_dict = {}
-        for new_outcome in new_outcomes:
-            count_dict[new_outcome] = 0
-            for old_outcome in label_merge_dict[new_outcome]:
-                count_dict[new_outcome] += linecounts.get(old_outcome, 0)
-        merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux,
-                                      recordZeroCnts=recordZeroCnts)
+        times, linecounts = dataset[key].get_timeseries()
+        count_dict_list = []
+        for i in range(len(times)):
+            count_dict = {}
+            for new_outcome in new_outcomes:
+                count_dict[new_outcome] = 0
+                for old_outcome in label_merge_dict[new_outcome]:
+                    count_dict[new_outcome] += linecounts[i].get(old_outcome, 0)
+            if recordZeroCnts is False:
+                for new_outcome in new_outcomes:
+                    if count_dict[new_outcome] == 0:
+                        del count_dict[new_outcome]
+            count_dict_list.append(count_dict)
+
+        merged_dataset.add_series_data(key, count_dict_list, times, aux=dataset[key].aux)
+
+    # Old code that doesn't work for time-series data.
+    #for key in dataset.keys():
+    #    linecounts = dataset[key].counts
+    #    count_dict = {}
+    #    for new_outcome in new_outcomes:
+    #        count_dict[new_outcome] = 0
+    #        for old_outcome in label_merge_dict[new_outcome]:
+    #            count_dict[new_outcome] += linecounts.get(old_outcome, 0)
+    #    merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux,
+    #                                  recordZeroCnts=recordZeroCnts)
+
     merged_dataset.done_adding_data()
     return merged_dataset
 
