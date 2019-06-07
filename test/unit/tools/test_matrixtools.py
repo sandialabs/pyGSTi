@@ -7,7 +7,7 @@ import warnings
 import pygsti.tools.matrixtools as mt
 
 
-class MatrixBaseTestCase(BaseCase):
+class MatrixToolsTester(BaseCase):
 
     def test_is_hermitian(self):
         herm_mx = np.array([[ 1, 1+2j],

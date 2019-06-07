@@ -11,7 +11,7 @@ for i in range(1, N):
             slices.append(slice(i, j, k))
 
 
-class SliceToolsBaseTestCase(BaseCase):
+class SliceToolsTester(BaseCase):
     def test_length(self):
         for s in slices:
             length(s)

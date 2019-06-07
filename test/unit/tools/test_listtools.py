@@ -7,7 +7,7 @@ from copy import deepcopy
 import pygsti.tools.listtools as lt
 
 
-class ListToolsBaseTestCase(BaseCase):
+class ListToolsTester(BaseCase):
     def test_remove_duplicates_in_place(self):
         l = [1, 2, 2, 3]
         l2 = deepcopy(l)
