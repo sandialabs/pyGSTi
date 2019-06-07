@@ -5,7 +5,7 @@ from pygsti.extras import rb
 from pygsti.tools import internalgates, optools as ot
 
 
-class InternalGatesTestCase(BaseCase):
+class InternalGatesTester(BaseCase):
 
     def test_internalgate_definitions(self):
         # TODO is this test needed?
