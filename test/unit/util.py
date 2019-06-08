@@ -23,6 +23,14 @@ _TEST_ROOT_PATH = Path(__file__).parent.parent.absolute()
 _TEST_DATA_PATH = _TEST_ROOT_PATH / "data"
 
 
+def version_label():
+    """Get the label used internally for this python version.
+
+    This is mainly used to identify version-specific test fixtures
+    """
+    return "v{}".format(sys.version_info.major)
+
+
 class BaseCase(TestCase):
     def assertArraysAlmostEqual(self, a, b, places=7, msg=None, delta=None):
         self.assertAlmostEqual(np.linalg.norm(a - b), 0, places=places, msg=msg, delta=delta)
@@ -51,7 +59,7 @@ class BaseCase(TestCase):
         noarch_file = _TEST_DATA_PATH / data_file_name
         if not noarch_file.exists():
             # If the no-arch data file doesn't exist, try looking in a python version-specific data path
-            version_path = _TEST_DATA_PATH / "v{}".format(sys.version_info.major)
+            version_path = _TEST_DATA_PATH / version_label()
             if version_path.exists():
                 version_file = version_path / data_file_name
                 if version_file.exists():
