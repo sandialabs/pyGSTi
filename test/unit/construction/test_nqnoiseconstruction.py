@@ -1,7 +1,8 @@
 from ..util import BaseCase
 
 from pygsti.objects import DataSet
-from pygsti.construction import nqnoiseconstruction as nc, std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
+from pygsti.construction import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
+import pygsti.construction.nqnoiseconstruction as nc
 
 
 class KCoverageTester(BaseCase):

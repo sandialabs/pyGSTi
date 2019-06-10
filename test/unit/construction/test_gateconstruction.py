@@ -2,7 +2,7 @@ import numpy as np
 
 from ..util import BaseCase
 
-from pygsti.construction import gateconstruction as gc
+import pygsti.construction.gateconstruction as gc
 
 
 class GateConstructionTester(BaseCase):
@@ -36,3 +36,7 @@ class GateConstructionTester(BaseCase):
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, ]])
         self.assertArraysAlmostEqual(gate, expected)
         # TODO edge cases?
+
+    def test_two_qubit_gate(self):
+        gate = gc.two_qubit_gate(xx=0.5, xy=0.5, xz=0.5, yy=0.5, yz=0.5, zz=0.5)
+        # TODO assert correctness

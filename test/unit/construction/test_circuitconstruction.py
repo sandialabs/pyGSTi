@@ -2,7 +2,7 @@ from ..util import BaseCase
 
 from pygsti.objects import Circuit, Label
 
-from pygsti.construction import circuitconstruction as cc
+import pygsti.construction.circuitconstruction as cc
 
 
 class CircuitConstructionTester(BaseCase):

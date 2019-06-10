@@ -4,7 +4,7 @@ from ..util import BaseCase
 
 import pygsti.construction as pc
 from pygsti.tools import listtools as lt
-from pygsti.construction import datasetconstruction as dc
+import pygsti.construction.datasetconstruction as dc
 
 
 class DataSetConstructionTester(BaseCase):
