@@ -587,6 +587,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         self.operation_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.factories['ops'] = _ld.OrderedMemberDict(self, None, None, flags)
 
         #SPAM (same as for cloud noise model)
         if prep_layers is None:
@@ -743,5 +744,36 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
     def get_layer_component_operation(self, complbl, dense):
         if isinstance(complbl, _CircuitLabel):
             return self.get_circuitlabel_op(complbl, dense)
-        else:
+        elif complbl in self.op_blks['layers']:
             return self.op_blks['layers'][complbl]
+        else:
+            #TODO REMOVE
+            #Auto-embedding -- should have an Embedding factory if you want this.
+            #complbl_without_sslbls = _Lbl(complbl.name, args=complbl.args)
+            #if complbl_without_sslbls in self.op_blks['layers']:
+            #    dense = bool(self.model._sim_type == "matrix")
+            #    Embedded = _op.EmbeddedDenseOp if dense else _op.EmbeddedOp
+            #    return Embedded(self.model.state_space_labels, complbl.sslbls,
+            #                    self.op_blks['layers'][complbl_without_sslbls])
+            opfactories = self.model.factories['ops']
+
+            if complbl.args:
+                complbl_without_args = _Lbl(complbl.name, complbl.sslbls)
+                if complbl_without_args in opfactories:
+                    return opfactories[complbl_without_args].create_simplified_op(args=complbl.args)
+                    # E.g. an EmbeddedOpFactory
+
+            complbl_name = _Lbl(complbl.name)
+            if complbl_name in opfactories:
+                return opfactories[complbl_name].create_simplified_op(args=complbl.args, sslbls=complbl.sslbls)
+                # E.g. an EmbeddingOpFactory
+
+#TODO REMOVE
+#                if complbl_name in self.factories['ops']:
+#                    try:
+#                        return Embedded(self.model.state_space_labels, complbl.sslbls,
+#                                        self.factories['ops'][complbl_name].create_simplified_op(complbl_without_sslbls))
+#                    except ValueError:
+#                        pass  # continue trying other ways of creating op
+
+            raise KeyError("Cannot create operator for label: %s" % str(complbl))

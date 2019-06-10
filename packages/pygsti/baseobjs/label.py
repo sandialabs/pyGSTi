@@ -67,6 +67,7 @@ class Label(object):
             could be an argument of a gate label, and one might create a label:
             `Label('Gx', (0,), args=(pi/3,))`
         """
+        #print("Label.__new__ with name=", name, "sslbls=", stateSpaceLabels, "t=", timestamp, "args=", args)
         if isinstance(name, Label) and stateSpaceLabels is None:
             return name  # Note: Labels are immutable, so no need to copy
 
@@ -105,8 +106,9 @@ class Label(object):
                             assert(timestamp is None), "Cannot supply timestamp in tuple when `timestamp` is given!"
                             timestamp = float(x[1:]); continue
                     stateSpaceLabels.append(x)
-                args = tup_args
+                args = tup_args if len(tup_args) > 0 else None
 
+        #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", timestamp, "args=", args)
         if stateSpaceLabels is None or stateSpaceLabels in ((), (None,)):
             if timestamp is None and args is None:
                 return LabelStr(name)

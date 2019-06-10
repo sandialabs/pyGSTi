@@ -56,6 +56,9 @@ from .povm import ComputationalBasisPOVM
 from .povm import LindbladPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
+from .opfactory import OpFactory
+from .opfactory import EmbeddedOpFactory
+from .opfactory import EmbeddingOpFactory
 
 from .model import Model
 from .explicitmodel import ExplicitOpModel
