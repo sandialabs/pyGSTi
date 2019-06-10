@@ -2427,6 +2427,8 @@ class Circuit(object):
             if nqubits == 1 and lbl.name is not None:
                 if isinstance(lbl, _CircuitLabel):  # HACK
                     return "|" + str(lbl) + "|"
+                elif lbl.args:
+                    return lbl.name + "(" + ",".join(map(str, lbl.args)) + ")"
                 else:
                     return lbl.name
             elif lbl.name in ('CNOT', 'Gcnot') and nqubits == 2:  # qubit indices = (control,target)
