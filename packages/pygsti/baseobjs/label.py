@@ -97,14 +97,31 @@ class Label(object):
                 tup = name
                 name = tup[0]
                 tup_args = []; stateSpaceLabels = []
+                next_is_arg = False
+                next_is_time = False
                 for x in tup[1:]:
+                    if next_is_arg:
+                        next_is_arg = False
+                        tup_args.append(x); continue
+                    if next_is_time:
+                        next_is_time = False
+                        timestamp = x; continue
+                        
                     if isstr(x):
                         if x.startswith(';'):
                             assert(args is None), "Cannot supply args in tuple when `args` is given!"
-                            tup_args.append(x[1:]); continue
+                            if x == ';':
+                                next_is_arg = True
+                            else:
+                                tup_args.append(x[1:])
+                            continue
                         if x.startswith('!'):
                             assert(timestamp is None), "Cannot supply timestamp in tuple when `timestamp` is given!"
-                            timestamp = float(x[1:]); continue
+                            if x == '!':
+                                next_is_time = True
+                            else:
+                                timestamp = float(x[1:])
+                            continue
                     stateSpaceLabels.append(x)
                 args = tup_args if len(tup_args) > 0 else None
 
