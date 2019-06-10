@@ -18,6 +18,7 @@ from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
 from . import labeldicts as _ld
+from . import opfactory as _opfactory
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
@@ -562,6 +563,8 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.operation_blks['cloudnoise'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.factories['targetops'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.factories['cloudnoise'] = _ld.OrderedMemberDict(self, None, None, flags)
 
         printer = _VerbosityPrinter.build_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
@@ -1159,11 +1162,11 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         if errcomp_type == "gates":
             if add_idle_noise: ops_to_compose.append(self.op_blks['layers']['globalIdle'])
             if len(components) > 1:
-                localErr = Composed([self.op_blks['cloudnoise'][l] for l in components],
+                localErr = Composed([self.get_layer_component_cloudnoise(l) for l in components],
                                     dim=self.model.dim, evotype=self.model._evotype)
             else:
                 l = components[0]
-                localErr = self.op_blks['cloudnoise'][l]
+                localErr = self.get_layer_component_cloudnoise(l)
 
             ops_to_compose.append(localErr)
 
@@ -1172,7 +1175,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
             errorGens = [self.op_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
-            errorGens.extend([self.op_blks['cloudnoise'][l]
+            errorGens.extend([self.get_layer_component_cloudnoise(l)
                               for l in components])
             if len(errorGens) > 1:
                 error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
@@ -1195,5 +1198,13 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
             #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
-        else:
+        elif complbl in self.op_blks['layers']:
             return self.op_blks['layers'][complbl]
+        else:
+            return _opfactory.op_from_factories(self.model.factories['targetops'], complbl)
+
+    def get_layer_component_cloudnoise(self, complbl):
+        if complbl in self.op_blks['cloudnoise']:
+            return self.op_blks['cloudnoise'][complbl]
+        else:
+            return _opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl)

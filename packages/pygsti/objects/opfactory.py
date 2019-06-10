@@ -16,6 +16,23 @@ from . import modelmember as _gm
 from . import operation as _op
 from . import instrument as _instrument
 from . import povm as _povm
+from ..baseobjs import Label as _Lbl
+
+
+def op_from_factories(factory_dict, lbl):
+    if lbl.args:
+        lbl_without_args = _Lbl(lbl.name, lbl.sslbls)
+        if lbl_without_args in factory_dict:
+            return factory_dict[lbl_without_args].create_simplified_op(args=lbl.args)
+            # E.g. an EmbeddedOpFactory
+
+    lbl_name = _Lbl(lbl.name)
+    if lbl_name in factory_dict:
+        return factory_dict[lbl_name].create_simplified_op(args=lbl.args, sslbls=lbl.sslbls)
+        # E.g. an EmbeddingOpFactory
+
+    raise KeyError("Cannot create operator for label `%s` from factories " % str(lbl))
+
 
 
 class OpFactory(_gm.ModelMember):
@@ -53,8 +70,7 @@ class OpFactory(_gm.ModelMember):
 
     def create_op(self, args=None, sslbls=None):
         """
-        Create the operation associated with the given `args` and `sslbls`.  If
-        this factory cannot make such an operation, ValueError should be raised.
+        Create the operation associated with the given `args` and `sslbls`.
 
         Parameters
         ----------
@@ -153,8 +169,7 @@ class EmbeddedOpFactory(OpFactory):
 
     def create_op(self, args=None, sslbls=None):
         """
-        Create the operation associated with the given `args` and `sslbls`.  If
-        this factory cannot make such an operation, ValueError should be raised.
+        Create the operation associated with the given `args` and `sslbls`.
 
         Parameters
         ----------
@@ -251,8 +266,7 @@ class EmbeddingOpFactory(OpFactory):
 
     def create_op(self, args=None, sslbls=None):
         """
-        Create the operation associated with the given `args` and `sslbls`.  If
-        this factory cannot make such an operation, ValueError should be raised.
+        Create the operation associated with the given `args` and `sslbls`.
 
         Parameters
         ----------
