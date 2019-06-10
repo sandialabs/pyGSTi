@@ -183,6 +183,17 @@ class Circuit(object):
             `line_labels` are consistent and want to save computation time.
         """
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
+        if _compat.isstr(layer_labels):
+            cparser = _CircuitParser(); cparser.lookup = None
+            layer_labels, chk_labels = cparser.parse(layer_labels)
+            if chk_labels is not None:
+                if line_labels == 'auto':
+                    line_labels = chk_labels
+                elif tuple(line_labels) != chk_labels:
+                    raise ValueError(("Error intializing Circuit: "
+                                      " `line_labels` and line labels in `layer_labels` do not match: %s != %s")
+                                     % (line_labels, chk_labels))
+
         if expand_subcircuits == "default":
             expand_subcircuits = Circuit.default_expand_subcircuits
         if expand_subcircuits and layer_labels is not None:
