@@ -5,8 +5,27 @@ from warnings import warn
 import types
 import pkgutil
 import importlib
+import sys
 
 from ..util import Path, version_label, _TEST_DATA_PATH
+
+__fixture_generators__ = []
+
+
+def _instantiate(name, cls):
+    """Helper for fixture generator modules.
+
+    Instantiates the given generator class and registers the instance
+    as the module export.
+    """
+    instance = cls()
+    if name == '__main__':
+        # Run generation for module
+        instance._run(_parse_args())
+    else:
+        # Load normally
+        sys.modules[name] = instance
+        __fixture_generators__.append(instance)
 
 
 def _write(fn):
@@ -26,6 +45,7 @@ def _write(fn):
             raise FileExistsError(str(filepath))
         else:
             write_fn(filepath)
+            return filepath
     return inner
 
 
@@ -52,7 +72,8 @@ def _memo(fn):
 def _generate(builders, *args, **kwargs):
     for fn in builders:
         try:
-            fn(*args, **kwargs)
+            filepath = fn(*args, **kwargs)
+            print("Wrote file \u001b[36m{}\u001b[0m".format(filepath))
         except FileExistsError as e:
             warn("File already exists: {} (hint: use \u001b[31m--force\u001b[0m to overwrite)".format(e))
 
@@ -77,36 +98,38 @@ class _FixtureGenABC:
         """Generate and write all non-python-version-specific test fixture data"""
         _generate([b for b in self.__builders__ if not hasattr(b, '__versioned__')], *args, **kwargs)
 
-
-def _fixture_generators():
-    for name, bound in globals().copy().items():
-        if isinstance(bound, _FixtureGenABC):
-            yield bound
+    def _run(self, args):
+        if args.only_versioned:
+            gen = self.generate_versioned
+        elif args.only_nonversioned:
+            gen = self.generate_nonversioned
+        else:
+            gen = self.generate_all
+        gen(force=args.force)
 
 
 def generate_all(force=False):
     """Generate and write all test fixture data from all fixture generators"""
-    for gen in _fixture_generators():
+    for gen in __fixture_generators__:
         gen.generate_all(force=force)
 
 
 def generate_versioned(force=False):
     """Generate and write all python-version-specific test fixture data from all fixture generators"""
-    for gen in _fixture_generators():
+    for gen in __fixture_generators__:
         gen.generate_versioned(force=force)
 
 
 def generate_nonversioned(force=False):
     """Generate and write all non-python-version-specific test fixture data from all fixture generators"""
-    for gen in _fixture_generators():
+    for gen in __fixture_generators__:
         gen.generate_nonversioned(force=force)
 
 
-# Dynamically import all submodules
-__all__ = []
-for loader, name, is_pkg in pkgutil.walk_packages(__path__):
-    # Import only non-private/magic modules
-    if not name.startswith('_'):
-        __all__.append(name)
-        full_name = "{}.{}".format(__package__, name)
-        importlib.import_module(full_name)
+def _parse_args():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-f', '--force', action='store_true', help="overwrite existing test fixtures")
+    parser.add_argument('-p', '--only-versioned', action='store_true', help="only build python-version-specific fixtures")
+    parser.add_argument('-n', '--only-nonversioned', action='store_true', help="only build non-python-version-specific fixtures")
+    return parser.parse_args()

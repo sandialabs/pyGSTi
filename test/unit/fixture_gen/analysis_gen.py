@@ -4,7 +4,7 @@ import sys
 from pygsti.construction import std1Q_XYI as std
 import pygsti
 
-from . import _memo, _write, _versioned, _FixtureGenABC
+from . import _memo, _write, _versioned, _FixtureGenABC, _instantiate
 
 
 class _M(_FixtureGenABC):
@@ -85,5 +85,4 @@ class _M(_FixtureGenABC):
         return 'analysis.model', lambda path: pygsti.io.write_model(self._mdl_lsgst_go, str(path), "Saved LSGST Analysis Model")
 
 
-# Using instance as module
-sys.modules[__name__] = _M()
+_instantiate(__name__, _M)
