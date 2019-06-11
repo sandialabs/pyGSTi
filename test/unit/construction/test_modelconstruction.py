@@ -24,9 +24,60 @@ class ModelConstructionTester(BaseCase):
         self.assertAlmostEqual(modelA.frobeniusdist(modelB), 0)
         # TODO assert correctness
 
-    def test_raises_on_bad_parameterization(self):
+    def test_build_model(self):
+        # TODO this isn't a unit test
+        stateSpace = [(4,)]  # density matrix is a 2x2 matrix
+        spaceLabels = [('Q0',)]  # interpret the 2x2 density matrix as a single qubit named 'Q0'
+        model1 = pygsti.objects.ExplicitOpModel(['Q0'])
+        model1['rho0'] = mc.build_vector(stateSpace, spaceLabels, "0")
+        model1['Mdefault'] = pygsti.obj.UnconstrainedPOVM([('0', mc.build_vector(stateSpace, spaceLabels, "0")),
+                                                           ('1', mc.build_vector(stateSpace, spaceLabels, "1"))])
+        model1['Gi'] = mc.build_operation(stateSpace, spaceLabels, "I(Q0)")
+        model1['Gx'] = mc.build_operation(stateSpace, spaceLabels, "X(pi/2,Q0)")
+        model1['Gy'] = mc.build_operation(stateSpace, spaceLabels, "Y(pi/2,Q0)")
+
+    def test_build_explicit_model(self):
+        model2 = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+
+        gateset2b = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                            effectLabels=['1', '0'])
+
+        std_gateset = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                              ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                              basis="std")
+
+        pp_gateset = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                             ["I(Q0)", "X(pi/8,Q0)", "Z(pi/8,Q0)"],
+                                             basis="pp")
+        # TODO assert correctness
+
+    def test_build_operation_raises_on_bad_parameterization(self):
         with self.assertRaises(ValueError):
             mc.build_operation([(4, 4)], [('Q0', 'Q1')], "X(pi,Q0)", "gm", parameterization="FooBar")
+
+    def test_build_explicit_model_raises_on_bad_state(self):
+        with self.assertRaises(ValueError):
+            pygsti.construction.build_explicit_model([('A0',)], ['Gi', 'Gx', 'Gy'],
+                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"])
+
+    def test_build_explicit_model_raises_on_bad_basis(self):
+        with self.assertRaises(AssertionError):
+            pygsti.construction.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                     basis="FooBar")
+
+    def test_build_explicit_model_raises_on_bad_rho_expression(self):
+        with self.assertRaises(ValueError):
+            pygsti.construction.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                     prepLabels=['rho0'], prepExpressions=["FooBar"],)
+
+    def test_build_explicit_model_raises_on_bad_effect_expression(self):
+        with self.assertRaises(ValueError):
+            pygsti.construction.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                     effectLabels=['0', '1'], effectExpressions=["FooBar", "1"])
 
 
 class GateConstructionBase:
@@ -34,6 +85,7 @@ class GateConstructionBase:
         pygsti.objects.ExplicitOpModel._strict = False
 
     def _construct_gates(self, param):
+        # TODO these aren't really unit tests
         #CNOT gate
         Ucnot = np.array([[1, 0, 0, 0],
                           [0, 1, 0, 0],
@@ -81,87 +133,87 @@ class GateConstructionBase:
         self.CnotB = mc.build_operation([(4, 4), (1,)], [('Q0', 'Q1'), ('L0',)], "CX(pi,Q0,Q1)", self.basis, 'full')
 
     def _test_leakA(self):
-        leakA_ans = np.array( [[ 0.,  1.,  0.],
-                               [ 1.,  0.,  0.],
-                               [ 0.,  0.,  1.]], 'd')
+        leakA_ans = np.array([[0., 1., 0.],
+                              [1., 0., 0.],
+                              [0., 0., 1.]], 'd')
         self.assertArraysAlmostEqual(self.leakA, leakA_ans)
 
     def _test_rotXa(self):
-        rotXa_ans = np.array([[ 1.,  0.,  0.,  0.],
-                              [ 0.,  1.,  0.,  0.],
-                              [ 0.,  0.,  0,  -1.],
-                              [ 0.,  0.,  1.,  0]], 'd')
+        rotXa_ans = np.array([[1., 0., 0., 0.],
+                              [0., 1., 0., 0.],
+                              [0., 0., 0, -1.],
+                              [0., 0., 1., 0]], 'd')
         self.assertArraysAlmostEqual(self.rotXa, rotXa_ans)
 
     def _test_rotX2(self):
-        rotX2_ans = np.array([[ 1.,  0.,  0.,  0.],
-                              [ 0.,  1.,  0.,  0.],
-                              [ 0.,  0., -1.,  0.],
-                              [ 0.,  0.,  0., -1.]], 'd')
+        rotX2_ans = np.array([[1., 0., 0., 0.],
+                              [0., 1., 0., 0.],
+                              [0., 0., -1., 0.],
+                              [0., 0., 0., -1.]], 'd')
         self.assertArraysAlmostEqual(self.rotX2, rotX2_ans)
 
     def _test_rotLeak(self):
-        rotLeak_ans = np.array([[ 0.5,         0.,          0.,         -0.5,         0.70710678],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [ 0.5,         0.,          0.,         -0.5,        -0.70710678],
-                                [ 0.70710678,  0.,          0.,          0.70710678,  0.        ]], 'd')
+        rotLeak_ans = np.array([[0.5, 0., 0., -0.5, 0.70710678],
+                                [0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., 0.],
+                                [0.5, 0., 0., -0.5, -0.70710678],
+                                [0.70710678, 0., 0., 0.70710678, 0.]], 'd')
         self.assertArraysAlmostEqual(self.rotLeak, rotLeak_ans)
 
     def _test_leakB(self):
-        leakB_ans = np.array(  [[ 0.5,         0.,          0.,         -0.5,         0.70710678],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [-0.5,         0.,          0.,          0.5,         0.70710678],
-                                [ 0.70710678,  0.,          0.,          0.70710678,  0.        ]], 'd')
+        leakB_ans = np.array([[0.5, 0., 0., -0.5, 0.70710678],
+                              [0., 0., 0., 0., 0.],
+                              [0., 0., 0., 0., 0.],
+                              [-0.5, 0., 0., 0.5, 0.70710678],
+                              [0.70710678, 0., 0., 0.70710678, 0.]], 'd')
         self.assertArraysAlmostEqual(self.leakB, leakB_ans)
 
     def _test_rotXb(self):
-        rotXb_ans = np.array( [[ 1.,  0.,  0.,  0.,  0.,  0.],
-                               [ 0.,  1.,  0.,  0.,  0.,  0.],
-                               [ 0.,  0., -1.,  0.,  0.,  0.],
-                               [ 0.,  0.,  0., -1.,  0.,  0.],
-                               [ 0.,  0.,  0.,  0.,  1.,  0.],
-                               [ 0.,  0.,  0.,  0.,  0.,  1.]], 'd')
+        rotXb_ans = np.array([[1., 0., 0., 0., 0., 0.],
+                              [0., 1., 0., 0., 0., 0.],
+                              [0., 0., -1., 0., 0., 0.],
+                              [0., 0., 0., -1., 0., 0.],
+                              [0., 0., 0., 0., 1., 0.],
+                              [0., 0., 0., 0., 0., 1.]], 'd')
         self.assertArraysAlmostEqual(self.rotXb, rotXb_ans)
 
     def _test_CnotA(self):
-        CnotA_ans = np.array( [[1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0],
-                               [  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0],
-                               [  0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                               [  0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0]] )
+        CnotA_ans = np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0],
+                              [0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
         self.assertArraysAlmostEqual(self.CnotA, CnotA_ans)
 
     def _test_CnotB(self):
-        CnotB_ans = np.array([[  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0],
-                              [    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0],
-                              [    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0]])
+        CnotB_ans = np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1.0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0],
+                              [0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0]])
         self.assertArraysAlmostEqual(self.CnotB, CnotB_ans)
 
     def test_raises_on_bad_basis(self):
