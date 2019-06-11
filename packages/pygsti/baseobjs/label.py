@@ -36,7 +36,7 @@ class Label(object):
     # depending on whether the tuple of sector names exists or not.
     # (the reason for separate classes is for hashing speed)
 
-    def __new__(cls, name, stateSpaceLabels=None, timestamp=None, args=None):
+    def __new__(cls, name, stateSpaceLabels=None, time=0.0, args=None):
         """
         Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
@@ -55,7 +55,7 @@ class Label(object):
             a list or tuple is passed, a single-element tuple is created
             containing the passed object.
 
-        timestamp : float
+        time : float
             The time at which this label occurs (can be relative or absolute)
 
         args : iterable of hashable types, optional
@@ -67,7 +67,7 @@ class Label(object):
             could be an argument of a gate label, and one might create a label:
             `Label('Gx', (0,), args=(pi/3,))`
         """
-        #print("Label.__new__ with name=", name, "sslbls=", stateSpaceLabels, "t=", timestamp, "args=", args)
+        #print("Label.__new__ with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
         if isinstance(name, Label) and stateSpaceLabels is None:
             return name  # Note: Labels are immutable, so no need to copy
 
@@ -84,14 +84,14 @@ class Label(object):
             #       (even a LabelStr)
 
             if len(name) == 0:
-                if timestamp is None and args is None: return LabelTupTup(())
-                else: return LabelTupTupWithTimeAndArgs((), timestamp, args)
+                if args: return LabelTupTupWithArgs((), time, args)
+                else: return LabelTupTup((), time)
             elif isinstance(name[0], (tuple, list, Label)):
                 if len(name) > 1:
-                    if timestamp is None and args is None: return LabelTupTup(name)
-                    else: return LabelTupTupWithTimeAndArgs(name, timestamp, args)
+                    if args: return LabelTupTupWithArgs(name, time, args)
+                    else: return LabelTupTup(name, time)
                 else:
-                    return Label(name[0], timestamp=timestamp, args=args)
+                    return Label(name[0], time=time, args=args)
             else:
                 #Case when stateSpaceLabels, etc, are given after name in a single tuple
                 tup = name
@@ -105,7 +105,7 @@ class Label(object):
                         tup_args.append(x); continue
                     if next_is_time:
                         next_is_time = False
-                        timestamp = x; continue
+                        time = x; continue
                         
                     if isstr(x):
                         if x.startswith(';'):
@@ -116,24 +116,25 @@ class Label(object):
                                 tup_args.append(x[1:])
                             continue
                         if x.startswith('!'):
-                            assert(timestamp is None), "Cannot supply timestamp in tuple when `timestamp` is given!"
+                            assert(time == 0.0), "Cannot supply time in tuple when `time` is given!"
                             if x == '!':
                                 next_is_time = True
                             else:
-                                timestamp = float(x[1:])
+                                time = float(x[1:])
                             continue
                     stateSpaceLabels.append(x)
                 args = tup_args if len(tup_args) > 0 else None
 
-        #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", timestamp, "args=", args)
+        #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
         if stateSpaceLabels is None or stateSpaceLabels in ((), (None,)):
-            if timestamp is None and args is None:
-                return LabelStr(name)
+            if args:
+                return LabelTupWithArgs(name, (), time, args)  # just use empty sslbls
             else:
-                return LabelTupWithTimeAndArgs(name, (), timestamp, args)  # just use empty sslbls
+                return LabelStr(name, time)
+
         else:
-            if timestamp is None and args is None: return LabelTup(name, stateSpaceLabels)
-            else: return LabelTupWithTimeAndArgs(name, stateSpaceLabels, timestamp, args)
+            if args: return LabelTupWithArgs(name, stateSpaceLabels, time, args)
+            else: return LabelTup(name, stateSpaceLabels, time)
 
     def depth(self):
         return 1  # most labels are depth=1
@@ -155,7 +156,7 @@ class LabelTup(Label, tuple):
     acted upon by an object so-labeled.
     """
 
-    def __new__(cls, name, stateSpaceLabels):
+    def __new__(cls, name, stateSpaceLabels, time=0.0):
         """
         Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
@@ -173,11 +174,15 @@ class LabelTup(Label, tuple):
             list defines the 'direction' of the gate.  If something other than
             a list or tuple is passed, a single-element tuple is created
             containing the passed object.
+
+        time : float
+            The time at which this label occurs (can be relative or absolute)
         """
 
         #Type checking
         assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
         assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
+        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if not isinstance(stateSpaceLabels, (tuple, list)):
             stateSpaceLabels = (stateSpaceLabels,)
         for ssl in stateSpaceLabels:
@@ -195,7 +200,9 @@ class LabelTup(Label, tuple):
         sslbls = tuple(integerized_sslbls)
         tup = (name,) + sslbls
 
-        return tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
+        ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
+        ret.time = time
+        return ret
 
     @property
     def name(self):
@@ -210,10 +217,6 @@ class LabelTup(Label, tuple):
     @property
     def args(self):
         return ()
-
-    @property
-    def time(self):
-        return 0.0
 
     @property
     def components(self):
@@ -367,7 +370,7 @@ class LabelStr(Label, strlittype):
     the hashing gets *much* slower.
     """
 
-    def __new__(cls, name):
+    def __new__(cls, name, time=0.0):
         """
         Creates a new Model-item label, which is just a simple string label.
 
@@ -375,11 +378,17 @@ class LabelStr(Label, strlittype):
         ----------
         name : str
             The item name. E.g., 'CNOT' or 'H'.
+
+        time : float
+            The time at which this label occurs (can be relative or absolute)
         """
 
         #Type checking
         assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
-        return strlittype.__new__(cls, name)
+        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        ret = strlittype.__new__(cls, name)
+        ret.time = time
+        return ret
 
     @property
     def name(self):
@@ -392,10 +401,6 @@ class LabelStr(Label, strlittype):
     @property
     def args(self):
         return ()
-
-    @property
-    def time(self):
-        return 0.0
 
     @property
     def components(self):
@@ -488,7 +493,7 @@ class LabelTupTup(Label, tuple):
     which labels a parallel layer/level of a circuit.
     """
 
-    def __new__(cls, tupOfTups):
+    def __new__(cls, tupOfTups, time=0.0):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -500,8 +505,11 @@ class LabelTupTup(Label, tuple):
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
         """
+        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         tupOfLabels = tuple((Label(tup) for tup in tupOfTups))  # Note: tup can also be a Label obj
-        return tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
+        ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
+        ret.time = time
+        return ret
 
     @property
     def name(self):
@@ -676,7 +684,7 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfTups, stateSpaceLabels, reps=1):  # timestamp??
+    def __new__(cls, name, tupOfTups, stateSpaceLabels, reps=1):  # time??
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -860,16 +868,16 @@ class CircuitLabel(Label, tuple):
 #        pass
 
 
-class LabelTupWithTimeAndArgs(Label, tuple):
+class LabelTupWithArgs(Label, tuple):
     """
-    Same as LabelTup, but includes slots for args and timestamp
+    Same as LabelTup, but includes slots for args and time
     """
 
-    def __new__(cls, name, stateSpaceLabels, timestamp, args):
+    def __new__(cls, name, stateSpaceLabels, time=0.0, args=()):
         """
         Creates a new Model-item label, which is divided into a simple string
         label, a tuple specifying the part of the Hilbert space upon which the
-        item acts (often just qubit indices), a timestamp, and arguments.
+        item acts (often just qubit indices), a time, and arguments.
 
         Parameters
         ----------
@@ -884,15 +892,12 @@ class LabelTupWithTimeAndArgs(Label, tuple):
             a list or tuple is passed, a single-element tuple is created
             containing the passed object.
 
-        timestamp : float
+        time : float
             The time at which this label occurs (can be relative or absolute)
 
         args : iterable of hashable types
             A list of "arguments" for this label.
         """
-        #Default interpretations of Nones
-        if args is None: args = ()
-        
         #Type checking
         assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
         assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
@@ -901,9 +906,8 @@ class LabelTupWithTimeAndArgs(Label, tuple):
         for ssl in stateSpaceLabels:
             assert(isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
-        assert(timestamp is None or isinstance(timestamp, float)), \
-            "`timestamp` must be a floating point value, received: " + str(timestamp)
-        assert(len(args) >= 0), "`args` must be a list/tuple of hashable arguments"
+        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
         #TODO: check that all args are hashable?
 
         #Try to convert integer-strings to ints (for parsing from files...)
@@ -916,28 +920,26 @@ class LabelTupWithTimeAndArgs(Label, tuple):
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
         args = tuple(args)
-        tup = (timestamp, name, 3 + len(args)) + args + sslbls  # stores: (time, name, K, args, sslbls)
+        tup = (name, 2 + len(args)) + args + sslbls  # stores: (name, K, args, sslbls)
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
 
-        return tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
+        ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
+        ret.time = time
+        return ret
 
     @property
     def name(self):
-        return self[1]
+        return self[0]
 
     @property
     def sslbls(self):
-        if len(self) > self[2]:
-            return self[self[2]:]
+        if len(self) > self[1]:
+            return self[self[1]:]
         else: return None
 
     @property
-    def time(self):
-        return self[0] if (self[0] is not None) else 0
-
-    @property
     def args(self):
-        return self[3:self[2]]
+        return self[2:self[1]]
 
     @property
     def components(self):
@@ -995,8 +997,8 @@ class LabelTupWithTimeAndArgs(Label, tuple):
             mapped_sslbls = [mapper[sslbl] for sslbl in self.sslbls]
         else:  # assume mapper is callable
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
-        return Label(self.name, mapped_sslbls, self[0], self.args)
-        # FUTURE: use LabelTupWithTimeAndArgs here instead of Label?
+        return Label(self.name, mapped_sslbls, self.time, self.args)
+        # FUTURE: use LabelTupWithArgs here instead of Label?
 
     def __str__(self):
         """
@@ -1010,7 +1012,7 @@ class LabelTupWithTimeAndArgs(Label, tuple):
             s += ";" + ";".join(map(str, self.args))
         if self.sslbls:  # test for None and len == 0
             s += ":" + ":".join(map(str, self.sslbls))
-        if self[0] is not None:  # if we're supposed to be holding a timestamp
+        if self[0] is not None:  # if we're supposed to be holding a time
             s += ("!%f" % self.time).rstrip('0').rstrip('.')
         return s
 
@@ -1019,7 +1021,7 @@ class LabelTupWithTimeAndArgs(Label, tuple):
 
     def __add__(self, s):
         if isstr(s):
-            return LabelTupWithTimeAndArgs(self.name + s, self.sslbls, self[0], self.args)  # use self[0] NOT self.time!
+            return LabelTupWithArgs(self.name + s, self.sslbls, self.time, self.args)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
@@ -1048,7 +1050,7 @@ class LabelTupWithTimeAndArgs(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTupWithTimeAndArgs, (self.name, self.sslbls, self[0], self.args), None)
+        return (LabelTupWithArgs, (self.name, self.sslbls, self.time, self.args), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
@@ -1058,7 +1060,7 @@ class LabelTupWithTimeAndArgs(Label, tuple):
 
     def replacename(self, oldname, newname):
         """ Returns a label with `oldname` replaced by `newname`."""
-        return LabelTupWithTimeAndArgs(newname, self.sslbls, self[0], self.args) if (self.name == oldname) else self
+        return LabelTupWithArgs(newname, self.sslbls, self.time, self.args) if (self.name == oldname) else self
 
     def issimple(self):
         """ Whether this is a "simple" (opaque w/a true name, from a
@@ -1069,14 +1071,14 @@ class LabelTupWithTimeAndArgs(Label, tuple):
     # native tuple.__hash__ directly == speed boost
 
 
-class LabelTupTupWithTimeAndArgs(Label, tuple):
+class LabelTupTupWithArgs(Label, tuple):
     """
     A label consisting of a *tuple* of (string, state-space-labels) tuples
-    which labels a parallel layer/level of a circuit at a single timestamp.
+    which labels a parallel layer/level of a circuit at a single time.
     This label also supports having arguments.
     """
 
-    def __new__(cls, tupOfTups, timestamp, args):
+    def __new__(cls, tupOfTups, time=0.0, args=()):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -1088,22 +1090,23 @@ class LabelTupTupWithTimeAndArgs(Label, tuple):
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
 
-        timestamp : float
+        time : float
             The time at which this label occurs (can be relative or absolute)
 
         args : iterable of hashable types
             A list of "arguments" for this label.
         """
-        #Default interpretations of Nones
-        if args is None: args = ()
+        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
+        tupOfLabels = (1 + len(args),) + args + tuple((Label(tup) for tup in tupOfTups))  # Note tup can be a Label
+        # stores: (K, args, subLabels) where K is the index of the start of subLabels
 
-        assert(len(args) >= 0), "`args` must be a list/tuple of hashable arguments"
-        tupOfLabels = (timestamp, 2 + len(args)) + args + tuple((Label(tup) for tup in tupOfTups))  # Note tup can be a Label
-        # stores: (time, K, args, subLabels) where K is the index of the start of subLabels
-        if timestamp is not None:
-            assert(all([(timestamp == l.time or l.time is None) for l in tupOfLabels[2 + len(args):]])), \
-                "Component times do not match compound label time!"
-        return tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
+        #if time is not None:
+        #    assert(all([(time == l.time or l.time is None) for l in tupOfLabels[1 + len(args):]])), \
+        #        "Component times do not match compound label time!"
+        ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
+        ret.time = time
+        return ret
 
     @property
     def name(self):
@@ -1117,22 +1120,18 @@ class LabelTupTupWithTimeAndArgs(Label, tuple):
         # Note: if any component has sslbls == None, which signifies operating
         # on *all* qubits, then this label is on *all* qubits
         s = set()
-        for lbl in self[self[1]:]:
+        for lbl in self[self[0]:]:
             if lbl.sslbls is None: return None
             s.update(lbl.sslbls)
         return tuple(sorted(list(s)))
 
     @property
     def args(self):
-        return self[2:self[1]]
-
-    @property
-    def time(self):
-        return self[0] if (self[0] is not None) else 0
+        return self[1:self[0]]
 
     @property
     def components(self):
-        return self[self[1]:]  # a tuple of "sub-label" components
+        return self[self[0]:]  # a tuple of "sub-label" components
 
     @property
     def qubits(self):  # Used in Circuit
@@ -1186,8 +1185,8 @@ class LabelTupTupWithTimeAndArgs(Label, tuple):
         -------
         Label
         """
-        return LabelTupTupWithTimeAndArgs(tuple((lbl.map_state_space_labels(mapper)
-                                                 for lbl in self.components)), self[0], self.args)
+        return LabelTupTupWithArgs(tuple((lbl.map_state_space_labels(mapper)
+                                          for lbl in self.components)), self.time, self.args)
 
     def __str__(self):
         """
@@ -1198,7 +1197,7 @@ class LabelTupTupWithTimeAndArgs(Label, tuple):
         else:
             argstr = ""
 
-        if self[0] is not None:  # if we're supposed to be holding a timestamp
+        if self[0] is not None:  # if we're supposed to be holding a time
             timestr = ("!%f" % self.time).rstrip('0').rstrip('.')
         else:
             timestr = ""
@@ -1236,18 +1235,18 @@ class LabelTupTupWithTimeAndArgs(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTupTupWithTimeAndArgs, (self.components, self.time, self.args), None)
+        return (LabelTupTupWithArgs, (self.components, self.time, self.args), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
             faster serialization.
         """
-        return self[0:self[1]] + tuple((x.tonative() for x in self[self[1]:]))
+        return self[0:self[0]] + tuple((x.tonative() for x in self[self[0]:]))
 
     def replacename(self, oldname, newname):
         """ Returns a label with `oldname` replaced by `newname`."""
-        return LabelTupTupWithTimeAndArgs(tuple((x.replacename(oldname, newname) for x in self.components)),
-                                          self.time, self.args)
+        return LabelTupTupWithArgs(tuple((x.replacename(oldname, newname) for x in self.components)),
+                                   self.time, self.args)
 
     def issimple(self):
         """ Whether this is a "simple" (opaque w/a true name, from a
