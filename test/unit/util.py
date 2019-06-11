@@ -4,6 +4,8 @@ from unittest import TestCase
 import sys
 import numpy as np
 import numbers
+import tempfile
+from contextlib import contextmanager
 
 # Test modules should import these generic names rather than importing the modules directly:
 
@@ -67,6 +69,38 @@ class BaseCase(TestCase):
 
         # As fallback, just return the no-arch filename and let the caller deal with it
         return str(noarch_file)
+
+    @contextmanager
+    def temp_file_path(self, filename=None):
+        """Provides a context with the path of a temporary file.
+
+        This is distinct from the contexts provided by tempfile in
+        that this method yields the path of the temporary file, so the
+        underlying file may be opened or closed inside the context as
+        the caller pleases.
+
+        Under the hood, this actually creates the file in a temporary
+        directory. This directory will be cleaned up when the context
+        closes, including the returned file and any other siblings.
+
+        Parameters
+        ----------
+        filename: str, optional
+            Optionally, the name of the file. By default, one will be
+            randomly generated.
+
+        Yields
+        ------
+        ``pathlib.Path``
+            A Path object representing the path of the temporary file.
+        """
+
+        filename = filename or "temp_file"  # yeah looks random to me
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / filename
+            # Yield to context with temporary path
+            yield tmp_path
+            # TemporaryDirectory will be cleaned up on close
 
     def debug(self, debugger=None):
         """Helper factory for debugger breakpoints.

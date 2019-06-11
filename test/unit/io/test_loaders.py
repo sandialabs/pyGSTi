@@ -52,9 +52,8 @@ LiouvilleMx
 BASIS: pp 4
 GAUGEGROUP: Full
 """
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_path = Path(tmpdir) / "Test_Gateset.txt"
-            with open(tmp_path, "w") as output:
+        with self.temp_file_path("Test_Gateset.txt") as tmp_file:
+            with open(tmp_file, "w") as output:
                 output.write(gateset4_txt)
-            gateset4 = loaders.load_model(str(tmp_path))
+            gateset4 = loaders.load_model(tmp_file)
             # TODO assert correctness
