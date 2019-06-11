@@ -243,7 +243,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                 assert(len(counts_list) == 1)
                 dataset.add_count_dict(s, counts_list[0], recordZeroCnts=recordZeroCnts)
             else:
-                dataset.add_series_data(s, counts_list, times)
+                dataset.add_series_data(s, counts_list, times, recordZeroCnts=recordZeroCnts)
                 
         dataset.done_adding_data()
 

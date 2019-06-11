@@ -1107,7 +1107,7 @@ class OpModel(Model):
         return (raw_spamTuples_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
 
-    def simplify_circuit(self, circuit):
+    def simplify_circuit(self, circuit, dataset=None):
         """
         Simplifies a single :class:`Circuit`.
 
@@ -1133,8 +1133,13 @@ class OpModel(Model):
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
+
+        dataset : DataSet, optional
+            If not None, restrict what is simplified to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
         """
-        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit])
+        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit], dataset)
         assert(len(outcomes[0]) == nEls)
         return raw_dict, outcomes[0]
 
@@ -1152,7 +1157,7 @@ class OpModel(Model):
         -------
         int
         """
-        _, outcomes = self.simplify_circuit(circuit)
+        _, outcomes = self.simplify_circuit(circuit, dataset=None)
         return len(outcomes)
 
     def probs(self, circuit, clipTo=None, time=None):

@@ -444,6 +444,7 @@ class TimeDependentChi2Function(ObjectiveFunction):
         self.dataset = dataset
         self.dsCircuitsToUse = dsCircuitsToUse
         self.circuitsToUse = circuitsToUse
+        self.num_total_outcomes = [mdl.get_num_outcomes(c) for c in circuitsToUse]  # for sparse data detection
         self.comm = comm
         self.profiler = profiler
         self.check = check
@@ -472,21 +473,6 @@ class TimeDependentChi2Function(ObjectiveFunction):
         self.v = _np.empty(KM, 'd')
         self.jac = _np.empty((KM + self.ex, vec_gs_len), 'd')
 
-        #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
-        self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-        for i, c in enumerate(circuitsToUse):
-            lklen = _slct.length(lookup[i])
-            if 0 < lklen < mdl.get_num_outcomes(c):
-                self.firsts.append(_slct.as_array(lookup[i])[0])
-                self.indicesOfCircuitsWithOmittedData.append(i)
-        if len(self.firsts) > 0:
-            self.firsts = _np.array(self.firsts, 'i')
-            self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), vec_gs_len), 'd')
-            self.printer.log("SPARSE DATA: %d of %d rows have sparse data" % (len(self.firsts), len(circuitsToUse)))
-        else:
-            self.firsts = None  # no omitted probs
-
         #REMOVE: these are time dependent now...
         #self.cntVecMx = cntVecMx
         #self.N = N
@@ -509,12 +495,12 @@ class TimeDependentChi2Function(ObjectiveFunction):
 
     #Objective Function
     def simple_chi2(self, vectorGS):
-        assert(self.firsts is None), "Sparse data not supported yet"
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         fsim = self.mdl._fwdsim()
         v = self.v
-        fsim.bulk_fill_timedep_chi2(v, self.evTree, self.dsCircuitsToUse, self.dataset, self.minProbClipForWeighting, self.probClipInterval, self.comm)
+        fsim.bulk_fill_timedep_chi2(v, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
+                                    self.dataset, self.minProbClipForWeighting, self.probClipInterval, self.comm)
         #self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
         #v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
@@ -523,7 +509,6 @@ class TimeDependentChi2Function(ObjectiveFunction):
 
     # Jacobian function
     def simple_jac(self, vectorGS):
-        assert(self.firsts is None), "Sparse data not supported yet"
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.KM, self.vec_gs_len)
@@ -535,8 +520,8 @@ class TimeDependentChi2Function(ObjectiveFunction):
         #weights = self.get_weights(self.probs)
         #dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None]
         fsim = self.mdl._fwdsim()
-        fsim.bulk_fill_timedep_dchi2(dprobs, self.evTree, self.dsCircuitsToUse, self.dataset,
-                                     self.minProbClipForWeighting, self.probClipInterval, None,
+        fsim.bulk_fill_timedep_dchi2(dprobs, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
+                                     self.dataset, self.minProbClipForWeighting, self.probClipInterval, None,
                                      self.comm, wrtBlockSize=self.wrtBlkSize, profiler=self.profiler,
                                      gatherMemLimit=self.gthrMem)
         # (KM,N) * (KM,1)   (N = dim of vectorized model)
@@ -848,6 +833,7 @@ class TimeDependentLogLFunction(ObjectiveFunction):
         self.evTree = evTree
         self.lookup = lookup
         self.circuitsToUse = circuitsToUse
+        self.num_total_outcomes = [mdl.get_num_outcomes(c) for c in circuitsToUse]  # for sparse data detection
         self.comm = comm
         self.profiler = profiler
         self.check = check
@@ -869,21 +855,6 @@ class TimeDependentLogLFunction(ObjectiveFunction):
         self.v = _np.empty(self.KM, 'd')
         self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
     
-        #Detect omitted frequences (assumed to be 0) so we can compute liklihood correctly
-        self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-        for i, c in enumerate(circuitsToUse):
-            lklen = _tools.slicetools.length(lookup[i])
-            if 0 < lklen < mdl.get_num_outcomes(c):
-                self.firsts.append(_tools.slicetools.as_array(lookup[i])[0])
-                self.indicesOfCircuitsWithOmittedData.append(i)
-        if len(self.firsts) > 0:
-            self.firsts = _np.array(self.firsts, 'i')
-            self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.vec_gs_len), 'd')
-        else:
-            self.firsts = None
-        assert(self.firsts is None), "Sparse data not supported yet"
-
         self.dataset = dataset
         self.dsCircuitsToUse = dsCircuitsToUse
 
@@ -906,8 +877,8 @@ class TimeDependentLogLFunction(ObjectiveFunction):
         self.mdl.from_vector(vectorGS)
         fsim = self.mdl._fwdsim()
         v = self.v
-        fsim.bulk_fill_timedep_loglpp(v, self.evTree, self.dsCircuitsToUse, self.dataset, self.min_p, self.a,
-                                      self.probClipInterval, self.comm)
+        fsim.bulk_fill_timedep_loglpp(v, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
+                                      self.dataset, self.min_p, self.a, self.probClipInterval, self.comm)
         v = _np.sqrt(v)
         v.shape = [self.KM]  # reshape ensuring no copy is needed
 
@@ -915,13 +886,12 @@ class TimeDependentLogLFunction(ObjectiveFunction):
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
 
-        
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
     #  with ommitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)  # noqa
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp_{i,sl} +                   # noqa
     #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)      # noqa
-    
+
     #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
     #   and deriv == 0.5 / sqrt(...) * S * dp
     def poisson_picture_jacobian(self, vectorGS):
@@ -929,10 +899,10 @@ class TimeDependentLogLFunction(ObjectiveFunction):
         dlogl = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dlogl
         dlogl.shape = (self.KM, self.vec_gs_len)
         self.mdl.from_vector(vectorGS)
-        
+
         fsim = self.mdl._fwdsim()
-        fsim.bulk_fill_timedep_dloglpp(dlogl, self.evTree, self.dsCircuitsToUse, self.dataset,
-                                       self.min_p, self.a, self.probClipInterval, self.v,
+        fsim.bulk_fill_timedep_dloglpp(dlogl, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
+                                       self.dataset, self.min_p, self.a, self.probClipInterval, self.v,
                                        self.comm, wrtBlockSize=self.wrtBlkSize, profiler=self.profiler,
                                        gatherMemLimit=self.gthrMem)
 

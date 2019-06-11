@@ -1009,7 +1009,7 @@ class MapForwardSimulator(ForwardSimulator):
 
     # --------------------------------------------------- TIMEDEP FUNCTIONS -----------------------------------------
 
-    def bulk_fill_timedep_chi2(self, mxToFill, evalTree, dsCircuitsToUse, dataset,
+    def bulk_fill_timedep_chi2(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                minProbClipForWeighting, probClipInterval, comm=None):
         """
         TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the circuit is run,
@@ -1028,11 +1028,12 @@ class MapForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 #Fill cache info
-                chi2Cache = self.DM_compute_TDchi2_cache(rholabel, elabels, evalSubTree, dataset_rows,
+                chi2Cache = self.DM_compute_TDchi2_cache(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
                                                          minProbClipForWeighting, probClipInterval, mySubComm)
 
                 #use cached data to final values
@@ -1050,7 +1051,7 @@ class MapForwardSimulator(ForwardSimulator):
         #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
 
     #TODO: move to slowreplib.py once we have a fast version
-    def DM_compute_TDchi2_cache(self, rholabel, elabels, evalTree, dataset_rows,
+    def DM_compute_TDchi2_cache(self, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                 minProbClipForWeighting, probClipInterval, comm):
 
         cacheSize = evalTree.cache_size()
@@ -1070,13 +1071,19 @@ class MapForwardSimulator(ForwardSimulator):
             iStart, remainder, iCache = evalTree[i]
             assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
             datarow = dataset_rows[i]
+            nTotOutcomes = num_outcomes[i]
 
             totalCnts = {}  # TODO defaultdict?
-            for t0, Nreps in zip(datarow.time, datarow.reps): # consolidate multiple outcomes that occur at same time? or sort?
-                if t0 in totalCnts: totalCnts[t0] += Nreps
-                else: totalCnts[t0] = Nreps
+            lastInds = {}; outcome_cnts = {}
+            for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):  # consolidate multiple outcomes that occur at same time? or sort?
+                if t0 in totalCnts:
+                    totalCnts[t0] += Nreps; outcome_cnts[t0] += 1
+                else:
+                    totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
+                lastInds[t0] = k
 
-            for t0, Nreps, outcome in zip(datarow.time, datarow.reps, datarow.outcomes):  # consolidate multiple outcomes that occur at same time? or sort?
+            cur_probtotal = 0; last_t = 0
+            for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):  # consolidate multiple outcomes that occur at same time? or sort?
                 t = t0
                 rhoVec.set_time(t)
                 rho = rhoVec.torep('prep')
@@ -1093,12 +1100,26 @@ class MapForwardSimulator(ForwardSimulator):
                 cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
                 N = totalCnts[t0]
                 f = Nreps / N
-                ret[i, j] += (p - f) * _np.sqrt(N / cp)
+                v = (p - f) * _np.sqrt(N / cp)
+
+                if t0 == last_t:
+                    cur_probtotal += p
+                else:
+                    last_t = t0
+                    cur_probtotal = p
+                
+                if lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes:  # cur_probtotal < 1.0?
+                    omitted_p = 1.0 - cur_probtotal
+                    omitted_cp = _np.clip(omitted_p, minProbClipForWeighting, 1 - minProbClipForWeighting)
+                    v = _np.sqrt(v**2 + N * omitted_p**2 / omitted_cp)
+                    # if this is the *last* outcome at this time then account for any omitted probability
+
+                ret[i, j] += v
 
         return ret
 
 
-    def bulk_fill_timedep_dchi2(self, mxToFill, evalTree, dsCircuitsToUse, dataset,
+    def bulk_fill_timedep_dchi2(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                 minProbClipForWeighting, probClipInterval, chi2MxToFill=None,
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
@@ -1131,6 +1152,7 @@ class MapForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
             #Free memory from previous subtree iteration before computing caches
             paramSlice = slice(None)
@@ -1141,14 +1163,14 @@ class MapForwardSimulator(ForwardSimulator):
                 tm = _time.time()
 
                 if chi2MxToFill is not None:
-                    chi2Cache = self.DM_compute_TDchi2_cache(rholabel, elabels, evalSubTree, dataset_rows,
+                    chi2Cache = self.DM_compute_TDchi2_cache(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
                                                              minProbClipForWeighting, probClipInterval, fillComm)
                     chi2 = evalSubTree.final_view(chi2Cache, axis=0)  # ( nCircuits, len(elabels))
                     for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                         _fas(mxToFill, [fInds], chi2[gInds, i], add=sumInto)
 
                 #Fill cache info
-                dchi2Cache = self.DM_compute_TDdchi2_cache(rholabel, elabels, evalSubTree, dataset_rows,
+                dchi2Cache = self.DM_compute_TDdchi2_cache(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
                                                            minProbClipForWeighting, probClipInterval,
                                                            paramSlice, fillComm)
                 dchi2 = evalSubTree.final_view(dchi2Cache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
@@ -1226,7 +1248,7 @@ class MapForwardSimulator(ForwardSimulator):
 
 
     #TODO: move to slowreplib.py once we have a fast version
-    def DM_compute_TDdchi2_cache(self, rholabel, elabels, evalTree, dataset_rows,
+    def DM_compute_TDdchi2_cache(self, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                  minProbClipForWeighting, probClipInterval, wrtSlice, comm):
 
         eps = 1e-7  # hardcoded?
@@ -1241,8 +1263,8 @@ class MapForwardSimulator(ForwardSimulator):
     
         cacheSize = evalTree.cache_size()
         assert(cacheSize == 0)
-    
-        chiCache = self.DM_compute_TDchi2_cache(rholabel, elabels, evalTree, dataset_rows,
+
+        chiCache = self.DM_compute_TDchi2_cache(rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                                 minProbClipForWeighting, probClipInterval, comm)
     
         all_slices, my_slice, owners, subComm = \
@@ -1264,7 +1286,7 @@ class MapForwardSimulator(ForwardSimulator):
                 vec = orig_vec.copy(); vec[i] += eps
                 self.from_vector(vec)
                 dchi2_cache[:, :, iFinal] = (self.DM_compute_TDchi2_cache(
-                    rholabel, elabels, evalTree, dataset_rows,
+                    rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                     minProbClipForWeighting, probClipInterval, subComm) - chiCache) / eps
         self.from_vector(orig_vec)
     
@@ -1279,7 +1301,7 @@ class MapForwardSimulator(ForwardSimulator):
         return dchi2_cache
 
 
-    def bulk_fill_timedep_loglpp(self, mxToFill, evalTree, dsCircuitsToUse, dataset,
+    def bulk_fill_timedep_loglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                  minProbClip, radius, probClipInterval, comm=None):
         """
         TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the circuit is run,
@@ -1297,11 +1319,12 @@ class MapForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 #Fill cache info
-                loglCache = self.DM_compute_TDloglpp_cache(rholabel, elabels, evalSubTree, dataset_rows,
+                loglCache = self.DM_compute_TDloglpp_cache(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
                                                            minProbClip, radius, probClipInterval, mySubComm)
 
                 #use cached data to final values
@@ -1320,7 +1343,7 @@ class MapForwardSimulator(ForwardSimulator):
 
 
     #TODO: move to slowreplib.py once we have a fast version
-    def DM_compute_TDloglpp_cache(self, rholabel, elabels, evalTree, dataset_rows,
+    def DM_compute_TDloglpp_cache(self, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                   minProbClip, radius, probClipInterval, comm):
 
         min_p = minProbClip; a = radius
@@ -1340,13 +1363,19 @@ class MapForwardSimulator(ForwardSimulator):
             iStart, remainder, iCache = evalTree[i]
             assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
             datarow = dataset_rows[i]
+            nTotOutcomes = num_outcomes[i]
 
             totalCnts = {}  # TODO defaultdict?
-            for t0, Nreps in zip(datarow.time, datarow.reps): # consolidate multiple outcomes that occur at same time? or sort?
-                if t0 in totalCnts: totalCnts[t0] += Nreps
-                else: totalCnts[t0] = Nreps
+            lastInds = {}; outcome_cnts = {}
+            for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):  # consolidate multiple outcomes that occur at same time? or sort?
+                if t0 in totalCnts:
+                    totalCnts[t0] += Nreps; outcome_cnts[t0] += 1
+                else:
+                    totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
+                lastInds[t0] = k
 
-            for t0, Nreps, outcome in zip(datarow.time, datarow.reps, datarow.outcomes):  # consolidate multiple outcomes that occur at same time? or sort?
+            cur_probtotal = 0; last_t = 0
+            for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):  # consolidate multiple outcomes that occur at same time? or sort?
                 t = t0
                 rhoVec.set_time(t)
                 rho = rhoVec.torep('prep')
@@ -1390,9 +1419,21 @@ class MapForwardSimulator(ForwardSimulator):
                 
                 ret[i, j] += v
 
+                if t0 == last_t:
+                    cur_probtotal += p
+                else:
+                    last_t = t0
+                    cur_probtotal = p
+
+                if lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes:  # cur_probtotal < 1.0?
+                    omitted_p = 1.0 - cur_probtotal
+                    ret[i, j] += N * omitted_p if omitted_p >= a else \
+                        N * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
+                    # if this is the *last* outcome at this time then account for any omitted probability
+
         return ret
 
-    def bulk_fill_timedep_dloglpp(self, mxToFill, evalTree, dsCircuitsToUse, dataset,
+    def bulk_fill_timedep_dloglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                   minProbClip, radius, probClipInterval, loglMxToFill=None,
                                   comm=None, wrtFilter=None, wrtBlockSize=None,
                                   profiler=None, gatherMemLimit=None):
@@ -1404,21 +1445,21 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dloglpp(rholabel, elabels, evalTree, dataset_rows, wrtSlice, fillComm):
-            return self.DM_compute_TDdloglpp_cache(rholabel, elabels, evalTree, dataset_rows,
+        def dloglpp(rholabel, elabels, num_tot_outcomes, evalTree, dataset_rows, wrtSlice, fillComm):
+            return self.DM_compute_TDdloglpp_cache(rholabel, elabels, num_tot_outcomes, evalTree, dataset_rows,
                                                    minProbClip, radius, probClipInterval, wrtSlice, fillComm)
 
-        def loglpp(rholabel, elabels, evalSubTree, dataset_rows, fillComm):
-            return self.DM_compute_TDloglpp_cache(rholabel, elabels, evalTree, dataset_rows,
+        def loglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return self.DM_compute_TDloglpp_cache(rholabel, elabels, num_tot_outcomes, evalTree, dataset_rows,
                                                   minProbClip, radius, probClipInterval, fillComm)
 
-        return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse,
+        return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
                                             mxToFill, dloglpp, loglMxToFill, loglpp,
                                             comm, wrtFilter, wrtBlockSize, profiler, gatherMemLimit)
 
 
     #A generic function - move to base class
-    def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse,
+    def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
                                 derivMxToFill, deriv_fn, mxToFill=None, fn=None,
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
@@ -1444,6 +1485,7 @@ class MapForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
             #Free memory from previous subtree iteration before computing caches
             paramSlice = slice(None)
@@ -1454,13 +1496,13 @@ class MapForwardSimulator(ForwardSimulator):
                 tm = _time.time()
 
                 if mxToFill is not None:
-                    cache = fn(rholabel, elabels, evalSubTree, dataset_rows, fillComm)
+                    cache = fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows, fillComm)
                     cache = evalSubTree.final_view(cache, axis=0)  # ( nCircuits, len(elabels))
                     for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                         _fas(mxToFill, [fInds], cache[gInds, i], add=sumInto)
 
                 #Fill cache info
-                dcache = deriv_fn(rholabel, elabels, evalSubTree,
+                dcache = deriv_fn(rholabel, elabels, num_outcomes, evalSubTree,
                                   dataset_rows, paramSlice, fillComm)
                 dcache = evalSubTree.final_view(dcache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
                 for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
@@ -1537,18 +1579,18 @@ class MapForwardSimulator(ForwardSimulator):
 
 
     #TODO: move to slowreplib.py once we have a fast version
-    def DM_compute_TDdloglpp_cache(self, rholabel, elabels, evalTree, dataset_rows,
+    def DM_compute_TDdloglpp_cache(self, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                    minProbClip, radius, probClipInterval, wrtSlice, comm):
 
-        def cachefn(rholabel, elabels, evTree, dataset_rows, fillComm):
-            return self.DM_compute_TDloglpp_cache(rholabel, elabels, evTree, dataset_rows,
+        def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+            return self.DM_compute_TDloglpp_cache(rholabel, elabels, n_outcomes, evTree, dataset_rows,
                                                   minProbClip, radius, probClipInterval, fillComm)
         
-        return self.DM_compute_timedep_dcache(rholabel, elabels, evalTree, dataset_rows,
+        return self.DM_compute_timedep_dcache(rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                               cachefn, wrtSlice, comm)
 
     #Generic function for base class
-    def DM_compute_timedep_dcache(self, rholabel, elabels, evalTree, dataset_rows,
+    def DM_compute_timedep_dcache(self, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                   cachefn, wrtSlice, comm):
 
         eps = 1e-7  # hardcoded?
@@ -1564,7 +1606,7 @@ class MapForwardSimulator(ForwardSimulator):
         cacheSize = evalTree.cache_size()
         assert(cacheSize == 0)
     
-        cache = cachefn(rholabel, elabels, evalTree, dataset_rows, comm)
+        cache = cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
     
         all_slices, my_slice, owners, subComm = \
             _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1584,7 +1626,8 @@ class MapForwardSimulator(ForwardSimulator):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.from_vector(vec)
-                dcache[:, :, iFinal] = (cachefn(rholabel, elabels, evalTree, dataset_rows, subComm) - cache) / eps
+                dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
+                                        - cache) / eps
         self.from_vector(orig_vec)
     
         #Now each processor has filled the relavant parts of dpr_cache,
