@@ -1,12 +1,13 @@
 import tempfile
 
-from ..util import BaseCase, Path
+from ..util import BaseCase, with_temp_path
 
 from pygsti.io import loaders
 
 
 class LoadersTester(BaseCase):
-    def test_load_model(self):
+    @with_temp_path
+    def test_load_model(self, tmp_path):
         gateset4_txt = """
 # Test text file describing a model
 
@@ -52,8 +53,7 @@ LiouvilleMx
 BASIS: pp 4
 GAUGEGROUP: Full
 """
-        with self.temp_file_path("Test_Gateset.txt") as tmp_file:
-            with open(tmp_file, "w") as output:
-                output.write(gateset4_txt)
-            gateset4 = loaders.load_model(tmp_file)
-            # TODO assert correctness
+        with open(tmp_path, "w") as output:
+            output.write(gateset4_txt)
+        gateset4 = loaders.load_model(tmp_path)
+        # TODO assert correctness

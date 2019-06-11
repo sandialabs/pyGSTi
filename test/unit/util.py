@@ -35,8 +35,8 @@ def version_label():
     return "v{}".format(sys.version_info.major)
 
 
-def with_temp_file(filename=None):
-    """Decorator version of ``BaseCase.temp_file_path``"""
+def with_temp_path(filename=None):
+    """Decorator version of ``BaseCase.temp_path``"""
     arg_fn = None
     if isinstance(filename, types.FunctionType):
         # Decorator was used without calling, so `filename' is actually the decorated function
@@ -46,8 +46,8 @@ def with_temp_file(filename=None):
     def decorator(fn):
         @functools.wraps(fn)
         def inner(self, *args, **kwargs):
-            with self.temp_file_path(filename) as tmp_file:
-                return fn(self, tmp_file, *args, **kwargs)
+            with self.temp_path(filename) as tmp_path:
+                return fn(self, tmp_path, *args, **kwargs)
         return inner
     if arg_fn is not None:
         return decorator(arg_fn)
@@ -93,7 +93,7 @@ class BaseCase(TestCase):
         return str(noarch_file)
 
     @contextmanager
-    def temp_file_path(self, filename=None):
+    def temp_path(self, filename=None):
         """Provides a context with the path of a temporary file.
 
         This is distinct from the contexts provided by tempfile in
