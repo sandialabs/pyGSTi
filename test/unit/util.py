@@ -5,6 +5,8 @@ import sys
 import numpy as np
 import numbers
 import tempfile
+import functools
+import types
 from contextlib import contextmanager
 
 # Test modules should import these generic names rather than importing the modules directly:
@@ -31,6 +33,26 @@ def version_label():
     This is mainly used to identify version-specific test fixtures
     """
     return "v{}".format(sys.version_info.major)
+
+
+def with_temp_file(filename=None):
+    """Decorator version of ``BaseCase.temp_file_path``"""
+    arg_fn = None
+    if isinstance(filename, types.FunctionType):
+        # Decorator was used without calling, so `filename' is actually the decorated function
+        arg_fn = filename
+        filename = None
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def inner(self, *args, **kwargs):
+            with self.temp_file_path(filename) as tmp_file:
+                return fn(self, tmp_file, *args, **kwargs)
+        return inner
+    if arg_fn is not None:
+        return decorator(arg_fn)
+    else:
+        return decorator
 
 
 class BaseCase(TestCase):
@@ -93,6 +115,10 @@ class BaseCase(TestCase):
         ------
         ``pathlib.Path``
             A Path object representing the path of the temporary file.
+
+        See Also
+        --------
+        ``test.unit.util.with_temp_file`` : decorator version
         """
 
         filename = filename or "temp_file"  # yeah looks random to me
