@@ -5,5 +5,7 @@ if 'FORCE_REGEN_TEST_DATA' in os.environ:
     from .util import _regenerate_fixtures
     _regenerate_fixtures(force=True)
 
+_NO_REGEN_TEST_DATA = 'NO_REGEN_TEST_DATA' in os.environ
+
 # Suppress pygsti backwards-compatibility warning
 os.environ['PYGSTI_BACKCOMPAT_WARNING'] = '0'

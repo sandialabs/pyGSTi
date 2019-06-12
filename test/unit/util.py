@@ -1,6 +1,4 @@
 """Utilities shared by unit tests"""
-from unittest import TestCase, skipUnless
-
 import sys
 import numpy as np
 import numbers
@@ -8,6 +6,9 @@ import tempfile
 import functools
 import types
 from contextlib import contextmanager
+from unittest import TestCase, skipUnless
+
+from . import _NO_REGEN_TEST_DATA
 
 # Test modules should import these generic names rather than importing the modules directly:
 
@@ -84,11 +85,36 @@ def _regenerate_fixtures(force=False):
 
 
 class BaseCase(TestCase):
-    def assertArraysAlmostEqual(self, a, b, places=7, msg=None, delta=None):
-        self.assertAlmostEqual(np.linalg.norm(a - b), 0, places=places, msg=msg, delta=delta)
+    def assertArraysAlmostEqual(self, a, b, **kwargs):
+        """Assert that two arrays are equal to within a certain precision.
 
-    def assertArraysEqual(self, a, b, msg=None):
-        self.assertTrue(np.array_equal(a, b), msg=msg)
+        Internally, this just wraps a call to
+        ``unittest.assertAlmostEqual`` with the operand difference
+        norm and zero.
+
+        Parameters
+        ----------
+        a, b: matrices or vectors
+            The two operands to compare
+        **kwargs:
+            Additional arguments to pass to ``unittest.assertAlmostEqual``
+        """
+        self.assertAlmostEqual(np.linalg.norm(a - b), 0, **kwargs)
+
+    def assertArraysEqual(self, a, b, **kwargs):
+        """Assert that two arrays are exactly equal.
+
+        Internally, this just wraps a call to ``numpy.array_equal``
+        in an assertion.
+
+        Parameters
+        ----------
+        a, b: matrices or vectors
+            The two operands to compare
+        **kwargs:
+            Additional arguments to pass to ``unittest.assertTrue``
+        """
+        self.assertTrue(np.array_equal(a, b), **kwargs)
 
     def assertDictContainsSubset(self, subset, dictionary, places=7, msg=None):
         """Assert that `dictionary` contains each key-value pair in `subset`
@@ -105,24 +131,74 @@ class BaseCase(TestCase):
             else:
                 self.assertEqual(v, e, msg=msg)
 
-    def fixture_path(self, data_file_name, can_retry=True):
-        """Returns the absolute path to a test fixture data file"""
+    def fixture_path(self, filename, can_retry=True):
+        """Returns the absolute path to a test fixture data file, if it exists.
+
+        Storage of test fixtures in the filesystem is handled
+        automatically. This is intentionally inconvenient; test
+        fixtures written in the filesystem are inherently transient
+        and are not git-tracked. Developers should not manually add
+        test fixtures to the data directory; instead, they should
+        write a module under ``test.unit.fixture_gen`` to generate
+        their fixtures programatically, so their test results are
+        reproducible.
+
+        Internally, this method first looks for a
+        non-python-version-specific, non-architecture-specific fixture
+        with the given filename. Failing that, it will look for a
+        version-specific fixture, and finally will either give up
+        (failling the test where it was called) or optionally try
+        again after regenerating missing test fixtures.
+
+        You can manually generate or regenerate test fixtures by
+        running ``python -m test.unit.fixture_gen`` or whatever
+        fixture_gen module is appropriate. Use the ``--help`` flag to
+        learn more. Alternatively, you can run any test under
+        ``test.unit`` with the ``FORCE_REGEN_TEST_DATA`` environment
+        variable set.
+
+        By default, if this method fails to locate a test fixture, it
+        will try to regenerate missing fixtures. This can be an
+        expensive operation. This behavior can be suppressed by
+        calling with ``can_retry=False``, or by setting the
+        ``NO_REGEN_TEST_DATA`` environment variable.
+
+        Parameters
+        ----------
+        filename: str
+            The filename of the fixture to load. This is the filename
+            used to write it by the respective ``fixture_gen`` module.
+        can_retry: bool
+            If ``True`` (default), if the given fixture can't be
+            found, try again after regenerating missing test fixtures.
+
+        Returns
+        -------
+        ``pathlib.Path``
+            The filesystem path of the fixture
+
+        See Also
+        --------
+        ``test.unit.fixture_gen`` : test fixture generation
+        """
         # First try without a version or architecture
-        noarch_file = _TEST_DATA_PATH / data_file_name
+        noarch_file = _TEST_DATA_PATH / filename
         if noarch_file.exists():
             return noarch_file
         else:
             # If the no-arch data file doesn't exist, try looking in a python version-specific data path
             version_path = _TEST_DATA_PATH / version_label()
             if version_path.exists():
-                version_file = version_path / data_file_name
+                version_file = version_path / filename
                 if version_file.exists():
                     return version_file
 
         # As fallback, regenerate fixtures and retry
         if can_retry:
-            _regenerate_fixtures()
-            return self.fixture_path(data_file_name, can_retry=False)
+            _regenerate_fixtures(force=False)
+            return self.fixture_path(filename, can_retry=False)
+        else:
+            self.fail("Could not locate test fixture data {}".format(filename))
 
     @contextmanager
     def temp_path(self, filename=None):
