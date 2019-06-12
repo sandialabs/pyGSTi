@@ -9,7 +9,6 @@ from . import _memo, _write, _versioned, _FixtureGenABC, _instantiate
 
 
 class _M(_FixtureGenABC):
-
     @_memo
     def _ds(self):
         ds = pygsti.obj.DataSet(outcomeLabels=['0', '1'], comment="Hello")
@@ -43,18 +42,22 @@ class _M(_FixtureGenABC):
             io.write_dataset(path, self._sparse_ds, outcomeLabelOrder=None, fixedColumnMode=False)
         return 'sparse_dataset2a.txt', writer
 
+    @_memo
+    def _ordering(self):
+        return [('0',), ('1',), ('0', '0'), ('1', '1')]
+
     @_write
     def build_sparse_dataset_1b(self):
         def writer(path):
             io.write_dataset(path, self._sparse_ds,
-                             outcomeLabelOrder=[('0',), ('1',), ('0', '0'), ('1', '1')], fixedColumnMode=True)
+                             outcomeLabelOrder=self._ordering, fixedColumnMode=True)
         return 'sparse_dataset1b.txt', writer
 
     @_write
     def build_sparse_dataset_2b(self):
         def writer(path):
             io.write_dataset(path, self._sparse_ds,
-                             outcomeLabelOrder=[('0',), ('1',), ('0', '0'), ('1', '1')], fixedColumnMode=False)
+                             outcomeLabelOrder=self._ordering, fixedColumnMode=False)
         return 'sparse_dataset2b.txt', writer
 
     @_write
@@ -77,17 +80,36 @@ Gx^4 20 80 0.2 100
     def _circuit_list(self):
         return pygsti.construction.circuit_list([(), ('Gx',), ('Gx', 'Gy')])
 
+    @_memo
+    def _circuit_list_header(self):
+        return "My Header"
+
     @_write
     def build_gatestringlist(self):
-        return 'gatestringlist_loadwrite.txt', lambda path: io.write_circuit_list(path, self._circuit_list, "My Header")
+        return 'gatestringlist_loadwrite.txt', lambda path: io.write_circuit_list(path, self._circuit_list,
+                                                                                  self._circuit_list_header)
 
     @_memo
     def _std_model(self):
         return std.target_model()
 
+    @_memo
+    def _gateset_title(self):
+        return "My Title"
+
     @_write
     def build_gateset(self):
-        return 'gateset_loadwrite.txt', lambda path: io.write_model(self._std_model, path, "My title")
+        return 'gateset_loadwrite.txt', lambda path: io.write_model(self._std_model, path, self._gateset_title)
+
+    @_memo
+    def _std_model_no_identity(self):
+        mdl = std.target_model()
+        mdl.povm_identity = None
+        return mdl
+
+    @_write
+    def build_gateset_no_identity(self):
+        return 'gateset_noidentity.txt', lambda path: io.write_model(self._std_model_no_identity, path)
 
     @_write
     def build_model_format_example(self):
