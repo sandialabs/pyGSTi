@@ -2,11 +2,12 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
-import os, time
+import os
+import time
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class TestWriteAndLoad(BaseTestCase):
 
+class TestWriteAndLoad(BaseTestCase):
     def test_dataset_file(self):
 
         strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
@@ -53,7 +54,7 @@ class TestWriteAndLoad(BaseTestCase):
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds[ ('Gy',) ] = {'0': 20, '1': 80}
         ds[ ('Gx','Gy') ] = {('0','0'): 30, ('1','1'): 70}
-        
+
         ds.done_adding_data()
         print("ORIG DS:"); print(ds)
 
@@ -73,7 +74,6 @@ class TestWriteAndLoad(BaseTestCase):
             self.assertEqual(ds[s].counts,ds1[s].counts)
             self.assertEqual(ds[s].counts,ds2[s].counts)
 
-            
     def test_multidataset_file(self):
         strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_empty_dataset(temp_files + "/emptyMultiDataset.txt", strList,
@@ -112,9 +112,6 @@ Gx^4 20 80 0.2 100
                 temp_files + "/TestMultiDatasetErr.txt",ds, [('Gx',)])
               # operation sequence list must be Circuit objects
 
-
-
-
     def test_circuit_list_file(self):
         strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_circuit_list(temp_files + "/gatestringlist_loadwrite.txt", strList, "My Header")
@@ -129,7 +126,6 @@ Gx^4 20 80 0.2 100
             pygsti.io.write_circuit_list(
                 temp_files + "/gatestringlist_bad.txt",
                 [ ('Gx',)], "My Header") #Must be Circuits
-
 
     def test_gateset_file(self):
         pygsti.io.write_model(std.target_model(), temp_files + "/gateset_loadwrite.txt", "My title")
@@ -235,28 +231,6 @@ GAUGEGROUP: Full
         d = pygsti.io.load_circuit_dict(temp_files + "/gatestringdict_loadwrite.txt")
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))
 
-
-    def test_gateset_writeload(self):
-        mdl = std.target_model()
-
-        for param in ('full','TP','CPTP','static'):
-            print("Param: ",param)
-            mdl.set_all_parameterizations(param)
-            filename = temp_files + "/gateset_%s.txt" % param
-            pygsti.io.write_model(mdl, filename)
-            gs2 = pygsti.io.read_model(filename)
-            self.assertAlmostEqual( mdl.frobeniusdist(gs2), 0.0 )
-            for lbl in mdl.operations:
-                self.assertEqual( type(mdl.operations[lbl]), type(gs2.operations[lbl]))
-            for lbl in mdl.preps:
-                self.assertEqual( type(mdl.preps[lbl]), type(gs2.preps[lbl]))
-            for lbl in mdl.povms:
-                self.assertEqual( type(mdl.povms[lbl]), type(gs2.povms[lbl]))
-            for lbl in mdl.instruments:
-                self.assertEqual( type(mdl.instruments[lbl]), type(gs2.instruments[lbl]))
-
-        #TODO: create unknown derived classes and write this model.
-        
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

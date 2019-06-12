@@ -55,6 +55,22 @@ def with_temp_path(filename=None):
         return decorator
 
 
+def with_temp_file(contents):
+    """Helper decorator for file I/O testing.
+
+    The decorated method will be called with the path of a temporary
+    file containing the given contents.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def inner(self, tmp_path, *args, **kwargs):
+            with open(tmp_path, 'w') as f:
+                f.write(contents)
+            return fn(self, tmp_path, *args, **kwargs)
+        return with_temp_path(inner)
+    return decorator
+
+
 def _regenerate_fixtures(force=False):
     """Regenerate missing test fixture files.
 

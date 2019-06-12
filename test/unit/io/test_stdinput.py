@@ -1,27 +1,13 @@
 import functools
 import numpy as np
 
-from ..util import BaseCase, with_temp_path
+from ..util import BaseCase, with_temp_path, with_temp_file
 
+from pygsti.construction import std1Q_XYI as std
 from pygsti.objects import Circuit, CircuitLabel
 import pygsti.construction as pc
+from pygsti import io
 import pygsti.io.stdinput as stdin
-
-
-def with_temp_file(contents):
-    """Helper decorator for file I/O testing.
-
-    The decorated method will be called with the path of a temporary
-    file containing the given contents.
-    """
-    def decorator(fn):
-        @functools.wraps(fn)
-        def inner(self, tmp_path, *args, **kwargs):
-            with open(tmp_path, 'w') as f:
-                f.write(contents)
-            return fn(self, tmp_path, *args, **kwargs)
-        return with_temp_path(inner)
-    return decorator
 
 
 class StdInputBase:
@@ -644,3 +630,32 @@ BASIS: pp
     def test_read_model_raises_on_no_basis_dimension(self, tmp_path):
         with self.assertRaises(ValueError):
             stdin.read_model(tmp_path)
+
+    @with_temp_path
+    def _test_gateset_writeload(self, tmp_path, param):
+        mdl = std.target_model()
+        mdl.set_all_parameterizations(param)
+        io.write_model(mdl, tmp_path)
+
+        gs2 = stdin.read_model(tmp_path)
+        self.assertAlmostEqual(mdl.frobeniusdist(gs2), 0.0)
+        for lbl in mdl.operations:
+            self.assertEqual(type(mdl.operations[lbl]), type(gs2.operations[lbl]))
+        for lbl in mdl.preps:
+            self.assertEqual(type(mdl.preps[lbl]), type(gs2.preps[lbl]))
+        for lbl in mdl.povms:
+            self.assertEqual(type(mdl.povms[lbl]), type(gs2.povms[lbl]))
+        for lbl in mdl.instruments:
+            self.assertEqual(type(mdl.instruments[lbl]), type(gs2.instruments[lbl]))
+
+    def test_read_model_full_param(self):
+        self._test_gateset_writeload('full')
+
+    def test_read_model_TP_param(self):
+        self._test_gateset_writeload('TP')
+
+    def test_read_model_CPTP_param(self):
+        self._test_gateset_writeload('CPTP')
+
+    def test_read_model_static_param(self):
+        self._test_gateset_writeload('static')
