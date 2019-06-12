@@ -1131,174 +1131,29 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
+        def dchi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
+            return self.DM_compute_TDdchi2_cache(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
+                                                 minProbClipForWeighting, probClipInterval, wrtSlice, fillComm)
 
-        tStart = _time.time()
-        if profiler is None: profiler = _dummy_profiler
+        def chi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return self.DM_compute_TDchi2_cache(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
+                                                minProbClipForWeighting, probClipInterval, fillComm)
 
-        if wrtFilter is not None:
-            assert(wrtBlockSize is None)  # Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice = _slct.list_to_slice(wrtFilter)  # for now, require the filter specify a slice
-        else:
-            wrtSlice = None
-
-        profiler.mem_check("bulk_fill_timedep_dchi2: begin")
-
-        #get distribution across subtrees (groups if needed)
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(evalTree)
-            dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
-            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
-
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice = slice(None)
-            fillComm = mySubComm  # comm used by calc_and_fill
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                tm = _time.time()
-
-                if chi2MxToFill is not None:
-                    chi2Cache = self.DM_compute_TDchi2_cache(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
-                                                             minProbClipForWeighting, probClipInterval, fillComm)
-                    chi2 = evalSubTree.final_view(chi2Cache, axis=0)  # ( nCircuits, len(elabels))
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(mxToFill, [fInds], chi2[gInds, i], add=sumInto)
-
-                #Fill cache info
-                dchi2Cache = self.DM_compute_TDdchi2_cache(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
-                                                           minProbClipForWeighting, probClipInterval,
-                                                           paramSlice, fillComm)
-                dchi2 = evalSubTree.final_view(dchi2Cache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds, pslc1], dchi2[gInds, i], add=sumInto)
-                profiler.add_time("bulk_fill_timedep_dchi2: calc_and_fill", tm)
-
-            #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-            else:
-                blkSize = None  # wrtFilter dictates block
-
-            if blkSize is None:
-                #Fill derivative cache info
-                paramSlice = wrtSlice  # specifies which deriv cols calc_and_fill computes
-
-                #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho((chi2MxToFill, mxToFill), evalSubTree,
-                                                   slice(None), slice(None), calc_and_fill)
-                profiler.mem_check("bulk_fill_dprobs: post fill")
-
-            else:  # Divide columns into blocks of at most blkSize
-                assert(wrtFilter is None)  # cannot specify both wrtFilter and blkSize
-                nBlks = int(_np.ceil(self.Np / blkSize))
-                # num blocks required to achieve desired average size == blkSize
-                blocks = _mpit.slice_up_range(self.Np, nBlks)
-
-                #distribute derivative computation across blocks
-                myBlkIndices, blkOwners, blkComm = \
-                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
-                if blkComm is not None:
-                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                                   + " than derivative columns(%d)!" % self.Np
-                                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-                fillComm = blkComm  # comm used by calc_and_fill
-
-                for iBlk in myBlkIndices:
-                    paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_result_tuple_collectrho(
-                        (mxToFill,), evalSubTree,
-                        blocks[iBlk], slice(None), calc_and_fill)
-                    profiler.mem_check("bulk_fill_dprobs: post fill blk")
-
-                #gather results
-                tm = _time.time()
-                _mpit.gather_slices(blocks, blkOwners, mxToFill, [felInds],
-                                    1, mySubComm, gatherMemLimit)
-                #note: gathering axis 1 of mxToFill[:,fslc], dim=(ks,M)
-                profiler.add_time("MPI IPC", tm)
-                profiler.mem_check("bulk_fill_dprobs: post gather blocks")
-
-        #collect/gather results
-        tm = _time.time()
-        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill, [], 0, comm, gatherMemLimit)
-        #note: pass mxToFill, dim=(KS,M), so gather mxToFill[felInds] (axis=0)
-
-        if chi2MxToFill is not None:
-            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 chi2MxToFill, [], 0, comm)
-            #note: pass prMxToFill, dim=(KS,), so gather prMxToFill[felInds] (axis=0)
-
-        profiler.add_time("MPI IPC", tm)
-        profiler.mem_check("bulk_fill_timedep_dchi2: post gather subtrees")
-
-        profiler.add_time("bulk_fill_timedep_dchi2: total", tStart)
-        profiler.add_count("bulk_fill_timedep_dchi2 count")
-        profiler.mem_check("bulk_fill_timedep_dchi2: end")
+        return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
+                                            mxToFill, dchi2, chi2MxToFill, chi2,
+                                            comm, wrtFilter, wrtBlockSize, profiler, gatherMemLimit)
 
 
     #TODO: move to slowreplib.py once we have a fast version
     def DM_compute_TDdchi2_cache(self, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
                                  minProbClipForWeighting, probClipInterval, wrtSlice, comm):
 
-        eps = 1e-7  # hardcoded?
-    
-        #Compute finite difference derivatives, one parameter at a time.
-        param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-        nDerivCols = len(param_indices)  # *all*, not just locally computed ones
-    
-        rhoVec, EVecs = self._rhoEs_from_labels(rholabel, elabels)
-        chiCache = _np.empty((len(evalTree), len(elabels)), 'd')
-        dchi2_cache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
-    
-        cacheSize = evalTree.cache_size()
-        assert(cacheSize == 0)
+        def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+            return self.DM_compute_TDchi2_cache(rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                                minProbClipForWeighting, probClipInterval, fillComm)
 
-        chiCache = self.DM_compute_TDchi2_cache(rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                                                minProbClipForWeighting, probClipInterval, comm)
-    
-        all_slices, my_slice, owners, subComm = \
-            _mpit.distribute_slice(slice(0, len(param_indices)), comm)
-    
-        my_param_indices = param_indices[my_slice]
-        st = my_slice.start  # beginning of where my_param_indices results
-        # get placed into dpr_cache
-    
-        #Get a map from global parameter indices to the desired
-        # final index within dpr_cache
-        iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
-    
-        orig_vec = self.to_vector().copy()
-        for i in range(self.Np):
-            #print("dprobs cache %d of %d" % (i,self.Np))
-            if i in iParamToFinal:
-                iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec)
-                dchi2_cache[:, :, iFinal] = (self.DM_compute_TDchi2_cache(
-                    rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                    minProbClipForWeighting, probClipInterval, subComm) - chiCache) / eps
-        self.from_vector(orig_vec)
-    
-        #Now each processor has filled the relavant parts of dpr_cache,
-        # so gather together:
-        _mpit.gather_slices(all_slices, owners, dchi2_cache, [], axes=2, comm=comm)
-    
-        # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
-        #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-        #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-    
-        return dchi2_cache
+        return self.DM_compute_timedep_dcache(rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                              cachefn, wrtSlice, comm)
 
 
     def bulk_fill_timedep_loglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
@@ -1445,12 +1300,12 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dloglpp(rholabel, elabels, num_tot_outcomes, evalTree, dataset_rows, wrtSlice, fillComm):
-            return self.DM_compute_TDdloglpp_cache(rholabel, elabels, num_tot_outcomes, evalTree, dataset_rows,
+        def dloglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
+            return self.DM_compute_TDdloglpp_cache(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
                                                    minProbClip, radius, probClipInterval, wrtSlice, fillComm)
 
         def loglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
-            return self.DM_compute_TDloglpp_cache(rholabel, elabels, num_tot_outcomes, evalTree, dataset_rows,
+            return self.DM_compute_TDloglpp_cache(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
                                                   minProbClip, radius, probClipInterval, fillComm)
 
         return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
