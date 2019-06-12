@@ -8,7 +8,7 @@ from pygsti.construction import std1Q_XYI as std
 from . import _memo, _write, _versioned, _FixtureGenABC, _instantiate
 
 
-class _M(_FixtureGenABC):
+class IOFixtureGen(_FixtureGenABC):
     @_memo
     def _ds(self):
         ds = pygsti.obj.DataSet(outcomeLabels=['0', '1'], comment="Hello")
@@ -178,5 +178,4 @@ F2 GxGy
         return 'gatestringdict_loadwrite.txt', writer
 
 
-
-_instantiate(__name__, _M)
+_instantiate(__name__, IOFixtureGen)

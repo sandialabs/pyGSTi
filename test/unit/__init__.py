@@ -1,7 +1,7 @@
 """Unit test coverage for pyGSTi"""
 import os
 
-if 'FORCE_REGEN_TEST_DATA' in os.environ:
+if 'PYGSTI_REGEN_REF_FILES' in os.environ:
     from .util import _regenerate_fixtures
     _regenerate_fixtures(force=True)
 

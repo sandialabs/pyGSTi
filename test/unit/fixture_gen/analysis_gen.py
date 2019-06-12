@@ -7,7 +7,7 @@ import pygsti
 from . import _memo, _write, _versioned, _FixtureGenABC, _instantiate
 
 
-class _M(_FixtureGenABC):
+class AnalysisFixtureGen(_FixtureGenABC):
     def __init__(self):
         super().__init__()
         self._model = std.target_model()
@@ -85,4 +85,4 @@ class _M(_FixtureGenABC):
         return 'analysis.model', lambda path: pygsti.io.write_model(self._mdl_lsgst_go, str(path), "Saved LSGST Analysis Model")
 
 
-_instantiate(__name__, _M)
+_instantiate(__name__, AnalysisFixtureGen)

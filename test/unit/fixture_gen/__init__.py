@@ -8,6 +8,7 @@ import importlib
 import sys
 
 from ..util import Path, version_label, _TEST_DATA_PATH
+from .. import _NO_REGEN_TEST_DATA
 
 __fixture_generators__ = []
 
@@ -84,8 +85,12 @@ class _FixtureGenMeta(type):
 
 class _FixtureGenABC(metaclass=_FixtureGenMeta):
     """Base class for fixture data generators"""
-
     def _generate(self, builders, *args, **kwargs):
+        if _NO_REGEN_TEST_DATA:
+            warn("Skipping generation of {} (\u001b[31m`NO_REGEN_TEST_DATA'\u001b[0m set)".format(
+                self.__class__.__name__
+            ))
+            return
         for fn in builders:
             try:
                 filepath = fn(self, *args, **kwargs)
@@ -137,6 +142,8 @@ def _parse_args():
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-f', '--force', action='store_true', help="overwrite existing test fixtures")
-    parser.add_argument('-p', '--only-versioned', action='store_true', help="only build python-version-specific fixtures")
-    parser.add_argument('-n', '--only-nonversioned', action='store_true', help="only build non-python-version-specific fixtures")
+    parser.add_argument('-p', '--only-versioned', action='store_true',
+                        help="only build python-version-specific fixtures")
+    parser.add_argument('-n', '--only-nonversioned', action='store_true',
+                        help="only build non-python-version-specific fixtures")
     return parser.parse_args()

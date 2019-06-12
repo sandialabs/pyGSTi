@@ -8,8 +8,6 @@ import types
 from contextlib import contextmanager
 from unittest import TestCase, skipUnless
 
-from . import _NO_REGEN_TEST_DATA
-
 # Test modules should import these generic names rather than importing the modules directly:
 
 # `pathlib' is standard as of 3.4, but has been backported as pathlib2
@@ -154,7 +152,7 @@ class BaseCase(TestCase):
         running ``python -m test.unit.fixture_gen`` or whatever
         fixture_gen module is appropriate. Use the ``--help`` flag to
         learn more. Alternatively, you can run any test under
-        ``test.unit`` with the ``FORCE_REGEN_TEST_DATA`` environment
+        ``test.unit`` with the ``PYGSTI_REGEN_REF_FILES`` environment
         variable set.
 
         By default, if this method fails to locate a test fixture, it
