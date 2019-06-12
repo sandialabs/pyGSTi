@@ -36,6 +36,7 @@ def _write(fn):
     wrapper will check if the file exists and raise if it does, unless
     called with ``force=True``.
     """
+    fn.__builder__ = True
     @functools.wraps(fn)
     def inner(*args, force=False, **kwargs):
         filename, write_fn = fn(*args, **kwargs)
@@ -69,34 +70,40 @@ def _memo(fn):
     return property(inner)
 
 
-def _generate(builders, *args, **kwargs):
-    for fn in builders:
-        try:
-            filepath = fn(*args, **kwargs)
-            print("Wrote file \u001b[36m{}\u001b[0m".format(filepath))
-        except FileExistsError as e:
-            warn("File already exists: {} (hint: use \u001b[31m--force\u001b[0m to overwrite)".format(e))
+class _FixtureGenMeta(type):
+    def __init__(cls, name, bases, dict):
+        super().__init__(name, bases, dict)
+        if hasattr(cls, '__builders__'):
+            cls.__builders__ = cls.__builders__.copy()
+        else:
+            cls.__builders__ = {}
+        for name, bound in dict.items():
+            if hasattr(bound, '__builder__'):
+                cls.__builders__[name] = bound
 
 
-class _FixtureGenABC:
+class _FixtureGenABC(metaclass=_FixtureGenMeta):
     """Base class for fixture data generators"""
-    @property
-    def __builders__(self):
-        for name in dir(self):
-            if name.startswith("build_"):
-                yield getattr(self, name)
+
+    def _generate(self, builders, *args, **kwargs):
+        for fn in builders:
+            try:
+                filepath = fn(self, *args, **kwargs)
+                warn("Wrote file \u001b[36m{}\u001b[0m".format(filepath))
+            except FileExistsError as e:
+                warn("File already exists: {} (hint: use \u001b[31m--force\u001b[0m to overwrite)".format(e))
 
     def generate_all(self, *args, **kwargs):
         """Generate and write all test fixture data"""
-        _generate(self.__builders__, *args, **kwargs)
+        self._generate(self.__builders__.values(), *args, **kwargs)
 
     def generate_versioned(self, *args, **kwargs):
         """Generate and write all python-version-specific test fixture data"""
-        _generate([b for b in self.__builders__ if hasattr(b, '__versioned__')], *args, **kwargs)
+        self._generate([b for b in self.__builders__.values() if hasattr(b, '__versioned__')], *args, **kwargs)
 
     def generate_nonversioned(self, *args, **kwargs):
         """Generate and write all non-python-version-specific test fixture data"""
-        _generate([b for b in self.__builders__ if not hasattr(b, '__versioned__')], *args, **kwargs)
+        self._generate([b for b in self.__builders__.values() if not hasattr(b, '__versioned__')], *args, **kwargs)
 
     def _run(self, args):
         if args.only_versioned:

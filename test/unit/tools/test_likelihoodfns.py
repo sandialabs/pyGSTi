@@ -8,8 +8,8 @@ from pygsti import io, construction
 
 class LikelihoodFunctionsBase(BaseCase):
     def setUp(self):
-        self.ds = DataSet(fileToLoadFrom=self.fixture_data('analysis.dataset'))
-        self.model = io.load_model(self.fixture_data("analysis.model"))
+        self.ds = DataSet(fileToLoadFrom=str(self.fixture_data('analysis.dataset')))
+        self.model = io.load_model(str(self.fixture_data("analysis.model")))
 
 
 class LikelihoodFunctionsTester(LikelihoodFunctionsBase):

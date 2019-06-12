@@ -1,5 +1,5 @@
 """Utilities shared by unit tests"""
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 
 import sys
 import numpy as np
@@ -55,6 +55,18 @@ def with_temp_path(filename=None):
         return decorator
 
 
+def _regenerate_fixtures(force=False):
+    """Regenerate missing test fixture files.
+
+    This call can be expensive, so use sparingly.
+    """
+    version_path = _TEST_DATA_PATH / version_label()
+    version_path.mkdir(parents=True, exist_ok=True)
+    from .fixture_gen import __main__ as gen
+    gen._load_all_generators()
+    gen.generate_all(force=force)
+
+
 class BaseCase(TestCase):
     def assertArraysAlmostEqual(self, a, b, places=7, msg=None, delta=None):
         self.assertAlmostEqual(np.linalg.norm(a - b), 0, places=places, msg=msg, delta=delta)
@@ -77,20 +89,24 @@ class BaseCase(TestCase):
             else:
                 self.assertEqual(v, e, msg=msg)
 
-    def fixture_data(self, data_file_name):
+    def fixture_data(self, data_file_name, can_retry=True):
         """Returns the absolute path to a test fixture data file"""
         # First try without a version or architecture
         noarch_file = _TEST_DATA_PATH / data_file_name
-        if not noarch_file.exists():
+        if noarch_file.exists():
+            return noarch_file
+        else:
             # If the no-arch data file doesn't exist, try looking in a python version-specific data path
             version_path = _TEST_DATA_PATH / version_label()
             if version_path.exists():
                 version_file = version_path / data_file_name
                 if version_file.exists():
-                    return str(version_file)
+                    return version_file
 
-        # As fallback, just return the no-arch filename and let the caller deal with it
-        return str(noarch_file)
+        # As fallback, regenerate fixtures and retry
+        if can_retry:
+            _regenerate_fixtures()
+            return self.fixture_data(data_file_name, can_retry=False)
 
     @contextmanager
     def temp_path(self, filename=None):
