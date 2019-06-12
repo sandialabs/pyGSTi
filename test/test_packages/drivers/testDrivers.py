@@ -49,7 +49,7 @@ class DriversTestCase(BaseTestCase):
             ds_tgp = pygsti.construction.generate_fake_data(
                 datagen_gateset, self.lsgstStrings_tgp[-1],
                 nSamples=1000,sampleError='binomial', seed=100)
-        
+
             ds_lae = pygsti.construction.generate_fake_data(
                 datagen_gateset, self.lsgstStrings_lae[-1],
                 nSamples=1000,sampleError='binomial', seed=100)
@@ -512,58 +512,11 @@ class TestDriversMethods(DriversTestCase):
             pygsti.drivers.gaugeopt_suite_to_dictionary(["foobar"], std.target_model(), verbosity=1)
 
     def test_bootstrap(self):
-
-        def dbsizes(mdl, title): #additional model debugging
-            print(title)
-            for l,o in mdl.operations.items(): print(l,":",o.num_params(),o.gpindices)
-            for l,o in mdl.preps.items(): print(l,":",o.num_params(),o.gpindices)
-            for l,o in mdl.povms.items(): print(l,":",o.num_params(),o.gpindices)
-            print("")
-
-        dbsizes(std.target_model(),"Orig target")
-
+        """Test bootstrap model generation"""
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         tp_target = std.target_model()
-        dbsizes(tp_target,"target copy")
         tp_target.set_all_parameterizations("TP")
-        dbsizes(tp_target,"TP target")
-
-        print("LGST------------------")
         mdl = pygsti.do_lgst(ds, std.fiducials, std.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0)
-
-        dbsizes(mdl, "LGST result")
-
-        bootds_p = pygsti.drivers.make_bootstrap_dataset(
-            ds,'parametric', mdl, seed=1234 )
-        bootds_np = pygsti.drivers.make_bootstrap_dataset(
-            ds,'nonparametric', seed=1234 )
-
-        with self.assertRaises(ValueError):
-            pygsti.drivers.make_bootstrap_dataset(ds,'foobar', seed=1)
-              #bad generationMethod
-        with self.assertRaises(ValueError):
-            pygsti.drivers.make_bootstrap_dataset(ds,'parametric', seed=1)
-              # must specify model for parametric mode
-        with self.assertRaises(ValueError):
-            pygsti.drivers.make_bootstrap_dataset(ds,'nonparametric',mdl,seed=1)
-              # must *not* specify model for nonparametric mode
-
-
-        maxLengths = [0] #just do LGST strings to make this fast...
-        bootgs_p = pygsti.drivers.make_bootstrap_models( # self.runSilent(
-            2, ds, 'parametric', std.fiducials, std.fiducials,
-            std.germs, maxLengths, inputModel=mdl,
-            returnData=False)
-
-        dbsizes(bootgs_p[0],"bootgs_p[0]")
-
-        #again, but with a specified list
-        custom_strs = pygsti.construction.make_lsgst_lists(
-            mdl, std.fiducials, std.fiducials, std.germs, [1])
-        bootgs_p_custom = self.runSilent(pygsti.drivers.make_bootstrap_models,
-                                         2, ds, 'parametric', None,None,None,None,
-                                         lsgstLists=custom_strs, inputModel=mdl,
-                                         returnData=False)
 
         default_maxLens = [0]+[2**k for k in range(10)]
         circuits = pygsti.construction.make_lsgst_experiment_list(
@@ -573,65 +526,10 @@ class TestDriversMethods(DriversTestCase):
             mdl, circuits, nSamples=10000, sampleError='round')
 
         bootgs_p_defaultMaxLens = \
-            pygsti.drivers.make_bootstrap_models( #self.runSilent(
-            2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
-            std.germs, None, inputModel=mdl,
-            returnData=False) #test when maxLengths == None
-
-        bootgs_np, bootds_np2 = self.runSilent(
-            pygsti.drivers.make_bootstrap_models,
-            2, ds, 'nonparametric', std.fiducials, std.fiducials,
-            std.germs, maxLengths, targetModel=mdl,
-            returnData=True)
-
-        with self.assertRaises(ValueError):
             pygsti.drivers.make_bootstrap_models(
-                2, ds, 'parametric', std.fiducials, std.fiducials,
-                std.germs, maxLengths,returnData=False)
-                #must specify either inputModel or targetModel
-
-        with self.assertRaises(ValueError):
-            pygsti.drivers.make_bootstrap_models(
-                2, ds, 'parametric', std.fiducials, std.fiducials,
-                std.germs, maxLengths, inputModel=mdl, targetModel=mdl,
-                returnData=False) #cannot specify both inputModel and targetModel
-
-
-        self.runSilent(pygsti.drivers.gauge_optimize_model_list,
-                       bootgs_p, std.target_model(), gateMetric = 'frobenius',
-                       spamMetric = 'frobenius', plot=False)
-
-        #Test plotting not impl -- b/c plotting was removed w/matplotlib removal
-        with self.assertRaises(NotImplementedError):
-            pygsti.drivers.gauge_optimize_model_list(
-                bootgs_p, std.target_model(), gateMetric = 'frobenius',
-                spamMetric = 'frobenius', plot=True)
-
-
-        #Test utility functions -- just make sure they run for now...
-        def gsFn(mdl):
-            return mdl.get_dimension()
-
-        tp_target = std.target_model()
-        tp_target.set_all_parameterizations("TP")
-
-        pygsti.drivers.mdl_stdev(gsFn, bootgs_p)
-        pygsti.drivers.mdl_mean(gsFn, bootgs_p)
-        #pygsti.drivers.to_vector(bootgs_p[0]) #removed
-
-        pygsti.drivers.to_mean_model(bootgs_p, tp_target)
-        pygsti.drivers.to_std_model(bootgs_p, tp_target)
-        pygsti.drivers.to_rms_model(bootgs_p, tp_target)
-
-        #Removed (unused)
-        #pygsti.drivers.gateset_jtracedist(bootgs_p[0], tp_target)
-        #pygsti.drivers.gateset_process_fidelity(bootgs_p[0], tp_target)
-        #pygsti.drivers.gateset_diamonddist(bootgs_p[0], tp_target)
-        #pygsti.drivers.gateset_decomp_angle(bootgs_p[0])
-        #pygsti.drivers.gateset_decomp_decay_diag(bootgs_p[0])
-        #pygsti.drivers.gateset_decomp_decay_offdiag(bootgs_p[0])
-        #pygsti.drivers.spamrameter(bootgs_p[0])
-
+                2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
+                std.germs, None, inputModel=mdl,
+                returnData=False) #test when maxLengths == None
 
 
 if __name__ == "__main__":
