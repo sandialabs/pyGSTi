@@ -2888,3 +2888,15 @@ def split_lindblad_paramtype(typ):
     elif evostr == "clifford terms": evotype = "cterm"
     else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
     return bTyp, evotype
+
+
+def spamTupleToOutcome(spamTuple):
+    """TODO: Docstring """
+    # Helper fn: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
+    if spamTuple is None:
+        return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
+    else:
+        prep_lbl, povm_and_effect_lbl = spamTuple
+        last_underscore = povm_and_effect_lbl.rindex('_')
+        effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
+        return (effect_lbl,)  # effect label *is* the outcome

@@ -17,6 +17,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
+from ..tools import optools as _gt
 
 from scipy.sparse.linalg import LinearOperator
 
@@ -1357,6 +1358,198 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
 
     return dpr_cache
+
+
+def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                            minProbClipForWeighting, probClipInterval, comm):
+
+    def obj_fn(p, f, Ni, N, omitted_p):
+        cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
+        v = (p - f) * _np.sqrt(N / cp)
+
+        if omitted_p != 0:
+            # if this is the *last* outcome at this time then account for any omitted probability
+            omitted_cp = _np.clip(omitted_p, minProbClipForWeighting, 1 - minProbClipForWeighting)
+            v = _np.sqrt(v**2 + N * omitted_p**2 / omitted_cp)
+        return v  # sqrt(the objective function term)  (the qty stored in cache)
+
+    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+
+def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                              minProbClip, radius, probClipInterval, comm):
+
+    min_p = minProbClip; a = radius
+
+    def obj_fn(p, f, Ni, N, omitted_p):
+        pos_p = max(p, min_p)
+        if Ni != 0:
+            freq_term = Ni * (_np.log(f) - 1.0)
+        else:
+            freq_term = 0.0
+        S = -Ni / min_p + N
+        S2 = 0.5 * Ni / (min_p**2)
+        v = freq_term + -Ni * _np.log(pos_p) + N * pos_p  # dims K x M (K = nSpamLabels, M = nCircuits)
+
+        # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+        v = max(v, 0)
+
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        if p < min_p:
+            v = v + S * (p - min_p) + S2 * (p - min_p)**2
+
+        if Ni == 0:
+            if p >= a:
+                v = N * p
+            else:
+                v = N * ((-1.0 / (3 * a**2)) * p**3 + p**2 / a + a / 3.0)
+        # special handling for f == 0 terms
+        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+
+        if omitted_p != 0.0:
+            # if this is the *last* outcome at this time then account for any omitted probability
+            v += N * omitted_p if omitted_p >= a else \
+                N * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
+
+        return v  # objective function term (the qty stored in cache)
+
+    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+
+def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm):
+
+    cacheSize = evalTree.cache_size()
+    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    ret = _np.zeros((len(evalTree), len(elabels)), 'd')  # zeros so we can just add contributions below
+
+    elabels_as_outcomes = [_gt.spamTupleToOutcome((rholabel, e)) for e in elabels]
+    outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
+
+    assert(cacheSize == 0)  # so all elements have None as start and all as remainder
+    #if clipTo is not None:
+    #    _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
+
+    #comm is currently ignored
+    #TODO: if evalTree is split, distribute among processors
+    for i in evalTree.get_evaluation_order():
+        iStart, remainder, iCache = evalTree[i]
+        assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
+        datarow = dataset_rows[i]
+        nTotOutcomes = num_outcomes[i]
+
+        totalCnts = {}  # TODO defaultdict?
+        lastInds = {}; outcome_cnts = {}
+        for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):  # consolidate multiple outcomes that occur at same time? or sort?
+            if t0 in totalCnts:
+                totalCnts[t0] += Nreps; outcome_cnts[t0] += 1
+            else:
+                totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
+            lastInds[t0] = k
+
+        cur_probtotal = 0; last_t = 0
+        for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):  # consolidate multiple outcomes that occur at same time? or sort?
+            t = t0
+            rhoVec.set_time(t)
+            rho = rhoVec.torep('prep')
+            t += rholabel.time
+
+            for gl in remainder:
+                op = calc.sos.get_operation(gl)
+                op.set_time(t); t += gl.time  # time in gate label == gate duration?
+                rho = op.torep().acton(rho)
+
+            j = outcome_to_elabel_index[outcome]
+            E = EVecs[j]; E.set_time(t)
+            p = E.torep('effect').probability(rho)  # outcome probability
+            N = totalCnts[t0]
+            f = Nreps / N
+
+            if t0 == last_t:
+                cur_probtotal += p
+            else:
+                last_t = t0
+                cur_probtotal = p
+
+            omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
+            # and cur_probtotal < 1.0?
+
+            ret[i, j] += objfn(p, f, Nreps, N, omitted_p)
+
+    return ret
+
+
+def DM_compute_TDdchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                             minProbClipForWeighting, probClipInterval, wrtSlice, comm):
+
+    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+        return DM_compute_TDchi2_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                       minProbClipForWeighting, probClipInterval, fillComm)
+
+    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                     cachefn, wrtSlice, comm)
+
+
+def DM_compute_TDdloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                               minProbClip, radius, probClipInterval, wrtSlice, comm):
+
+    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+        return DM_compute_TDloglpp_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                         minProbClip, radius, probClipInterval, fillComm)
+
+    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                     cachefn, wrtSlice, comm)
+
+
+def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                              cachefn, wrtSlice, comm):
+
+    eps = 1e-7  # hardcoded?
+
+    #Compute finite difference derivatives, one parameter at a time.
+    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+    nDerivCols = len(param_indices)  # *all*, not just locally computed ones
+
+    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    cache = _np.empty((len(evalTree), len(elabels)), 'd')
+    dcache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
+
+    cacheSize = evalTree.cache_size()
+    assert(cacheSize == 0)
+
+    cache = cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+    all_slices, my_slice, owners, subComm = \
+        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+
+    my_param_indices = param_indices[my_slice]
+    st = my_slice.start  # beginning of where my_param_indices results
+    # get placed into dpr_cache
+
+    #Get a map from global parameter indices to the desired
+    # final index within dpr_cache
+    iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
+
+    orig_vec = calc.to_vector().copy()
+    for i in range(calc.Np):
+        #print("dprobs cache %d of %d" % (i,calc.Np))
+        if i in iParamToFinal:
+            iFinal = iParamToFinal[i]
+            vec = orig_vec.copy(); vec[i] += eps
+            calc.from_vector(vec)
+            dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
+                                    - cache) / eps
+    calc.from_vector(orig_vec)
+
+    #Now each processor has filled the relavant parts of dpr_cache,
+    # so gather together:
+    _mpit.gather_slices(all_slices, owners, dcache, [], axes=2, comm=comm)
+
+    #REMOVE
+    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
+    #      (calc.Np, calc.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+
+    return dcache
 
 
 def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):

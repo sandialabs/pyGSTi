@@ -44,18 +44,6 @@ from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Label
 
-
-# Helper fn: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-# TODO: move this somewhere better?  used in circuit simplification but also in fwdsims...
-def spamTupleToOutcome(spamTuple):
-    if spamTuple is None:
-        return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
-    else:
-        prep_lbl, povm_and_effect_lbl = spamTuple
-        last_underscore = povm_and_effect_lbl.rindex('_')
-        effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
-        return (effect_lbl,)  # effect label *is* the outcome
-
     
 class Model(object):
     """
@@ -1012,7 +1000,7 @@ class OpModel(Model):
                     #if action == "add":
                     od = raw_spamTuples_dict[s]  # ordered dict
                     for spamtup in spamtuples:
-                        outcome_tup = op_outcomes + spamTupleToOutcome(spamtup)
+                        outcome_tup = op_outcomes + _gt.spamTupleToOutcome(spamtup)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
@@ -1029,7 +1017,7 @@ class OpModel(Model):
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + spamTupleToOutcome(x) for x in spamtuples]
+                    outcome_tuples = [op_outcomes + _gt.spamTupleToOutcome(x) for x in spamtuples]
 
                     if observed_outcomes is not None:
                         # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
