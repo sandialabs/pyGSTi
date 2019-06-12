@@ -69,10 +69,10 @@ class CircuitLexer:
     @staticmethod
     def makeLabel(s):
         if '!' in s:
-            s, timestamp = s.split('!')  # must be only two parts (only 1 exclamation pt)
-            timestamp = float(timestamp)
+            s, time = s.split('!')  # must be only two parts (only 1 exclamation pt)
+            time = float(time)
         else:
-            timestamp = None
+            time = 0.0
             
         if ';' in s:
             parts = s.split(';')
@@ -89,7 +89,7 @@ class CircuitLexer:
         if len(sslbls) == 0:
             sslbls = None
 
-        return _Label(nm, sslbls, timestamp, args)
+        return _Label(nm, sslbls, time, args)
     
     @staticmethod
     def t_GATE(t):
