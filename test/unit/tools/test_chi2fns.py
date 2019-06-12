@@ -10,10 +10,10 @@ from pygsti.tools import chi2fns
 
 class Chi2LogLTester(BaseCase):
     def setUp(self):
-        self.dataset = DataSet(fileToLoadFrom=str(self.fixture_data('analysis.dataset')))
+        self.dataset = DataSet(fileToLoadFrom=str(self.fixture_path('analysis.dataset')))
 
     def test_chi2_terms(self):
-        mdl = io.load_model(self.fixture_data('analysis.model'))
+        mdl = io.load_model(self.fixture_path('analysis.model'))
         terms = chi2fns.chi2_terms(mdl, self.dataset)
         # TODO assert correctness
 

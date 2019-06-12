@@ -105,7 +105,7 @@ class BaseCase(TestCase):
             else:
                 self.assertEqual(v, e, msg=msg)
 
-    def fixture_data(self, data_file_name, can_retry=True):
+    def fixture_path(self, data_file_name, can_retry=True):
         """Returns the absolute path to a test fixture data file"""
         # First try without a version or architecture
         noarch_file = _TEST_DATA_PATH / data_file_name
@@ -122,7 +122,7 @@ class BaseCase(TestCase):
         # As fallback, regenerate fixtures and retry
         if can_retry:
             _regenerate_fixtures()
-            return self.fixture_data(data_file_name, can_retry=False)
+            return self.fixture_path(data_file_name, can_retry=False)
 
     @contextmanager
     def temp_path(self, filename=None):
