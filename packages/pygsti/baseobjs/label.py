@@ -36,7 +36,7 @@ class Label(object):
     # depending on whether the tuple of sector names exists or not.
     # (the reason for separate classes is for hashing speed)
 
-    def __new__(cls, name, stateSpaceLabels=None, time=0.0, args=None):
+    def __new__(cls, name, stateSpaceLabels=None, time=None, args=None):
         """
         Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
@@ -116,7 +116,7 @@ class Label(object):
                                 tup_args.append(x[1:])
                             continue
                         if x.startswith('!'):
-                            assert(time == 0.0), "Cannot supply time in tuple when `time` is given!"
+                            assert(time is None), "Cannot supply time in tuple when `time` is given!"
                             if x == '!':
                                 next_is_time = True
                             else:
@@ -125,6 +125,9 @@ class Label(object):
                     stateSpaceLabels.append(x)
                 args = tup_args if len(tup_args) > 0 else None
 
+        if time is None:
+            time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
+            
         #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
         if stateSpaceLabels is None or stateSpaceLabels in ((), (None,)):
             if args:
@@ -493,7 +496,7 @@ class LabelTupTup(Label, tuple):
     which labels a parallel layer/level of a circuit.
     """
 
-    def __new__(cls, tupOfTups, time=0.0):
+    def __new__(cls, tupOfTups, time=None):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -505,10 +508,14 @@ class LabelTupTup(Label, tuple):
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
         """
-        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         tupOfLabels = tuple((Label(tup) for tup in tupOfTups))  # Note: tup can also be a Label obj
         ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
-        ret.time = time
+        if time is None:
+            ret.time = 0.0 if len(tupOfLabels) == 0 else \
+                max([lbl.time for lbl in tupOfLabels])
+        else:
+            ret.time = time
         return ret
 
     @property
@@ -531,18 +538,6 @@ class LabelTupTup(Label, tuple):
     @property
     def args(self):
         return ()
-
-    @property
-    def time(self):
-        return max([lbl.time for lbl in self])
-        #FUTURE: could cache this value since it shouldn't change?
-
-        #OLD: for *absolute* times:
-        #t = 0
-        #for lbl in self:
-        #    if lbl.time is not None: t = lbl.time
-        #    else: assert(lbl.time == t), "Components occur at different times!"
-        #return t
 
     @property
     def components(self):
@@ -1078,7 +1073,7 @@ class LabelTupTupWithArgs(Label, tuple):
     This label also supports having arguments.
     """
 
-    def __new__(cls, tupOfTups, time=0.0, args=()):
+    def __new__(cls, tupOfTups, time=None, args=()):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -1096,7 +1091,7 @@ class LabelTupTupWithArgs(Label, tuple):
         args : iterable of hashable types
             A list of "arguments" for this label.
         """
-        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
         tupOfLabels = (1 + len(args),) + args + tuple((Label(tup) for tup in tupOfTups))  # Note tup can be a Label
         # stores: (K, args, subLabels) where K is the index of the start of subLabels
@@ -1105,7 +1100,11 @@ class LabelTupTupWithArgs(Label, tuple):
         #    assert(all([(time == l.time or l.time is None) for l in tupOfLabels[1 + len(args):]])), \
         #        "Component times do not match compound label time!"
         ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
-        ret.time = time
+        if time is None:
+            ret.time = 0.0 if len(tupOfLabels) == 0 else \
+                max([lbl.time for lbl in tupOfLabels])
+        else:
+            ret.time = time
         return ret
 
     @property
