@@ -48,6 +48,7 @@ def _write(fn):
         if not force and filepath.exists():
             raise FixtureExistsError(str(filepath))
         else:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
             write_fn(str(filepath))
             return filepath
     return inner
