@@ -77,24 +77,28 @@ class DriverFixtureGen(_FixtureGenABC):
         )
 
     @_write
+    def build_drivers_model(self):
+        return 'drivers.model', lambda path: pygsti.io.write_model(self._model, path)
+
+    @_write
     @_versioned
     def build_drivers_dataset(self):
-        return 'drivers.dataset', lambda path: self._ds.save(str(path))
+        return 'drivers.dataset', lambda path: self._ds.save(path)
 
     @_write
     @_versioned
     def build_drivers_dataset_non_markovian(self):
-        return 'drivers2.dataset', lambda path: self._ds2.save(str(path))
+        return 'drivers2.dataset', lambda path: self._ds2.save(path)
 
     @_write
     @_versioned
     def build_drivers_dataset_tgp(self):
-        return 'drivers_tgp.dataset', lambda path: self._ds_tgp.save(str(path))
+        return 'drivers_tgp.dataset', lambda path: self._ds_tgp.save(path)
 
     @_write
     @_versioned
     def build_drivers_dataset_lae(self):
-        return 'drivers_lae.dataset', lambda path: self._ds_lae.save(str(path))
+        return 'drivers_lae.dataset', lambda path: self._ds_lae.save(path)
 
 
 _instantiate(__name__, DriverFixtureGen)

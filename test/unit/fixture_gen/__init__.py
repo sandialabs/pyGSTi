@@ -48,7 +48,7 @@ def _write(fn):
         if not force and filepath.exists():
             raise FixtureExistsError(str(filepath))
         else:
-            write_fn(filepath)
+            write_fn(str(filepath))
             return filepath
     return inner
 

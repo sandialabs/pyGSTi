@@ -73,16 +73,16 @@ class AnalysisFixtureGen(_FixtureGenABC):
     @_write
     @_versioned
     def build_analysis_dataset(self):
-        return 'analysis.dataset', lambda path: self._ds.save(str(path))
+        return 'analysis.dataset', lambda path: self._ds.save(path)
 
     @_write
     @_versioned
     def build_lgst_analysis_dataset(self):
-        return 'analysis_lgst.dataset', lambda path: self._ds_lgst.save(str(path))
+        return 'analysis_lgst.dataset', lambda path: self._ds_lgst.save(path)
 
     @_write
     def build_lsgst_analysis_model(self):
-        return 'analysis.model', lambda path: pygsti.io.write_model(self._mdl_lsgst_go, str(path), "Saved LSGST Analysis Model")
+        return 'analysis.model', lambda path: pygsti.io.write_model(self._mdl_lsgst_go, path, "Saved LSGST Analysis Model")
 
 
 _instantiate(__name__, AnalysisFixtureGen)
