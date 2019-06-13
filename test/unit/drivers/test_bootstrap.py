@@ -1,6 +1,5 @@
 from ..util import BaseCase
-
-from ..fixture_gen import drivers_gen
+from . import fixtures as pkg
 
 from pygsti import algorithms as alg, construction as pc
 from pygsti.objects import DataSet
@@ -9,18 +8,21 @@ from pygsti.drivers import bootstrap as bs
 
 
 class BootstrapBase(BaseCase):
-    def setUp(self):
-        self.opLabels = drivers_gen._opLabels
-        self.fiducials = drivers_gen._fiducials
-        self.germs = drivers_gen._germs
-
-        self.ds = DataSet(fileToLoadFrom=str(self.fixture_path('drivers.dataset')))
+    @classmethod
+    def setUpClass(cls):
+        cls.opLabels = pkg.opLabels
+        cls.fiducials = pkg.fiducials
+        cls.germs = pkg.germs
+        cls.ds = pkg.dataset
         tp_target = std.target_model()
         tp_target.set_all_parameterizations("TP")
-
-        self.mdl = alg.do_lgst(
-            self.ds, self.fiducials, self.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0
+        cls.mdl = alg.do_lgst(
+            cls.ds, cls.fiducials, cls.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0
         )
+
+    def setUp(self):
+        self.ds = self.ds.copy()
+        self.mdl = self.mdl.copy()
 
 
 class BootstrapDatasetTester(BootstrapBase):
@@ -97,15 +99,19 @@ class BootstrapModelTester(BootstrapBase):
 
 
 class BootstrapUtilityTester(BootstrapBase):
-    def setUp(self):
-        super(BootstrapUtilityTester, self).setUp()
+    @classmethod
+    def setUpClass(cls):
+        super(BootstrapUtilityTester, cls).setUpClass()
         maxLengths = [0]
-        # TODO optimize
-        self.bootgs_p = bs.make_bootstrap_models(
-            2, self.ds, 'parametric', self.fiducials, self.fiducials,
-            self.germs, maxLengths, inputModel=self.mdl,
+        cls.bootgs_p = bs.make_bootstrap_models(
+            2, cls.ds, 'parametric', cls.fiducials, cls.fiducials,
+            cls.germs, maxLengths, inputModel=cls.mdl,
             returnData=False
         )
+
+    def setUp(self):
+        super(BootstrapUtilityTester, self).setUp()
+        self.bootgs_p = self.bootgs_p.copy()
 
     def test_gauge_optimize_model_list(self):
         bs.gauge_optimize_model_list(

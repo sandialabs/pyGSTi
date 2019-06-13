@@ -1,8 +1,9 @@
 from ..util import BaseCase, with_temp_path
-from ..fixture_gen import drivers_gen
+from . import fixtures as pkg
 
 from io import BytesIO
 from pygsti import io
+import pygsti.construction as pc
 from pygsti.construction import std1Q_XYI as std
 from pygsti.construction import std2Q_XYICNOT as std2Q
 from pygsti.objects import DataSet, operation, UnitaryGaugeGroup, TrivialGaugeGroup, mapforwardsim
@@ -11,13 +12,19 @@ from pygsti.drivers import longsequence as ls
 
 # TODO optimize everything
 class LongSequenceBase(BaseCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.model = pkg.model
+        cls.maxLens = pkg.maxLengthList
+        cls.opLabels = pkg.opLabels
+        cls.fiducials = pkg.fiducials
+        cls.germs = pkg.germs
+        cls.lsgstStrings = pkg.lsgstStrings
+        cls.ds = pkg.dataset
+
     def setUp(self):
-        self.maxLens = [1, 2, 4]
-        self.lsgstStrings = drivers_gen._lsgstStrings
-        self.fiducials = drivers_gen._fiducials
-        self.germs = drivers_gen._germs
-        self.ds = DataSet(fileToLoadFrom=self.fixture_path('drivers.dataset'))
-        self.model = io.load_model(self.fixture_path('drivers.model'))
+        self.model = self.model.copy()
+        self.ds = self.ds.copy()
 
 
 class LongSequenceUtilTester(LongSequenceBase):
@@ -137,9 +144,10 @@ class StdPracticeGSTTester(LongSequenceBase):
     @with_temp_path
     @with_temp_path
     @with_temp_path
-    def test_stdpractice_gst_file_args(self, ds_path, fiducial_path, germ_path):
-        model_path = self.fixture_path('drivers.model')
+    @with_temp_path
+    def test_stdpractice_gst_file_args(self, ds_path, model_path, fiducial_path, germ_path):
         io.write_dataset(ds_path, self.ds, self.lsgstStrings[-1])
+        io.write_model(self.model, model_path)
         io.write_circuit_list(fiducial_path, self.fiducials)
         io.write_circuit_list(germ_path, self.germs)
 
@@ -275,9 +283,10 @@ class WholeGermPowersTester(LongSequenceGSTWithChi2):
     @with_temp_path
     @with_temp_path
     @with_temp_path
-    def test_long_sequence_gst_with_file_args(self, ds_path, fiducial_path, germ_path):
-        model_path = self.fixture_path('drivers.model')
+    @with_temp_path
+    def test_long_sequence_gst_with_file_args(self, ds_path, model_path, fiducial_path, germ_path):
         io.write_dataset(ds_path, self.ds, self.lsgstStrings[-1])
+        io.write_model(self.model, model_path)
         io.write_circuit_list(fiducial_path, self.fiducials)
         io.write_circuit_list(germ_path, self.germs)
 
@@ -293,16 +302,40 @@ class WholeGermPowersTester(LongSequenceGSTWithChi2):
 
 
 class TruncatedGermPowersTester(LongSequenceGSTWithChi2):
+    @classmethod
+    def setUpClass(cls):
+        super(TruncatedGermPowersTester, cls).setUpClass()
+        lsgstStrings = pc.make_lsgst_lists(
+            cls.opLabels, cls.fiducials, cls.fiducials,
+            cls.germs, cls.maxLens,
+            truncScheme="truncated germ powers"
+        )
+        cls.ds = pc.generate_fake_data(
+            pkg.datagen_gateset, lsgstStrings[-1], nSamples=1000,
+            sampleError='binomial', seed=100
+        )
+
     def setUp(self):
         super(TruncatedGermPowersTester, self).setUp()
-        self.ds = DataSet(fileToLoadFrom=self.fixture_path('drivers_tgp.dataset'))
         self.options = {'truncScheme': "truncated germ powers"}
 
 
 class LengthAsExponentTester(LongSequenceGSTWithChi2):
+    @classmethod
+    def setUpClass(cls):
+        super(LengthAsExponentTester, cls).setUpClass()
+        lsgstStrings = pc.make_lsgst_lists(
+            cls.opLabels, cls.fiducials, cls.fiducials,
+            cls.germs, cls.maxLens,
+            truncScheme="length as exponent"
+        )
+        cls.ds = pc.generate_fake_data(
+            pkg.datagen_gateset, lsgstStrings[-1], nSamples=1000,
+            sampleError='binomial', seed=100
+        )
+
     def setUp(self):
         super(LengthAsExponentTester, self).setUp()
-        self.ds = DataSet(fileToLoadFrom=self.fixture_path('drivers_lae.dataset'))
         self.options = {'truncScheme': "length as exponent"}
 
 
@@ -351,9 +384,19 @@ class BadFitTester(LongSequenceGSTWithChi2):
 
 
 class RobustDataScalingTester(LongSequenceGSTBase):
+    @classmethod
+    def setUpClass(cls):
+        super(RobustDataScalingTester, cls).setUpClass()
+        datagen_gateset = cls.model.depolarize(op_noise=0.1, spam_noise=0.03).rotate((0.05, 0.13, 0.02))
+        ds2 = pc.generate_fake_data(
+            datagen_gateset, cls.lsgstStrings[-1], nSamples=1000, sampleError='binomial', seed=100
+        ).copy_nonstatic()
+        ds2.add_counts_from_dataset(cls.ds)
+        ds2.done_adding_data()
+        cls.ds = ds2
+
     def setUp(self):
         super(RobustDataScalingTester, self).setUp()
-        self.ds = DataSet(fileToLoadFrom=self.fixture_path('drivers2.dataset'))
         self.options = {
             'badFitThreshold': -100,
             'onBadFit': ["do nothing", "robust", "Robust", "robust+", "Robust+"]

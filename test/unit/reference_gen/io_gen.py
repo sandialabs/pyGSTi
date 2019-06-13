@@ -1,4 +1,4 @@
-"""IO test fixture generation"""
+"""IO test reference generation"""
 from __future__ import unicode_literals
 import sys
 

@@ -1,15 +1,16 @@
 from ..util import BaseCase
+from . import fixtures as pkg
 
 from pygsti.tools import likelihoodfns as lfn
 from pygsti.objects.dataset import DataSet
 from pygsti.construction import std1Q_XYI as std
-from pygsti import io, construction
+from pygsti import construction
 
 
 class LikelihoodFunctionsBase(BaseCase):
     def setUp(self):
-        self.ds = DataSet(fileToLoadFrom=str(self.fixture_path('analysis.dataset')))
-        self.model = io.load_model(str(self.fixture_path("analysis.model")))
+        self.ds = pkg.dataset.copy()
+        self.model = pkg.mdl_lsgst_go.copy()
 
 
 class LikelihoodFunctionsTester(LikelihoodFunctionsBase):

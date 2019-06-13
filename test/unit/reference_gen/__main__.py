@@ -1,9 +1,9 @@
-# Can be run as a script: `python -m test.unit.fixture_gen -h'
+# Can be run as a script: `python -m test.unit.reference_gen -h'
 import argparse
 import pkgutil
 import importlib
 
-from . import __path__ as modulepath, __fixture_generators__, \
+from . import __path__ as modulepath, __reference_generators__, \
     generate_all, generate_versioned, generate_nonversioned, _parse_args
 
 

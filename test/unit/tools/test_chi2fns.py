@@ -1,19 +1,19 @@
 import numpy as np
 
 from ..util import BaseCase, mock
+from . import fixtures as pkg
 
 from pygsti.construction import std1Q_XYI as std
-from pygsti import io
 from pygsti.objects.dataset import DataSet
 from pygsti.tools import chi2fns
 
 
 class Chi2LogLTester(BaseCase):
     def setUp(self):
-        self.dataset = DataSet(fileToLoadFrom=str(self.fixture_path('analysis.dataset')))
+        self.dataset = pkg.dataset.copy()
 
     def test_chi2_terms(self):
-        mdl = io.load_model(self.fixture_path('analysis.model'))
+        mdl = pkg.mdl_lsgst_go.copy()
         terms = chi2fns.chi2_terms(mdl, self.dataset)
         # TODO assert correctness
 

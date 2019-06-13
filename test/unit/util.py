@@ -40,7 +40,7 @@ _TEST_DATA_PATH = _TEST_ROOT_PATH / "data"
 def version_label():
     """Get the label used internally for this python version.
 
-    This is mainly used to identify version-specific test fixtures
+    This is mainly used to identify version-specific test reference data
     """
     return "v{}".format(sys.version_info.major)
 
@@ -81,14 +81,14 @@ def with_temp_file(contents):
     return decorator
 
 
-def _regenerate_fixtures(force=False):
-    """Regenerate missing test fixture files.
+def _regenerate_references(force=False):
+    """Regenerate missing test references files.
 
     This call can be expensive, so use sparingly.
     """
     version_path = _TEST_DATA_PATH / version_label()
     version_path.mkdir(parents=True, exist_ok=True)
-    from .fixture_gen import __main__ as gen
+    from .reference_gen import __main__ as gen
     gen._load_all_generators()
     gen.generate_all(force=force)
 
@@ -140,34 +140,34 @@ class BaseCase(unittest.TestCase):
             else:
                 self.assertEqual(v, e, msg=msg)
 
-    def fixture_path(self, filename, can_retry=True):
-        """Returns the absolute path to a test fixture data file, if it exists.
+    def reference_path(self, filename, can_retry=True):
+        """Returns the absolute path to a test reference data file, if it exists.
 
-        Storage of test fixtures in the filesystem is handled
+        Storage of test references in the filesystem is handled
         automatically. This is intentionally inconvenient; test
-        fixtures written in the filesystem are inherently transient
+        references written in the filesystem are inherently transient
         and are not git-tracked. Developers should not manually add
-        test fixtures to the data directory; instead, they should
-        write a module under ``test.unit.fixture_gen`` to generate
-        their fixtures programatically, so their test results are
+        test references to the data directory; instead, they should
+        write a module under ``test.unit.reference_gen`` to generate
+        their references programatically, so their test results are
         reproducible.
 
         Internally, this method first looks for a
-        non-python-version-specific, non-architecture-specific fixture
+        non-python-version-specific, non-architecture-specific reference
         with the given filename. Failing that, it will look for a
-        version-specific fixture, and finally will either give up
+        version-specific reference, and finally will either give up
         (failling the test where it was called) or optionally try
-        again after regenerating missing test fixtures.
+        again after regenerating missing test references.
 
-        You can manually generate or regenerate test fixtures by
-        running ``python -m test.unit.fixture_gen`` or whatever
-        fixture_gen module is appropriate. Use the ``--help`` flag to
+        You can manually generate or regenerate test references by
+        running ``python -m test.unit.reference_gen`` or whatever
+        reference_gen module is appropriate. Use the ``--help`` flag to
         learn more. Alternatively, you can run any test under
         ``test.unit`` with the ``PYGSTI_REGEN_REF_FILES`` environment
         variable set.
 
-        By default, if this method fails to locate a test fixture, it
-        will try to regenerate missing fixtures. This can be an
+        By default, if this method fails to locate a test reference, it
+        will try to regenerate missing references. This can be an
         expensive operation. This behavior can be suppressed by
         calling with ``can_retry=False``, or by setting the
         ``NO_REGEN_TEST_DATA`` environment variable.
@@ -175,20 +175,20 @@ class BaseCase(unittest.TestCase):
         Parameters
         ----------
         filename: str
-            The filename of the fixture to load. This is the filename
-            used to write it by the respective ``fixture_gen`` module.
+            The filename of the reference to load. This is the filename
+            used to write it by the respective ``reference_gen`` module.
         can_retry: bool
-            If ``True`` (default), if the given fixture can't be
-            found, try again after regenerating missing test fixtures.
+            If ``True`` (default), if the given reference can't be
+            found, try again after regenerating missing test references.
 
         Returns
         -------
         str
-            The filesystem path of the fixture
+            The filesystem path of the reference file
 
         See Also
         --------
-        ``test.unit.fixture_gen`` : test fixture generation
+        ``test.unit.reference_gen`` : test reference data generation
         """
         # First try without a version or architecture
         noarch_file = _TEST_DATA_PATH / filename
@@ -204,8 +204,8 @@ class BaseCase(unittest.TestCase):
 
         # As fallback, regenerate fixtures and retry
         if can_retry:
-            _regenerate_fixtures(force=False)
-            return self.fixture_path(filename, can_retry=False)
+            _regenerate_references(force=False)
+            return self.reference_path(filename, can_retry=False)
         else:
             self.fail("Could not locate test fixture data {}".format(filename))
 
@@ -310,3 +310,43 @@ class BaseCase(unittest.TestCase):
                 except ModuleNotFoundError:
                     debug = debug_pdb()
             return debug
+
+
+class Namespace(object):
+    """Namespace for package-level fixtures"""
+    def __init__(self, **kwargs):
+        self.__patched_module__ = None
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+        self.__ns_props__ = {}
+
+    def __getattr__(self, name):
+        try:
+            return object.__getattribute__(self, name)
+        except AttributeError as err:
+            if name in self.__ns_props__:
+                return self.__ns_props__[name](self)
+            elif self.__patched_module__ is not None:
+                return self.__patched_module__.__getattribute__(name)
+            else:
+                raise(err)
+
+    def property(self, fn):
+        """Dynamic namespace property"""
+        self.__ns_props__[fn.__name__] = fn
+
+    def memo(self, fn):
+        """Memoized namespace property"""
+        fn.__memo__ = None
+        @functools.wraps(fn)
+        def inner(self):
+            if fn.__memo__ is None:
+                fn.__memo__ = fn(self)
+            return fn.__memo__
+        self.property(inner)
+
+    def patch_module(self, module):
+        """Patch a module with this namespace"""
+        self.__warningregistry__ = None
+        self.__patched_module__ = sys.modules[module]
+        sys.modules[module] = self

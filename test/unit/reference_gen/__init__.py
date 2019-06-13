@@ -1,4 +1,4 @@
-"""Build or rebuild test fixtures on the disk"""
+"""Build or rebuild test references on the disk"""
 from __future__ import absolute_import, unicode_literals
 from future.utils import with_metaclass
 
@@ -12,11 +12,11 @@ import sys
 from ..util import Path, version_label, _TEST_DATA_PATH
 from .. import _NO_REGEN_TEST_DATA
 
-__fixture_generators__ = []
+__reference_generators__ = []
 
 
 def _instantiate(name, cls):
-    """Helper for fixture generator modules.
+    """Helper for reference generator modules.
 
     Instantiates the given generator class and registers the instance
     as the module export.
@@ -28,11 +28,11 @@ def _instantiate(name, cls):
     else:
         # Load normally
         sys.modules[name] = instance
-        __fixture_generators__.append(instance)
+        __reference_generators__.append(instance)
 
 
 def _write(fn):
-    """Helper wrapper for fixture generators.
+    """Helper wrapper for reference generators.
 
     The underlying function must return two objects, a relative
     filename and a function that will write to a given path. This
@@ -87,7 +87,7 @@ class _FixtureGenMeta(type):
 
 
 class _FixtureGenABC(with_metaclass(_FixtureGenMeta, object)):
-    """Base class for fixture data generators"""
+    """Base class for reference data generators"""
     def __init__(self):
         super(_FixtureGenABC, self).__init__()
         self._module = sys.modules[self.__module__]
@@ -114,15 +114,15 @@ class _FixtureGenABC(with_metaclass(_FixtureGenMeta, object)):
                 warn("File already exists: {} (hint: use \u001b[31m--force\u001b[0m to overwrite)".format(e))
 
     def generate_all(self, *args, **kwargs):
-        """Generate and write all test fixture data"""
+        """Generate and write all test reference data"""
         self._generate(self.__builders__.values(), *args, **kwargs)
 
     def generate_versioned(self, *args, **kwargs):
-        """Generate and write all python-version-specific test fixture data"""
+        """Generate and write all python-version-specific test reference data"""
         self._generate([b for b in self.__builders__.values() if hasattr(b, '__versioned__')], *args, **kwargs)
 
     def generate_nonversioned(self, *args, **kwargs):
-        """Generate and write all non-python-version-specific test fixture data"""
+        """Generate and write all non-python-version-specific test reference data"""
         self._generate([b for b in self.__builders__.values() if not hasattr(b, '__versioned__')], *args, **kwargs)
 
     def _run(self, args):
@@ -136,31 +136,31 @@ class _FixtureGenABC(with_metaclass(_FixtureGenMeta, object)):
 
 
 def generate_all(force=False):
-    """Generate and write all test fixture data from all fixture generators"""
-    for gen in __fixture_generators__:
+    """Generate and write all test reference data from all reference generators"""
+    for gen in __reference_generators__:
         gen.generate_all(force=force)
 
 
 def generate_versioned(force=False):
-    """Generate and write all python-version-specific test fixture data from all fixture generators"""
-    for gen in __fixture_generators__:
+    """Generate and write all python-version-specific test reference data from all reference generators"""
+    for gen in __reference_generators__:
         gen.generate_versioned(force=force)
 
 
 def generate_nonversioned(force=False):
-    """Generate and write all non-python-version-specific test fixture data from all fixture generators"""
-    for gen in __fixture_generators__:
+    """Generate and write all non-python-version-specific test reference data from all reference generators"""
+    for gen in __reference_generators__:
         gen.generate_nonversioned(force=force)
 
 
 def _parse_args():
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-f', '--force', action='store_true', help="overwrite existing test fixtures")
+    parser.add_argument('-f', '--force', action='store_true', help="overwrite existing test references")
     parser.add_argument('-p', '--only-versioned', action='store_true',
-                        help="only build python-version-specific fixtures")
+                        help="only build python-version-specific references")
     parser.add_argument('-n', '--only-nonversioned', action='store_true',
-                        help="only build non-python-version-specific fixtures")
+                        help="only build non-python-version-specific references")
     return parser.parse_args()
 
 
