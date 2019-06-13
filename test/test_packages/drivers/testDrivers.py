@@ -59,111 +59,6 @@ class DriversTestCase(BaseTestCase):
             ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
 
 class TestDriversMethods(DriversTestCase):
-
-    def test_longSequenceGST_WholeGermPowers(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
-        ts = "whole germ powers"
-
-        maxLens = self.maxLens
-        result = pygsti.do_long_sequence_gst( #self.runSilent(
-                                ds, std.target_model(), std.fiducials, std.fiducials,
-                                std.germs, maxLens, advancedOptions={'truncScheme': ts})
-
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                ds, std.target_model(), std.fiducials, std.fiducials,
-                                std.germs, maxLens,
-                                advancedOptions={'truncScheme': ts, 'objective': "chi2"})
-
-
-        #Try using files instead of objects
-        pygsti.io.write_model(std.target_model(), temp_files + "/driver.model")
-        pygsti.io.write_dataset(temp_files + "/driver_test_dataset.txt",
-                                ds, self.lsgstStrings[-1])
-        pygsti.io.write_circuit_list(temp_files + "/driver_fiducials.txt", std.fiducials)
-        pygsti.io.write_circuit_list(temp_files + "/driver_germs.txt", std.germs)
-
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                temp_files + "/driver_test_dataset.txt",
-                                temp_files + "/driver.model",
-                                temp_files + "/driver_fiducials.txt",
-                                temp_files + "/driver_fiducials.txt",
-                                temp_files + "/driver_germs.txt",
-                                maxLens, advancedOptions={'truncScheme': ts,
-                                                          'randomizeStart': 1e-6,
-                                                          'profile': 2,
-                                                          'verbosity': 10,
-                                                          'memoryLimitInBytes': 2*1000**3})
-                        # Also try profile=2 and deprecated advanced options here (above)
-
-        #check invalid profile options
-        with self.assertRaises(ValueError):
-            pygsti.do_long_sequence_gst(ds, std.target_model(), std.fiducials, std.fiducials,
-                                        std.germs, maxLens,
-                                        advancedOptions={'profile': 3})
-
-        #Try using effectStrs == None and some advanced options
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                ds, std.target_model(), std.fiducials, None,
-                                std.germs, maxLens,
-                                advancedOptions={'starting point': std.target_model(),
-                                                 'depolarizeStart': 0.05,
-                                                 'truncScheme': ts,
-                                                 'cptpPenaltyFactor': 1.0})
-                                            # OLD: 'contractStartToCPTP': True,
-
-
-        #Check errors
-        with self.assertRaises(ValueError):
-            self.runSilent(pygsti.do_long_sequence_gst,
-                           ds, std.target_model(), std.fiducials, None,
-                           std.germs, maxLens,
-                           advancedOptions={'truncScheme': ts, 'objective': "FooBar"}) #bad objective
-        with self.assertRaises(ValueError):
-            self.runSilent(pygsti.do_long_sequence_gst,
-                           ds, std.target_model(), std.fiducials, None,
-                           std.germs, maxLens,
-                           advancedOptions={'truncScheme': ts, 'starting point': "FooBar"}) #bad objective
-
-
-
-    def test_longSequenceGST_TruncGermPowers(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
-        ts = "truncated germ powers"
-
-        maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-            ds, std.target_model(), std.fiducials, std.fiducials,
-            std.germs, maxLens, advancedOptions={'truncScheme': ts})
-
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-            ds, std.target_model(), std.fiducials, std.fiducials,
-            std.germs, maxLens,
-            advancedOptions={'truncScheme': ts, 'objective': "chi2"})
-
-        #result = self.runSilent(pygsti.do_long_sequence_gst,
-        #    ds, std.target_model(), std.fiducials, std.fiducials,
-        #    std.germs, maxLens, truncScheme=ts, constrainToTP=False)
-
-    def test_longSequenceGST_LengthAsExponent(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
-        ts = "length as exponent"
-
-        maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-            ds, std.target_model(), std.fiducials, std.fiducials,
-            std.germs, maxLens, advancedOptions={'truncScheme': ts})
-
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-            ds, std.target_model(), std.fiducials, std.fiducials,
-            std.germs, maxLens,
-            advancedOptions={'truncScheme': ts, 'objective': "chi2"})
-
-        #result = self.runSilent(pygsti.do_long_sequence_gst,
-        #    ds, std.target_model(), std.fiducials, std.fiducials,
-        #    std.germs, maxLens, truncScheme=ts, constrainToTP=False)
-
-
-
     def test_longSequenceGST_fiducialPairReduction(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         maxLens = self.maxLens
@@ -258,30 +153,6 @@ class TestDriversMethods(DriversTestCase):
         #create a report...
         pygsti.report.create_standard_report(result2, temp_files + "/full_report_RFPR2.html",
                                              verbosity=2)
-
-
-    #We're removing linear gates - at least building them
-    #def test_longSequenceGST_linearGates(self):
-    #    ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
-    #    ts = "whole germ powers"
-    #
-    #    target_model = pygsti.construction.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
-    #                                                  [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-    #                                                  parameterization="linear")
-    #
-    #    maxLens = self.maxLens
-    #    result = self.runSilent(pygsti.do_long_sequence_gst,
-    #                            ds, target_model, std.fiducials, std.fiducials,
-    #                            std.germs, maxLens,
-    #                            advancedOptions={'truncScheme': ts, 'tolerance':1e-4} )
-    #                            #decrease tolerance
-    #                            # b/c this problem seems hard to converge at the very end
-    #                            # very small changes (~0.0001) to the total chi^2.
-    #
-    #    #create a report...
-    #    pygsti.report.create_standard_report(result, temp_files + "/full_report_LPGates",
-    #                                         "LPGates report", verbosity=2)
-
 
     def test_longSequenceGST_CPTP(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
@@ -417,26 +288,6 @@ class TestDriversMethods(DriversTestCase):
             self.runSilent(pygsti.do_model_test, mdl_guess,
                            ds, std.target_model(), std.fiducials, std.fiducials,
                            std.germs, maxLens, advancedOptions=advancedOpts)
-
-
-
-    def test_robust_data_scaling(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers2.dataset%s" % self.versionsuffix)
-        mdl_guess = std.target_model().depolarize(op_noise=0.01,spam_noise=0.01)
-
-        #lower bad-fit threshold to zero to trigger bad-fit additional processing
-        maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                ds, std.target_model(), std.fiducials, std.fiducials,
-                                std.germs, maxLens, advancedOptions={'badFitThreshold': -100,
-                                                                     'onBadFit': ["do nothing","robust","Robust","robust+","Robust+"]})
-
-        with self.assertRaises(ValueError):
-            self.runSilent(pygsti.do_long_sequence_gst,
-                           ds, std.target_model(), std.fiducials, std.fiducials,
-                           std.germs, maxLens, advancedOptions={'badFitThreshold': -100,
-                                                                'onBadFit': ["foobar"]})
-
 
     def test_stdpracticeGST(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
