@@ -303,6 +303,8 @@ class LabelTup(Label, tuple):
         s = str(self.name)
         if self.sslbls:  # test for None and len == 0
             s += ":" + ":".join(map(str, self.sslbls))
+        if self.time != 0.0:
+            s += ("!%f" % self.time).rstrip('0').rstrip('.')
         return s
 
     def __repr__(self):
@@ -440,7 +442,10 @@ class LabelStr(Label, strlittype):
         return self.startswith(prefix)
 
     def __str__(self):
-        return self[:]  # converts to a normal str
+        s = self[:] # converts to a normal str
+        if self.time != 0.0:
+            s += ("!%f" % self.time).rstrip('0').rstrip('.')
+        return s
 
     def __repr__(self):
         return "Label{" + strlittype(self) + "}"
@@ -790,8 +795,12 @@ class CircuitLabel(Label, tuple):
         """
         if len(self.name) > 0:
             s = self.name
+            if self.time != 0.0:
+                s += ("!%f" % self.time).rstrip('0').rstrip('.')
         else:
             s = "".join([str(lbl) for lbl in self.components])
+            if self.time != 0.0:
+                s += ("!%f" % self.time).rstrip('0').rstrip('.')
             if len(self.components) > 1:
                 s = "(" + s + ")"  # add parenthesis
         if self[2] != 1: s += "^%d" % self[2]
@@ -1010,7 +1019,7 @@ class LabelTupWithArgs(Label, tuple):
             s += ";" + ";".join(map(str, self.args))
         if self.sslbls:  # test for None and len == 0
             s += ":" + ":".join(map(str, self.sslbls))
-        if self[0] is not None:  # if we're supposed to be holding a time
+        if self.time != 0.0:
             s += ("!%f" % self.time).rstrip('0').rstrip('.')
         return s
 
@@ -1199,7 +1208,7 @@ class LabelTupTupWithArgs(Label, tuple):
         else:
             argstr = ""
 
-        if self[0] is not None:  # if we're supposed to be holding a time
+        if self.time != 0.0:  # if we're supposed to be holding a time
             timestr = ("!%f" % self.time).rstrip('0').rstrip('.')
         else:
             timestr = ""
