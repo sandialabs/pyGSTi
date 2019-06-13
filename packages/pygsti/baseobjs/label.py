@@ -442,7 +442,7 @@ class LabelStr(Label, strlittype):
         return self.startswith(prefix)
 
     def __str__(self):
-        s = self[:] # converts to a normal str
+        s = self[:]  # converts to a normal str
         if self.time != 0.0:
             s += ("!%f" % self.time).rstrip('0').rstrip('.')
         return s
