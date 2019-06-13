@@ -27,13 +27,6 @@ def _instantiate(name, cls):
         instance._run(_parse_args())
     else:
         # Load normally
-        if sys.version_info < (3,):
-            # Decorate instance with module-level names (python 2 compat)
-            # XXX this is like super dangerous LOL
-            mod = sys.modules[name]
-            for name, bound in mod.__dict__.items():
-                if not hasattr(instance, name):
-                    setattr(instance, name, bound)
         sys.modules[name] = instance
         __fixture_generators__.append(instance)
 
@@ -92,8 +85,19 @@ class _FixtureGenMeta(type):
                 cls.__builders__[name] = bound
 
 
-class _FixtureGenABC(with_metaclass(_FixtureGenMeta)):
+class _FixtureGenABC(with_metaclass(_FixtureGenMeta, object)):
     """Base class for fixture data generators"""
+    def __init__(self):
+        super(_FixtureGenABC, self).__init__()
+        self._module = sys.modules[self.__module__]
+        self.__warningregistry__ = None
+
+    def __getattr__(self, name):
+        # Manually override with module lookup for python2 compat
+        if name in dir(self):
+            return object.__getattribute__(self, name)
+        else:
+            return self._module.__getattribute__(name)
 
     def _generate(self, builders, *args, **kwargs):
         if _NO_REGEN_TEST_DATA:
