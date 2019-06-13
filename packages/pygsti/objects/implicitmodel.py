@@ -221,6 +221,9 @@ class ImplicitOpModel(_mdl.OpModel):
                                                             for lbl, opdict in self.operation_blks.items()])
         copyInto.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copyInto))
                                                              for lbl, idict in self.instrument_blks.items()])
+        copyInto.factories = _collections.OrderedDict([(lbl, fdict.copy(copyInto))
+                                                       for lbl, fdict in self.factories.items()])
+
         copyInto._shlp = self.simplifier_helper_class(copyInto)
 
     def __setstate__(self, stateDict):
@@ -244,6 +247,9 @@ class ImplicitOpModel(_mdl.OpModel):
         for idict in self.instrument_blks.values():
             idict.parent = self
             for o in idict.values(): o.relink_parent(self)
+        for fdict in self.factories.values():
+            fdict.parent = self
+            for o in fdict.values(): o.relink_parent(self)
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
@@ -310,6 +316,10 @@ class ImplicitOpModel(_mdl.OpModel):
         for dictlbl, d in self.instrument_blks.items():
             for lbl, inst in d.items():
                 s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(inst) + "\n"
+        s += "\n"
+        for dictlbl, d in self.factories.items():
+            for lbl, factory in d.items():
+                s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(factory) + "\n"
         s += "\n"
 
         return s
