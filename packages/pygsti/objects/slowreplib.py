@@ -1812,6 +1812,10 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     circuit : Circuit
         The gate sequence to sandwich between the prep and effect labels.
 
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -1823,12 +1827,42 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         A switch between a faster, slighty more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
-    TODO: docstring - additional args and now return polys again
+        pathmagnitude_gap : float, optional
+            The amount less than the perfect sum-of-path-magnitudes that
+            is desired.  This sets the target sum-of-path-magnitudes for each
+            circuit -- the threshold that determines how many paths are added.
+
+        min_term_mag : float, optional
+            A technical parameter to the path pruning algorithm; this value
+            sets a threshold for how small a term magnitude (one factor in
+            a path magnitude) must be before it is removed from consideration
+            entirely (to limit the number of even *potential* paths).  Terms
+            with a magnitude lower than this values are neglected.
+
+        current_threshold : float, optional
+            If the threshold needed to achieve the desired `pathmagnitude_gap`
+            is greater than this value (i.e. if using current_threshold would
+            result in *more* paths being computed) then this function will not
+            compute any paths and exit early, returning `None` in place of the
+            usual list of polynomial representations.
 
     Returns
     -------
-    numpy.ndarray
-        one per element of `elabels`.
+    prps : list of PolynomialRep objects
+        the polynomials for the requested circuit probabilities, computed by
+        selectively summing up high-magnitude paths.
+    npaths : int
+        the number of paths that were included.
+    threshold : float
+        the path-magnitude threshold used.
+    target_sopm : float
+        The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+        less than the perfect "all-paths" sum.  This sums together the
+        contributions of different effects.
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.  Ideally this would equal
+        `target_sopm`. (This also sums together the contributions of
+        different effects.)
     """
     #t0 = _time.time()
 
@@ -1885,7 +1919,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
-        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, len(elabels), foat_indices_per_op,
+        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
         initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 100.0)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
@@ -2014,13 +2048,60 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     #coefficients when needed instead?
 
     #... and we're done!
+    
+    #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
+    # in fastreplib.pyx but forgot it here.
     return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
 # foat = first-order always-traversed
 def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op, fn_visitpath,
                                   debug=False):
-    """ TODO: docstring """  # zot = zero-order-terms
+    """
+    Traverse all the paths up to some path-magnitude threshold, calling
+    `fn_visitpath` for each one.
+
+    Parameters
+    ----------
+    oprep_lists : list of lists
+        representations for the terms of each layer of the circuit whose
+        outcome probability we're computing, including prep and POVM layers.
+        `oprep_lists[i]` is a list of the terms available to choose from
+        for the i-th circuit layer, ordered by increasing term-magnitude.
+
+    pathmag_threshold : float
+        the path-magnitude threshold to use.
+
+    num_elabels : int
+        The number of effect labels corresponding whose terms are all
+        amassed in the in final `oprep_lists[-1]` list (knowing which
+        elements of `oprep_lists[-1]` correspond to which effect isn't
+        necessary for this function).
+
+    foat_indices_per_op : list
+        A list of lists of integers, such that `foat_indices_per_op[i]`
+        is a list of indices into `oprep_lists[-1]` that marks out which
+        terms are first-order (Taylor) terms that should therefore always
+        be traversed regardless of their term-magnitude (foat = first-order-
+        always-traverse).
+
+    fn_visitpath : function
+        A function called for each path that is traversed.  Arguments
+        are `(term_indices, magnitude, incd)` where `term_indices` is
+        an array of integers giving the index into each `oprep_lists[i]`
+        list, `magnitude` is the path magnitude, and `incd` is the index
+        of the circuit layer that was just incremented (all elements of
+        `term_indices` less than this index are guaranteed to be the same
+        as they were in the last call to `fn_visitpath`, and this can be
+        used for faster path evaluation.
+
+    debug : bool, optional
+        Whether to print additional debug info.
+
+    Returns
+    -------
+    None
+    """  # zot = zero-order-terms
     n = len(oprep_lists)
     nops = [len(oprep_list) for oprep_list in oprep_lists]
     b = [0] * n  # root
@@ -2097,10 +2178,60 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     return
 
 
-def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_elabels=None,
+def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_pathmags,
                             foat_indices_per_op=None, initial_threshold=0.1, min_threshold=1e-10):
     """
-    TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
+    Find the pathmagnitude-threshold needed to achieve some target sum-of-path-magnitudes:
+    so that the sum of all the path-magnitudes greater than this threshold achieve the
+    target (or get as close as we can).
+
+    Parameters
+    ----------
+    oprep_lists : list of lists
+        representations for the terms of each layer of the circuit whose
+        outcome probability we're computing, including prep and POVM layers.
+        `oprep_lists[i]` is a list of the terms available to choose from
+        for the i-th circuit layer, ordered by increasing term-magnitude.
+
+    E_indices : numpy array
+        The effect-vector index for each element of `oprep_lists[-1]`
+        (representations for *all* effect vectors exist all together
+        in `oprep_lists[-1]`).
+
+    num_elabels : int
+        The total number of different effects whose reps appear in
+        `oprep_lists[-1]` (also one more than the largest index in 
+        `E_indices`.
+
+    target_sum_of_pathmags : array
+        An array of floats of length `num_elabels` giving the target sum of path
+        magnitudes desired for each effect (separately).
+
+    foat_indices_per_op : list
+        A list of lists of integers, such that `foat_indices_per_op[i]`
+        is a list of indices into `oprep_lists[-1]` that marks out which
+        terms are first-order (Taylor) terms that should therefore always
+        be traversed regardless of their term-magnitude (foat = first-order-
+        always-traverse).
+
+    initial_threshold : float
+        The starting pathmagnitude threshold to try (this function uses
+        an iterative procedure to find a threshold).
+
+    min_threshold : float
+        The smallest threshold allowed.  If this amount is reached, it
+        is just returned and searching stops.
+
+    Returns
+    -------
+    threshold : float
+        The obtained pathmagnitude threshold.
+    npaths : numpy array
+        An array of length `num_elabels` giving the number of paths selected
+        for each of the effect vectors.
+    achieved_sopm : numpy array
+        An array of length `num_elabels` giving the achieved sum-of-path-
+        magnitudes for each of the effect vectors.
     """
     nIters = 0
     threshold = initial_threshold if (initial_threshold >= 0) else 0.1  # default value
@@ -2118,8 +2249,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
         mag[E_indices[b[-1]]] += mg; nPaths[E_indices[b[-1]]] += 1
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
-        mag = _np.zeros(nEffects, 'd')
-        nPaths = _np.zeros(nEffects, int)
+        mag = _np.zeros(num_elabels, 'd')
+        nPaths = _np.zeros(num_elabels, int)
 
         if _np.all(mag >= target_mag):  # try larger threshold
             threshold_lower_bound = threshold
@@ -2143,8 +2274,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
         nIters += 1
 
     #Run path traversal once more to count final number of paths
-    mag = _np.zeros(nEffects, 'd')
-    nPaths = _np.zeros(nEffects, int)
+    mag = _np.zeros(num_elabels, 'd')
+    nPaths = _np.zeros(num_elabels, int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
                                   foat_indices_per_op, count_path)  # sets mag and nPaths
 

@@ -352,11 +352,118 @@ def build_standard_cloudnoise_model_from_hops_and_weights(
 
 def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, availability=None,
                                 qubit_labels=None, geometry="line", parameterization='auto',
-                                evotype="auto", sim_type="auto", on_construction_error='raise',
-                                independent_gates=False, ensure_composed_gates=False, sparse=True,
+                                evotype="auto", sim_type="auto", independent_gates=False, sparse=True,
                                 errcomp_type="errorgens", addIdleNoiseToAllGates=True, verbosity=0):
     """
-    TODO: docstring
+    Create a n-qubit model that may contain crosstalk errors.
+
+    This function constructs a :class:`CloudNoiseModel` that may place noise on
+    a gate that affects arbitrary qubits, i.e. qubits in addition to the target
+    qubits of the gate.  These errors are specified uing a dictionary of error
+    rates.
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits
+
+    error_rates : dict
+        A dictionary whose keys are primitive-layer and gate labels (e.g.
+        `("Gx",0)` or `"Gx"`) and whose values are "error-dictionaries"
+        that determine the type and amount of error placed on each item.
+        Error-dictionary keys are `(termType, basisLabel)` tuples, where
+        `termType` can be `"H"` (Hamiltonian), `"S"` (Stochastic), or `"A"`
+        (Affine), and `basisLabel` is a string of I, X, Y, or Z to describe a
+        Pauli basis element appropriate for the gate (i.e. having the same
+        number of letters as there are qubits in the gate).  For example, you
+        could specify a 0.01-radian Z-rotation error and 0.05 rate of Pauli-
+        stochastic X errors on a 1-qubit gate by using the error dictionary:
+        `{('H','Z'): 0.01, ('S','X'): 0.05}`.  Furthermore, basis elements
+        may be directed at specific qubits using a color followed by a comma-
+        separated qubit-label-list.  For example, `('S',"XX:0,1")` would
+        mean a weight-2 XX stochastic error on qubits 0 and 1, and this term
+        could be placed in the error dictionary for a gate that is only
+        supposed to target qubit 0, for instance.  In addition to the primitive
+        label names, the special values `"prep"`, `"povm"`, and `"idle"` may be
+        used as keys of `error_rates` to specify the error on the state
+        preparation, measurement, and global idle, respectively.
+
+    nonstd_gate_unitaries : dict, optional
+        A dictionary of numpy arrays which specifies the unitary gate action
+        of the gate names given by the dictionary's keys.
+
+    availability : dict, optional
+        A dictionary whose keys are the same gate names as in
+        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and specifies that the named gate
+        is available to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be available for acting on qubits
+        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
+        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
+        `availability` may take the special values `"all-permutations"` and
+        `"all-combinations"`, which as their names imply, equate to all possible
+        permutations and combinations of the appropriate number of qubit labels
+        (deterined by the gate's dimension).  The default value `"all-edges"`
+        equates to all the edges in the graph given by `geometry`.
+
+    qubit_labels : tuple, optional
+        The circuit-line labels for each of the qubits, which can be integers
+        and/or strings.  Must be of length `nQubits`.  If None, then the
+        integers from 0 to `nQubits-1` are used.
+
+    geometry : {"line","ring","grid","torus"} or QubitGraph
+        The type of connectivity among the qubits, specifying a
+        graph used to define neighbor relationships.  Alternatively,
+        a :class:`QubitGraph` object with node labels equal to
+        `qubit_labels` may be passed directly.
+
+    parameterization : "auto"
+        This argument is for future expansion and currently must be set to `"auto"`.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  If "auto" is specified, "densitymx" is used.
+
+    sim_type : {"auto","matrix","map","termorder:<N>"}
+        The type of forward simulation (probability computation) to use for the
+        returned :class:`Model`.  That is, how should the model compute
+        operation sequence/circuit probabilities when requested.  `"matrix"` is better
+        for small numbers of qubits, `"map"` is better for larger numbers. The
+        `"termorder"` option is designed for even larger numbers.  Usually,
+        the default of `"auto"` is what you want.
+
+    independent_gates : bool, optional
+        Whether gates are allowed independent cloud noise or not.  If False,
+        then all gates with the same name (e.g. "Gx") will have the *same*
+        noise.  If True, then gates with the same name acting on different
+        qubits may have different noise.
+
+    sparse : bool, optional
+        Whether the embedded Lindblad-parameterized gates within the constructed
+        `nQubits`-qubit gates are sparse or not.
+
+    errcomp_type : {"gates","errorgens"}
+        How errors are composed when creating layer operations in the returned
+        model.  `"gates"` means that the errors on multiple gates in a single
+        layer are composed as separate and subsequent processes.  `"errorgens"`
+        means that layer operations have the form `Composed(target, error)`
+        where `target` is as above and `error` results from composing the idle
+        and cloud-noise error *generators*, i.e. a map that acts as the
+        exponentiated sum of error generators (ordering is irrelevant in
+        this case).
+
+    addIdleNoiseToAllGates: bool, optional
+        Whether the global idle should be added as a factor following the
+        ideal action of each of the non-idle gates when constructing layer
+        operations.
+
+    verbosity : int, optional
+        An integer >= 0 dictating how must output to send to stdout.
+
+    Returns
+    -------
+    CloudNoiseModel
     """
     # E.g. error_rates could == {'Gx': {('H','X'): 0.1, ('S','Y'): 0.2} } # Lindblad, b/c val is dict
     #                        or {'Gx': 0.1 } # Depolarization b/c val is a float
@@ -432,7 +539,38 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         return ret
 
     def create_error(target_labels, errs=None, stencil=None, return_what="auto"):  # err = an error rates dict
-        """TODO: docstring """
+        """
+        Create an error generator or error superoperator based on the error dictionary
+        `errs`.  This function is used to construct error for SPAM and gate layer operations.
+
+        Parameters
+        ----------
+        target_labels : tuple
+            The target labels of the gate/primitive layer we're constructing an
+            error for.  This is needed for knowing the size of the target op and
+            for using "@" syntax within stencils.
+
+        errs : dict
+            A error-dictionary specifying what types of errors we need to construct.
+
+        stencil : None or OrderedDict
+            Instead of specifying `errs`, one can specify `stencil` to tell us how
+            and *with what* to construct an error -- `stencil` will contain keys
+            that are tuples of "stencil labels" and values which are error generators,
+            specifying errors that occur on certain "real" qubits by mapping the
+            stencil qubits to real qubits using `target_labels` as an anchor.
+
+        return_what : {"auto", "stencil", "errmap", "errgen"}, optional
+            What type of object should be returned.  "auto" causes either an
+            "errmap" (a superoperator) or "errgen" (an error generator) to
+            be selected based on the outside-scope value of `errcomp_type`.
+
+        Returns
+        -------
+        LinearOperator or OrderedDict
+            The former in the "errmap" and "errgen" cases, the latter in the
+            "stencil" case.
+        """
         target_nQubits = len(target_labels)
 
         if return_what == "auto":  # then just base return type on errcomp_type
@@ -554,7 +692,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
             errgen = _op.ComposedErrorgen(embedded_errgens, nQubit_dim, evotype)
 
         #If we get here, we've created errgen, which we either return or package into a map:
-        if return_what == "errormap":
+        if return_what == "errmap":
             return _op.LindbladOp(None, errgen, sparse_expm=sparse)
         else:
             return errgen
@@ -1897,7 +2035,6 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                          paramroot="H+S", sparse=False, verbosity=0, cache=None, idleOnly=False,
                                          idtPauliDicts=None, algorithm="greedy", idleOpStr=((),), comm=None):
     """
-    TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to
@@ -1973,6 +2110,10 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         :function:`find_amped_polys_for_syntheticidle`.  You should leave this
         as the default unless you know what you're doing.
 
+    idleOpStr : Circuit or tuple, optional
+        The circuit or label that is used to indicate a completely
+        idle layer (all qubits idle).
+
     Returns
     -------
     LsGermsSerialStructure
@@ -2003,7 +2144,6 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                 sparse=False, verbosity=0, cache=None, idleOnly=False,
                                 idtPauliDicts=None, algorithm="greedy", idleOpStr=((),), comm=None):
     """
-    TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to
@@ -2068,6 +2208,10 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         The algorithm is used internall by
         :function:`find_amped_polys_for_syntheticidle`.  You should leave this
         as the default unless you know what you're doing.
+
+    idleOpStr : Circuit or tuple, optional
+        The circuit or label that is used to indicate a completely
+        idle layer (all qubits idle).
 
     Returns
     -------

@@ -660,7 +660,27 @@ class QubitGraph(object):
         return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed)
 
     def resolve_relative_nodelabel(self, relative_nodelabel, target_labels):
-        """TODO: docstring """
+        """
+        Resolve a "relative nodelabel" into an actual node in this graph.
+
+        Relative node labels can use "@" to index elements of `target_labels`
+        and can contain "+<dir>" directives to move along directions defined
+        in this graph.
+
+        Parameters
+        ----------
+        relative_nodelabel : int or str
+            An absolute or relative node-label.  For example:
+            `0`, `"@0"`, `"@0+right"`, `"@1+left+up"`
+
+        target_labels : list or tuple
+            A list of (absolute) node labels present in this graph that may
+            be referred to using the "@" syntax within `relative_nodelabel`.
+
+        Returns
+        -------
+        int or str
+        """
         if relative_nodelabel in self.get_node_names():
             return relative_nodelabel  # relative_nodelabel is a valid absolute node label
         elif _compat.isstr(relative_nodelabel) and relative_nodelabel.startswith("@"):
@@ -681,7 +701,25 @@ class QubitGraph(object):
         return node
 
     def move_in_direction(self, start_node, direction):
-        """TODO: docstring - note None is returned when no node exists in `direction`"""
+        """
+        Get the node that is one step in `direction` of `start_node`.
+
+        Parameters
+        ----------
+        start_node : int or str
+            the starting point (a node label of this graph)
+
+        direction : str or int
+            the name of a direction or its index within this graphs
+            `.directions` member.
+
+        Returns
+        -------
+        str or int or None
+            the node in the given direction or `None` if there is no
+            node in that direction (e.g. if you reach the end of a
+            chain).
+        """
         assert(self.directions is not None), "This QubitGraph doesn't have directions!"
         i = self._nodeinds[start_node]
         dir_index = direction if isinstance(direction, int) else self.directions.index(direction)

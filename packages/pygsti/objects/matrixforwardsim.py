@@ -1157,8 +1157,26 @@ class MatrixForwardSimulator(ForwardSimulator):
 
     def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
-        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
+
+        Parameters
+        ----------
+        simplified_circuits : list
+            A list of Circuits or tuples of operation labels which specify
+            the operation sequences to create an evaluation tree out of
+            (most likely because you want to computed their probabilites).
+            These are a "simplified" circuits in that they should only contain
+            "deterministic" elements (no POVM or Instrument labels).
+
+        numSubtreeComms : int
+            The number of processor groups that will be assigned to
+            subtrees of the created tree.  This aids in the tree construction
+            by giving the tree information it needs to distribute itself
+            among the available processors.
+
+        Returns
+        -------
+        MatrixEvalTree
         """
         evTree = _MatrixEvalTree()
         evTree.initialize(simplified_circuits, numSubtreeComms)

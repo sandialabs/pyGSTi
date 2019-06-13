@@ -249,131 +249,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                     sim_type="auto", parameterization="H+S",
                                     spamtype="lindblad", addIdleNoiseToAllGates=True,
                                     errcomp_type="gates", independent_clouds=True, verbosity=0):
-        """ TODO: docstring """
-        printer = _VerbosityPrinter.build_printer(verbosity)
-
-        if qubit_labels is None:
-            qubit_labels = tuple(range(nQubits))
-
-        if not independent_clouds:
-            raise NotImplementedError("Non-independent noise clounds are not supported yet!")
-
-        if isinstance(geometry, _qgraph.QubitGraph):
-            qubitGraph = geometry
-        else:
-            qubitGraph = _qgraph.QubitGraph.common_graph(nQubits, geometry, directed=False,
-                                                         qubit_labels=qubit_labels)
-            printer.log("Created qubit graph:\n" + str(qubitGraph))
-
-        #Process "auto" sim_type
-        _, evotype = _gt.split_lindblad_paramtype(parameterization)
-        assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
-        if sim_type == "auto":
-            if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
-            else: sim_type = "map" if nQubits > 2 else "matrix"
-        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
-
-        #Global Idle
-        if maxIdleWeight > 0:
-            printer.log("Creating Idle:")
-            global_idle_layer = _build_nqn_global_noise(
-                qubitGraph, maxIdleWeight, sparse,
-                sim_type, parameterization, errcomp_type, printer - 1)
-        else:
-            global_idle_layer = None
-
-        #SPAM
-        if spamtype == "static" or maxSpamWeight == 0:
-            if maxSpamWeight > 0:
-                _warnings.warn(("`spamtype == 'static'` ignores the supplied "
-                                "`maxSpamWeight=%d > 0`") % maxSpamWeight)
-            prep_layers = [_sv.ComputationalSPAMVec([0] * nQubits, evotype)]
-            povm_layers = {'Mdefault': _povm.ComputationalBasisPOVM(nQubits, evotype)}
-
-        elif spamtype == "tensorproduct":
-
-            _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
-            basis1Q = _BuiltinBasis("pp", 4)
-            prep_factors = []; povm_factors = []
-
-            from ..construction import basis_build_vector
-
-            v0 = basis_build_vector("0", basis1Q)
-            v1 = basis_build_vector("1", basis1Q)
-
-            # Historical use of TP for non-term-based cases?
-            #  - seems we could remove this. FUTURE REMOVE?
-            povmtyp = rtyp = "TP" if parameterization in \
-                             ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D+A", "D+A", "D") \
-                             else parameterization
-
-            for i in range(nQubits):
-                prep_factors.append(
-                    _sv.convert(_sv.StaticSPAMVec(v0), rtyp, basis1Q))
-                povm_factors.append(
-                    _povm.convert(_povm.UnconstrainedPOVM(([
-                        ('0', _sv.StaticSPAMVec(v0)),
-                        ('1', _sv.StaticSPAMVec(v1))])), povmtyp, basis1Q))
-
-            prep_layers = [_sv.TensorProdSPAMVec('prep', prep_factors)]
-            povm_layers = {'Mdefault': _povm.TensorProdPOVM(povm_factors)}
-
-        elif spamtype == "lindblad":
-
-            prepPure = _sv.ComputationalSPAMVec([0] * nQubits, evotype)
-            prepNoiseMap = _build_nqn_global_noise(
-                qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
-            prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
-
-            povmNoiseMap = _build_nqn_global_noise(
-                qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
-            povm_layers = {'Mdefault': _povm.LindbladPOVM(povmNoiseMap, None, "pp")}
-
-        else:
-            raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
-
-        weight_maxhops_tuples_1Q = [(1, maxhops + extraWeight1Hops)] + \
-                                   [(1 + x, maxhops) for x in range(1, extraGateWeight + 1)]
-        cloud_maxhops_1Q = max([mx for wt, mx in weight_maxhops_tuples_1Q])  # max of max-hops
-
-        weight_maxhops_tuples_2Q = [(1, maxhops + extraWeight1Hops), (2, maxhops)] + \
-                                   [(2 + x, maxhops) for x in range(1, extraGateWeight + 1)]
-        cloud_maxhops_2Q = max([mx for wt, mx in weight_maxhops_tuples_2Q])  # max of max-hops
-
-        def build_cloudnoise_fn(lbl):
-            weight_maxhops_tuples = weight_maxhops_tuples_1Q if len(lbl.sslbls) == 1 else weight_maxhops_tuples_2Q
-            return _build_nqn_cloud_noise(
-                lbl.sslbls, qubitGraph, weight_maxhops_tuples,
-                errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
-                parameterization=parameterization, verbosity=printer - 1)
-
-        def build_cloudkey_fn(lbl):
-            cloud_maxhops = cloud_maxhops_1Q if len(lbl.sslbls) == 1 else cloud_maxhops_2Q
-            cloud_inds = tuple(qubitGraph.radius(lbl.sslbls, cloud_maxhops))
-            cloud_key = (tuple(lbl.sslbls), tuple(sorted(cloud_inds)))  # (sets are unhashable)
-            return cloud_key
-
-        return cls(nQubits, gatedict, availability, qubit_labels, geometry,
-                   global_idle_layer, prep_layers, povm_layers,
-                   build_cloudnoise_fn, build_cloudkey_fn,
-                   sim_type, evotype, errcomp_type,
-                   addIdleNoiseToAllGates, sparse, printer)
-
-    def __init__(self, nQubits, gatedict, availability=None,
-                 qubit_labels=None, geometry="line",
-                 global_idle_layer=None, prep_layers=None, povm_layers=None,
-                 build_cloudnoise_fn=None, build_cloudkey_fn=None,
-                 sim_type="map", evotype="densitymx", errcomp_type="gates",
-                 addIdleNoiseToAllGates=True, sparse=False, verbosity=0):
-
-        #build_targetgate_fn=None,
-        #maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-        #extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-        #sim_type="auto", parameterization="H+S",
-        #spamtype="lindblad", addIdleNoiseToAllGates=True,
-        #errcomp_type="gates", independent_clouds=True, verbosity=0):
         """
-        TODO: docstring fix this (arguments changed)
         Create a n-qubit model using a low-weight and geometrically local
         error model with a common "global idle" operation.
 
@@ -505,6 +381,243 @@ class CloudNoiseModel(_ImplicitOpModel):
             Currently this must be set to True.  In a future version, setting to
             true will allow all the clouds of a given gate name to have a similar
             cloud-noise process, mapped to the full qubit graph via a stencil.
+
+        verbosity : int, optional
+            An integer >= 0 dictating how must output to send to stdout.
+        """
+        printer = _VerbosityPrinter.build_printer(verbosity)
+
+        if qubit_labels is None:
+            qubit_labels = tuple(range(nQubits))
+
+        if not independent_clouds:
+            raise NotImplementedError("Non-independent noise clounds are not supported yet!")
+
+        if isinstance(geometry, _qgraph.QubitGraph):
+            qubitGraph = geometry
+        else:
+            qubitGraph = _qgraph.QubitGraph.common_graph(nQubits, geometry, directed=False,
+                                                         qubit_labels=qubit_labels)
+            printer.log("Created qubit graph:\n" + str(qubitGraph))
+
+        #Process "auto" sim_type
+        _, evotype = _gt.split_lindblad_paramtype(parameterization)
+        assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
+        if sim_type == "auto":
+            if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
+            else: sim_type = "map" if nQubits > 2 else "matrix"
+        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
+
+        #Global Idle
+        if maxIdleWeight > 0:
+            printer.log("Creating Idle:")
+            global_idle_layer = _build_nqn_global_noise(
+                qubitGraph, maxIdleWeight, sparse,
+                sim_type, parameterization, errcomp_type, printer - 1)
+        else:
+            global_idle_layer = None
+
+        #SPAM
+        if spamtype == "static" or maxSpamWeight == 0:
+            if maxSpamWeight > 0:
+                _warnings.warn(("`spamtype == 'static'` ignores the supplied "
+                                "`maxSpamWeight=%d > 0`") % maxSpamWeight)
+            prep_layers = [_sv.ComputationalSPAMVec([0] * nQubits, evotype)]
+            povm_layers = {'Mdefault': _povm.ComputationalBasisPOVM(nQubits, evotype)}
+
+        elif spamtype == "tensorproduct":
+
+            _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
+            basis1Q = _BuiltinBasis("pp", 4)
+            prep_factors = []; povm_factors = []
+
+            from ..construction import basis_build_vector
+
+            v0 = basis_build_vector("0", basis1Q)
+            v1 = basis_build_vector("1", basis1Q)
+
+            # Historical use of TP for non-term-based cases?
+            #  - seems we could remove this. FUTURE REMOVE?
+            povmtyp = rtyp = "TP" if parameterization in \
+                             ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D+A", "D+A", "D") \
+                             else parameterization
+
+            for i in range(nQubits):
+                prep_factors.append(
+                    _sv.convert(_sv.StaticSPAMVec(v0), rtyp, basis1Q))
+                povm_factors.append(
+                    _povm.convert(_povm.UnconstrainedPOVM(([
+                        ('0', _sv.StaticSPAMVec(v0)),
+                        ('1', _sv.StaticSPAMVec(v1))])), povmtyp, basis1Q))
+
+            prep_layers = [_sv.TensorProdSPAMVec('prep', prep_factors)]
+            povm_layers = {'Mdefault': _povm.TensorProdPOVM(povm_factors)}
+
+        elif spamtype == "lindblad":
+
+            prepPure = _sv.ComputationalSPAMVec([0] * nQubits, evotype)
+            prepNoiseMap = _build_nqn_global_noise(
+                qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
+            prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
+
+            povmNoiseMap = _build_nqn_global_noise(
+                qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
+            povm_layers = {'Mdefault': _povm.LindbladPOVM(povmNoiseMap, None, "pp")}
+
+        else:
+            raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
+
+        weight_maxhops_tuples_1Q = [(1, maxhops + extraWeight1Hops)] + \
+                                   [(1 + x, maxhops) for x in range(1, extraGateWeight + 1)]
+        cloud_maxhops_1Q = max([mx for wt, mx in weight_maxhops_tuples_1Q])  # max of max-hops
+
+        weight_maxhops_tuples_2Q = [(1, maxhops + extraWeight1Hops), (2, maxhops)] + \
+                                   [(2 + x, maxhops) for x in range(1, extraGateWeight + 1)]
+        cloud_maxhops_2Q = max([mx for wt, mx in weight_maxhops_tuples_2Q])  # max of max-hops
+
+        def build_cloudnoise_fn(lbl):
+            weight_maxhops_tuples = weight_maxhops_tuples_1Q if len(lbl.sslbls) == 1 else weight_maxhops_tuples_2Q
+            return _build_nqn_cloud_noise(
+                lbl.sslbls, qubitGraph, weight_maxhops_tuples,
+                errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
+                parameterization=parameterization, verbosity=printer - 1)
+
+        def build_cloudkey_fn(lbl):
+            cloud_maxhops = cloud_maxhops_1Q if len(lbl.sslbls) == 1 else cloud_maxhops_2Q
+            cloud_inds = tuple(qubitGraph.radius(lbl.sslbls, cloud_maxhops))
+            cloud_key = (tuple(lbl.sslbls), tuple(sorted(cloud_inds)))  # (sets are unhashable)
+            return cloud_key
+
+        return cls(nQubits, gatedict, availability, qubit_labels, geometry,
+                   global_idle_layer, prep_layers, povm_layers,
+                   build_cloudnoise_fn, build_cloudkey_fn,
+                   sim_type, evotype, errcomp_type,
+                   addIdleNoiseToAllGates, sparse, printer)
+
+    def __init__(self, nQubits, gatedict, availability=None,
+                 qubit_labels=None, geometry="line",
+                 global_idle_layer=None, prep_layers=None, povm_layers=None,
+                 build_cloudnoise_fn=None, build_cloudkey_fn=None,
+                 sim_type="map", evotype="densitymx", errcomp_type="gates",
+                 addIdleNoiseToAllGates=True, sparse=False, verbosity=0):
+        """
+        Create a n-qubit model using a low-weight and geometrically local
+        error model with a common "global idle" operation.
+
+        This constructor relies on factory functions being passed to it
+        which generate the cloud-noise operators - noise thtat is specific
+        to a gate but may act on a neighborhood or cloud around the gate's
+        target qubits.
+
+        Parameters
+        ----------
+        nQubits : int
+            The number of qubits
+
+        gatedict : dict
+            A dictionary (an `OrderedDict` if you care about insertion order) which
+            associates with string-type gate names (e.g. `"Gx"`) :class:`LinearOperator`,
+            `numpy.ndarray` objects. When the objects may act on fewer than the total
+            number of qubits (determined by their dimension/shape) then they are
+            repeatedly embedded into `nQubits`-qubit gates as specified by `availability`.
+
+        availability : dict, optional
+            A dictionary whose keys are the same gate names as in
+            `gatedict` and whose values are lists of qubit-label-tuples.  Each
+            qubit-label-tuple must have length equal to the number of qubits
+            the corresponding gate acts upon, and causes that gate to be
+            embedded to act on the specified qubits.  For example,
+            `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+            the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+            0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+            acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+            values of `availability` may take the special values
+            `"all-permutations"` and `"all-combinations"`, which as their names
+            imply, equate to all possible permutations and combinations of the
+            appropriate number of qubit labels (deterined by the gate's dimension).
+            If a gate name (a key of `gatedict`) is not present in `availability`,
+            the default is `"all-permutations"`.
+
+        qubit_labels : tuple, optional
+            The circuit-line labels for each of the qubits, which can be integers
+            and/or strings.  Must be of length `nQubits`.  If None, then the
+            integers from 0 to `nQubits-1` are used.
+
+        geometry : {"line","ring","grid","torus"} or QubitGraph
+            The type of connectivity among the qubits, specifying a
+            graph used to define neighbor relationships.  Alternatively,
+            a :class:`QubitGraph` object with node labels equal to
+            `qubit_labels` may be passed directly.
+
+        global_idle_layer : LinearOperator
+            A global idle operation which acts on all the qubits and
+            is, if `addIdleNoiseToAllGates=True`, composed with the
+            actions of specific gates to form the layer operation of
+            any circuit layer.
+
+        prep_layers, povm_layers : None or operator or dict or list, optional
+            The SPAM operations as n-qubit layer operations.  If `None`, then
+            no preps (or POVMs) are created.  If a dict, then the keys are
+            labels and the values are layer operators.  If a list, then the
+            elements are layer operators and the labels will be assigned as
+            "rhoX" and "MX" where X is an integer starting at 0.  If a single
+            layer operation is given, then this is used as the sole prep or
+            POVM and is assigned the label "rho0" or "Mdefault" respectively.
+
+        build_cloudnoise_fn : function, optional
+            A function which takes a single :class:`Label` as an argument and
+            returns the cloud-noise operation for that primitive layer
+            operation.  Note that if `errcomp_type="gates"` the returned
+            operator should be a superoperator whereas if 
+            `errcomp_type="errorgens"` then the returned operator should be
+            an error generator (not yet exponentiated).
+
+        build_cloudkey_fn : function, optional
+            An function which takes a single :class:`Label` as an argument and
+            returns a "cloud key" for that primitive layer.  The "cloud" is the
+            set of qubits that the error (the operator returned from
+            `build_cloudnoise_fn`) touches -- and the "key" returned from this
+            function is meant to identify that cloud.  This is used to keep track
+            of which primitive layer-labels correspond to the same cloud - e.g.
+            the cloud-key for ("Gx",2) and ("Gy",2) might be the same and could
+            be processed together when selecing sequences that amplify the parameters
+            in the cloud-noise operations for these two labels.  The return value
+            should be something hashable with the property that two noise
+            which act on the same qubits should have the same cloud key.
+
+        sim_type : {"matrix","map","termorder:<N>"}
+            The type of forward simulation (probability computation) to use for the
+            returned :class:`Model`.  That is, how should the model compute
+            operation sequence/circuit probabilities when requested.  `"matrix"` is better
+            for small numbers of qubits, `"map"` is better for larger numbers. The
+            `"termorder"` option is designed for even larger numbers.  Usually,
+            the default of `"auto"` is what you want.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+            The evolution type.
+
+        errcomp_type : {"gates","errorgens"}
+            How errors are composed when creating layer operations in the created
+            model.  `"gates"` means that the errors on multiple gates in a single
+            layer are composed as separate and subsequent processes.  Specifically,
+            the layer operation has the form `Composed(target,idleErr,cloudErr)`
+            where `target` is a composition of all the ideal gate operations in the
+            layer, `idleErr` is idle error (`.operation_blks['layers']['globalIdle']`),
+            and `cloudErr` is the composition (ordered as layer-label) of cloud-
+            noise contributions, i.e. a map that acts as the product of exponentiated
+            error-generator matrices.  `"errorgens"` means that layer operations
+            have the form `Composed(target, error)` where `target` is as above and
+            `error` results from composing the idle and cloud-noise error
+            *generators*, i.e. a map that acts as the exponentiated sum of error
+            generators (ordering is irrelevant in this case).
+
+        addIdleNoiseToAllGates: bool, optional
+            Whether the global idle should be added as a factor following the
+            ideal action of each of the non-idle gates.
+
+        sparse : bool, optional
+            Whether embedded Lindblad-parameterized gates within the constructed
+            `nQubits`-qubit gates are sparse or not.
 
         verbosity : int, optional
             An integer >= 0 dictating how must output to send to stdout.

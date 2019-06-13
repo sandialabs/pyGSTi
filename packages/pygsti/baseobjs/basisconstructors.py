@@ -70,37 +70,113 @@ def _check_dim(dim):
 
 
 class MatrixBasisConstructor(object):
+    """
+    A factory class for constructing builtin basis types
+    whose elements are matrices.
+    """
+
     def __init__(self, longname, matrixgen_fn, labelgen_fn, real):
-        """ TODO: docstring - note function expect *matrix* dimension as arg"""
+        """
+        Create a new MatrixBasisConstructor:
+
+        Parameters
+        ----------
+        longname : str
+            The long name for the builtin basis.
+
+        matrixgen_fn : function
+            A function that generates the matrix elements for this
+            basis given the matrix dimension (i.e. the number of rows or
+            columns in the matrices to produce).
+
+        labelgen_fn : function
+            A function that generates the element labels for this
+            basis given the matrix dimension (i.e. the number of rows or
+            columns in the matrices to produce).
+
+        real : bool
+            Whether vectors expressed in this basis are required to have
+            real components.
+        """
         self.matrixgen_fn = matrixgen_fn
         self.labelgen_fn = labelgen_fn
         self.longname = longname
         self.real = real
 
     def matrix_dim(self, dim):
-        """ TODO: docstring - dim is *vector-space* dimension """
+        """ Helper function that converts a *vector-space* dimension
+           `dim` to matrix-dimension by taking a sqrt."""
         d = int(round(_np.sqrt(dim)))
         assert(d**2 == dim), "Matrix bases can only have dimension = perfect square (not %d)!" % dim
         return d
 
     def labeler(self, dim, sparse):
-        """ TODO: docstring - dim is *vector-space* dimension """
+        """
+        Get the labels of a basis to be constructed.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+        
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        list of labels (strs)
+        """
         return self.labelgen_fn(self.matrix_dim(dim))
 
     def constructor(self, dim, sparse):
-        """ TODO: docstring - dim is *vector-space* dimension """
+        """
+        Get the elements of a basis to be constructed.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+        
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        list of basis elements
+        """
         els = self.matrixgen_fn(self.matrix_dim(dim))
         if sparse: els = [_sps.csr_matrix(el) for el in els]
         return els
 
-    """ A "sizes" function for constructing Basis objects
-        so that they can know the size & dimension of a
-        basis without having the construct the (potentially
-        large) set of elements. """
-
     def sizes(self, dim, sparse):
-        """ TODO: docstring - dim is dimension of vector space basis spans,
-             i.e. 4 for a basis of 2x2 matrices and 2 for a basis of length=2 vectors"""
+        """
+        Get some relevant sizes/dimensions for constructing a basis.
+
+        This function is needed for constructing Basis objects
+        because these objects want to know the size & dimension of
+        a basis without having to construct the (potentially
+        large) set of elements.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+            e.g. 4 for a basis of 2x2 matrices and 2 for
+            a basis of length=2 vectors.
+        
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        nElements : int
+            The number of elements in the basis.
+        dim : int
+            The vector-space dimension of the basis.
+        elshape : tuple
+            The shape of the elements that might be
+            constructed (if `constructor` was called).
+        """
         nElements = dim  # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis is for
         # (== size for a full basis, > size for a partial basis)
@@ -109,9 +185,12 @@ class MatrixBasisConstructor(object):
 
 
 class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
+    """
+    A constructor for a basis containing just a single element (e.g. the identity).
+    """
+    
     def sizes(self, dim, sparse):
-        """ TODO: docstring - dim is dimension of vector space basis spans,
-             i.e. 4 for a basis of 2x2 matrices and 2 for a basis of length=2 vectors"""
+        """ See docstring for :class:`MatrixBasisConstructor` """
         nElements = 1   # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis is for
         # (== size for a full basis, > size for a partial basis)
@@ -120,25 +199,104 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
 
 
 class VectorBasisConstructor(object):
+    """
+    A factory class for constructing builtin basis types
+    whose elements are vectors.
+    """
+
     def __init__(self, longname, vectorgen_fn, labelgen_fn, real):
-        """ TODO: docstring - note function expect *matrix* dimension as arg"""
+        """
+        Create a new MatrixBasisConstructor:
+
+        Parameters
+        ----------
+        longname : str
+            The long name for the builtin basis.
+
+        vectorgen_fn : function
+            A function that generates the vector elements for this
+            basis given the vector dimension.
+
+        labelgen_fn : function
+            A function that generates the element labels for this
+            basis given the vector dimension.
+
+        real : bool
+            Whether vectors expressed in this basis are required to have
+            real components.
+        """
         self.vectorgen_fn = vectorgen_fn
         self.labelgen_fn = labelgen_fn
         self.longname = longname
         self.real = real
 
     def labeler(self, dim, sparse):
-        """ TODO: docstring - dim is *vector-space* dimension """
+                """
+        Get the labels of a basis to be constructed.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+        
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        list of labels (strs)
+        """
         return self.labelgen_fn(dim)
 
     def constructor(self, dim, sparse):
-        """ TODO: docstring - dim is *vector-space* dimension """
+                """
+        Get the elements of a basis to be constructed.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+        
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        list of basis elements
+        """
         els = self.vectorgen_fn(dim)
         assert(not sparse), "Sparse vector bases not supported (yet)"
         return els
 
     def sizes(self, dim, sparse):
-        """ TODO: docstring """
+        """
+        Get some relevant sizes/dimensions for constructing a basis.
+
+        This function is needed for constructing Basis objects
+        because these objects want to know the size & dimension of
+        a basis without having to construct the (potentially
+        large) set of elements.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+            e.g. 4 for a basis of 2x2 matrices and 2 for
+            a basis of length=2 vectors.
+        
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        nElements : int
+            The number of elements in the basis.
+        dim : int
+            The vector-space dimension of the basis.
+        elshape : tuple
+            The shape of the elements that might be
+            constructed (if `constructor` was called).
+        """
         nElements = dim  # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis
         elshape = (dim,)  # the shape of the (vector) elements
@@ -148,34 +306,27 @@ class VectorBasisConstructor(object):
 def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis
-    spanning the density-matrix space given by matrix_dim.
+    spanning the density-matrix space given by matrix_dim x matrix_dim
+    matrices.
 
-    #TODO: update docstring since we don't do this embedding anymore - matrix_dim must be an int!
-    The returned matrices are given in the standard basis of the
-    "embedding" density matrix space, that is, the space which
-    embeds the block-diagonal matrix structure stipulated in
-    dim. These matrices form an orthonormal basis under
+    The returned matrices are orthonormal basis under
     the trace inner product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.
 
     Parameters
     ----------
-    dim: int
-        dimension of the density-matrix space.
+    matrix_dim: int
+        matrix dimension of the density-matrix space, e.g. 2
+        for a single qubit in a 2x2 density matrix basis.
 
     Returns
     -------
     list
-        A list of N numpy arrays each of shape (dim, dim),
-        where dim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dim)
-        and N is the dimension of the density-matrix space,
-        equal to sum( block_dim_i^2 ).
+        A list of N numpy arrays each of shape (matrix_dim, matrix_dim).
 
     Notes
     -----
     Each element is a matrix containing
-    a single "1" entry amidst a background of zeros, and there
-    are never "1"s in positions outside the block-diagonal structure.
+    a single "1" entry amidst a background of zeros.
     """
     _check_dim(matrix_dim)
     basisDim = matrix_dim ** 2
@@ -189,7 +340,19 @@ def std_matrices(matrix_dim):
 
 
 def std_labels(matrix_dim):
-    """ TODO: docstring - dim is *matrix* dimension """
+    """
+    Return the standard-matrix-basis labels based on a matrix dimension.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The matrix dimension of the basis to generate labels for (the
+        number of rows or columns in a matrix).
+
+    Returns
+    -------
+    list of strs
+    """
     if matrix_dim == 0: return []
     if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
     return ["(%d,%d)" % (i, j) for i in range(matrix_dim) for j in range(matrix_dim)]
@@ -473,7 +636,19 @@ def qt_matrices(matrix_dim, selected_pp_indices=[0, 5, 10, 11, 1, 2, 3, 6, 7]):
 
 
 def qt_labels(matrix_dim):
-    """ TODO: docstring """
+    """
+    Return the qutrit-basis labels based on a matrix dimension.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The matrix dimension of the basis to generate labels for (the
+        number of rows or columns in a matrix).
+
+    Returns
+    -------
+    list of strs
+    """
     if matrix_dim == 0: return []
     if matrix_dim == 1: return ['']  # special case
     assert(matrix_dim == 3), "Qutrit basis must have matrix_dim == 3!"
@@ -515,7 +690,19 @@ def cl_vectors(dim):
 
 
 def cl_labels(dim):
-    """ TODO: docstring """
+    """
+    Return the classical-basis labels based on a vector dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the basis to generate labels for (e.g.
+        2 for a single classical bit).
+
+    Returns
+    -------
+    list of strs
+    """
     if dim == 0: return []
     if dim == 1: return ['']  # special case - use empty label instead of "0"
     return ["%d" % i for i in range(dim)]
@@ -545,7 +732,19 @@ def sv_vectors(dim):
 
 
 def sv_labels(dim):
-    """ TODO: docstring """
+    """
+    Return the state-vector-basis labels based on a vector dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the basis to generate labels for (e.g.
+        2 for a single qubit represented as a state vector).
+
+    Returns
+    -------
+    list of strs
+    """
     if dim == 0: return []
     if dim == 1: return ['']  # special case - use empty label instead of "0"
     return ["|%d>" % i for i in range(dim)]

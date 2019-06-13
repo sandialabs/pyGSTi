@@ -77,7 +77,7 @@ def basis_build_vector(vecExpr, basis):
     std_basis = basis.equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
-    vecInReducedStdBasis = _np.dot(std_basis.get_from_simple_std(), vecInSimpleStdBasis.flatten())
+    vecInReducedStdBasis = _np.dot(std_basis.get_from_element_std(), vecInSimpleStdBasis.flatten())
     # translates the density matrx / SPAMVec to the std basis with our desired block structure
 
     #TODO REMOVE
@@ -848,7 +848,118 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
                                evotype="auto", sim_type="auto", on_construction_error='raise',
                                independent_gates=False, ensure_composed_gates=False):
     """
-    TODO: docstring
+    Create a n-qubit "crosstalk-free" model: one whose operations only act
+    nontrivially on their target qubits.
+
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits.
+
+    gate_names : list
+        A list of string-type gate names (e.g. `"Gx"`) either taken from
+        the list of builtin "standard" gate names or from the
+        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
+        gates that are repeatedly embedded (based on `availability`) to form
+        the resulting model.
+
+    error_rates : dict
+        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
+        determine the type and amount of error placed on that gate.  Values can
+        be floats, tuples or "error-dictionaries".  A float specifies a rate of
+        uniform depolarization, and a tuple of floats specifies Pauli-stochastic
+        error rates for each of the non-trivial Paulis (so a 3-tuple would be
+        expected for a 1Q gate and a 15-tuple for a 2Q gate).  Finally, an error
+        dictionary is a `dict` with keys that specify types of errors and values
+        that specify rates.  Keys are `(termType, basisLabel)` tuples, where
+        `termType` can be `"H"` (Hamiltonian), `"S"` (Stochastic), or `"A"`
+        (Affine), and `basisLabel` is a string of I, X, Y, or Z to describe a
+        Pauli basis element appropriate for the gate (i.e. having the same
+        number of letters as there are qubits in the gate).  For example, you
+        could specify a 0.01-radian Z-rotation error and 0.05 rate of Pauli-
+        stochastic X errors on a 1-qubit gate by using the error dictionary:
+        `{('H','Z'): 0.01, ('S','X'): 0.05}`.  In addition to the gate names,
+        the special values `"prep"`, `"povm"`, and `"idle"` may be used as
+        keys of `error_rates` to specify the error on the state preparation,
+        measurement, and global idle, respectively.
+
+    nonstd_gate_unitaries : dict, optional
+        A dictionary of numpy arrays which specifies the unitary gate action
+        of the gate names given by the dictionary's keys.
+
+    availability : dict, optional
+        A dictionary whose keys are the same gate names as in
+        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and specifies that the named gate
+        is available to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be available for acting on qubits
+        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
+        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
+        `availability` may take the special values `"all-permutations"` and
+        `"all-combinations"`, which as their names imply, equate to all possible
+        permutations and combinations of the appropriate number of qubit labels
+        (deterined by the gate's dimension).  The default value `"all-edges"`
+        equates to all the edges in the graph given by `geometry`.
+
+    qubit_labels : tuple, optional
+        The circuit-line labels for each of the qubits, which can be integers
+        and/or strings.  Must be of length `nQubits`.  If None, then the
+        integers from 0 to `nQubits-1` are used.
+
+    geometry : {"line","ring","grid","torus"} or QubitGraph, optional
+        The type of connectivity among the qubits, specifying a graph used to
+        define neighbor relationships.  Alternatively, a :class:`QubitGraph`
+        object with `qubit_labels` as the node labels may be passed directly.
+        This argument is only used as a convenient way of specifying gate
+        availability (edge connections are used for gates whose availability
+        is unspecified by `availability` or whose value there is `"all-edges"`).
+
+    parameterization : "auto"
+        This argument is for future expansion and currently must be set to `"auto"`.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  If "auto" is specified, "densitymx" is used.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the creation of a gate with the given
+        `parameterization` fails.  Usually you'll want to `"raise"` the error.
+        In some cases, for example when converting as many gates as you can
+        into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+    independent_gates : bool, optional
+        Whether gates are allowed independent local noise or not.  If False,
+        then all gates with the same name (e.g. "Gx") will have the *same*
+        (local) noise (e.g. an overrotation by 1 degree), and the
+        `operation_bks['gates']` dictionary contains a single key per gate
+        name.  If True, then gates with the same name acting on different
+        qubits may have different local noise, and so the
+        `operation_bks['gates']` dictionary contains a key for each gate
+         available gate placement.
+
+    ensure_composed_gates : bool, optional
+        If True then the elements of the `operation_bks['gates']` will always
+        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+        facilitate modifying the gate operations after the model is created.
+        If False, then the appropriately parameterized gate objects (often
+        dense gates) are used directly.
+
+    Returns
+    -------
+    Model
+        A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+        gate name (keys of `gatedict`) and qubit labels (from within
+        `availability`).  For instance, the operation label for the `"Gx"` gate on
+        qubit 2 might be `Label("Gx",1)`.
     """
     # E.g. error_rates could == {'Gx': {('H','X'): 0.1, ('S','Y'): 0.2} } # Lindblad, b/c val is dict
     #                        or {'Gx': 0.1 } # Depolarization b/c val is a float

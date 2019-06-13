@@ -62,16 +62,80 @@ def _sparse_equal(A, B, atol=1e-8):
 
 class Basis(object):
     '''
-    TODO: docstrings in this module
-    Base class = abstract notion of a basis with a certain size - no actual elements or labels
-     are stored though it *expects* to have .elements, .labels, and .ellookup members to perform
-     common basis operations.
+    An ordered set of labeled matrices/vectors.
 
-    Encapsulates a basis - an ordered set of labelled matrices/vectors.
+    The base class for basis objects.  A basis in pyGSTi is an abstract notion
+    of a set of labeled elements, or "vectors".  Each basis has a certain size,
+    and has .elements, .labels, and .ellookup members, the latter being a
+    dictionary mapping of labels to elements.
+
+    An important point to note that isn't immediately
+    intuitive is that while Basis object holds *elements* (in its
+    `.elements` property) these are not the same as its *vectors*
+    (given by the object's `vector_elements` property).  Often times,
+    in what we term a "simple" basis, the you just flatten an element
+    to get the corresponding vector-element.  This works for bases
+    where the elements are either vectors (where flattening does
+    nothing) and matrices.  By storing `elements` as distinct from
+    `vector_elements`, the Basis can capture additional structure
+    of the elements (such as viewing them as matrices) that can
+    be helpful for their display and interpretation.  The elements
+    are also sometimes referred to as the "natural elements" because
+    they represent how to display the element in a natrual way.  A
+    non-simple basis occurs when vector_elements need to be stored as
+    elements in a larger "embedded" way so that these elements can be
+    displayed and interpeted naturally.
+
+    A second important note is that there is assumed to be some underlying
+    "standard" basis underneath all the bases in pyGSTi.  The elements in
+    a Basis are *always* written in this standard basis.  In the case of the
+    "std"-named basis in pyGSTi, these elements are just the trivial vector
+    or matrix units, so one can rightly view the "std" pyGSTi basis as the
+    "standard" basis for a that particular dimension.
     '''
 
     @classmethod
     def cast(cls, nameOrBasisOrMatrices, dim=None, sparse=None, classicalName='cl'):
+        """
+        Convert various things that can describe a basis into a `Basis` object.
+
+        Parameters
+        ----------
+        nameOrBasisOrMatrices : various
+            Can take on a variety of values to produce different types of bases:
+
+            - `None`: an empty `ExpicitBasis`
+            - `Basis`: checked with `dim` and `sparse` and passed through.
+            - `str`: `BuiltinBasis` or `DirectSumBasis` with the given name.
+            - `list`: an `ExplicitBasis` if given matrices/vectors or a
+                     `DirectSumBasis` if given a `(name, dim)` pairs.
+
+        dim : int or StateSpaceLabels, optional
+            The dimension of the basis to create.  Sometimes this can be
+            inferred based on `nameOrBasisOrMatrices`, other times it must
+            be supplied.  This is the dimension of the space that this basis
+            fully or partially spans.  This is equal to the number of basis
+            elements in a "full" (ordinary) basis.  When a `StateSpaceLabels`
+            object is given, a more detailed direct-sum-of-tensor-product-blocks
+            structure for the state space (rather than a single dimension) is
+            described, and a basis is produced for this space.  For instance,
+            a `DirectSumBasis` basis of `TensorProdBasis` components can result
+            when there are multiple tensor-product blocks and these blocks
+            consist of multiple factors.
+
+        sparse : bool, optional
+            Whether the resulting basis should be "sparse", meaning that its
+            elements will be sparse rather than dense matrices.
+
+        classicalName : str, optional
+            An alternate builtin basis name that should be used when
+            constructing the bases for the classical sectors of `dim`,
+            when `dim` is a `StateSpaceLabels` object.
+
+        Returns
+        -------
+        Basis
+        """
         #print("DB: CAST = ",nameOrBasisOrMatrices,dim)
         from ..objects.labeldicts import StateSpaceLabels as _SSLs
         if nameOrBasisOrMatrices is None:  # special case of empty basis
@@ -132,6 +196,69 @@ class Basis(object):
             raise ValueError("Can't cast %s to be a basis!" % str(type(nameOrBasisOrMatrices)))
 
     def __init__(self, name, longname, dim, size, elshape, real, sparse):
+        """
+        Create a new Basis (base class) object.
+
+        The arguments below describe the basic properties of all basis
+        objects in pyGSTi.  It is important to remember that the
+        `vector_elements` of a basis are different from its `elements`
+        (see the :class:`Basis` docstring), and that `dim` refers
+        to the vector elements whereas elshape refers to the elements.
+
+        For example, consider a 2-element Basis containing the I and X Pauli
+        matrices.  The `size` of this basis is `2`, as there are two elements
+        (and two vector elements).  Since vector elements are the length-4
+        flattened Pauli matrices, the dimension (`dim`) is `4`.  Since the
+        elements are 2x2 Pauli matrices, the `elshape` is `(2,2)`.
+
+        As another example consider a basis which spans all the diagonal
+        2x2 matrices.  The elements of this basis are the two matrix units
+        with a 1 in the (0,0) or (1,1) location.  The vector elements,
+        however, are the length-2 [1,0] and [0,1] vectors obtained by extracting
+        just the diagonal entries from each basis element.  Thus, for this
+        basis, `size=2`, `dim=2`, and `elshape=(2,2)` - so the dimension is
+        not just the product of `elshape` entries (equivalently, `elsize`).
+
+
+        Parameters
+        ----------
+        name : string
+            The name of the basis.  This can be anything, but is
+            usually short and abbreviated.  There are several
+            types of bases built into pyGSTi that can be constructed by
+            this name.
+
+        longname : string
+            A more descriptive name for the basis.
+
+        dim : int
+            The dimension of the vector space this basis fully or partially
+            spans.  Equivalently, the length of the `vector_elements` of the
+            basis.
+
+        size : int
+            The number of elements (or vector-elements) in the basis.
+
+        elshape : tuple
+            The shape of each element.  Typically either a length-1 or length-2
+            tuple, corresponding to vector or matrix elements, respectively.
+            Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+            in the sparse case).
+
+        real : bool
+            Elements and vector elements are always allowed to have complex
+            entries.  This argument indicates whether the coefficients in the
+            expression of an arbitrary vector in this basis must be real.  For
+            example, if `real=True`, then when pyGSTi transforms a vector in
+            some other basis to a vector in *this* basis, it will demand that
+            the values of that vector (i.e. the coefficients which multiply
+            this basis's elements to obtain a vector in the "standard" basis)
+            are real.
+
+        sparse : bool
+            Whether the elements of `.elements` for this Basis are stored (when
+            they are stored at all) as sparse matrices or vectors.
+        """
         self.name = name
         self.longname = longname
         self.dim = dim  # dimension of vector space this basis fully or partially spans
@@ -143,39 +270,64 @@ class Basis(object):
 
     @property
     def elndim(self):
+        """The number of element dimensions, i.e. `len(self.elshape)`"""
         if self.elshape is None: return 0
         return len(self.elshape)
 
     @property
     def elsize(self):
+        """The total element size, i.e. `product(self.elshape)`"""
         if self.elshape is None: return 0
         return int(_np.product(self.elshape))
 
     def is_simple(self):
         """
         Whether the flattened-element vector space is the *same*
-        space as the space this basis belongs to"""
+        space as the space this basis's vectors belong to.
+
+        Returns
+        -------
+        bool
+        """
         return self.elsize == self.dim
 
     def is_complete(self):
         """
         Whether this is a complete basis, i.e. this basis's
         vectors span the entire space that they live in.
+
+        Returns
+        -------
+        bool
         """
         return self.dim == self.size
 
     def is_partial(self):
+        """
+        The negative of :method:`is_complete`, effectively "is_incomplete".
+
+        Returns
+        -------
+        bool
+        """
         return not self.is_complete()
 
     @property
     def vector_elements(self):
+        """ The "vectors" of this basis, always 1D (sparse or dense) arrays. """
         if self.sparse:
             return [_sps.lil_matrix(el).reshape((self.elsize, 1)) for el in self.elements]
         else:
             return [el.flatten() for el in self.elements]
 
     def copy(self):
-        """Make a copy of this Basis object."""
+        """
+        Make a copy of this Basis object.
+
+        Returns
+        -------
+        Basis
+        """
         return _copy.deepcopy(self)
 
     def __str__(self):
@@ -213,17 +365,18 @@ class Basis(object):
 
     def transform_matrix(self, to_basis):
         '''
-        TODO: docstring
-        Retrieve a list of matrices by index
+        Get the matrix that transforms a vector from this basis to `to_basis`.
 
         Parameters
         ----------
-        index : int
-            the position of matrices to retrieve
+        to_basis : Basis or string
+            The basis to transform to or a built-in basis name.  In the latter
+            case, a basis to transform to is built with the same structure as
+            this basis but with all components constructed from the given name.
 
         Returns
         -------
-        matrix to transform from this basis to another
+        numpy.ndarray (even if basis is sparse)
         '''
         #Note: construct to_basis as sparse this basis is sparse and
         # if to_basis is not already a Basis object
@@ -241,7 +394,20 @@ class Basis(object):
 
     def reverse_transform_matrix(self, from_basis):
         '''
-        TODO: docstring (and above) - the matrix to transform *to* this basis from `from_basis`
+        Get the matrix that transforms a vector from `from_basis` to this basis.
+
+        The reverse of :method:`transform_matrix`.
+
+        Parameters
+        ----------
+        from_basis : Basis or string
+            The basis to transform from or a built-in basis name.  In the latter
+            case, a basis to transform from is built with the same structure as
+            this basis but with all components constructed from the given name.
+
+        Returns
+        -------
+        numpy.ndarray (even if basis is sparse)
         '''
         if not isinstance(from_basis, Basis):
             from_basis = self.equivalent(from_basis)
@@ -258,7 +424,9 @@ class Basis(object):
     @cache_by_hashed_args
     def is_normalized(self):
         '''
-        Check if a basis is normalized
+        Check if a basis is normalized, meaning that Tr(Bi Bi) = 1.0.
+
+        Available only to bases whose elements are *matrices* for now.
 
         Returns
         -------
@@ -278,11 +446,15 @@ class Basis(object):
     @cache_by_hashed_args
     def get_to_std(self):
         '''
-        Retrieve the matrix that will convert from the current basis to the standard basis
+        Retrieve the matrix that transforms a vector from this basis to the
+        standard basis of this basis's dimension.
 
         Returns
         -------
-        numpy array
+        numpy array or scipy.sparse.lil_matrix
+            An array of shape `(dim, size)` where `dim` is the dimension
+            of this basis (the length of its vectors) and `size` is the
+            size of this basis (its number of vectors).
         '''
         if self.sparse:
             toStd = _sps.lil_matrix((self.dim, self.size), dtype='complex')
@@ -296,114 +468,149 @@ class Basis(object):
     @cache_by_hashed_args
     def get_from_std(self):
         '''
-        Retrieve the matrix that will convert from the standard basis to the current basis
+        Retrieve the matrix that transforms vectors from the standard basis
+        to this basis.
 
         Returns
         -------
-        numpy array
+        numpy array or scipy sparse matrix
+            An array of shape `(size, dim)` where `dim` is the dimension
+            of this basis (the length of its vectors) and `size` is the
+            size of this basis (its number of vectors).
         '''
-        #TODO: warning/error/pseudoinverse when get_to_std() returns a non-square matrix?
         if self.sparse:
-            return _spsl.inv(self.get_to_std().tocsc()).tocsr()
+            if self.is_complete():
+                return _spsl.inv(self.get_to_std().tocsc()).tocsr()
+            else:
+                assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
+                # we'd need to construct a different pseudo-inverse if the above assert fails
+
+                A = self.get_to_std()  # shape (dim,size) - should have indep *cols*
+                Adag = A.getH()        # shape (size, dim)
+                invAdagA = _spsl.inv(Adag.tocsr().dot(A.tocsc())).tocsr()
+                return invAdagA.dot(Adag.tocsc())
         else:
-            return _inv(self.get_to_std())
+            if self.is_complete():
+                return _inv(self.get_to_std())
+            else:
+                assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
+                # we'd need to construct a different pseudo-inverse if the above assert fails
+
+                A = self.get_to_std()  # shape (dim,size) - should have indep *cols*
+                Adag = A.transpose().conjugate()  # shape (size, dim)
+                return _np.dot(_inv(_np.dot(Adag, A)), Adag)
 
     @cache_by_hashed_args
-    def get_to_simple_std(self):  # OLD: contract_mx(self):
+    def get_to_element_std(self):
         '''
-        Retrieve the matrix that will convert from the embedding space to the direct sum space,
-        truncating if necessary (Currently without warning)
-        TODO: docstring
+        Get the matrix that transforms vectors in this basis (with length equal
+        to the `dim` of this basis) to vectors in the "element space" - that
+        is, vectors in the same standard basis that the *elements* of this basis
+        are expressed in.
 
         Returns
         -------
         numpy array
+            An array of shape `(element_dim, size)` where `element_dim` is the
+            dimension, i.e. size, of the elements of this basis (e.g. 16 if the
+            elements are 4x4 matrices) and `size` is the size of this basis (its
+            number of vectors).
         '''
-        # Default implementation assumes that the (flattened) element space
+        # This default implementation assumes that the (flattened) element space
         # *is* a standard representation of the vector space this basis or partial-basis
         # acts upon (this is *not* true for direct-sum bases, where the flattened
-        # elements represent vectors in the *embedding* space (w/larger dim than actual space).
-        return self.get_to_std()  # because this *is* a simple basis
+        # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of get_to_element_std"
+        return self.get_to_std()
 
     @cache_by_hashed_args
-    def get_from_simple_std(self):  # OLD: get_expand_mx(self):
+    def get_from_element_std(self):  # OLD: get_expand_mx(self):
         '''
-        Retrieve the matrix that will convert from the direct sum space to the embedding space
-        TODO: docstring
+        Get the matrix that transforms vectors in the "element space" - that
+        is, vectors in the same standard basis that the *elements* of this basis
+        are expressed in - to vectors in this basis (with length equal to the
+        `dim` of this basis).
 
         Returns
         -------
         numpy array
+            An array of shape `(size, element_dim)` where `element_dim` is the
+            dimension, i.e. size, of the elements of this basis (e.g. 16 if the
+            elements are 4x4 matrices) and `size` is the size of this basis (its
+            number of vectors).
         '''
-        # Default implementation assumes that the (flattened) element space
+        # This default implementation assumes that the (flattened) element space
         # *is* a standard representation of the vector space this basis or partial-basis
         # acts upon (this is *not* true for direct-sum bases, where the flattened
-        # elements represent vectors in the *embedding* space (w/larger dim than actual space).
-        assert(not self.sparse), "get_from_simple_std not implemented for sparse mode"  # (b/c pinv used)
-        return _np.linalg.pinv(self.get_to_simple_std())
+        # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of get_from_element_std"
+        if self.sparse:
+            raise NotImplementedError("get_from_element_std not implemented for sparse mode")  # (b/c pinv used)
+        return _np.linalg.pinv(self.get_to_element_std())
 
     def equivalent(self, builtinBasisName):
         """
         Create a Basis that is equivalent in structure & dimension to this
-        basis but whose simple components (perhaps just this basis) is of
-        the builtin basis type given by `builtinBasisName`.
+        basis but whose simple components (perhaps just this basis itself) is
+        of the builtin basis type given by `builtinBasisName`.
+
+        Parameters
+        ----------
+        builtinBasisName : str
+            The name of a builtin basis, e.g. `"pp"`, `"gm"`, or `"std"`. Used to
+            construct the simple components of the returned basis.
+
+        Returns
+        -------
+        Basis
         """
+        #This default implementation assumes that this basis is simple.
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of equivalent()"
         return BuiltinBasis(builtinBasisName, self.dim, sparse=self.sparse)
 
-        #"""
-        #Return a `Basis` of the type given by `otherName` and the dimensions
-        #of this `Basis`.
-        #
-        #Parameters
-        #----------
-        #otherName : {'std', 'gm', 'pp', 'qt'}
-        #    A standard basis abbreviation.
-        #
-        #Returns
-        #-------
-        #Basis
-        #"""
-
+    #TODO: figure out if we actually need the return value from this function to
+    # not have any components...  Maybe jamiolkowski.py needs this?  If it's
+    # unnecessary, we can update these doc strings and perhaps TensorProdBasis's
+    # implementation:
     def simple_equivalent(self, builtinBasisName=None):
         """
-        Create a simple basis (i.e. one without components) of the builtin
-        type specified whose dimension is compatible with the *elements* of
-        this basis.  (e.g. the embedded space for a direct-sum basis)
+        Create a simple basis *and* one without components (e.g. a
+        :class:`TensorProdBasis`, is a simple basis w/components) of the
+        builtin type specified whose dimension is compatible with the
+        *elements* of this basis.  This function might also be named
+        "element_equivalent", as it returns the `builtinBasisName`-analogue
+        of the standard basis that this basis's elements are expressed in.
+
+        Parameters
+        ----------
+        builtinBasisName : str, optional
+            The name of the built-in basis to use.  If `None`, then a
+            copy of this basis is returned (if it's simple) or this
+            basis's name is used to try to construct a simple and
+            component-free version of the same builtin-basis type.
+
+        Returns
+        -------
+        Basis
         """
+        #This default implementation assumes that this basis is simple.
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of simple_equivalent()"
         if builtinBasisName is None: return self.copy()
         else: return self.equivalent(builtinBasisName)
-
-        #"""
-        #Return a single-block `Basis` of the type given by `otherName` and
-        #dimension given by the sum of the block dimensions of this `Basis`.
-        #
-        #Parameters
-        #----------
-        #otherName : {'std', 'gm', 'pp', 'qt', None}
-        #    A standard basis abbreviation.  If None, then this
-        #    `Basis`'s name is used.
-        #
-        #Returns
-        #-------
-        #Basis
-        #"""
-
-    #TODO REMOVE
-    #def std_equivalent(self):
-    #    """ Convenience method identical to `.equivalent('std')` """
-    #    return self.equivalent('std')
-    #
-    #def simple_std_equivalent(self):
-    #    """ Convenience method identical to `.simple_equivalent('std')` """
-    #    return self.simple_equivalent('std')
 
 
 class LazyBasis(Basis):
     """
-    TODO: docstring - basis with elements that are constructed on an as-needed basis (no pun intended)
+    A :class:`Basis` whose labels and elements that are constructed only when at least
+    one of them is needed.  This class is also used as a base class for higher-level,
+    more specific basis classes.
     """
 
     def __init__(self, name, longname, dim, size, elshape, real, sparse):
+        """
+        Creates a new LazyBasis.  Parameters are the same as those to
+        :method:`Basis.__init__`.
+        """
         self._elements = None        # "natural-shape" elements - can be vecs or matrices
         self._labels = None          # element labels
         self._ellookup = None        # fast element lookup
@@ -417,6 +624,7 @@ class LazyBasis(Basis):
 
     @property
     def ellookup(self):
+        """A dictionary mapping basis element labels to the elements themselves"""
         if self._ellookup is None:
             if self._elements is None:
                 self._lazy_build_elements()
@@ -427,12 +635,14 @@ class LazyBasis(Basis):
 
     @property
     def elements(self):
+        """The basis elements (sometimes different from the *vectors*)"""
         if self._elements is None:
             self._lazy_build_elements()
         return self._elements
 
     @property
     def labels(self):
+        """The basis labels"""
         if self._labels is None:
             self._lazy_build_labels()
         return self._labels
@@ -446,12 +656,43 @@ class LazyBasis(Basis):
 
 
 class ExplicitBasis(Basis):
-    """ Supply elements directly """
+    """
+    A `Basis` whose elements are specified directly.  All explicit bases are
+    simple: their vector space is always taken to be that of the the flattened
+    elements.
+    """
     Count = 0  # The number of custom bases, used for serialized naming
 
     def __init__(self, elements, labels=None, name=None, longname=None, real=False, sparse=None):
         '''
-            TODO: docstring
+        Create a new ExplicitBasis.
+
+        Parameters
+        ----------
+        elements : iterable
+            A list of the elements of this basis.
+
+        labels : iterable, optional
+            A list of the labels corresponding to the elements of `elements`.
+            If given, `len(labels)` must equal `len(elements)`.
+
+        name : str, optional
+            The name of this basis.  If `None`, then a name will be
+            automatically generated.
+
+        longname : str, optional
+            A more descriptive name for this basis.  If `None`, then the
+            short `name` will be used.
+
+        real : bool, optional
+            Whether the coefficients in the expression of an arbitrary vector
+            as a linear combination of this basis's elements must be real.
+
+        sparse : bool, optional
+            Whether the elements of this Basis are stored as sparse matrices or
+            vectors.  If `None`, then this is automatically determined by the
+            type of the initial object: `elements[0]` (`sparse=False` is used
+            when `len(elements) == 0`).
         '''
         if name is None:
             name = 'ExplicitBasis_{}'.format(ExplicitBasis.Count)
@@ -493,41 +734,31 @@ class ExplicitBasis(Basis):
 
 
 class BuiltinBasis(LazyBasis):
+    """
+    A basis that is included within and integrated into pyGSTi, such that it may
+    be represented, in many cases, merely by its name.  (In actuality, a
+    dimension is also required, but this is often able to be inferred from
+    context.)
+    """
 
     def __init__(self, name, dim, sparse=False):
         '''
-        Initialize a basis object.
-        - NOTE: dim, sparse, ... are the "creation args" for this type of basis
-        TODO: docstring: matrices -> elements, dim changed to cargs == vector-space dimension, not matrix!
+        Create a new BuiltinBasis object.
 
         Parameters
         ----------
-        name : string
-            Name of the basis to be created;
-            if the name is 'pp', 'std', 'gm', or 'qt' and a dimension is provided,
-            then a default basis is created
+        name : {"pp", "gm", "std", "qt", "id", "cl", "sv"}
+            Name of the basis to be created.
 
         dim : int
-            dimension of the basis to be created.
-            Only required when creating default bases
-
-        matrices : list of numpy arrays, list of lists of numpy arrays, list of Basis objects/tuples
-            Flexible argument that allows different types of basis creation
-            When a list of numpy arrays, creates a non composite basis
-            When a list of lists of numpy arrays or list of other bases, creates a composite bases with each outer list
-            element as a composite part.
-
-        longname : str
-            Printout name for the basis
-
-        real : bool
-            Determine whether the basis admits complex elements during basis change
-
-        labels : list of strings
-            Labels for the basis matrices (i.e. I, X, Y, Z for the Pauli 2x2 basis)
+            The dimension of the basis to be created.  Note that this is the
+            dimension of the *vectors*, which correspond to flattened elements
+            in simple cases.  Thus, a 1-qubit basis would have dimension 2 in
+            the state-vector (`name="sv"`) case and dimension 4 when
+            constructing a density-matrix basis (e.g. `name="pp"`).
 
         sparse : bool, optional
-            Whether the basis matrices should be stored as SciPy CSR sparse matrices
+            Whether basis elements should be stored as SciPy CSR sparse matrices
             or dense numpy arrays (the default).
         '''
         assert(name in _basisConstructorDict), "Unknown builtin basis name '%s'!" % name
@@ -566,13 +797,33 @@ class BuiltinBasis(LazyBasis):
 class DirectSumBasis(LazyBasis):
     '''
     A basis that is the direct sum of one or more "component" bases.  Elements
-    of this basis are simply the union of the basis elements on each component.
-    TODO: docstring (more?)
+    of this basis are the union of the basis elements on each component, each
+    embedded into a common block-diagonal structure where each component
+    occupies its own block.  Thus, when there is more than one component, a
+    `DirectSumBasis` is not a simple basis because the size of its elements
+    is larger than the size of its vector space (which corresponds to just
+    the diagonal blocks of its elements).
     '''
 
     def __init__(self, component_bases, name=None, longname=None):
         '''
-        TODO: docstring
+        Create a new DirectSumBasis - a basis for a space that is the direct-sum
+        of the spaces spanned by other "component" bases.
+
+        Parameters
+        ----------
+        component_bases : iterable
+            A list of the component bases.  Each list elements may be either
+            a Basis object or a tuple of arguments to :function:`Basis.cast`,
+            e.g. `('pp',4)`.
+
+        name : str, optional
+            The name of this basis.  If `None`, the names of the component bases
+            joined with "+" is used.
+
+        longname : str, optional
+            A longer description of this basis.  If `None`, then a long name is
+            automatically generated.
         '''
         assert(len(component_bases) > 0), "Must supply at least one component basis"
 
@@ -583,8 +834,8 @@ class DirectSumBasis(LazyBasis):
             if isinstance(compbasis, Basis):
                 self.component_bases.append(compbasis)
             else:
-                #compbasis can be a list/tuple of args to Basis.__init__, e.g. ('pp',2)
-                self.component_bases.append(Basis(*compbasis))
+                #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp',2)
+                self.component_bases.append(Basis.cast(*compbasis))
 
         if name is None:
             name = "+".join([c.name for c in self.component_bases])
@@ -674,6 +925,7 @@ class DirectSumBasis(LazyBasis):
 
     @property
     def vector_elements(self):
+        """ The "vectors" of this basis, always 1D (sparse or dense) arrays. """
         if self._vector_elements is None:
             self._lazy_build_vector_elements()
         return self._vector_elements
@@ -681,11 +933,15 @@ class DirectSumBasis(LazyBasis):
     @cache_by_hashed_args
     def get_to_std(self):
         '''
-        Retrieve the matrix that will convert from the current basis to the standard basis
+        Retrieve the matrix that transforms a vector from this basis to the
+        standard basis of this basis's dimension.
 
         Returns
         -------
-        numpy array
+        numpy array or scipy.sparse.lil_matrix
+            An array of shape `(dim, size)` where `dim` is the dimension
+            of this basis (the length of its vectors) and `size` is the
+            size of this basis (its number of vectors).
         '''
         if self.sparse:
             toStd = _sps.lil_matrix((self.dim, self.size), dtype='complex')
@@ -699,17 +955,22 @@ class DirectSumBasis(LazyBasis):
         return toStd
 
     @cache_by_hashed_args
-    def get_to_simple_std(self):  # OLD: contract_mx(self):
+    def get_to_element_std(self):
         '''
-        Retrieve the matrix that will convert from the embedding space to the direct sum space,
-        truncating if necessary (Currently without warning)
-        TODO: docstring
+        Get the matrix that transforms vectors in this basis (with length equal
+        to the `dim` of this basis) to vectors in the "element space" - that
+        is, vectors in the same standard basis that the *elements* of this basis
+        are expressed in.
 
         Returns
         -------
         numpy array
+            An array of shape `(element_dim, size)` where `element_dim` is the
+            dimension, i.e. size, of the elements of this basis (e.g. 16 if the
+            elements are 4x4 matrices) and `size` is the size of this basis (its
+            number of vectors).
         '''
-        assert(not self.sparse), "get_to_simple_std not implemented for sparse mode"
+        assert(not self.sparse), "get_to_element_std not implemented for sparse mode"
         expanddim = self.elsize  # == _np.product(self.elshape)
         if self.sparse:
             toSimpleStd = _sps.lil_matrix((expanddim, self.size), dtype='complex')
@@ -724,44 +985,87 @@ class DirectSumBasis(LazyBasis):
             toSimpleStd[:, i] = vel
         return toSimpleStd
 
-    def equivalent(self, otherName):
-        equiv_components = [c.equivalent(otherName) for c in self.component_bases]
-        return DirectSumBasis(equiv_components)
-
-    def simple_equivalent(self, otherName=None):
+    def equivalent(self, builtinBasisName):
         """
-        TODO: docstring
-        Return a single-block `Basis` of the type given by `otherName` and
-        dimension given by the sum of the block dimensions of this `Basis`.
+        Create a Basis that is equivalent in structure & dimension to this
+        basis but whose simple components (perhaps just this basis itself) is
+        of the builtin basis type given by `builtinBasisName`.
 
         Parameters
         ----------
-        otherName : {'std', 'gm', 'pp', 'qt', None}
-            A standard basis abbreviation.  If None, then this
-            `Basis`'s name is used.
+        builtinBasisName : str
+            The name of a builtin basis, e.g. `"pp"`, `"gm"`, or `"std"`. Used to
+            construct the simple components of the returned basis.
+
+        Returns
+        -------
+        DirectSumBasis
+        """
+        equiv_components = [c.equivalent(builtinBasisName) for c in self.component_bases]
+        return DirectSumBasis(equiv_components)
+
+    def simple_equivalent(self, builtinBasisName=None):
+        """
+        Create a simple basis *and* one without components (e.g. a
+        :class:`TensorProdBasis`, is a simple basis w/components) of the
+        builtin type specified whose dimension is compatible with the
+        *elements* of this basis.  This function might also be named
+        "element_equivalent", as it returns the `builtinBasisName`-analogue
+        of the standard basis that this basis's elements are expressed in.
+
+        Parameters
+        ----------
+        builtinBasisName : str, optional
+            The name of the built-in basis to use.  If `None`, then a
+            copy of this basis is returned (if it's simple) or this
+            basis's name is used to try to construct a simple and
+            component-free version of the same builtin-basis type.
 
         Returns
         -------
         Basis
         """
-        if otherName is None:
-            otherName = self.name  # default
+        if builtinBasisName is None:
+            builtinBasisName = self.name  # default
             if len(self.component_bases) > 0:
                 first_comp_name = self.component_bases[0].name
                 if all([c.name == first_comp_name for c in self.component_bases]):
-                    otherName = first_comp_name  # if all components have the same name
-        return BuiltinBasis(otherName, self.elsize, sparse=self.sparse)  # Note: changes dimension
+                    builtinBasisName = first_comp_name  # if all components have the same name
+        return BuiltinBasis(builtinBasisName, self.elsize, sparse=self.sparse)  # Note: changes dimension
 
 
 class TensorProdBasis(LazyBasis):
     '''
-    A basis that is the tensor product of one or more "component" bases.
-    TODO: docstring (more?)
+    A Basis that is the tensor product of one or more "component" bases.
+
+    The elements of a TensorProdBasis consist of all tensor products of
+    component basis elements (respecting the order given).  The components
+    of a TensorProdBasis must be simple bases so that kronecker products
+    can be used to produce the parent basis's elements.
+
+    A TensorProdBasis is a "simple" basis in that its flattened elements
+    do correspond to its vectors.
     '''
 
     def __init__(self, component_bases, name=None, longname=None):
         '''
-        TODO: docstring
+        Create a new TensorProdBasis whose elements are the tensor products
+        of the elements of a set of "component" bases.
+
+        Parameters
+        ----------
+        component_bases : iterable
+            A list of the component bases.  Each list elements may be either
+            a Basis object or a tuple of arguments to :function:`Basis.cast`,
+            e.g. `('pp',4)`.
+
+        name : str, optional
+            The name of this basis.  If `None`, the names of the component bases
+            joined with "*" is used.
+
+        longname : str, optional
+            A longer description of this basis.  If `None`, then a long name is
+            automatically generated.
         '''
         assert(len(component_bases) > 0), "Must supply at least one component basis"
 
@@ -770,8 +1074,8 @@ class TensorProdBasis(LazyBasis):
             if isinstance(compbasis, Basis):
                 self.component_bases.append(compbasis)
             else:
-                #compbasis can be a list/tuple of args to Basis.__init__, e.g. ('pp',2)
-                self.component_bases.append(Basis(*compbasis))
+                #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp',2)
+                self.component_bases.append(Basis.cast(*compbasis))
 
         if name is None:
             name = "*".join([c.name for c in self.component_bases])
@@ -786,9 +1090,10 @@ class TensorProdBasis(LazyBasis):
         assert(sparse is False), "Sparse matrices are not supported within TensorProductBasis objects yet"
 
         dim = int(_np.product([c.dim for c in self.component_bases]))
-        assert(all([c.dim == c.elsize for c in self.component_bases])), \
-            "Components of a tensor product basis must have vector-dimension == size of elements"
+        assert(all([c.is_simple() for c in self.component_bases])), \
+            "Components of a tensor product basis must be *simple* (have vector-dimension == size of elements)"
         # because we use the natural representation to take tensor (kronecker) products.
+        # Note: this assertion also means dim == product(component_elsizes) == elsize, so basis is *simple*
 
         size = int(_np.product([c.size for c in self.component_bases]))
         elndim = max([c.elndim for c in self.component_bases])
@@ -830,44 +1135,85 @@ class TensorProdBasis(LazyBasis):
         if len(self.component_bases) != len(other.component_bases): return False
         return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
-    def equivalent(self, otherName):
-        equiv_components = [c.equivalent(otherName) for c in self.component_bases]
-        return TensorProdBasis(equiv_components)
-
-    def simple_equivalent(self, otherName=None):
+    def equivalent(self, builtinBasisName):
         """
-        Return a single-block `Basis` of the type given by `otherName` and
-        dimension given by the sum of the block dimensions of this `Basis`.
+        Create a Basis that is equivalent in structure & dimension to this
+        basis but whose simple components (perhaps just this basis itself) is
+        of the builtin basis type given by `builtinBasisName`.
 
         Parameters
         ----------
-        otherName : {'std', 'gm', 'pp', 'qt', None}
-            A standard basis abbreviation.  If None, then this
-            `Basis`'s name is used.
+        builtinBasisName : str
+            The name of a builtin basis, e.g. `"pp"`, `"gm"`, or `"std"`. Used to
+            construct the simple components of the returned basis.
+
+        Returns
+        -------
+        TensorProdBasis
+        """
+        equiv_components = [c.equivalent(builtinBasisName) for c in self.component_bases]
+        return TensorProdBasis(equiv_components)
+
+    def simple_equivalent(self, builtinBasisName=None):
+        """
+        Create a simple basis *and* one without components (e.g. a
+        :class:`TensorProdBasis`, is a simple basis w/components) of the
+        builtin type specified whose dimension is compatible with the
+        *elements* of this basis.  This function might also be named
+        "element_equivalent", as it returns the `builtinBasisName`-analogue
+        of the standard basis that this basis's elements are expressed in.
+
+        Parameters
+        ----------
+        builtinBasisName : str, optional
+            The name of the built-in basis to use.  If `None`, then a
+            copy of this basis is returned (if it's simple) or this
+            basis's name is used to try to construct a simple and
+            component-free version of the same builtin-basis type.
 
         Returns
         -------
         Basis
         """
-        if otherName is None:
-            otherName = self.name  # default
+        if builtinBasisName is None:
+            builtinBasisName = self.name  # default
             if len(self.component_bases) > 0:
                 first_comp_name = self.component_bases[0].name
                 if all([c.name == first_comp_name for c in self.component_bases]):
-                    otherName = first_comp_name  # if all components have the same name
-        return BuiltinBasis(otherName, self.elsize, sparse=self.sparse)
+                    builtinBasisName = first_comp_name  # if all components have the same name
+        return BuiltinBasis(builtinBasisName, self.elsize, sparse=self.sparse)
 
 
 class EmbeddedBasis(LazyBasis):
     '''
-    A basis that embeds a basis for a smaller state space within a larger state space
-    TODO: docstring (more?)
+    A basis that embeds a basis for a smaller state space within a larger
+    state space.
+
+    The elements of an EmbeddedBasis are therefore just embedded versions
+    of the elements of the basis that is embedded.
     '''
 
     @classmethod
     def embed_label(cls, lbl, target_labels):
-        """Convenience method that gives the EmbeddedBasis label for `lbl`
-           without needing to construct the `EmbeddedBasis` """
+        """
+        Convenience method that gives the EmbeddedBasis label for `lbl`
+        without needing to construct the `EmbeddedBasis`.  E.g. "
+
+        Parameters
+        ----------
+        lbl : str
+            Un-embedded basis element label, e.g. `"XX"`.
+
+        target_labels : tuple
+            The target state space labels upon which this basis element
+            will be embedded, e.g. `(1,2)`
+
+        Returns
+        -------
+        str
+            The embedded-basis-element label as an EmbeddedBasis would
+            assign it.  E.g. `"XX:1,2"`.
+        """
         return "%s:%s" % (lbl, ",".join(map(str, target_labels)))
 
     @classmethod
@@ -881,7 +1227,27 @@ class EmbeddedBasis(LazyBasis):
 
     def __init__(self, basis_to_embed, state_space_labels, target_labels, name=None, longname=None):
         '''
-        TODO: docstring
+        Create a new EmbeddedBasis.
+
+        Parameters
+        ----------
+        basis_to_embed : Basis
+            The basis being embedded.
+
+        state_space_labels : StateSpaceLabels
+            An object describing the struture of the entire state space.
+
+        target_labels : list or tuple
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by `basis_to_embed`.
+
+        name : str, optional
+            The name of this basis.  If `None`, the names of `basis_to_embed`
+            is joined with ':' characters to the elements of `target_labels`.
+
+        longname : str, optional
+            A longer description of this basis.  If `None`, then a long name is
+            automatically generated.
         '''
         self.embedded_basis = basis_to_embed
         self.target_labels = target_labels
@@ -950,28 +1316,49 @@ class EmbeddedBasis(LazyBasis):
             return False
         return self.embedded_basis == other.embedded_basis
 
-    def equivalent(self, otherName):
-        equiv_embedded = self.embedded_basis.equivalent(otherName)
-        return EmbeddedBasis(equiv_embedded, self.state_space_labels, self.target_labels)
-
-    def simple_equivalent(self, otherName=None):
+    def equivalent(self, builtinBasisName):
         """
-        Return a single-block `Basis` of the type given by `otherName` and
-        dimension given by the sum of the block dimensions of this `Basis`.
+        Create a Basis that is equivalent in structure & dimension to this
+        basis but whose simple components (perhaps just this basis itself) is
+        of the builtin basis type given by `builtinBasisName`.
 
         Parameters
         ----------
-        otherName : {'std', 'gm', 'pp', 'qt', None}
-            A standard basis abbreviation.  If None, then this
-            `Basis`'s name is used.
+        builtinBasisName : str
+            The name of a builtin basis, e.g. `"pp"`, `"gm"`, or `"std"`. Used to
+            construct the simple components of the returned basis.
+
+        Returns
+        -------
+        EmbeddedBasis
+        """
+        equiv_embedded = self.embedded_basis.equivalent(builtinBasisName)
+        return EmbeddedBasis(equiv_embedded, self.state_space_labels, self.target_labels)
+
+    def simple_equivalent(self, builtinBasisName=None):
+        """
+        Create a simple basis *and* one without components (e.g. a
+        :class:`TensorProdBasis`, is a simple basis w/components) of the
+        builtin type specified whose dimension is compatible with the
+        *elements* of this basis.  This function might also be named
+        "element_equivalent", as it returns the `builtinBasisName`-analogue
+        of the standard basis that this basis's elements are expressed in.
+
+        Parameters
+        ----------
+        builtinBasisName : str, optional
+            The name of the built-in basis to use.  If `None`, then a
+            copy of this basis is returned (if it's simple) or this
+            basis's name is used to try to construct a simple and
+            component-free version of the same builtin-basis type.
 
         Returns
         -------
         Basis
         """
-        if otherName is None:
-            otherName = self.embedded_basis.name  # default
-        return BuiltinBasis(otherName, self.elsize, sparse=self.sparse)
+        if builtinBasisName is None:
+            builtinBasisName = self.embedded_basis.name  # default
+        return BuiltinBasis(builtinBasisName, self.elsize, sparse=self.sparse)
 
 
 def basis_matrices(nameOrBasis, dim, sparse=False):

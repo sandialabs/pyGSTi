@@ -205,7 +205,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                                     independent_gates=False, ensure_composed_gates=False,
                                     global_idle=None):
         """
-        TODO: docstring update - this one is from __init__, but is basically correct
         Creates a n-qubit model by embedding the *same* gates from `gatedict`
         as requested and creating a perfect 0-prep and z-basis POVM.
 
@@ -243,6 +242,19 @@ class LocalNoiseModel(_ImplicitOpModel):
             appropriate number of qubit labels (deterined by the gate's dimension).
             If a gate name (a key of `gatedict`) is not present in `availability`,
             the default is `"all-permutations"`.
+
+        qubit_labels : tuple, optional
+            The circuit-line labels for each of the qubits, which can be integers
+            and/or strings.  Must be of length `nQubits`.  If None, then the
+            integers from 0 to `nQubits-1` are used.
+
+        geometry : {"line","ring","grid","torus"} or QubitGraph, optional
+            The type of connectivity among the qubits, specifying a graph used to
+            define neighbor relationships.  Alternatively, a :class:`QubitGraph`
+            object with `qubit_labels` as the node labels may be passed directly.
+            This argument is only used as a convenient way of specifying gate
+            availability (edge connections are used for gates whose availability
+            is unspecified by `availability` or whose value there is `"all-edges"`).
 
         parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                             "H+S clifford terms", "clifford"}
@@ -295,6 +307,10 @@ class LocalNoiseModel(_ImplicitOpModel):
             If a 1-qubit operator is given and `nQubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
             Otherwise the given operator must act on all `nQubits` qubits.
+
+        Returns
+        -------
+        LocalNoiseModel
         """
         if evotype == "auto":  # Note: this same logic is repeated in build_standard above
             if parameterization == "clifford": evotype = "stabilizer"
@@ -413,14 +429,20 @@ class LocalNoiseModel(_ImplicitOpModel):
                    qubit_labels, geometry, evotype, sim_type, on_construction_error,
                    independent_gates, ensure_composed_gates, global_idle)
 
+    #        spamdict : dict
+    #        A dictionary (an `OrderedDict` if you care about insertion order) which
+    #        associates string-type state preparation and POVM names (e.g. `"rho0"`
+    #        or `"Mdefault"`) with :class:`SPAMVec` and :class:`POVM` objects, respectively.
+    #        Currently, these objects must operate on all `nQubits` qubits.  If None,
+    #        then a 0-state prep `"rho0"` and computational basis measurement `"Mdefault"`
+    #        will be created with the given `parameterization`.
+
     def __init__(self, nQubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
                  qubit_labels=None, geometry="line", evotype="densitymx",
                  sim_type="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False,
                  global_idle=None):
         """
-        TODO: docstring update - remove parameterization below, spamdict => prep/povm_layers, evotype
-        can't be "auto" and more?
         Creates a n-qubit model by embedding the *same* gates from `gatedict`
         as requested and creating a perfect 0-prep and z-basis POVM.
 
@@ -442,13 +464,14 @@ class LocalNoiseModel(_ImplicitOpModel):
             number of qubits (determined by their dimension/shape) then they are
             repeatedly embedded into `nQubits`-qubit gates as specified by `availability`.
 
-        spamdict : dict
-            A dictionary (an `OrderedDict` if you care about insertion order) which
-            associates string-type state preparation and POVM names (e.g. `"rho0"`
-            or `"Mdefault"`) with :class:`SPAMVec` and :class:`POVM` objects, respectively.
-            Currently, these objects must operate on all `nQubits` qubits.  If None,
-            then a 0-state prep `"rho0"` and computational basis measurement `"Mdefault"`
-            will be created with the given `parameterization`.
+        prep_layers, povm_layers : None or operator or dict or list
+            The SPAM operations as n-qubit layer operations.  If `None`, then
+            no preps (or POVMs) are created.  If a dict, then the keys are
+            labels and the values are layer operators.  If a list, then the
+            elements are layer operators and the labels will be assigned as
+            "rhoX" and "MX" where X is an integer starting at 0.  If a single
+            layer operation is given, then this is used as the sole prep or
+            POVM and is assigned the label "rho0" or "Mdefault" respectively.
 
         availability : dict, optional
             A dictionary whose keys are the same gate names as in
@@ -467,19 +490,8 @@ class LocalNoiseModel(_ImplicitOpModel):
             If a gate name (a key of `gatedict`) is not present in `availability`,
             the default is `"all-permutations"`.
 
-        TODO: docstring - remove parameterization and others?
-        parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
-                            "H+S clifford terms", "clifford"}
-            The type of parameterizaton to convert each value in `gatedict` to. See
-            :method:`ExplicitOpModel.set_all_parameterizations` for more details.
-
-        evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
-            The evolution type.  Often this is determined by the choice of
-            `parameterization` and can be left as `"auto"`, which prefers
-            `"densitymx"` (full density matrix evolution) when possible. In some
-            cases, however, you may want to specify this manually.  For instance,
-            if you give unitary maps instead of superoperators in `gatedict`
-            you'll want to set this to `"statevec"`.
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+            The evolution type.
 
         sim_type : {"auto", "matrix", "map", "termorder:<N>"}
             The simulation method used to compute predicted probabilities for the
