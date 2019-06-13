@@ -48,7 +48,7 @@ class TestStdInputParser(BaseTestCase):
 
         #print "String Tests:"
         for s,expected in string_tests:
-            #print "%s ==> " % s, result
+            #print("%s ==> " % s, expected)
             result,line_labels = std.parse_circuit(s, lookup=lkup)
             self.assertEqual(line_labels, None)
             circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)

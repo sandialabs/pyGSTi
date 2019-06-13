@@ -124,10 +124,11 @@ class Label(object):
                             continue
                     stateSpaceLabels.append(x)
                 args = tup_args if len(tup_args) > 0 else None
+                stateSpaceLabels = tuple(stateSpaceLabels)  # needed for () and (None,) comparison below
 
         if time is None:
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
-            
+   
         #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
         if stateSpaceLabels is None or stateSpaceLabels in ((), (None,)):
             if args:
@@ -679,7 +680,7 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfTups, stateSpaceLabels, reps=1):  # time??
+    def __new__(cls, name, tupOfTups, stateSpaceLabels, reps=1, time=None):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -698,7 +699,13 @@ class CircuitLabel(Label, tuple):
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tupOfTups))  # Note: tup can also be a Label obj
         # creates a CircuitLabel object using tuple's __new__
-        return tuple.__new__(cls, (name, stateSpaceLabels, reps) + tupOfLabels)
+        ret = tuple.__new__(cls, (name, stateSpaceLabels, reps) + tupOfLabels)
+        if time is None:
+            ret.time = 0.0 if len(tupOfLabels) == 0 else \
+                max([lbl.time for lbl in tupOfLabels])
+        else:
+            ret.time = time
+        return ret
 
     @property
     def name(self):
@@ -711,10 +718,6 @@ class CircuitLabel(Label, tuple):
     @property
     def reps(self):
         return self[2]
-
-    @property
-    def time(self):
-        raise NotImplementedError("TODO!")
 
     @property
     def args(self):

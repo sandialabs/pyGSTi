@@ -231,6 +231,9 @@ class ImplicitOpModel(_mdl.OpModel):
         if 'uuid' not in stateDict:
             self.uuid = _uuid.uuid4()  # create a new uuid
 
+        if 'factories' not in stateDict:
+            self.factories = _collections.OrderedDict()  # backward compatibility (temporary)
+
         #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
         # preserve this information upon pickling so as to avoid
