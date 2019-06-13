@@ -3783,6 +3783,8 @@ class ComposedOp(LinearOperator):
         """
         Return this operation as a dense matrix.
         """
+        if len(self.factorops) == 0:
+            return _np.identity(self.dim, 'd')
         mx = self.factorops[0].todense()
         for gate in self.factorops[1:]:
             mx = _np.dot(gate.todense(), mx)
