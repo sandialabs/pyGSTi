@@ -12,7 +12,7 @@ env:
     - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
     - TEST_ROOT="test/test_packages"
   matrix:
-    - NOSETESTS="test.unit" NOSEOPTS=$NOSEOPTS_ALL TEST_ROOT="."
+    - NOSETESTS="test.unit" NOSEOPTS=$NOSEOPTS_ALL
 
 # Install native package dependencies & initialize build environment
 before_install:
