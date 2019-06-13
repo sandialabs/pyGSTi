@@ -106,7 +106,7 @@ class Label(object):
                     if next_is_time:
                         next_is_time = False
                         time = x; continue
-                        
+
                     if isstr(x):
                         if x.startswith(';'):
                             assert(args is None), "Cannot supply args in tuple when `args` is given!"
@@ -128,7 +128,7 @@ class Label(object):
 
         if time is None:
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
-   
+
         #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
         if stateSpaceLabels is None or stateSpaceLabels in ((), (None,)):
             if args:

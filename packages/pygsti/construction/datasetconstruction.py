@@ -147,7 +147,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
             #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
             trans_s = _gstrc.translate_circuit(s, aliasDict)
             circuit_times = times if times is not None else ["N/A dummy"]
-            
+
             counts_list = []
             for tm in circuit_times:
                 if gsGen:
@@ -155,7 +155,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                         ps = all_probs[trans_s]
                     else:
                         ps = gsGen.probs(trans_s, time=tm)
-    
+
                     if sampleError in ("binomial", "multinomial"):
                         #Adjust to probabilities if needed (and warn if not close to in-bounds)
                         for ol in ps:
@@ -168,7 +168,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                 else:
                     ps = _collections.OrderedDict([(ol, frac) for ol, frac
                                                    in dsGen[trans_s].fractions.items()])
-    
+
                 if gsGen and sampleError in ("binomial", "multinomial"):
                     #Check that sum ~= 1 (and nudge if needed) since binomial and
                     #  multinomial random calls assume this.
@@ -180,7 +180,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                     if psum < 1 - TOL:
                         adjusted = True
                         _warnings.warn("Adjusting sum(probs) < 1 to 1")
-    
+
                     # A cleaner probability cleanup.. lol
                     OVERTOL = 1.0 + TOL
                     UNDERTOL = 1.0 - TOL
@@ -189,11 +189,11 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                         m = max(ps.values())
                         ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
                         print(sum(ps.values()))
-    
+
                     assert normalized(), 'psum={}'.format(sum(ps.values()))
                     if adjusted:
                         _warnings.warn('Adjustment finished')
-    
+
                 if nSamples is None and dsGen is not None:
                     N = dsGen[trans_s].total  # use the number of samples from the generating dataset
                     #Note: total() accounts for other intermediate-measurment branches automatically
@@ -202,14 +202,14 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                         N = nSamples[k]  # try to treat nSamples as a list
                     except:
                         N = nSamples  # if not indexable, nSamples should be a single number
-    
+
                 nWeightedSamples = N
-    
+
                 counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
                 labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
                 # "outcome labels" - sort by prob for consistent generation
                 if sampleError == "binomial":
-    
+
                     if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
                         counts[labels[0]] = nWeightedSamples
                     else:
@@ -217,7 +217,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                         ol0, ol1 = labels[0], labels[1]
                         counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
                         counts[ol1] = nWeightedSamples - counts[ol0]
-    
+
                 elif sampleError == "multinomial":
                     countsArray = rndm.multinomial(nWeightedSamples,
                                                    [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
@@ -238,13 +238,13 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                                 "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
                             )
                 counts_list.append(counts)
-                
+
             if times is None:
                 assert(len(counts_list) == 1)
                 dataset.add_count_dict(s, counts_list[0], recordZeroCnts=recordZeroCnts)
             else:
                 dataset.add_series_data(s, counts_list, times, recordZeroCnts=recordZeroCnts)
-                
+
         dataset.done_adding_data()
 
     if comm is not None:  # broadcast to non-root procs

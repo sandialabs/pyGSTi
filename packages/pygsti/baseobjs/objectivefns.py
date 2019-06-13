@@ -41,12 +41,12 @@ class Chi2Function(ObjectiveFunction):
         self.profiler = profiler
         self.check = check
         self.check_jacobian = check_jacobian
-        
+
         KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
         vec_gs_len = mdl.num_params()
         self.printer = _VerbosityPrinter.build_printer(verbosity, comm)
         self.opBasis = mdl.basis
-            
+
         #Compute "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
         self.ex = 0
         if regularizeFactor != 0:
@@ -64,13 +64,12 @@ class Chi2Function(ObjectiveFunction):
         self.probClipInterval = probClipInterval
         self.wrtBlkSize = wrtBlkSize
         self.gthrMem = gthrMem
-    
+
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
         #   tree and initialization of dsCircuitsToUse)
         self.probs = _np.empty(KM, 'd')
         self.jac = _np.empty((KM + self.ex, vec_gs_len), 'd')
-
 
         #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
         self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
@@ -86,7 +85,7 @@ class Chi2Function(ObjectiveFunction):
             self.printer.log("SPARSE DATA: %d of %d rows have sparse data" % (len(self.firsts), len(circuitsToUse)))
         else:
             self.firsts = None  # no omitted probs
-        
+
         self.cntVecMx = cntVecMx
         self.N = N
         self.f = cntVecMx / N
@@ -146,8 +145,8 @@ class Chi2Function(ObjectiveFunction):
             2 * v[self.firsts, None] * dprobs[self.firsts, :]
             - dprobs_factor_omitted[:, None] * self.dprobs_omitted_rowsum)
 
-
     #Objective Function
+
     def simple_chi2(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
@@ -207,7 +206,7 @@ class Chi2Function(ObjectiveFunction):
             self.update_v_for_omitted_probs(v)
 
         chisq = _np.sum(v * v)
-        
+
         nClipped = len((_np.logical_or(self.probs < self.minProbClipForWeighting,
                                        self.probs > (1 - self.minProbClipForWeighting))).nonzero()[0])
         self.printer.log("MC2-OBJ: chi2=%g\n" % chisq
@@ -260,7 +259,8 @@ class Chi2Function(ObjectiveFunction):
         if self.firsts is not None:
             self.update_dprobs_for_omitted_probs(dprobs, weights)
 
-        if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs') #TO FIX
+        if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
@@ -286,12 +286,13 @@ class Chi2Function(ObjectiveFunction):
 
         if self.firsts is not None:
             self.update_dprobs_for_omitted_probs(dprobs, weights)
-        
+
         gsVecGrad = _np.diag([(self.regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0)
                               for x in vectorGS])  # (N,N)
         self.jac[self.KM:, :] = gsVecGrad  # jac.shape == (KM+N,N)
 
-        if self.check_jacobian: _opt.check_jac(lambda v: self.regularized_chi2(v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
+        if self.check_jacobian: _opt.check_jac(lambda v: self.regularized_chi2(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
 
         # dpr has shape == (nCircuits, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
         # return shape == (nCircuits+nDerivCols, nDerivCols)
@@ -326,7 +327,8 @@ class Chi2Function(ObjectiveFunction):
             off += _spam_penalty_jac_fill(
                 self.jac[self.KM + off:, :], self.mdl, self.spam_penalty_factor, self.opBasis)
 
-        if self.check_jacobian: _opt.check_jac(lambda v: self.penalized_chi2(v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
+        if self.check_jacobian: _opt.check_jac(lambda v: self.penalized_chi2(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
         self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
         return self.jac
 
@@ -391,7 +393,8 @@ class Chi2Function(ObjectiveFunction):
                          + "         maxLen = %d, nClipped = %d" % (self.maxCircuitLength, nClipped), 4)
 
         if self.check_jacobian:
-            errSum, errs, fd_jac = _opt.check_jac(lambda v: self.verbose_chi2(v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
+            errSum, errs, fd_jac = _opt.check_jac(lambda v: self.verbose_chi2(
+                v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
             self.printer.log("Jacobian has error %g and %d of %d indices with error > tol" %
                              (errSum, len(errs), self.jac.shape[0] * self.jac.shape[1]), 4)
             if len(errs) > 0:
@@ -411,9 +414,9 @@ class FreqWeightedChi2Function(Chi2Function):
                  spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
                  gthrMem, check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
 
-        Chi2Function.__init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                              spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
-                              gthrMem, check, check_jacobian, comm, profiler, verbosity=0)
+        Chi2Function.__init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor,
+                              cptp_penalty_factor, spam_penalty_factor, cntVecMx, N, minProbClipForWeighting,
+                              probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, verbosity=0)
         self.fweights = fweights
         self.z = _np.zeros(self.KM, 'd')
 
@@ -449,12 +452,12 @@ class TimeDependentChi2Function(ObjectiveFunction):
         self.profiler = profiler
         self.check = check
         self.check_jacobian = check_jacobian
-        
+
         KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
         vec_gs_len = mdl.num_params()
         self.printer = _VerbosityPrinter.build_printer(verbosity, comm)
         self.opBasis = mdl.basis
-            
+
         #Compute "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
         self.ex = 0
         self.KM = KM
@@ -466,7 +469,7 @@ class TimeDependentChi2Function(ObjectiveFunction):
         self.probClipInterval = probClipInterval
         self.wrtBlkSize = wrtBlkSize
         self.gthrMem = gthrMem
-    
+
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
         #   tree and initialization of dsCircuitsToUse)
@@ -528,7 +531,8 @@ class TimeDependentChi2Function(ObjectiveFunction):
         # this multiply also computes jac, which is just dprobs
         # with a different shape (jac.shape == [KM,vec_gs_len])
 
-        if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs') #TO FIX
+        if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
@@ -597,11 +601,11 @@ class LogLFunction(ObjectiveFunction):
         if cptp_penalty_factor != 0: self.ex += _cptp_penalty_size(mdl)
         if spam_penalty_factor != 0: self.ex += _spam_penalty_size(mdl)
         if forcefn_grad is not None: self.ex += forcefn_grad.shape[0]
-    
+
         #Allocate peristent memory
         self.probs = _np.empty(self.KM, 'd')
         self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
-    
+
         #Detect omitted frequences (assumed to be 0) so we can compute liklihood correctly
         self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
         for i, c in enumerate(circuitsToUse):
@@ -615,13 +619,14 @@ class LogLFunction(ObjectiveFunction):
             self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.vec_gs_len), 'd')
         else:
             self.firsts = None
-    
+
         self.minusCntVecMx = -1.0 * cntVecMx
         self.totalCntVec = totalCntVec
-    
+
         self.freqs = cntVecMx / totalCntVec
-        self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)  # set zero freqs to 1.0 so np.log doesn't complain
-    
+        # set zero freqs to 1.0 so np.log doesn't complain
+        self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
+
         if poissonPicture:
             self.freqTerm = cntVecMx * (_np.log(self.freqs_nozeros) - 1.0)
         else:
@@ -630,17 +635,17 @@ class LogLFunction(ObjectiveFunction):
             #DB_freqTerm[cntVecMx == 0] = 0.0
         # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
         #freqTerm[cntVecMx == 0] = 0.0
-    
+
         #CHECK OBJECTIVE FN
         #max_logL_terms = _tools.logl_max_terms(mdl, dataset, dsCircuitsToUse,
         #                                             poissonPicture, opLabelAliases, evaltree_cache)
         #print("DIFF1 = ",abs(_np.sum(max_logL_terms) - _np.sum(freqTerm)))
-    
+
         self.min_p = minProbClip
         self.a = radius  # parameterizes "roundness" of f == 0 terms
         self.probClipInterval = probClipInterval
         self.forcefn_grad = forcefn_grad
-    
+
         if forcefn_grad is not None:
             ffg_norm = _np.linalg.norm(forcefn_grad)
             start_norm = _np.linalg.norm(mdl.to_vector())
@@ -651,7 +656,7 @@ class LogLFunction(ObjectiveFunction):
             if cptp_penalty_factor != 0: self.forceOffset += _cptp_penalty_size(mdl)
             if spam_penalty_factor != 0: self.forceOffset += _spam_penalty_size(mdl)
             #index to jacobian row of first forcing term
-    
+
         if poissonPicture:
             self.fn = self.poisson_picture_logl
             self.jfn = self.poisson_picture_jacobian
@@ -693,7 +698,8 @@ class LogLFunction(ObjectiveFunction):
         v = _np.where(self.minusCntVecMx == 0,
                       self.totalCntVec * _np.where(self.probs >= self.a,
                                                    self.probs,
-                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a + self.a / 3.0),
+                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a
+                                                   + self.a / 3.0),
                       v)
         # special handling for f == 0 terms
         # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
@@ -709,7 +715,8 @@ class LogLFunction(ObjectiveFunction):
         #logL_terms = _tools.logl_terms(mdl, dataset, circuitsToUse,
         #                                     min_p, probClipInterval, a, poissonPicture, False,
         #                                     opLabelAliases, evaltree_cache) # v = maxL - L so L + v - maxL should be 0
-        #print("DIFF2 = ",_np.sum(logL_terms), _np.sum(v), _np.sum(freqTerm), abs(_np.sum(logL_terms) + _np.sum(v)-_np.sum(freqTerm)))
+        #print("DIFF2 = ",_np.sum(logL_terms), _np.sum(v), _np.sum(freqTerm), abs(_np.sum(logL_terms)
+        #      + _np.sum(v)-_np.sum(freqTerm)))
 
         v = _np.sqrt(v)
         v.shape = [self.KM]  # reshape ensuring no copy is needed
@@ -732,15 +739,15 @@ class LogLFunction(ObjectiveFunction):
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
 
-        
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
     #  with ommitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)  # noqa
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp_{i,sl} +                   # noqa
     #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)      # noqa
-    
+
     #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
     #   and deriv == 0.5 / sqrt(...) * S * dp
+
     def poisson_picture_jacobian(self, vectorGS):
         tm = _time.time()
         dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
@@ -764,7 +771,8 @@ class LogLFunction(ObjectiveFunction):
         v = _np.where(self.minusCntVecMx == 0,
                       self.totalCntVec * _np.where(self.probs >= self.a,
                                                    self.probs,
-                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a + self.a / 3.0),
+                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a
+                                                   + self.a / 3.0),
                       v)
 
         if self.firsts is not None:
@@ -781,7 +789,8 @@ class LogLFunction(ObjectiveFunction):
         dprobs_factor_pos = (0.5 / v) * (self.minusCntVecMx / pos_probs + self.totalCntVec)
         dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (self.probs - self.min_p))
         dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(self.probs >= self.a,
-                                                                     1.0, (-1.0 / self.a**2) * self.probs**2 + 2 * self.probs / self.a)
+                                                                          1.0, (-1.0 / self.a**2) * self.probs**2
+                                                                          + 2 * self.probs / self.a)
         dprobs_factor = _np.where(self.probs < self.min_p, dprobs_factor_neg, dprobs_factor_pos)
         dprobs_factor = _np.where(self.minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
 
@@ -850,18 +859,18 @@ class TimeDependentLogLFunction(ObjectiveFunction):
 
         #Compute "extra" (i.e. beyond the (circuit,spamlable)) rows of jacobian
         self.ex = 0
-    
+
         #Allocate peristent memory
         self.v = _np.empty(self.KM, 'd')
         self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
-    
+
         self.dataset = dataset
         self.dsCircuitsToUse = dsCircuitsToUse
 
         self.min_p = minProbClip
         self.a = radius  # parameterizes "roundness" of f == 0 terms
         self.probClipInterval = probClipInterval
-    
+
         if poissonPicture:
             self.fn = self.poisson_picture_logl
             self.jfn = self.poisson_picture_jacobian
@@ -975,7 +984,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, mdl, prefactor, opBasis):
     Returns a (real) array of shape (len(mdl.operations), nParams).
     """
     from .. import tools as _tools
-    
+
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     for i, gate in enumerate(mdl.operations.values()):
         nP = gate.num_params()

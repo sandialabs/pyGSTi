@@ -1439,7 +1439,8 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
 
         totalCnts = {}  # TODO defaultdict?
         lastInds = {}; outcome_cnts = {}
-        for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):  # consolidate multiple outcomes that occur at same time? or sort?
+        # consolidate multiple outcomes that occur at same time? or sort?
+        for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):
             if t0 in totalCnts:
                 totalCnts[t0] += Nreps; outcome_cnts[t0] += 1
             else:
@@ -1447,7 +1448,8 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
             lastInds[t0] = k
 
         cur_probtotal = 0; last_t = 0
-        for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):  # consolidate multiple outcomes that occur at same time? or sort?
+        # consolidate multiple outcomes that occur at same time? or sort?
+        for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):
             t = t0
             rhoVec.set_time(t)
             rho = rhoVec.torep('prep')

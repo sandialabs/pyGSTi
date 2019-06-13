@@ -73,7 +73,7 @@ class CircuitLexer:
             time = float(time)
         else:
             time = 0.0
-            
+
         if ';' in s:
             parts = s.split(';')
             parts2 = parts[-1].split(':')
@@ -90,7 +90,7 @@ class CircuitLexer:
             sslbls = None
 
         return _Label(nm, sslbls, time, args)
-    
+
     @staticmethod
     def t_GATE(t):
         r'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'

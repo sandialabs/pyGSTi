@@ -117,7 +117,7 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
         # (== size for a full basis, > size for a partial basis)
         d = self.matrix_dim(dim); elshape = (d, d)
         return nElements, basisDim, elshape
-    
+
 
 class VectorBasisConstructor(object):
     def __init__(self, longname, vectorgen_fn, labelgen_fn, real):

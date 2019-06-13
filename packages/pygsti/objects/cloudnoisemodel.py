@@ -367,11 +367,11 @@ class CloudNoiseModel(_ImplicitOpModel):
                  addIdleNoiseToAllGates=True, sparse=False, verbosity=0):
 
         #build_targetgate_fn=None,
-                 #maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                 #extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                 #sim_type="auto", parameterization="H+S",
-                 #spamtype="lindblad", addIdleNoiseToAllGates=True,
-                 #errcomp_type="gates", independent_clouds=True, verbosity=0):
+        #maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+        #extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+        #sim_type="auto", parameterization="H+S",
+        #spamtype="lindblad", addIdleNoiseToAllGates=True,
+        #errcomp_type="gates", independent_clouds=True, verbosity=0):
         """
         TODO: docstring fix this (arguments changed)
         Create a n-qubit model using a low-weight and geometrically local
@@ -651,8 +651,10 @@ class CloudNoiseModel(_ImplicitOpModel):
                 #cloud_inds = tuple(qubitGraph.radius((i,), cloud_maxhops))
                 #cloud_key = ((i,), tuple(sorted(cloud_inds)))  # (sets are unhashable)
 
-                if build_cloudkey_fn is not None: #TODO: is there any way to get a default "key", e.g. the qubits touched by the corresponding cloudnoise op?
-                    cloud_key = build_cloudkey_fn(_Lbl(gn, i)) # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have the *same* cloud)
+                if build_cloudkey_fn is not None:  # TODO: is there any way to get a default "key", e.g. the
+                    # qubits touched by the corresponding cloudnoise op?
+                    # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have the *same* cloud)
+                    cloud_key = build_cloudkey_fn(_Lbl(gn, i))
                     if cloud_key not in self.clouds: self.clouds[cloud_key] = []
                     self.clouds[cloud_key].append(_Lbl(gn, i))
                 #keep track of the primitive-layer labels in each cloud,
@@ -695,9 +697,9 @@ class CloudNoiseModel(_ImplicitOpModel):
         elif isinstance(prep_layers, dict):
             for rhoname, layerop in prep_layers.items():
                 self.prep_blks['layers'][_Lbl(rhoname)] = layerop
-        elif isinstance(prep_layers, _op.LinearOperator): # just a single layer op
+        elif isinstance(prep_layers, _op.LinearOperator):  # just a single layer op
             self.prep_blks['layers'][_Lbl('rho0')] = prep_layers
-        else: # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
+        else:  # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
             for i, layerop in enumerate(prep_layers):
                 self.prep_blks['layers'][_Lbl("rho%d" % i)] = layerop
 
@@ -708,7 +710,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         elif isinstance(povm_layers, dict):
             for povmname, layerop in povm_layers.items():
                 self.povm_blks['layers'][_Lbl(povmname)] = layerop
-        else: # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
+        else:  # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 

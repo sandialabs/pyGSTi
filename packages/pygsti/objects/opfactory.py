@@ -34,7 +34,6 @@ def op_from_factories(factory_dict, lbl):
     raise KeyError("Cannot create operator for label `%s` from factories " % str(lbl))
 
 
-
 class OpFactory(_gm.ModelMember):
     """
     An OpFactory is an object that can generate "on-demand" operators
@@ -83,7 +82,7 @@ class OpFactory(_gm.ModelMember):
             If None, then these labels are unspecified and should be irrelevant
             to the construction of the operator (which typically, in this case,
             has some fixed dimension and no noition of state space labels).
-                
+
         Returns
         -------
         ModelMember
@@ -161,7 +160,7 @@ class EmbeddedOpFactory(OpFactory):
         self.targetLabels = targetLabels
         self.dense = dense
         super(EmbeddedOpFactory, self).__init__(self.state_space_labels.dim, factory_to_embed._evotype)
-        
+
         #FUTURE: somehow do all the difficult embedded op computation once at construction so we
         # don't need to keep reconstructing an Embedded op in each create_op call.
         #Embedded = _op.EmbeddedDenseOp if dense else _op.EmbeddedOp
@@ -183,7 +182,7 @@ class EmbeddedOpFactory(OpFactory):
             If None, then these labels are unspecified and should be irrelevant
             to the construction of the operator (which typically, in this case,
             has some fixed dimension and no noition of state space labels).
-                
+
         Returns
         -------
         ModelMember
@@ -248,7 +247,7 @@ class EmbeddedOpFactory(OpFactory):
         self.embedded_factory.from_vector(v)
         self.dirty = True
 
-        
+
 class EmbeddingOpFactory(OpFactory):
     """
     A factory that "on-demand" embeds a given factory or operation into any requested
@@ -280,7 +279,7 @@ class EmbeddingOpFactory(OpFactory):
             If None, then these labels are unspecified and should be irrelevant
             to the construction of the operator (which typically, in this case,
             has some fixed dimension and no noition of state space labels).
-                
+
         Returns
         -------
         ModelMember

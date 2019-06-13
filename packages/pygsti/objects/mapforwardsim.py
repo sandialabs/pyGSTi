@@ -117,7 +117,7 @@ class MapForwardSimulator(ForwardSimulator):
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
-        if time is None: # time-independent state propagation
+        if time is None:  # time-independent state propagation
             rhorep = self.sos.get_prep(rholabel).torep('prep')
             ereps = [self.sos.get_effect(elabel).torep('effect') for elabel in elabels]
             rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl).torep() for gl in circuit])
@@ -1012,8 +1012,8 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_timedep_chi2(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                minProbClipForWeighting, probClipInterval, comm=None):
         """
-        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the circuit is run,
-        given by the timestamps in `dataset`
+        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the
+        circuit is run, given by the timestamps in `dataset`
 
         Returns
         -------
@@ -1056,8 +1056,8 @@ class MapForwardSimulator(ForwardSimulator):
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
         """
-        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however many times the circuit is run,
-        given by the timestamps in `dataset`
+        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however many
+        times the circuit is run, given by the timestamps in `dataset`
 
         Returns
         -------
@@ -1078,8 +1078,8 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_timedep_loglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                  minProbClip, radius, probClipInterval, comm=None):
         """
-        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the circuit is run,
-        given by the timestamps in `dataset`
+        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many
+        times the circuit is run, given by the timestamps in `dataset`
 
         Returns
         -------
@@ -1121,8 +1121,8 @@ class MapForwardSimulator(ForwardSimulator):
                                   comm=None, wrtFilter=None, wrtBlockSize=None,
                                   profiler=None, gatherMemLimit=None):
         """
-        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however many times the circuit is run,
-        given by the timestamps in `dataset`
+        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however
+        many times the circuit is run, given by the timestamps in `dataset`
 
         Returns
         -------
@@ -1141,15 +1141,15 @@ class MapForwardSimulator(ForwardSimulator):
                                             mxToFill, dloglpp, loglMxToFill, loglpp,
                                             comm, wrtFilter, wrtBlockSize, profiler, gatherMemLimit)
 
-
     #A generic function - move to base class
+
     def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
                                 derivMxToFill, deriv_fn, mxToFill=None, fn=None,
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
         """TODO: docstring """
 
-        tStart = _time.time()
+        #tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
         if wrtFilter is not None:
@@ -1177,7 +1177,7 @@ class MapForwardSimulator(ForwardSimulator):
 
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
-                tm = _time.time()
+                #tm = _time.time()
 
                 if mxToFill is not None:
                     cache = fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows, fillComm)

@@ -1093,8 +1093,6 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             isinstance(circuitsToUse[0], _objs.Circuit):
         circuitsToUse = [opstr.tup for opstr in circuitsToUse]
 
-    vec_gs_len = mdl.num_params()
-
     #Memory allocation
     ns = int(round(_np.sqrt(mdl.dim)))  # estimate avg number of spamtuples per string
     ng = len(circuitsToUse)
@@ -1140,7 +1138,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
     profiler.add_time("do_mc2gst: pre-opt treegen", tStart)
-    
+
     #Expand operation label aliases used in DataSet lookups
     dsCircuitsToUse = _tools.find_replace_tuple_list(
         circuitsToUse, opLabelAliases)
@@ -1228,14 +1226,16 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
 
     full_minErrVec = objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec  # don't include "extra" regularization terms
+    # don't include "extra" regularization terms
+    minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
     soln_gs = mdl.copy()
     profiler.add_time("do_mc2gst: leastsq", tm)
 
     tm = _time.time()
 
     if printer.verbosity > 0:
-        nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
+        nDataParams = dataset.get_degrees_of_freedom(
+            dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
         # in dataset (max. model # of params)
 
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
@@ -2050,9 +2050,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-
     mdl = startModel.copy()
-    opBasis = startModel.basis
 
     if maxfev is None: maxfev = maxiter
 
@@ -2075,8 +2073,6 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
                                (comm.Get_rank(), normdiff))  # pragma: no cover
             #assert(normdiff <= 1e-6)
             forcefn_grad = forcefn_cmp  # use broadcast value to make certain each proc has *exactly* the same input
-
-    vec_gs_len = mdl.num_params()
 
     #Memory allocation
     ns = int(round(_np.sqrt(mdl.dim)))  # estimate avg number of spamtuples per string
@@ -2151,7 +2147,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         if evaltree_cache is not None:
             evaltree_cache['cntVecMx'] = cntVecMx
             evaltree_cache['totalCntVec'] = totalCntVec
-        
+
     # The theoretical upper bound on the log(likelihood)
     logL_upperbound = _tools.logl_max(mdl, dataset, dsCircuitsToUse,
                                       poissonPicture, check, opLabelAliases, evaltree_cache)
@@ -2165,7 +2161,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
         #DEBUG TODO REMOVE (to use, also need to indent objective_func assignment below)
         #objective2 = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-        #                                  spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval,
+        #                                  spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
+        #                                  probClipInterval,
         #                                  wrtBlkSize, gthrMem, forcefn_grad, poissonPicture, shiftFctr, check, comm,
         #                                  profiler, printer)
         #
@@ -2182,9 +2179,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     else:
         objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval,
-                                         wrtBlkSize, gthrMem, forcefn_grad, poissonPicture, shiftFctr, check, comm,
-                                         profiler, printer)
+                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
+                                         probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
+                                         shiftFctr, check, comm, profiler, printer)
     objective_func = objective.fn
     jacobian = objective.jfn
 
@@ -2215,7 +2212,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     #mdl.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
     full_minErrVec = objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec  # don't include "extra" penalty terms
+    # don't include "extra" penalty terms
+    minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
     deltaLogL = sum(minErrVec**2)  # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':
@@ -2224,7 +2222,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     if printer.verbosity > 0:
         if _np.isfinite(deltaLogL):
-            nDataParams = dataset.get_degrees_of_freedom(dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
+            nDataParams = dataset.get_degrees_of_freedom(
+                dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
             # in dataset (max. model # of params)
 
             #Don't compute num gauge params if it's expensive (>10% of mem limit)
@@ -2539,8 +2538,6 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 ###################################################################################
 #                 Other Tools
 ###################################################################################
-
-
 
 
 def find_closest_unitary_opmx(operationMx):

@@ -44,7 +44,7 @@ from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Label
 
-    
+
 class Model(object):
     """
     A predictive model for a Quantum Information Processor (QIP).
