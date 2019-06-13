@@ -3,21 +3,16 @@ language: python
 
 python: 3.7
 
-if: (branch IN (master, beta, develop, ci-fixes)) OR (tag IS present)
+if: (branch IN (master, beta, develop, refactor-unit-tests)) OR (tag IS present)
 
 env:
   global:
     - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
     - NOSEOPTS_PARALLEL="--processes=-1 --process-timeout=2400" # timeout after 40 minutes (travis job timeout is 50 minutes)
     - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
+    - TEST_ROOT="test/test_packages"
   matrix:
-    - NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL # first in build mx because long duration
-    - NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_DEFAULT # cannot be run in parallel
+    - NOSETESTS="test.unit" NOSEOPTS=$NOSEOPTS_ALL TEST_ROOT="."
 
 # Install native package dependencies & initialize build environment
 before_install:
@@ -35,7 +30,7 @@ install:
 
 # Default `test' stage script
 script:
-  - cd test/test_packages
+  - cd $TEST_ROOT
   - nosetests $NOSEOPTS $NOSETESTS
 
 # Cache pip packages
@@ -49,7 +44,7 @@ stages:
   - name: lint-comprehensive
     if: branch IN (master, beta)
   - test
-  # Run tests on python 2.7 & 3.5, but only on master/beta
+  # Run extra tests, but only on master/beta
   - name: test-extra
     if: branch IN (master, beta)
   - name: push
@@ -74,6 +69,28 @@ jobs:
       name: "Comprehensive linting"
 
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.7
+      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
+
     - stage: test-extra
       python: 3.5
       env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
