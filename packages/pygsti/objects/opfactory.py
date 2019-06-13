@@ -97,6 +97,7 @@ class OpFactory(_gm.ModelMember):
         # assign the created operation the same indices as we have.
         # (so we don't call model._init_virtual_obj as there's no need)
         obj.set_gpindices(self.gpindices, self.parent)
+        obj.from_vector(self.to_vector())
         return obj
 
     def create_simplified_op(self, args=None, sslbls=None, item_lbl=None):
