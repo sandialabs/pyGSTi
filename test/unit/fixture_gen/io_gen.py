@@ -1,4 +1,5 @@
 """IO test fixture generation"""
+from __future__ import unicode_literals
 import sys
 
 import pygsti
@@ -19,7 +20,7 @@ class IOFixtureGen(_FixtureGenABC):
 
     @_write
     def build_loadwrite_dataset(self):
-        return 'dataset_loadwrite.txt', lambda path: io.write_dataset(path, self._ds)
+        return 'dataset_loadwrite.txt', lambda path: io.write_dataset(str(path), self._ds)
 
     @_memo
     def _sparse_ds(self):
@@ -33,13 +34,13 @@ class IOFixtureGen(_FixtureGenABC):
     @_write
     def build_sparse_dataset_1a(self):
         def writer(path):
-            io.write_dataset(path, self._sparse_ds, outcomeLabelOrder=None, fixedColumnMode=True)
+            io.write_dataset(str(path), self._sparse_ds, outcomeLabelOrder=None, fixedColumnMode=True)
         return 'sparse_dataset1a.txt', writer
 
     @_write
     def build_sparse_dataset_2a(self):
         def writer(path):
-            io.write_dataset(path, self._sparse_ds, outcomeLabelOrder=None, fixedColumnMode=False)
+            io.write_dataset(str(path), self._sparse_ds, outcomeLabelOrder=None, fixedColumnMode=False)
         return 'sparse_dataset2a.txt', writer
 
     @_memo
@@ -49,14 +50,14 @@ class IOFixtureGen(_FixtureGenABC):
     @_write
     def build_sparse_dataset_1b(self):
         def writer(path):
-            io.write_dataset(path, self._sparse_ds,
+            io.write_dataset(str(path), self._sparse_ds,
                              outcomeLabelOrder=self._ordering, fixedColumnMode=True)
         return 'sparse_dataset1b.txt', writer
 
     @_write
     def build_sparse_dataset_2b(self):
         def writer(path):
-            io.write_dataset(path, self._sparse_ds,
+            io.write_dataset(str(path), self._sparse_ds,
                              outcomeLabelOrder=self._ordering, fixedColumnMode=False)
         return 'sparse_dataset2b.txt', writer
 
@@ -72,7 +73,7 @@ Gx^4 20 80 0.2 100
 """
 
         def writer(path):
-            with open(path, 'w') as f:
+            with open(str(path), 'w') as f:
                 f.write(content)
         return 'TestMultiDataset.txt', writer
 
@@ -86,7 +87,7 @@ Gx^4 20 80 0.2 100
 
     @_write
     def build_gatestringlist(self):
-        return 'gatestringlist_loadwrite.txt', lambda path: io.write_circuit_list(path, self._circuit_list,
+        return 'gatestringlist_loadwrite.txt', lambda path: io.write_circuit_list(str(path), self._circuit_list,
                                                                                   self._circuit_list_header)
 
     @_memo
@@ -99,7 +100,7 @@ Gx^4 20 80 0.2 100
 
     @_write
     def build_gateset(self):
-        return 'gateset_loadwrite.txt', lambda path: io.write_model(self._std_model, path, self._gateset_title)
+        return 'gateset_loadwrite.txt', lambda path: io.write_model(self._std_model, str(path), self._gateset_title)
 
     @_memo
     def _std_model_no_identity(self):
@@ -109,7 +110,7 @@ Gx^4 20 80 0.2 100
 
     @_write
     def build_gateset_no_identity(self):
-        return 'gateset_noidentity.txt', lambda path: io.write_model(self._std_model_no_identity, path)
+        return 'gateset_noidentity.txt', lambda path: io.write_model(self._std_model_no_identity, str(path))
 
     @_write
     def build_model_format_example(self):
@@ -161,7 +162,7 @@ GAUGEGROUP: Full
 """
 
         def writer(path):
-            with open(path, 'w') as f:
+            with open(str(path), 'w') as f:
                 f.write(content)
         return 'formatExample.model', writer
 
@@ -173,7 +174,7 @@ F2 GxGy
 """
 
         def writer(path):
-            with open(path, 'w') as f:
+            with open(str(path), 'w') as f:
                 f.write(content)
         return 'gatestringdict_loadwrite.txt', writer
 

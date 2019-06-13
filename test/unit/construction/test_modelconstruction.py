@@ -253,7 +253,7 @@ class StdGateConstructionTester(GateConstructionBase, BaseCase):
     basis = 'std'
 
     def test_construct_gates_full(self):
-        super().test_construct_gates_full()
+        super(StdGateConstructionTester, self).test_construct_gates_full()
         self._test_leakA()
 
 
@@ -261,21 +261,21 @@ class GellMannGateConstructionTester(GateConstructionBase, BaseCase):
     basis = 'gm'
 
     def test_construct_gates_TP(self):
-        super().test_construct_gates_TP()
+        super(GellMannGateConstructionTester, self).test_construct_gates_TP()
         self._test_rotXa()
         self._test_rotX2()
 
         self._test_CnotA()
 
     def test_construct_gates_static(self):
-        super().test_construct_gates_static()
+        super(GellMannGateConstructionTester, self).test_construct_gates_static()
         self._test_rotXa()
         self._test_rotX2()
 
         self._test_CnotA()
 
     def test_construct_gates_full(self):
-        super().test_construct_gates_full()
+        super(GellMannGateConstructionTester, self).test_construct_gates_full()
         self._test_leakA()
         self._test_rotXa()
         self._test_rotX2()

@@ -20,7 +20,7 @@ class LikelihoodFunctionsTester(LikelihoodFunctionsBase):
 
 class LogLTester(LikelihoodFunctionsBase):
     def setUp(self):
-        super().setUp()
+        super(LogLTester, self).setUp()
         self.circuits = construction.circuit_list([('Gx',), ('Gy',), ('Gx', 'Gx')])
 
     def test_logl(self):

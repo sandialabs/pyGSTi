@@ -1,5 +1,4 @@
 from ..util import BaseCase
-import unittest
 import pygsti
 import pickle
 import time
@@ -17,6 +16,7 @@ def fib(x):
 
 @sc.smart_cached
 def slow_fib(x):
+    # TODO is this useful?
     time.sleep(0.01)
     assert x >= 0
     if x == 1 or x == 0:

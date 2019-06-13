@@ -115,8 +115,10 @@ extras = {
         'coverage',
         'zmq',
         'rednose',
-        'pathlib2;python_version<"3.0"',
-        'mock;python_version<"3.0"'
+        'pathlib2;python_version<"3.4"',
+        'unittest2;python_version<"3.2"',
+        'backports.tempfile;python_version<"3.2"',
+        'mock;python_version<"3.3"'
     ]
 }
 

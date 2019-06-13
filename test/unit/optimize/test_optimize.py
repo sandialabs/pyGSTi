@@ -1,8 +1,7 @@
 import numpy as np
-import unittest
 import os
 
-from ..util import BaseCase
+from ..util import BaseCase, unittest
 
 from pygsti.optimize import optimize as opt
 

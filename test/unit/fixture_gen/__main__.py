@@ -1,6 +1,5 @@
 # Can be run as a script: `python -m test.unit.fixture_gen -h'
 import argparse
-from types import SimpleNamespace
 import pkgutil
 import importlib
 
@@ -16,8 +15,8 @@ def _load_all_generators():
             full_name = "{}.{}".format(__package__, name)
             importlib.import_module(full_name)
 
+
 if __name__ == '__main__':
-    _load_all_generators()
     args = _parse_args()
 
     if args.only_versioned:
@@ -27,4 +26,5 @@ if __name__ == '__main__':
     else:
         gen = generate_all
 
+    _load_all_generators()
     gen(force=args.force)

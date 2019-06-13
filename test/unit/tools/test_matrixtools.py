@@ -1,7 +1,6 @@
 from ..util import BaseCase
 import numpy as np
 import scipy.sparse as sps
-import unittest
 import warnings
 
 import pygsti.tools.matrixtools as mt

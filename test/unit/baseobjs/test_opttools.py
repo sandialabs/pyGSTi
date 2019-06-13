@@ -10,7 +10,10 @@ from pygsti.baseobjs import opttools as opt
 class CacheByHashedArgsTester(BaseCase):
     def test_args_are_cached(self):
         mock_call = mock.MagicMock(return_value=42)
-        cached_call = opt.cache_by_hashed_args(mock_call)
+
+        @opt.cache_by_hashed_args
+        def cached_call(*args):
+            return mock_call(*args)
 
         value = cached_call(8, 6, 7, 5)
         self.assertEqual(value, mock_call.return_value, "function returns unexpected value")

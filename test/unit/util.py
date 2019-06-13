@@ -2,11 +2,9 @@
 import sys
 import numpy as np
 import numbers
-import tempfile
 import functools
 import types
 from contextlib import contextmanager
-from unittest import TestCase, skipUnless
 
 # Test modules should import these generic names rather than importing the modules directly:
 
@@ -21,6 +19,19 @@ try:
     from unittest import mock
 except ImportError:
     import mock
+
+# `tempfile.TemporaryDirectory' is new as of 3.2
+try:
+    from tempfile import TemporaryDirectory
+except ImportError:
+    from backports.tempfile import TemporaryDirectory
+
+# using `unittest.TestCase' features new as of 3.2
+if sys.version_info < (3, 2):
+    import unittest2 as unittest
+else:
+    import unittest
+
 
 _TEST_ROOT_PATH = Path(__file__).parent.parent.absolute()
 _TEST_DATA_PATH = _TEST_ROOT_PATH / "data"
@@ -82,7 +93,7 @@ def _regenerate_fixtures(force=False):
     gen.generate_all(force=force)
 
 
-class BaseCase(TestCase):
+class BaseCase(unittest.TestCase):
     def assertArraysAlmostEqual(self, a, b, **kwargs):
         """Assert that two arrays are equal to within a certain precision.
 
@@ -172,7 +183,7 @@ class BaseCase(TestCase):
 
         Returns
         -------
-        ``pathlib.Path``
+        str
             The filesystem path of the fixture
 
         See Also
@@ -182,14 +193,14 @@ class BaseCase(TestCase):
         # First try without a version or architecture
         noarch_file = _TEST_DATA_PATH / filename
         if noarch_file.exists():
-            return noarch_file
+            return str(noarch_file)
         else:
             # If the no-arch data file doesn't exist, try looking in a python version-specific data path
             version_path = _TEST_DATA_PATH / version_label()
             if version_path.exists():
                 version_file = version_path / filename
                 if version_file.exists():
-                    return version_file
+                    return str(version_file)
 
         # As fallback, regenerate fixtures and retry
         if can_retry:
@@ -219,8 +230,8 @@ class BaseCase(TestCase):
 
         Yields
         ------
-        ``pathlib.Path``
-            A Path object representing the path of the temporary file.
+        str
+            The path of the temporary file.
 
         See Also
         --------
@@ -228,10 +239,10 @@ class BaseCase(TestCase):
         """
 
         filename = filename or "temp_file"  # yeah looks random to me
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir) / filename
             # Yield to context with temporary path
-            yield tmp_path
+            yield str(tmp_path)
             # TemporaryDirectory will be cleaned up on close
 
     def debug(self, debugger=None):

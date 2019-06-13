@@ -1,7 +1,7 @@
 import functools
 import numpy as np
 
-from ..util import BaseCase, with_temp_path, with_temp_file
+from ..util import BaseCase, with_temp_path, with_temp_file, Path
 
 from pygsti.construction import std1Q_XYI as std
 from pygsti.objects import Circuit, CircuitLabel
@@ -142,7 +142,7 @@ thatOne G1 G2 * G3
     @with_temp_path
     def test_parse_datafile(self, tmp_path):
         # write lookup dict
-        dict_path = tmp_path.parent / "sip_test.dict"
+        dict_path = str(Path(tmp_path).parent / "sip_test.dict")
         self._write_dictfile(dict_path)
 
         contents = """#My Data file
@@ -180,7 +180,7 @@ G_my_x G_my_y 0.5 24.0
     @with_temp_path
     def test_parse_multidatafile(self, tmp_path):
         # write lookup dict
-        dict_path = tmp_path.parent / "sip_test.dict"
+        dict_path = str(Path(tmp_path).parent / "sip_test.dict")
         self._write_dictfile(dict_path)
 
         contents = """#Multi Data File

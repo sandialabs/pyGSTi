@@ -1,4 +1,6 @@
 """Build or rebuild test fixtures on the disk"""
+from __future__ import absolute_import, unicode_literals
+from future.utils import with_metaclass
 
 import functools
 from warnings import warn
@@ -25,6 +27,13 @@ def _instantiate(name, cls):
         instance._run(_parse_args())
     else:
         # Load normally
+        if sys.version_info < (3,):
+            # Decorate instance with module-level names (python 2 compat)
+            # XXX this is like super dangerous LOL
+            mod = sys.modules[name]
+            for name, bound in mod.__dict__.items():
+                if not hasattr(instance, name):
+                    setattr(instance, name, bound)
         sys.modules[name] = instance
         __fixture_generators__.append(instance)
 
@@ -39,12 +48,12 @@ def _write(fn):
     """
     fn.__builder__ = True
     @functools.wraps(fn)
-    def inner(*args, force=False, **kwargs):
-        filename, write_fn = fn(*args, **kwargs)
+    def inner(self, force=False, *args, **kwargs):
+        filename, write_fn = fn(self, *args, **kwargs)
         filepath = _TEST_DATA_PATH / filename
 
         if not force and filepath.exists():
-            raise FileExistsError(str(filepath))
+            raise FixtureExistsError(str(filepath))
         else:
             write_fn(filepath)
             return filepath
@@ -73,7 +82,7 @@ def _memo(fn):
 
 class _FixtureGenMeta(type):
     def __init__(cls, name, bases, dict):
-        super().__init__(name, bases, dict)
+        super(_FixtureGenMeta, cls).__init__(name, bases, dict)
         if hasattr(cls, '__builders__'):
             cls.__builders__ = cls.__builders__.copy()
         else:
@@ -83,8 +92,9 @@ class _FixtureGenMeta(type):
                 cls.__builders__[name] = bound
 
 
-class _FixtureGenABC(metaclass=_FixtureGenMeta):
+class _FixtureGenABC(with_metaclass(_FixtureGenMeta)):
     """Base class for fixture data generators"""
+
     def _generate(self, builders, *args, **kwargs):
         if _NO_REGEN_TEST_DATA:
             warn("Skipping generation of {} (\u001b[31m`NO_REGEN_TEST_DATA'\u001b[0m set)".format(
@@ -95,7 +105,7 @@ class _FixtureGenABC(metaclass=_FixtureGenMeta):
             try:
                 filepath = fn(self, *args, **kwargs)
                 warn("Wrote file \u001b[36m{}\u001b[0m".format(filepath))
-            except FileExistsError as e:
+            except FixtureExistsError as e:
                 warn("File already exists: {} (hint: use \u001b[31m--force\u001b[0m to overwrite)".format(e))
 
     def generate_all(self, *args, **kwargs):
@@ -147,3 +157,7 @@ def _parse_args():
     parser.add_argument('-n', '--only-nonversioned', action='store_true',
                         help="only build non-python-version-specific fixtures")
     return parser.parse_args()
+
+
+class FixtureExistsError(IOError):
+    pass

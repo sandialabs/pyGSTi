@@ -9,7 +9,7 @@ from . import _memo, _write, _versioned, _FixtureGenABC, _instantiate
 
 class DriverFixtureGen(_FixtureGenABC):
     def __init__(self):
-        super().__init__()
+        super(DriverFixtureGen, self).__init__()
         self._model = std.target_model()
         self._fiducials = std.fiducials
         self._germs = std.germs

@@ -47,7 +47,7 @@ class BootstrapDatasetTester(BootstrapBase):
 
 class BootstrapModelTester(BootstrapBase):
     def setUp(self):
-        super().setUp()
+        super(BootstrapModelTester, self).setUp()
         self.maxLengths = [0]  # just do LGST strings to make this fast...
 
     def test_make_bootstrap_models_parametric(self):
@@ -98,7 +98,7 @@ class BootstrapModelTester(BootstrapBase):
 
 class BootstrapUtilityTester(BootstrapBase):
     def setUp(self):
-        super().setUp()
+        super(BootstrapUtilityTester, self).setUp()
         maxLengths = [0]
         # TODO optimize
         self.bootgs_p = bs.make_bootstrap_models(
