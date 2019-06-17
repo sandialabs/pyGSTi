@@ -3,9 +3,39 @@ import pickle
 
 from ..util import BaseCase
 
-from pygsti.objects import FullGaugeGroupElement, Basis, ExplicitOpModel
+from pygsti.objects import FullGaugeGroupElement, Basis, ExplicitOpModel, TPPOVM, UnconstrainedPOVM
 import pygsti.construction as pc
 import pygsti.objects.spamvec as sv
+
+
+class SpamvecUtilTester(BaseCase):
+    def test_convert_to_vector_raises_on_bad_input(self):
+        bad_vecs = [
+            'akdjsfaksdf',
+            [[], [1, 2]],
+            [[[]], [[1, 2]]]
+        ]
+        for bad_vec in bad_vecs:
+            with self.assertRaises(ValueError):
+                sv.SPAMVec.convert_to_vector(bad_vec)
+        with self.assertRaises(ValueError):
+            sv.SPAMVec.convert_to_vector(0.0)  # something with no len()
+
+    def test_base_spamvec(self):
+        raw = sv.SPAMVec(4, "densitymx")
+
+        T = FullGaugeGroupElement(
+            np.array([[0, 1, 0, 0],
+                      [1, 0, 0, 0],
+                      [0, 0, 1, 0],
+                      [0, 0, 0, 1]], 'd'))
+
+        with self.assertRaises(NotImplementedError):
+            raw.todense()
+        with self.assertRaises(NotImplementedError):
+            raw.transform(T, "prep")
+        with self.assertRaises(NotImplementedError):
+            raw.depolarize(0.01)
 
 
 class SpamvecBase:
@@ -84,6 +114,18 @@ class SpamvecBase:
         self.assertEqual(type(result), np.ndarray)
         result = V - self.vec
         self.assertEqual(type(result), np.ndarray)
+
+    def test_hessian(self):
+        self.assertFalse(self.vec.has_nonzero_hessian())
+
+    def test_frobeniusdist2(self):
+        self.vec.frobeniusdist2(self.vec, "prep")
+        self.vec.frobeniusdist2(self.vec, "effect")
+        # TODO assert correctness
+
+    def test_frobeniusdist2_raises_on_bad_type(self):
+        with self.assertRaises(ValueError):
+            self.vec.frobeniusdist2(self.vec, "foobar")
 
 
 class MutableSpamvecBase(SpamvecBase):
@@ -168,14 +210,101 @@ class TPSpamvecTester(MutableSpamvecBase, BaseCase):
         # TODO assert correctness
 
 
-class StaticSpamvecTester(ImmutableSpamvecBase, BaseCase):
-    n_params = 0
+class CPTPSpamvecTester(MutableSpamvecBase, BaseCase):
+    n_params = 4
 
     @staticmethod
     def build_vec():
-        return sv.StaticSPAMVec([1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)])
+        v_tp = np.zeros((4, 1), 'd')
+        v_tp[0] = 1.0 / np.sqrt(2)
+        v_tp[3] = 1.0 / np.sqrt(2) - 0.05
+        return sv.CPTPSPAMVec(v_tp, "pp")
+
+    def test_hessian(self):
+        self.vec.hessian_wrt_params()
+        self.vec.hessian_wrt_params([0])
+        self.vec.hessian_wrt_params([0], [0])
+        # TODO assert correctness
+
+
+class StaticSpamvecTester(ImmutableSpamvecBase, BaseCase):
+    n_params = 0
+    v_tp = [1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)]
+
+    @staticmethod
+    def build_vec():
+        return sv.StaticSPAMVec(StaticSpamvecTester.v_tp)
 
     def test_convert(self):
         basis = Basis.cast("pp", 4)
         conv = sv.convert(self.vec, "static", basis)
         # TODO assert correctness
+
+    def test_optimize(self):
+        s = sv.FullSPAMVec(StaticSpamvecTester.v_tp)
+        sv.optimize_spamvec(self.vec, s)
+        # TODO assert correctness
+
+
+class POVMSpamvecBase(ImmutableSpamvecBase):
+    def test_vector_conversion(self):
+        with self.assertRaises(ValueError):
+            self.vec.to_vector()
+
+
+class ComplementSpamvecTester(POVMSpamvecBase, BaseCase):
+    n_params = 4
+
+    @staticmethod
+    def build_vec():
+        v = np.ones((4, 1), 'd')
+        v_id = np.zeros((4, 1), 'd')
+        v_id[0] = 1.0 / np.sqrt(2)
+        tppovm = TPPOVM([('0', sv.FullSPAMVec(v)),
+                         ('1', sv.FullSPAMVec(v_id - v))])
+        return tppovm['1']  # complement POVM
+
+    def test_vector_conversion(self):
+        with self.assertRaises(ValueError):
+            self.vec.to_vector()
+
+
+class TensorProdSpamvecBase(ImmutableSpamvecBase):
+    def test_arithmetic(self):
+        with self.assertRaises(TypeError):
+            self.vec + self.vec
+
+    def test_copy(self):
+        vec_copy = self.vec.copy()
+        self.assertArraysAlmostEqual(vec_copy.todense(), self.vec.todense())
+        self.assertEqual(type(vec_copy), type(self.vec))
+
+    def test_element_accessors(self):
+        with self.assertRaises(TypeError):
+            self.vec[:]
+
+    def test_pickle(self):
+        pklstr = pickle.dumps(self.vec)
+        vec_pickle = pickle.loads(pklstr)
+        self.assertArraysAlmostEqual(vec_pickle.todense(), self.vec.todense())
+        self.assertEqual(type(vec_pickle), type(self.vec))
+
+
+class TensorProdPrepSpamvecTester(TensorProdSpamvecBase, BaseCase):
+    n_params = 4
+
+    @staticmethod
+    def build_vec():
+        v = np.ones((2, 1), 'd')
+        return sv.TensorProdSPAMVec("prep", [sv.FullSPAMVec(v),
+                                             sv.FullSPAMVec(v)])
+
+
+class TensorProdEffectSpamvecTester(TensorProdSpamvecBase, POVMSpamvecBase, BaseCase):
+    n_params = 4
+
+    @staticmethod
+    def build_vec():
+        v = np.ones((4, 1), 'd')
+        povm = UnconstrainedPOVM([('0', sv.FullSPAMVec(v))])
+        return sv.TensorProdSPAMVec("effect", [povm], ['0'])
