@@ -913,16 +913,6 @@ class OpModel(Model):
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
-        # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-        def spamTupleToOutcome(spamTuple):
-            if spamTuple is None:
-                return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
-            else:
-                prep_lbl, povm_and_effect_lbl = spamTuple
-                last_underscore = povm_and_effect_lbl.rindex('_')
-                effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
-                return (effect_lbl,)  # effect label *is* the outcome
-
         def resolveSPAM(circuit):
             """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
@@ -1010,7 +1000,7 @@ class OpModel(Model):
                     #if action == "add":
                     od = raw_spamTuples_dict[s]  # ordered dict
                     for spamtup in spamtuples:
-                        outcome_tup = op_outcomes + spamTupleToOutcome(spamtup)
+                        outcome_tup = op_outcomes + _gt.spamTupleToOutcome(spamtup)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
@@ -1027,7 +1017,7 @@ class OpModel(Model):
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + spamTupleToOutcome(x) for x in spamtuples]
+                    outcome_tuples = [op_outcomes + _gt.spamTupleToOutcome(x) for x in spamtuples]
 
                     if observed_outcomes is not None:
                         # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
@@ -1105,7 +1095,7 @@ class OpModel(Model):
         return (raw_spamTuples_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
 
-    def simplify_circuit(self, circuit):
+    def simplify_circuit(self, circuit, dataset=None):
         """
         Simplifies a single :class:`Circuit`.
 
@@ -1131,8 +1121,13 @@ class OpModel(Model):
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
+
+        dataset : DataSet, optional
+            If not None, restrict what is simplified to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
         """
-        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit])
+        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit], dataset)
         assert(len(outcomes[0]) == nEls)
         return raw_dict, outcomes[0]
 
@@ -1150,10 +1145,10 @@ class OpModel(Model):
         -------
         int
         """
-        _, outcomes = self.simplify_circuit(circuit)
+        _, outcomes = self.simplify_circuit(circuit, dataset=None)
         return len(outcomes)
 
-    def probs(self, circuit, clipTo=None):
+    def probs(self, circuit, clipTo=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -1166,6 +1161,9 @@ class OpModel(Model):
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
+        time : float, optional
+            The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         probs : dictionary
@@ -1173,7 +1171,7 @@ class OpModel(Model):
             probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
-        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo)
+        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo, time)
 
     def dprobs(self, circuit, returnPr=False, clipTo=None):
         """

@@ -87,7 +87,7 @@ def stochastic_lindbladian(Q, sparse=False):
     #This is the most intuitive to the user (the coeff lambda ~= err_rate), so we
     # scale the generator to by a sqrt(d) factor per basis element, as
     # we expect the given element Q to be normalized.
-    
+
     #TODO: there's probably a fast & slick way to so this computation
     #  using vectorization identities
     assert(len(Q.shape) == 2)
@@ -179,7 +179,7 @@ def nonham_lindbladian(Lm, Ln, sparse=False):
     """
     #Same sqrt(d) per basis element (so total d) scaling factor as
     # stochastic_lindbladian (see notes there).
-    
+
     #TODO: there's probably a fast & slick way to so this computation
     #  using vectorization identities
     assert(len(Lm.shape) == 2)

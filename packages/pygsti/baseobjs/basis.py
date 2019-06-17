@@ -424,7 +424,7 @@ class LazyBasis(Basis):
                 self._lazy_build_labels()
             self._ellookup = {lbl: el for lbl, el in zip(self._labels, self._elements)}
         return self._ellookup
-   
+
     @property
     def elements(self):
         if self._elements is None:
@@ -937,7 +937,7 @@ class EmbeddedBasis(LazyBasis):
         else:
             # we need to perform embedding using vectors rather than matrices - doable, but
             # not needed yet, so defer implementation to later.
-            raise NotImplementedError("Embedding *vector*-type bases not implemented yet")        
+            raise NotImplementedError("Embedding *vector*-type bases not implemented yet")
 
     def _lazy_build_labels(self):
         self._labels = [EmbeddedBasis.embed_label(lbl, self.target_labels)

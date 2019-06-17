@@ -60,44 +60,67 @@ class CircuitLexer:
         'CLOSEBR',
         'LPAREN',
         'COLON',
+        'SEMICOLON',
+        'EXCLAM',
         'RPAREN',
         'STRINGIND'
     )
 
     @staticmethod
+    def makeLabel(s):
+        if '!' in s:
+            s, time = s.split('!')  # must be only two parts (only 1 exclamation pt)
+            time = float(time)
+        else:
+            time = 0.0
+
+        if ';' in s:
+            parts = s.split(';')
+            parts2 = parts[-1].split(':')
+            nm = parts[0]
+            args = parts[1:-1] + [parts2[0]]
+            sslbls = parts2[1:]
+        else:
+            parts = s.split(':')
+            nm = parts[0]
+            args = None
+            sslbls = parts[1:]
+
+        if len(sslbls) == 0:
+            sslbls = None
+
+        return _Label(nm, sslbls, time, args)
+
+    @staticmethod
     def t_GATE(t):
-        r'G[a-z0-9_]+(:[a-zQ0-9_]+)*'
+        r'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'
         #Note: Q is only capital letter allowed in qubit label
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        lbl = CircuitLexer.makeLabel(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
     def t_INSTRMT(t):
-        r'I[a-z0-9_]+'
+        r'I[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        lbl = CircuitLexer.makeLabel(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
     def t_PREP(t):
-        r'rho[a-z0-9_]+'
+        r'rho[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        lbl = CircuitLexer.makeLabel(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
     def t_POVM(t):
-        r'M[a-z0-9_]+'
+        r'M[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        parts = t.value.split(':')
-        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0], parts[1:])
+        lbl = CircuitLexer.makeLabel(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
@@ -120,6 +143,8 @@ class CircuitLexer:
     t_LPAREN = r'\('
     t_RPAREN = r'\)'
     t_COLON = r'\:'
+    t_SEMICOLON = r'\;'
+    t_EXCLAM = r'\!'
 
     @staticmethod
     def t_NOP(t):

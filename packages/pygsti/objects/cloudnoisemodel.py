@@ -18,6 +18,7 @@ from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
 from . import labeldicts as _ld
+from . import opfactory as _opfactory
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
@@ -366,11 +367,11 @@ class CloudNoiseModel(_ImplicitOpModel):
                  addIdleNoiseToAllGates=True, sparse=False, verbosity=0):
 
         #build_targetgate_fn=None,
-                 #maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                 #extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                 #sim_type="auto", parameterization="H+S",
-                 #spamtype="lindblad", addIdleNoiseToAllGates=True,
-                 #errcomp_type="gates", independent_clouds=True, verbosity=0):
+        #maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+        #extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+        #sim_type="auto", parameterization="H+S",
+        #spamtype="lindblad", addIdleNoiseToAllGates=True,
+        #errcomp_type="gates", independent_clouds=True, verbosity=0):
         """
         TODO: docstring fix this (arguments changed)
         Create a n-qubit model using a low-weight and geometrically local
@@ -562,6 +563,8 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.operation_blks['cloudnoise'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.factories['targetops'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.factories['cloudnoise'] = _ld.OrderedMemberDict(self, None, None, flags)
 
         printer = _VerbosityPrinter.build_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
@@ -648,8 +651,10 @@ class CloudNoiseModel(_ImplicitOpModel):
                 #cloud_inds = tuple(qubitGraph.radius((i,), cloud_maxhops))
                 #cloud_key = ((i,), tuple(sorted(cloud_inds)))  # (sets are unhashable)
 
-                if build_cloudkey_fn is not None: #TODO: is there any way to get a default "key", e.g. the qubits touched by the corresponding cloudnoise op?
-                    cloud_key = build_cloudkey_fn(_Lbl(gn, i)) # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have the *same* cloud)
+                if build_cloudkey_fn is not None:  # TODO: is there any way to get a default "key", e.g. the
+                    # qubits touched by the corresponding cloudnoise op?
+                    # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have the *same* cloud)
+                    cloud_key = build_cloudkey_fn(_Lbl(gn, i))
                     if cloud_key not in self.clouds: self.clouds[cloud_key] = []
                     self.clouds[cloud_key].append(_Lbl(gn, i))
                 #keep track of the primitive-layer labels in each cloud,
@@ -692,9 +697,9 @@ class CloudNoiseModel(_ImplicitOpModel):
         elif isinstance(prep_layers, dict):
             for rhoname, layerop in prep_layers.items():
                 self.prep_blks['layers'][_Lbl(rhoname)] = layerop
-        elif isinstance(prep_layers, _op.LinearOperator): # just a single layer op
+        elif isinstance(prep_layers, _op.LinearOperator):  # just a single layer op
             self.prep_blks['layers'][_Lbl('rho0')] = prep_layers
-        else: # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
+        else:  # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
             for i, layerop in enumerate(prep_layers):
                 self.prep_blks['layers'][_Lbl("rho%d" % i)] = layerop
 
@@ -705,7 +710,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         elif isinstance(povm_layers, dict):
             for povmname, layerop in povm_layers.items():
                 self.povm_blks['layers'][_Lbl(povmname)] = layerop
-        else: # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
+        else:  # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
@@ -1159,11 +1164,11 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         if errcomp_type == "gates":
             if add_idle_noise: ops_to_compose.append(self.op_blks['layers']['globalIdle'])
             if len(components) > 1:
-                localErr = Composed([self.op_blks['cloudnoise'][l] for l in components],
+                localErr = Composed([self.get_layer_component_cloudnoise(l) for l in components],
                                     dim=self.model.dim, evotype=self.model._evotype)
             else:
                 l = components[0]
-                localErr = self.op_blks['cloudnoise'][l]
+                localErr = self.get_layer_component_cloudnoise(l)
 
             ops_to_compose.append(localErr)
 
@@ -1172,7 +1177,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
             errorGens = [self.op_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
-            errorGens.extend([self.op_blks['cloudnoise'][l]
+            errorGens.extend([self.get_layer_component_cloudnoise(l)
                               for l in components])
             if len(errorGens) > 1:
                 error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
@@ -1195,5 +1200,13 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
             #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
-        else:
+        elif complbl in self.op_blks['layers']:
             return self.op_blks['layers'][complbl]
+        else:
+            return _opfactory.op_from_factories(self.model.factories['targetops'], complbl)
+
+    def get_layer_component_cloudnoise(self, complbl):
+        if complbl in self.op_blks['cloudnoise']:
+            return self.op_blks['cloudnoise'][complbl]
+        else:
+            return _opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl)

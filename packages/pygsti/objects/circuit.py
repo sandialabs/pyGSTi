@@ -183,6 +183,17 @@ class Circuit(object):
             `line_labels` are consistent and want to save computation time.
         """
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
+        if _compat.isstr(layer_labels):
+            cparser = _CircuitParser(); cparser.lookup = None
+            layer_labels, chk_labels = cparser.parse(layer_labels)
+            if chk_labels is not None:
+                if line_labels == 'auto':
+                    line_labels = chk_labels
+                elif tuple(line_labels) != chk_labels:
+                    raise ValueError(("Error intializing Circuit: "
+                                      " `line_labels` and line labels in `layer_labels` do not match: %s != %s")
+                                     % (line_labels, chk_labels))
+
         if expand_subcircuits == "default":
             expand_subcircuits = Circuit.default_expand_subcircuits
         if expand_subcircuits and layer_labels is not None:
@@ -2427,6 +2438,8 @@ class Circuit(object):
             if nqubits == 1 and lbl.name is not None:
                 if isinstance(lbl, _CircuitLabel):  # HACK
                     return "|" + str(lbl) + "|"
+                elif lbl.args:
+                    return lbl.name + "(" + ",".join(map(str, lbl.args)) + ")"
                 else:
                     return lbl.name
             elif lbl.name in ('CNOT', 'Gcnot') and nqubits == 2:  # qubit indices = (control,target)

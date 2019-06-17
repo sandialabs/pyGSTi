@@ -412,6 +412,22 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise ValueError("Cannot set the value of a %s directly!" % self.__class__.__name__)
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.  For time-independent
+        operators (the default), this function does absolutely nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        pass
+
     def todense(self):
         """
         Return this operation as a dense matrix.
@@ -537,15 +553,18 @@ class LinearOperator(_modelmember.ModelMember):
         #DEBUG TODO REMOVE
         #chk1 = sum([t[1].magnitude for t in sorted_terms])
         #chk2 = self.get_total_term_magnitude()
-        #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order, " minmag=",min_term_mag)
+        #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order,
+        #      " minmag=",min_term_mag)
         #print("  sum of magnitudes =",chk1, " <?= ", chk2)
         #if chk1 > chk2:
         #    print("Term magnitudes = ", [t[1].magnitude for t in sorted_terms])
         #    egterms = self.errorgen.get_taylor_order_terms(0)
         #    #vtape, ctape = self.errorgen.Lterm_coeffs
-        #    #coeffs = [ abs(x) for x in _bulk_eval_complex_compact_polys(vtape, ctape, self.errorgen.to_vector(), (len(self.errorgen.Lterms),)) ]
+        #    #coeffs = [ abs(x) for x in _bulk_eval_complex_compact_polys(vtape, ctape, self.errorgen.to_vector(),
+        #    #  (len(self.errorgen.Lterms),)) ]
         #    mags = [ abs(t.evaluate_coeff(self.errorgen.to_vector()).coeff) for t in egterms ]
-        #    print("Errorgen ", self.errorgen.__class__.__name__, " term magnitudes (%d): " % len(egterms), "\n",list(sorted(mags, reverse=True)))
+        #    print("Errorgen ", self.errorgen.__class__.__name__, " term magnitudes (%d): " % len(egterms),
+        #    "\n",list(sorted(mags, reverse=True)))
         #    print("Errorgen sum = ",sum(mags), " vs ", self.errorgen.get_total_term_magnitude())
         #assert(chk1 <= chk2)
 
@@ -2802,7 +2821,8 @@ class LindbladOp(LinearOperator):
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
-        #TODO REMOVE: print("DB: LindbladOp.get_totat_term_magnitude is exp(",self.errorgen.get_total_term_magnitude(),") - ",self.errorgen.__class__.__name__)
+        #TODO REMOVE: print("DB: LindbladOp.get_totat_term_magnitude is exp(",self.errorgen.get_total_term_magnitude(),
+        # ") - ",self.errorgen.__class__.__name__)
         return _np.exp(self.errorgen.get_total_term_magnitude())
 
     def num_params(self):
@@ -3767,6 +3787,8 @@ class ComposedOp(LinearOperator):
         """
         Return this operation as a dense matrix.
         """
+        if len(self.factorops) == 0:
+            return _np.identity(self.dim, 'd')
         mx = self.factorops[0].todense()
         for gate in self.factorops[1:]:
             mx = _np.dot(gate.todense(), mx)
@@ -3835,7 +3857,7 @@ class ComposedOp(LinearOperator):
         """
         if order not in self.terms:
             terms = []
-            
+
             #DEBUG TODO REMOVE
             #print("Composed op getting order",order,"terms:")
             #for i,fop in enumerate(self.factorops):
@@ -4550,9 +4572,10 @@ class EmbeddedOp(LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
         # of the operator being embedded, the total term magnitude is the same:
-        
+
         #DEBUG TODO REMOVE
-        #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",self.embedded_op.__class__.__name__)
+        #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",
+        #   self.embedded_op.__class__.__name__)
         #ret = self.embedded_op.get_total_term_magnitude()
         #egterms = self.get_taylor_order_terms(0)
         #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
@@ -4560,7 +4583,6 @@ class EmbeddedOp(LinearOperator):
         #assert(sum(mags) <= ret+1e-4)
 
         return self.embedded_op.get_total_term_magnitude()
-
 
     def num_params(self):
         """
@@ -5421,13 +5443,14 @@ class ComposedErrorgen(LinearOperator):
 
         #DEBUG TODO REMOVE
         #factor_ttms = [eg.get_total_term_magnitude() for eg in self.factors]
-        #print("DB: ComposedErrorgen.total_term_magnitude = sum(",factor_ttms,") -- ",[eg.__class__.__name__ for eg in self.factors])
+        #print("DB: ComposedErrorgen.total_term_magnitude = sum(",factor_ttms,") -- ",
+        #      [eg.__class__.__name__ for eg in self.factors])
         #for k,eg in enumerate(self.factors):
         #    sub_egterms = eg.get_taylor_order_terms(0)
         #    sub_mags = [ abs(t.evaluate_coeff(eg.to_vector()).coeff) for t in sub_egterms ]
         #    print(" -> ",k,": total terms mag = ",sum(sub_mags), "(%d)" % len(sub_mags),"\n", sub_mags)
         #    print("     gpindices = ",eg.gpindices)
-        #    
+        #
         #ret = sum(factor_ttms)
         #egterms = self.get_taylor_order_terms(0)
         #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]

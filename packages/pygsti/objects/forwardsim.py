@@ -103,18 +103,21 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-    def probs(self, simplified_circuit, clipTo=None):
+    def probs(self, simplified_circuit, clipTo=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
 
         Parameters
         ----------
-        circuit : Circuit or tuple of operation labels
+        circuit : Circuit or tuple of operation labels TODO: docstring - fix these to simplified_circuit & explain
           The sequence of operation labels specifying the operation sequence.
 
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
+
+        time : float, optional
+            The *start* time at which `circuit` is evaluated.
 
         Returns
         -------
@@ -135,12 +138,12 @@ class ForwardSimulator(object):
                 else:
                     if len(elabels) > 0:
                         # evaluate spamTuples w/same rholabel together
-                        for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False):
+                        for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False, time):
                             probs[outcomeLbls[iOut]] = pval; iOut += 1
                     rholabel = spamTuple[0]  # make "current"
                     elabels = [spamTuple[1]]
             if len(elabels) > 0:
-                for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False):
+                for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False, time):
                     probs[outcomeLbls[iOut]] = pval; iOut += 1
             #OLD
             #for spamTuple in spamTuples:

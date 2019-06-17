@@ -89,7 +89,7 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
             if requireConnected:
                 nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds, wt)
             else:
-                nErrTargetLocations = _scipy.special.comb(len(possible_err_qubit_inds), wt)  # matches actual initial stud
+                nErrTargetLocations = _scipy.special.comb(len(possible_err_qubit_inds), wt)
             if ZZonly and wt > 1: basisSizeWoutId = 1**wt  # ( == 1)
             else: basisSizeWoutId = 3**wt  # (X,Y,Z)^wt
             nErrParams = 2 * basisSizeWoutId  # H+S terms
@@ -426,7 +426,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
             parameterization = '+'.join(paramtypes)
         return parameterization
 
-    def _map_stencil_sslbls(stencil_sslbls, target_lbls): # deals with graph directions
+    def _map_stencil_sslbls(stencil_sslbls, target_lbls):  # deals with graph directions
         ret = [qubitGraph.resolve_relative_nodelabel(s, target_lbls) for s in stencil_sslbls]
         if any([x is None for x in ret]): return None  # signals there is a non-present dirs, e.g. end of chain
         return ret
@@ -434,12 +434,12 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
     def create_error(target_labels, errs=None, stencil=None, return_what="auto"):  # err = an error rates dict
         """TODO: docstring """
         target_nQubits = len(target_labels)
-        
-        if return_what == "auto": # then just base return type on errcomp_type
+
+        if return_what == "auto":  # then just base return type on errcomp_type
             return_what == "errgen" if errcomp_type == "errorgens" else "errmap"
 
         assert(stencil is None or errs is None), "Cannot specify both `errs` and `stencil`!"
-        
+
         if errs is None:
             if stencil is None:
                 if return_what == "stencil":
@@ -451,9 +451,9 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                 embedded_errgens = []
                 for stencil_sslbls, lind_errgen in stencil.items():
                     # Note: stencil_sslbls should contain directions like "up" or integer indices of target qubits.
-                    error_sslbls = _map_stencil_sslbls(stencil_sslbls, target_labels) # deals with graph directions
+                    error_sslbls = _map_stencil_sslbls(stencil_sslbls, target_labels)  # deals with graph directions
                     if error_sslbls is None: continue  # signals not all direction were present => skip this term
-                    op_to_embed = lind_errgen.copy() if independent_gates else lind_errgen # copy() for independent gates
+                    op_to_embed = lind_errgen.copy() if independent_gates else lind_errgen  # copy for independent gates
                     #REMOVE print("DB: Applying stencil: ",all_sslbls, error_sslbls,op_to_embed.dim)
                     embedded_errgen = _op.EmbeddedErrorgen(all_sslbls, error_sslbls, op_to_embed)
                     embedded_errgens.append(embedded_errgen)
@@ -462,7 +462,8 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
             #We need to build a stencil (which may contain QubitGraph directions) or an effective stencil
             assert(stencil is None)  # checked by above assert too
 
-            distinct_errorqubits = _collections.OrderedDict() # distinct sets of qubits upon which a single (high-weight) error term acts
+            # distinct sets of qubits upon which a single (high-weight) error term acts:
+            distinct_errorqubits = _collections.OrderedDict()
             if isinstance(errs, dict):  # either for creating a stencil or an error
                 for nm, val in errs.items():
                     #REMOVE print("DB: Processing: ",nm, val)
@@ -470,11 +471,12 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                     err_typ, basisEls = nm[0], nm[1:]
                     sslbls = None
                     local_nm = [err_typ]
-                    for bel in basisEls: # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
+                    for bel in basisEls:  # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
                         #REMOVE print("Basis el: ",bel)
-                        # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates a graph *direction*, e.g. "up"
+                        # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates
+                        # a graph *direction*, e.g. "up"
                         if ':' in bel:
-                            bel_name, bel_sslbls = bel.split(':')  # should be of the form <name>:<comma-separated-sslbls>
+                            bel_name, bel_sslbls = bel.split(':')  # should have form <name>:<comma-separated-sslbls>
                             bel_sslbls = bel_sslbls.split(',')  # e.g. ('Q0','Q1')
                             integerized_sslbls = []
                             for ssl in bel_sslbls:
@@ -485,18 +487,20 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                             bel_name = bel
                             bel_sslbls = target_labels
                         #REMOVE print("DB: Nm + sslbls: ",bel_name,bel_sslbls)
-                            
+
                         if sslbls is None:
                             sslbls = bel_sslbls
                         else:
-                            #Note: sslbls should always be the same if there are multiple basisEls, i.e for nm == ('S',bel1,bel2)
+                            #Note: sslbls should always be the same if there are multiple basisEls,
+                            #  i.e for nm == ('S',bel1,bel2)
                             assert(sslbls == bel_sslbls), \
                                 "All basis elements of the same error term must operate on the *same* state!"
                         local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
-                            
-                    # keep track of errors by the qubits they act on, as only each such set will have it's own LindbladErrorgen
+
+                    # keep track of errors by the qubits they act on, as only each such
+                    # set will have it's own LindbladErrorgen
                     sslbls = tuple(sorted(sslbls))
-                    local_nm = tuple(local_nm) # so it's hashable
+                    local_nm = tuple(local_nm)  # so it's hashable
                     if sslbls not in distinct_errorqubits:
                         distinct_errorqubits[sslbls] = _collections.OrderedDict()
                     if local_nm in distinct_errorqubits[sslbls]:
@@ -504,9 +508,10 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                     else:
                         distinct_errorqubits[sslbls][local_nm] = val
 
-            elif isinstance(errs, float): # depolarization, action on only target qubits
-                sslbls = tuple(range(target_nQubits)) if return_what == "stencil" else target_labels # use relative target indices in a stencil
-                basis = _BuiltinBasis('pp',4**target_nQubits) # assume we always use Pauli basis?
+            elif isinstance(errs, float):  # depolarization, action on only target qubits
+                sslbls = tuple(range(target_nQubits)) if return_what == "stencil" else target_labels
+                # Note: we use relative target indices in a stencil
+                basis = _BuiltinBasis('pp', 4**target_nQubits)  # assume we always use Pauli basis?
                 distinct_errorqubits[sslbls] = _collections.OrderedDict()
                 perPauliRate = errs / len(basis.labels)
                 for bl in basis.labels:
@@ -526,7 +531,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
                         if bel not in basis.labels:
                             raise ValueError("In %s: invalid basis element label `%s` where one of {%s} was expected" %
                                              (str(errs), str(bel), ', '.join(basis.labels)))
-                        
+
                 parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
                 _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(parameterization)
@@ -553,9 +558,9 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
             return _op.LindbladOp(None, errgen, sparse_expm=sparse)
         else:
             return errgen
-        
+
     #Process "auto" sim_type
-    _, evotype = _gt.split_lindblad_paramtype(parameterization) #what about "auto" parameterization?
+    _, evotype = _gt.split_lindblad_paramtype(parameterization)  # what about "auto" parameterization?
     assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
     if sim_type == "auto":
         if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
@@ -584,7 +589,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         povm_layers = [_povm.ComputationalBasisPOVM(nQubits, evotype)]
 
     stencils = _collections.OrderedDict()
-        
+
     def build_cloudnoise_fn(lbl):
         # lbl will be for a particular gate and target qubits.  If we have error rates for this specific gate
         # and target qubits (i.e this primitive layer op) then we should build it directly (and independently,
@@ -592,12 +597,13 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         # for this gate, then we should use it to construct the output, using a copy when gates are independent
         # and a reference to the *same* stencil operations when `independent_gates==False`.
         if lbl in error_rates:
-            return create_error(lbl.sslbls, errs=error_rates[lbl]) # specific instructions for this primitive layer
+            return create_error(lbl.sslbls, errs=error_rates[lbl])  # specific instructions for this primitive layer
         elif lbl.name in stencils:
-            return create_error(lbl.sslbls, stencil=stencils[lbl.name]) # use existing stencil
+            return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # use existing stencil
         elif lbl.name in error_rates:
-            stencils[lbl.name] = create_error(lbl.sslbls, error_rates[lbl.name], return_what='stencil') # create stencil
-            return create_error(lbl.sslbls, stencil=stencils[lbl.name]) # and then use it
+            stencils[lbl.name] = create_error(lbl.sslbls, error_rates[lbl.name],
+                                              return_what='stencil')  # create stencil
+            return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # and then use it
         else:
             return create_error(lbl, None)
 
@@ -617,7 +623,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
         gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         # assume evotype is a densitymx or term type
-    
+
     return _CloudNoiseModel(nQubits, gatedict, availability, qubit_labels, geometry,
                             global_idle_layer, prep_layers, povm_layers,
                             build_cloudnoise_fn, build_cloudkey_fn,

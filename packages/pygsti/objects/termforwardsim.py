@@ -362,7 +362,7 @@ class TermForwardSimulator(ForwardSimulator):
                 self.cache[ck] = poly
         return prps
 
-    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False):
+    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
         operation sequence.  The spam tuples may only vary in their effect-label (their
@@ -387,12 +387,16 @@ class TermForwardSimulator(ForwardSimulator):
         bUseScaling : bool, optional
           Unused.  Present to match function signature of other calculators.
 
+        time : float, optional
+          The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         numpy.ndarray
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
+        assert(time is None), "TermForwardSimulator currently doesn't support time-dependent circuits"
         cpolys = self.prs_as_compact_polys(rholabel, elabels, circuit)
         vals = [_bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
                 for cpoly in cpolys]

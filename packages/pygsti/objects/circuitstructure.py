@@ -145,7 +145,8 @@ class CircuitPlaquette(object):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Manipulate this object's circuits according to `processor_fn`
+        and return a new `CircuitPlaquette` object.
 
         Parameters
         ----------
@@ -161,7 +162,7 @@ class CircuitPlaquette(object):
 
         Returns
         -------
-        None
+        CircuitPlaquette
         """
         P = processor_fn
         updated_elements = [(i, j, P(s)) for i, j, s in self.elements]
@@ -597,7 +598,8 @@ class LsGermsStructure(CircuitStructure):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Manipulate this object's circuits according to `processor_fn`,
+        returning a new circuit structure with processed circuits.
 
         Parameters
         ----------
@@ -613,12 +615,12 @@ class LsGermsStructure(CircuitStructure):
 
         Returns
         -------
-        None
+        LsGermsStructure
         """
         P = processor_fn  # shorhand
-        cpy = LsGermsSerialStructure(self.Ls, list(map(P, self.germs)),
-                                     list(map(P, self.prepStrs)), list(map(P, self.effectStrs)),
-                                     updated_aliases, self.sequenceRules)
+        cpy = LsGermsStructure(self.Ls, list(map(P, self.germs)),
+                               list(map(P, self.prepStrs)), list(map(P, self.effectStrs)),
+                               updated_aliases, self.sequenceRules)
         cpy.allstrs = list(map(P, self.allstrs))
         cpy.allstrs_set = set(cpy.allstrs)
         cpy.unindexed = list(map(P, self.unindexed))
@@ -962,7 +964,8 @@ class LsGermsSerialStructure(CircuitStructure):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Manipulate this object's circuits according to `processor_fn`,
+        returning a new circuit structure with processed circuits.
 
         Parameters
         ----------
@@ -978,7 +981,7 @@ class LsGermsSerialStructure(CircuitStructure):
 
         Returns
         -------
-        None
+        LsGermsSerialStructure
         """
         P = processor_fn  # shorthand
         cpy = LsGermsSerialStructure(self.Ls, list(map(P, self.germs)),

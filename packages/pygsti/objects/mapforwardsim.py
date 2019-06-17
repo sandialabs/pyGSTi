@@ -21,6 +21,7 @@ from ..baseobjs import Label as _Label
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .forwardsim import ForwardSimulator
 from . import replib
+from . import model as _model
 
 
 _dummy_profiler = _DummyProfiler()
@@ -82,7 +83,7 @@ class MapForwardSimulator(ForwardSimulator):
         #No support for "custom" spamlabel stuff here
         return rho, Es
 
-    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False):
+    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
         operation sequence.  The spam tuples may only vary in their effect-label (their
@@ -107,17 +108,33 @@ class MapForwardSimulator(ForwardSimulator):
         bUseScaling : bool, optional
           Unused.  Present to match function signature of other calculators.
 
+        time : float, optional
+          The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         numpy.ndarray
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
-        rhorep = self.sos.get_prep(rholabel).torep('prep')
-        ereps = [self.sos.get_effect(elabel).torep('effect') for elabel in elabels]
-        rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl).torep() for gl in circuit])
-        ps = _np.array([erep.probability(rhorep) for erep in ereps], 'd')
-        #outcome probabilities
+        if time is None:  # time-independent state propagation
+            rhorep = self.sos.get_prep(rholabel).torep('prep')
+            ereps = [self.sos.get_effect(elabel).torep('effect') for elabel in elabels]
+            rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl).torep() for gl in circuit])
+            ps = _np.array([erep.probability(rhorep) for erep in ereps], 'd')
+            #outcome probabilities
+        else:
+            t = time
+            op = self.sos.get_prep(rholabel); op.set_time(t); t += rholabel.time
+            state = op.torep('prep')
+            for gl in circuit:
+                op = self.sos.get_operation(gl); op.set_time(t); t += gl.time  # time in labels == duration
+                state = op.torep().acton(state)
+            ps = []
+            for elabel in elabels:
+                op = self.sos.get_effect(elabel); op.set_time(t)  # don't advance time (all effects occur at same time)
+                ps.append(op.torep('effect').probability(state))
+            ps = _np.array(ps, 'd')
 
         if _np.any(_np.isnan(ps)):
             if len(circuit) < 10:
@@ -989,3 +1006,257 @@ class MapForwardSimulator(ForwardSimulator):
                 yield wrtSlice1, wrtSlice2, hprobs, dprobs12
             else:
                 yield wrtSlice1, wrtSlice2, hprobs
+
+    # --------------------------------------------------- TIMEDEP FUNCTIONS -----------------------------------------
+
+    def bulk_fill_timedep_chi2(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
+                               minProbClipForWeighting, probClipInterval, comm=None):
+        """
+        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the
+        circuit is run, given by the timestamps in `dataset`
+
+        Returns
+        -------
+        None
+        """
+
+        #get distribution across subtrees (groups if needed)
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+
+            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
+                #Fill cache info
+                chi2Cache = replib.DM_compute_TDchi2_cache(self, rholabel, elabels, num_outcomes,
+                                                           evalSubTree, dataset_rows, minProbClipForWeighting,
+                                                           probClipInterval, mySubComm)
+
+                #use cached data to final values
+                ps = evalSubTree.final_view(chi2Cache, axis=0)  # ( nCircuits, len(elabels))
+                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
+                    _fas(mxToFill, [fInds], ps[gInds, i], add=sumInto)
+
+            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
+                                               slice(None), slice(None), calc_and_fill)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill, [], 0, comm)
+        #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
+
+    def bulk_fill_timedep_dchi2(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
+                                minProbClipForWeighting, probClipInterval, chi2MxToFill=None,
+                                comm=None, wrtFilter=None, wrtBlockSize=None,
+                                profiler=None, gatherMemLimit=None):
+        """
+        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however many
+        times the circuit is run, given by the timestamps in `dataset`
+
+        Returns
+        -------
+        None
+        """
+        def dchi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
+            return replib.DM_compute_TDdchi2_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
+                                                   minProbClipForWeighting, probClipInterval, wrtSlice, fillComm)
+
+        def chi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_compute_TDchi2_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
+                                                  minProbClipForWeighting, probClipInterval, fillComm)
+
+        return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
+                                            mxToFill, dchi2, chi2MxToFill, chi2,
+                                            comm, wrtFilter, wrtBlockSize, profiler, gatherMemLimit)
+
+    def bulk_fill_timedep_loglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
+                                 minProbClip, radius, probClipInterval, comm=None):
+        """
+        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many
+        times the circuit is run, given by the timestamps in `dataset`
+
+        Returns
+        -------
+        None
+        """
+        #get distribution across subtrees (groups if needed)
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+
+            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
+                #Fill cache info
+                loglCache = replib.DM_compute_TDloglpp_cache(self, rholabel, elabels, num_outcomes,
+                                                             evalSubTree, dataset_rows, minProbClip,
+                                                             radius, probClipInterval, mySubComm)
+
+                #use cached data to final values
+                logl = evalSubTree.final_view(loglCache, axis=0)  # ( nCircuits, len(elabels))
+                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
+                    _fas(mxToFill, [fInds], logl[gInds, i], add=sumInto)
+
+            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
+                                               slice(None), slice(None), calc_and_fill)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill, [], 0, comm)
+        #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
+
+    def bulk_fill_timedep_dloglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
+                                  minProbClip, radius, probClipInterval, loglMxToFill=None,
+                                  comm=None, wrtFilter=None, wrtBlockSize=None,
+                                  profiler=None, gatherMemLimit=None):
+        """
+        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however
+        many times the circuit is run, given by the timestamps in `dataset`
+
+        Returns
+        -------
+        None
+        """
+        def dloglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
+            return replib.DM_compute_TDdloglpp_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree,
+                                                     dataset_rows, minProbClip, radius, probClipInterval,
+                                                     wrtSlice, fillComm)
+
+        def loglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_compute_TDloglpp_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree,
+                                                    dataset_rows, minProbClip, radius, probClipInterval, fillComm)
+
+        return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
+                                            mxToFill, dloglpp, loglMxToFill, loglpp,
+                                            comm, wrtFilter, wrtBlockSize, profiler, gatherMemLimit)
+
+    #A generic function - move to base class
+
+    def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
+                                derivMxToFill, deriv_fn, mxToFill=None, fn=None,
+                                comm=None, wrtFilter=None, wrtBlockSize=None,
+                                profiler=None, gatherMemLimit=None):
+        """TODO: docstring """
+
+        #tStart = _time.time()
+        if profiler is None: profiler = _dummy_profiler
+
+        if wrtFilter is not None:
+            assert(wrtBlockSize is None)  # Cannot specify both wrtFilter and wrtBlockSize
+            wrtSlice = _slct.list_to_slice(wrtFilter)  # for now, require the filter specify a slice
+        else:
+            wrtSlice = None
+
+        #profiler.mem_check("bulk_fill_timedep_dchi2: begin")
+
+        #get distribution across subtrees (groups if needed)
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+            dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
+
+            #Free memory from previous subtree iteration before computing caches
+            paramSlice = slice(None)
+            fillComm = mySubComm  # comm used by calc_and_fill
+
+            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
+                #tm = _time.time()
+
+                if mxToFill is not None:
+                    cache = fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows, fillComm)
+                    cache = evalSubTree.final_view(cache, axis=0)  # ( nCircuits, len(elabels))
+                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
+                        _fas(mxToFill, [fInds], cache[gInds, i], add=sumInto)
+
+                #Fill cache info
+                dcache = deriv_fn(rholabel, elabels, num_outcomes, evalSubTree,
+                                  dataset_rows, paramSlice, fillComm)
+                dcache = evalSubTree.final_view(dcache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
+                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
+                    _fas(derivMxToFill, [fInds, pslc1], dcache[gInds, i], add=sumInto)
+                #profiler.add_time("bulk_fill_timedep_dchi2: calc_and_fill", tm)
+
+            #Set wrtBlockSize to use available processors if it isn't specified
+            if wrtFilter is None:
+                blkSize = wrtBlockSize  # could be None
+                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
+                    comm_blkSize = self.Np / mySubComm.Get_size()
+                    blkSize = comm_blkSize if (blkSize is None) \
+                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
+            else:
+                blkSize = None  # wrtFilter dictates block
+
+            if blkSize is None:
+                #Fill derivative cache info
+                paramSlice = wrtSlice  # specifies which deriv cols calc_and_fill computes
+
+                #Compute all requested derivative columns at once
+                self._fill_result_tuple_collectrho((mxToFill, derivMxToFill), evalSubTree,
+                                                   slice(None), slice(None), calc_and_fill)
+                #profiler.mem_check("bulk_fill_dprobs: post fill")
+
+            else:  # Divide columns into blocks of at most blkSize
+                assert(wrtFilter is None)  # cannot specify both wrtFilter and blkSize
+                nBlks = int(_np.ceil(self.Np / blkSize))
+                # num blocks required to achieve desired average size == blkSize
+                blocks = _mpit.slice_up_range(self.Np, nBlks)
+
+                #distribute derivative computation across blocks
+                myBlkIndices, blkOwners, blkComm = \
+                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
+                if blkComm is not None:
+                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+                                   + " than derivative columns(%d)!" % self.Np
+                                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
+                fillComm = blkComm  # comm used by calc_and_fill
+
+                for iBlk in myBlkIndices:
+                    paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
+                    self._fill_result_tuple_collectrho(
+                        (derivMxToFill,), evalSubTree,
+                        blocks[iBlk], slice(None), calc_and_fill)
+                    #profiler.mem_check("bulk_fill_dprobs: post fill blk")
+
+                #gather results
+                tm = _time.time()
+                _mpit.gather_slices(blocks, blkOwners, derivMxToFill, [felInds],
+                                    1, mySubComm, gatherMemLimit)
+                #note: gathering axis 1 of derivMxToFill[:,fslc], dim=(ks,M)
+                profiler.add_time("MPI IPC", tm)
+                #profiler.mem_check("bulk_fill_dprobs: post gather blocks")
+
+        #collect/gather results
+        tm = _time.time()
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             derivMxToFill, [], 0, comm, gatherMemLimit)
+        #note: pass derivMxToFill, dim=(KS,M), so gather derivMxToFill[felInds] (axis=0)
+
+        if mxToFill is not None:
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 mxToFill, [], 0, comm)
+            #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
+
+        profiler.add_time("MPI IPC", tm)
+        #profiler.mem_check("bulk_fill_timedep_dchi2: post gather subtrees")
+        #
+        #profiler.add_time("bulk_fill_timedep_dchi2: total", tStart)
+        #profiler.add_count("bulk_fill_timedep_dchi2 count")
+        #profiler.mem_check("bulk_fill_timedep_dchi2: end")

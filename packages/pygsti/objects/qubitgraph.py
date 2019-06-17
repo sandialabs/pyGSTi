@@ -89,7 +89,7 @@ class QubitGraph(object):
                             q0, q1 = qls[irow * s + icol], qls[0 + icol]
                             edges.append((q0, q1, "down") if directed else (q0, q1))
                             if all_directions:
-                                edges.append((q1, q0, "up") if directed else (q1, q0))                            
+                                edges.append((q1, q0, "up") if directed else (q1, q0))
             else:
                 raise ValueError("Invalid `geometry`: %s" % geometry)
         return cls(qls, initial_edges=edges, directed=directed)
@@ -155,7 +155,7 @@ class QubitGraph(object):
                     "must supply `direction_names` when `initial_connectivity` contains *integers*!"
             self.directions = list(direction_names) if direction_names is not None else None
             # either a list of direction names or None, indicating no directions
-                
+
         elif initial_edges is not None:
             lens = list(map(len, initial_edges))
             if len(lens) == 0:
@@ -169,7 +169,7 @@ class QubitGraph(object):
                         "`initial_edges` elements must be 3-tuples when `direction_names` is non-None"
                 elif lens[0] == 3:
                     direction_names_chk = set()
-                    contains_direction_indices = False 
+                    contains_direction_indices = False
                     for edge in initial_edges:
                         if isinstance(edge[2], int):
                             contains_direction_indices = True
@@ -668,7 +668,7 @@ class QubitGraph(object):
             parts = relative_nodelabel.split('+')
             target_index = int(parts[0][1:])  # we know parts[0] starts with @ and rest should be an int index
             start_node = target_labels[target_index]
-            return self.move_in_directions(start_node, parts[1:]) # parts[1:] are (optional) directions
+            return self.move_in_directions(start_node, parts[1:])  # parts[1:] are (optional) directions
         else:
             raise ValueError("Unknown node: %s" % str(relative_nodelabel))
 
@@ -679,7 +679,7 @@ class QubitGraph(object):
             if node is None:
                 return None
         return node
-        
+
     def move_in_direction(self, start_node, direction):
         """TODO: docstring - note None is returned when no node exists in `direction`"""
         assert(self.directions is not None), "This QubitGraph doesn't have directions!"

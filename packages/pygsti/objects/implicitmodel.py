@@ -117,6 +117,7 @@ class ImplicitOpModel(_mdl.OpModel):
         self.povm_blks = _collections.OrderedDict()
         self.operation_blks = _collections.OrderedDict()
         self.instrument_blks = _collections.OrderedDict()
+        self.factories = _collections.OrderedDict()
 
         if primitive_labels is None: primitive_labels = {}
         self._primitive_prep_labels = primitive_labels.get('preps', ())
@@ -174,7 +175,8 @@ class ImplicitOpModel(_mdl.OpModel):
         for dictlbl, objdict in _itertools.chain(self.prep_blks.items(),
                                                  self.povm_blks.items(),
                                                  self.operation_blks.items(),
-                                                 self.instrument_blks.items()):
+                                                 self.instrument_blks.items(),
+                                                 self.factories.items()):
             for lbl, obj in objdict.items():
                 yield (_Label(dictlbl + ":" + lbl.name, lbl.sslbls), obj)
 
@@ -199,6 +201,7 @@ class ImplicitOpModel(_mdl.OpModel):
         simplified_prep_blks = self.prep_blks.copy()  # no compilation needed
 
         return self._lizardClass(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)
+        # maybe add a self.factories arg? (but factories aren't really "simplified"...
         # use self._lizardArgs internally?
 
     def _init_copy(self, copyInto):
@@ -218,12 +221,18 @@ class ImplicitOpModel(_mdl.OpModel):
                                                             for lbl, opdict in self.operation_blks.items()])
         copyInto.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copyInto))
                                                              for lbl, idict in self.instrument_blks.items()])
+        copyInto.factories = _collections.OrderedDict([(lbl, fdict.copy(copyInto))
+                                                       for lbl, fdict in self.factories.items()])
+
         copyInto._shlp = self.simplifier_helper_class(copyInto)
 
     def __setstate__(self, stateDict):
         self.__dict__.update(stateDict)
         if 'uuid' not in stateDict:
             self.uuid = _uuid.uuid4()  # create a new uuid
+
+        if 'factories' not in stateDict:
+            self.factories = _collections.OrderedDict()  # backward compatibility (temporary)
 
         #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -241,6 +250,9 @@ class ImplicitOpModel(_mdl.OpModel):
         for idict in self.instrument_blks.values():
             idict.parent = self
             for o in idict.values(): o.relink_parent(self)
+        for fdict in self.factories.values():
+            fdict.parent = self
+            for o in fdict.values(): o.relink_parent(self)
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
@@ -307,6 +319,10 @@ class ImplicitOpModel(_mdl.OpModel):
         for dictlbl, d in self.instrument_blks.items():
             for lbl, inst in d.items():
                 s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(inst) + "\n"
+        s += "\n"
+        for dictlbl, d in self.factories.items():
+            for lbl, factory in d.items():
+                s += "%s:%s = " % (str(dictlbl), str(lbl)) + str(factory) + "\n"
         s += "\n"
 
         return s

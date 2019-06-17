@@ -1938,12 +1938,12 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
         coefficients (the projections).
 
     basis : Basis
-        A single basis containing all the basis labels used in `Ltermdict` (and 
+        A single basis containing all the basis labels used in `Ltermdict` (and
         *only* those elements).  Only returned when `return_basis == True`.
     """
     assert(not (ham_basis is None and other_basis is None)), \
         "At least one of `ham_basis` and `other_basis` must be non-None"
-    
+
     # Make None => length-0 arrays so iteration code works below (when basis is None)
     if hamProjs is None: hamProjs = _np.empty(0, 'd')
     if otherProjs is None:
@@ -1979,7 +1979,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
             Ltermdict[('H', lbl)] = coeff
             set_basis_el(lbl, bmx)
     else:
-        ham_lbls = []  
+        ham_lbls = []
 
     #Add "other" error elements
     if other_basis is not None:
@@ -1990,7 +1990,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
             for coeff, lbl, bmx in zip(otherProjs, other_lbls[1:], other_mxs[1:]):  # skip identity
                 Ltermdict[('S', lbl)] = coeff
                 set_basis_el(lbl, bmx)
-    
+
         elif other_mode == "diag_affine":
             assert((2, len(other_mxs[1:])) == otherProjs.shape)
             for coeff, lbl, bmx in zip(otherProjs[0], other_lbls[1:], other_mxs[1:]):  # skip identity
@@ -1999,7 +1999,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
             for coeff, lbl, bmx in zip(otherProjs[1], other_lbls[1:], other_mxs[1:]):  # skip identity
                 Ltermdict[('A', lbl)] = coeff
                 set_basis_el(lbl, bmx)
-    
+
         else:
             assert((len(other_mxs[1:]), len(other_mxs[1:])) == otherProjs.shape)
             for i, (lbl1, bmx1) in enumerate(zip(other_lbls[1:], other_mxs[1:])):  # skip identity
@@ -2029,11 +2029,11 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
                 elshape = other_basis.elshape
                 sparse = sparse and other_basis.sparse
                 real = real and other_basis.real
-    
+
             d = elshape[0]
             Id = _sps.identity(d, 'complex', 'csr') / _np.sqrt(d) if sparse \
                 else _np.identity(d, 'complex') / _np.sqrt(d)
-    
+
             lbls = ['I'] + list(basisdict.keys())
             mxs = [Id] + list(basisdict.values())
             basis = _ExplicitBasis(mxs, lbls, name=None,
@@ -2109,7 +2109,7 @@ def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
     """
     #Separately enumerate the (distinct) basis elements used for Hamiltonian
     # and non-Hamiltonian error terms
-    #print("DB: lindblad term to proj: \n",Ltermdict,"\n",basis) 
+    #print("DB: lindblad term to proj: \n",Ltermdict,"\n",basis)
     hamBasisLabels = []
     otherBasisLabels = []
     for termLbl, coeff in Ltermdict.items():
@@ -2169,8 +2169,8 @@ def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
             other_basis = _ExplicitBasis(other_basis_mxs, name=None, real=True, sparse=sparse)
 
     bsH, bsO = len(ham_basis), len(other_basis)
-    #print("DB: constructed ham_basis = ",ham_basis) 
-    #print("DB: other basis = ",other_basis) 
+    #print("DB: constructed ham_basis = ",ham_basis)
+    #print("DB: other basis = ",other_basis)
 
     #Create projection (term coefficient) arrays - or return None if
     # the corresponding basis is empty (as per our convention)
@@ -2443,7 +2443,7 @@ def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
             expected_shape = (1,) if (param_mode in ("depol", "reldepol")) else (bsO - 1,)
             assert(otherParams.shape == expected_shape)
             if param_mode in ("depol", "reldepol"):
-                otherParams = otherParams[0] * _np.ones(bsO - 1, 'd') # replicate single param bsO-1 times
+                otherParams = otherParams[0] * _np.ones(bsO - 1, 'd')  # replicate single param bsO-1 times
 
             if param_mode in ("cptp", "depol"):
                 otherCoeffs = otherParams**2  # Analagous to L*L_dagger
@@ -2888,3 +2888,15 @@ def split_lindblad_paramtype(typ):
     elif evostr == "clifford terms": evotype = "cterm"
     else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
     return bTyp, evotype
+
+
+def spamTupleToOutcome(spamTuple):
+    """TODO: Docstring """
+    # Helper fn: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
+    if spamTuple is None:
+        return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
+    else:
+        prep_lbl, povm_and_effect_lbl = spamTuple
+        last_underscore = povm_and_effect_lbl.rindex('_')
+        effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
+        return (effect_lbl,)  # effect label *is* the outcome

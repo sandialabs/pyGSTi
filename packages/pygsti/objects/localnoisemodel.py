@@ -18,6 +18,7 @@ from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
 from . import labeldicts as _ld
+from . import opfactory as _opfactory
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
@@ -418,7 +419,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                  independent_gates=False, ensure_composed_gates=False,
                  global_idle=None):
         """
-        TODO: docstring update - remove parameterization below, spamdict => prep/povm_layers, evotype can't be "auto" and more?
+        TODO: docstring update - remove parameterization below, spamdict => prep/povm_layers, evotype
+        can't be "auto" and more?
         Creates a n-qubit model by embedding the *same* gates from `gatedict`
         as requested and creating a perfect 0-prep and z-basis POVM.
 
@@ -549,16 +551,11 @@ class LocalNoiseModel(_ImplicitOpModel):
         if evotype in ("densitymx", "svterm", "cterm"):
             from ..construction import basis_build_vector as _basis_build_vector
             basis1Q = _BuiltinBasis("pp", 4)
-            v0 = _basis_build_vector("0", basis1Q)
-            v1 = _basis_build_vector("1", basis1Q)
         elif evotype == "statevec":
             basis1Q = _BuiltinBasis("sv", 2)
-            v0 = _np.array([[1], [0]], complex)
-            v1 = _np.array([[0], [1]], complex)
         else:
             basis1Q = _BuiltinBasis("sv", 2)
             assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
-            v0 = v1 = None  # then we shouldn't use these
 
         if sim_type == "auto":
             if evotype == "densitymx":
@@ -587,6 +584,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         self.operation_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.factories['ops'] = _ld.OrderedMemberDict(self, None, None, flags)
 
         #SPAM (same as for cloud noise model)
         if prep_layers is None:
@@ -594,9 +592,9 @@ class LocalNoiseModel(_ImplicitOpModel):
         elif isinstance(prep_layers, dict):
             for rhoname, layerop in prep_layers.items():
                 self.prep_blks['layers'][_Lbl(rhoname)] = layerop
-        elif isinstance(prep_layers, _op.LinearOperator): # just a single layer op
+        elif isinstance(prep_layers, _op.LinearOperator):  # just a single layer op
             self.prep_blks['layers'][_Lbl('rho0')] = prep_layers
-        else: # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
+        else:  # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
             for i, layerop in enumerate(prep_layers):
                 self.prep_blks['layers'][_Lbl("rho%d" % i)] = layerop
 
@@ -607,7 +605,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         elif isinstance(povm_layers, dict):
             for povmname, layerop in povm_layers.items():
                 self.povm_blks['layers'][_Lbl(povmname)] = layerop
-        else: # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
+        else:  # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
@@ -688,7 +686,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 self.operation_blks['gates'][_Lbl('1QIdle')] = global_idle
                 Embedded = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
                 global_idle = Composed([Embedded(self.state_space_labels, (qlbl,), global_idle)
-                                       for qlbl in qubit_labels])
+                                        for qlbl in qubit_labels])
 
             global_idle_nQubits = int(round(_np.log2(global_idle.dim) / 2)) \
                 if (evotype in ("densitymx", "svterm", "cterm")) \
@@ -743,5 +741,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
     def get_layer_component_operation(self, complbl, dense):
         if isinstance(complbl, _CircuitLabel):
             return self.get_circuitlabel_op(complbl, dense)
-        else:
+        elif complbl in self.op_blks['layers']:
             return self.op_blks['layers'][complbl]
+        else:
+            return _opfactory.op_from_factories(self.model.factories['ops'], complbl)
