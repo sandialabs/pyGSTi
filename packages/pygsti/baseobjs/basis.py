@@ -539,11 +539,6 @@ class Basis(object):
             elements are 4x4 matrices) and `size` is the size of this basis (its
             number of vectors).
         '''
-        # This default implementation assumes that the (flattened) element space
-        # *is* a standard representation of the vector space this basis or partial-basis
-        # acts upon (this is *not* true for direct-sum bases, where the flattened
-        # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of get_from_element_std"
         if self.sparse:
             raise NotImplementedError("get_from_element_std not implemented for sparse mode")  # (b/c pinv used)
         return _np.linalg.pinv(self.get_to_element_std())
