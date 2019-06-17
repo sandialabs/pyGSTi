@@ -7,6 +7,12 @@ from pygsti.objects import circuit
 
 
 class CircuitTester(BaseCase):
+    def test_construct_with_label(self):
+        #Check that parallel operation labels get converted to circuits properly
+        opstr = circuit.Circuit(((('Gx', 0), ('Gy', 1)), ('Gcnot', 0, 1)))
+        c = circuit.Circuit(layer_labels=opstr, num_lines=2)
+        self.assertEqual(c._labels, (Label((('Gx', 0), ('Gy', 1))), Label('Gcnot', (0, 1))))
+
     def test_to_pythonstr(self):
         mdl = circuit.Circuit(None, stringrep="Gx^3Gy^2GxGz")
 
