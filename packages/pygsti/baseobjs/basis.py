@@ -1417,7 +1417,6 @@ def basis_element_labels(basis, dim):
     elements of the described basis.  These labels are
     typically used to label the rows/columns of a box-plot
     of a matrix in the basis.
-    TODO: docstring - update w/cargs
 
     Parameters
     ----------

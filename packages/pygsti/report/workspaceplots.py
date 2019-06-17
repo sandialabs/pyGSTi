@@ -1510,7 +1510,12 @@ class ColorBoxPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function that increases
+            the goodness of fit by adjusting (by an amount measured in TVD) the
+            probabilities produced by `model` before comparing with the
+            frequencies in `dataset`.  Currently, this functionality is only
+            supported for `plottype == "logl"`.
 
         colorbar : bool, optional
             Whether to include a colorbar.
@@ -2549,8 +2554,12 @@ class FitComparisonBarPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
-
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function (`objective`),
+            which increases the goodness of fit by adjusting (by an amount
+            measured in TVD) the probabilities produced by a model before
+            comparing with the frequencies in `dataset`.  Currently, this
+            functionality is only supported for `objective == "logl"`.
         """
         super(FitComparisonBarPlot, self).__init__(ws, self._create,
                                                    Xs, gssByX, modelByX, datasetByX,
@@ -2696,7 +2705,12 @@ class FitComparisonBoxPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function (`objective`),
+            which increases the goodness of fit by adjusting (by an amount
+            measured in TVD) the probabilities produced by a model before
+            comparing with the frequencies in `dataset`.  Currently, this
+            functionality is only supported for `objective == "logl"`.
         """
         super(FitComparisonBoxPlot, self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,

@@ -11,18 +11,73 @@ from .. import tools as _tools
 
 
 class WildcardBudget(object):
-    """ TODO: docstring for entire module """
+    """
+    Encapsulates a fixed amount of "wildcard budget" that allows each circuit
+    an amount "slack" in its outcomes probabilities.  The way in which this
+    slack is computed - or "distributed", though it need not necessarily sum to
+    a fixed total - per circuit depends on each derived class's implementation
+    of the :method:`circuit_budget` method.  Goodness-of-fit quantities such as
+    the log-likelihood or chi2 can utilize a `WildcardBudget` object to compute
+    a value that shifts the circuit outcome probabilities within their allowed
+    slack (so `|p_used - p_actual| <= slack`) to achieve the best goodness of
+    fit.  For example, see the `wildcard` argument of :function:`two_delta_logl_terms`.
+
+    This is a base class, which must be inherited from in order to obtain a
+    full functional wildcard budge (the `circuit_budget` method must be
+    implemented and usually `__init__` should accept more customized args).
+    """
 
     def __init__(self, Wvec):
+        """
+        Create a new WildcardBudget.
+
+        Parameters
+        ----------
+        Wvec : numpy array
+            The "wildcard vector" which stores the parameters of this budget
+            which can be varied when trying to find an optimal budget (similar
+            to the parameters of a :class:`Model`).
+        """
         self.wildcard_vector = Wvec
 
     def to_vector(self):
+        """
+        Get the parameters of this wildcard budget.
+
+        Returns
+        -------
+        numpy array
+        """
         return self.wildcard_vector
 
     def from_vector(self, Wvec):
+        """
+        Set the parameters of this wildcard budge.
+
+        Parameters
+        ----------
+        Wvec : numpy array
+            A vector of parameter values.
+
+        Returns
+        -------
+        None
+        """
         self.wildcard_vector = Wvec
 
     def circuit_budget(self, circuit):
+        """
+        Get the amount of wildcard budget, or "outcome-probability-slack"
+        for `circuit`.
+
+        Parameters
+        ----------
+        circuit : Circuit
+        
+        Returns
+        -------
+        float
+        """
         raise NotImplementedError("Derived classes must implement `circuit_budget`")
 
     #def compute_circuit_wildcard_budget(c, Wvec):
@@ -31,8 +86,49 @@ class WildcardBudget(object):
     #    return abs(Wvec[0]) * len(c)
 
     def update_probs(self, probs_in, probs_out, freqs, circuits, elIndices):
-        """ Note: probs_in can == probs_out for in-place updating """
+        """
+        Update a set of circuit outcome probabilities, `probs_in`, into a
+        corresponding set, `probs_out`, which uses the slack alloted to each
+        outcome probability to match (as best as possible) the data frequencies
+        in `freqs`.  In particular, it computes this best-match in a way that
+        maximizes the likelihood between `probs_out` and `freqs`. This method is
+        the core function of a :class:`WildcardBudget`.
 
+        Parameters
+        ----------
+        probs_in : numpy array
+            The input probabilities, usually computed by a :class:`Model`.
+
+        probs_out : numpy array
+            The output probabilities: `probs_in`, adjusted according to the
+            slack allowed by this wildcard budget, in order to maximize
+            `logl(probs_out, freqs)`.  Note that `probs_out` may be the same
+            array as `probs_in` for in-place updating.
+
+        freqs : numpy array
+            An array of frequencies corresponding to each of the
+            outcome probabilites in `probs_in` or `probs_out`.
+
+        circuits : list
+            A list of :class:`Circuit` objects giving the circuits that
+            `probs_in` contains the outcome probabilities of.  Typically
+            there are multiple outcomes per circuit, so `len(circuits)`
+            is less than `len(probs_in)` - see `elIndices` below.
+
+        elIndices : list or numpy array
+            A list of the element indices corresponding to each circuit in
+            `circuits`.  Thus, `probs_in[elIndices[i]]` must give the
+            probabilities corresponding to `circuits[i]`, and `elIndices[i]`
+            can be any valid index for a numpy array (an integer, a slice,
+            or an integer-array).  Similarly, `freqs[elIndices[i]]` gives
+            the corresponding frequencies.
+
+        Returns
+        -------
+        None
+        """
+
+        #For these helper functions, see Robin's notes
         def computeTVD(A, B, alpha, beta, q, f):
             ret = 0.5 * (sum(q[A] - alpha * f[A]) + sum(beta * f[B] - q[B]))
             return ret
@@ -157,9 +253,35 @@ class WildcardBudget(object):
 
 
 class PrimitiveOpsWildcardBudget(WildcardBudget):
-    """ TODO: docstring """
+    """
+    A wildcard budget containing one parameter per "primitive operation".
+
+    A parameter's absolute value gives the amount of "slack", or
+    "wildcard budget" that is allocated per that particular primitive
+    operation.
+
+    Primitive operations are the components of circuit layers, and so
+    the wilcard budget for a circuit is just the sum of the (abs vals of)
+    the parameters corresponding to each primitive operation in the circuit.
+    """
 
     def __init__(self, primitiveOpLabels, start_budget=0.01):
+        """
+        Create a new PrimitiveOpsWildcardBudget.
+
+        Parameters
+        ----------
+        primitiveOpLabels : iterable
+            A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
+            which give all the possible primitive ops (components of circuit
+            layers) that will appear in circuits.  Each one of these operations
+            will be assigned it's own independent element in the wilcard-vector.
+
+        start_budget : float
+            A rough initial value to set all the parameters to.  Some slight
+            offset "noise" is also applied to better seed optimization of these
+            parameters later on - this just gives a rough order of magnitude.
+        """
         self.primOpLookup = {lbl: i for i, lbl in enumerate(primitiveOpLabels)}
         nPrimOps = len(self.primOpLookup)
         Wvec = _np.array([start_budget] * nPrimOps) + start_budget / 10.0 * \
@@ -167,6 +289,18 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
 
     def circuit_budget(self, circuit):
+        """
+        Get the amount of wildcard budget, or "outcome-probability-slack"
+        for `circuit`.
+
+        Parameters
+        ----------
+        circuit : Circuit
+        
+        Returns
+        -------
+        float
+        """
         Wvec = self.wildcard_vector
         budget = 0
         for layer in circuit:
@@ -175,6 +309,20 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         return budget
 
     def get_op_budget(self, op_label):
+        """
+        Retrieve the budget amount correponding to primitive op `op_label`.
+
+        This is just the absolute value of this wildcard budget's parameter
+        that corresponds to `op_label`.
+
+        Parameters
+        ----------
+        op_label : Label
+
+        Returns
+        -------
+        float
+        """
         return abs(self.wildcard_vector[self.primOpLookup[op_label]])
 
     def __str__(self):

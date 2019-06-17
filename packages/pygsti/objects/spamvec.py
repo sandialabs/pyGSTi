@@ -460,8 +460,45 @@ class SPAMVec(_modelmember.ModelMember):
                                   self.__class__.__name__)
 
     def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
-        """ TODO: docstring - note this also *sets* the magnitudes of the terms it
-            returns to their current value (based on parameters) """
+        """
+        Get the terms (from a Taylor expansion of this SPAM vector) that have
+        magnitude above `min_term_mag` (the magnitude of a term is taken to
+        be the absolute value of its coefficient), considering only those
+        terms up to some maximum Taylor expansion order, `max_taylor_order`.
+
+        Note that this function also *sets* the magnitudes of the returned
+        terms (by calling `term.set_magnitude(...)`) based on the current
+        values of this SPAM vector's parameters.  This is an essential step
+        to using these terms in pruned-path-integral calculations later on.
+        
+        Parameters
+        ----------
+        min_term_mag : float
+            the threshold for term magnitudes: only terms with magnitudes above
+            this value are returned.
+
+        force_firstorder : bool, optional
+            if True, then always return all the first-order Taylor-series terms,
+            even if they have magnitudes smaller than `min_term_mag`.  This
+            behavior is needed for using GST with pruned-term calculations, as
+            we may begin with a guess model that has no error (all terms have
+            zero magnitude!) and still need to compute a meaningful jacobian at
+            this point.
+
+        max_taylor_order : int, optional
+            the maximum Taylor-order to consider when checking whether term-
+            magnitudes exceed `min_term_mag`.
+
+        Returns
+        -------
+        highmag_terms : list
+            A list of the high-magnitude terms that were found.  These
+            terms are *sorted* in descending order by term-magnitude.
+        first_order_indices : list
+            A list of the indices into `highmag_terms` that mark which
+            of these terms are first-order Taylor terms (useful when
+            we're forcing these terms to always be present).
+        """
         #NOTE: SAME as for LinearOperator class -- TODO consolidate in FUTURE
         #print("DB: SPAM get_high_magnitude_terms")
         v = self.to_vector()
@@ -2147,10 +2184,9 @@ class PureStateSPAMVec(SPAMVec):
             else:
                 return []
 
+    #TODO REMOVE
     #def get_direct_order_terms(self, order, base_order):
     #    """
-    #    TODO: docstring
-    #
     #    Parameters
     #    ----------
     #    order : int
@@ -2779,7 +2815,16 @@ class LindbladSPAMVec(SPAMVec):
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this SPAM vector's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this SPAM vector in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # return (sum of absvals of *all* term coeffs)
         return self.error_map.get_total_term_magnitude()  # error map is only part with terms
