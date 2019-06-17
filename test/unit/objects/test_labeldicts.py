@@ -1,3 +1,5 @@
+import pickle
+
 from ..util import BaseCase
 
 from pygsti.construction.modelconstruction import build_explicit_model
@@ -26,3 +28,19 @@ class LabelDictTester(BaseCase):
             model2[label] = povm
 
         self.assertAlmostEqual(model.frobeniusdist(model2), 0.0)
+
+    def test_outcome_label_dict(self):
+        d = ld.OutcomeLabelDict([(('0',), 90), (('1',), 10)])
+        self.assertEqual(d['0'], 90)  # don't need tuple when they're 1-tuples
+        self.assertEqual(d['1'], 10)  # don't need tuple when they're 1-tuples
+
+    def test_outcome_label_dict_pickles(self):
+        d = ld.OutcomeLabelDict([(('0',), 90), (('1',), 10)])
+        s = pickle.dumps(d)
+        d_pickle = pickle.loads(s)
+        self.assertEqual(d, d_pickle)
+
+    def test_outcome_label_dict_copy(self):
+        d = ld.OutcomeLabelDict([(('0',), 90), (('1',), 10)])
+        d_copy = d.copy()
+        self.assertEqual(d, d_copy)
