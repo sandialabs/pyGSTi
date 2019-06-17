@@ -2048,7 +2048,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     #coefficients when needed instead?
 
     #... and we're done!
-    
+
     #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
     # in fastreplib.pyx but forgot it here.
     return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
@@ -2200,7 +2200,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
 
     num_elabels : int
         The total number of different effects whose reps appear in
-        `oprep_lists[-1]` (also one more than the largest index in 
+        `oprep_lists[-1]` (also one more than the largest index in
         `E_indices`.
 
     target_sum_of_pathmags : array

@@ -568,7 +568,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             A function which takes a single :class:`Label` as an argument and
             returns the cloud-noise operation for that primitive layer
             operation.  Note that if `errcomp_type="gates"` the returned
-            operator should be a superoperator whereas if 
+            operator should be a superoperator whereas if
             `errcomp_type="errorgens"` then the returned operator should be
             an error generator (not yet exponentiated).
 

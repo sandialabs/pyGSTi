@@ -1064,7 +1064,7 @@ class MapForwardSimulator(ForwardSimulator):
             the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
         probClipInterval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to. 
+           (min,max) values used to clip the predicted probabilities to.
            If None, no clipping is performed.
 
         comm : mpi4py.MPI.Comm, optional
@@ -1148,7 +1148,7 @@ class MapForwardSimulator(ForwardSimulator):
             the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
         probClipInterval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to. 
+           (min,max) values used to clip the predicted probabilities to.
            If None, no clipping is performed.
 
         chi2MxToFill : numpy array, optional
@@ -1304,7 +1304,7 @@ class MapForwardSimulator(ForwardSimulator):
             the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
         probClipInterval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to. 
+           (min,max) values used to clip the predicted probabilities to.
            If None, no clipping is performed.
 
         loglMxToFill : numpy array, optional

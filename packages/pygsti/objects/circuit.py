@@ -1194,7 +1194,7 @@ class Circuit(object):
         for opLabel in opLabels:
             translateDict[c] = opLabel
             c = chr(ord(c) + 1)
-        return cls(tuple([translateDict[c] for c in pythonString]))
+        return cls(tuple([translateDict[cc] for cc in pythonString]))
 
     def serialize(self):
         """
@@ -1303,7 +1303,7 @@ class Circuit(object):
 
         This operation is done in place and so can only be performed
         on an editable :class:`Circuit`.
-        
+
         Returns
         -------
         None

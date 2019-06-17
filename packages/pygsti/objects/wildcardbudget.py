@@ -73,7 +73,7 @@ class WildcardBudget(object):
         Parameters
         ----------
         circuit : Circuit
-        
+
         Returns
         -------
         float
@@ -296,7 +296,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         Parameters
         ----------
         circuit : Circuit
-        
+
         Returns
         -------
         float

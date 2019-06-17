@@ -470,7 +470,7 @@ class SPAMVec(_modelmember.ModelMember):
         terms (by calling `term.set_magnitude(...)`) based on the current
         values of this SPAM vector's parameters.  This is an essential step
         to using these terms in pruned-path-integral calculations later on.
-        
+
         Parameters
         ----------
         min_term_mag : float

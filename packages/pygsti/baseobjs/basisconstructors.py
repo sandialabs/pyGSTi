@@ -118,7 +118,7 @@ class MatrixBasisConstructor(object):
         ----------
         dim : int
             The *vector-space* dimension of the basis.
-        
+
         sparse : bool
             Whether the basis is sparse or not.
 
@@ -136,7 +136,7 @@ class MatrixBasisConstructor(object):
         ----------
         dim : int
             The *vector-space* dimension of the basis.
-        
+
         sparse : bool
             Whether the basis is sparse or not.
 
@@ -163,7 +163,7 @@ class MatrixBasisConstructor(object):
             The *vector-space* dimension of the basis.
             e.g. 4 for a basis of 2x2 matrices and 2 for
             a basis of length=2 vectors.
-        
+
         sparse : bool
             Whether the basis is sparse or not.
 
@@ -188,7 +188,6 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
     """
     A constructor for a basis containing just a single element (e.g. the identity).
     """
-    
     def sizes(self, dim, sparse):
         """ See docstring for :class:`MatrixBasisConstructor` """
         nElements = 1   # the number of matrices in the basis
@@ -231,14 +230,14 @@ class VectorBasisConstructor(object):
         self.real = real
 
     def labeler(self, dim, sparse):
-                """
+        """
         Get the labels of a basis to be constructed.
 
         Parameters
         ----------
         dim : int
             The *vector-space* dimension of the basis.
-        
+
         sparse : bool
             Whether the basis is sparse or not.
 
@@ -249,14 +248,14 @@ class VectorBasisConstructor(object):
         return self.labelgen_fn(dim)
 
     def constructor(self, dim, sparse):
-                """
+        """
         Get the elements of a basis to be constructed.
 
         Parameters
         ----------
         dim : int
             The *vector-space* dimension of the basis.
-        
+
         sparse : bool
             Whether the basis is sparse or not.
 
@@ -283,7 +282,7 @@ class VectorBasisConstructor(object):
             The *vector-space* dimension of the basis.
             e.g. 4 for a basis of 2x2 matrices and 2 for
             a basis of length=2 vectors.
-        
+
         sparse : bool
             Whether the basis is sparse or not.
 

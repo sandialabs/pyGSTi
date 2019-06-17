@@ -534,7 +534,7 @@ class LinearOperator(_modelmember.ModelMember):
         terms (by calling `term.set_magnitude(...)`) based on the current
         values of this operator's parameters.  This is an essential step
         to using these terms in pruned-path-integral calculations later on.
-        
+
         Parameters
         ----------
         min_term_mag : float
@@ -3069,7 +3069,7 @@ class LindbladOp(LinearOperator):
             "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
-            the corresponding value given in `Ltermdict`.  This is what is 
+            the corresponding value given in `Ltermdict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
         Returns
@@ -4134,7 +4134,7 @@ class ExponentiatedOp(ComposedOp):
         Parameters
         ----------
         op_to_exponentiate : list
-            A `LinearOperator`-derived object that is exponentiated to 
+            A `LinearOperator`-derived object that is exponentiated to
             some integer power to produce this operator.
 
         power : int
@@ -5315,7 +5315,7 @@ class ComposedErrorgen(LinearOperator):
             "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
-            the corresponding value given in `Ltermdict`.  This is what is 
+            the corresponding value given in `Ltermdict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
         Returns
@@ -5951,7 +5951,7 @@ class EmbeddedErrorgen(EmbeddedOp):
             "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
-            the corresponding value given in `Ltermdict`.  This is what is 
+            the corresponding value given in `Ltermdict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
         Returns
@@ -6888,7 +6888,7 @@ class LindbladErrorgen(LinearOperator):
             "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
-            the corresponding value given in `Ltermdict`.  This is what is 
+            the corresponding value given in `Ltermdict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
         Returns
