@@ -121,7 +121,6 @@ class Circuit(object):
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
                  stringrep=None, name='', check=True, expand_subcircuits="default"):
         """
-        TODO: docstring update
         Creates a new Circuit object, encapsulating a quantum circuit.
 
         You only need to supply the first `layer_labels` argument, though
@@ -131,10 +130,11 @@ class Circuit(object):
 
         Parameters
         ----------
-        layer_labels : iterable of Labels
+        layer_labels : iterable of Labels or str
             This argument provides a list of the layer labels specifying the
             state preparations, gates, and measurements for the circuit.  This
-            argument can also be a :class:`Circuit`.  Internally this will
+            argument can also be a :class:`Circuit` or a string, in which case
+            it is parsed as a text-formatted circuit.  Internally this will
             eventually be converted to a list of `Label` objects, one per layer,
             but it may be specified using anything that can be readily converted
             to a Label objects.  For example, any of the following are allowed:
@@ -166,14 +166,15 @@ class Circuit(object):
             then this will be generated automatically when needed.  One
             reason you'd want to specify this is if you know of a nice compact
             string representation that you'd rather use, e.g. `"Gx^4"` instead
-            of the automatically generated `"GxGxGxGx"`.  Another reason is if
-            you want to initialize a `Circuit` entirely from a string
-            representation you can set `layer_labels` to `None` and `stringrep`
-            to any valid (one-line) circuit string.
+            of the automatically generated `"GxGxGxGx"`.  If you want to
+            initialize a `Circuit` entirely from a string representation you
+            can either specify the string in as `layer_labels` or set
+            `layer_labels` to `None` and `stringrep` to any valid (one-line)
+            circuit string.
 
         name : str, optional
             A name for this circuit (useful if/when used as a block within
-            larger circuits).v
+            larger circuits).
 
         check : bool, optional
             Whether `stringrep` should be checked against `layer_labels` to
@@ -181,6 +182,16 @@ class Circuit(object):
             are a subset of `line_labels`.  The only reason you'd want to set
             this to `False` is if you're absolutely sure `stringrep` and
             `line_labels` are consistent and want to save computation time.
+
+        expand_subcircuits : bool or "default"
+            If `"default"`, then the value of `Circuit.default_expand_subcircuits`
+            is used.  If True, then any sub-circuits (e.g. anything exponentiated
+            like "(GxGy)^4") will be expanded when it is stored within the created
+            Circuit.  If False, then such sub-circuits will be left as-is.  It's
+            typically more robust to expand sub-circuits as this facilitates
+            comparison (e.g. so "GxGx" == "Gx^2"), but in cases when you have
+            massive exponents (e.g. "Gx^8192") it may improve performance to
+            set `expand_subcircuits=False`.
         """
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
         if _compat.isstr(layer_labels):
@@ -307,7 +318,19 @@ class Circuit(object):
         #    self._static = not editable
 
     def as_label(self, nreps=1):
-        """TODO: docstring """
+        """
+        Construct and return this entire circuit as a :class:`CircuitLabel`.
+
+        Parameters
+        ----------
+        nreps : int, optional
+            The number of times this circuit will be repeated (`CircuitLabels`
+            support exponentiation and you can specify this here).
+
+        Returns
+        -------
+        CircuitLabel
+        """
         eff_line_labels = None if self._line_labels == ('*',) else self._line_labels  # special case
         return _CircuitLabel(self._name, self._labels, eff_line_labels, nreps)
 
@@ -1171,7 +1194,7 @@ class Circuit(object):
         for opLabel in opLabels:
             translateDict[c] = opLabel
             c = chr(ord(c) + 1)
-        return cls(tuple([translateDict[c] for c in pythonString]))
+        return cls(tuple([translateDict[cc] for cc in pythonString]))
 
     def serialize(self):
         """
@@ -1275,7 +1298,16 @@ class Circuit(object):
         return Circuit(parallel_lbls, self.line_labels, editable=False, check=False)
 
     def expand_subcircuits(self):
-        """ TODO: docstring """
+        """
+        Expands all :class:`CircuitLabel` labels within this circuit.
+
+        This operation is done in place and so can only be performed
+        on an editable :class:`Circuit`.
+
+        Returns
+        -------
+        None
+        """
         assert(not self._static), "Cannot edit a read-only circuit!"
 
         #Iterate in reverse so we don't have to deal with
@@ -1297,7 +1329,18 @@ class Circuit(object):
                                 subc.sslbls)  # dump in the contents
 
     def factorize_repetitions(self):
-        """ TODO: docstring """
+        """
+        More or less the reverse of :method:`expand_subcircuits`, this method
+        attempts to collapse repetitions of the same labels into single
+        :class:`CircuitLabel` labels within this circuit.
+
+        This operation is done in place and so can only be performed
+        on an editable :class:`Circuit`.
+
+        Returns
+        -------
+        None
+        """
         assert(not self._static), "Cannot edit a read-only circuit!"
         nLayers = self.num_layers()
         iLayersToRemove = []

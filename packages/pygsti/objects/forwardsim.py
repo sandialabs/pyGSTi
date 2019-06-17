@@ -110,8 +110,11 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : Circuit or tuple of operation labels TODO: docstring - fix these to simplified_circuit & explain
-          The sequence of operation labels specifying the operation sequence.
+        simplified_circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the operation sequence.
+            This is a "simplified" circuit in that it should not contain any
+            POVM or Instrument labels (but can have effect or Instrument-member
+            labels).
 
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
@@ -159,8 +162,11 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+        simplified_circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the operation sequence.
+            This is a "simplified" circuit in that it should not contain any
+            POVM or Instrument labels (but can have effect or Instrument-member
+            labels).
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -193,8 +199,11 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+        simplified_circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the operation sequence.
+            This is a "simplified" circuit in that it should not contain any
+            POVM or Instrument labels (but can have effect or Instrument-member
+            labels).
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -486,8 +495,26 @@ class ForwardSimulator(object):
 
     def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
-        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
+
+        Parameters
+        ----------
+        simplified_circuits : list
+            A list of Circuits or tuples of operation labels which specify
+            the operation sequences to create an evaluation tree out of
+            (most likely because you want to computed their probabilites).
+            These are a "simplified" circuits in that they should only contain
+            "deterministic" elements (no POVM or Instrument labels).
+
+        numSubtreeComms : int
+            The number of processor groups that will be assigned to
+            subtrees of the created tree.  This aids in the tree construction
+            by giving the tree information it needs to distribute itself
+            among the available processors.
+
+        Returns
+        -------
+        EvalTree
         """
         raise NotImplementedError("construct_evaltree(...) is not implemented!")
 

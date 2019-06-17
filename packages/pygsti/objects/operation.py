@@ -524,8 +524,45 @@ class LinearOperator(_modelmember.ModelMember):
                                   self.__class__.__name__)
 
     def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
-        """ TODO: docstring - note this also *sets* the magnitudes of the terms it
-            returns to their current value (based on parameters) """
+        """
+        Get the terms (from a Taylor expansion of this operator) that have
+        magnitude above `min_term_mag` (the magnitude of a term is taken to
+        be the absolute value of its coefficient), considering only those
+        terms up to some maximum Taylor expansion order, `max_taylor_order`.
+
+        Note that this function also *sets* the magnitudes of the returned
+        terms (by calling `term.set_magnitude(...)`) based on the current
+        values of this operator's parameters.  This is an essential step
+        to using these terms in pruned-path-integral calculations later on.
+
+        Parameters
+        ----------
+        min_term_mag : float
+            the threshold for term magnitudes: only terms with magnitudes above
+            this value are returned.
+
+        force_firstorder : bool, optional
+            if True, then always return all the first-order Taylor-series terms,
+            even if they have magnitudes smaller than `min_term_mag`.  This
+            behavior is needed for using GST with pruned-term calculations, as
+            we may begin with a guess model that has no error (all terms have
+            zero magnitude!) and still need to compute a meaningful jacobian at
+            this point.
+
+        max_taylor_order : int, optional
+            the maximum Taylor-order to consider when checking whether term-
+            magnitudes exceed `min_term_mag`.
+
+        Returns
+        -------
+        highmag_terms : list
+            A list of the high-magnitude terms that were found.  These
+            terms are *sorted* in descending order by term-magnitude.
+        first_order_indices : list
+            A list of the indices into `highmag_terms` that mark which
+            of these terms are first-order Taylor terms (useful when
+            we're forcing these terms to always be present).
+        """
         #print("DB: OP get_high_magnitude_terms")
         v = self.to_vector()
         taylor_order = 0
@@ -1958,7 +1995,29 @@ class StochasticNoiseOp(LinearOperator):
     # and don't bother restricting their sum to be < 1?
 
     def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None):
-        """ TODO: docstring - note: assume the first element of `basis` is the identity"""
+        """
+        Create a new StochasticNoiseOp, representing a stochastic noise
+        channel with possibly asymmetric noise but only noise that is
+        "diagonal" in a particular basis (e.g. Pauli-stochastic noise).
+
+        Parameters
+        ----------
+        dim : int
+            The dimension of this operator (4 for a single qubit).
+
+        basis : Basis or {'pp','gm','qt'}, optional
+            The basis to use, defining the "principle axes"
+            along which there is stochastic noise.  We assume that
+            the first element of `basis` is the identity.
+
+        evotype : {"densitymx", "cterm", "svterm"}
+            the evolution type being used.
+
+        initial_rates : list or array
+            if not None, a list of `dim-1` initial error rates along each of
+            the directions corresponding to each basis element.  If None,
+            then all initial rates are zero.
+        """
         self.basis = _Basis.cast(basis, dim, sparse=False)  # sparse??
         assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
 
@@ -2111,7 +2170,16 @@ class StochasticNoiseOp(LinearOperator):
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
@@ -2167,7 +2235,27 @@ class StochasticNoiseOp(LinearOperator):
 
 class DepolarizeOp(StochasticNoiseOp):
     def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0):
-        """ TODO: docstring - note: assume the first element of `basis` is the identity"""
+        """
+        Create a new DepolarizeOp, representing a depolarizing channel.
+
+        Parameters
+        ----------
+        dim : int
+            The dimension of this operator (4 for a single qubit).
+
+        basis : Basis or {'pp','gm','qt'}, optional
+            The basis to use, defining the "principle axes"
+            along which there is stochastic noise.  While strictly unnecessary
+            since all complete bases yield the same operator, this affects the
+            underlying :class:`StochasticNoiseOp` and so is given as an option
+            to the user.
+
+        evotype : {"densitymx", "cterm", "svterm"}
+            the evolution type being used.
+
+        initial_rate : float, optional
+            the initial error rate.
+        """
         num_rates = dim - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
         StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
@@ -2817,7 +2905,16 @@ class LindbladOp(LinearOperator):
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
@@ -2875,11 +2972,18 @@ class LindbladOp(LinearOperator):
 
         Parameters
         ----------
-        return_basis : bool
+        return_basis : bool, optional
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
 
-        TODO docstring: logscale_nonham
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`get_error_rates`.
 
         Returns
         -------
@@ -2945,7 +3049,32 @@ class LindbladOp(LinearOperator):
 
         Parameters
         ----------
-        TODO: docstring
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `Ltermdict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `Ltermdict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        Returns
+        -------
+        None
         """
         self.errorgen.set_coeffs(Ltermdict, action, logscale_nonham)
         if self._evotype == "densitymx":
@@ -3895,7 +4024,16 @@ class ComposedOp(LinearOperator):
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
         #  of an errorgen or operator.
@@ -3983,7 +4121,6 @@ class ComposedOp(LinearOperator):
         return s
 
 
-#TODO: check if we need this at all?
 class ExponentiatedOp(ComposedOp):
     """
     A gate map that is the composition of a number of map-like factors (possibly
@@ -3992,27 +4129,20 @@ class ExponentiatedOp(ComposedOp):
 
     def __init__(self, op_to_exponentiate, power, evotype="auto"):
         """
-        TODO: docstring
-        Creates a new ComposedOp.
+        Creates a new ExponentiatedOp.
 
         Parameters
         ----------
-        ops_to_compose : list
-            List of `LinearOperator`-derived objects
-            that are composed to form this gate map.  Elements are composed
-            with vectors  in  *left-to-right* ordering, maintaining the same
-            convention as operation sequences in pyGSTi.  Note that this is
-            *opposite* from standard matrix multiplication order.
+        op_to_exponentiate : list
+            A `LinearOperator`-derived object that is exponentiated to
+            some integer power to produce this operator.
 
-        dim : int or "auto"
-            Dimension of this operation.  Can be set to `"auto"` to take dimension
-            from `ops_to_compose[0]` *if* there's at least one gate being
-            composed.
+        power : int
+            the power to exponentiate `op_to_exponentiate` to.
 
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this operation.  Can be set to `"auto"` to take
-            the evolution type of `ops_to_compose[0]` *if* there's at least
-            one gate being composed.
+            the evolution type.  `"auto"` uses the evolution type of
+            `op_to_exponentiate`.
         """
         #We may not actually need to save these, since they can be inferred easily
         self.exponentiated_op = op_to_exponentiate
@@ -4566,7 +4696,16 @@ class EmbeddedOp(LinearOperator):
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
         #  of an errorgen or operator.
@@ -5033,7 +5172,14 @@ class ComposedErrorgen(LinearOperator):
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
 
-        TODO docstring: locscale_nonham
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`get_error_rates`.
 
         Returns
         -------
@@ -5149,7 +5295,32 @@ class ComposedErrorgen(LinearOperator):
 
         Parameters
         ----------
-        TODO: docstring
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `Ltermdict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `Ltermdict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        Returns
+        -------
+        None
         """
         factor_coeffs_list = [eg.get_coeffs(False, logscale_nonham) for eg in self.factors]
         perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
@@ -5434,7 +5605,16 @@ class ComposedErrorgen(LinearOperator):
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
         #  of an errorgen or operator.
@@ -5657,7 +5837,14 @@ class EmbeddedErrorgen(EmbeddedOp):
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
 
-        TODO docstring: locscale_nonham
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`get_error_rates`.
 
         Returns
         -------
@@ -5744,7 +5931,32 @@ class EmbeddedErrorgen(EmbeddedOp):
 
         Parameters
         ----------
-        TODO: docstring
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `Ltermdict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `Ltermdict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        Returns
+        -------
+        None
         """
         unembedded_Ltermdict = _collections.OrderedDict()
         for k, val in Ltermdict.items():
@@ -6481,16 +6693,22 @@ class LindbladErrorgen(LinearOperator):
         return self.Lterms  # terms with local-index polynomial coefficients
 
     #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
-    #    """
-    #    TODO: docstring
-    #    """
     #    v = self.to_vector()
     #    poly_terms = self.get_taylor_order_terms(order)
     #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
     def get_total_term_magnitude(self):
         """
-        TODO: docstring
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
         """
         # return (sum of absvals of term coeffs)
         vtape, ctape = self.Lterm_coeffs
@@ -6562,7 +6780,14 @@ class LindbladErrorgen(LinearOperator):
             Whether to also return a :class:`Basis` containing the elements
             with which the error generator terms were constructed.
 
-        TODO docstring: locscale_nonham
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`get_error_rates`.
 
         Returns
         -------
@@ -6643,7 +6868,32 @@ class LindbladErrorgen(LinearOperator):
 
         Parameters
         ----------
-        TODO: docstring
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `Ltermdict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `Ltermdict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `Ltermdict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        Returns
+        -------
+        None
         """
         existing_Ltermdict, basis = self.get_coeffs(return_basis=True, logscale_nonham=False)
 

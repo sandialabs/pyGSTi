@@ -339,8 +339,26 @@ class MapForwardSimulator(ForwardSimulator):
 
     def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
-        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
+
+        Parameters
+        ----------
+        simplified_circuits : list
+            A list of Circuits or tuples of operation labels which specify
+            the operation sequences to create an evaluation tree out of
+            (most likely because you want to computed their probabilites).
+            These are a "simplified" circuits in that they should only contain
+            "deterministic" elements (no POVM or Instrument labels).
+
+        numSubtreeComms : int
+            The number of processor groups that will be assigned to
+            subtrees of the created tree.  This aids in the tree construction
+            by giving the tree information it needs to distribute itself
+            among the available processors.
+
+        Returns
+        -------
+        MapEvalTree
         """
         evTree = _MapEvalTree()
         evTree.initialize(simplified_circuits, numSubtreeComms, self.max_cache_size)
@@ -1012,8 +1030,47 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_timedep_chi2(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                minProbClipForWeighting, probClipInterval, comm=None):
         """
-        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many times the
-        circuit is run, given by the timestamps in `dataset`
+        Compute the chi2 contributions for an entire tree of circuits, computing
+        and then summing together the contributions for each time the circuit is
+        run, as given by the timestamps in `dataset`.
+
+        Parameters
+        ----------
+        mxToFill : numpy ndarray
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. evalTree.num_final_elements())
+
+        evalTree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        dsCircuitsToUse : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `evalTree` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(dsCircuitsToUse)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the chi2 contributions.
+
+        minProbClipForWeighting : float, optional
+            Sets the minimum and maximum probability p allowed in the chi^2
+            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
+
+        probClipInterval : 2-tuple or None, optional
+           (min,max) values used to clip the predicted probabilities to.
+           If None, no clipping is performed.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
         Returns
         -------
@@ -1056,8 +1113,53 @@ class MapForwardSimulator(ForwardSimulator):
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
         """
-        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however many
-        times the circuit is run, given by the timestamps in `dataset`
+        Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
+        of the summed chi2 contributions for each circuit with respect to the
+        model's parameters.
+
+        Parameters
+        ----------
+        mxToFill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. evalTree.num_final_elements()) and M is the
+            number of model parameters.
+
+        evalTree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        dsCircuitsToUse : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `evalTree` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(dsCircuitsToUse)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the chi2 contributions.
+
+        minProbClipForWeighting : float, optional
+            Sets the minimum and maximum probability p allowed in the chi^2
+            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
+
+        probClipInterval : 2-tuple or None, optional
+           (min,max) values used to clip the predicted probabilities to.
+           If None, no clipping is performed.
+
+        chi2MxToFill : numpy array, optional
+          when not None, an already-allocated length-E numpy array that is filled
+          with the per-circuit chi2 contributions, just like in
+          bulk_fill_timedep_chi2(...).
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
         Returns
         -------
@@ -1078,8 +1180,54 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_timedep_loglpp(self, mxToFill, evalTree, dsCircuitsToUse, num_total_outcomes, dataset,
                                  minProbClip, radius, probClipInterval, comm=None):
         """
-        TODO: docstring -- fills in sum of chi2 contributions for each circuit, at however many
-        times the circuit is run, given by the timestamps in `dataset`
+        Compute the log-likelihood contributions (within the "poisson picture")
+        for an entire tree of circuits, computing and then summing together
+        the contributions for each time the circuit is run, as given by the
+        timestamps in `dataset`.
+
+        Parameters
+        ----------
+        mxToFill : numpy ndarray
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. evalTree.num_final_elements())
+
+        evalTree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        dsCircuitsToUse : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `evalTree` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(dsCircuitsToUse)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the logl contributions.
+
+        minProbClip : float, optional
+            The minimum probability treated normally in the evaluation of the
+            log-likelihood.  A penalty function replaces the true log-likelihood
+            for probabilities that lie below this threshold so that the
+            log-likelihood never becomes undefined (which improves optimizer
+            performance).
+
+        radius : float, optional
+            Specifies the severity of rounding used to "patch" the
+            zero-frequency terms of the log-likelihood.
+
+        probClipInterval : 2-tuple or None, optional
+           (min,max) values used to clip the predicted probabilities to.
+           If None, no clipping is performed.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
         Returns
         -------
@@ -1121,8 +1269,53 @@ class MapForwardSimulator(ForwardSimulator):
                                   comm=None, wrtFilter=None, wrtBlockSize=None,
                                   profiler=None, gatherMemLimit=None):
         """
-        TODO: docstring -- fills in sum of derivative(chi2) contributions for each circuit, at however
-        many times the circuit is run, given by the timestamps in `dataset`
+        Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
+        of the summed logl (in posison picture) contributions for each circuit
+        with respect to the model's parameters.
+
+        Parameters
+        ----------
+        mxToFill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. evalTree.num_final_elements()) and M is the
+            number of model parameters.
+
+        evalTree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        dsCircuitsToUse : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `evalTree` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(dsCircuitsToUse)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the logl contributions.
+
+        minProbClipForWeighting : float, optional
+            Sets the minimum and maximum probability p allowed in the chi^2
+            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
+
+        probClipInterval : 2-tuple or None, optional
+           (min,max) values used to clip the predicted probabilities to.
+           If None, no clipping is performed.
+
+        loglMxToFill : numpy array, optional
+          when not None, an already-allocated length-E numpy array that is filled
+          with the per-circuit logl contributions, just like in
+          bulk_fill_timedep_loglpp(...).
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
         Returns
         -------
@@ -1141,13 +1334,99 @@ class MapForwardSimulator(ForwardSimulator):
                                             mxToFill, dloglpp, loglMxToFill, loglpp,
                                             comm, wrtFilter, wrtBlockSize, profiler, gatherMemLimit)
 
-    #A generic function - move to base class
-
+    #A generic function - move to base class?
     def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
                                 derivMxToFill, deriv_fn, mxToFill=None, fn=None,
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
-        """TODO: docstring """
+        """
+        A generic method providing the scaffolding used when computing (filling)
+        the derivative of a time-dependent quantity.  In particular, it
+        distributes the computation among the subtrees of `evalTree` and
+        relies on the caller to supply "compute_cache" and "compute_dcache"
+        functions which just need to compute the quantitiy being filled and
+        its derivative given a sub-tree and a parameter-slice.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        dataset : DataSet
+            the data set passed on to the computation functions.
+
+        dsCircuitsToUse : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `evalTree` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(dsCircuitsToUse)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        derivMxToFill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. evalTree.num_final_elements()) and M is the
+            number of model parameters.
+
+        deriv_fn : function
+            A function with the signature:
+            `deriv_fn(rholabel, elabels, num_outcomes, evalSubTree,
+                      dataset_rows, paramSlice, fillComm)` which computes the
+            derivative of a quantity to be stored in `derivMxToFill`.  This
+            jacobian is computed for all the circuits in `evalSubTree` with respect
+            to the slice of model parameters given by `paramSlice`.  This function
+            must return an array of shape (E',M') where E' is the total number of
+            computed elements (i.e. evalSubTree.num_final_elements()) and M' is
+            the number of model parameters in paramSlice.
+
+        mxToFill : numpy array, optional
+            when not None, an already-allocated length-E numpy array that is filled
+            with the per-circuit contributions computed using `fn` below.
+
+        fn : function
+            A function with the signature:
+            `fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
+                fillComm)` which computes the quantity to store in `mxToFill`
+            (usually the quantity `deriv_fn` gives the derivative of).  This
+            quantity is computed for all the circuits in `evalSubTree`, and `fn`
+            must return a 1D array of length E' where E' is the total number of
+            computed elements (i.e. evalSubTree.num_final_elements()).
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
+
+        wrtFilter : list of ints, optional
+          If not None, a list of integers specifying which parameters
+          to include in the derivative dimension. This argument is used
+          internally for distributing calculations across multiple
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
+
+        wrtBlockSize : int or float, optional
+          The maximum number of derivative columns to compute *products*
+          for simultaneously.  None means compute all requested columns
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
+          non-None to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
+
+        Returns
+        -------
+        None
+        """
 
         #tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler

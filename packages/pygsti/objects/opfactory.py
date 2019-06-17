@@ -59,7 +59,12 @@ class OpFactory(_gm.ModelMember):
 
         Parameters
         ----------
-        TODO: docstring - just transfer from ModelMember?
+        dim : int
+            The state-space dimension of the operation(s) this factory builds.
+            (E.g. for a single qubit represented as a density matrix, `dim=4`)
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+            The evolution type of the operation(s) this factory builds.
         """
         #self._paramvec = _np.zeros(nparams, 'd')
         _gm.ModelMember.__init__(self, dim, evotype)
@@ -152,7 +157,32 @@ class EmbeddedOpFactory(OpFactory):
     """
 
     def __init__(self, stateSpaceLabels, targetLabels, factory_to_embed, dense=False):
-        """TODO: docstring """
+        """
+        Create a new EmbeddedOpFactory object.
+
+        Parameters
+        ----------
+        stateSpaceLabels : StateSpaceLabels or a list of tuples
+            This argument specifies the density matrix space upon which the
+            operations this factory builds act.  If a list of tuples, each tuple
+            corresponds to a block of a density matrix in the standard basis
+            (and therefore a component of the direct-sum density matrix
+            space). Elements of a tuple are user-defined labels beginning with
+            "L" (single Level) or "Q" (two-level; Qubit) which interpret the
+            d-dimensional state space corresponding to a d x d block as a tensor
+            product between qubit and single level systems.  (E.g. a 2-qubit
+            space might be labelled `[('Q0','Q1')]`).
+
+        targetLabels : list of strs
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by the operations produced
+            by `factory_to_embed` (the "contained" factory).
+
+        factory_to_embed : OpFactory
+            The factory object that is to be contained within this factory,
+            and that specifies the only non-trivial action of the operations
+            this factory produces.
+        """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory = factory_to_embed
         self.state_space_labels = _StateSpaceLabels(stateSpaceLabels,
@@ -250,12 +280,38 @@ class EmbeddedOpFactory(OpFactory):
 
 class EmbeddingOpFactory(OpFactory):
     """
-    A factory that "on-demand" embeds a given factory or operation into any requested
-    set of target sectors.
+    A factory that "on-demand" embeds a given factory or operation into any
+    requested set of target sectors.  This is similar to an `EmbeddedOpFactory`
+    except in this case how the "contained" operation/factory is embedded is
+    *not* determined at creation time: the `sslbls` argument of
+    :method:`create_op` is used instead.
     """
 
     def __init__(self, stateSpaceLabels, factory_or_op_to_embed, dense=False):
-        """TODO: docstring """
+        """
+        Create a new EmbeddingOpFactory object.
+
+        Parameters
+        ----------
+        stateSpaceLabels : StateSpaceLabels or a list of tuples
+            This argument specifies the density matrix space upon which the
+            operations this factory builds act.  If a list of tuples, each tuple
+            corresponds to a block of a density matrix in the standard basis
+            (and therefore a component of the direct-sum density matrix
+            space). Elements of a tuple are user-defined labels beginning with
+            "L" (single Level) or "Q" (two-level; Qubit) which interpret the
+            d-dimensional state space corresponding to a d x d block as a tensor
+            product between qubit and single level systems.  (E.g. a 2-qubit
+            space might be labelled `[('Q0','Q1')]`).
+
+        factory_or_op_to_embed : LinearOperator or OpFactory
+            The factory or operation object that is to be contained within this
+            factory.  If a linear operator, this *same* operator (not a copy)
+            is embedded however is requested.  If a factory, then this object's
+            `create_op` method is called with any `args` that are passed to
+            the embedding-factory's `create_op` method, but the `sslbls` are
+            always set to `None` (as they are processed by the embedding
+        """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)

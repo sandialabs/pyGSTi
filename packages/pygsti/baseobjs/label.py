@@ -148,7 +148,18 @@ class Label(object):
         return 1  # most labels have only reps==1
 
     def expand_subcircuits(self):
-        """TODO: docstring - returns a list/tuple of labels """
+        """
+        Expand any sub-circuits within this label and return a resulting list
+        of component labels which doesn't include any :class:`CircuitLabel`
+        labels.  This effectively expands any "boxes" or "exponentiation"
+        within this label.
+
+        Returns
+        -------
+        tuple
+            A tuple of component Labels (none of which should be
+            :class:`CircuitLabel`s).
+        """
         return (self,)  # most labels just expand to themselves
 
 
@@ -662,7 +673,18 @@ class LabelTupTup(Label, tuple):
         return max([x.depth() for x in self.components])
 
     def expand_subcircuits(self):
-        """TODO: docstring - returns a list/tuple of labels """
+        """
+        Expand any sub-circuits within this label and return a resulting list
+        of component labels which doesn't include any :class:`CircuitLabel`
+        labels.  This effectively expands any "boxes" or "exponentiation"
+        within this label.
+
+        Returns
+        -------
+        tuple
+            A tuple of component Labels (none of which should be
+            :class:`CircuitLabel`s).
+        """
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
@@ -685,24 +707,44 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfTups, stateSpaceLabels, reps=1, time=None):
+    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None):
         """
-        Creates a new Model-item label, which is a tuple of tuples of simple
-        string labels and tuples specifying the part of the Hilbert space upon
-        which that item acts (often just qubit indices).
+        Creates a new Model-item label, which defines a set of other labels
+        as a sub-circuit and allows that sub-circuit to be repeated some integer
+        number of times.  A `CircuitLabel` can be visualized as placing a
+        (named) box around some set of labels and optionally exponentiating
+        that box.
 
-        TODO: docstring!
+        Internally, a circuit labels look very similar to `LabelTupTup` objects,
+        holding a tuple of tuples defining the component labels (circuit layers).
 
         Parameters
         ----------
-        tupOfTups : tuple
-            The item data - a tuple of (string, state-space-labels) tuples
-            which labels a parallel layer/level of a circuit.
+        name : str
+            The name of the sub-circuit (box).  Cannot be `None`, but can be
+            empty.
+
+        tupOfLayers : tuple
+            The item data - a tuple of tuples which label the components
+            (layers) within this label.
+
+        stateSpaceLabels : list or tuple
+            A list or tuple that identifies which sectors/parts of the Hilbert
+            space is acted upon.  In many cases, this is a list of integers
+            specifying the qubits on which a gate acts, when the ordering in the
+            list defines the 'direction' of the gate.
+
+        reps : int, optional
+            The "exponent" - the number of times the `tupOfLayers` labels are
+            repeated.
+
+        time : float
+            The time at which this label occurs (can be relative or absolute)
         """
         #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
         assert(isinstance(reps, _numbers.Integral) and isstr(name)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
-        tupOfLabels = tuple((Label(tup) for tup in tupOfTups))  # Note: tup can also be a Label obj
+        tupOfLabels = tuple((Label(tup) for tup in tupOfLayers))  # Note: tup can also be a Label obj
         # creates a CircuitLabel object using tuple's __new__
         ret = tuple.__new__(cls, (name, stateSpaceLabels, reps) + tupOfLabels)
         if time is None:
@@ -861,7 +903,18 @@ class CircuitLabel(Label, tuple):
         return sum([x.depth() for x in self.components]) * self.reps
 
     def expand_subcircuits(self):
-        """TODO: docstring - returns a list/tuple of labels """
+        """
+        Expand any sub-circuits within this label and return a resulting list
+        of component labels which doesn't include any :class:`CircuitLabel`
+        labels.  This effectively expands any "boxes" or "exponentiation"
+        within this label.
+
+        Returns
+        -------
+        tuple
+            A tuple of component Labels (none of which should be
+            :class:`CircuitLabel`s).
+        """
         #REMOVE print("Expanding subcircuit components: ",self.components)
         #REMOVE print(" --> ",[ x.expand_subcircuits() for x in self.components ])
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps

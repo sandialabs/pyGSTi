@@ -627,7 +627,9 @@ class GatesVsTargetTable(WorkspaceTable):
             (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
 
-        wildcard: TODO: docstring
+        wildcard: PrimitiveOpsWildcardBudget
+            A wildcard budget with a `get_op_budget` method that is used to
+            fill in the "unmodeled" error column when it is requested.
 
         Returns
         -------
@@ -1867,8 +1869,12 @@ class FitComparisonTable(WorkspaceTable):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
-
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function (`objective`),
+            which increases the goodness of fit by adjusting (by an amount
+            measured in TVD) the probabilities produced by a model before
+            comparing with the frequencies in `dataset`.  Currently, this
+            functionality is only supported for `objective == "logl"`.
 
         Returns
         -------

@@ -730,7 +730,12 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         The number of free parameters in the model.  If None, then
         `model.num_nongauge_params()` is used.
 
-    wildcard : TODO: docstring
+    wildcard : WildcardBudget
+        A wildcard budget to apply to the objective function (`objective`),
+        which increases the goodness of fit by adjusting (by an amount measured
+        in TVD) the probabilities produced by `model` before comparing with
+        the frequencies in `dataset`.  Currently, this functionality is only
+        supported for `objective == "logl"`.
 
     returnAll : bool, optional
         Returns additional information such as the raw and expected model
