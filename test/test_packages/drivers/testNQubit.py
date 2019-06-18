@@ -15,7 +15,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 
 #from .nqubitconstruction import *
 
-#Mimics a function that used to be in pyGSTi, replaced with build_standard_cloudnoise_model
+#Mimics a function that used to be in pyGSTi, replaced with build_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                                       extraWeight1Hops=0, extraGateWeight=0, sparse=False,
@@ -24,8 +24,8 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pc.build_standard_cloudnoise_model_from_hops_and_weights(
-        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability,
+    return pc.build_cloudnoise_model_from_hops_and_weights(
+        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
         None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight, sparse,
         roughNoise, sim_type, parameterization,

@@ -17,6 +17,8 @@ from . import operation as _op
 from . import instrument as _instrument
 from . import povm as _povm
 from ..baseobjs import Label as _Lbl
+from ..tools import optools as _gt
+from ..tools import basistools as _bt
 
 
 def op_from_factories(factory_dict, lbl):
@@ -70,6 +72,38 @@ class OpFactory(_gm.ModelMember):
         _gm.ModelMember.__init__(self, dim, evotype)
 
     def create_object(self, args=None, sslbls=None):
+        """
+        Create the object which implements the operation associated
+        with the given `args` and `sslbls`.
+
+        Note to developers:
+        The difference beween this method and :method:`create_op` is that
+        this method just creates the foundational object without needing
+        to setup it's parameter indices (a technical detail which connects
+        the created object with the originating factory's parameters).  The
+        base-class `create_op` method calls `create_object` and then performs
+        some additional setup on the returned object before returning it
+        itself.  Thus, unless you have a reason for implementing `create_op`
+        it's often more convenient and robust to implement this function.
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Instrument, or POVM, depending on the label requested.
+        """
         raise NotImplementedError("Derived factory classes must implement `create_object`!")
 
     def create_op(self, args=None, sslbls=None):
@@ -287,7 +321,7 @@ class EmbeddingOpFactory(OpFactory):
     :method:`create_op` is used instead.
     """
 
-    def __init__(self, stateSpaceLabels, factory_or_op_to_embed, dense=False):
+    def __init__(self, stateSpaceLabels, factory_or_op_to_embed, dense=False, num_target_labels=None):
         """
         Create a new EmbeddingOpFactory object.
 
@@ -311,6 +345,16 @@ class EmbeddingOpFactory(OpFactory):
             `create_op` method is called with any `args` that are passed to
             the embedding-factory's `create_op` method, but the `sslbls` are
             always set to `None` (as they are processed by the embedding
+
+        dense : bool, optional
+            Whether dense embedding operations (ops which hold their entire
+            "action" matrix in memory) should be created.
+
+        num_target_labels : int, optional
+            If not `None`, the number of target labels that should be expected
+            (usually equal to the number of qubits the contained gate acts
+            upon).  If `None`, then the length of the `sslbls` passed to this
+            factory's `create_op` method is not checked at all.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory_or_op = factory_or_op_to_embed
@@ -318,6 +362,7 @@ class EmbeddingOpFactory(OpFactory):
         self.state_space_labels = _StateSpaceLabels(stateSpaceLabels,
                                                     evotype=factory_or_op_to_embed._evotype)
         self.dense = dense
+        self.num_target_labels = num_target_labels
         super(EmbeddingOpFactory, self).__init__(self.state_space_labels.dim, factory_or_op_to_embed._evotype)
 
     def create_op(self, args=None, sslbls=None):
@@ -344,7 +389,10 @@ class EmbeddingOpFactory(OpFactory):
         """
         assert(sslbls is not None), ("EmbeddedOpFactory objects should be asked to create "
                                      "operations with specific `sslbls`")
-
+        assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
+            ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
+             " (expected %d)") % (len(sslbls), self.num_target_labels)
+        
         Embedded = _op.EmbeddedDenseOp if self.dense else _op.EmbeddedOp
         if self.embeds_factory:
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
@@ -402,3 +450,59 @@ class EmbeddingOpFactory(OpFactory):
         """
         self.embedded_factory_or_op.from_vector(v)
         self.dirty = True
+
+
+class UnitaryOpFactory(OpFactory):
+    """
+    Converts a function, f(arg_tuple), that outputs a unitary matrix (operation)
+    into a factory that produces a :class:`StaticDenseOp` superoperator.
+    """
+
+    def __init__(self, fn, superop_basis="pp"):
+        """
+        Create a new UnitaryOpFactory object.
+
+        Parameters
+        ----------
+        fn : function
+            A function that takes as it's only argument a tuple
+            of label-arguments (arguments included in circuit labels,
+            e.g. 'Gxrot;0.347') and returns a unitary matrix -- a
+            complex numpy array that has dimension 2^nQubits, e.g.
+            a 2x2 matrix in the 1-qubit case.
+
+        superop_basis : Basis or {"std","pp","gm","qt"}
+            The basis the resulting :class:`StaticDenseOp` superoperator
+            should be given in.  Usually the default of `"pp"` is what
+            you want.
+        """
+        self.basis = superop_basis
+        self.fn = fn
+
+    def create_object(self, args=None, sslbls=None):
+        """
+        Create the object which implements the operation associated
+        with the given `args` and `sslbls`.
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Instrument, or POVM, depending on the label requested.
+        """
+        assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
+        U = self.fn(args)
+        superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
+        return _op.StaticDenseOp(superop)
