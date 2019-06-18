@@ -1,7 +1,14 @@
 import numpy as np
-from ..util import BaseCase
+from ..util import BaseCase, unittest
 
 from pygsti.construction import std1Q_XYI as std
+from pygsti.objects import slowreplib
+
+try:
+    from pygsti.objects import fastreplib
+    _FASTREPLIB_LOADED = True
+except ImportError:
+    _FASTREPLIB_LOADED = False
 
 
 class ReplibBase:
@@ -26,11 +33,13 @@ class ReplibBase:
 
 
 class SlowReplibTester(ReplibBase, BaseCase):
-    from pygsti.objects import slowreplib as replib
+    replib = slowreplib
 
 
+@unittest.skipUnless(_FASTREPLIB_LOADED, "`pygsti.objects.fastreplib` not built")
 class FastReplibTester(ReplibBase, BaseCase):
-    def setUp(self):
-        # tests requiring fastreplib will fail if the module is absent
-        from pygsti.objects import fastreplib
-        self.replib = fastreplib
+    @classmethod
+    def setUpClass(cls):
+        # bind replib during test setup
+        # class should still be defined without fastreplib, so it can be shown as skipped
+        cls.replib = fastreplib
