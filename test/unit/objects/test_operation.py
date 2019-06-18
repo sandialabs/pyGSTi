@@ -150,8 +150,6 @@ class DenseOpBase(OpBase):
         # TODO assert correctness
 
 
-
-
 class MutableDenseOpBase(DenseOpBase):
     def test_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
@@ -441,16 +439,40 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
         # TODO assert correctness
 
 
-class RealEigenvalueParamDenseOpTester(ImmutableDenseOpBase, BaseCase):
+class EigenvalueParamDenseOpBase(ImmutableDenseOpBase):
+    pass
+
+
+class RealEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
     n_params = 4
 
     @staticmethod
     def build_gate():
         mx = np.identity(4, 'd')
-        return op.EigenvalueParamDenseOp(mx, includeOffDiagsInDegen2Blocks=False, TPconstrainedAndUnital=False)
+        return op.EigenvalueParamDenseOp(
+            mx, includeOffDiagsInDegen2Blocks=False,
+            TPconstrainedAndUnital=False
+        )
+
+    def test_include_off_diags_in_degen_2_blocks(self):
+        mx = np.array([[1, 0, 0, 0],
+                       [0, 1, 0, 0],
+                       [0, 0, -1, 0],
+                       [0, 0, 0, -1]], 'complex')
+        # 2 degenerate real pairs of evecs => should add off-diag els
+        g2 = op.EigenvalueParamDenseOp(
+            mx, includeOffDiagsInDegen2Blocks=True, TPconstrainedAndUnital=False
+        )
+        self.assertEqual(
+            g2.params,
+            [[(1.0, (0, 0))], [(1.0, (1, 1))],
+             [(1.0, (0, 1))], [(1.0, (1, 0))],  # off diags blk 1
+             [(1.0, (2, 2))], [(1.0, (3, 3))],
+             [(1.0, (2, 3))], [(1.0, (3, 2))]]  # off diags blk 2
+        )
 
 
-class ComplexEigenvalueParamDenseOpTester(ImmutableDenseOpBase, BaseCase):
+class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
     n_params = 4
 
     @staticmethod
@@ -459,7 +481,49 @@ class ComplexEigenvalueParamDenseOpTester(ImmutableDenseOpBase, BaseCase):
                        [0, 1, 0, 0],
                        [0, 0, 0, 1],
                        [0, 0, -1, 0]], 'd')
-        return op.EigenvalueParamDenseOp(mx, includeOffDiagsInDegen2Blocks=False, TPconstrainedAndUnital=False)
+        return op.EigenvalueParamDenseOp(
+            mx, includeOffDiagsInDegen2Blocks=False,
+            TPconstrainedAndUnital=False
+        )
+
+    def test_include_off_diags_in_degen_2_blocks(self):
+        mx = np.array([[1, -0.1, 0, 0],
+                       [0.1, 1, 0, 0],
+                       [0, 0, 1 + 1, -0.1],
+                       [0, 0, 0.1, 1 + 1]], 'complex')
+        # complex pairs of evecs => make sure combined parameters work
+        g3 = op.EigenvalueParamDenseOp(
+            mx, includeOffDiagsInDegen2Blocks=True, TPconstrainedAndUnital=False
+        )
+        self.assertEqual(
+            g3.params,
+            [[(1.0, (0, 0)), (1.0, (1, 1))],  # single param that is Re part of 0,0 and 1,1 els
+             [(1j, (0, 0)), (-1j, (1, 1))],   # Im part of 0,0 and 1,1 els
+             [(1.0, (2, 2)), (1.0, (3, 3))],  # Re part of 2,2 and 3,3 els
+             [(1j, (2, 2)), (-1j, (3, 3))]]   # Im part of 2,2 and 3,3 els
+        )
+
+        # TODO I don't understand what edge case is being covered here
+        mx = np.array([[1, -0.1, 0, 0],
+                       [0.1, 1, 0, 0],
+                       [0, 0, 1, -0.1],
+                       [0, 0, 0.1, 1]], 'complex')
+        # 2 degenerate complex pairs of evecs => should add off-diag els
+        g4 = op.EigenvalueParamDenseOp(
+            mx, includeOffDiagsInDegen2Blocks=True, TPconstrainedAndUnital=False
+        )
+        self.assertArraysAlmostEqual(g4.evals, [1. + 0.1j, 1. + 0.1j, 1. - 0.1j, 1. - 0.1j])  # Note: evals are sorted!
+        self.assertEqual(
+            g4.params,
+            [[(1.0, (0, 0)), (1.0, (2, 2))],  # single param that is Re part of 0,0 and 2,2 els (conj eval pair, since sorted)
+             [(1j, (0, 0)), (-1j, (2, 2))],   # Im part of 0,0 and 2,2 els
+             [(1.0, (1, 1)), (1.0, (3, 3))],  # Re part of 1,1 and 3,3 els
+             [(1j, (1, 1)), (-1j, (3, 3))],   # Im part of 1,1 and 3,3 els
+             [(1.0, (0, 1)), (1.0, (2, 3))],  # Re part of 0,1 and 2,3 els (upper triangle)
+             [(1j, (0, 1)), (-1j, (2, 3))],   # Im part of 0,1 and 2,3 els (upper triangle); (0,1) and (2,3) must be conjugates
+             [(1.0, (1, 0)), (1.0, (3, 2))],  # Re part of 1,0 and 3,2 els (lower triangle)
+             [(1j, (1, 0)), (-1j, (3, 2))]]   # Im part of 1,0 and 3,2 els (lower triangle); (1,0) and (3,2) must be conjugates
+        )
 
 
 class LindbladOpBase:
@@ -490,6 +554,10 @@ class LindbladDenseOpBase(LindbladOpBase, MutableDenseOpBase):
         s4 = self.gate[2:4, 1]
 
         result = len(self.gate)
+        # TODO assert correctness
+
+    def test_convert(self):
+        g = op.convert(self.gate, "CPTP", Basis.cast("pp", 4))
         # TODO assert correctness
 
 
@@ -540,7 +608,6 @@ class CPTPLindbladSparseOpTester(LindbladSparseOpBase, BaseCase):
             nonham_basis="pp", param_mode="cptp", nonham_mode="all",
             truncate=True, mxBasis="pp"
         )
-
 
 
 class PostFactorCPTPLindbladSparseOpTester(LindbladSparseOpBase, BaseCase):
