@@ -1,5 +1,6 @@
-import numpy as np
 import pickle
+import numpy as np
+import scipy.sparse as sps
 
 from ..util import BaseCase, unittest
 from .. import _SKIP_CVXPY
@@ -8,24 +9,6 @@ from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, Expl
 from pygsti.baseobjs import basisconstructors as bc
 import pygsti.construction as pc
 import pygsti.objects.operation as op
-
-
-def OperationUtilTester(BaseCase):
-    def test_convert_to_matrix_raises_on_bad_dim(self):
-        with self.assertRaises(ValueError):
-            op.DenseOperator.convert_to_matrix(np.zeros((2, 2, 2), 'd'))
-
-    def test_convert_to_matrix_raises_on_bad_shape(self):
-        with self.assertRaises(ValueError):
-            op.DenseOperator.convert_to_matrix(np.zeros((2, 4), 'd'))
-
-    def test_convert_to_matrix_raises_on_bad_input(self):
-        bad_mxs = ['akdjsfaksdf',
-                   [[], [1, 2]],
-                   [[[]], [[1, 2]]]]
-        for bad_mx in bad_mxs:
-            with self.assertRaises(ValueError):
-                op.DenseOperator.convert_to_matrix(bad_mx)
 
 
 class OpBase:
@@ -38,7 +21,7 @@ class OpBase:
 
     def test_copy(self):
         gate_copy = self.gate.copy()
-        self.assertArraysAlmostEqual(gate_copy, self.gate)
+        self.assertArraysEqual(gate_copy, self.gate)
         self.assertEqual(type(gate_copy), type(self.gate))
 
     def test_get_dimension(self):
@@ -47,18 +30,6 @@ class OpBase:
     def test_vector_conversion(self):
         v = self.gate.to_vector()
         self.gate.from_vector(v)
-        # TODO assert correctness
-
-    def test_deriv_wrt_params(self):
-        deriv = self.gate.deriv_wrt_params()
-        self.assertEqual(deriv.shape, (self.gate.dim**2, self.n_params))
-        # TODO assert correctness
-
-    def test_hessian_wrt_params(self):
-        hessian = self.gate.hessian_wrt_params()
-        hessian = self.gate.hessian_wrt_params([1,2],None)
-        hessian = self.gate.hessian_wrt_params(None,[1,2])
-        hessian = self.gate.hessian_wrt_params([1,2],[1,2])
         # TODO assert correctness
 
     def test_has_nonzero_hessian(self):
@@ -70,18 +41,6 @@ class OpBase:
         self.gate.torep().acton(FullSPAMVec(state).torep("prep"))
         # TODO assert correctness
 
-    def test_frobeniusdist(self):
-        self.assertAlmostEqual(self.gate.frobeniusdist(self.gate), 0.0)
-        self.assertAlmostEqual(self.gate.frobeniusdist2(self.gate), 0.0)
-        # TODO test non-trivial case
-
-    def test_jtracedist(self):
-        self.assertAlmostEqual(self.gate.jtracedist(self.gate), 0.0)
-
-    @unittest.skipIf(_SKIP_CVXPY, "skipping cvxpy tests")
-    def test_diamonddist(self):
-        self.assertAlmostEqual(self.gate.diamonddist(self.gate), 0.0)
-
     def test_to_string(self):
         gate_as_str = str(self.gate)
         # TODO assert correctness
@@ -89,8 +48,12 @@ class OpBase:
     def test_pickle(self):
         pklstr = pickle.dumps(self.gate)
         gate_pickle = pickle.loads(pklstr)
-        self.assertArraysAlmostEqual(gate_pickle, self.gate)
+        self.assertArraysEqual(gate_pickle, self.gate)
         self.assertEqual(type(gate_pickle), type(self.gate))
+
+    def test_tosparse(self):
+        sparseMx = self.gate.tosparse()
+        # TODO assert correctness
 
 
 class LinearOpTester(OpBase):
@@ -162,8 +125,34 @@ class DenseOpBase(OpBase):
         result = M - self.gate
         self.assertEqual(type(result), np.ndarray)
 
+    def test_frobeniusdist(self):
+        self.assertAlmostEqual(self.gate.frobeniusdist(self.gate), 0.0)
+        self.assertAlmostEqual(self.gate.frobeniusdist2(self.gate), 0.0)
+        # TODO test non-trivial case
 
-class MutableGateBase(DenseOpBase):
+    def test_jtracedist(self):
+        self.assertAlmostEqual(self.gate.jtracedist(self.gate), 0.0)
+
+    @unittest.skipIf(_SKIP_CVXPY, "skipping cvxpy tests")
+    def test_diamonddist(self):
+        self.assertAlmostEqual(self.gate.diamonddist(self.gate), 0.0)
+
+    def test_deriv_wrt_params(self):
+        deriv = self.gate.deriv_wrt_params()
+        self.assertEqual(deriv.shape, (self.gate.dim**2, self.n_params))
+        # TODO assert correctness
+
+    def test_hessian_wrt_params(self):
+        hessian = self.gate.hessian_wrt_params()
+        hessian = self.gate.hessian_wrt_params([1, 2], None)
+        hessian = self.gate.hessian_wrt_params(None, [1, 2])
+        hessian = self.gate.hessian_wrt_params([1, 2], [1, 2])
+        # TODO assert correctness
+
+
+
+
+class MutableDenseOpBase(DenseOpBase):
     def test_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
         self.gate.set_value(M)
@@ -212,7 +201,7 @@ class MutableGateBase(DenseOpBase):
         # TODO assert correctness
 
 
-class ImmutableGateBase(DenseOpBase):
+class ImmutableDenseOpBase(DenseOpBase):
     def test_raises_on_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
         with self.assertRaises(ValueError):
@@ -241,15 +230,31 @@ class ImmutableGateBase(DenseOpBase):
         # TODO assert correctness
 
 
-class DenseOpTester(ImmutableGateBase, BaseCase):
+class DenseOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 0
 
     @staticmethod
     def build_gate():
         return op.DenseOperator(np.zeros((4, 4)), 'densitymx')
 
+    def test_convert_to_matrix_raises_on_bad_dim(self):
+        with self.assertRaises(ValueError):
+            op.DenseOperator.convert_to_matrix(np.zeros((2, 2, 2), 'd'))
 
-class FullOpTester(MutableGateBase, BaseCase):
+    def test_convert_to_matrix_raises_on_bad_shape(self):
+        with self.assertRaises(ValueError):
+            op.DenseOperator.convert_to_matrix(np.zeros((2, 4), 'd'))
+
+    def test_convert_to_matrix_raises_on_bad_input(self):
+        bad_mxs = ['akdjsfaksdf',
+                   [[], [1, 2]],
+                   [[[]], [[1, 2]]]]
+        for bad_mx in bad_mxs:
+            with self.assertRaises(ValueError):
+                op.DenseOperator.convert_to_matrix(bad_mx)
+
+
+class FullOpTester(MutableDenseOpBase, BaseCase):
     n_params = 16
 
     @staticmethod
@@ -304,7 +309,7 @@ class FullOpTester(MutableGateBase, BaseCase):
         # TODO assert correctness
 
 
-class LinearlyParamOpTester(MutableGateBase, BaseCase):
+class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
     n_params = 16
 
     @staticmethod
@@ -355,7 +360,7 @@ class LinearlyParamOpTester(MutableGateBase, BaseCase):
         # TODO assert correctness
 
 
-class TPOpTester(MutableGateBase, BaseCase):
+class TPOpTester(MutableDenseOpBase, BaseCase):
     n_params = 12
 
     @staticmethod
@@ -404,7 +409,7 @@ class TPOpTester(MutableGateBase, BaseCase):
             self.gate[0][1:2] = [0]
 
 
-class StaticOpTester(ImmutableGateBase, BaseCase):
+class StaticOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 0
 
     @staticmethod
@@ -436,7 +441,7 @@ class StaticOpTester(ImmutableGateBase, BaseCase):
         # TODO assert correctness
 
 
-class RealEigenvalueParamDenseOpTester(ImmutableGateBase, BaseCase):
+class RealEigenvalueParamDenseOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 4
 
     @staticmethod
@@ -445,7 +450,7 @@ class RealEigenvalueParamDenseOpTester(ImmutableGateBase, BaseCase):
         return op.EigenvalueParamDenseOp(mx, includeOffDiagsInDegen2Blocks=False, TPconstrainedAndUnital=False)
 
 
-class ComplexEigenvalueParamDenseOpTester(ImmutableGateBase, BaseCase):
+class ComplexEigenvalueParamDenseOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 4
 
     @staticmethod
@@ -457,10 +462,12 @@ class ComplexEigenvalueParamDenseOpTester(ImmutableGateBase, BaseCase):
         return op.EigenvalueParamDenseOp(mx, includeOffDiagsInDegen2Blocks=False, TPconstrainedAndUnital=False)
 
 
-class LindbladOpBase(MutableGateBase):
+class LindbladOpBase:
     def test_has_nonzero_hessian(self):
         self.assertTrue(self.gate.has_nonzero_hessian())
 
+
+class LindbladDenseOpBase(LindbladOpBase, MutableDenseOpBase):
     def test_transform(self):
         gate_copy = self.gate.copy()
         T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
@@ -486,31 +493,74 @@ class LindbladOpBase(MutableGateBase):
         # TODO assert correctness
 
 
-class CPTPLindbladDenseOpTester(LindbladOpBase, BaseCase):
+class LindbladSparseOpBase(LindbladOpBase, OpBase):
+    def assertArraysEqual(self, a, b):
+        # Sparse LindbladOp does not support equality natively, so compare errorgen matrices
+        self.assertEqual((a.errorgen.err_gen_mx != b.errorgen.err_gen_mx).nnz, 0)
+
+
+class CPTPLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     n_params = 12
 
     @staticmethod
     def build_gate():
         mx = np.identity(4, 'd')
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis="pp", nonham_basis="pp", param_mode="cptp", nonham_mode="all",
+            mx, unitaryPostfactor=None, ham_basis="pp",
+            nonham_basis="pp", param_mode="cptp", nonham_mode="all",
             truncate=True, mxBasis="pp"
         )
 
 
-class DiagonalCPTPLindbladDenseOpTester(LindbladOpBase, BaseCase):
+class DiagonalCPTPLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     n_params = 6
 
     @staticmethod
     def build_gate():
         mx = np.identity(4, 'd')
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis="pp", nonham_basis="pp", param_mode="cptp", nonham_mode="diagonal",
+            mx, unitaryPostfactor=None, ham_basis="pp",
+            nonham_basis="pp", param_mode="cptp",
+            nonham_mode="diagonal", truncate=True, mxBasis="pp"
+        )
+
+
+class CPTPLindbladSparseOpTester(LindbladSparseOpBase, BaseCase):
+    n_params = 12
+
+    @staticmethod
+    def build_gate():
+        densemx = np.array([[1, 0, 0, 0],
+                            [0, 1, 0, 0],
+                            [0, 0, 0, 1],
+                            [0, 0, -1, 0]], 'd')
+        sparsemx = sps.csr_matrix(densemx, dtype='d')
+        return op.LindbladOp.from_operation_matrix(
+            sparsemx, unitaryPostfactor=None, ham_basis="pp",
+            nonham_basis="pp", param_mode="cptp", nonham_mode="all",
             truncate=True, mxBasis="pp"
         )
 
 
-class UnconstrainedLindbladDenseOpTester(LindbladOpBase, BaseCase):
+
+class PostFactorCPTPLindbladSparseOpTester(LindbladSparseOpBase, BaseCase):
+    n_params = 12
+
+    @staticmethod
+    def build_gate():
+        densemx = np.array([[1, 0, 0, 0],
+                            [0, 1, 0, 0],
+                            [0, 0, 0, 1],
+                            [0, 0, -1, 0]], 'd')
+        sparsemx = sps.csr_matrix(densemx, dtype='d')
+        return op.LindbladOp.from_operation_matrix(
+            None, unitaryPostfactor=sparsemx, ham_basis="pp",
+            nonham_basis="pp", param_mode="cptp", nonham_mode="all",
+            truncate=True, mxBasis="pp"
+        )
+
+
+class UnconstrainedLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     n_params = 12
 
     @staticmethod
@@ -518,12 +568,13 @@ class UnconstrainedLindbladDenseOpTester(LindbladOpBase, BaseCase):
         mx = np.identity(4, 'd')
         ppBasis = Basis.cast("pp", 4)
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
+            mx, unitaryPostfactor=None, ham_basis=ppBasis,
+            nonham_basis=ppBasis, param_mode="unconstrained",
             nonham_mode="all", truncate=True, mxBasis="pp"
         )
 
 
-class DiagonalUnconstrainedLindbladDenseOpTester(LindbladOpBase, BaseCase):
+class DiagonalUnconstrainedLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     n_params = 6
 
     @staticmethod
@@ -531,12 +582,13 @@ class DiagonalUnconstrainedLindbladDenseOpTester(LindbladOpBase, BaseCase):
         mx = np.identity(4, 'd')
         ppMxs = bc.pp_matrices(2)
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis=ppMxs, nonham_basis=ppMxs, param_mode="unconstrained",
+            mx, unitaryPostfactor=None, ham_basis=ppMxs,
+            nonham_basis=ppMxs, param_mode="unconstrained",
             nonham_mode="diagonal", truncate=True, mxBasis="pp"
         )
 
 
-class UntruncatedLindbladDenseOpTester(LindbladOpBase, BaseCase):
+class UntruncatedLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     n_params = 12
 
     @staticmethod
@@ -544,12 +596,13 @@ class UntruncatedLindbladDenseOpTester(LindbladOpBase, BaseCase):
         mx = np.identity(4, 'd')
         ppBasis = Basis.cast("pp", 4)
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
+            mx, unitaryPostfactor=None, ham_basis=ppBasis,
+            nonham_basis=ppBasis, param_mode="unconstrained",
             nonham_mode="all", truncate=False, mxBasis="pp"
         )
 
 
-class ComposedDenseOpTester(ImmutableGateBase, BaseCase):
+class ComposedDenseOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 48
 
     @staticmethod
@@ -574,10 +627,20 @@ class ComposedDenseOpTester(ImmutableGateBase, BaseCase):
         return gate
 
 
-class EmbeddedDenseOpTester(ImmutableGateBase, BaseCase):
+class EmbeddedDenseOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 16
 
     @staticmethod
     def build_gate():
         mx = np.identity(4, 'd')
         return op.EmbeddedDenseOp([('Q0',)], ['Q0'], op.FullDenseOp(mx))
+
+    def test_constructor_raises_on_bad_state_space_label(self):
+        mx = np.identity(4, 'd')
+        with self.assertRaises(ValueError):
+            op.EmbeddedOp([('L0', 'foobar')], ['Q0'], op.FullDenseOp(mx))
+
+    def test_constructor_raises_on_state_space_label_mismatch(self):
+        mx = np.identity(4, 'd')
+        with self.assertRaises(ValueError):
+            op.EmbeddedOp([('Q0',), ('Q1',)], ['Q0', 'Q1'], op.FullDenseOp(mx))
