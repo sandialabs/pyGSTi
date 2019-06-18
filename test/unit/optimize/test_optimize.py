@@ -1,7 +1,7 @@
 import numpy as np
-import os
 
 from ..util import BaseCase, unittest
+from .. import _SKIP_DEAP
 
 from pygsti.optimize import optimize as opt
 
@@ -25,7 +25,7 @@ class OptimizeTester(BaseCase):
         result = opt.minimize(self.f, self.x0, "brute", maxiter=10)
         self.assertArraysAlmostEqual(result.x, self.answer)
 
-    @unittest.skipIf(os.getenv('SKIP_DEAP'), "skipping deap tests")
+    @unittest.skipIf(_SKIP_DEAP, "skipping deap tests")
     def test_minimize_evolutionary(self):
         result = opt.minimize(self.f, self.x0, "evolve", maxiter=20)
         self.assertLess(np.linalg.norm(result.x - self.answer), 0.1)
