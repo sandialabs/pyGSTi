@@ -1,4 +1,4 @@
-"""Test fixtures for pygsti.tools unit tests"""
+"""Test fixtures for pygsti.objects unit tests"""
 from ..util import Namespace
 
 import pygsti
@@ -9,7 +9,7 @@ ns.model = std.target_model()
 ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
-ns.maxLengthList = [0, 1, 2, 4, 8]
+ns.maxLengthList = [1, 2]
 ns.CM = pygsti.baseobjs.profiler._get_mem_usage()
 
 
@@ -51,6 +51,14 @@ def mdl_clgst(self):
 @ns.memo
 def lsgstStrings(self):
     return pygsti.construction.make_lsgst_lists(
+        self.opLabels, self.fiducials, self.fiducials, self.germs,
+        self.maxLengthList
+    )
+
+
+@ns.memo
+def lsgstStructs(self):
+    return pygsti.construction.make_lsgst_structs(
         self.opLabels, self.fiducials, self.fiducials, self.germs,
         self.maxLengthList
     )
