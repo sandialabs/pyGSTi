@@ -5,6 +5,8 @@ import numbers
 import functools
 import types
 from contextlib import contextmanager
+import os
+import warnings
 
 # Test modules should import these generic names rather than importing the modules directly:
 
@@ -35,6 +37,20 @@ else:
 
 _TEST_ROOT_PATH = Path(__file__).parent.parent.absolute()
 _TEST_DATA_PATH = _TEST_ROOT_PATH / "data"
+
+
+def needs_cvxpy(fn):
+    """Shortcut decorator for skipping tests that require CVXPY"""
+    return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(
+        fn
+    )
+
+
+def needs_deap(fn):
+    """Shortcut decorator for skipping tests that require deap"""
+    return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(
+        fn
+    )
 
 
 def version_label():
@@ -139,6 +155,15 @@ class BaseCase(unittest.TestCase):
                 self.assertAlmostEqual(v, e, places=7, msg=msg)
             else:
                 self.assertEqual(v, e, msg=msg)
+
+    @contextmanager
+    def assertNoWarns(self, category=Warning):
+        with warnings.catch_warnings(record=True) as warns:
+            yield  # yield to context
+
+            for w in warns:
+                if issubclass(w.category, category):
+                    self.fail("{} was triggered".format(category))
 
     def reference_path(self, filename, can_retry=True):
         """Returns the absolute path to a test reference data file, if it exists.

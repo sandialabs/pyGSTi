@@ -2,8 +2,7 @@ import pickle
 import numpy as np
 import scipy.sparse as sps
 
-from ..util import BaseCase, unittest
-from .. import _SKIP_CVXPY
+from ..util import BaseCase, needs_cvxpy
 
 from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, ExplicitOpModel, Basis, FullSPAMVec
 from pygsti.baseobjs import basisconstructors as bc
@@ -133,7 +132,7 @@ class DenseOpBase(OpBase):
     def test_jtracedist(self):
         self.assertAlmostEqual(self.gate.jtracedist(self.gate), 0.0)
 
-    @unittest.skipIf(_SKIP_CVXPY, "skipping cvxpy tests")
+    @needs_cvxpy
     def test_diamonddist(self):
         self.assertAlmostEqual(self.gate.diamonddist(self.gate), 0.0)
 

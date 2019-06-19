@@ -2,8 +2,7 @@ import functools
 import numpy as np
 import scipy
 
-from ..util import BaseCase, mock, unittest
-from .. import _SKIP_CVXPY
+from ..util import BaseCase, mock, needs_cvxpy
 
 from pygsti.construction import std2Q_XXYYII
 import pygsti.tools.optools as ot
@@ -267,7 +266,7 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mxBasis="std"), 0.0)
         self.assertAlmostEqual(ot.jtracedist(self.A, self.B, mxBasis="std"), 0.26430148)  # OLD: 0.2601 ?
 
-    @unittest.skipIf(_SKIP_CVXPY, "skipping cvxpy tests")
+    @needs_cvxpy
     def test_diamond_distance(self):
         self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mxBasis="std"), 0.0)
         self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mxBasis="std"), 0.614258836298)
