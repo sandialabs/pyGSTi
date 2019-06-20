@@ -5515,6 +5515,8 @@ class ComposedErrorgen(LinearOperator):
 
     def todense(self):
         """ Return this error generator as a dense matrix """
+        if len(self.factors) == 0:
+            return _np.zeros((self.dim, self.dim), 'd')
         mx = self.factors[0].todense()
         for eg in self.factors[1:]:
             mx += eg.todense()

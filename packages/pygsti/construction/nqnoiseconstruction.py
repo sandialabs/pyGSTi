@@ -24,6 +24,7 @@ from ..tools import mpitools as _mpit
 from ..tools import compattools as _compat
 from ..objects import model as _mdl
 from ..objects import operation as _op
+from ..objects import opfactory as _opfactory
 from ..objects import spamvec as _sv
 from ..objects import povm as _povm
 from ..objects import qubitgraph as _qgraph
@@ -793,6 +794,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         return cloud_key
 
     # gate_names => gatedict
+    if custom_gates is None: custom_gates = {}
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = _itgs.get_standard_gatename_unitaries()
 
@@ -803,8 +805,12 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         else:
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-            gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-            # assume evotype is a densitymx or term type
+            if callable(U):  # then assume a function: args -> unitary
+                U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+            else:
+                gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                # assume evotype is a densitymx or term type
 
     #Add anything from custom_gates directly if it wasn't added already
     for lbl, gate in custom_gates.items():
@@ -2176,6 +2182,8 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     for name in gate_names:
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+        if callable(U):  # then assume a function: args -> unitary
+            raise NotImplementedError("Factories are not allowed to passed to create_standard_cloudnoise_sequences yet")
         gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         # assume evotype is a densitymx or term type
 

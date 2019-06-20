@@ -240,9 +240,14 @@ class CloudNoiseModel(_ImplicitOpModel):
                 gatedict[name] = custom_gates[name]
             else:
                 U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
-                if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-                gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-                # assume evotype is a densitymx or term type
+                if U is None:
+                    raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+                if callable(U):  # then assume a function: args -> unitary
+                    U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                    gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+                else:
+                    gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                    # assume evotype is a densitymx or term type
 
         #Add anything from custom_gates directly if it wasn't added already
         for lbl, gate in custom_gates.items():
@@ -562,7 +567,10 @@ class CloudNoiseModel(_ImplicitOpModel):
             qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
             #Only extract qubit labels from the first tensor-product block...
 
-        lizardArgs = {'add_idle_noise': addIdleNoiseToAllGates, 'errcomp_type': errcomp_type, 'sparse_expm': sparse}
+        if global_idle_layer is None:
+            self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
+        lizardArgs = {'add_idle_noise': self.addIdleNoiseToAllGates,
+                      'errcomp_type': errcomp_type, 'sparse_expm': sparse}
         super(CloudNoiseModel, self).__init__(qubit_sslbls, "pp", {}, CloudNoiseLayerLizard,
                                               lizardArgs, sim_type=sim_type, evotype=evotype)
 
@@ -590,7 +598,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 
         if global_idle_layer is None:
-            self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
+            pass
         elif callable(global_idle_layer):
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle_layer()
         else:
@@ -1147,7 +1155,8 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
 
         add_idle_noise = self.model._lizardArgs['add_idle_noise']
         errcomp_type = self.model._lizardArgs['errcomp_type']
-        sparse_expm = self.model._lizardArgs['sparse_expm']
+        sparse_expm = self.model._lizardArgs['sparse_expm'] and not dense
+        # can't create LindbladDensOps with sparse_expm=True
 
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         Lindblad = _op.LindbladDenseOp if dense else _op.LindbladOp
@@ -1169,29 +1178,29 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
 
         if errcomp_type == "gates":
             if add_idle_noise: ops_to_compose.append(self.op_blks['layers']['globalIdle'])
-            if len(components) > 1:
-                localErr = Composed([self.get_layer_component_cloudnoise(l) for l in components],
-                                    dim=self.model.dim, evotype=self.model._evotype)
-            else:
-                l = components[0]
-                localErr = self.get_layer_component_cloudnoise(l)
-
-            ops_to_compose.append(localErr)
+            component_cloudnoise_ops = self.get_layer_component_cloudnoises(components),
+            if len(component_cloudnoise_ops) > 0:
+                if len(component_cloudnoise_ops) > 1:
+                    localErr = Composed(component_cloudnoise_ops,
+                                        dim=self.model.dim, evotype=self.model._evotype)
+                else:
+                    localErr = component_cloudnoise_ops[0]
+                ops_to_compose.append(localErr)
 
         elif errcomp_type == "errorgens":
             #We compose the target operations to create a
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
             errorGens = [self.op_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
-            errorGens.extend([self.get_layer_component_cloudnoise(l)
-                              for l in components])
-            if len(errorGens) > 1:
-                error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
-                                           evotype=self.model._evotype),
-                                 sparse_expm=sparse_expm)
-            else:
-                error = Lindblad(None, errorGens[0], sparse_expm=sparse_expm)
-            ops_to_compose.append(error)
+            errorGens.extend(self.get_layer_component_cloudnoises(components))
+            if len(errorGens) > 0:
+                if len(errorGens) > 1:
+                    error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
+                                               evotype=self.model._evotype),
+                                     sparse_expm=sparse_expm)
+                else:
+                    error = Lindblad(None, errorGens[0], sparse_expm=sparse_expm)
+                ops_to_compose.append(error)
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerLizard: %s" % errcomp_type)
 
@@ -1211,8 +1220,18 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
 
-    def get_layer_component_cloudnoise(self, complbl):
-        if complbl in self.op_blks['cloudnoise']:
-            return self.op_blks['cloudnoise'][complbl]
-        else:
-            return _opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl)
+    def get_layer_component_cloudnoises(self, complbl_list):
+        """
+        Get any present cloudnoise ops from a list of components.  This function processes
+        a list rather than an item because it's OK if some components don't have
+        corresponding cloudnoise ops - we just leave those off.
+        """
+        ret = []
+        for complbl in complbl_list:
+            if complbl in self.op_blks['cloudnoise']:
+                ret.append(self.op_blks['cloudnoise'][complbl])
+            else:
+                try:
+                    ret.append(_opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl))
+                except KeyError: pass  # OK if cloudnoise doesn't exist (means no noise)
+        return ret

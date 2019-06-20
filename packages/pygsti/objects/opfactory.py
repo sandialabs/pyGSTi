@@ -33,7 +33,8 @@ def op_from_factories(factory_dict, lbl):
         return factory_dict[lbl_name].create_simplified_op(args=lbl.args, sslbls=lbl.sslbls)
         # E.g. an EmbeddingOpFactory
 
-    raise KeyError("Cannot create operator for label `%s` from factories " % str(lbl))
+    extra = ". Maybe you forgot the args?" if not lbl.args else ""
+    raise KeyError("Cannot create operator for label `%s` from factories%s" % (str(lbl), extra))
 
 
 class OpFactory(_gm.ModelMember):
@@ -452,13 +453,156 @@ class EmbeddingOpFactory(OpFactory):
         self.dirty = True
 
 
+class ComposedOpFactory(OpFactory):
+    """
+    A factory that composes a number of other factories and/or operations.
+
+    Label arguments are passed unaltered through this factory to any component
+    factories.
+    """
+
+    def __init__(self, factories_or_ops_to_compose, dim="auto", evotype="auto", dense=False):
+        """
+        Creates a new ComposedOpFactory.
+
+        Parameters
+        ----------
+        factories_or_ops_to_compose : list
+            List of `LinearOperator` or `OpFactory`-derived objects
+            that are composed to form this factory.  There should be at least
+            one factory among this list, otherwise there's no need for a
+            factory.  Elements are composed with vectors in *left-to-right*
+            ordering, maintaining the same convention as operation sequences
+            in pyGSTi.  Note that this is *opposite* from standard matrix
+            multiplication order.
+
+        dim : int or "auto"
+            Dimension of the operations produced by this factory.  Can be set
+            to `"auto"` to take dimension from `factories_or_ops_to_compose[0]`
+            *if* there's at least one factory or operator being composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this factory.  Can be set to `"auto"` to take
+            the evolution type of `factories_or_ops_to_compose[0]` *if* there's
+            at least one factory or operator being composed.
+
+        dense : bool, optional
+            Whether dense composed operations (ops which hold their entire
+            "action" matrix in memory) should be created.
+        """
+        assert(len(factories_or_ops_to_compose) > 0 or dim != "auto"), \
+            "Must compose at least one factory/op when dim='auto'!"
+        self.factors = list(factories_or_ops_to_compose)
+
+        if dim == "auto":
+            dim = factories_or_ops_to_compose[0].dim
+        assert(all([dim == f.dim for f in factories_or_ops_to_compose])), \
+            "All factories/ops must have the same dimension (%d expected)!" % dim
+
+        if evotype == "auto":
+            evotype = factories_or_ops_to_compose[0]._evotype
+        assert(all([evotype == f._evotype for f in factories_or_ops_to_compose])), \
+            "All factories/ops must have the same evolution type (%s expected)!" % evotype
+
+        self.dense = dense
+        self.is_factory = [isinstance(f, OpFactory) for f in factories_or_ops_to_compose]
+        super(ComposedOpFactory, self).__init__(dim, evotype)
+
+    def create_op(self, args=None, sslbls=None):
+        """
+        Create the operation associated with the given `args` and `sslbls`.
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Instrument, or POVM, depending on the label requested.
+        """
+        Composed = _op.ComposedDenseOp if self.dense else _op.ComposedOp
+        ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
+        op = Composed(ops_to_compose, self.dim, self._evotype)
+        op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
+        return op
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return self.factors
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this factory.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+
+    def to_vector(self):
+        """
+        Get the parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        assert(self.gpindices is not None), "Must set a ComposedOpFactory's .gpindices before calling to_vector"
+        v = _np.empty(self.num_params(), 'd')
+        for gate in self.factors:
+            factor_local_inds = _gm._decompose_gpindices(
+                self.gpindices, gate.gpindices)
+            v[factor_local_inds] = gate.to_vector()
+        return v
+
+    def from_vector(self, v):
+        """
+        Initialize this factory using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling from_vector"
+        for gate in self.factors:
+            factor_local_inds = _gm._decompose_gpindices(
+                self.gpindices, gate.gpindices)
+            gate.from_vector(v[factor_local_inds])
+        self.dirty = True
+
+
 class UnitaryOpFactory(OpFactory):
     """
     Converts a function, f(arg_tuple), that outputs a unitary matrix (operation)
     into a factory that produces a :class:`StaticDenseOp` superoperator.
     """
 
-    def __init__(self, fn, superop_basis="pp"):
+    def __init__(self, fn, unitary_dim, superop_basis="pp", evotype="densitymx"):
         """
         Create a new UnitaryOpFactory object.
 
@@ -471,13 +615,23 @@ class UnitaryOpFactory(OpFactory):
             complex numpy array that has dimension 2^nQubits, e.g.
             a 2x2 matrix in the 1-qubit case.
 
+        unitary_dim : int
+            The dimension of the unitary that is returned by `fn`,
+            e.g. 2 for a 1-qubit factory.
+
         superop_basis : Basis or {"std","pp","gm","qt"}
             The basis the resulting :class:`StaticDenseOp` superoperator
             should be given in.  Usually the default of `"pp"` is what
             you want.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+            The evolution type of the operation(s) this factory builds.
         """
         self.basis = superop_basis
         self.fn = fn
+        self.make_superop = bool(evotype in ("densitymx", "svterm", "cterm"))
+        dim = unitary_dim**2 if self.make_superop else unitary_dim
+        super(UnitaryOpFactory, self).__init__(dim, evotype)
 
     def create_object(self, args=None, sslbls=None):
         """
@@ -504,5 +658,8 @@ class UnitaryOpFactory(OpFactory):
         """
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
         U = self.fn(args)
-        superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
-        return _op.StaticDenseOp(superop)
+        if self.make_superop:
+            superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
+            return _op.StaticDenseOp(superop, self._evotype)
+        else:
+            return _op.StaticDenseOp(U, self._evotype)

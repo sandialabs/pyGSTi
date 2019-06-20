@@ -21,6 +21,7 @@ from ..tools import internalgates as _itgs
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
+from ..objects import opfactory as _opfactory
 from ..objects import explicitmodel as _emdl
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
@@ -1009,6 +1010,7 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
                                    "parameterization - for instance building DepolarizeOp objects "
                                    "instead of LindbladOps for depolarization errors."))
 
+    if custom_gates is None: custom_gates = {}
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = _itgs.get_standard_gatename_unitaries()
 
@@ -1030,8 +1032,16 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
     def create_gate(name, gateMx):
         """Create a gate object corresponding to a name with appropriate parameterization"""
         errs = error_rates.get(name, None)
+
+        if isinstance(gateMx, _opfactory.OpFactory):
+            factory = gateMx
+            gateMx = _np.identity(factory.dim, 'd') # we'll prefix with factory
+        else:
+            factory = None
+
         if errs is None:
-            return _op.StaticDenseOp(gateMx, evotype)
+            if factory: return factory  # gateMx is just identity
+            else: return _op.StaticDenseOp(gateMx, evotype)
 
         elif isinstance(errs, dict):
             parameterization = _parameterization_from_errgendict(errs)
@@ -1066,6 +1076,10 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
         else:
             raise ValueError("Invalid `error_rates` value: %s (type %s)" % (str(errs), type(errs)))
 
+        if factory:
+            #just add errors after whatever factory produces.
+            gate = _opfactory.ComposedOpFactory([factory, gate])
+
         return gate
 
     gatedict = _collections.OrderedDict()
@@ -1076,7 +1090,11 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
             if evotype in ("densitymx", "svterm", "cterm"):
-                gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                if callable(U):  # then assume a function: args -> unitary
+                    U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                    gateMx = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+                else:
+                    gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
             else:  # we just store the unitaries
                 raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
                 #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
