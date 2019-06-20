@@ -596,6 +596,8 @@ class ComposedOpFactory(OpFactory):
         self.dirty = True
 
 
+#Note: to pickle these Factories we'll probably need to some work
+# because they include functions.
 class UnitaryOpFactory(OpFactory):
     """
     Converts a function, f(arg_tuple), that outputs a unitary matrix (operation)

@@ -225,15 +225,15 @@ class LocalNoiseModel(_ImplicitOpModel):
                 U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
                 if U is None:
                     raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-                if evotype in ("densitymx", "svterm", "cterm"):
-                    if callable(U):  # then assume a function: args -> unitary
-                        U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
-                        gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
-                    else:
+                if callable(U):  # then assume a function: args -> unitary
+                    U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                    gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+                else:
+                    if evotype in ("densitymx", "svterm", "cterm"):
                         gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-                else:  # we just store the unitaries
-                    assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
-                    gatedict[name] = U
+                    else:  # we just store the unitaries
+                        assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
+                        gatedict[name] = U
 
         #Add anything from custom_gates directly if it wasn't added already
         for lbl, gate in custom_gates.items():

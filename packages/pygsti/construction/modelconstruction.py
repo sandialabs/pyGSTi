@@ -1089,16 +1089,16 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
         else:
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-            if evotype in ("densitymx", "svterm", "cterm"):
-                if callable(U):  # then assume a function: args -> unitary
-                    U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
-                    gateMx = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
-                else:
+            if callable(U):  # then assume a function: args -> unitary
+                U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                gateMx = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+            else:
+                if evotype in ("densitymx", "svterm", "cterm"):
                     gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-            else:  # we just store the unitaries
-                raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
-                #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
-                #gateMx = U
+                else:  # we just store the unitaries
+                    raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+                    #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
+                    #gateMx = U
             gatedict[name] = create_gate(name, gateMx)
 
     #Check for any error rates specific to sslbls that we missed, e.g. ('Gx',0)
