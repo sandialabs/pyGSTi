@@ -21,6 +21,7 @@ from ..tools import internalgates as _itgs
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
+from ..objects import opfactory as _opfactory
 from ..objects import explicitmodel as _emdl
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
@@ -706,10 +707,10 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
     return mdl_new
 
 
-def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
-                                    qubit_labels=None, geometry="line", parameterization='static',
-                                    evotype="auto", sim_type="auto", on_construction_error='raise',
-                                    independent_gates=False, ensure_composed_gates=False, globalIdle=None):
+def build_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+                           availability=None, qubit_labels=None, geometry="line", parameterization='static',
+                           evotype="auto", sim_type="auto", on_construction_error='raise',
+                           independent_gates=False, ensure_composed_gates=False, globalIdle=None):
     """
     Creates a "standard" n-qubit local-noise model, usually of ideal gates.
 
@@ -744,23 +745,51 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
 
     nonstd_gate_unitaries : dict, optional
         A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.
+        of the gate names given by the dictionary's keys.  As an advanced
+        behavior, a unitary-matrix-returning function which takes a single
+        argument - a tuple of label arguments - may be given instead of a
+        single matrix to create an operation *factory* which allows
+        continuously-parameterized gates.  This function must also return
+        an empty/dummy unitary when `None` is given as it's argument.
+
+    custom_gates : dict, optional
+        A dictionary that associates with gate labels
+        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+        objects.  These objects describe the full action of the gate or
+        primitive-layer they're labeled by (so if the model represents
+        states by density matrices these objects are superoperators, not
+        unitaries), and override any standard construction based on builtin
+        gate names or `nonstd_gate_unitaries`.  Keys of this dictionary may
+        be string-type gate *names*, which will be embedded according to
+        `availability`, or labels that include target qubits,
+        e.g. `("Gx",0)`, which override this default embedding behavior.
+        Furthermore, :class:`OpFactory` objects may be used in place of
+        `LinearOperator` objects to allow the evaluation of labels with
+        arguments.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and specifies that the named gate
-        is available to act on the specified qubits.  For example,
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
         `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be available for acting on qubits
-        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
-        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
-        `availability` may take the special values `"all-permutations"` and
-        `"all-combinations"`, which as their names imply, equate to all possible
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
         permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).  The default value `"all-edges"`
-        equates to all the edges in the graph given by `geometry`.
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the graphy given by `geometry`.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
@@ -836,15 +865,15 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         `availability`).  For instance, the operation label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    return _LocalNoiseModel.build_standard_from_parameterization(
-        nQubits, gate_names, nonstd_gate_unitaries, availability,
-        qubit_labels, geometry, parameterization, evotype,
+    return _LocalNoiseModel.build_from_parameterization(
+        nQubits, gate_names, nonstd_gate_unitaries, custom_gates,
+        availability, qubit_labels, geometry, parameterization, evotype,
         sim_type, on_construction_error, independent_gates,
         ensure_composed_gates, globalIdle)
 
 
-def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, availability=None,
-                               qubit_labels=None, geometry="line", parameterization='auto',
+def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
+                               availability=None, qubit_labels=None, geometry="line", parameterization='auto',
                                evotype="auto", sim_type="auto", on_construction_error='raise',
                                independent_gates=False, ensure_composed_gates=False):
     """
@@ -887,21 +916,37 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
         A dictionary of numpy arrays which specifies the unitary gate action
         of the gate names given by the dictionary's keys.
 
+    custom_gates : dict, optional
+        A dictionary that associates with gate labels
+        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+        objects.  These objects override any other behavior for constructing
+        their designated operations (e.g. from `error_rates` or
+        `nonstd_gate_unitaries`).  Keys of this dictionary may
+        be string-type gate *names* or labels that include target qubits.
+
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and specifies that the named gate
-        is available to act on the specified qubits.  For example,
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
         `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be available for acting on qubits
-        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
-        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
-        `availability` may take the special values `"all-permutations"` and
-        `"all-combinations"`, which as their names imply, equate to all possible
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
         permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).  The default value `"all-edges"`
-        equates to all the edges in the graph given by `geometry`.
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the graphy given by `geometry`.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
@@ -970,6 +1015,7 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
                                    "parameterization - for instance building DepolarizeOp objects "
                                    "instead of LindbladOps for depolarization errors."))
 
+    if custom_gates is None: custom_gates = {}
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = _itgs.get_standard_gatename_unitaries()
 
@@ -991,8 +1037,16 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
     def create_gate(name, gateMx):
         """Create a gate object corresponding to a name with appropriate parameterization"""
         errs = error_rates.get(name, None)
+
+        if isinstance(gateMx, _opfactory.OpFactory):
+            factory = gateMx
+            gateMx = _np.identity(factory.dim, 'd')  # we'll prefix with factory
+        else:
+            factory = None
+
         if errs is None:
-            return _op.StaticDenseOp(gateMx, evotype)
+            if factory: return factory  # gateMx is just identity
+            else: return _op.StaticDenseOp(gateMx, evotype)
 
         elif isinstance(errs, dict):
             parameterization = _parameterization_from_errgendict(errs)
@@ -1027,19 +1081,47 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
         else:
             raise ValueError("Invalid `error_rates` value: %s (type %s)" % (str(errs), type(errs)))
 
+        if factory:
+            #just add errors after whatever factory produces.
+            gate = _opfactory.ComposedOpFactory([factory, gate])
+
         return gate
 
     gatedict = _collections.OrderedDict()
     for name in gate_names:
-        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
-        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-        if evotype in ("densitymx", "svterm", "cterm"):
-            gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-        else:  # we just store the unitaries
-            raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
-            #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
-            #gateMx = U
-        gatedict[name] = create_gate(name, gateMx)
+        if name in custom_gates:
+            gatedict[name] = custom_gates[name]
+        else:
+            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+            if callable(U):  # then assume a function: args -> unitary
+                U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                gateMx = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+            else:
+                if evotype in ("densitymx", "svterm", "cterm"):
+                    gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                else:  # we just store the unitaries
+                    raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+                    #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
+                    #gateMx = U
+            gatedict[name] = create_gate(name, gateMx)
+
+    #Check for any error rates specific to sslbls that we missed, e.g. ('Gx',0)
+    for errlbl, errdict in error_rates.items():
+        if errlbl not in gate_names and isinstance(errlbl, _label.Label):
+            name = errlbl.name
+            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+            if evotype in ("densitymx", "svterm", "cterm"):
+                gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+            else:  # we just store the unitaries
+                raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+            gatedict[errlbl] = create_gate(errlbl, gateMx)
+
+    #Add anything from custom_gates directly if it wasn't added already (allows overrides of, e.g. ('Gx',0))
+    for lbl, gate in custom_gates.items():
+        if lbl not in gate_names:
+            gatedict[lbl] = gate
 
     if 'idle' in error_rates:
         idleOp = create_gate('idle', _np.identity(4))  # 1-qubit idle op

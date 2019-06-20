@@ -17,6 +17,8 @@ from . import operation as _op
 from . import instrument as _instrument
 from . import povm as _povm
 from ..baseobjs import Label as _Lbl
+from ..tools import optools as _gt
+from ..tools import basistools as _bt
 
 
 def op_from_factories(factory_dict, lbl):
@@ -31,7 +33,8 @@ def op_from_factories(factory_dict, lbl):
         return factory_dict[lbl_name].create_simplified_op(args=lbl.args, sslbls=lbl.sslbls)
         # E.g. an EmbeddingOpFactory
 
-    raise KeyError("Cannot create operator for label `%s` from factories " % str(lbl))
+    extra = ". Maybe you forgot the args?" if not lbl.args else ""
+    raise KeyError("Cannot create operator for label `%s` from factories%s" % (str(lbl), extra))
 
 
 class OpFactory(_gm.ModelMember):
@@ -70,6 +73,38 @@ class OpFactory(_gm.ModelMember):
         _gm.ModelMember.__init__(self, dim, evotype)
 
     def create_object(self, args=None, sslbls=None):
+        """
+        Create the object which implements the operation associated
+        with the given `args` and `sslbls`.
+
+        Note to developers:
+        The difference beween this method and :method:`create_op` is that
+        this method just creates the foundational object without needing
+        to setup it's parameter indices (a technical detail which connects
+        the created object with the originating factory's parameters).  The
+        base-class `create_op` method calls `create_object` and then performs
+        some additional setup on the returned object before returning it
+        itself.  Thus, unless you have a reason for implementing `create_op`
+        it's often more convenient and robust to implement this function.
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Instrument, or POVM, depending on the label requested.
+        """
         raise NotImplementedError("Derived factory classes must implement `create_object`!")
 
     def create_op(self, args=None, sslbls=None):
@@ -287,7 +322,7 @@ class EmbeddingOpFactory(OpFactory):
     :method:`create_op` is used instead.
     """
 
-    def __init__(self, stateSpaceLabels, factory_or_op_to_embed, dense=False):
+    def __init__(self, stateSpaceLabels, factory_or_op_to_embed, dense=False, num_target_labels=None):
         """
         Create a new EmbeddingOpFactory object.
 
@@ -311,6 +346,16 @@ class EmbeddingOpFactory(OpFactory):
             `create_op` method is called with any `args` that are passed to
             the embedding-factory's `create_op` method, but the `sslbls` are
             always set to `None` (as they are processed by the embedding
+
+        dense : bool, optional
+            Whether dense embedding operations (ops which hold their entire
+            "action" matrix in memory) should be created.
+
+        num_target_labels : int, optional
+            If not `None`, the number of target labels that should be expected
+            (usually equal to the number of qubits the contained gate acts
+            upon).  If `None`, then the length of the `sslbls` passed to this
+            factory's `create_op` method is not checked at all.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory_or_op = factory_or_op_to_embed
@@ -318,6 +363,7 @@ class EmbeddingOpFactory(OpFactory):
         self.state_space_labels = _StateSpaceLabels(stateSpaceLabels,
                                                     evotype=factory_or_op_to_embed._evotype)
         self.dense = dense
+        self.num_target_labels = num_target_labels
         super(EmbeddingOpFactory, self).__init__(self.state_space_labels.dim, factory_or_op_to_embed._evotype)
 
     def create_op(self, args=None, sslbls=None):
@@ -344,6 +390,9 @@ class EmbeddingOpFactory(OpFactory):
         """
         assert(sslbls is not None), ("EmbeddedOpFactory objects should be asked to create "
                                      "operations with specific `sslbls`")
+        assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
+            ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
+             " (expected %d)") % (len(sslbls), self.num_target_labels)
 
         Embedded = _op.EmbeddedDenseOp if self.dense else _op.EmbeddedOp
         if self.embeds_factory:
@@ -402,3 +451,217 @@ class EmbeddingOpFactory(OpFactory):
         """
         self.embedded_factory_or_op.from_vector(v)
         self.dirty = True
+
+
+class ComposedOpFactory(OpFactory):
+    """
+    A factory that composes a number of other factories and/or operations.
+
+    Label arguments are passed unaltered through this factory to any component
+    factories.
+    """
+
+    def __init__(self, factories_or_ops_to_compose, dim="auto", evotype="auto", dense=False):
+        """
+        Creates a new ComposedOpFactory.
+
+        Parameters
+        ----------
+        factories_or_ops_to_compose : list
+            List of `LinearOperator` or `OpFactory`-derived objects
+            that are composed to form this factory.  There should be at least
+            one factory among this list, otherwise there's no need for a
+            factory.  Elements are composed with vectors in *left-to-right*
+            ordering, maintaining the same convention as operation sequences
+            in pyGSTi.  Note that this is *opposite* from standard matrix
+            multiplication order.
+
+        dim : int or "auto"
+            Dimension of the operations produced by this factory.  Can be set
+            to `"auto"` to take dimension from `factories_or_ops_to_compose[0]`
+            *if* there's at least one factory or operator being composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this factory.  Can be set to `"auto"` to take
+            the evolution type of `factories_or_ops_to_compose[0]` *if* there's
+            at least one factory or operator being composed.
+
+        dense : bool, optional
+            Whether dense composed operations (ops which hold their entire
+            "action" matrix in memory) should be created.
+        """
+        assert(len(factories_or_ops_to_compose) > 0 or dim != "auto"), \
+            "Must compose at least one factory/op when dim='auto'!"
+        self.factors = list(factories_or_ops_to_compose)
+
+        if dim == "auto":
+            dim = factories_or_ops_to_compose[0].dim
+        assert(all([dim == f.dim for f in factories_or_ops_to_compose])), \
+            "All factories/ops must have the same dimension (%d expected)!" % dim
+
+        if evotype == "auto":
+            evotype = factories_or_ops_to_compose[0]._evotype
+        assert(all([evotype == f._evotype for f in factories_or_ops_to_compose])), \
+            "All factories/ops must have the same evolution type (%s expected)!" % evotype
+
+        self.dense = dense
+        self.is_factory = [isinstance(f, OpFactory) for f in factories_or_ops_to_compose]
+        super(ComposedOpFactory, self).__init__(dim, evotype)
+
+    def create_op(self, args=None, sslbls=None):
+        """
+        Create the operation associated with the given `args` and `sslbls`.
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Instrument, or POVM, depending on the label requested.
+        """
+        Composed = _op.ComposedDenseOp if self.dense else _op.ComposedOp
+        ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
+        op = Composed(ops_to_compose, self.dim, self._evotype)
+        op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
+        return op
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return self.factors
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this factory.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+
+    def to_vector(self):
+        """
+        Get the parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        assert(self.gpindices is not None), "Must set a ComposedOpFactory's .gpindices before calling to_vector"
+        v = _np.empty(self.num_params(), 'd')
+        for gate in self.factors:
+            factor_local_inds = _gm._decompose_gpindices(
+                self.gpindices, gate.gpindices)
+            v[factor_local_inds] = gate.to_vector()
+        return v
+
+    def from_vector(self, v):
+        """
+        Initialize this factory using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling from_vector"
+        for gate in self.factors:
+            factor_local_inds = _gm._decompose_gpindices(
+                self.gpindices, gate.gpindices)
+            gate.from_vector(v[factor_local_inds])
+        self.dirty = True
+
+
+#Note: to pickle these Factories we'll probably need to some work
+# because they include functions.
+class UnitaryOpFactory(OpFactory):
+    """
+    Converts a function, f(arg_tuple), that outputs a unitary matrix (operation)
+    into a factory that produces a :class:`StaticDenseOp` superoperator.
+    """
+
+    def __init__(self, fn, unitary_dim, superop_basis="pp", evotype="densitymx"):
+        """
+        Create a new UnitaryOpFactory object.
+
+        Parameters
+        ----------
+        fn : function
+            A function that takes as it's only argument a tuple
+            of label-arguments (arguments included in circuit labels,
+            e.g. 'Gxrot;0.347') and returns a unitary matrix -- a
+            complex numpy array that has dimension 2^nQubits, e.g.
+            a 2x2 matrix in the 1-qubit case.
+
+        unitary_dim : int
+            The dimension of the unitary that is returned by `fn`,
+            e.g. 2 for a 1-qubit factory.
+
+        superop_basis : Basis or {"std","pp","gm","qt"}
+            The basis the resulting :class:`StaticDenseOp` superoperator
+            should be given in.  Usually the default of `"pp"` is what
+            you want.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+            The evolution type of the operation(s) this factory builds.
+        """
+        self.basis = superop_basis
+        self.fn = fn
+        self.make_superop = bool(evotype in ("densitymx", "svterm", "cterm"))
+        dim = unitary_dim**2 if self.make_superop else unitary_dim
+        super(UnitaryOpFactory, self).__init__(dim, evotype)
+
+    def create_object(self, args=None, sslbls=None):
+        """
+        Create the object which implements the operation associated
+        with the given `args` and `sslbls`.
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Instrument, or POVM, depending on the label requested.
+        """
+        assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
+        U = self.fn(args)
+        if self.make_superop:
+            superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
+            return _op.StaticDenseOp(superop, self._evotype)
+        else:
+            return _op.StaticDenseOp(U, self._evotype)

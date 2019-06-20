@@ -68,8 +68,8 @@ class LabelTestCase(BaseTestCase):
     def test_layerlizzard(self):
         #Test this here b/c auto-gators are associated with parallel operation labels
         availability = {'Gcnot': [(0,1)]}
-        mdl = pc.build_standard_cloudnoise_model_from_hops_and_weights(
-            2, ['Gx','Gy','Gcnot'], {}, availability,
+        mdl = pc.build_cloudnoise_model_from_hops_and_weights(
+            2, ['Gx','Gy','Gcnot'], {}, None, availability,
             None, "line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True,
             sim_type="map", parameterization="H+S")

@@ -24,6 +24,7 @@ from ..tools import mpitools as _mpit
 from ..tools import compattools as _compat
 from ..objects import model as _mdl
 from ..objects import operation as _op
+from ..objects import opfactory as _opfactory
 from ..objects import spamvec as _sv
 from ..objects import povm as _povm
 from ..objects import qubitgraph as _qgraph
@@ -54,7 +55,7 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
 
     Parameters
     ----------
-    Subset of those of :function:`build_standard_cloudnoise_model_from_hops_and_weights`.
+    Subset of those of :function:`build_cloudnoise_model_from_hops_and_weights`.
 
     Returns
     -------
@@ -135,9 +136,9 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
     return nParams, sum(nParams.values())
 
 
-def build_standard_cloudnoise_model_from_hops_and_weights(
-        nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
-        qubit_labels=None, geometry="line",
+def build_cloudnoise_model_from_hops_and_weights(
+        nQubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+        availability=None, qubit_labels=None, geometry="line",
         maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
         extraWeight1Hops=0, extraGateWeight=0, sparse=False,
         roughNoise=None, sim_type="auto", parameterization="H+S",
@@ -188,23 +189,51 @@ def build_standard_cloudnoise_model_from_hops_and_weights(
 
     nonstd_gate_unitaries : dict, optional
         A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.
+        of the gate names given by the dictionary's keys.  As an advanced
+        behavior, a unitary-matrix-returning function which takes a single
+        argument - a tuple of label arguments - may be given instead of a
+        single matrix to create an operation *factory* which allows
+        continuously-parameterized gates.  This function must also return
+        an empty/dummy unitary when `None` is given as it's argument.
+
+    custom_gates : dict
+        A dictionary that associates with gate labels
+        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+        objects.  These objects describe the full action of the gate or
+        primitive-layer they're labeled by (so if the model represents
+        states by density matrices these objects are superoperators, not
+        unitaries), and override any standard construction based on builtin
+        gate names or `nonstd_gate_unitaries`.  Keys of this dictionary must
+        be string-type gate *names* -- they cannot include state space labels
+        -- and they must be *static* (have zero parameters) because they
+        represent only the ideal behavior of each gate -- the cloudnoise
+        operations represent the parameterized noise.  To fine-tune how this
+        noise is parameterized, call the :class:`CloudNoiseModel` constructor
+        directly.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and specifies that the named gate
-        is available to act on the specified qubits.  For example,
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
         `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be available for acting on qubits
-        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
-        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
-        `availability` may take the special values `"all-permutations"` and
-        `"all-combinations"`, which as their names imply, equate to all possible
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
         permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).  The default value `"all-edges"`
-        equates to all the edges in the graph given by `geometry`.
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the graphy given by `geometry`.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
@@ -320,9 +349,9 @@ def build_standard_cloudnoise_model_from_hops_and_weights(
     -------
     Model
     """
-    mdl = _CloudNoiseModel.build_standard_from_hops_and_weights(
-        nQubits, gate_names, nonstd_gate_unitaries, availability,
-        qubit_labels, geometry,
+    mdl = _CloudNoiseModel.build_from_hops_and_weights(
+        nQubits, gate_names, nonstd_gate_unitaries, custom_gates,
+        availability, qubit_labels, geometry,
         maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight, sparse,
         sim_type, parameterization, spamtype,
@@ -350,8 +379,8 @@ def build_standard_cloudnoise_model_from_hops_and_weights(
         return mdl
 
 
-def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, availability=None,
-                                qubit_labels=None, geometry="line", parameterization='auto',
+def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
+                                availability=None, qubit_labels=None, geometry="line", parameterization='auto',
                                 evotype="auto", sim_type="auto", independent_gates=False, sparse=True,
                                 errcomp_type="errorgens", addIdleNoiseToAllGates=True, verbosity=0):
     """
@@ -390,23 +419,46 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
     nonstd_gate_unitaries : dict, optional
         A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.
+        of the gate names given by the dictionary's keys.  As an advanced
+        behavior, a unitary-matrix-returning function which takes a single
+        argument - a tuple of label arguments - may be given instead of a
+        single matrix to create an operation *factory* which allows
+        continuously-parameterized gates.  This function must also return
+        an empty/dummy unitary when `None` is given as it's argument.
+
+    custom_gates : dict, optional
+        A dictionary that associates with gate labels
+        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+        objects.  These objects override any other behavior for constructing
+        their designated operations (e.g. from `error_rates` or
+        `nonstd_gate_unitaries`).  Note: currently these objects must
+        be *static*, and keys of this dictionary must by strings - there's
+        no way to specify the "cloudnoise" part of a gate via this dict
+        yet, only the "target" part.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and specifies that the named gate
-        is available to act on the specified qubits.  For example,
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
         `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be available for acting on qubits
-        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
-        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
-        `availability` may take the special values `"all-permutations"` and
-        `"all-combinations"`, which as their names imply, equate to all possible
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
         permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).  The default value `"all-edges"`
-        equates to all the edges in the graph given by `geometry`.
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the graphy given by `geometry`.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
@@ -752,15 +804,27 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
         return cloud_key
 
     # gate_names => gatedict
+    if custom_gates is None: custom_gates = {}
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = _itgs.get_standard_gatename_unitaries()
 
     gatedict = _collections.OrderedDict()
     for name in gate_names:
-        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
-        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-        gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-        # assume evotype is a densitymx or term type
+        if name in custom_gates:
+            gatedict[name] = custom_gates[name]
+        else:
+            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+            if callable(U):  # then assume a function: args -> unitary
+                U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+            else:
+                gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                # assume evotype is a densitymx or term type
+
+    #Add anything from custom_gates directly if it wasn't added already
+    for lbl, gate in custom_gates.items():
+        if lbl not in gate_names: gatedict[lbl] = gate
 
     return _CloudNoiseModel(nQubits, gatedict, availability, qubit_labels, geometry,
                             global_idle_layer, prep_layers, povm_layers,
@@ -2006,8 +2070,8 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
     from pygsti.construction import std1Q_XY  # the base model for 1Q gates
     from pygsti.construction import std2Q_XYICNOT  # the base model for 2Q (CNOT) gate
 
-    tgt1Q = std1Q_XY.target_model()
-    tgt2Q = std2Q_XYICNOT.target_model()
+    tgt1Q = std1Q_XY.target_model("static")
+    tgt2Q = std2Q_XYICNOT.target_model("static")
     Gx = tgt1Q.operations['Gx']
     Gy = tgt1Q.operations['Gy']
     Gcnot = tgt2Q.operations['Gcnot']
@@ -2038,7 +2102,7 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to
-    :function:`build_standard_cloudnoise_model_from_hops_and_weights`.
+    :function:`build_cloudnoise_model_from_hops_and_weights`.
 
     Note that this function essentialy performs fiducial selection, germ
     selection, and fiducial-pair reduction simultaneously.  It is used to
@@ -2076,7 +2140,7 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     gate_names, nonstd_gate_unitaries, availability, geometry,
     maxIdleWeight, maxhops, extraWeight1Hops, extraGateWeight, sparse : various
         Cloud-noise model parameters specifying the model to create sequences
-        for. See function:`build_standard_cloudnoise_model_from_hops_and_weights`
+        for. See function:`build_cloudnoise_model_from_hops_and_weights`
         for details.
 
     paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
@@ -2128,6 +2192,8 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     for name in gate_names:
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+        if callable(U):  # then assume a function: args -> unitary
+            raise NotImplementedError("Factories are not allowed to passed to create_standard_cloudnoise_sequences yet")
         gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         # assume evotype is a densitymx or term type
 
@@ -2147,7 +2213,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to
-    function:`build_standard_cloudnoise_model_from_hops_and_weights`.
+    function:`build_cloudnoise_model_from_hops_and_weights`.
 
     Note that this function essentialy performs fiducial selection, germ
     selection, and fiducial-pair reduction simultaneously.  It is used to
@@ -2266,7 +2332,8 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     all_qubit_labels = qubitGraph.get_node_names()
 
     model = _CloudNoiseModel.build_from_hops_and_weights(
-        nQubits, gatedict, availability, None, qubitGraph,
+        nQubits, tuple(gatedict.keys()), None, gatedict,
+        availability, None, qubitGraph,
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
         sim_type="termorder:1", parameterization=ptermstype)
@@ -2283,7 +2350,8 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # ideal or error - except that which is the same as the Gi gate.
 
     ideal_model = _CloudNoiseModel.build_from_hops_and_weights(
-        nQubits, gatedict, availability, None, qubitGraph,
+        nQubits, tuple(gatedict.keys()), None, gatedict,
+        availability, None, qubitGraph,
         0, 0, 0, 0, 0, False, verbosity=printer - 5,
         sim_type="map", parameterization=paramroot)
     # for testing for synthetic idles - so no " terms"
@@ -2299,7 +2367,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graphO
     printer.log("Creating \"idle error\" model on %d qubits" % maxIdleWeight)
     idle_model = _CloudNoiseModel.build_from_hops_and_weights(
-        maxIdleWeight, gatedict, {}, None, qubitGraph,
+        maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, qubitGraph,
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
         sim_type="termorder:1", parameterization=ptermstype)
@@ -2377,7 +2445,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
             printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
             printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
             sidle_model = _CloudNoiseModel.build_from_hops_and_weights(
-                maxSyntheticIdleWt, gatedict, {}, None, 'line',
+                maxSyntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
                 maxIdleWeight, 0, maxhops, extraWeight1Hops,
                 extraGateWeight, sparse, verbosity=printer - 5,
                 sim_type="termorder:1", parameterization=ptermstype)
