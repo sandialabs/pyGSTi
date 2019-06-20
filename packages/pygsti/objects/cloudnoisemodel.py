@@ -1185,7 +1185,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
 
         if errcomp_type == "gates":
             if add_idle_noise: ops_to_compose.append(self.op_blks['layers']['globalIdle'])
-            component_cloudnoise_ops = self.get_layer_component_cloudnoises(components),
+            component_cloudnoise_ops = self.get_layer_component_cloudnoises(components)
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
                     localErr = Composed(component_cloudnoise_ops,
