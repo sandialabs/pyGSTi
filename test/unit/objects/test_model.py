@@ -1,11 +1,13 @@
 import numpy as np
 import pickle
 from contextlib import contextmanager
+import functools
 
 from ..util import BaseCase, needs_cvxpy
 
 from pygsti.objects import ExplicitOpModel, Instrument, LinearOperator, \
     Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim
+from pygsti.tools import indices
 import pygsti.construction as pc
 import pygsti.objects.model as m
 
@@ -13,23 +15,37 @@ import pygsti.objects.model as m
 @contextmanager
 def smallness_threshold(threshold=10):
     """Helper context for setting/resetting the matrix forward simulator smallness threshold"""
-    original = matrixforwardsim.PSMALL
+    original_p = matrixforwardsim.PSMALL
+    original_d = matrixforwardsim.DSMALL
+    original_h = matrixforwardsim.HSMALL
     try:
         matrixforwardsim.PSMALL = threshold
+        matrixforwardsim.DSMALL = threshold
+        matrixforwardsim.HSMALL = threshold
         yield  # yield to context
     finally:
-        matrixforwardsim.PSMALL = original
+        matrixforwardsim.HSMALL = original_h
+        matrixforwardsim.DSMALL = original_d
+        matrixforwardsim.PSMALL = original_p
 
 
+##
+# Model base classes, controlling the parameterization of the tested model
+#
 class ModelBase:
     @classmethod
     def setUpClass(cls):
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
         ExplicitOpModel._strict = False
+        cls._model = pc.build_explicit_model(
+            [('Q0',)], ['Gi', 'Gx', 'Gy'],
+            ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            **cls.build_options)
 
     def setUp(self):
         self.model = self._model.copy()
+        super(ModelBase, self).setUp()
 
     def test_construction(self):
         # XXX what exactly does this cover and is it needed?
@@ -45,6 +61,26 @@ class ModelBase:
 
         self.assertTrue(isinstance(self.model['Gi'], LinearOperator))
 
+
+class FullModelBase(ModelBase):
+    """Base class for test cases using a full-parameterized model"""
+    build_options = {'parameterization': 'full'}
+
+
+class TPModelBase(ModelBase):
+    """Base class for test cases using a TP-parameterized model"""
+    build_options = {'parameterization': 'TP'}
+
+
+class StaticModelBase(ModelBase):
+    """Base class for test cases using a static-parameterized model"""
+    build_options = {'parameterization': 'static'}
+
+
+##
+# Method base classes, controlling which methods will be tested
+#
+class GeneralMethodBase:
     def _assert_model_params(self, *, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
         self.assertEqual(self.model.num_params(), nParams)
@@ -165,6 +201,10 @@ class ModelBase:
         g._clean_paramvec()
         self.assertAlmostEqual(self.model.frobeniusdist(g), 0.0)
 
+
+class ThresholdMethodBase:
+    """Tests for model methods affected by the mapforwardsim smallness threshold"""
+
     def test_product(self):
         circuit = ('Gx', 'Gy')
         p1 = np.dot(self.model['Gy'], self.model['Gx'])
@@ -179,12 +219,6 @@ class ModelBase:
         p3, scale = self.model.product(circuit, bScale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
-
-    def test_product_with_high_threshold(self):
-        # Artificially reset the "smallness" threshold for scaling to be
-        # sure to engate the scaling machinery
-        with smallness_threshold(10):
-            self.test_product()
 
     def test_bulk_product(self):
         gatestring1 = ('Gx', 'Gy')
@@ -202,109 +236,180 @@ class ModelBase:
         self.assertArraysAlmostEqual(bulk_prods2[0], p1)
         self.assertArraysAlmostEqual(bulk_prods2[1], p2)
 
-    def test_bulk_product_with_high_threshold(self):
-        # Artificially reset the "smallness" threshold for scaling to be
-        # sure to engate the scaling machinery
-        with smallness_threshold(10):
-            self.test_bulk_product()
-
     def test_dproduct(self):
         circuit = ('Gx', 'Gy')
         dp = self.model.dproduct(circuit)
         dp_flat = self.model.dproduct(circuit, flat=True)
         # TODO assert correctness for all of the above
 
+
+class SimMethodBase:
+    """Tests for model methods which can use different sim modes"""
+    def setUp(self):
+        super(SimMethodBase, self).setUp()
+        self.gatestring1 = ('Gx', 'Gy')
+        self.gatestring2 = ('Gx', 'Gy', 'Gy')
+        self._expected_probs = {
+            self.gatestring1: np.dot(np.transpose(self.model.povms['Mdefault']['0']),
+                                     np.dot(self.model['Gy'],
+                                            np.dot(self.model['Gx'],
+                                                   self.model.preps['rho0']))).reshape(-1)[0],
+            self.gatestring2: np.dot(np.transpose(self.model.povms['Mdefault']['0']),
+                                     np.dot(self.model['Gy'],
+                                            np.dot(self.model['Gy'],
+                                                   np.dot(self.model['Gx'],
+                                                          self.model.preps['rho0'])))).reshape(-1)[0]
+        }
+
     def test_probs(self):
-        circuit = ('Gx', 'Gy')
-        p0a = np.dot(np.transpose(self.model.povms['Mdefault']['0']),
-                     np.dot(self.model['Gy'],
-                            np.dot(self.model['Gx'],
-                                   self.model.preps['rho0'])))
+        probs = self.model.probs(self.gatestring1)
+        expected = self._expected_probs[self.gatestring1]
+        actual_p0, actual_p1 = probs[('0',)], probs[('1',)]
+        self.assertAlmostEqual(expected, actual_p0)
+        self.assertAlmostEqual(1.0 - expected, actual_p1)
 
-        probs = self.model.probs(circuit)
-        p0b, p1b = probs[('0',)], probs[('1',)]
-        self.assertArraysAlmostEqual(p0a, p0b)
-        self.assertArraysAlmostEqual(1.0 - p0a, p1b)
-
-        circuit = ('Gx', 'Gy', 'Gy')
-        p1 = np.dot(np.transpose(self.model.povms['Mdefault']['0']),
-                    np.dot(self.model['Gy'],
-                           np.dot(self.model['Gy'],
-                                  np.dot(self.model['Gx'],
-                                         self.model.preps['rho0']))))
-        p2 = self.model.probs(circuit)[('0',)]
-        self.assertAlmostEqual(p1.reshape(-1)[0], p2)
-        # TODO is this sufficient?
-
-    def test_probs_map_computation(self):
-        #Compare with map-based computation
-        self.model.set_simtype('map')
-        self.test_probs()
+        probs = self.model.probs(self.gatestring2)
+        expected = self._expected_probs[self.gatestring2]
+        actual_p0, actual_p1 = probs[('0',)], probs[('1',)]
+        self.assertAlmostEqual(expected, actual_p0)
+        self.assertAlmostEqual(1.0 - expected, actual_p1)
 
     def test_dprobs(self):
-        circuit = ('Gx', 'Gy')
-
-        dprobs = self.model.dprobs(circuit)
-        dprobs2 = self.model.dprobs(circuit, returnPr=True)
+        dprobs = self.model.dprobs(self.gatestring1)
+        dprobs2 = self.model.dprobs(self.gatestring1, returnPr=True)
         self.assertArraysAlmostEqual(dprobs[('0',)], dprobs2[('0',)][0])
         self.assertArraysAlmostEqual(dprobs[('1',)], dprobs2[('1',)][0])
         # TODO assert correctness
 
-    def test_dprobs_map_computation(self):
-        #Compare with map-based computation
-        self.model.set_simtype('map')
-        self.test_dprobs()
+    def test_hprobs(self):
+        hprobs = self.model.hprobs(self.gatestring1)
+        hprobs2 = self.model.hprobs(self.gatestring1, returnPr=True)
+        hprobs3 = self.model.hprobs(self.gatestring1, returnPr=True, returnDeriv=True)
+        self.assertArraysAlmostEqual(hprobs[('0',)], hprobs2[('0',)][0])
+        self.assertArraysAlmostEqual(hprobs[('1',)], hprobs2[('1',)][0])
+        self.assertArraysAlmostEqual(hprobs[('0',)], hprobs3[('0',)][0])
+        self.assertArraysAlmostEqual(hprobs[('1',)], hprobs3[('1',)][0])
+        # TODO assert correctness
 
     def test_probs_warns_on_nan_in_input(self):
-        circuit = ('Gx', 'Gy')
-
         self.model['rho0'][:] = np.nan
         with self.assertWarns(Warning):
-            self.model.probs(circuit)
-
-    def test_probs_map_computation_warns_on_nan_in_input(self):
-        self.model.set_simtype('map')
-        self.test_probs_warns_on_nan_in_input()
+            self.model.probs(self.gatestring1)
 
     def test_bulk_probs(self):
-        gatestring1 = Circuit(('Gx', 'Gy'))
-        gatestring2 = Circuit(('Gx', 'Gy', 'Gy'))
-        # evt, lookup, outcome_lookup = self.model.bulk_evaltree([gatestring1, gatestring2])
-        # mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring1,gatestring2] )
+        with self.assertNoWarns():
+            bulk_probs = self.model.bulk_probs([self.gatestring1, self.gatestring2], check=True)
 
-        p1 = np.dot(np.transpose(self.model.povms['Mdefault']['0']),
-                    np.dot(self.model['Gy'],
-                           np.dot(self.model['Gx'],
-                                  self.model.preps['rho0']))).reshape(-1)[0]
+        expected_1 = self._expected_probs[self.gatestring1]
+        expected_2 = self._expected_probs[self.gatestring2]
+        self.assertAlmostEqual(expected_1, bulk_probs[self.gatestring1][('0',)])
+        self.assertAlmostEqual(expected_2, bulk_probs[self.gatestring2][('0',)])
+        self.assertAlmostEqual(1.0 - expected_1, bulk_probs[self.gatestring1][('1',)])
+        self.assertAlmostEqual(1.0 - expected_2, bulk_probs[self.gatestring2][('1',)])
 
-        p2 = np.dot(np.transpose(self.model.povms['Mdefault']['0']),
-                    np.dot(self.model['Gy'],
-                           np.dot(self.model['Gy'],
-                                  np.dot(self.model['Gx'],
-                                         self.model.preps['rho0'])))).reshape(-1)[0]
+    def test_bulk_fill_probs(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        probs_to_fill = np.empty(nElements, 'd')
 
         with self.assertNoWarns():
-            bulk_probs = self.model.bulk_probs([gatestring1, gatestring2], check=True)
+            self.model.bulk_fill_probs(probs_to_fill, evt, check=True)
 
-        self.assertAlmostEqual(p1, bulk_probs[gatestring1][('0',)])
-        self.assertAlmostEqual(p2, bulk_probs[gatestring2][('0',)])
-        self.assertAlmostEqual(1.0 - p1, bulk_probs[gatestring1][('1',)])
-        self.assertAlmostEqual(1.0 - p2, bulk_probs[gatestring2][('1',)])
+        expected_1 = self._expected_probs[self.gatestring1]
+        expected_2 = self._expected_probs[self.gatestring2]
+        actual_1 = probs_to_fill[lookup[0]]
+        actual_2 = probs_to_fill[lookup[1]]
+        self.assertAlmostEqual(expected_1, actual_1[0])
+        self.assertAlmostEqual(expected_2, actual_2[0])
+        self.assertAlmostEqual(1 - expected_1, actual_1[1])
+        self.assertAlmostEqual(1 - expected_2, actual_2[1])
 
-    def test_bulk_probs_map_computation(self):
-        #Compare with map-based computation
-        self.model.set_simtype('map')
-        self.test_dprobs()
+    def test_bulk_fill_probs_with_split_tree(self):
+        # XXX is this correct?
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        probs_to_fill = np.empty(nElements, 'd')
+        lookup_split = evt.split(lookup, numSubTrees=2)
+
+        with self.assertNoWarns():
+            self.model.bulk_fill_probs(probs_to_fill, evt)
+
+        expected_1 = self._expected_probs[self.gatestring1]
+        expected_2 = self._expected_probs[self.gatestring2]
+        actual_1 = probs_to_fill[lookup_split[0]]
+        actual_2 = probs_to_fill[lookup_split[1]]
+        self.assertAlmostEqual(expected_1, actual_1[0])
+        self.assertAlmostEqual(expected_2, actual_2[0])
+        self.assertAlmostEqual(1 - expected_1, actual_1[1])
+        self.assertAlmostEqual(1 - expected_2, actual_2[1])
+
+    def test_bulk_dprobs(self):
+        with self.assertNoWarns():
+            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], returnPr=False)
+        # TODO assert correctness
+
+    def test_bulk_dprobs_with_probabilities(self):
+        with self.assertNoWarns():
+            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], returnPr=True)
+        # TODO assert correctness
+
+    def test_bulk_fill_dprobs(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        nParams = self.model.num_params()
+        probs_to_fill = np.empty(nElements, 'd')
+        dprobs_to_fill = np.empty((nElements, nParams), 'd')
+
+        with self.assertNoWarns():
+            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
+        # TODO assert correctness
+
+    def test_bulk_fill_dprobs_with_probabilities(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        nParams = self.model.num_params()
+        probs_to_fill = np.empty(nElements, 'd')
+        dprobs_to_fill = np.empty((nElements, nParams), 'd')
+
+        with self.assertNoWarns():
+            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, prMxToFill=probs_to_fill, check=True)
+        # TODO assert correctness
+
+    def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
+        # TODO figure out better way to do this
+        with smallness_threshold(10):
+            evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+            nElements = evt.num_final_elements()
+            nParams = self.model.num_params()
+            probs_to_fill = np.empty(nElements, 'd')
+            dprobs_to_fill = np.empty((nElements, nParams), 'd')
+
+            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
+            # TODO assert correctness
+
+    def test_bulk_fill_dprobs_with_split_tree(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        nParams = self.model.num_params()
+        dprobs_to_fill = np.empty((nElements, nParams), 'd')
+        lookup_split = evt.split(lookup, numSubTrees=2)
+        with self.assertNoWarns():
+            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
+        # TODO assert correctness
+
+    def test_bulk_dproduct(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        dProds = self.model.bulk_dproduct(evt)
+        # TODO assert correctness
+
+class StandardMethodBase(GeneralMethodBase, SimMethodBase, ThresholdMethodBase):
+    pass
 
 
-class FullModelTester(ModelBase, BaseCase):
-    @classmethod
-    def setUpClass(cls):
-        super(FullModelTester, cls).setUpClass()
-        cls._model = pc.build_explicit_model(
-            [('Q0',)], ['Gi', 'Gx', 'Gy'],
-            ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"])
-
+##
+# Test cases to run, built from combinations of model & method bases
+#
+class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
     def test_transform(self):
         T = np.array([[0.36862036, 0.49241519, 0.35903944, 0.90069522],
                       [0.12347698, 0.45060548, 0.61671491, 0.64854769],
@@ -328,28 +433,36 @@ class FullModelTester(ModelBase, BaseCase):
                 self.assertArraysAlmostEqual(eVec, np.dot(np.transpose(T), self.model.povms[povmLabel][effectLabel]))
 
 
-class TPModelTester(ModelBase, BaseCase):
-    @classmethod
-    def setUpClass(cls):
-        super(TPModelTester, cls).setUpClass()
-        cls._model = pc.build_explicit_model(
-            [('Q0',)], ['Gi', 'Gx', 'Gy'],
-            ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            parameterization="TP")
+class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
+    pass
 
 
-class StaticModelTester(ModelBase, BaseCase):
-    @classmethod
-    def setUpClass(cls):
-        super(StaticModelTester, cls).setUpClass()
-        cls._model = pc.build_explicit_model(
-            [('Q0',)], ['Gi', 'Gx', 'Gy'],
-            ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            parameterization="static")
-
+class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_set_operation_matrix(self):
         # TODO no random
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_dense_op = FullDenseOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+
+
+class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
+    def setUp(self):
+        super(FullMapSimMethodTester, self).setUp()
+        self.model.set_simtype('map')
+
+    def test_bulk_dproduct(self):
+        evt, _, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        with self.assertRaises(AttributeError):
+            self.model.bulk_dproduct(evt)
+
+
+class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase):
+    def setUp(self):
+        super(FullHighThresholdMethodTester, self).setUp()
+        self._context = smallness_threshold(10)
+        self._context.__enter__()
+
+    def tearDown(self):
+        self._context.__exit__(None, None, None)
+        super(FullHighThresholdMethodTester, self).tearDown()

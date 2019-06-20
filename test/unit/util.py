@@ -163,7 +163,7 @@ class BaseCase(unittest.TestCase):
 
             for w in warns:
                 if issubclass(w.category, category):
-                    self.fail("{} was triggered".format(category))
+                    self.fail("{} was triggered".format(category.__name__))
 
     def reference_path(self, filename, can_retry=True):
         """Returns the absolute path to a test reference data file, if it exists.
