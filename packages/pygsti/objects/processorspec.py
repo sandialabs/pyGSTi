@@ -469,7 +469,7 @@ class ProcessorSpec(object):
         nontrivial_gname_pauligate_pairs = []
         for gname in self.root_gate_names:
             if callable(self.root_gate_unitaries[gname]): continue  # can't pre-process factories
-            
+
             # We convert to process matrices, to avoid global phase problems.
             u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
             if u.shape == (4, 4):

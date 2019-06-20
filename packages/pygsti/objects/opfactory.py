@@ -393,7 +393,7 @@ class EmbeddingOpFactory(OpFactory):
         assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
              " (expected %d)") % (len(sslbls), self.num_target_labels)
-        
+
         Embedded = _op.EmbeddedDenseOp if self.dense else _op.EmbeddedOp
         if self.embeds_factory:
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already

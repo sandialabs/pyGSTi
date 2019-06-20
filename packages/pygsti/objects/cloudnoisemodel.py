@@ -239,6 +239,10 @@ class CloudNoiseModel(_ImplicitOpModel):
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         std_unitaries = _itgs.get_standard_gatename_unitaries()
 
+        #Get evotype
+        _, evotype = _gt.split_lindblad_paramtype(parameterization)
+        assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
+
         gatedict = _collections.OrderedDict()
         for name in gate_names:
             if name in custom_gates:
@@ -272,8 +276,6 @@ class CloudNoiseModel(_ImplicitOpModel):
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 
         #Process "auto" sim_type
-        _, evotype = _gt.split_lindblad_paramtype(parameterization)
-        assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
         if sim_type == "auto":
             if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
             else: sim_type = "map" if nQubits > 2 else "matrix"
@@ -518,7 +520,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         # operations and all noise (and parameters) are assumed to enter through the cloudnoise members.
         StaticDenseOp = _get_Static_factory(sim_type, evotype)  # always a *gate*
         mm_gatedict = _collections.OrderedDict()  # static *target* ops as ModelMembers
-        #REMOVE self.gatedict = _collections.OrderedDict()  # static *target* ops (unused) as numpy arrays (so copying is clean)
+        #REMOVE self.gatedict = _collections.OrderedDict()  # static *target* ops (unused) as numpy arrays
         for gn, gate in gatedict.items():
             if isinstance(gate, _op.LinearOperator):
                 assert(gate.num_params() == 0), "Only *static* ideal operators are allowed in `gatedict`!"
@@ -536,7 +538,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                 #REMOVE self.gatedict[gn] = _np.array(gate)
                 mm_gatedict[gn] = StaticDenseOp(gate, "pp")
             assert(mm_gatedict[gn]._evotype == evotype)
-            
+
         #Set other members
         self.nQubits = nQubits
         self.availability = availability
@@ -636,17 +638,17 @@ class CloudNoiseModel(_ImplicitOpModel):
                                                "on graph edges yet") % gate_nQubits)
             elif availList in ('arbitrary', '*'):
                 availList = [('*', gate_nQubits)]  # let a factory determine what's "available"
-                    
+
             self.availability[gateName] = tuple(availList)
             gates_and_avail[gateName] = (gate, availList)
 
         ssAllQ = qubit_sslbls  # labls should also be node-names of qubitGraph
         EmbeddedDenseOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
-        
+
         for gn, (gate, availList) in gates_and_avail.items():
             #Note: gate was taken from mm_gatedict, and so is a static op or factory
             gate_is_factory = isinstance(gate, _opfactory.OpFactory)
-            
+
             if gate_is_factory:
                 self.factories['gates'][_Lbl(gn)] = gate
             else:

@@ -1040,7 +1040,7 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
 
         if isinstance(gateMx, _opfactory.OpFactory):
             factory = gateMx
-            gateMx = _np.identity(factory.dim, 'd') # we'll prefix with factory
+            gateMx = _np.identity(factory.dim, 'd')  # we'll prefix with factory
         else:
             factory = None
 

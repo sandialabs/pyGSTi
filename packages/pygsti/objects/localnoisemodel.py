@@ -497,7 +497,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 mm_gatedict[gn] = gate
             else:  # presumably a numpy array or something like it:
                 #REMOVE self.gatedict[gn] = _np.array(gate)
-                mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype) # static gates by default
+                mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype)  # static gates by default
 
         self.nQubits = nQubits
         self.availability = availability
@@ -583,7 +583,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             if _Lbl(gateName).sslbls is not None: continue
             # only process gate labels w/out sslbls (e.g. "Gx", not "Gx:0") - we'll check for the
             # latter when we process the corresponding "name-only" gate's availability
-            
+
             gate_nQubits = int(round(_np.log2(gate.dim) / 2)) if (evotype in ("densitymx", "svterm", "cterm")) \
                 else int(round(_np.log2(gate.dim)))  # evotype in ("statevec","stabilizer")
 
@@ -611,7 +611,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     #Make a single ComposedDenseOp *here*, which is used
                     # in all the embeddings for different target qubits
                     gate = Composed([gate])  # to make adding more factors easy
-                    
+
                 if gate_is_factory:
                     self.factories['gates'][_Lbl(gateName)] = gate
                 else:
@@ -625,7 +625,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # for overrides in `gatedict` - there's always just *one* instance
                     # of an arbitrarily available gate or factory.
                     base_gate = gate
-                    
+
                 elif _Lbl(gateName, inds) in mm_gatedict:
                     #Allow elements of `gatedict` that *have* sslbls override the
                     # default copy/reference of the "name-only" gate:
@@ -636,7 +636,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         self.factories['gates'][_Lbl(gateName, inds)] = base_gate
                     else:
                         self.operation_blks['gates'][_Lbl(gateName, inds)] = base_gate
-                        
+
                 elif independent_gates:  # then we need to ~copy `gate` so it has indep params
                     if ensure_composed_gates and not gate_is_factory:
                         #Make a single ComposedDenseOp *here*, for *only this* embedding
@@ -665,7 +665,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
                         #Add any primitive ops for this factory?
-                        
+
                     elif gate_is_factory:
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
@@ -682,7 +682,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                             embedded_op = EmbeddedOp(self.state_space_labels, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
                         primitive_ops.append(_Lbl(gateName, inds))
-    
+
                 except Exception as e:
                     if on_construction_error == 'warn':
                         _warnings.warn("Failed to embed %s gate. Dropping it." % str(_Lbl(gateName, inds)))
