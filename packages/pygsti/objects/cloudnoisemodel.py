@@ -89,7 +89,12 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         nonstd_gate_unitaries : dict, optional
             A dictionary of numpy arrays which specifies the unitary gate action
-            of the gate names given by the dictionary's keys.
+            of the gate names given by the dictionary's keys.  As an advanced
+            behavior, a unitary-matrix-returning function which takes a single
+            argument - a tuple of label arguments - may be given instead of a
+            single matrix to create an operation *factory* which allows
+            continuously-parameterized gates.  This function must also return
+            an empty/dummy unitary when `None` is given as it's argument.
 
         custom_gates : dict
             A dictionary that associates with gate labels
