@@ -98,25 +98,6 @@ class TestGateSetMethods(GateSetTestCase):
         evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
-        hP0 = self.model.hprobs(gatestring0)[('0',)]
-        hP1 = self.model.hprobs(gatestring1)[('0',)]
-        hP2 = self.model.hprobs(gatestring2)[('0',)]
-        hP0m = self.model.hprobs(gatestring0)[('1',)]
-        hP1m = self.model.hprobs(gatestring1)[('1',)]
-        hP2m = self.model.hprobs(gatestring2)[('1',)]
-
-        hP0b,P0 = self.model.hprobs(gatestring0, returnPr=True)[('0',)]
-        hP0b,dP0 = self.model.hprobs(gatestring0, returnDeriv=True)[('0',)]
-        hP0mb,P0m = self.model.hprobs(gatestring0, returnPr=True)[('1',)]
-        hP0mb,dP0m = self.model.hprobs(gatestring0, returnDeriv=True)[('1',)]
-
-        hProbs0 = self.model.hprobs(gatestring0)
-        hProbs1 = self.model.hprobs(gatestring1)
-        hProbs2 = self.model.hprobs(gatestring2)
-        mhProbs0 = self.mgateset.hprobs(gatestring0)
-        mhProbs1 = self.mgateset.hprobs(gatestring1)
-        mhProbs2 = self.mgateset.hprobs(gatestring2)
-
         self.assertArraysAlmostEqual(hProbs0[('0',)], hP0)
         self.assertArraysAlmostEqual(hProbs1[('0',)], hP1)
         self.assertArraysAlmostEqual(hProbs2[('0',)], hP2)
@@ -125,175 +106,13 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(mhProbs2[('0',)], hP2, places=FD_HESS_PLACES)
 
 
-        bulk_hProbs = self.assertNoWarnings(self.model.bulk_hprobs,
-                                            circuitList, returnPr=False, check=True)
-        bulk_hProbs_chk = self.assertNoWarnings(self.model.bulk_hprobs,
-                                                circuitList, returnPr=True, check=True)
-        mbulk_hProbs = self.assertNoWarnings(self.mgateset.bulk_hprobs,
-                                            circuitList, returnPr=False, check=True)
-        mbulk_hProbs_chk = self.assertNoWarnings(self.mgateset.bulk_hprobs,
-                                                circuitList, returnPr=True, check=True)
-
-        for opstr in circuitList:
-            for outLbl in bulk_hProbs[opstr]:
-                self.assertArraysAlmostEqual(bulk_hProbs[opstr][outLbl],
-                                             bulk_hProbs_chk[opstr][outLbl][0]) #[0] b/c _chk also contains probs
-                self.assertArraysAlmostEqual(mbulk_hProbs[opstr][outLbl],
-                                             mbulk_hProbs_chk[opstr][outLbl][0]) #[0] b/c _chk also contains probs
-                self.assertArraysAlmostEqual(bulk_hProbs[opstr][outLbl],
-                                             mbulk_hProbs[opstr][outLbl], places=FD_HESS_PLACES) # map vs. matrix
-
-        self.assertArraysAlmostEqual(bulk_hProbs[gatestring0][('0',)],hP0)
-        self.assertArraysAlmostEqual(bulk_hProbs[gatestring1][('0',)],hP1)
-        self.assertArraysAlmostEqual(bulk_hProbs[gatestring2][('0',)],hP2)
-
-        self.assertArraysAlmostEqual(mbulk_hProbs[gatestring0][('0',)],mhProbs0[('0',)], places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs[gatestring1][('0',)],mhProbs1[('0',)], places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs[gatestring2][('0',)],mhProbs2[('0',)], places=FD_HESS_PLACES)
-
-        #Vary keyword args
-        hProbs0b = self.model.hprobs(gatestring0,returnPr=True)
-        hProbs0c = self.model.hprobs(gatestring0,returnDeriv=True)
-        hProbs0d = self.model.hprobs(gatestring0,returnDeriv=True,returnPr=True)
-        bulk_hProbs_B = self.model.bulk_hprobs(circuitList, returnPr=True, returnDeriv=True)
-        bulk_hProbs_C = self.model.bulk_hprobs(circuitList, returnDeriv=True)
-
-        mhProbs0b = self.mgateset.hprobs(gatestring0,returnPr=True)
-        mhProbs0c = self.mgateset.hprobs(gatestring0,returnDeriv=True)
-        mhProbs0d = self.mgateset.hprobs(gatestring0,returnDeriv=True,returnPr=True)
-        mbulk_hProbs_B = self.mgateset.bulk_hprobs(circuitList, returnPr=True, returnDeriv=True)
-        mbulk_hProbs_C = self.mgateset.bulk_hprobs(circuitList, returnDeriv=True)
-
-
         nElements = evt.num_final_elements(); nParams = self.model.num_params()
         probs_to_fill = np.empty( nElements, 'd')
-        probs_to_fillB = np.empty( nElements, 'd')
         dprobs_to_fill = np.empty( (nElements,nParams), 'd')
-        dprobs_to_fillB = np.empty( (nElements,nParams), 'd')
         hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
-        hprobs_to_fillB = np.empty( (nElements,nParams,nParams), 'd')
-        mprobs_to_fill = np.empty( nElements, 'd')
-        mprobs_to_fillB = np.empty( nElements, 'd')
-        mdprobs_to_fill = np.empty( (nElements,nParams), 'd')
-        mdprobs_to_fillB = np.empty( (nElements,nParams), 'd')
-        mhprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
-        mhprobs_to_fillB = np.empty( (nElements,nParams,nParams), 'd')
-        spam_label_rows = { '0': 0, '1': 1 }
         self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fill, evt,
                               prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fill, mevt,
-                              prMxToFill=mprobs_to_fill, derivMxToFill=mdprobs_to_fill, check=True)
-
-        def elIndx(iOpStr, outcome):
-            inds = pygsti.tools.indices(lookup[iOpStr]) if isinstance(lookup[iOpStr],slice) \
-                   else lookup[iOpStr] #an index array
-            return inds[ outcome_lookup[iOpStr].index( outcome ) ]
-        def melIndx(iOpStr, outcome):
-            inds = pygsti.tools.indices(mlookup[iOpStr]) if isinstance(mlookup[iOpStr],slice) \
-                   else mlookup[iOpStr] #an index array
-            return inds[ moutcome_lookup[iOpStr].index( outcome ) ]
-
-        self.assertArraysAlmostEqual(hprobs_to_fill[elIndx(0,('0',)),:,:],hP0)
-        self.assertArraysAlmostEqual(hprobs_to_fill[elIndx(1,('0',)),:,:],hP1)
-        self.assertArraysAlmostEqual(hprobs_to_fill[elIndx(2,('0',)),:,:],hP2)
-        self.assertArraysAlmostEqual(mhprobs_to_fill[melIndx(0,('0',)),:,:],hP0, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mhprobs_to_fill[melIndx(1,('0',)),:,:],hP1, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mhprobs_to_fill[melIndx(2,('0',)),:,:],hP2, places=FD_HESS_PLACES)
-
-        #without derivative
-        self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fillB, evt,
-                              prMxToFill=probs_to_fillB, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt,
-                              prMxToFill=mprobs_to_fillB, check=True)
-
-        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
-        self.assertArraysAlmostEqual(probs_to_fill,probs_to_fillB)
-        self.assertArraysAlmostEqual(mhprobs_to_fill,mhprobs_to_fillB, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mprobs_to_fill,mprobs_to_fillB, places=FD_HESS_PLACES)
-
-
-        #without probs
-        self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fillB, evt,
-                              derivMxToFill=dprobs_to_fillB, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt,
-                              derivMxToFill=mdprobs_to_fillB, check=True)
-
-        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
-        self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
-        self.assertArraysAlmostEqual(mhprobs_to_fill,mhprobs_to_fillB, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mdprobs_to_fill,mdprobs_to_fillB, places=FD_HESS_PLACES)
-
-        #without either
-        self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fillB, evt, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt, check=True)
-        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
-        self.assertArraysAlmostEqual(mhprobs_to_fill,mhprobs_to_fillB, places=FD_HESS_PLACES)
-
-
-        #Artificially reset the "smallness" threshold for scaling
-        # to be sure to engate the scaling machinery
-        PORIG = pygsti.objects.matrixforwardsim.PSMALL; pygsti.objects.matrixforwardsim.PSMALL = 10
-        DORIG = pygsti.objects.matrixforwardsim.DSMALL; pygsti.objects.matrixforwardsim.DSMALL = 10
-        HORIG = pygsti.objects.matrixforwardsim.HSMALL; pygsti.objects.matrixforwardsim.HSMALL = 10
-        self.model.bulk_fill_hprobs(hprobs_to_fillB, evt, check=True)
-        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
-        pygsti.objects.matrixforwardsim.PSMALL = PORIG
-        self.model.bulk_fill_hprobs(hprobs_to_fillB, evt, check=True)
-        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
-        pygsti.objects.matrixforwardsim.DSMALL = DORIG
-        pygsti.objects.matrixforwardsim.HSMALL = HORIG
-
-
-        #test with split eval tree
-        evt_split = evt.copy(); lookup_splt = evt_split.split(lookup,maxSubTreeSize=4)
-        mevt_split = mevt.copy(); mlookup_splt = mevt_split.split(mlookup,numSubTrees=2)
-        hprobs_to_fill_splt = np.empty( (nElements,nParams,nParams), 'd')
-        mhprobs_to_fill_splt = np.empty( (nElements,nParams,nParams), 'd')
-        self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fill_splt, evt_split, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fill_splt, mevt_split, check=True)
-
-        #Note: Outcome labels stay in same order across tree splits (i.e.
-        #   evalTree.split() doesn't need to update outcome_lookup)
-        for i,opstr in enumerate(circuitList): #original operation sequences
-            self.assertArraysAlmostEqual(hprobs_to_fill[ lookup[i] ],
-                                         hprobs_to_fill_splt[ lookup_splt[i] ])
-            self.assertArraysAlmostEqual(mhprobs_to_fill[ mlookup[i] ],
-                                         mhprobs_to_fill_splt[ mlookup_splt[i] ], places=FD_HESS_PLACES)
-
-            #Also check map vs matrix fills:
-            assert(outcome_lookup[i] == moutcome_lookup[i]) # should stay in same ordering... I think
-            self.assertArraysAlmostEqual(hprobs_to_fill[ lookup[i] ],
-                                         mhprobs_to_fill[ mlookup[i] ], places=FD_HESS_PLACES)
-
-
-        #products
-        N = self.model.get_dimension()**2 #number of elements in a operation matrix
-
-        hProds = self.model.bulk_hproduct(evt)
-        hProdsB,scales = self.model.bulk_hproduct(evt, bScale=True)
-
-        self.assertArraysAlmostEqual(hProds, scales[:,None,None,None,None]*hProdsB)
-
-        hProdsFlat = self.model.bulk_hproduct(evt, flat=True, bScale=False)
-        hProdsFlatB,S1 = self.model.bulk_hproduct(evt, flat=True, bScale=True)
-
-        self.assertArraysAlmostEqual(hProdsFlat, np.repeat(S1,N)[:,None,None]*hProdsFlatB)
-
-        hProdsC, dProdsC, prodsC = self.model.bulk_hproduct(evt, bReturnDProdsAndProds=True, bScale=False)
-        hProdsD, dProdsD, prodsD, S2 = self.model.bulk_hproduct(evt, bReturnDProdsAndProds=True, bScale=True)
-
-        self.assertArraysAlmostEqual(hProds, hProdsC)
-        self.assertArraysAlmostEqual(hProds, S2[:,None,None,None,None]*hProdsD)
-        self.assertArraysAlmostEqual(dProdsC, S2[:,None,None,None]*dProdsD)
-        self.assertArraysAlmostEqual(prodsC, S2[:,None,None]*prodsD)
-
-        hProdsF, dProdsF, prodsF    = self.model.bulk_hproduct(evt, bReturnDProdsAndProds=True, flat=True, bScale=False)
-        hProdsF2, dProdsF2, prodsF2, S3 = self.model.bulk_hproduct(evt, bReturnDProdsAndProds=True, flat=True, bScale=True)
-
-        self.assertArraysAlmostEqual(hProdsFlat, hProdsF)
-        self.assertArraysAlmostEqual(hProdsFlat, np.repeat(S3,N)[:,None,None]*hProdsF2)
-        self.assertArraysAlmostEqual(dProdsF, np.repeat(S3,N)[:,None]*dProdsF2)
-        self.assertArraysAlmostEqual(prodsF, S3[:,None,None]*prodsF2)
+)
 
 
         nP = self.model.num_params()

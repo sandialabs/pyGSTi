@@ -42,6 +42,7 @@ class ModelBase:
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             **cls.build_options)
+        super(ModelBase, cls).setUpClass()
 
     def setUp(self):
         self.model = self._model.copy()
@@ -242,24 +243,52 @@ class ThresholdMethodBase:
         dp_flat = self.model.dproduct(circuit, flat=True)
         # TODO assert correctness for all of the above
 
+    def test_bulk_dproduct(self):
+        gatestring1 = ('Gx', 'Gy')
+        gatestring2 = ('Gx', 'Gy', 'Gy')
+        evt, lookup, _ = self.model.bulk_evaltree([gatestring1, gatestring2])
+        dp = self.model.bulk_dproduct(evt)
+        dp_flat = self.model.bulk_dproduct(evt, flat=True)
+        dp_scaled, scaleVals = self.model.bulk_dproduct(evt, bScale=True)
+        # TODO assert correctness for all of the above
+
+    def test_hproduct(self):
+        circuit = ('Gx', 'Gy')
+        hp = self.model.hproduct(circuit)
+        hp_flat = self.model.hproduct(circuit, flat=True)
+        # TODO assert correctness for all of the above
+
+    def test_bulk_hproduct(self):
+        gatestring1 = ('Gx', 'Gy')
+        gatestring2 = ('Gx', 'Gy', 'Gy')
+        evt, lookup, _ = self.model.bulk_evaltree([gatestring1, gatestring2])
+        hp = self.model.bulk_hproduct(evt)
+        hp_flat = self.model.bulk_hproduct(evt, flat=True)
+        hp_scaled, scaleVals = self.model.bulk_hproduct(evt, bScale=True)
+        # TODO assert correctness for all of the above
+
 
 class SimMethodBase:
     """Tests for model methods which can use different sim modes"""
-    def setUp(self):
-        super(SimMethodBase, self).setUp()
-        self.gatestring1 = ('Gx', 'Gy')
-        self.gatestring2 = ('Gx', 'Gy', 'Gy')
-        self._expected_probs = {
-            self.gatestring1: np.dot(np.transpose(self.model.povms['Mdefault']['0']),
-                                     np.dot(self.model['Gy'],
-                                            np.dot(self.model['Gx'],
-                                                   self.model.preps['rho0']))).reshape(-1)[0],
-            self.gatestring2: np.dot(np.transpose(self.model.povms['Mdefault']['0']),
-                                     np.dot(self.model['Gy'],
-                                            np.dot(self.model['Gy'],
-                                                   np.dot(self.model['Gx'],
-                                                          self.model.preps['rho0'])))).reshape(-1)[0]
+
+    @classmethod
+    def setUpClass(cls):
+        # def setUp(self):
+        super(SimMethodBase, cls).setUpClass()
+        cls.gatestring1 = ('Gx', 'Gy')
+        cls.gatestring2 = ('Gx', 'Gy', 'Gy')
+        cls._expected_probs = {
+            cls.gatestring1: np.dot(np.transpose(cls._model.povms['Mdefault']['0']),
+                                    np.dot(cls._model['Gy'],
+                                           np.dot(cls._model['Gx'],
+                                                  cls._model.preps['rho0']))).reshape(-1)[0],
+            cls.gatestring2: np.dot(np.transpose(cls._model.povms['Mdefault']['0']),
+                                    np.dot(cls._model['Gy'],
+                                           np.dot(cls._model['Gy'],
+                                                  np.dot(cls._model['Gx'],
+                                                         cls._model.preps['rho0'])))).reshape(-1)[0]
         }
+        # TODO expected dprobs & hprobs
 
     def test_probs(self):
         probs = self.model.probs(self.gatestring1)
@@ -282,13 +311,18 @@ class SimMethodBase:
         # TODO assert correctness
 
     def test_hprobs(self):
+        # TODO optimize
         hprobs = self.model.hprobs(self.gatestring1)
-        hprobs2 = self.model.hprobs(self.gatestring1, returnPr=True)
-        hprobs3 = self.model.hprobs(self.gatestring1, returnPr=True, returnDeriv=True)
-        self.assertArraysAlmostEqual(hprobs[('0',)], hprobs2[('0',)][0])
-        self.assertArraysAlmostEqual(hprobs[('1',)], hprobs2[('1',)][0])
-        self.assertArraysAlmostEqual(hprobs[('0',)], hprobs3[('0',)][0])
-        self.assertArraysAlmostEqual(hprobs[('1',)], hprobs3[('1',)][0])
+        # XXX is this necessary?
+        # Cover combinations of arguments
+        variants = [
+            self.model.hprobs(self.gatestring1, returnPr=True),
+            self.model.hprobs(self.gatestring1, returnDeriv=True),
+            self.model.hprobs(self.gatestring1, returnPr=True, returnDeriv=True)
+        ]
+        for hprobs2 in variants:
+            self.assertArraysAlmostEqual(hprobs[('0',)], hprobs2[('0',)][0])
+            self.assertArraysAlmostEqual(hprobs[('1',)], hprobs2[('1',)][0])
         # TODO assert correctness
 
     def test_probs_warns_on_nan_in_input(self):
@@ -348,7 +382,6 @@ class SimMethodBase:
             bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], returnPr=False)
         # TODO assert correctness
 
-    def test_bulk_dprobs_with_probabilities(self):
         with self.assertNoWarns():
             bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], returnPr=True)
         # TODO assert correctness
@@ -357,20 +390,14 @@ class SimMethodBase:
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
         nParams = self.model.num_params()
-        probs_to_fill = np.empty(nElements, 'd')
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
 
         with self.assertNoWarns():
             self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
         # TODO assert correctness
 
-    def test_bulk_fill_dprobs_with_probabilities(self):
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
-        nParams = self.model.num_params()
         probs_to_fill = np.empty(nElements, 'd')
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
-
         with self.assertNoWarns():
             self.model.bulk_fill_dprobs(dprobs_to_fill, evt, prMxToFill=probs_to_fill, check=True)
         # TODO assert correctness
@@ -381,7 +408,6 @@ class SimMethodBase:
             evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
             nElements = evt.num_final_elements()
             nParams = self.model.num_params()
-            probs_to_fill = np.empty(nElements, 'd')
             dprobs_to_fill = np.empty((nElements, nParams), 'd')
 
             self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
@@ -397,10 +423,83 @@ class SimMethodBase:
             self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
         # TODO assert correctness
 
-    def test_bulk_dproduct(self):
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        dProds = self.model.bulk_dproduct(evt)
+    def test_bulk_hprobs(self):
+        # call normally
+        with self.assertNoWarns():
+            bulk_hprobs = self.model.bulk_hprobs(
+                [self.gatestring1, self.gatestring2], returnPr=False, returnDeriv=False)
         # TODO assert correctness
+
+        # with probabilities
+        with self.assertNoWarns():
+            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], returnPr=True, returnDeriv=False)
+        # TODO assert correctness
+
+        # with derivative probabilities
+        with self.assertNoWarns():
+            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], returnPr=False, returnDeriv=True)
+        # TODO assert correctness
+
+    def test_bulk_fill_hprobs(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        nParams = self.model.num_params()
+
+        # call normally
+        hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
+        with self.assertNoWarns():
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
+        # TODO assert correctness
+
+        # also fill probabilities
+        probs_to_fill = np.empty(nElements, 'd')
+        with self.assertNoWarns():
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, prMxToFill=probs_to_fill, check=True)
+        # TODO assert correctness
+
+        #also fill derivative probabilities
+        dprobs_to_fill = np.empty((nElements, nParams), 'd')
+        hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
+        with self.assertNoWarns():
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, derivMxToFill=dprobs_to_fill, check=True)
+        # TODO assert correctness
+
+    def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
+        # TODO figure out better way to do this
+        with smallness_threshold(10):
+            evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+            nElements = evt.num_final_elements()
+            nParams = self.model.num_params()
+            hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
+
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
+            # TODO assert correctness
+
+    def test_bulk_fill_hprobs_with_split_tree(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nElements = evt.num_final_elements()
+        nParams = self.model.num_params()
+        hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
+        lookup_split = evt.split(lookup, numSubTrees=2)
+        with self.assertNoWarns():
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
+        # TODO assert correctness
+
+    def test_bulk_hprobs_by_block(self):
+        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        nP = self.model.num_params()
+
+        hcols = []
+        d12cols = []
+        slicesList = [(slice(0, nP), slice(i, i + 1)) for i in range(nP)]
+        for s1, s2, hprobs_col, dprobs12_col in self.model.bulk_hprobs_by_block(
+                evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
+        all_hcols = np.concatenate(hcols, axis=2)  # axes = (spam+circuit, derivParam1, derivParam2)
+        all_d12cols = np.concatenate(d12cols, axis=2)
+        # TODO assert correctness
+
 
 class StandardMethodBase(GeneralMethodBase, SimMethodBase, ThresholdMethodBase):
     pass
@@ -450,11 +549,6 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
         super(FullMapSimMethodTester, self).setUp()
         self.model.set_simtype('map')
-
-    def test_bulk_dproduct(self):
-        evt, _, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        with self.assertRaises(AttributeError):
-            self.model.bulk_dproduct(evt)
 
 
 class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase):
