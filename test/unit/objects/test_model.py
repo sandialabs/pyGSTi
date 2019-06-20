@@ -500,6 +500,25 @@ class SimMethodBase:
         all_d12cols = np.concatenate(d12cols, axis=2)
         # TODO assert correctness
 
+    def test_bulk_evaltree(self):
+        # Test tree construction
+        circuits = pc.circuit_list(
+            [('Gx',),
+             ('Gy',),
+             ('Gx', 'Gy'),
+             ('Gy', 'Gy'),
+             ('Gy', 'Gx'),
+             ('Gx', 'Gx', 'Gx'),
+             ('Gx', 'Gy', 'Gx'),
+             ('Gx', 'Gy', 'Gy'),
+             ('Gy', 'Gy', 'Gy'),
+             ('Gy', 'Gx', 'Gx')])
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, maxTreeSize=4)
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, minSubtrees=2, maxTreeSize=4)
+        with self.assertWarns(Warning):
+            self.model.bulk_evaltree(circuits, minSubtrees=3, maxTreeSize=8)
+            #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
+
 
 class StandardMethodBase(GeneralMethodBase, SimMethodBase, ThresholdMethodBase):
     pass

@@ -256,7 +256,7 @@ class TestGateSetMethods(GateSetTestCase):
         #                        print("  el(%d,%d):  %g - %g = %g" % (i,j,x,y,x-y))
 
 
-    def test_tree_construction(self):
+    def test_tree_construction_mem_limit(self):
         circuits = pygsti.construction.circuit_list(
             [('Gx',),
              ('Gy',),
@@ -268,15 +268,6 @@ class TestGateSetMethods(GateSetTestCase):
              ('Gx','Gy','Gy'),
              ('Gy','Gy','Gy'),
              ('Gy','Gx','Gx') ] )
-        evt,lookup,outcome_lookup = self.model.bulk_evaltree( circuits, maxTreeSize=4 )
-        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( circuits, maxTreeSize=4 )
-
-        evt,lookup,outcome_lookup = self.model.bulk_evaltree( circuits, minSubtrees=2, maxTreeSize=4 )
-        self.assertWarns(self.model.bulk_evaltree, circuits, minSubtrees=3, maxTreeSize=8 )
-           #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
-
-        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( circuits, minSubtrees=2, maxTreeSize=4 )
-
         ##Make a few-param model to better test mem limits
         mdl_few = self.model.copy()
         mdl_few.set_all_parameterizations("static")
