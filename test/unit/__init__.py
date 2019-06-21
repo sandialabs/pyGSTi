@@ -1,5 +1,8 @@
 """Unit test coverage for pyGSTi"""
 import os
+import logging
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 
 if 'PYGSTI_REGEN_REF_FILES' in os.environ:
     from .util import _regenerate_references
