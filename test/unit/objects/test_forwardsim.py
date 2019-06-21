@@ -110,6 +110,14 @@ class ForwardSimBase:
         self.fwdsim.estimate_cache_size(100)
         # TODO assert correctness
 
+    def test_estimate_mem_usage(self):
+        est = self.fwdsim.estimate_mem_usage(
+            ["bulk_fill_probs", "bulk_fill_dprobs", "bulk_fill_hprobs"],
+            cache_size=100, num_subtrees=2, num_subtree_proc_groups=1,
+            num_param1_groups=1, num_param2_groups=1, num_final_strs=100
+        )
+        # TODO assert correctness
+
     def test_estimate_mem_usage_raises_on_bad_subcall_key(self):
         with self.assertRaises(ValueError):
             self.fwdsim.estimate_mem_usage(["foobar"], 1, 1, 1, 1, 1, 1)

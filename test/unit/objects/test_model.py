@@ -143,13 +143,14 @@ class GeneralMethodBase:
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
-    def test_raise_on_set_bad_prep_key(self):
-        with self.assertRaises(KeyError):
-            self.model.preps['foobar'] = [1.0 / np.sqrt(2), 0, 0, 0]  # bad key prefix
-
-    def test_raise_on_get_bad_povm_key(self):
-        with self.assertRaises(KeyError):
-            self.model.povms['foobar']
+    def test_strdiff(self):
+        other = pc.build_explicit_model(
+            [('Q0',)], ['Gi', 'Gx', 'Gy'],
+            ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            parameterization='TP'
+        )
+        self.model.strdiff(other)
+        # TODO assert correctness
 
     def test_copy(self):
         gs2 = self.model.copy()
@@ -202,6 +203,29 @@ class GeneralMethodBase:
         g._clean_paramvec()
         self.assertAlmostEqual(self.model.frobeniusdist(g), 0.0)
 
+    def test_gpindices(self):
+        # XXX what is being tested here?
+        # TODO break apart
+
+        # Test instrument construction with elements whose gpindices
+        # are already initialized.  Since this isn't allowed currently
+        # (a future functionality), we need to do some hacking
+        mdl = self.model.copy()
+        mdl.operations['Gnew1'] = FullDenseOp(np.identity(4, 'd'))
+        del mdl.operations['Gnew1']
+
+        v = mdl.to_vector()
+        Np = mdl.num_params()
+        gate_with_gpindices = FullDenseOp(np.identity(4, 'd'))
+        gate_with_gpindices[0, :] = v[0:4]
+        gate_with_gpindices.set_gpindices(np.concatenate(
+            (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
+        mdl.operations['Gnew2'] = gate_with_gpindices
+        mdl.operations['Gnew3'] = FullDenseOp(np.identity(4, 'd'))
+        del mdl.operations['Gnew3']  # this causes update of Gnew2 indices
+        del mdl.operations['Gnew2']
+        # TODO assert correctness
+
     def test_raises_on_get_bad_key(self):
         with self.assertRaises(KeyError):
             self.model['Non-existent-key']
@@ -209,6 +233,14 @@ class GeneralMethodBase:
     def test_raises_on_set_bad_key(self):
         with self.assertRaises(KeyError):
             self.model['Non-existent-key'] = np.zeros((4, 4), 'd')  # can't set things not in the model
+
+    def test_raise_on_set_bad_prep_key(self):
+        with self.assertRaises(KeyError):
+            self.model.preps['foobar'] = [1.0 / np.sqrt(2), 0, 0, 0]  # bad key prefix
+
+    def test_raise_on_get_bad_povm_key(self):
+        with self.assertRaises(KeyError):
+            self.model.povms['foobar']
 
     def test_raises_on_conflicting_attribute_access(self):
         self.model.preps['rho1'] = self.model.preps['rho0'].copy()
@@ -584,7 +616,8 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 
 
 class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
-    pass
+    def test_tp_dist(self):
+        self.assertAlmostEqual(self.model.tpdist(), 3.52633900335e-16, 5)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
@@ -630,3 +663,18 @@ class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase
     def tearDown(self):
         self._context.__exit__(None, None, None)
         super(FullHighThresholdMethodTester, self).tearDown()
+
+
+class FullBadDimensionModelTester(FullModelBase, BaseCase):
+    def setUp(self):
+        super(FullBadDimensionModelTester, self).setUp()
+        self.model = self.model.increase_dimension(11)
+
+    # XXX these aren't tested under normal conditions...
+    def test_rotate_raises(self):
+        with self.assertRaises(AssertionError):
+            self.model.rotate((0.1, 0.1, 0.1))
+
+    def test_randomize_with_unitary_raises(self):
+        with self.assertRaises(AssertionError):
+            self.model.randomize_with_unitary(1, randState=np.random.RandomState())  # scale shouldn't matter
