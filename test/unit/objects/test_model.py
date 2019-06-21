@@ -202,6 +202,37 @@ class GeneralMethodBase:
         g._clean_paramvec()
         self.assertAlmostEqual(self.model.frobeniusdist(g), 0.0)
 
+    def test_raises_on_get_bad_key(self):
+        with self.assertRaises(KeyError):
+            self.model['Non-existent-key']
+
+    def test_raises_on_set_bad_key(self):
+        with self.assertRaises(KeyError):
+            self.model['Non-existent-key'] = np.zeros((4, 4), 'd')  # can't set things not in the model
+
+    def test_raises_on_conflicting_attribute_access(self):
+        self.model.preps['rho1'] = self.model.preps['rho0'].copy()
+        self.model.povms['M2'] = self.model.povms['Mdefault'].copy()
+        with self.assertRaises(ValueError):
+            self.model.prep  # can only use this property when there's a *single* prep
+        with self.assertRaises(ValueError):
+            self.model.effects  # can only use this property when there's a *single* POVM
+
+        with self.assertRaises(ValueError):
+            prep, gates, povm = self.model.split_circuit(Circuit(('rho0', 'Gx')))
+        with self.assertRaises(ValueError):
+            prep, gates, povm = self.model.split_circuit(Circuit(('Gx', 'Mdefault')))
+
+    def test_set_gate_raises_on_bad_dimension(self):
+        with self.assertRaises(ValueError):
+            self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
+
+    def test_check_paramvec_raises_on_error(self):
+        # XXX is this test needed?
+        self.model._paramvec[:] = 0.0  # mess with paramvec to get error below
+        with self.assertRaises(ValueError):
+            self.model._check_paramvec(debug=True)  # param vec is now out of sync!
+
 
 class ThresholdMethodBase:
     """Tests for model methods affected by the mapforwardsim smallness threshold"""
@@ -269,7 +300,8 @@ class ThresholdMethodBase:
 
 
 class SimMethodBase:
-    """Tests for model methods which can use different sim modes"""
+    """Tests for model methods which can use different forward sims"""
+    # XXX is there any reason this shouldn't be refactored into test_forwardsim?
 
     @classmethod
     def setUpClass(cls):
@@ -568,6 +600,25 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
         super(FullMapSimMethodTester, self).setUp()
         self.model.set_simtype('map')
+
+    def test_bulk_evaltree(self):
+        # Test tree construction
+        circuits = pc.circuit_list(
+            [('Gx',),
+             ('Gy',),
+             ('Gx', 'Gy'),
+             ('Gy', 'Gy'),
+             ('Gy', 'Gx'),
+             ('Gx', 'Gx', 'Gx'),
+             ('Gx', 'Gy', 'Gx'),
+             ('Gx', 'Gy', 'Gy'),
+             ('Gy', 'Gy', 'Gy'),
+             ('Gy', 'Gx', 'Gx')])
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, maxTreeSize=4)
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, minSubtrees=2, maxTreeSize=4)
+        with self.assertNoWarns():
+            self.model.bulk_evaltree(circuits, minSubtrees=3, maxTreeSize=8)
+            #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
 
 
 class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase):

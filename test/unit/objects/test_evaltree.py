@@ -38,11 +38,19 @@ class EvalTreeBase:
         nStrs = self.tree.num_final_strings()
         self.assertEqual(self.tree.final_slice(None), slice(0, nStrs))  # trivial since t is not split
 
+    def test_num_final_elements(self):
+        n = self.tree.num_final_elements()
+        # TODO assert correctness
+
     def test_evaluation_order(self):
         order = self.tree.get_evaluation_order()
         for k in order:
             assert(len(self.tree[k]) in (2, 3))
             # TODO does this assert correctness?
+
+    def test_get_sub_trees(self):
+        subtrees = self.tree.get_sub_trees()
+        # TODO assert correctness
 
     def test_permute(self):
         # TODO no randomness

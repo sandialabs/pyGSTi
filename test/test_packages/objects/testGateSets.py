@@ -98,12 +98,6 @@ class TestGateSetMethods(GateSetTestCase):
         evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
-        self.assertArraysAlmostEqual(hProbs0[('0',)], hP0)
-        self.assertArraysAlmostEqual(hProbs1[('0',)], hP1)
-        self.assertArraysAlmostEqual(hProbs2[('0',)], hP2)
-        self.assertArraysAlmostEqual(mhProbs0[('0',)], hP0, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mhProbs1[('0',)], hP1, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mhProbs2[('0',)], hP2, places=FD_HESS_PLACES)
 
 
         nElements = evt.num_final_elements(); nParams = self.model.num_params()
@@ -112,7 +106,6 @@ class TestGateSetMethods(GateSetTestCase):
         hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
         self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fill, evt,
                               prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
-)
 
 
         nP = self.model.num_params()
@@ -362,95 +355,6 @@ class TestGateSetMethods(GateSetTestCase):
                                          bulk_probsC[ lookupC[i] ])
 
 
-    def test_failures(self):
-
-        with self.assertRaises(KeyError):
-            self.model['Non-existent-key']
-
-        with self.assertRaises(KeyError):
-            self.model['Non-existent-key'] = np.zeros((4,4),'d') #can't set things not in the model
-
-        #with self.assertRaises(ValueError):
-        #    self.model['Gx'] = np.zeros((4,4),'d') #can't set matrices
-
-        #with self.assertRaises(ValueError):
-        #    self.model.update( {'Gx': np.zeros((4,4),'d') } )
-
-        #with self.assertRaises(ValueError):
-        #    self.model.update( Gx=np.zeros((4,4),'d') )
-
-        #with self.assertRaises(TypeError):
-        #    self.model.update( 1, 2 ) #too many positional arguments...
-
-        #with self.assertRaises(ValueError):
-        #    self.model.setdefault('Gx',np.zeros((4,4),'d'))
-
-        with self.assertRaises(ValueError):
-            self.model['Gbad'] = pygsti.obj.FullDenseOp(np.zeros((5,5),'d')) #wrong gate dimension
-
-        mdl_multispam = self.model.copy()
-        mdl_multispam.preps['rho1'] = mdl_multispam.preps['rho0'].copy()
-        mdl_multispam.povms['M2'] = mdl_multispam.povms['Mdefault'].copy()
-        with self.assertRaises(ValueError):
-            mdl_multispam.prep #can only use this property when there's a *single* prep
-        with self.assertRaises(ValueError):
-            mdl_multispam.effects #can only use this property when there's a *single* POVM
-        with self.assertRaises(ValueError):
-            prep,gates,povm = mdl_multispam.split_circuit( pygsti.obj.Circuit(('Gx','Mdefault')) )
-        with self.assertRaises(ValueError):
-            prep,gates,povm = mdl_multispam.split_circuit( pygsti.obj.Circuit(('rho0','Gx')) )
-
-        mdl = self.model.copy()
-        mdl._paramvec[:] = 0.0 #mess with paramvec to get error below
-        with self.assertRaises(ValueError):
-            mdl._check_paramvec(debug=True) # param vec is now out of sync!
-
-
-    def test_iteration(self):
-        #Iterate over all gates and SPAM matrices
-        #for mx in self.model.iterall():
-        pass
-
-    def test_deprecated_functions(self):
-        pass
-
-        #MOST ARE REMOVED NOW:
-        #name = self.model.get_basis_name()
-        #dim  = self.model.get_basis_dimension()
-        #self.model.set_basis(name, dim)
-        #
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_prep_labels()
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_effect_labels()
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_preps()
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_effects()
-        #with self.assertRaises(AssertionError):
-        #    self.model.num_preps()
-        #with self.assertRaises(AssertionError):
-        #    self.model.num_effects()
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_reverse_spam_defs()
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_spam_labels()
-        #with self.assertRaises(AssertionError):
-        #    self.model.get_spamop(None)
-        #with self.assertRaises(AssertionError):
-        #    self.model.iter_operations()
-        #with self.assertRaises(AssertionError):
-        #    self.model.iter_preps()
-        #with self.assertRaises(AssertionError):
-        #    self.model.iter_effects()
-
-        ##simulate copying an old model
-        #old_gs = self.model.copy()
-        #del old_gs.__dict__['_calcClass']
-        #del old_gs.__dict__['basis']
-        #old_gs._basisNameAndDim = ('pp',2)
-        #copy_of_old = old_gs.copy()
-
     def test_load_old_gateset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
@@ -474,145 +378,6 @@ class TestGateSetMethods(GateSetTestCase):
         #del mdl._calcClass
         #c = mdl._fwdsim() #automatically sets _calcClass
         #self.assertTrue(hasattr(mdl,'_calcClass'))
-
-
-    def test_base_fwdsim(self):
-        class TEMP_SOS(object): # SOS = Simplified Op Server
-            def get_evotype(self): return "densitymx"
-        rawCalc = pygsti.objects.forwardsim.ForwardSimulator(4, TEMP_SOS(), np.zeros(16,'d'))
-
-        #Lots of things that derived classes implement
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc._buildup_dPG() # b/c gates are not DenseOperator-derived (they're strings in fact!)
-
-        #Now fwdsim doesn't contain product fns?
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc.product(('Gx',))
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc.dproduct(('Gx',))
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc.hproduct(('Gx',))
-        with self.assertRaises(NotImplementedError):
-            rawCalc.construct_evaltree(None,None)
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc.bulk_product(None)
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc.bulk_dproduct(None)
-        #with self.assertRaises(NotImplementedError):
-        #    rawCalc.bulk_hproduct(None)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_fill_probs(None,None)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_fill_dprobs(None,None)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_fill_hprobs(None,None)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_hprobs_by_block(None,None)
-
-    def test_base_gatematrixcalc(self):
-        rawCalc = self.model._fwdsim()
-
-        #Make call variants that aren't called by Model routines
-        dg = rawCalc.doperation(L('Gx'), flat=False)
-        dgflat = rawCalc.doperation(L('Gx'), flat=True)
-
-        rawCalc.hproduct(Ls('Gx','Gx'), flat=True, wrtFilter1=[0,1], wrtFilter2=[1,2,3])
-        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
-        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
-        rawCalc.prs( L('rho0'), [L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1))
-        rawCalc.prs( L('rho0'), [L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
-
-        custom_spamTuple = ( np.zeros((4,1),'d'), np.zeros((4,1),'d') )
-        rawCalc._rhoE_from_spamTuple(custom_spamTuple)
-
-        evt,lookup,outcome_lookup = self.model.bulk_evaltree( [('Gx',), ('Gx','Gx')] )
-        nEls = evt.num_final_elements()
-
-        mx = np.zeros((nEls,3,3),'d')
-        dmx = np.zeros((nEls,3),'d')
-        pmx = np.zeros(nEls,'d')
-        rawCalc.bulk_fill_hprobs(mx, evt,
-                                 prMxToFill=pmx, deriv1MxToFill=dmx, deriv2MxToFill=dmx,
-                                 wrtFilter1=[0,1,2], wrtFilter2=[0,1,2]) #same slice on each deriv
-
-        mx = np.zeros((nEls,3,2),'d')
-        dmx1 = np.zeros((nEls,3),'d')
-        dmx2 = np.zeros((nEls,2),'d')
-        pmx = np.zeros(nEls,'d')
-        rawCalc.bulk_fill_hprobs(mx, evt,
-                                 prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
-                                 wrtFilter1=[0,1,2], wrtFilter2=[2,3]) #different slices on 1st vs. 2nd deriv
-
-
-        with self.assertRaises(ValueError):
-            rawCalc.estimate_mem_usage(["foobar"], 1,1,1,1,1,1)
-
-        cptpGateset = self.model.copy()
-        cptpGateset.set_all_parameterizations("CPTP") # so gates have nonzero hessians
-        cptpCalc = cptpGateset._fwdsim()
-
-        hg = cptpCalc.hoperation(L('Gx'), flat=False)
-        hgflat = cptpCalc.hoperation(L('Gx'), flat=True)
-
-        cptpCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), False,False, clipTo=(-1,1))
-
-
-
-    def test_base_gatemapcalc(self):
-        rawCalc = self.mgateset._fwdsim()
-
-        #Make call variants that aren't called by Model routines
-        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
-        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
-        rawCalc.prs( L('rho0'),[L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1))
-        rawCalc.prs( L('rho0'),[L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
-        rawCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), False,False, clipTo=(-1,1))
-        rawCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), True,True, clipTo=(-1,1))
-
-        #Custom spamtuples aren't supported anymore
-        #custom_spamTuple = ( np.nan*np.ones((4,1),'d'), np.zeros((4,1),'d') )
-        #rawCalc.pr( custom_spamTuple, ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
-
-        rawCalc.estimate_cache_size(100)
-        with self.assertRaises(ValueError):
-            rawCalc.estimate_mem_usage(["foobar"], 1,1,1,1,1,1)
-
-        evt,lookup,outcome_lookup = self.mgateset.bulk_evaltree( [('Gx',), ('Gx','Gx')] )
-        nEls = evt.num_final_elements()
-        nP = self.mgateset.num_params()
-
-        mx = np.zeros((nEls,3),'d')
-        pmx = np.zeros(nEls,'d')
-        rawCalc.bulk_fill_dprobs(mx, evt,
-                                 prMxToFill=pmx, clipTo=(-1,1),wrtFilter=[0,1,2])
-
-        mx = np.zeros((nEls,nP),'d')
-        rawCalc.bulk_fill_dprobs(mx, evt,
-                                 prMxToFill=pmx, clipTo=(-1,1), wrtBlockSize=2)
-
-
-        mx = np.zeros((nEls,3,3),'d')
-        dmx = np.zeros((nEls,3),'d')
-        pmx = np.zeros(nEls,'d')
-        rawCalc.bulk_fill_hprobs(mx, evt, clipTo=(-1,1),
-                                 prMxToFill=pmx, deriv1MxToFill=dmx, deriv2MxToFill=dmx,
-                                 wrtFilter1=[0,1,2], wrtFilter2=[0,1,2]) #same slice on each deriv
-
-        mx = np.zeros((nEls,3,2),'d')
-        dmx1 = np.zeros((nEls,3),'d')
-        dmx2 = np.zeros((nEls,2),'d')
-        pmx = np.zeros(nEls,'d')
-        rawCalc.bulk_fill_hprobs(mx, evt, clipTo=(-1,1),
-                                 prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
-                                 wrtFilter1=[0,1,2], wrtFilter2=[2,3]) #different slices on 1st vs. 2nd deriv
-
-        mx = np.zeros((nEls,nP,nP),'d')
-        dmx1 = np.zeros((nEls,nP),'d')
-        dmx2 = np.zeros((nEls,nP),'d')
-        pmx = np.zeros(nEls,'d')
-        rawCalc.bulk_fill_hprobs(mx, evt, clipTo=(-1,1),
-                                 prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
-                                 wrtBlockSize1=2, wrtBlockSize2=3) #use block sizes
 
 
     def test_base_gatesetmember(self):
