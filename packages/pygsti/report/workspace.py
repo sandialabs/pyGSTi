@@ -319,6 +319,8 @@ class Workspace(object):
         self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
         self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
+        self.PowerSpectrumPlot = makefactory(_wp.PowerSpectrumPlot)
+        self.ProbabilityTrajectoryPlot = makefactory(_wp.ProbabilityTrajectoryPlot)
 
         #Text blocks
         self.StdoutText = makefactory(_wtxt.StdoutText)

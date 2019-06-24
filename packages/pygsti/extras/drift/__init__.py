@@ -1,4 +1,4 @@
-""" LinearOperator Set Tomography Tools Python Package """
+""" Drift Detection and Characterization Sub-package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -8,9 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 #Import the most important/useful routines of each module into
 # the package namespace
+#from .core import *
+#from .signal import DCT
 from .core import *
-
-from . import simulate
-from . import estimate
-from . import results
-from . import signal
+from .stabilityanalyzer import StabilityAnalyzer
