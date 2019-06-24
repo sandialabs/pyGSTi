@@ -17,37 +17,79 @@ except ImportError:
 
 class DriftTestCase(BaseTestCase):
 
-    def test_drift_characterization(self):
-        tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
-        results_gst = drift.do_drift_characterization(tds)
-        #results_gst.any_drift_detect()
-        # opstr = list(tds.keys())[0]
+    def test_signal(self):
+
+        base = 0.5
+        p = drift.signal.generate_gaussian_signal(10, 23, 10, 1000, base=base, method='sharp')
+        p = drift.signal.generate_gaussian_signal(10, 23, 10, 1000, base=base, method='logistic')
+        p = drift.signal.generate_gaussian_signal(10, 23, 10, 1000, base=base, method=None)
+        p = drift.signal.generate_flat_signal(100, 2, 1000, candidatefreqs=None, base=0.5, method ='logistic')
+        p = drift.signal.generate_flat_signal(100, 2, 1000, candidatefreqs=np.arange(1,10), base=0.5, method ='sharp')
+        a1, b1, c1 = drift.signal.spectrum(p, times=np.arange(1000), returnfrequencies=True)
+        a2, b2, c2 = drift.signal.spectrum(p, times=np.arange(1000), null_hypothesis=None, transform='lsp')
+        a3, b3, c3 = drift.signal.spectrum(p, times=np.arange(1000), null_hypothesis=p, transform='dft')
+        power = drift.signal.bartlett_spectrum(p, 5, counts=1, null_hypothesis=None, transform='dct')
+        assert(abs(max(c1)  -50) < 1e-10)
+        assert(abs(sum(c1[0:10]) - 100) < 1e-10)
+
+        fnc = drift.signal.dct_basisfunction(3, np.arange(500), 0, 500)
+        amps = drift.signal.amplitudes_at_frequencies([1,3], {'0':fnc, '1': - fnc})
+
+        assert(abs(amps['0'][0]) < 1e-10)
+        assert(abs(amps['0'][1]-1) < 1e-10)
+        assert(abs(amps['1'][0]) < 1e-10)
+        assert(abs(amps['1'][1]+1) < 1e-10)
+
+        powerthreshold = drift.signal.power_significance_threshold(0.05, 100, 1)
+        pvaluethreshold = drift.signal.power_to_pvalue(powerthreshold, 1)
+        assert(abs(pvaluethreshold - 0.05 / 100) < 1e-10)
+        drift.signal.maxpower_pvalue(20, 100, 1)
+        qthreshold = drift.signal.power_significance_quasithreshold(0.05, 100, 1, procedure='Benjamini-Hochberg')
+        assert(abs(qthreshold[-1] - powerthreshold) < 1e-10)
+
+        drift.signal.sparsity(p)
+        plpf = drift.signal.lowpass_filter(p, max_freq=None)
+        assert(np.sum(abs(p - plpf)) < 1e-7)
+
+        assert(abs(drift.signal.moving_average(np.arange(0,100),width=11)[50] - 50) < 1e-10)
+
+    # def test_drift_characterization(self):
+    #     tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
+    #     results_gst = drift.do_drift_characterization(tds)
+    #             #results_gst.any_drift_detect()
+    #             # opstr = list(tds.keys())[0]
         
-        # print(results_gst.global_drift_frequencies)
+    #     # print(results_gst)
 
-        #if bMPL:
-        #    results_gst.plot_power_spectrum(savepath=temp_files+"/driftchar_powspec1.png")
-        #    results_gst.plot_power_spectrum(sequence=opstr,loc='upper right', 
-        #                                    savepath=temp_files+"/driftchar_powspec2.png")
+    #     #if bMPL:
+    #     #    results_gst.plot_power_spectrum(savepath=temp_files+"/driftchar_powspec1.png")
+    #     #    results_gst.plot_power_spectrum(sequence=opstr,loc='upper right', 
+    #     #                                    savepath=temp_files+"/driftchar_powspec2.png")
 
-            # This box constructs some GST objects, needed to create any sort of boxplot with GST data
+    #         # This box constructs some GST objects, needed to create any sort of boxplot with GST data
 
-        # This manually specifies the germ and fiducial structure for the imported data.
-        fiducial_strs = ['{}','Gx','Gy','GxGx','GxGxGx','GyGyGy']
-        germ_strs = ['Gi','Gx','Gy','GxGy','GxGyGi','GxGiGy','GxGiGi','GyGiGi','GxGxGiGy','GxGyGyGi','GxGxGyGxGyGy']
-        log2maxL = 1 # log2 of the maximum germ power
+    #     # This manually specifies the germ and fiducial structure for the imported data.
+    #     fiducial_strs = ['{}','Gx','Gy','GxGx','GxGxGx','GyGyGy']
+    #     germ_strs = ['Gi','Gx','Gy','GxGy','GxGyGi','GxGiGy','GxGiGi','GyGiGi','GxGxGiGy','GxGyGyGi','GxGxGyGxGyGy']
+    #     log2maxL = 1 # log2 of the maximum germ power
 
-        # Below we use the maxlength, germ and fuducial lists to create the GST structures needed for box plots.
-        fiducials = [pygsti.objects.Circuit(None,stringrep=fs) for fs in fiducial_strs]
-        germs = [pygsti.objects.Circuit(None,stringrep=s) for s in germ_strs]
-        max_lengths = [2**i for i in range(0,log2maxL)]
-        gssList = pygsti.construction.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
+    #     # Below we use the maxlength, germ and fuducial lists to create the GST structures needed for box plots.
+    #     fiducials = [pygsti.objects.Circuit(None,stringrep=fs) for fs in fiducial_strs]
+    #     germs = [pygsti.objects.Circuit(None,stringrep=s) for s in germ_strs]
+    #     max_lengths = [2**i for i in range(0,log2maxL)]
+    #     gssList = pygsti.construction.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
 
-        w = pygsti.report.Workspace()
-        #w.init_notebook_mode(connected=False, autodisplay=True)
+    #     w = pygsti.report.Workspace()
+    #     # Create a boxplot of the maximum power in the power spectra for each sequence.
+    #     w.ColorBoxPlot('driftpwr', gssList[-1], None, None, driftresults = (results_gst,None))
 
-        # Create a boxplot of the maximum power in the power spectra for each sequence.
-        w.ColorBoxPlot('driftpwr', gssList[-1], None, None, driftresults = (results_gst,None))
+ 
+
+
+
+
+
+
 
         #if bMPL:
         #    results_gst.plot_most_drifty_probability(plot_data=True, savepath=temp_files+"/driftchar_probs.png")

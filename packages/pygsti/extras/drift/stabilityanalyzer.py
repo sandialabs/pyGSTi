@@ -185,7 +185,11 @@ def populate_inclass_correction(inclass_correction={}):
 
 
 def get_auto_betweenclass_weighting(tests, betweenclass_weighting=True):
+    """
+    Finds the automatic weighting used between classes of test, e.g., a
+    "top level" Bonferroni correction, or no correction, etc.
 
+    """
     if betweenclass_weighting:
         betweenclass_weighting = {test: 1 / len(tests) for test in tests}
     else:
@@ -268,8 +272,8 @@ class StabilityAnalyzer(object):
                 - 'dft' :   The discrete Fourier transform (with an orthogonal normalization). *** This is an
                             experimental feature, and the results are unreliable with this transform ***
 
-                - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an
-                            experimental feature, and the code is untested with this transform ***
+                - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an experimental feature, and the code is
+                            untested with this transform ***
 
         marginalize : str or bool, optional
             True, False or 'auto'. Whether or not to marginalize multi-qubit data, to look for instability
@@ -459,33 +463,50 @@ class StabilityAnalyzer(object):
     def generate_spectra(self, frequencies='auto', freqpointers={}):
         """"
         Generates and records power spectra. This is the first stage in instability detection
-        and characterization.
+        and characterization with a StabilityAnalyzer.
 
         Parameters
         ----------
         frequencies : 'auto' or list, optional
             The frequencies that the power spectra are calculated for. If 'auto' these are automatically
             determined from the meta-data of the time-series data (e.g., using the mean time between data
-            points) and the transform being used. If not 'auto', then a list  .... todo.
+            points) and the transform being used. If not 'auto', then a list of lists, where each list is
+            a set of frequencies that are the frequencies corresponding to one or more power spectra. The
+            frequencies that should be paired to a given power spectrum are specified by `freqpointers`.
 
             These frequencies (whether automatically calculated or explicitly input) have a fundmentally
-            different role depending on whether the transform is time-stamp aware (e.g., LSP) or not
-            (e.g., DCT).
+            different meaning depending on whether the transform is time-stamp aware (here, the LSP) or not
+            (here, the DCT and DFT).
 
-            - Time-stamp aware transforms : takes the frequencies to calculate powers at as an input (e.g., the Lomb-Scargle periodogram) --
-            because it explicitly uses the data collections times -- or whether the transform acts only on 
-            the ...
+            Time-stamp aware transforms take the frequencies to calculate powers at *as an input*, so the
+            specified frequencies are, explicitly, the frequencies associated with the powers. The task
+            of choosing the frequencies amounts to picking the best set of frequencies at which to interogate
+            the true probability trajectory for components. As there are complex factors involved in this
+            choice that the code has no way of knowing, sometimes it is best to choose them yourself. E.g.,
+            if different frequencies are used for different circuits it isn't possible to (meaningfully)
+            averaging power spectra across circuits, but this might be preferable if the time-step is
+            sufficiently different between different circuits -- it depends on your aims.
 
-            - Time-stamp unaware transforms :
+            For time-stamp unaware transforms, these frequencies should be the frequencies that, given
+            that we're implementing the, e.g., DCT, the generated power spectrum is *implicitly* with respect
+            to. In the case of data on a fixed time-grid, i.e., equally spaced data, then there is a
+            precise set of frequencies implicit in the transform (which will be accurately extracted with
+            frequencies set to `auto`). Otherwise, these frequencies are explicitly at least slightly
+            ad hoc, and choosing these frequencies amounts to choosing those frequencies that "best"
+            approximate the properties being interogatted with fitting each, e.g., DCT basis function
+            to the (timestamp-free) data. The 'auto' option bases there frequencies solely on the
+            mean time step and the number of times, and is a decent option when the time stamps are roughly
+            equally spaced for each circuit.
 
-            NOTE : THERE IS NOTHING TO SAVE YOU IF YOU MESS THIS UP.
-
-            The units on these frequencies should be consistent with the units on the time stamps of the
+            todo: discuss unit. The units on these frequencies should be consistent with the units on the time stamps of the
             data. E.g., if the times are in seconds then ... todo.
 
         freqpointers : dict, optional
-            Keys are  .... todo.
-
+            Specifies which frequencies correspond to which power spectra. The keys are power spectra labels,
+            and the values are integers that point to the index of `frequencies` (a list of lists) that the
+            relevant frquencies are found at. Whenever a power spectra is not included in `freqpointers` then
+            this defaults to 0. So if `frequencies` is specified and is a list containing a single list (of
+            frequencies) then `freqpointers` can be left as the empty dictionary.
 
         Returns
         -------
@@ -557,7 +578,7 @@ class StabilityAnalyzer(object):
                     self._basespectra[i, j, k] = powers
                     if modes is not None: self._modes[i, j, k] = modes
 
-                    # future: calculate any dof alternative here (perhaps do inside the spectrum function?),
+                    # todo: calculate any dof alternative here (perhaps do inside the spectrum function?),
                     # and record it.
 
         self._contains_spectra = True
@@ -592,7 +613,22 @@ class StabilityAnalyzer(object):
 
     def get_dof(self, label, adjusted=False):
         """
-        docstringtodo
+        Returns the number of degrees of freedom (DOF) for a power in the power spectrum specified by `label`.
+        This is the DOF in the chi2 distribution that the powers are (approximately) distributed according to,
+        under the null hypothesis of stable circuits.
+
+        Parameters
+        ----------
+        label: tuple
+            The label specifying power spectrum, or type of power spectrum
+
+        adjusted: bool, optional
+            todo.
+
+        Returns
+        -------
+        float
+
         """
         if not adjusted:
             dof = 1
@@ -608,7 +644,11 @@ class StabilityAnalyzer(object):
 
     def get_number_of_spectra(self, label):
         """
-        docstringtodo
+        The number of power spectra in the "class" of spectra specified by `label`, where `label` is
+        a tuple containing some subset of 'dataset', 'circuit' and 'outcome'. The strings it contains
+        specified those axes that are not averaged, and those not contained are axes that are averaged.
+        For example, ('circuit',) is the number of power spectra after averaging over DataSets (often 1) and
+        outcomes (often 2), and it is just the total number of circuits.
         """
         numspectra = 1
         for i, axislabel in enumerate(self._axislabels):
@@ -619,17 +659,21 @@ class StabilityAnalyzer(object):
 
     def same_frequencies(self, dictlabel={}):
         """
-        Checks whether all the power spectra defined by `dictlabel` are all with respect to the same frequencies.
+        Checks whether all the "base" power spectra defined by `dictlabel` are all with respect to the same frequencies.
 
         Parameters
         ----------
         dictlabel : dict, optional
-            todo.
+            Specifies the set of "base" power spectra. Keys should be a subset of 'dataset', 'circuit' and 'outcome'.
+            For each string included as a key, we restrict to only those power spectra with associated with the
+            corresponding value. For example, if 'circuit' is a key the value should be a Circuit and we are looking
+            at only those power spectra obtained from the data for that circuit. So an empty dict means we look at every
+            base spectra
 
         Returns
         -------
         Bool
-        True only if the spectra defined by `dictlabel` are all with respect to the same frequencies.
+            True only if the spectra defined by `dictlabel` are all with respect to the same frequencies.
 
         """
         # If there's no frequency pointers stored it's automatically true, becuase then all spectra
@@ -661,7 +705,30 @@ class StabilityAnalyzer(object):
 
     def averaging_allowed(self, dictlabel={}, checklevel=2):
         """
-        docstringtodo
+        Checks whether we can average over the specified "base" power spectra.
+
+        Parameters
+        ----------
+        dictlabel : dict, optional
+            Specifies the set of "base" power spectra. Keys should be a subset of 'dataset', 'circuit' and 'outcome'.
+            For each string included as a key, we restrict to only those power spectra with associated with the
+            corresponding value. For example, if 'circuit' is a key the value should be a Circuit and we are looking
+            at only those power spectra obtained from the data for that circuit. So an empty dict means we look at every
+            base spectra
+
+        checklevel : int, optiona;
+            The degree of checking.
+                - 0:  the function is trivial, and returns True
+                - 1:  the function checks that all the power spectra to be averaged are associated with the same
+                      frequencies
+                - 2+: checks that we can calculate the DOF for that averaged power spectrum, so that hypothesis
+                      testing can be implemented on it.
+
+        Returns
+        -------
+        Bool
+            True if the power spectra pass the tests for the validity of averaging over them.
+
         """
         if checklevel == 0:  # Does no checking if `checklevel` is 0.
             return True
@@ -681,20 +748,23 @@ class StabilityAnalyzer(object):
 
             return True
 
-    def _dictlabel_to_array_indices(self, dictlabel):
-        """
-        docstringtodo
-        """
-        #codetodo: update to call the dictionary, or just delete?
-        indices = []
-        for axislabel in dictlabel.keys():
-            indices.append(self._index(axislabel, dictlabel[axislabel]))
+    # todo : delete
+    # def _dictlabel_to_array_indices(self, dictlabel):
+    #     """
+    #     Converts a dictlabel, for a "base" power spectra, into
+    #     """
+    #     #codetodo: update to call the dictionary, or just delete?
+    #     indices = []
+    #     for axislabel in dictlabel.keys():
+    #         indices.append(self._index(axislabel, dictlabel[axislabel]))
 
-        return tuple(indices)
+    #     return tuple(indices)
 
     def _index(self, axislabel, key):
         """
-        todo
+        Returns the spectra array index for a key along a specific axis. For example,
+        `axislabel` could be 'circuit' and 'key' and Circuit for the DataSet, and this
+        will return the index in spectra array to find the spectra for that circuit.
         """
         if axislabel == 'dataset':
             return list(self.data.keys()).index(key)
@@ -707,7 +777,7 @@ class StabilityAnalyzer(object):
 
     def _dictlabel_to_averaging_axes_and_array_indices(self, dictlabel):
         """
-        docstringtodo
+        todo
         """
         indices = []
         averageaxes = []
@@ -744,7 +814,7 @@ class StabilityAnalyzer(object):
         """
         assert(self._contains_spectra is not None), "Spectra must be generated before they can be accessed!"
         if len(dictlabel) == len(self._axislabels):
-            arrayindices = self._dictlabel_to_array_indices(dictlabel)
+            arrayindices = self._tupletoindex(tuple(dictlabel.values()))
             spectrum = self._basespectra[arrayindices].copy()
             if returnfrequencies:
                 freq = self._frequencies[self._freqpointers[arrayindices]]
@@ -1457,7 +1527,3 @@ class StabilityAnalyzer(object):
         probabilities = ptraj.get_probabilities(times)
 
         return probabilities
-
-    def plot_spectrum(self):
-        # codetodo
-        return None

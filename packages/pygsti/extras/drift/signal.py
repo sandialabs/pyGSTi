@@ -33,7 +33,7 @@ def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', 
             modes = dct(x, null_hypothesis, counts)
             powers = modes**2
 
-        if transform == 'dft':
+        elif transform == 'dft':
             modes = dft(x, null_hypothesis, counts)
             powers = _np.abs(modes)**2
 
@@ -230,7 +230,14 @@ def lsp(x, times, frequencies='auto', null_hypothesis=None, counts=1):
         out[0] = 0.
         return out
 
-    power = _LombScargle(times, standardized_x).power(freq, normalization='psd')
+    if freq[0] == 0.:
+        lspfreq = freq[1:]
+    else:
+        lspfreq = freq
+
+    power = _LombScargle(times, standardized_x, fit_mean=True, center_data=False).power(lspfreq, normalization='psd')
+
+    if freq[0] == 0.: power = _np.array([0,] + list(power))
 
     return freq, power
 
@@ -276,8 +283,10 @@ def bartlett_spectrum(x, numspectra, counts=1, null_hypothesis=None, transform='
     bartlett_spectrum = _np.zeros(length)
 
     for i in range(0, numspectra):
-        spectra[i, :] = spectrum(x[i * length:((i + 1) * length)], counts=counts,
-                                 null_hypothesis=null_hypothesis[i * length:((i + 1) * length)])
+        junk, powers = spectrum(x[i * length:((i + 1) * length)], counts=counts,
+                                null_hypothesis=null_hypothesis[i * length:((i + 1) * length)],
+                                returnfrequencies=False)
+        spectra[i, :] = powers
 
     bartlett_spectrum = _np.mean(spectra, axis=0)
 
@@ -334,16 +343,34 @@ def power_significance_quasithreshold(significance, numstats, dof, procedure='Be
 def get_auto_frequencies(ds, transform='dct'):
     """
     Returns a set of frequencies to create spectra for, for the input data. These frequencies are
-    in units of 1/unit where `unit` is the units of the time-stamps in the DataSet.
-    Depending on the type of transform, what this function is doing has different interpretations:
-    .....
+    in units of 1 / unit where `unit` is the units of the time-stamps in the DataSet.
+    What this function is doing has a fundmentally different meaning depending on whether the
+    transform is time-stamp aware (here, the LSP) or not (here, the DCT and DFT).
+
+    Time-stamp aware transforms take the frequencies to calculate powers at *as an input*, so this
+    chooses these frequencies, which are, explicitly, the frequencies associated with the powers. The task
+    of choosing the frequencies amounts to picking the best set of frequencies at which to interogate
+    the true probability trajectory for components. As there are complex factors involved in this
+    choice that the code has no way of knowing, sometimes it is best to choose them yourself. E.g.,
+    if different frequencies are used for different circuits it isn't possible to (meaningfully)
+    averaging power spectra across circuits, but this might be preferable if the time-step is
+    sufficiently different between different circuits -- it depends on your aims.
+
+    For time-stamp unaware transforms, these are the frequencies that, given that we're implementing
+    the, e.g., DCT, the generated power spectrum is *implicitly* with respect to. In the case of data
+    on a fixed time-grid, i.e., equally spaced data, then there is a precise set of frequencies implicit
+    in the transform. Otherwise, these frequencies are explicitly at least slightly ad hoc, and choosing
+    these frequencies amounts to choosing those frequencies that "best" approximate the properties being
+    interogatted with fitting each, e.g., DCT basis function to the (timestamp-free) data.
 
     Parameters
     ----------
-    transform: str, optional
-
     ds: DataSet or MultiDataset
         Contains time-series data that the "auto" frequencies are calculated for.
+
+    transform: str, optional
+        The type of transform that the frequencies are being chosen for.
+
 
     Returns
     -------
@@ -361,7 +388,6 @@ def get_auto_frequencies(ds, transform='dct'):
 
     """
     # future: make this function for the lsp.
-
     assert(transform in ('dct', 'dft', 'lsp')), "The type of transform is invalid!"
     # todo : This is only reasonable with data that is equally spaced per circuit and with the same 
     # time-step over circuits
@@ -405,6 +431,8 @@ def frequencies_from_timestep(timestep, numtimes):
     return _np.arange(0, numtimes) / (2 * timestep * numtimes)
 
 
+# Currently this is a trivial wrap-around for `frequencies_from_timestep, but in the future it might
+# do something more subtle.
 def fourier_frequencies_from_times(times):
     """
     Calculates the Fourier frequencies from a set of times. These frequencies are in 1/units, where
@@ -425,14 +453,15 @@ def fourier_frequencies_from_times(times):
 
     """
     timestep = _np.mean(_np.diff(times))  # The average time step.
-    T = times[-1] - times[0]  # The total time difference
+    numtimes = len(times)  # The number of times steps
 
-    return frequencies_from_timestep(timestep, T)
+    return frequencies_from_timestep(timestep, numtimes)
 
 
 def amplitudes_at_frequencies(freqInds, timeseries, times=None, transform='dct'):
     """
-    todo
+    Finds the amplitudes in the data at the specified frequency indices.
+    Todo: better docstring. Currently only works for the DCT.
     """
     amplitudes = {}
     for o in timeseries.keys():
@@ -518,9 +547,9 @@ def logistic_transform(x, mean):
     return out
 
 
-def lowpass_filter(data, max_freq=None, transform='dct'):
+def lowpass_filter(data, max_freq=None):
     """
-    Implements a low-pass filter on the input array, by Fourier transforming the input, mapping all but the lowest
+    Implements a low-pass filter on the input array, by DCTing the input, mapping all but the lowest
     `max_freq` modes to zero, and then inverting the transform.
 
     Parameters
@@ -532,9 +561,6 @@ def lowpass_filter(data, max_freq=None, transform='dct'):
         The highest frequency to keep. If None then it keeps the minimum of 50 or l/10 frequencies, where l is the
         length of the data vector
 
-    transform : str in ('dct','dft')
-        The type of transform to use: the type-II discrete cosine transform or the discrete Fourier transform.
-
     Returns
     -------
     numpy.array
@@ -545,18 +571,13 @@ def lowpass_filter(data, max_freq=None, transform='dct'):
     if max_freq is None:
         max_freq = min(int(_np.ceil(n / 10)), 50)
 
-    if transform == 'dct':
-        modes = _dct(data, norm='ortho')
-    if transform == 'dft':
-        modes = _fft(data, norm='ortho')
+    modes = _dct(data, norm='ortho')
 
     if max_freq < n - 1:
         modes[max_freq + 1:] = _np.zeros(len(data) - max_freq - 1)
 
-    if transform == 'dct':
-        out = _idct(modes, norm='ortho')
-    if transform == 'dft':
-        out = _ifft(modes, norm='ortho')
+    out = _idct(modes, norm='ortho')
+
     return out
 
 
@@ -634,27 +655,27 @@ def generate_flat_signal(power, nummodes, n, candidatefreqs=None, base=0.5, meth
     return p
 
 
-def generate_gaussian_signal(power, center, spread, N, base=0.5, method='sharp'):
+def generate_gaussian_signal(power, center, spread, n, base=0.5, method='sharp'):
     """
-    Generates a minimal sparsity probability trajectory for the specified power, and a specified number of modes
-    containing non-zero power. This is a probability trajectory that has a signal power of `power` (where, for a
-    probability trajectory p, the signal vector is s = p - mean(p)), and has that power equally spread over `nummodes`
-    different frequencies. The phases on the amplitudes are randomized.
+    Generates a probability trajectory with the specified power that is approximately Gaussian distribution
+    accross frequencies, centered in the frequency specified by `center`. The probability trajectory has a
+    rescaled signal power of `power`, where, for a probability trajectory p, the signal vector is s = p - mean(p),
+    and the rescaled signal vector is p - mean(p) / sqrt(mean(p) * (1 - mean(p)). The phases on the amplitudes
+    are randomized.
 
     Parameters
     ----------
     power : float
-        The amount of power in the signal of the generated probability trajectory
+        The amount of power in the rescaled signal of the generated probability trajectory.
 
-    nummodes : int
-        The number of modes to equally spread that power over.
+    center : int
+        The mode on which to center the Gaussian.
+
+    spread : int
+        The spread of the Gaussian
 
     n : int
         The number of sample times that the probability trajectory is being created for.
-
-    candidatefreqs : list, optional
-        A list containing a subset of 1,2,...,n-1. If not None, then all frequencies are included.
-
 
     base : float in (0,1), optional
         The mean of the generated probability trajectory.
@@ -679,13 +700,13 @@ def generate_gaussian_signal(power, center, spread, N, base=0.5, method='sharp')
         A probability trajectory.
 
     """
-    modes = _np.zeros(N)
+    modes = _np.zeros(n)
     modes[0] = 0.
-    modes[1:] = _np.exp(-1 * (_np.arange(1, N) - center)**2 / (2 * spread**2))
-    modes = modes * (-1)**_np.random.binomial(1, 0.5, size=N)
+    modes[1:] = _np.exp(-1 * (_np.arange(1, n) - center)**2 / (2 * spread**2))
+    modes = modes * (-1)**_np.random.binomial(1, 0.5, size=n)
     modes = _np.sqrt(power) * modes / _np.sqrt(sum(modes**2))
 
-    p = idct(modes, base * _np.ones(N))
+    p = idct(modes, base * _np.ones(n))
 
     if method is not None:
         p = renormalizer(p, method=method)

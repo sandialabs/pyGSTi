@@ -21,13 +21,20 @@ def do_stability_analysis(ds, significance=0.05, transform='auto', marginalize='
                           estimator='auto', modelselector=(None, None), verbosity=1):
     """
     Implements instability ("drift") detection and characterization on timeseries data from *any* set of
-    quantum circuits on *any* number of qubits.
+    quantum circuits on *any* number of qubits. This uses the StabilityAnalyzer object, and directly
+    accessing that object allows for some more complex analyzes to be performed.
 
-    This is a wrap-around of the StabilityAnalyzer object. More complex analyzes can be implemented
-    by directly using that object.
+    Parameters
+    ----------
+
+    Returns
+    -------
+    StabilityAnalyzers
+        An object containing the results of the instability detection and characterization. This can
+        be used to, e.g., generate plots showing any detected drift, and it can also form the basis
+        of further analysis.
 
     """
-
     if verbosity > 0: print(" - Formatting the data...", end='')
     results = _sa.StabilityAnalyzer(ds, transform=transform, marginalize=marginalize, mergeoutcomes=mergeoutcomes,
                                     constnumtimes=constnumtimes, ids=ids)
@@ -57,9 +64,25 @@ def do_stability_analysis(ds, significance=0.05, transform='auto', marginalize='
     return results
 
 
-def do_time_resolved_rb():
+def do_time_resolved_rb(ds, timeslices='auto', significance=0.05, transform='auto', constnumtimes='auto',
+                        frequencies='auto', freqpointers={}, freqtest=None, estimator='auto', verbosity=1):
     """
+    Implements a time-resolved randomized benchmarking (RB) analysis, on time-series RB data. This data can
+    be from any form of RB in which the observed sucess/survial probability is fit to the standard
+    exponential form Pm = A + Bp^m.
 
     """
-    # codetodo
+    mergeoutcomes = todo
+    trrb_tests = ((),)
+    trrb_inclass_correction = {}
+    trrb_modelselector = ('default', ((),))
+
+    stabilityanalyzer = do_stability_analysis(ds, significance=significance, transform=transform,
+                                              mergeoutcomes=rb_mergeoutcomes, constnumtimes=constnumtimes, ids=True,
+                                              frequencies=frequencies, freqpointers=freqpointers, freqstest=freqtest,
+                                              tests=trrb_tests, inclass_correction=trrb_inclass_correction,
+                                              betweenclass_weighting='auto', estimator=estimator,
+                                              modelselector=trrb_modelselector, verbosity=verbosity - 1)
+
+
     return None
