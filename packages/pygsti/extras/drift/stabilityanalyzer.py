@@ -556,9 +556,10 @@ class StabilityAnalyzer(object):
         counts = counts[0]
 
         for i, dskey in enumerate(dskeys):
+            ds = self.data[dskey]
             for j, circuit in enumerate(circuits):
                 # The time-series data to generate power spectra for.
-                times, outcomedict = self.data[dskey][circuit].get_timeseries_for_outcomes()
+                times, outcomedict = ds[circuit].get_timeseries_for_outcomes()
                 # Go through the outcomes and generate a power spectrum for the clickstream of each outcome
                 for k, outcome in enumerate(outcomes):
 

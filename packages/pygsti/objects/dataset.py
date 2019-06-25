@@ -197,29 +197,49 @@ class DataSetRow(object):
         """
         times = []
         last_time = None
-        seriesDict = {}
-        for outcome_label in self.outcomes:
-            if outcome_label not in seriesDict.keys():
-                seriesDict[outcome_label] = []
+        seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.get_outcome_labels()}
+
+        #REMOVED: (though this gives slightly different behavior)
+        #for outcome_label in self.outcomes:
+        #    if outcome_label not in seriesDict.keys():
+        #        seriesDict[outcome_label] = []
 
         if self.reps is None:
-            reps = list(_np.ones(len(self.time), int))
+            reps = _np.ones(len(self.time), int)
         else: reps = self.reps
 
-        for t, outcome_label, rep in zip(self.time, self.outcomes, reps):
+        # An alternate implementation that appears to be (surprisingly?) slower...
+        ##Get time bin locations
+        #time_bins_borders = []
+        #last_time = None
+        #for i, t in enumerate(self.time):
+        #    if t != last_time:
+        #        time_bins_borders.append(i)
+        #        last_time = t
+        #time_bins_borders.append(len(self.time))
+        #nTimes = len(time_bins_borders) - 1
+        #
+        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.get_outcome_labels()}
+        #    
+        #for i in range(nTimes):
+        #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
+        #    times.append( self.time[slc.start] )
+        #    for oli, rep in zip(self.oli[slc], reps[slc]):
+        #        seriesDict[oli][i] += rep
+
+        for t, oli, rep in zip(self.time, self.oli, reps):
 
             if t != last_time:
                 times.append(t)
                 last_time = t
 
-                for ol in seriesDict.keys():
-                    if ol == outcome_label: seriesDict[ol].append(rep)
-                    else: seriesDict[ol].append(0)
-
+                for sd_oli in seriesDict.keys():
+                    if sd_oli == oli: seriesDict[sd_oli].append(rep)
+                    else: seriesDict[sd_oli].append(0)
             else:
-                seriesDict[outcome_label][-1] += rep
+                seriesDict[oli][-1] += rep
 
-        return times, seriesDict
+        return times, {ol: seriesDict[oli] for ol, oli in self.dataset.olIndex.items()}
 
     def get_timeseries(self):
         """
@@ -1278,6 +1298,131 @@ class DataSet(object):
         return self.add_raw_series_data(circuit, expanded_outcomeList,
                                         expanded_timeList, expanded_repList,
                                         overwriteExisting, aux=aux)
+
+    def merge_outcomes(self, label_merge_dict, recordZeroCnts=True):
+        """
+        Creates a DataSet which merges certain outcomes in this DataSet;
+        used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+        DataSet.
+    
+        Parameters
+        ----------
+        label_merge_dict : dictionary
+            The dictionary whose keys define the new DataSet outcomes, and whose items
+            are lists of input DataSet outcomes that are to be summed together.  For example,
+            if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
+            we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
+            {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
+            to use :function:`filter_qubits` which also updates the operation sequences.
+    
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            (merged) DataSet.  If False, then zero counts are ignored, except for
+            potentially registering new outcome labels.
+    
+        Returns
+        -------
+        merged_dataset : DataSet object
+            The DataSet with outcomes merged according to the rules given in label_merge_dict.
+        """
+
+        #static_self = self.copy()
+        #static_self.done_adding_data()  # makes static, so we can assume this below
+        
+        # strings -> tuple outcome labels in keys and values of label_merge_dict
+        to_outcome = _ld.OutcomeLabelDict.to_outcome  # shorthand
+        label_merge_dict = {to_outcome(key): list(map(to_outcome, val))
+                            for key, val in label_merge_dict.items()}
+
+        merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
+        if not set(self.get_outcome_labels()).issubset(merge_dict_old_outcomes):
+            raise ValueError(
+                "`label_merge_dict` must account for all the outcomes in original dataset."
+                " It's missing directives for:\n%s" %
+                '\n'.join(set(map(str, self.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+            )
+
+        new_outcomes = sorted(list(label_merge_dict.keys()))
+        new_outcome_indices = _OrderedDict([(ol, i) for i, ol in enumerate(new_outcomes)])
+        nNewOutcomes = len(new_outcomes)
+
+        #Count the number of time steps so we allocate enough space
+        nSteps = 0
+        for key, dsrow in self.items():
+            cur_t = None
+            for t in dsrow.time:
+                if t != cur_t:
+                    nSteps += 1
+                    cur_t = t
+
+        #idea is that we create oliData, timeData, repData, and circuitIndices for the
+        # merged dataset rather than looping over insertion, as this is faster
+        oliData = _np.empty(nSteps * nNewOutcomes, self.oliType)
+        repData = _np.empty(nSteps * nNewOutcomes, self.repType)
+        timeData = _np.empty(nSteps * nNewOutcomes, self.timeType)
+
+        oli_map = {}  # maps old outcome label indices to new ones
+        for new_outcome, old_outcome_list in label_merge_dict.items():
+            new_index = new_outcome_indices[new_outcome]
+            for old_outcome in old_outcome_list:
+                oli_map[self.olIndex[old_outcome]] = new_index
+
+        #Future - when recordZeroCnts=False these may not need to be so large
+        new_olis = _np.array(range(nNewOutcomes), _np.int64)
+        new_cnts = _np.zeros(nNewOutcomes, self.repType)
+
+        if recordZeroCnts:
+            def add_cnts(t, cnts, offset):  # cnts is an array here
+                new_cnts[:] = 0
+                for nonzero_oli, cnt in cnts.items():
+                    new_cnts[nonzero_oli] = cnt
+                timeData[offset:offset + nNewOutcomes] = t
+                oliData[offset:offset + nNewOutcomes] = new_olis
+                repData[offset:offset + nNewOutcomes] = new_cnts  # a length-nNewOutcomes array
+                return nNewOutcomes
+
+        else:
+            def add_cnts(t, cnts, offset):  # cnts is a dict here
+                nNewCnts = len(cnts)
+                #new_olis = _np.empty(nNewCnts, _np.int64)
+                #new_cnts = _np.empty(nNewCnts, self.repType)
+                for ii, (nonzero_oli, cnt) in enumerate(cnts.items()):
+                    new_olis[ii] = nonzero_oli
+                    new_cnts[ii] = cnt
+                timeData[offset:offset + nNewCnts] = t
+                oliData[offset:offset + nNewCnts] = new_olis[0:nNewCnts]
+                repData[offset:offset + nNewCnts] = new_cnts[0:nNewCnts]
+                return nNewCnts  # return the number of added counts
+
+        k = 0  # beginning of current circuit data in 1D arrays: oliData, timeData, repData
+        circuitIndices = _OrderedDict()
+        for key, dsrow in self.items():
+
+            last_t = dsrow.time[0]
+            
+            #Below code is faster version of: mapped_oli = [oli_map[x] for x in dsrow.oli]
+            mapped_oli = dsrow.oli.copy()
+            for from_oli, to_oli in oli_map.items():
+                mapped_oli[dsrow.oli == from_oli] = to_oli
+                
+            reps = _np.ones(len(dsrow.time), self.timeType) if (self.repData is None) else dsrow.reps
+            cnts = _DefaultDict(lambda: 0)
+            
+            i = 0  # offset to current timeslice
+            for oli, t, reps in zip(mapped_oli, dsrow.time, reps):
+                if t != last_t:
+                    i += add_cnts(last_t, cnts, k + i)
+                    last_t = t; cnts.clear()
+                cnts[oli] += reps
+            if len(cnts) > 0:
+                i += add_cnts(last_t, cnts, k + i)
+
+            circuitIndices[key] = slice(k, k + i)
+            k += i
+
+        merged_dataset = DataSet(oliData[0:k], timeData[0:k], repData[0:k], circuitIndices=circuitIndices,
+                                 outcomeLabelIndices=new_outcome_indices, bStatic=True)
+        return merged_dataset
 
     def add_auxiliary_info(self, circuit, aux):
         """
