@@ -19,16 +19,16 @@ class LabelTestCase(BaseTestCase):
 
     def testLabels(self):
         labels = []
-        labels.append( pygsti.obj.Label('Gx',0) ) # a LabelTup
-        labels.append( pygsti.obj.Label('Gx',(0,1)) ) # a LabelTup
-        labels.append( pygsti.obj.Label( ('Gx',0,1) ) ) # a LabelTup
-        labels.append( pygsti.obj.Label('Gx') ) # a LabelStr
-        labels.append( pygsti.obj.Label('Gx',None) ) #still a LabelStr
-        labels.append( pygsti.obj.Label( [('Gx',0),('Gy',0)] ) ) # a LabelTupTup of LabelTup objs
-        labels.append( pygsti.obj.Label( (('Gx',None),('Gy',None)) ) ) # a LabelTupTup of LabelStr objs
-        labels.append( pygsti.obj.Label( [('Gx',0)] )  ) # just a LabelTup b/c only one component
-        labels.append( pygsti.obj.Label( [L('Gx'),L('Gy')] )  ) # a LabelTupTup of LabelStrs
-        labels.append( pygsti.obj.Label(L('Gx')) ) # Init from another label
+        labels.append( L('Gx',0) ) # a LabelTup
+        labels.append( L('Gx',(0,1)) ) # a LabelTup
+        labels.append( L( ('Gx',0,1) ) ) # a LabelTup
+        labels.append( L('Gx') ) # a LabelStr
+        labels.append( L('Gx',None) ) #still a LabelStr
+        labels.append( L( [('Gx',0),('Gy',0)] ) ) # a LabelTupTup of LabelTup objs
+        labels.append( L( (('Gx',None),('Gy',None)) ) ) # a LabelTupTup of LabelStr objs
+        labels.append( L( [('Gx',0)] )  ) # just a LabelTup b/c only one component
+        labels.append( L( [L('Gx'),L('Gy')] )  ) # a LabelTupTup of LabelStrs
+        labels.append( L(L('Gx')) ) # Init from another label
         
         for l in labels:
             native = l.tonative()
@@ -90,4 +90,52 @@ class LabelTestCase(BaseTestCase):
         expected = { ('00',): 0.25, ('01',): 0.25, ('10',): 0.25, ('11',): 0.25 }
         for k,v in probs.items():
             self.assertAlmostEqual(v, expected[k])
-        
+
+    def test_labels_with_time_and_arguments(self):
+
+        #Label with time and args
+        l = L('Gx',(0,1),time=1.2, args=('1.4','1.7'))
+        self.assertEqual(l.time, 1.2)
+        self.assertEqual(l.args,('1.4','1.7'))
+        self.assertEqual(tuple(l), ('Gx', 4, '1.4', '1.7', 0, 1) )
+
+        l2 = L(('Gx',';1.4',';1.7',0,1,'!1.25'))
+        self.assertEqual(tuple(l2), ('Gx', 4, '1.4', '1.7', 0, 1) )
+
+        l3 = L(('Gx',';','1.4',';','1.7',0,1,'!',1.3))
+        self.assertEqual(tuple(l3), ('Gx', 4, '1.4', '1.7', 0, 1) )
+
+        self.assertTrue(l == l2 == l3)
+
+        #Time without args
+        l = L('Gx',(0,1),time=1.2)
+        self.assertEqual(l.time, 1.2)
+        self.assertEqual(l.args,())
+        self.assertEqual(tuple(l), ('Gx', 0, 1) )
+
+        #Args without time
+        l = L('Gx',(0,1),args=('1.4',))
+        self.assertEqual(l.time, 0)
+        self.assertEqual(l.args,('1.4',))
+        self.assertEqual(tuple(l), ('Gx', 3, '1.4', 0, 1) )
+
+    def test_label_time_is_not_hashed(self):
+        #Ensure that time is not considered in the equality (or hashing) of labels - it's a
+        # tag-along "comment" that does not change the real value of a Label.
+        l1 = L('Gx',time=1.2)
+        l2 = L('Gx')
+        self.assertEqual(l1,l2)
+        self.assertTrue(l1.time != l2.time)
+
+        l1 = L('Gx',(0,),time=1.2)
+        l2 = L('Gx',(0,))
+        self.assertEqual(l1,l2)
+        self.assertTrue(l1.time != l2.time)
+
+    def test_only_nonzero_time_is_printed(self):
+        l = L('GrotX',(0,1),args=('1.4',))
+        self.assertEqual(str(l), "GrotX;1.4:0:1")  # make sure we don't print time when it's not given (i.e. zero)
+        self.assertEqual(l.time, 0.0) # BUT l.time is still 0, not None
+        l = L('GrotX',(0,1),args=('1.4',),time=0.2)
+        self.assertEqual(str(l), "GrotX;1.4:0:1!0.2")  # make sure we do print time when it's nonzero
+        self.assertEqual(l.time, 0.2)

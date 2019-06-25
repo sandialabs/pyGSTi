@@ -65,6 +65,32 @@ class TestStdInputParser(BaseTestCase):
         with self.assertRaises(ValueError):
             std.parse_circuit("(G1")
 
+    def test_parse_circuit_with_time_and_args(self):
+        std = pygsti.io.StdInputParser()
+        
+        cstr = "Gx;pi/1.2:0:2!1.0"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.0)
+        self.assertEqual(firstLbl.args, ('pi/1.2',))
+        self.assertEqual(firstLbl.sslbls, (0, 2))
+        self.assertEqual(firstLbl.name, 'Gx')
+        self.assertEqual(tuple(firstLbl), ('Gx', 3, 'pi/1.2', 0, 2))
+
+        cstr = "rho0!1.21{}"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.21)
+        self.assertEqual(firstLbl.args, ())
+        self.assertEqual(firstLbl.sslbls, None)
+        self.assertEqual(firstLbl.name, 'rho0')
+        self.assertEqual(str(firstLbl), 'rho0!1.21')
+
+        cstr = "{}M0!1.22"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.22)
+        self.assertEqual(firstLbl.args, ())
+        self.assertEqual(firstLbl.sslbls, None)
+        self.assertEqual(firstLbl.name, 'M0')
+        self.assertEqual(str(firstLbl), 'M0!1.22')
 
     def test_string_exception(self):
         """Test lookup failure and Syntax error"""

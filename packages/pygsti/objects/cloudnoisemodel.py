@@ -279,7 +279,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         if sim_type == "auto":
             if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
             else: sim_type = "map" if nQubits > 2 else "matrix"
-        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
+        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder") or sim_type.startswith("termgap"))
 
         #Global Idle
         if maxIdleWeight > 0:
@@ -564,7 +564,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #    if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
         #    else: sim_type = "map" if nQubits > 2 else "matrix"
 
-        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
+        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder") or sim_type.startswith("termgap"))
 
         qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
         if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
@@ -875,7 +875,7 @@ def _get_Static_factory(sim_type, evotype):
             return lambda g, b: _op.StaticDenseOp(g, evotype)  # TODO: create StaticGateMap?
 
     elif evotype in ("svterm", "cterm"):
-        assert(sim_type.startswith("termorder"))
+        assert(sim_type.startswith("termorder") or sim_type.startswith("termgap"))
 
         def _f(opMatrix, mxBasis="pp"):
             return _op.LindbladOp.from_operation_matrix(

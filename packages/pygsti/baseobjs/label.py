@@ -409,7 +409,7 @@ class LabelStr(Label, strlittype):
 
     @property
     def name(self):
-        return strlittype(self)
+        return strlittype(self[:])
 
     @property
     def sslbls(self):
