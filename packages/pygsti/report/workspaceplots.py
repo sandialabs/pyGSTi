@@ -21,6 +21,7 @@ from .workspace import WorkspacePlot
 from .figure import ReportFigure
 from . import colormaps as _colormaps
 from . import plothelpers as _ph
+from ..extras.drift import signal as _sig
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -3603,6 +3604,93 @@ class PowerSpectrumPlot(WorkspacePlot):
 class ProbabilityTrajectoryPlot(WorkspacePlot):
     """ Plot of time-series data power spectrum """
 
+    def __init__(self, ws, stabilityanalyzer, circuit, outcome, times=None, dskey=None, estimatekey=None, estimator=None, legend=False, scale=1.0):
+        """
+        Plot RB decay curve, as a function of sequence length.  Optionally
+        includes a fitted exponential decay.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        None
+        """
+        super(ProbabilityTrajectoryPlot, self).__init__(ws, self._create, stabilityanalyzer, circuit, outcome,
+                                                        times, dskey, estimatekey, estimator, legend, scale)
+
+    def _create(self, stabilityanalyzer, circuit, outcome, times, dskey, estimatekey, estimator, legend, scale):
+
+        if dskey is None:
+            assert(len(stabilityanalyzer.data.keys()) == 1), "There is more than one DataSet, so must specify the `dskey`!"
+            dskey = list(stabilityanalyzer.data.keys())[0]
+        dtimes, data = stabilityanalyzer.data[dskey][circuit].get_timeseries_for_outcomes()
+        if times is None:
+            times = _np.linspace(min(dtimes), max(dtimes), 5000)
+        p = stabilityanalyzer.get_probability_trajectory(circuit, times=times)[outcome]
+        lowpass = _sig.moving_average(data[outcome], width=100)
+
+        trace_pt = go.Scatter(x=times, y=p, name="Probability Trajectory", line=dict(color='#e74c3c'),
+                              opacity=1.)
+        trace_lowpass = go.Scatter(x=dtimes, y=lowpass, name="Moving average", line=dict(color='#7F7F7F'),
+                                   opacity=0.8)
+
+        data = [trace_pt, trace_lowpass]
+
+        updatemenus = list([
+            dict(active=0,
+                 buttons=list([dict(label='Probability trajectory',
+                                    method='update',
+                                    args=[{'visible': [True, False]}, ]),
+                               dict(label='Moving average',
+                                    method='update',
+                                    args=[{'visible': [False, True]}, ]),
+                               dict(label='Both',
+                                    method='update',
+                                    args=[{'visible': [True, True]},]),
+                               ]),
+                 xanchor='left',
+                 yanchor='top',
+                 x=0.02,
+                 y = 1.2, #y=0.98,
+                 showactive=True
+                 )
+        ])
+
+        layout = dict(width=800 * scale, height=500 * scale,
+            #title='Probability Trajectory',
+            xaxis=dict(title="Time (seconds)",
+                rangeslider=dict(visible = True),
+            ),
+            yaxis=dict(title="Probability", titlefont=dict(size=14),range=[0,1]), 
+            updatemenus=updatemenus,
+            legend=dict(
+                x=0.5,
+                y=1.05,
+                traceorder='normal',
+                font=dict(
+                    size=12,
+                    color='#000'
+                ),
+                bgcolor='#ecf0f1',
+                bordercolor='#bdc3c7',
+                borderwidth=2,
+                orientation="h"
+            )
+        )
+
+        pythonVal = {}
+        for i, tr in enumerate(data):
+            if 'x0' in tr: continue  # don't put boxes in python val for now
+            key = tr['name'] if ("name" in tr) else "trace%d" % i
+            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
+
+        return ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)
+
+
+class ProbabilityTrajectoriesPlot(WorkspacePlot):
+    """ Plot of time-series data power spectrum """
+
     def __init__(self, ws, stabilityanalyzer, circuits, outcomes, times, dskey=None, estimatekey=None, estimator=None, legend=False, scale=1.0):
         """
         Plot RB decay curve, as a function of sequence length.  Optionally
@@ -3615,7 +3703,7 @@ class ProbabilityTrajectoryPlot(WorkspacePlot):
         -------
         None
         """
-        super(ProbabilityTrajectoryPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, outcomes,
+        super(ProbabilityTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, outcomes,
                                                 times, dskey, estimatekey, estimator, legend, scale)
 
     def _create(self, stabilityanalyzer, circuits, outcomes, times, dskey, estimatekey, estimator, legend, scale):

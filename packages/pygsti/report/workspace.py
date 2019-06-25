@@ -321,6 +321,7 @@ class Workspace(object):
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
         self.PowerSpectrumPlot = makefactory(_wp.PowerSpectrumPlot)
         self.ProbabilityTrajectoryPlot = makefactory(_wp.ProbabilityTrajectoryPlot)
+        self.ProbabilityTrajectoriesPlot = makefactory(_wp.ProbabilityTrajectoriesPlot)
 
         #Text blocks
         self.StdoutText = makefactory(_wtxt.StdoutText)

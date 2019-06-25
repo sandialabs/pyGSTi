@@ -25,7 +25,60 @@ from ... import objects as _obj
 def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', transform='dct',
              returnfrequencies=True):
     """
-    todo
+    Generates a power spectrum from the input time-series data. Before converting to a power
+    spectrum, x is rescaled as
+
+    x - >  (x - counts * null_hypothesis)  / sqrt(counts * null_hypothesis * (1-null_hypothesis)),
+
+    where the arithmetic is element-wise, and `null_hypothesis` is a vector in (0,1).
+    If `null_hypothesis` is None it is set to the mean of x. If that mean is 0 or 1 then
+    the power spectrum returned is (0,1,1,1,...).
+
+    Parameters
+    ----------
+    x: array
+        The time-series data to convert into a power spectrum
+
+    times: array, optional
+        The times associated with the data in `x`. This is not optional for the `lsp` transform
+
+    null_hypothesis: None or array, optional
+        Used to normalize the data, and should be the null hypothesis that is being tested for
+        the probability trajectory from which `x` is drawn. If `null_hypothesis` is None it is
+        set to the mean of x.
+
+    counts: int, optional
+        The number of counts per time-step, whereby all values of `x` are within [0,counts].
+        In the main usages for drift detection, `x` is the clickstream for a single measurement
+        outcome -- so `x` contains integers between 0 and the number of measurements at a (perhaps
+        coarse-grained) time. `counts` is this number of measurements per time.
+
+    frequencies: 'auto' or array, optional
+        The frequencies to generate the power spectrum for. Only relevant for transform=`lsp`.
+
+    transform: 'dct', 'dft' or 'lsp', optional
+        The transform to use to generate power spectrum. 'dct' is the Type-II discrete cosine transform
+        with an orthogonal normalization; 'dft' is the discrete Fourier transform with a unitary
+        normalization; 'lsp' is the float-meaning Lomb-Scargle periodogram with an orthogonal-like
+        normalization.
+
+    returnfrequencies: bool, optional
+        Whether to return the frequencies corrsponding to the powers
+
+    Returns
+    -------
+    if returnfrequencies:
+        array or None
+            The frequencies corresponding to the power spectrum. None is returned if the frequencies
+            cannot be ascertained (when `times` is not specified).
+
+    array or None
+        The amplitudes, that are squared to obtain the powers. None is returned when the transform
+        does not generate amplitudes (this is the case for `lsp`)
+
+    array
+        The power spectrum
+
     """
     if transform == 'dct' or transform == 'dft':
 
@@ -62,7 +115,14 @@ def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', 
 
 def standardizer(x, null_hypothesis=None, counts=1):
     """
-    todo
+    Maps the vector x over [0, counts] as
+
+    x - >  (x - counts * null_hypothesis)  / sqrt(counts * null_hypothesis * (1-null_hypothesis)),
+
+    where the arithmetic is element-wise, and `null_hypothesis` is a vector in (0,1).
+    If `null_hypothesis` is None it is set to the mean of x. If that mean is 0 or 1 then
+    None is returned.
+
     """
     mean = _np.mean(x)
     if null_hypothesis is None:
@@ -78,7 +138,7 @@ def standardizer(x, null_hypothesis=None, counts=1):
 
 def unstandardizer(z, null_hypothesis, counts=1):
     """
-    todo
+    Inverts the `standardizer` function.
     """
     return z * _np.sqrt(counts * null_hypothesis * (1 - null_hypothesis)) + counts * null_hypothesis
 
@@ -86,14 +146,12 @@ def unstandardizer(z, null_hypothesis, counts=1):
 def dct(x, null_hypothesis=None, counts=1):
     """
     Returns the Type-II discrete cosine transform of y, with an orthogonal normalization, where
-    y is an array with elements related to the x array by
 
-    y[k] = (x[k] - null_hypothesis[k])/normalizer;
-    normalizer = sqrt(counts*null_hypothesis[k]*(1-null_hypothesis[k])).
+    y = (x - counts * null_hypothesis)  / sqrt(counts * null_hypothesis * (1-null_hypothesis)),
 
-    If null_hypothesis is None, then null_hypothesis[k] is mean(x)/counts, for all k. This is
-    with the exception that when mean(x)/counts = 0 or 1 (when the above y[k] is ill-defined),
-    in which case the zero vector is returned.
+    where the arithmetic is element-wise, and `null_hypothesis` is a vector in (0,1).
+    If `null_hypothesis` is None it is set to the mean of x. If that mean is 0 or 1 then
+    the vector of all ones, except for the first element which is set to zero, is returned.
 
     Parameters
     ----------
@@ -112,7 +170,7 @@ def dct(x, null_hypothesis=None, counts=1):
     Returns
     -------
     array
-        The dct modes described above.
+        The DCT modes described above.
 
     """
     standardized_x = standardizer(x, null_hypothesis, counts)
@@ -158,7 +216,34 @@ def idct(modes, null_hypothesis, counts=1):
 
 def dft(x, null_hypothesis=None, counts=1):
     """
-    todo
+    Returns the discrete Fourier transform of y, with a unitary normalization, where
+    y is an array with elements related to the x array by
+
+    y = (x - counts * null_hypothesis)  / sqrt(counts * null_hypothesis * (1-null_hypothesis)),
+
+    where the arithmetic is element-wise, and `null_hypothesis` is a vector in (0,1).
+    If `null_hypothesis` is None it is set to the mean of x. If that mean is 0 or 1 then
+    the vector of all ones, except for the first element which is set to zero, is returned.
+
+    Parameters
+    ----------
+    x : array
+        Data string, on which the normalization and discrete cosine transformation is performed. If
+        counts is not specified, this must be a bit string.
+
+    null_hypothesis : array, optional
+        If not None, an array to use in the normalization before the dct. If None, it is
+        taken to be an array in which every element is the mean of x.
+
+    counts : int, optional
+        A factor in the normalization, that should correspond to the counts-per-timestep (so
+        for full time resolution this is 1).
+
+    Returns
+    -------
+    array
+        The DFT modes described above.
+
     """
     standardized_x = standardizer(x, null_hypothesis, counts)
 
@@ -295,14 +380,19 @@ def bartlett_spectrum(x, numspectra, counts=1, null_hypothesis=None, transform='
 
 def dct_basisfunction(omega, times, starttime, timedif):
     """
-    todo
+    The `omega`th DCT basis function, for a initial time of `starttime` and a time-step of `timedif`,
+    evaluated at the times `times`.
+
     """
     return _np.array([_np.cos(omega * _np.pi * (t - starttime + 0.5) / timedif) for t in times])
 
 
 def power_significance_threshold(significance, numtests, dof):
     """
-    todo
+    The multi-test adjusted `signficance` statistical significance threshold for
+    testing `numtests` test statistics that all have a marginal distribution that
+    is chi2 with `dof` degrees of freedom.
+
     """
     threshold = _chi2.isf(significance / numtests, dof) / dof
 
@@ -311,7 +401,8 @@ def power_significance_threshold(significance, numtests, dof):
 
 def power_to_pvalue(power, dof):
     """
-    todo
+    Converts a power to a p-value, under the assumption that the power is chi2
+    distribution with `dof` degrees of freedom.
     """
     pvalue = 1 - _chi2.cdf(dof * power, dof)
 
@@ -320,7 +411,12 @@ def power_to_pvalue(power, dof):
 
 def maxpower_pvalue(maxpower, numpowers, dof):
     """
-    Todo: docstring
+    The p-value of the test statistic max(lambda_i) where there are `numpowers`
+    lambda_i test statistics, and they are i.i.d. as chi2 with `dof` degrees
+    of freedom. This approximates the p-value of the largest power in "clickstream"
+    power spectrum (generated from `spectrum`), with the DOF given by the number of
+    clicks per times.
+
     """
     pvalue = 1 - _chi2.cdf(maxpower * dof, dof) ** (numpowers - 1)
 
@@ -329,7 +425,9 @@ def maxpower_pvalue(maxpower, numpowers, dof):
 
 def power_significance_quasithreshold(significance, numstats, dof, procedure='Benjamini-Hochberg'):
     """
-    Todo
+    The Benjamini-Hockberg quasi-threshold for finding the statistically significant powers in
+    a power spectrum.
+
     """
     if procedure == 'Benjamini-Hochberg':
         quasithreshold = _np.array([_chi2.isf((numstats - i) * significance / numstats, dof) / dof
