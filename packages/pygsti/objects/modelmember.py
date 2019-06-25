@@ -9,6 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import copy as _copy
 from ..tools import slicetools as _slct
+from ..tools import listtools as _lt
+
 
 
 class ModelChild(object):
@@ -232,7 +234,7 @@ class ModelMember(ModelChild):
         self._parent = parent
         self._gpindices = gpindices
 
-    def allocate_gpindices(self, startingIndex, parent):
+    def allocate_gpindices(self, startingIndex, parent, memo=None):
         """
         Sets gpindices array for this object or any objects it
         contains (i.e. depends upon).  Indices may be obtained
@@ -249,6 +251,11 @@ class ModelMember(ModelChild):
         parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
+        memo : set, optional
+            Used to prevent duplicate calls and self-referencing loops.  If
+            `memo` contains an object's id (`id(self)`) then this routine
+            will exit immediately.
+
         Returns
         -------
         num_new: int
@@ -256,14 +263,19 @@ class ModelMember(ModelChild):
             the parent should mark as allocated parameter
             indices `startingIndex` to `startingIndex + new_new`).
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return 0
+
         if len(self.submembers()) > 0:
             #Allocate sub-members
             tot_new_params = 0; all_gpindices = []
             for subm in self.submembers():
-                num_new_params = subm.allocate_gpindices(startingIndex, parent)  # *same* parent as this member
+                num_new_params = subm.allocate_gpindices(startingIndex, parent, memo)  # *same* parent as this member
                 startingIndex += num_new_params
                 tot_new_params += num_new_params
                 all_gpindices.extend(subm.gpindices_as_array())
+
+            _lt.remove_duplicates_in_place(all_gpindices)  # in case multiple submembers have the same params
 
             #Then just set the gpindices of this member to those used by
             # its submembers - assume this object doesn't need to allocate any
@@ -272,8 +284,9 @@ class ModelMember(ModelChild):
             # or change an already allocated ._gpindices slice/array.  Here we
             # need to set (really, "allocate") *just* the ._gpindices of this
             # object, not the submembers as this is already done above.
+            memo.add(id(self))  # would have been called in a proper set_gpindices call
             self._set_only_my_gpindices(
-                _slct.list_to_slice(all_gpindices, array_ok=True),
+                _slct.list_to_slice(all_gpindices, array_ok=True, require_contiguous=False),
                 parent)
             return tot_new_params
 
@@ -290,7 +303,7 @@ class ModelMember(ModelChild):
                 Np = self.num_params()
                 slc = slice(startingIndex, startingIndex + Np) \
                     if Np > 0 else slice(0, 0, None)  # special "null slice" for zero params
-                self.set_gpindices(slc, parent)
+                self.set_gpindices(slc, parent, memo)
                 #print(" -- allocated %d indices: %s" % (Np,str(slc)))
                 return Np
             else:  # assume gpindices is good & everything's allocated already

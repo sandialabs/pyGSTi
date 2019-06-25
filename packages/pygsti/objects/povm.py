@@ -1020,7 +1020,7 @@ class LindbladPOVM(POVM):
         return (LindbladPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
 
-    def allocate_gpindices(self, startingIndex, parent):
+    def allocate_gpindices(self, startingIndex, parent, memo=None):
         """
         Sets gpindices array for this object or any objects it
         contains (i.e. depends upon).  Indices may be obtained
@@ -1037,6 +1037,11 @@ class LindbladPOVM(POVM):
         parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
+        memo : set, optional
+            Used to prevent duplicate calls and self-referencing loops.  If
+            `memo` contains an object's id (`id(self)`) then this routine
+            will exit immediately.
+
         Returns
         -------
         num_new: int
@@ -1044,8 +1049,12 @@ class LindbladPOVM(POVM):
             the parent should mark as allocated parameter
             indices `startingIndex` to `startingIndex + new_new`).
         """
+        if memo is None: memo = set()
+        if id(self) in memo: return 0
+        memo.add(id(self))
+        
         assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
-        num_new_params = self.error_map.allocate_gpindices(startingIndex, parent)  # *same* parent as this SPAMVec
+        num_new_params = self.error_map.allocate_gpindices(startingIndex, parent, memo)  # *same* parent as this SPAMVec
         _gm.ModelMember.set_gpindices(
             self, self.error_map.gpindices, parent)
         return num_new_params

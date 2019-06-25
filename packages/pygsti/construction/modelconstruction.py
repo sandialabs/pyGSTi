@@ -1108,7 +1108,8 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
 
     #Check for any error rates specific to sslbls that we missed, e.g. ('Gx',0)
     for errlbl, errdict in error_rates.items():
-        if errlbl not in gate_names and isinstance(errlbl, _label.Label):
+        if errlbl not in gate_names and _label.Label(errlbl).sslbls is not None:
+            errlbl = _label.Label(errlbl)
             name = errlbl.name
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)

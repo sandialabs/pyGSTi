@@ -664,4 +664,7 @@ class UnitaryOpFactory(OpFactory):
             superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
             return _op.StaticDenseOp(superop, self._evotype)
         else:
-            return _op.StaticDenseOp(U, self._evotype)
+            if self._evotype == "stabilizer":
+                return _op.CliffordOp(U)
+            else:
+                return _op.StaticDenseOp(U, self._evotype)
