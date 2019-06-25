@@ -334,6 +334,11 @@ class Workspace(object):
         self.IdleTomographyObservedRatesForIntrinsicRateTable = makefactory(
             _idt.IdleTomographyObservedRatesForIntrinsicRateTable)
 
+        from ..extras.drift import driftreport as _driftrpt
+        self.DriftSampleTable = makefactory(_driftrpt.DriftSampleTable)
+        self.DriftSamplePlot = makefactory(_driftrpt.DriftSamplePlot)
+        
+
     def init_notebook_mode(self, connected=False, autodisplay=False):
         """
         Initialize this Workspace for use in an iPython notebook environment.
