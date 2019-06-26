@@ -492,7 +492,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
         numL = len(gss.Ls)
         colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
 
-        for Lind, L in gss.Ls:
+        for Lind, L in enumerate(gss.Ls):
             if L >= minL:
                 for j, k, circuit in gss.get_plaquette(L, germ):               
                     if j == prepind:
