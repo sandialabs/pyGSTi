@@ -700,11 +700,11 @@ def create_drift_report(results, gss, filename, title="auto",
            'compact', .05, 1e-4, None, None, results)
     #addqty(A, 'samplePlot', ws.DriftSamplePlot, "Title of Plot")
     germ = gss.germs[0]
-    if len(results.data.keys()) > 1:
-        dskeysetter = drift_switchBd.dataset
-    else:
-        dskeysetter = None
-    addqty(A, 'GermFiducialProbTrajectoriesPlot', GermFiducialProbTrajectoriesPlot, results, gss, drift_switchBd.prep, drift_switchBd.germ, drift_switchBd.meas, 
+    #if len(results.data.keys()) > 1:
+    #    dskeysetter = drift_switchBd.dataset
+    #else:
+    #    dskeysetter = None
+    addqty(A, 'GermFiducialProbTrajectoriesPlot', ws.GermFiducialProbTrajectoriesPlot, results, gss, drift_switchBd.prep, drift_switchBd.germ, drift_switchBd.meas, 
         drift_switchBd.outcome, 1,)
 
     toggles = {}
