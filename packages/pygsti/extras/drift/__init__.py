@@ -12,4 +12,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #from .signal import DCT
 from .core import *
 from .stabilityanalyzer import StabilityAnalyzer
-from . import driftreport
+from . import driftreport as report
+from . import signal
+from . import probtrajectory

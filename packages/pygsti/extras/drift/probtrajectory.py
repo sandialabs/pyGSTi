@@ -26,7 +26,7 @@ except:
     pass
 
 
-class ProbabilityTrajectory(object):
+class ProbTrajectory(object):
     """
     todo
 
@@ -137,7 +137,7 @@ class ProbabilityTrajectory(object):
         return probs
 
 
-class ConstantProbabilityTrajectory(ProbabilityTrajectory):
+class ConstantProbTrajectory(ProbTrajectory):
 
     def __init__(self, outcomes, probabilities):
         """
@@ -152,7 +152,7 @@ class ConstantProbabilityTrajectory(ProbabilityTrajectory):
         return _np.ones(len(times), float)
 
 
-class CosineProbabilityTrajectory(ProbabilityTrajectory):
+class CosineProbTrajectory(ProbTrajectory):
 
     def __init__(self, outcomes, hyperparameters, parameters, starttime, timestep, numtimes):
         """
@@ -213,7 +213,7 @@ def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
 
     Parameters
     ----------
-    model : ProbabilityTrajectoryModel
+    model : ProbTrajectoryModel
         The model to find the log-likelihood of.
 
     data : dict
@@ -256,7 +256,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
 
     Parameters
     ----------
-    model : ProbabilityTrajectoryModel
+    model : ProbTrajectoryModel
         The model for which to maximize the likelihood of the parameters. The value of the parameters
         in the input model is used as the seed.
 
@@ -290,7 +290,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
 
     Returns
     -------
-    ProbabilityTrajectoryModel
+    ProbTrajectoryModel
         The maximum likelihood model returned by the optimizer.
 
     if returnOptout:
@@ -347,7 +347,7 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
     -------
 
     """
-    assert(isinstance(probtrajectory, CosineProbabilityTrajectory)), "Input must be a CosineProbabilityTrajectory!"
+    assert(isinstance(probtrajectory, CosineProbTrajectory)), "Input must be a CosineProbTrajectory!"
 
     def update_multiplier(multipler, a, b, epsilon):
         """

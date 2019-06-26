@@ -21,7 +21,6 @@ from .workspace import WorkspacePlot
 from .figure import ReportFigure
 from . import colormaps as _colormaps
 from . import plothelpers as _ph
-from ..extras.drift import signal as _sig
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -1432,7 +1431,7 @@ class ColorBoxPlot(WorkspacePlot):
         Parameters
         ----------
         plottype : {"chi2","logl","tvd","blank","errorrate","directchi2","directlogl","dscmp",
-                    "drift"}
+                    "driftdetector", "driftsize"}
             Specifies the type of plot. "errorate", "directchi2" and
             "directlogl" require that `directGSTmodels` be set.
 
@@ -1485,7 +1484,7 @@ class ColorBoxPlot(WorkspacePlot):
             The data set comparator used to produce the "dscmp" plot type.
 
         stabilityanalyzer : StabilityAnalyzer or 3-tuple, optional
-            Only used to produce the "drift" boxplot. If a StabilityAnalyzer, then
+            Only used to produce the "driftdetector" and "driftsize" boxplot. If a StabilityAnalyzer, then
             this contains the results of the drift / stability analysis to be displayed.
             For non-expert users, this is the best option. If a tuple, then the first
             element of the tuple is this StabilityAnalyzer object,
@@ -1649,7 +1648,8 @@ class ColorBoxPlot(WorkspacePlot):
                 #         key0 = list(dscomparator.dataset_list_or_multidataset.keys())[0]
                 #         dataset = dscomparator.dataset_list_or_multidataset[key0]
 
-            elif ptyp == "drift":
+            elif ptyp == "driftdetector":
+
                 assert(stabilityanalyzer is not None), \
                     "Must specify `stabilityanalyzer` argument to create `drift` plot!"
                 # If stabilityanalyzer  is a tuple, we expand into its components
@@ -1676,9 +1676,29 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "green"
                 pvaluethreshold, junk = stabilityanalyzer.get_pvalue_threshold(test, detectorkey=detectorkey)
                 linlog_trans = -1 * _np.log10(pvaluethreshold)
-                ytitle = "-log10(pvalue)"
+                ytitle = "Evidence for instability as quantified by -log10(pvalue)"
                 mx_fn = _mx_fn_driftpv  # use a *global* function so cache can tell it's the same
                 extra_arg = (stabilityanalyzer, test)
+
+            elif ptyp == "driftsize":
+
+                assert(stabilityanalyzer is not None), \
+                    "Must specify `stabilityanalyzer` argument to create `drift` plot!"
+                # If stabilityanalyzer  is a tuple, we expand into its components
+                if isinstance(stabilityanalyzer, tuple):
+
+                    estimatekey = stabilityanalyzer[1]
+                    estimator = stabilityanalyzer[2]
+                    stabilityanalyzer = stabilityanalyzer[0]
+                # If stabilityanalyzer is a StabilityAnalyzer, we initialize the other components not given
+                else:
+                    estimatekey = None
+                    estimator = None
+
+                colormapType = "blueseq"
+                ytitle = "Total Variational Distance (TVD)"
+                mx_fn = _mx_fn_drifttvd  # use a *global* function so cache can tell it's the same
+                extra_arg = (stabilityanalyzer, estimatekey, estimator)
 
             # future: delete this, or update it and added it back in.
             # elif ptyp == "driftpwr":
@@ -1862,6 +1882,9 @@ def _mx_fn_dscmp(plaq, x, y, dscomparator):
 def _mx_fn_driftpv(plaq, x, y, instabilityanalyzertuple):
     return _ph.drift_neglog10pvalue_matrices(plaq, instabilityanalyzertuple)
 
+
+def _mx_fn_drifttvd(plaq, x, y, instabilityanalyzertuple):
+    return _ph.drift_maxtvd_matrices(plaq, instabilityanalyzertuple)
 
 # future: delete this, or update it and added it back in.
 # def _mx_fn_driftpwr(plaq, x, y, driftresults):
@@ -3549,188 +3572,3 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 #                    if len(save_to) > 0:
 #                        _plt.savefig( _makeHistFilename(save_to) )
 #                    _plt.close(fig)
-
-
-class PowerSpectrumPlot(WorkspacePlot):
-    """ Plot of time-series data power spectrum """
-
-    def __init__(self, ws, stabilityanalyzer, spectrumlabel={}, ylim=None, xlim=None,
-                 legend=True, title=None, scale=1.0):
-        """
-        Plot RB decay curve, as a function of sequence length.  Optionally
-        includes a fitted exponential decay.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        None
-        """
-        super(PowerSpectrumPlot, self).__init__(ws, self._create, stabilityanalyzer,
-                                                spectrumlabel, ylim, xlim, legend, title, scale)
-
-    def _create(self, stabilityanalyzer, spectrumlabel, ylim, xlim, legend, title, scale):
-
-
-        freqs, powers = stabilityanalyzer.get_spectrum(spectrumlabel, returnfrequencies=True, checklevel=2)
-
-        xdata = _np.asarray(freqs)
-        ydata = _np.asarray(powers)
-
-        data = []  # list of traces
-        data.append(go.Scatter(x=xdata, y=ydata, mode='markers', marker=dict(color="rgb(0,0,0)", size=5),
-                               name='Spectral Power', showlegend=legend))
-
-        ymin = 0
-        ymax = max(ydata) * 1.1
-        xmin = 0 -0.05 * max(xdata)
-        xmax = max(xdata) * 1.05
-
-        layout = go.Layout(width=800 * scale, height=400 * scale, title=title, titlefont=dict(size=16),
-                           xaxis=dict(title="Frequency (Hz)", titlefont=dict(size=14), range=xlim if xlim else [xmin, xmax],),
-                           yaxis=dict(title="Spectral Power", titlefont=dict(size=14), range=ylim if ylim else [ymin, ymax],),
-                           legend=dict(x=0.5, y=1.2, font=dict(size=13),))
-
-        pythonVal = {}
-        for i, tr in enumerate(data):
-            if 'x0' in tr: continue  # don't put boxes in python val for now
-            key = tr['name'] if ("name" in tr) else "trace%d" % i
-            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
-
-        return ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)
-
-
-class ProbabilityTrajectoryPlot(WorkspacePlot):
-    """ Plot of time-series data power spectrum """
-
-    def __init__(self, ws, stabilityanalyzer, circuit, outcome, times=None, dskey=None, estimatekey=None, estimator=None, legend=False, scale=1.0):
-        """
-        Plot RB decay curve, as a function of sequence length.  Optionally
-        includes a fitted exponential decay.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        None
-        """
-        super(ProbabilityTrajectoryPlot, self).__init__(ws, self._create, stabilityanalyzer, circuit, outcome,
-                                                        times, dskey, estimatekey, estimator, legend, scale)
-
-    def _create(self, stabilityanalyzer, circuit, outcome, times, dskey, estimatekey, estimator, legend, scale):
-
-        if dskey is None:
-            assert(len(stabilityanalyzer.data.keys()) == 1), "There is more than one DataSet, so must specify the `dskey`!"
-            dskey = list(stabilityanalyzer.data.keys())[0]
-        dtimes, data = stabilityanalyzer.data[dskey][circuit].get_timeseries_for_outcomes()
-        if times is None:
-            times = _np.linspace(min(dtimes), max(dtimes), 5000)
-        p = stabilityanalyzer.get_probability_trajectory(circuit, times=times)[outcome]
-        lowpass = _sig.moving_average(data[outcome], width=100)
-
-        trace_pt = go.Scatter(x=times, y=p, name="Probability Trajectory", line=dict(color='#e74c3c'),
-                              opacity=1.)
-        trace_lowpass = go.Scatter(x=dtimes, y=lowpass, name="Moving average", line=dict(color='#7F7F7F'),
-                                   opacity=0.8)
-
-        data = [trace_pt, trace_lowpass]
-
-        updatemenus = list([
-            dict(active=0,
-                 buttons=list([dict(label='Probability trajectory',
-                                    method='update',
-                                    args=[{'visible': [True, False]}, ]),
-                               dict(label='Moving average',
-                                    method='update',
-                                    args=[{'visible': [False, True]}, ]),
-                               dict(label='Both',
-                                    method='update',
-                                    args=[{'visible': [True, True]},]),
-                               ]),
-                 xanchor='left',
-                 yanchor='top',
-                 x=0.02,
-                 y = 1.2, #y=0.98,
-                 showactive=True
-                 )
-        ])
-
-        layout = dict(width=800 * scale, height=500 * scale,
-            #title='Probability Trajectory',
-            xaxis=dict(title="Time (seconds)",
-                rangeslider=dict(visible = True),
-            ),
-            yaxis=dict(title="Probability", titlefont=dict(size=14),range=[0,1]), 
-            updatemenus=updatemenus,
-            legend=dict(
-                x=0.5,
-                y=1.05,
-                traceorder='normal',
-                font=dict(
-                    size=12,
-                    color='#000'
-                ),
-                bgcolor='#ecf0f1',
-                bordercolor='#bdc3c7',
-                borderwidth=2,
-                orientation="h"
-            )
-        )
-
-        pythonVal = {}
-        for i, tr in enumerate(data):
-            if 'x0' in tr: continue  # don't put boxes in python val for now
-            key = tr['name'] if ("name" in tr) else "trace%d" % i
-            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
-
-        return ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)
-
-
-class ProbabilityTrajectoriesPlot(WorkspacePlot):
-    """ Plot of time-series data power spectrum """
-
-    def __init__(self, ws, stabilityanalyzer, circuits, outcomes, times, dskey=None, estimatekey=None, estimator=None, legend=False, scale=1.0):
-        """
-        Plot RB decay curve, as a function of sequence length.  Optionally
-        includes a fitted exponential decay.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        None
-        """
-        super(ProbabilityTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, outcomes,
-                                                times, dskey, estimatekey, estimator, legend, scale)
-
-    def _create(self, stabilityanalyzer, circuits, outcomes, times, dskey, estimatekey, estimator, legend, scale):
-
-        data = []
-        xdata = _np.asarray(times)
-        for circuit in circuits:
-            probsdict = stabilityanalyzer.get_probability_trajectory(circuit, times, dskey, estimatekey, estimator)
-            for outcome in outcomes:
-                ydata = _np.asarray(probsdict[outcome])
-
-                # list of traces
-                data.append(go.Scatter(x=xdata, y=ydata, mode='lines', line=dict(width=1, color="rgb(120,120,120)"),
-                            name='{}, {}'.format(outcome, circuit), showlegend=legend))
-
-        ylim = [-0.1, 1.1]
-        xlim = [min(xdata), max(xdata)]
-
-        layout = go.Layout(width=800 * scale, height=400 * scale, title=None, titlefont=dict(size=16),
-                           xaxis=dict(title="Time (seconds)", titlefont=dict(size=14), range=xlim),
-                           yaxis=dict(title="Probability", titlefont=dict(size=14), range=ylim),
-                           legend=dict(x=0.5, y=1.2, font=dict(size=13),))
-
-        pythonVal = {}
-        for i, tr in enumerate(data):
-            if 'x0' in tr: continue  # don't put boxes in python val for now
-            key = tr['name'] if ("name" in tr) else "trace%d" % i
-            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
-
-        return ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)

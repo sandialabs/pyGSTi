@@ -319,9 +319,6 @@ class Workspace(object):
         self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
         self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
-        self.PowerSpectrumPlot = makefactory(_wp.PowerSpectrumPlot)
-        self.ProbabilityTrajectoryPlot = makefactory(_wp.ProbabilityTrajectoryPlot)
-        self.ProbabilityTrajectoriesPlot = makefactory(_wp.ProbabilityTrajectoriesPlot)
 
         #Text blocks
         self.StdoutText = makefactory(_wtxt.StdoutText)
@@ -337,7 +334,10 @@ class Workspace(object):
         from ..extras.drift import driftreport as _driftrpt
         self.DriftSampleTable = makefactory(_driftrpt.DriftSampleTable)
         self.DriftSamplePlot = makefactory(_driftrpt.DriftSamplePlot)
-        
+        self.PowerSpectraPlot = makefactory(_driftrpt.PowerSpectraPlot)
+        self.ProbTrajectoriesPlot = makefactory(_driftrpt.ProbTrajectoriesPlot)
+        #self.GermProbTrajectoriesPlot = makefactory(_driftrpt.GermProbTrajectoriesPlot)
+        self.GermFiducialProbTrajectoriesPlot = makefactory(_driftrpt.GermFiducialProbTrajectoriesPlot)
 
     def init_notebook_mode(self, connected=False, autodisplay=False):
         """

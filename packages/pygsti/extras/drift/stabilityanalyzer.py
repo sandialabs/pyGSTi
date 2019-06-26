@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from . import signal as _sig
-from . import probabilitytrajectory as _ptraj
+from . import probtrajectory as _ptraj
 
 from ... import objects as _obj
 from ...construction import datasetconstruction as _dsconst
@@ -457,7 +457,7 @@ class StabilityAnalyzer(object):
             s = "Instability *has* been detected,"
         else:
             s = "Instability has *not* been detected,"
-        s += " from tests at a global significance of {}" .format(self._significance[detectorkey])
+        s += " from tests at a global significance of {}%" .format(100 * self._significance[detectorkey])
         return s
 
     def generate_spectra(self, frequencies='auto', freqpointers={}):
@@ -1186,6 +1186,14 @@ class StabilityAnalyzer(object):
         if verbosity > 1: print("Instability detection complete!")
         return None
 
+    def get_statistical_significance(self, detectorkey=None):
+        """
+        todo
+        """
+        if detectorkey is None: detectorkey = self._def_detection
+
+        return self._significance[detectorkey]
+
     def _equivalent_implemented_test(self, test, detectorkey=None):
         """
         doctstringtodo
@@ -1201,7 +1209,8 @@ class StabilityAnalyzer(object):
         # Otherwise we return None, to signify that there was no equivalent test implemented.
         else: return None
 
-    def get_unstable_circuits(self, detectorkey=None, fromtests='auto', frequenciesinHz=True):
+    def get_unstable_circuits(self, getmaxtvd=False, detectorkey=None, fromtests='auto', freqindices=False,
+                              estimatekey=None, dskey=None):
         """
         doctstringtodo
 
@@ -1237,6 +1246,8 @@ class StabilityAnalyzer(object):
         # Goes through each test in fromtests, and collates all the circuit with drift.
         for test in fromtests:
 
+            if dskey is not None: 
+                assert(len(self.data.keys()) == 1 or dskey == test['dataset'])
             # If 'circuit' is in test, then we assign different drift frequencies to each circuit. Frequency indices
             # added in this loop are "true" hypothesis test results, in that ... docstringtodo. (except when the dataset
             # contains only one circuit, in which case we go into the loop below).
@@ -1276,10 +1287,24 @@ class StabilityAnalyzer(object):
                         else:
                             circuits[circuit] = list(freqindices)
 
-        if frequenciesinHz:
+        if not freqindices:
             for circuit, freqindices in circuits.items():
                 freqs = self._frequencies[self._freqpointers.get(self._index('circuit', circuit), 0)][freqindices]
                 circuits[circuit] = freqs
+
+        if getmaxtvd:
+            if dskey is None:
+                assert(len(self.data.keys()) == 1)
+                dskey = list(self.data.keys())[0]
+            if estimatekey is None:
+                estimatekey = self._def_probtrajectories
+            for circuit in self.data[dskey].keys():
+                maxtvd = self.get_max_tvd(circuit, dskey=dskey, estimatekey=estimatekey, estimator=None)
+                if circuit in circuits.keys():
+                    circuits[circuit] = (circuits[circuit], maxtvd)
+                else:
+                    if maxtvd > 0:
+                        circuits[circuit] = ([], maxtvd)
 
         return circuits
 
@@ -1333,11 +1358,12 @@ class StabilityAnalyzer(object):
         if 'circuit' in dictlabel.keys():
             circuitindex = self._index('circuit', dictlabel['circuit'])
         # Otherwise set the circuit index to 0 (an arbitrary value)
-        circuitindex = 0
+        else:
+            circuitindex = 0
         # Get the pointer to the frequencies for this circuit index
         freqpointer = self._freqpointers.get(circuitindex, 0)
         # Get the frequencies.
-        driftfreqs = self._frequencies[freqpointer][freqind]
+        driftfreqs = self._frequencies[freqpointer][list(freqind)]
 
         return driftfreqs
 
@@ -1436,13 +1462,13 @@ class StabilityAnalyzer(object):
 
                 self._probtrajectories[i, j] = {}
                 if verbosity > 1:
-                    print("    - Generating estimates for dataset {} and circuit {}".format(dskey, circuit))
+                    print("    - Generating estimates for dataset {} and circuit {}".format(dskey, circuit.str))
 
                 # The most likely null hypothesis model, i.e., constant probabilities that are the observed frequencies.
                 counts = self.data[dskey][circuit].counts
                 total = self.data[dskey][circuit].total
                 means = {o: counts[o] / total for o in outcomes}
-                nullptraj = _ptraj.ConstantProbabilityTrajectory(outcomes, means)
+                nullptraj = _ptraj.ConstantProbTrajectory(outcomes, means)
                 self._probtrajectories[i, j]['null'] = nullptraj
 
                 # The hyper-parameters for the DCT models are frequency indices, along with the start and end times.
@@ -1469,7 +1495,7 @@ class StabilityAnalyzer(object):
                         timestep = _np.mean(_np.diff(times))
                         numtimes = len(times)
                         # Creates the "raw" filter model, where we've set all non-sig frequencies to zero.
-                        filterptraj = _ptraj.CosineProbabilityTrajectory(outcomes, freqs, parameters,
+                        filterptraj = _ptraj.CosineProbTrajectory(outcomes, freqs, parameters,
                                                                          starttime=starttime, timestep=timestep,
                                                                          numtimes=numtimes)
                         # Converts to the "damped" estimator, where amplitudes are reduced to guarantee valid prob.
@@ -1527,3 +1553,22 @@ class StabilityAnalyzer(object):
         probabilities = ptraj.get_probabilities(times)
 
         return probabilities
+
+    def get_max_tvd(self, circuit, dskey=None, estimatekey=None, estimator=None):
+        """
+        todo
+
+        """
+        ptraj = self.get_probability_trajectory_model(circuit, dskey, estimatekey, estimator)
+        params = ptraj.get_parameters()
+        final_out_amplitudes = _np.zeros(len(ptraj.hyperparameters))
+        summed_abs_amps = 0
+
+        for o in params:
+            final_out_amplitudes  += params[o]
+            summed_abs_amps += _np.sum(_np.abs(params[o][1:]))
+
+        summed_abs_amps += _np.sum(_np.abs(final_out_amplitudes[1:]))
+        maxtvd = 0.5 * summed_abs_amps
+
+        return maxtvd

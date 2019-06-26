@@ -645,6 +645,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     drifttuple : 2-tuple
         The first element of the tuple is a StabilityAnalyzer. The second element is a
         tuple that specifies the hypothesis test(s) from which to extract the p-values.
+        This can be None, and then the default is used.
 
     Returns
     -------
@@ -666,6 +667,45 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
         except:
             pass
     return ret
+
+
+@smart_cached
+def drift_maxtvd_matrices(gsplaq, drifttuple):
+    """
+    Computes matrix of max-tvds for quantifying the size of any detected drift.
+
+    Parameters
+    ----------
+    gsplaq : CircuitPlaquette
+        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which operation sequences
+        they correspond to.
+
+    drifttuple : 2-tuple
+        The first element of the tuple is a StabilityAnalyzer. The second element is a
+        tuple that specifies the estimatorkey, and the third element is an estimator
+        name, that specifies the estimates to use (both can be None, and then the
+        default is used).
+
+    Returns
+    -------
+    numpy array of shape ( len(effectStrs), len(prepStrs) )
+        The max tvd for quantifying deviations from the data mean. This
+        operation sequences correspond to the operation sequences where a base circuit
+        is sandwiched between the each prep-fiducial and effect-fiducial pair.
+
+    """
+    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    stabilityanalyzer = drifttuple[0]
+    estimatekey = drifttuple[1]
+    estimator = drifttuple[2]
+    for i, j, opstr in gsplaq:
+        try:
+            ret[i, j] = stabilityanalyzer.get_max_tvd(opstr, dskey=None, estimatekey=estimatekey, estimator=estimator)
+        except:
+            pass
+    return ret
+
 
 # future: delete this if we decide not to add this option back in.
 # @smart_cached
