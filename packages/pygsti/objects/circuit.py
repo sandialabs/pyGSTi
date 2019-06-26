@@ -422,6 +422,10 @@ class Circuit(object):
     def __iter__(self):
         return self._labels.__iter__()
 
+    def __contains__(self, x):
+        """Note: this is not covered by __iter__ for case of contained CircuitLabels """
+        return any([(x == layer or x in layer) for layer in self._labels])
+
     def __add__(self, x):
         if not isinstance(x, Circuit):
             raise ValueError("Can only add Circuits objects to other Circuit objects")
@@ -726,6 +730,8 @@ class Circuit(object):
         # 1) a single Label (possibly compound) if layers is an int
         # 2) a tuple of Labels (possibly compound) otherwise
         if int_layers:
+            if isinstance(lbls, Circuit):  # special case: "box" a circuit assigned to a single layer
+                lbls = lbls.as_label()     # converts Circuit => CircuitLabel
             lbls = toLabel(lbls)
             lbls_sslbls = None if (lbls.sslbls is None) else set(lbls.sslbls)
         else:
@@ -2526,6 +2532,20 @@ class Circuit(object):
 
     def __repr__(self):
         return "Circuit(%s)" % self.str
+
+    def _print_labelinfo(self):
+        """A useful debug routine for printing the internal label structure of a circuit"""
+        def plbl(x, lit):
+            iscircuit = isinstance(x, _CircuitLabel)
+            extra = "reps=%d" % x.reps if iscircuit else ""
+            print(lit, ": str=", x, " type=", type(x), " ncomps=", len(x.components), extra)
+            if len(x.components) > 1 or iscircuit:
+                for i, cmp in enumerate(x.components):
+                    plbl(cmp, "  %s[%d]" % (lit, i))
+
+        print("--- LABEL INFO for %s (%d layers) ---" % (self.str, self.num_layers()))
+        for j in range(0, self.num_layers()):
+            plbl(self[j], "self[%d]" % j)
 
     def write_Qcircuit_tex(self, filename):  # TODO
         """

@@ -11,7 +11,6 @@ from pygsti.objects import Label as L
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-# This class is for unifying some models that get used in this file and in testGateSets2.py
 class LabelTestCase(BaseTestCase):
 
     def setUp(self):
@@ -139,3 +138,6 @@ class LabelTestCase(BaseTestCase):
         l = L('GrotX',(0,1),args=('1.4',),time=0.2)
         self.assertEqual(str(l), "GrotX;1.4:0:1!0.2")  # make sure we do print time when it's nonzero
         self.assertEqual(l.time, 0.2)
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
