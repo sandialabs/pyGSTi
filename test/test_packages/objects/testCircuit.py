@@ -435,5 +435,10 @@ class CircuitTestCase(BaseTestCase):
         c = pygsti.obj.Circuit( ['Gi', pygsti.obj.Label(())] )
         self.assertEqual(len(c), 2)
 
+    def test_replace_with_idling_line(self):
+        c = pygsti.obj.Circuit( [('Gcnot',0,1)], editable=True)
+        c.replace_with_idling_line(0)
+        self.assertEqual(c, ((),))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
