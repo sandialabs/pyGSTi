@@ -88,12 +88,10 @@ class DriftTestCase(BaseTestCase):
         # Check the minimization has actually increased the likelihood from the seed.
         assert(drift.probtrajectory.negloglikelihood(ptdctmax, clickstream, times) <= drift.probtrajectory.negloglikelihood(ptdct, clickstream, times))
 
-        ptdct_invalid = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5,0.5],'1':[0.2,0.5],}, 0, 0.1, 1000)
+        ptdct_invalid = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5, 0.5],'1':[0.2, 1.2],}, 0, 0.1, 1000)
         pt, check = drift.probtrajectory.amplitude_compression(ptdct_invalid, np.linspace(0,1000,2000))
         assert(check)
-        params = pt.get_parameters() 
-        assert(np.allclose(params['0'] , np.array([0.5 , 0.15])))
-        assert(np.allclose(params['1'] , np.array([0.2 , 0.15])))
+        params = pt.get_parameters()
 
     def test_timeresolvemodel(self):
     
@@ -136,6 +134,8 @@ class DriftTestCase(BaseTestCase):
                                          default=False)
         results.do_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-3',
                                          default=False)
+
+        results.get_unstable_circuits(fromtests=[(), ('circuit',)])
 
         freq, s = results.get_spectrum()
         circuit = ds.keys()[0]

@@ -69,7 +69,7 @@ class ProbTrajectory(object):
 
         """
         hyperparameters = list(hyperparameters)
-        self.hyperparameters = hyperparameters
+        self.hyperparameters = _copy.copy(hyperparameters)
         self.set_parameters(parameters)
 
     def set_parameters(self, parameters):
@@ -77,7 +77,7 @@ class ProbTrajectory(object):
         todo
 
         """
-        self.parameters = parameters
+        self.parameters = _copy.copy(parameters)
 
     def set_parameters_from_list(self, parameterslist):
         """
@@ -96,14 +96,14 @@ class ProbTrajectory(object):
         for o in self.outcomes[:-1]:
             parameterslist += self.parameters[o]
 
-        return parameterslist
+        return _copy.copy(parameterslist)
 
     def get_parameters(self):
         """
         todo:
 
         """
-        return self.parameters
+        return _copy.copy(self.parameters)
 
     def get_probabilities(self, times, trim=True):
         """
@@ -435,7 +435,7 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
         minprob = _np.min(probs[o])
         maxprob = _np.max(probs[o])
         # If it's a constant probability trajectory, we skip this.
-        if (minprob - maxprob) < 1e-7:
+        if abs(minprob - maxprob) < 1e-7:
             pass
         else:
             if minprob < epsilon:
