@@ -434,17 +434,21 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
         alpha0s[o] = rectify_alpha0(params[o][0])
         minprob = _np.min(probs[o])
         maxprob = _np.max(probs[o])
-        if minprob < epsilon:
-            # Find the multipler such that alpha0 + min(probs-alpha0) * multipler = epsilon
-            if minprob - alpha0s[o] < 0:
-                newmultiplier = (epsilon - alpha0s[o]) / (minprob - alpha0s[o])
-                multiplier = min(multiplier, newmultiplier)
-
-        if maxprob > 1 - epsilon:
-            # Find the multipler such that alpha0 + max(probs-alpha0) * multipler = 1 - epsilon
-            if maxprob - alpha0s[o] > 0:
-                newmultiplier = (1 - epsilon - alpha0s[o]) / (maxprob - alpha0s[o])
-                multiplier = min(multiplier, newmultiplier)
+        # If it's a constant probability trajectory, we skip this.
+        if (minprob - maxprob) < 1e-7:
+            pass
+        else:
+            if minprob < epsilon:
+                # Find the multipler such that alpha0 + min(probs-alpha0) * multipler = epsilon
+                if minprob - alpha0s[o] < 0:
+                    newmultiplier = (epsilon - alpha0s[o]) / (minprob - alpha0s[o])
+                    multiplier = min(multiplier, newmultiplier)
+  
+            if maxprob > 1 - epsilon:
+                # Find the multipler such that alpha0 + max(probs-alpha0) * multipler = 1 - epsilon
+                if maxprob - alpha0s[o] > 0:
+                    newmultiplier = (1 - epsilon - alpha0s[o]) / (maxprob - alpha0s[o])
+                    multiplier = min(multiplier, newmultiplier)
 
     if multiplier < 1:
         shape = (len(probtrajectory.outcomes) - 1, len(probtrajectory.hyperparameters))
@@ -456,7 +460,6 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
         compparameters = compparameters.flatten()
         comppt = probtrajectory.copy()
         comppt.set_parameters_from_list(list(compparameters))
-        print(True, multiplier)
 
         return comppt, True
 
