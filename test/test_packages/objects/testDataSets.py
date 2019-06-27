@@ -20,35 +20,11 @@ class TestDataSetMethods(BaseTestCase):
         ds[ ('Gx',) ]['1'] = 90
         with self.assertRaises(NotImplementedError):
             ds[ ('Gx',) ]['new'] = 20 # assignment can't create *new* outcome labels (yet)
-        #OLD ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
-        #OLD ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
         ds.add_count_dict( ('Gy','Gy'), {'FooBar': 10, '1': 90 }) # OK to add outcome labels on the fly
         ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # now all outcome labels OK now
         ds.add_count_dict( ('Gy','Gy'),pygsti.obj.labeldicts.OutcomeLabelDict([('0',10), ('1',90)]),
                            overwriteExisting=False) #adds counts at next available integer timestep
         ds.done_adding_data()
-
-        #Test that we don't *need* to add anything
-        dsEmpty = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        dsEmpty.done_adding_data()
-
-        dsWritable = ds.copy_nonstatic()
-        dsWritable[('Gy',)] = {'0': 20, '1': 80}
-
-        dsWritable2 = dsWritable.copy_nonstatic()
-         #test copy_nonstatic on already non-static dataset
-
-        ds_str = str(ds)
-
-        with self.assertRaises(ValueError):
-            ds.add_count_dict( ('Gx',), {'0': 10, '1': 90 }) # done adding data
-        #OLD with self.assertRaises(ValueError):
-        #    ds.add_counts_1q( ('Gx',), 40,60) # done adding data
-
-        self.assertEqual(ds[('Gx',)]['0'], 10)
-        self.assertEqual(ds[('Gx',)]['1'], 90)
-        print(ds)
-        self.assertAlmostEqual(ds[('Gx',)].fraction('0'), 0.1)
 
         #Pickle and unpickle
         with open(temp_files + '/dataset.pickle', 'wb') as datasetfile:
@@ -79,81 +55,10 @@ class TestDataSetMethods(BaseTestCase):
 
         ds2 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
                                      circuits=gstrs, outcomeLabels=['0','1'])
-        ds3 = pygsti.objects.DataSet(oli_nonstc[:], time_nonstc[:], reps_nonstc[:],
-                                     circuitIndices=gstrInds, outcomeLabelIndices=olInds)
         ds4 = pygsti.objects.DataSet(oli_static, time_static, reps_static,
                                      circuitIndices=gstrInds_static, outcomeLabels=['0','1'], bStatic=True)
-        ds5 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc, circuits=gstrs,
-                                     outcomeLabels=['0','1'], bStatic=False)
-        ds6 = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        ds6.done_adding_data() #ds6 = empty dataset
 
         ds2.add_counts_from_dataset(ds)
-        ds3.add_counts_from_dataset(ds)
-        with self.assertRaises(ValueError):
-            ds4.add_counts_from_dataset(ds) #can't add to static DataSet
-
-        with self.assertRaises(AssertionError):
-            pygsti.objects.DataSet(circuits=gstrs) #no spam labels specified
-        with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(oli_static, time_static, reps_static,
-                                   outcomeLabels=['0','1'], bStatic=True)
-              #must specify opLabels (or indices) when creating static DataSet
-        with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(circuits=gstrs, outcomeLabels=['0','1'], bStatic=True)
-              #must specify counts when creating static DataSet
-
-        #Test __contains__ methods
-        self.assertTrue(('Gx',) in ds2)
-        self.assertTrue('0' in ds2[('Gx',)])
-
-        #Test indexing methods
-        cnt = 0
-        for opstr in ds:
-
-            if opstr in ds:
-                if opstr in ds:
-                    pass
-                if pygsti.obj.Circuit(opstr) in ds:
-                    pass
-
-            dsRow = ds[opstr]
-            allLabels = list(dsRow.counts.keys())
-            counts = dsRow.counts
-            for spamLabel in counts:
-                if spamLabel in counts: #we know to be true
-                    cnt = counts[spamLabel]
-                if spamLabel in counts:
-                    cnt = counts[spamLabel]
-
-        for dsRow in ds.values():
-            for spamLabel,count in dsRow.counts.items():
-                cnt += count
-
-        #Check degrees of freedom
-        ds.get_degrees_of_freedom()
-        ds2.get_degrees_of_freedom()
-        print("DEBUG: ds3 = ",ds3.keys())
-        ds3.get_degrees_of_freedom()
-        ds4.get_degrees_of_freedom()
-
-        #String Manipulation
-        dsWritable.process_circuits( lambda s: pygsti.construction.manipulate_circuit(s, [( ('Gx',), ('Gy',))]) )
-        test_cntDict = dsWritable[('Gy',)].as_dict()
-
-        #Test truncation
-        ds2.truncate( [('Gx',),('Gx','Gy')] ) #non-static
-        ds4.truncate( [('Gx',),('Gx','Gy')] ) #static
-        ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="warn" ) #non-static
-        ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="ignore" ) #static
-        with self.assertRaises(KeyError):
-            ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="raise" ) #Gz is missing
-        with self.assertRaises(KeyError):
-            ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="raise" ) #Gz is missing
-
-        #test copy
-        ds2_copy = ds2.copy() #non-static
-        ds4_copy = ds4.copy() #static
 
         #Loading and saving
         ds2.save(temp_files + "/nonstatic_dataset.saved")
@@ -175,16 +80,6 @@ class TestDataSetMethods(BaseTestCase):
         ds4.load(temp_files + "/static_dataset.saved.gz")
         with open(temp_files + "/static_dataset.stream","rb") as streamfile:
             ds2.load(streamfile)
-
-        #Test various other methods
-        nStrs = len(ds)
-        cntDict = ds[('Gx',)].as_dict()
-        asStr = str(ds[('Gx',)])
-
-        dsWritable[('Gy',)].scale(2.0)
-        self.assertEqual(dsWritable[('Gy',)]['0'], 40)
-        self.assertEqual(dsWritable[('Gy',)]['1'], 160)
-
 
         #Test loading a deprecated dataset file
         #dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
