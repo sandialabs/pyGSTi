@@ -3,9 +3,13 @@
         <p>This summarizes the results of instability ("drift") detection and characterization.
         </p>
 
-    %(drift_switchBd)s
+    <figure id="driftSummaryTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Table Caption.</span> <span class="captiondetail">Say what this table is.</span></figcaption>
+	  %(driftSummaryTable)s
+	</figure>
 
-<!--     <figure id="driftdetectorColorBoxPlot" class='tbl'>
+
+    <figure id="driftdetectorColorBoxPlot" class='tbl'>
 	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
 	  %(driftdetectorColorBoxPlot)s
 	</figure>
@@ -13,22 +17,27 @@
 	<figure id="driftsizeColorBoxPlot" class='tbl'>
 	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
 	  %(driftsizeColorBoxPlot)s
-	</figure> -->
+	</figure>
 
-<!-- 	<figure id="driftSampleTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Table Caption.</span> <span class="captiondetail">Say what this table is.</span></figcaption>
-	  %(sampleTable)s
-	</figure> -->
-
-<!-- 	<figure id="driftSamplePlot" class='tbl'>
+	<figure id="GlobalPowerSpectraPlot" class='tbl'>
 	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
-	  %(samplePlot)s
-	</figure> -->
+	  %(GlobalPowerSpectraPlot)s
+	</figure>
+
+	%(drift_switchBd)s
+
+	<figure id="GermFiducialPowerSpectraPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
+	  %(GermFiducialProbTrajectoriesPlot)s
+	</figure>
+
 
 	<figure id="GermFiducialProbTrajectoriesPlot" class='tbl'>
 	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
 	  %(GermFiducialProbTrajectoriesPlot)s
 	</figure>
+
+	
 
 
 

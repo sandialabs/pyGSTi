@@ -332,12 +332,11 @@ class Workspace(object):
             _idt.IdleTomographyObservedRatesForIntrinsicRateTable)
 
         from ..extras.drift import driftreport as _driftrpt
-        self.DriftSampleTable = makefactory(_driftrpt.DriftSampleTable)
-        self.DriftSamplePlot = makefactory(_driftrpt.DriftSamplePlot)
+        self.DriftSummaryTable = makefactory(_driftrpt.DriftSummaryTable)
         self.PowerSpectraPlot = makefactory(_driftrpt.PowerSpectraPlot)
         self.ProbTrajectoriesPlot = makefactory(_driftrpt.ProbTrajectoriesPlot)
-        #self.GermProbTrajectoriesPlot = makefactory(_driftrpt.GermProbTrajectoriesPlot)
         self.GermFiducialProbTrajectoriesPlot = makefactory(_driftrpt.GermFiducialProbTrajectoriesPlot)
+        self.GermFiducialPowerSpectraPlot = makefactory(_driftrpt.GermFiducialPowerSpectraPlot)
 
     def init_notebook_mode(self, connected=False, autodisplay=False):
         """

@@ -29,16 +29,16 @@ class DriftTestCase(BaseTestCase):
         a2, b2, c2 = drift.signal.spectrum(p, times=np.arange(1000), null_hypothesis=None, transform='lsp')
         a3, b3, c3 = drift.signal.spectrum(p, times=np.arange(1000), null_hypothesis=p, transform='dft')
         power = drift.signal.bartlett_spectrum(p, 5, counts=1, null_hypothesis=None, transform='dct')
-        assert(abs(max(c1)  -50) < 1e-10)
+        assert(abs(max(c1) - 50) < 1e-10)
         assert(abs(sum(c1[0:10]) - 100) < 1e-10)
 
         fnc = drift.signal.dct_basisfunction(3, np.arange(500), 0, 500)
-        amps = drift.signal.amplitudes_at_frequencies([1,3], {'0':fnc, '1': - fnc})
+        amps = drift.signal.amplitudes_at_frequencies([1, 3], {'0': fnc, '1': - fnc})
 
         assert(abs(amps['0'][0]) < 1e-10)
-        assert(abs(amps['0'][1]-1) < 1e-10)
+        assert(abs(amps['0'][1] - 1) < 1e-10)
         assert(abs(amps['1'][0]) < 1e-10)
-        assert(abs(amps['1'][1]+1) < 1e-10)
+        assert(abs(amps['1'][1] + 1) < 1e-10)
 
         powerthreshold = drift.signal.power_significance_threshold(0.05, 100, 1)
         pvaluethreshold = drift.signal.power_to_pvalue(powerthreshold, 1)
@@ -52,6 +52,56 @@ class DriftTestCase(BaseTestCase):
         assert(np.sum(abs(p - plpf)) < 1e-7)
 
         assert(abs(drift.signal.moving_average(np.arange(0,100),width=11)[50] - 50) < 1e-10)
+
+    def test_probtrajectory(self):
+
+        # Create some fake clickstream data, from a constant probability distribution.
+        numtimes = 500
+        timstep = 0.1
+        starttime = 0.
+        times = (timstep * np.arange(0, numtimes)) + starttime
+        clickstream = {}
+        outcomes = ['0','1','2']
+        for o in outcomes:
+            clickstream[o] = []
+        for i in range(len(times)):
+            click = np.random.randint(0,3)
+            for o in outcomes:
+                if int(o) == click:
+                    clickstream[o].append(1)
+                else:
+                    clickstream[o].append(0)
+
+        # Test construction of a constant probability trajectory model
+        pt = drift.probtrajectory.ConstantProbTrajectory(['0','1','2'],{'0':[0.5],'1':[0.2],})
+        # Test MLE runs (this calls pretty much everything in the probability trajectory code)
+        ptmax = drift.probtrajectory.maxlikelihood(pt, clickstream, times, verbosity=1)
+        parameters = ptmax.get_parameters()
+        # The exact MLE is the data mean, so check the returned MLE is close to that.
+        for o in outcomes[:-1]:
+            assert(abs(parameters[o][0] - np.mean(clickstream[o])) < 1e-3)
+        # Check the minimization has actually increased the likelihood from the seed.
+        assert(drift.probtrajectory.negloglikelihood(ptmax, clickstream, times) <= drift.probtrajectory.negloglikelihood(pt, clickstream, times))
+
+        # Test construction of a DCT probability trajectory model
+        ptdct = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5,0.02],'1':[0.2,0.03],}, 0, 0.1, 1000)
+        # Test set parameters from list is working correctly.
+        ptdct.set_parameters_from_list([0.5,0.02,0.2,0.03])
+        assert(ptdct.get_parameters() == {'0':[0.5,0.02],'1':[0.2,0.03],})
+        # Test set parameters from list is working correctly.
+        assert(ptdct.get_parameters_as_list() == [0.5,0.02,0.2,0.03])
+        # Run MLE.
+        ptdctmax = drift.probtrajectory.maxlikelihood(ptdct, clickstream, times, verbosity=2)
+        probsmax = ptdctmax.get_probabilities(times)
+        # Check the minimization has actually increased the likelihood from the seed.
+        assert(drift.probtrajectory.negloglikelihood(ptdctmax, clickstream, times) <= drift.probtrajectory.negloglikelihood(ptdct, clickstream, times))
+
+        ptdct_invalid = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5,0.5],'1':[0.2,0.5],}, 0, 0.1, 1000)
+        pt, check = drift.probtrajectory.amplitude_compression(ptdct_invalid)
+        assert(check)
+        params = pt.get_parameters() 
+        assert(np.allclose(params['0'] , np.array([0.5 , 0.15])))
+        assert(np.allclose(params['1'] , np.array([0.2 , 0.15])))
 
     # def test_drift_characterization(self):
     #     tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")

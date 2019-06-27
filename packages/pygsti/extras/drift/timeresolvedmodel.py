@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """Functions for Fourier analysis of equally spaced time-series data"""
 
 from . import signal as _sig
-from . import probabilitytrajectoryestimation as _ptest
+from . import probtrajectory as _ptraj
 
 import numpy as _np
 import time as _tm
@@ -18,17 +18,28 @@ from scipy.optimize import minimize as _minimize
 
 class TimeResolvedModel(object):
     """
-    todo
+    Encapsulates a basic form of time-resolved model, for implementing simple types
+    of time-resolved characterization, e.g., time-resolved Ramsey spectroscopy.
     """
     def __init__(self, hyperparameters, parameters):
         """
-        todo:
+        Initializes a TimResolvedModel object.
+
+        Parameters
+        ----------
+        hyperparameters: list
+            A set of meta-parameters, that define the model. For example, these could
+            be frequencies to include in a Fourier decomposition.
+
+        parameters: list
+           The values for the parameters of the model. For example, these could be
+           the amplitudes for each frequency in a Fourier decomposition.
 
         Returns
         -------
-        None
-        """
+        TimeResolvedModel
 
+        """
         self.hyperparameters = hyperparameters
         self.parameters = parameters
 
@@ -53,85 +64,86 @@ class TimeResolvedModel(object):
         return _copy.deepcopy(self)
 
 
-class TimeResolvedRamseyModel(TimeResolvedModel):
+def negloglikelihood(trmodel, ds, minp=0, maxp=1): 
     """
-    todo.
-    """
-    def __init__(self, hyperparameters, parameters):
-        """
-        todo.
+    The negative loglikelihood for a TimeResolvedModel given the data.
 
-        """
-        super().__init(hyperparameters, parameters)
-        return
+    Parameters
+    ----------
+    timeresolvedmodel: TimeResolvedModel
+        The TimeResolvedModel to calculate the likelihood of.
 
-    def get_probabilities(self, circuit, times):
-        """
-        todo
+    ds: DataSet
+        A DataSet, containing time-series data.
 
-        """ 
-        assert(len(self.parameters) == len(self.hyperparameters) - 4)
+    minp, maxp: float, optional
+        Value used to smooth the 0 and 1 probability boundaries for
+        the likelihood function. Useful in optimization routines.
 
-        delta = self.parameters[0]
-        gamma = self.parameters[1]
-        Lambda = self.parameters[2]
-        alphas = np.array(self.parameters[3:])
-
-        L = len(gs) - 2
-        T = len(times)
-        theta = np.zeros(T)
-        for omgInd, omg in enumerate(omegas):
-            if omg != 0:
-                theta += alphas[omgInd] * np.array([np.cos(omg*np.pi*(t-starttime+0.5)/timedif) for t in times])
-            else:
-                theta += alphas[omgInd]
-        p = OutcomeLabelDict() 
-        p[('1',)] = delta*np.ones(T) + 0.5  + 0.5*gamma*(Lambda**L)*np.sin(L*theta)
-        p[('0',)] = 1. - p[('1',)]
-        return p
-
-
-def negloglikelihood(timeresolvedmodel, times, data, min_p, max_p): 
-    """
-    The negative loglikelihood for a TimeResolvedModel.
+    Returns
+    -------
+    float
+        The negative loglikelihood of the model.
 
     """
     negll = 0.
-    for circuit in data.keys():
-        p = timeresolvedmodel.get_probabilities(circuit, times[circuit])
-        negll += _ptest.probabilitytrajectoryNegLogLikelihood(p, data[circuit], min_p, max_p)
+    for circuit in ds.keys():
+        times, clickstreams = ds[circuit].get_timeseries_for_outcomes()
+        probs = trmodel.get_probabilities(circuit, times)
+        negll += _ptraj.probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
 
     return negll
 
 
-def maxlikelihood_model(timeresolvedmodel, times, data, seed, min_p=1e-4, max_p=1-1e-6, bounds=None, returnOptout=False,
-                        verbosity=1):
+def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=False,
+                  optoptions={}, verbosity=1):
     """
-    Todo.
+    Finds the maximum likelihood TimeResolvedModel given the data.
+
+    Parameters
+    ----------
+    timeresolvedmodel: TimeResolvedModel
+        The TimeResolvedModel that is used as the seed, and which defines
+        the class of parameterized models to optimize over.
+
+    ds: DataSet
+        A DataSet, containing time-series data.
+
+    minp, maxp: float, optional
+        Value used to smooth the 0 and 1 probability boundaries for
+        the likelihood function.
+
+    bounds: list or None, optional
+        Bounds on the parameters, as specified in scipy.optimize.minimize
+
+    optout: bool, optional
+        Wether to return the output of scipy.optimize.minimize
+
+    optoptions: dict, optional
+        Optional arguments for scipy.optimize.minimize.
+
+    Returns
+    -------
+    float
+        The maximum loglikelihood model
 
     """
-    maxltimeresolvedmodel = timeresolvedmodel.copy()
+    maxlmodel = trmodel.copy()
+
     def objfunc(parameters):
+        maxlmodel.set_parameters(parameters)
+        return negloglikelihood(maxlmodel, ds, minp, maxp)
 
-        negll = 0.
-        for circuit in data.keys():
-            maxltimeresolvedmodel.set_parameters(parameters)
-            p = maxltimeresolvedmodel.get_probabilities(circuit, times[mdl], parameters)
-            negll += _ptest.probabilitytrajectoryNegLogLikelihood(p, data[circuit], min_p, max_p)
-
-        return negll
-
-    options = {'disp':False}
     if verbosity > 0:
-        print("- Performing MLE over {} parameters...".format(len(seed)), end='')
+        print("- Performing MLE over {} parameters...".format(len(maxlmodel.get_parameters())), end='')
     if verbosity > 1:
         print("")
-        options = {'disp':True}
 
-    seed = maxltimeresolvedmodel.get_parameter()
+    seed = maxlmodel.get_parameters()
     start = _tm.time()
-    optout = _minimize(objfunc, seed, options=options, bounds=bounds)
+    optout = _minimize(objfunc, seed, options=optoptions, bounds=bounds)
     maxlparameters = optout.x
+    maxlmodel.set_parameters(maxlparameters)
     end = _tm.time()
 
     if verbosity == 1:
@@ -139,7 +151,7 @@ def maxlikelihood_model(timeresolvedmodel, times, data, seed, min_p=1e-4, max_p=
     if verbosity > 0:
         print("- Time taken: {} seconds".format(end - start)),
 
-    if returnOptout:
-        return maxltimeresolvedmodel, maxlparameters, optout
+    if optout:
+        return maxlmodel, optout
     else:
-        return maxltimeresolvedmodel
+        return maxlmodel

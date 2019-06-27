@@ -209,7 +209,7 @@ def _xlogp_rectified(x, p, minp=0.0001, maxp=0.999999):
 
 def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
     """
-    The log-likelihood of a time-resolved probabilities trajectory model.
+    The negative log-likelihood of a time-resolved probabilities trajectory model.
 
     Parameters
     ----------
@@ -240,11 +240,20 @@ def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
     float
         The log-likehood of the model given the time-series data.
     """
-    p = probtrajectory.get_probabilities(times)
+    probs = probtrajectory.get_probabilities(times)
+    return probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
+
+
+def probsdict_negloglikelihood(probs, clickstreams, minp=0., maxp=1.):
+    """
+    The negative log-likelihood of varying probabilities `probs`, evaluated for the data streams
+    in `clickstreams`.
+    """
     logl = 0
     for outcome in clickstreams.keys():
         logl += _np.sum([_xlogp_rectified(xot, pot, minp, maxp) for xot, pot in zip(clickstreams[outcome],
-                                                                                    p[outcome])])
+                                                                                    probs[outcome])])
+
     return -logl
 
 
@@ -341,10 +350,28 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
 
 def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
     """
-    todo
+    Reduces the amplitudes in a CosineProbTrajectory model until the
+    model is valid, i.e., all probabilities are within [0,1].
+
+    Parameters
+    ----------
+    probtrajectory: CosineProbTrajectory
+        The model on which to perform the amplitude reduction
+
+    epsilon: float, optional
+        The amplitudes are compressed so that all the probabilities are
+        within [0+epsilon,1-epsilon] at all times. Setting this to be
+        larger than 0 can be useful as it guarantees that the resultant
+        probability trajectory has a non-zero likelihood.
 
     Returns
     -------
+    CosineProbTrajectory
+        The new model, that may have had the amplitudes reduced
+
+    Bool
+        Whether or not the function did anything non-trivial, i.e, whether any
+        compression was required.
 
     """
     assert(isinstance(probtrajectory, CosineProbTrajectory)), "Input must be a CosineProbTrajectory!"

@@ -412,7 +412,7 @@ class StabilityAnalyzer(object):
         # circuit's spectra.
         self._frequencies = None
         # Will become a dictionary of ``pointers`` that designate the index of the `self._frequencies` list that the
-        # frequencies for a circuit correpsond to. The key is the circuit index (in self.data.keys()) and the value 
+        # frequencies for a circuit correspond to. The key is the circuit index (in self.data.keys()) and the value 
         # is the index in self._frequncies.
         self._freqpointers = None
         self._dofalt = {}  # A dictionary containing alternative dofs, so that it can be adjusted in special cases.
@@ -681,19 +681,20 @@ class StabilityAnalyzer(object):
         # are for the frequencies stored as self._frequencies[0].
         if len(self._freqpointers) == 0: return True
 
-        anyspectraindex = [] # Indices to an arbitrary spectra in the set under consideration
         iterator = [] # A list of list-like to iterate over to consider all the spectra in question.
         for i, axislabel in enumerate(self._axislabels):
             if axislabel in dictlabel.keys():
                 iterator.append([dictlabel[axislabel], ])
-                anyspectraindex.append(dictlabel[axislabel])
             else:
                 iterator.append(range(self._shape[i]))
-                anyspectraindex.append(0)
 
+        if 'circuit' in dictlabel.keys():
+            circuitindex = self._index('circuit', dictlabel['circuit'])
+        else:
+            circuitindex = 0
         # Find the frequency pointer for an arbitrary one of the spectra in question, and return the default of
         # 0 if there isn't one.
-        reference_freqpointer = self._freqpointers.get(tuple(anyspectraindex), 0)
+        reference_freqpointer = self._freqpointers.get(circuitindex, 0)
         # Iterate through the indices to all the spectra under consideration, and check their frequency pointers
         # are the same as the reference.
         for indices in _itertools.product(*iterator):
@@ -815,10 +816,11 @@ class StabilityAnalyzer(object):
         """
         assert(self._contains_spectra is not None), "Spectra must be generated before they can be accessed!"
         if len(dictlabel) == len(self._axislabels):
-            arrayindices = self._tupletoindex(tuple(dictlabel.values()))
+            arrayindices = self._tupletoindex[tuple(dictlabel.values())]
             spectrum = self._basespectra[arrayindices].copy()
             if returnfrequencies:
-                freq = self._frequencies[self._freqpointers[arrayindices]]
+                circuitindex = arrayindices[1]
+                freq = self._frequencies[self._freqpointers.get(circuitindex,0)]
                 return freq, spectrum
             else:
                 return spectrum
