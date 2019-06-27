@@ -1500,7 +1500,7 @@ class StabilityAnalyzer(object):
                         filterptraj = _ptraj.CosineProbTrajectory(outcomes, freqs, parameters, starttime=starttime,
                                                                   timestep=timestep, numtimes=numtimes)
                         # Converts to the "damped" estimator, where amplitudes are reduced to guarantee valid prob.
-                        filterptraj, flag = _ptraj.amplitude_compression(filterptraj)
+                        filterptraj, flag = _ptraj.amplitude_compression(filterptraj, times)
                         # Records this estimate.
                         self._probtrajectories[i, j][detectorkey, test, 'filter'] = filterptraj
 

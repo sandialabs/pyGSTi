@@ -105,7 +105,7 @@ class ProbTrajectory(object):
         """
         return self.parameters
 
-    def get_probabilities(self, times):
+    def get_probabilities(self, times, trim=True):
         """
         Returns the probability distribution for each time in `times`.
 
@@ -113,6 +113,11 @@ class ProbTrajectory(object):
         ----------
         times : list
             A list of times, to return the probability distributions for.
+
+        time : bool, optional
+            Whether or not to set probability > 1 to 1 and probabilities
+            < 0 to 0. If set to True then there is no guarantee that the
+            probabilities will sum to 1 at all times anymore.
 
         Returns
         -------
@@ -128,12 +133,20 @@ class ProbTrajectory(object):
         for o in self.outcomes[:-1]:
             p = _np.sum(_np.array([self.parameters[o][ind] * self.basisfunction(i, times)
                                    for ind, i in enumerate(self.hyperparameters)]), axis=0)
+            # This trimming means it's possible to have probabilities that don't sum exactly to 1.
+            if trim: 
+                p[p > 1] = 1
+                p[p < 0] = 0
             probs[o] = p
             totalprob += p  # Keeps track of the total probability accounted for.
 
-        # Add in the probability trace for the final outcome, which is specified indirectly.
-        probs[self.outcomes[-1]] = 1 - totalprob
-
+        # Calculate and add in the probability trace for the final outcome, which is specified indirectly.
+        p = 1 - totalprob
+        # This trimming means it's possible to have probabilities that don't sum exactly to 1.
+        if trim:
+            p[p > 1] = 1
+            p[p < 0] = 0
+        probs[self.outcomes[-1]] = p
         return probs
 
 
@@ -348,7 +361,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         return maxlprobtrajectory
 
 
-def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
+def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
     """
     Reduces the amplitudes in a CosineProbTrajectory model until the
     model is valid, i.e., all probabilities are within [0,1].
@@ -357,6 +370,11 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
     ----------
     probtrajectory: CosineProbTrajectory
         The model on which to perform the amplitude reduction
+
+    times: list
+        The times at which to enforce the validity of the model (this algorithm
+        does *not* guarantee that the probabilities will be within [0,1] at all
+        times)
 
     epsilon: float, optional
         The amplitudes are compressed so that all the probabilities are
@@ -376,32 +394,18 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
     """
     assert(isinstance(probtrajectory, CosineProbTrajectory)), "Input must be a CosineProbTrajectory!"
 
-    def update_multiplier(multipler, a, b, epsilon):
+    def satisfies_hard_constraint(a, b, epsilon):
         """
-        Updates `multiplier` so that the following two equations
-        are satisfied:
-
-        a - (b * multipler) >= epsilon
-        a + (b * multipler) =< 1 - epsilon
-
-        where `a`, `b` and `epsilon` are positive. If the equations
-        are already satisfied, `multipler` is unchanged. Otherwise it
-        this function returns the maximum `multipler` such that this holds,
-        i.e., the `multipler` that satisfies at least one of these conditions
-        as an equality. If b = 0 then the input multipler is returned.
+        Returns True if  a - b >= epsilon and  a + b =< 1 - epsilon. Otherwise
+        Returns False.
 
         """
-        if b <= 0: return multipler
-
-        if a - (b * multipler) < epsilon:
-            multipler = (a - epsilon) / b
-        if a + (b * multipler) > 1 - epsilon:
-            multipler = (1 - epsilon - a) / b
-
-        return multipler
+        return (a - b >= epsilon) and (a + b >= 1 - epsilon)
 
     def rectify_alpha0(alpha0):
-
+        """
+        Fixes a probability that's strayed slightly out of [0,1]
+        """
         if alpha0 > 1:
             assert(abs(alpha0 - 1) < 1e-6), "The mean of each trajectory must be within [0,1]!"
             return 1
@@ -415,24 +419,32 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
 
     multiplier = 1
 
-    alphassum = _np.zeros(len(probtrajectory.hyperparameters), float)
     alpha0s = {}
+    probs = probtrajectory.get_probabilities(times, trim=False)
+    params = probtrajectory.get_parameters()
+    # Add in the outcome that's parameters are fully defined by the others.
+    params[probtrajectory.outcomes[-1]] = _np.zeros(len(params[list(params.keys())[0]]))
+    # Populate those parameters.
+    for o in probtrajectory.outcomes[:-1]: params[probtrajectory.outcomes[-1]] += params[o]
+    # The constant prob is 1 - the sum of the other constant probs.
+    params[probtrajectory.outcomes[-1]][0] = 1 - params[probtrajectory.outcomes[-1]][0]
 
-    for o in probtrajectory.outcomes[:-1]:
-        alphas = probtrajectory.parameters[o]
-        alphas[0] = rectify_alpha0(alphas[0])
-        # Store the rectified alpha0, to set in the trajectory later.
-        alpha0s[o] = alphas[0]
-        alphai_abssum = _np.sum(abs(_np.array(alphas[1:])))
-        #print(multiplier, alpha0s[o], alphai_abssum, epsilon)
-        multiplier = update_multiplier(multiplier, alpha0s[o], alphai_abssum, epsilon)
-        #print(multiplier, alpha0s[o], alphai_abssum, epsilon)
-        alphassum += _np.array(alphas)
+    for o in probtrajectory.outcomes:
 
-    alpha0 = 1 - alphassum[0]
-    alphai_abssum = _np.sum(abs(-_np.array(alphassum[1:])))
-    multiplier = update_multiplier(multiplier, alpha0, alphai_abssum, epsilon)
-    #print(multiplier, alpha0s[o], alphai_abssum, epsilon)
+        alpha0s[o] = rectify_alpha0(params[o][0])
+        minprob = _np.min(probs[o])
+        maxprob = _np.max(probs[o])
+        if minprob < epsilon:
+            # Find the multipler such that alpha0 + min(probs-alpha0) * multipler = epsilon
+            if minprob - alpha0s[o] < 0:
+                newmultiplier = (epsilon - alpha0s[o]) / (minprob - alpha0s[o])
+                multiplier = min(multiplier, newmultiplier)
+
+        if maxprob > 1 - epsilon:
+            # Find the multipler such that alpha0 + max(probs-alpha0) * multipler = 1 - epsilon
+            if maxprob - alpha0s[o] > 0:
+                newmultiplier = (1 - epsilon - alpha0s[o]) / (maxprob - alpha0s[o])
+                multiplier = min(multiplier, newmultiplier)
 
     if multiplier < 1:
         shape = (len(probtrajectory.outcomes) - 1, len(probtrajectory.hyperparameters))
@@ -444,8 +456,9 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
         compparameters = compparameters.flatten()
         comppt = probtrajectory.copy()
         comppt.set_parameters_from_list(list(compparameters))
-        #print(True, multiplier)
+        print(True, multiplier)
 
         return comppt, True
+
     else:
         return probtrajectory, False
