@@ -63,26 +63,26 @@ def do_stability_analysis(ds, significance=0.05, transform='auto', marginalize='
 
     return results
 
+# future
+# def do_time_resolved_rb(ds, timeslices='auto', significance=0.05, transform='auto', constnumtimes='auto',
+#                         frequencies='auto', freqpointers={}, freqtest=None, estimator='auto', verbosity=1):
+#     """
+#     Implements a time-resolved randomized benchmarking (RB) analysis, on time-series RB data. This data can
+#     be from any form of RB in which the observed sucess/survial probability is fit to the standard
+#     exponential form Pm = A + Bp^m.
 
-def do_time_resolved_rb(ds, timeslices='auto', significance=0.05, transform='auto', constnumtimes='auto',
-                        frequencies='auto', freqpointers={}, freqtest=None, estimator='auto', verbosity=1):
-    """
-    Implements a time-resolved randomized benchmarking (RB) analysis, on time-series RB data. This data can
-    be from any form of RB in which the observed sucess/survial probability is fit to the standard
-    exponential form Pm = A + Bp^m.
+#     """
+#     mergeoutcomes = todo
+#     trrb_tests = ((),)
+#     trrb_inclass_correction = {}
+#     trrb_modelselector = ('default', ((),))
 
-    """
-    mergeoutcomes = todo
-    trrb_tests = ((),)
-    trrb_inclass_correction = {}
-    trrb_modelselector = ('default', ((),))
-
-    stabilityanalyzer = do_stability_analysis(ds, significance=significance, transform=transform,
-                                              mergeoutcomes=rb_mergeoutcomes, constnumtimes=constnumtimes, ids=True,
-                                              frequencies=frequencies, freqpointers=freqpointers, freqstest=freqtest,
-                                              tests=trrb_tests, inclass_correction=trrb_inclass_correction,
-                                              betweenclass_weighting='auto', estimator=estimator,
-                                              modelselector=trrb_modelselector, verbosity=verbosity - 1)
+#     stabilityanalyzer = do_stability_analysis(ds, significance=significance, transform=transform,
+#                                               mergeoutcomes=rb_mergeoutcomes, constnumtimes=constnumtimes, ids=True,
+#                                               frequencies=frequencies, freqpointers=freqpointers, freqstest=freqtest,
+#                                               tests=trrb_tests, inclass_correction=trrb_inclass_correction,
+#                                               betweenclass_weighting='auto', estimator=estimator,
+#                                               modelselector=trrb_modelselector, verbosity=verbosity - 1)
 
 
-    return None
+#     return None

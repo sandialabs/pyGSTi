@@ -388,9 +388,11 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
         are already satisfied, `multipler` is unchanged. Otherwise it
         this function returns the maximum `multipler` such that this holds,
         i.e., the `multipler` that satisfies at least one of these conditions
-        as an equality.
+        as an equality. If b = 0 then the input multipler is returned.
 
         """
+        if b <= 0: return multipler
+
         if a - (b * multipler) < epsilon:
             multipler = (a - epsilon) / b
         if a + (b * multipler) > 1 - epsilon:
@@ -398,30 +400,51 @@ def amplitude_compression(probtrajectory, epsilon=0., verbosity=1):
 
         return multipler
 
+    def rectify_alpha0(alpha0):
+
+        if alpha0 > 1:
+            assert(abs(alpha0 - 1) < 1e-6), "The mean of each trajectory must be within [0,1]!"
+            return 1
+
+        elif alpha0 < 0:
+            assert(abs(alpha0 - 0) < 1e-6), "The mean of each trajectory must be within [0,1]!"
+            return 0
+
+        else:
+            return alpha0
+
     multiplier = 1
 
     alphassum = _np.zeros(len(probtrajectory.hyperparameters), float)
+    alpha0s = {}
 
     for o in probtrajectory.outcomes[:-1]:
         alphas = probtrajectory.parameters[o]
-        alpha0 = alphas[0]
+        alphas[0] = rectify_alpha0(alphas[0])
+        # Store the rectified alpha0, to set in the trajectory later.
+        alpha0s[o] = alphas[0]
         alphai_abssum = _np.sum(abs(_np.array(alphas[1:])))
-        multiplier = update_multiplier(multiplier, alpha0, alphai_abssum, epsilon)
-
+        #print(multiplier, alpha0s[o], alphai_abssum, epsilon)
+        multiplier = update_multiplier(multiplier, alpha0s[o], alphai_abssum, epsilon)
+        #print(multiplier, alpha0s[o], alphai_abssum, epsilon)
         alphassum += _np.array(alphas)
 
     alpha0 = 1 - alphassum[0]
     alphai_abssum = _np.sum(abs(-_np.array(alphassum[1:])))
     multiplier = update_multiplier(multiplier, alpha0, alphai_abssum, epsilon)
+    #print(multiplier, alpha0s[o], alphai_abssum, epsilon)
 
     if multiplier < 1:
         shape = (len(probtrajectory.outcomes) - 1, len(probtrajectory.hyperparameters))
         parameters = _np.reshape(probtrajectory.get_parameters_as_list(), shape)
         compparameters = multiplier * parameters
-        compparameters[:, 0] = parameters[:, 0]
+        # set the alpha0s as unchanged, except if rectified:
+        for ind, o in enumerate(probtrajectory.outcomes[:-1]):
+            compparameters[ind, 0] = alpha0s[o]
         compparameters = compparameters.flatten()
         comppt = probtrajectory.copy()
-        comppt.set_parameters_from_list(compparameters)
+        comppt.set_parameters_from_list(list(compparameters))
+        #print(True, multiplier)
 
         return comppt, True
     else:

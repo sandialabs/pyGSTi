@@ -21,6 +21,7 @@ from ...report import autotitle as _autotitle
 from ...tools import timed_block as _timed_block
 
 from . import signal as _sig
+from . import stabilityanalyzer as _sa
 
 import plotly.graph_objs as go
 import seaborn as _sns
@@ -28,35 +29,59 @@ import seaborn as _sns
 
 class DriftSummaryTable(_ws.WorkspaceTable):
     """
-    TODO: docstrings in this entire module
+    todo
     """
 
-    def __init__(self, ws, stabilityanalyzer):
-        super(DriftSummaryTable, self).__init__(ws, self._create, stabilityanalyzer)
+    def __init__(self, ws, stabilityanalyzer, dskey=None, detectorkey=None, estimatekey=None):
+        """
+        todo
+        """
+        super(DriftSummaryTable, self).__init__(ws, self._create, stabilityanalyzer, dskey, detectorkey, estimatekey)
 
-    def _create(self, stabilityanalyzer):
+    def _create(self, stabilityanalyzer, dskey, detectorkey, estimatekey):
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
-        table.addrow(['Instability detected', stabilityanalyzer.instability_detected()], [None, None])
+        table.addrow(['Global statistical significance level', stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
+        table.addrow(['Instability detected', stabilityanalyzer.instability_detected(detectorkey=detectorkey)], [None, None])
+        table.addrow(['Instability size (maxmaxtvd)', stabilityanalyzer.get_maxmax_tvd(dskey=dskey, estimatekey=estimatekey)], [None, None])
+        table.finish()
+        return table
+
+
+class DriftDetailsTable(_ws.WorkspaceTable):
+    """
+    todo
+    """
+    def __init__(self, ws, stabilityanalyzer, detectorkey=None, estimatekey=None):
+        """
+        todo
+        """
+        super(DriftDetailsTable, self).__init__(ws, self._create, stabilityanalyzer, detectorkey, estimatekey)
+
+    def _create(self, stabilityanalyzer, detectorkey, estimatekey):
+        if detectorkey is None:
+            detectorkey = stabilityanalyzer._def_detection
+        if estimatekey is None:
+            estimatekey = stabilityanalyzer._def_probtrajectories
+        colHeadings = ['', '', ]
+        table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
+        table.addrow(['Transform', stabilityanalyzer.transform], [None, None])
+        table.addrow(['Single detector in the results', len(stabilityanalyzer._driftdetectors) == 1], [None, None])
+        table.addrow(['Name of detector', detectorkey], [None, None])
+        table.addrow(['Tests run for detector', str(stabilityanalyzer._condtests)], [None, None])
+        table.addrow(['Type of estimator', str(estimatekey)], [None, None])
         table.finish()
         return table
 
 
 class PowerSpectraPlot(_ws.WorkspacePlot):
-    """ Plot of time-series data power spectrum """
-
+    """
+    Plot of time-series data power spectrum
+    """
     def __init__(self, ws, stabilityanalyzer, spectrumlabel={}, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
-        Plot RB decay curve, as a function of sequence length.  Optionally
-        includes a fitted exponential decay.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        None
+        todo
         """
         super(PowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer,
                                                spectrumlabel, detectorkey, showlegend, scale)
@@ -186,20 +211,14 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         return  _reportfigure.ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)
 
 class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
-    """ Plot of time-series data power spectrum """
+    """ 
+    Plot of time-series data power spectrum 
+    """
 
     def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, dskey=None, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
-        Plot RB decay curve, as a function of sequence length.  Optionally
-        includes a fitted exponential decay.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        None
+        todo
         """
         super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas, dskey,
                                                            detectorkey, showlegend, scale)
@@ -235,10 +254,12 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
 
 
 class ProbTrajectoriesPlot(_ws.WorkspacePlot):
-    """ Plot of time-series data power spectrum """
-
+    """ 
+    todo
+    """
     def __init__(self, ws, stabilityanalyzer, circuits, outcome, times=None, dskey=None, estimatekey=None, estimator=None, showlegend=True, scale=1.0):
         """
+        todo
         """
         super(ProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, outcome,
                                                         times, dskey, estimatekey, estimator, showlegend, scale)
@@ -365,10 +386,14 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
 
 
 class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
-
+    """
+    todo
+    """
     def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None, estimatekey=None,
                  estimator=None, showlegend=False, scale=1.0):
         """
+        todo
+
         gss : CircuitStructure
             Specifies the set of operation sequences along with their structure, e.g. fiducials, germs,
             and maximum lengths.
@@ -450,7 +475,9 @@ def _create_switchboard(ws, results_dict):
     return switchBd, dataset_labels
 
 def _create_drift_switchboard(ws, results, gss):
-
+    """
+    todo
+    """
     if len(results.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
             ["Dataset", "Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)], 
@@ -487,6 +514,9 @@ def create_drift_report(results, gss, filename, title="auto",
     """
     Creates a Drift report.
     """
+    assert(isinstance(results, _sa.StabilityAnalyzer)), "Support for multiple results as a Dict is not yet included!"
+    singleresults = results
+
     tStart = _time.time()
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
 
@@ -524,10 +554,14 @@ def create_drift_report(results, gss, filename, title="auto",
     drift_switchBd = _create_drift_switchboard(ws, results, gss)
     qtys = {}  # stores strings to be inserted into report template
     qtys['drift_switchBd'] = drift_switchBd
+    
+    # Sets whether or not the dataset key is a switchboard or not.
     if len(results.data.keys()) > 1:
        dskey = drift_switchBd.dataset
+       arb_dskey = list(singleresults.data.keys())[0]
     else:
-       dskey = list(results.data.keys())[0]
+       dskey = list(singleresults.data.keys())[0]
+       arb_dskey = dskey
 
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
@@ -561,14 +595,15 @@ def create_drift_report(results, gss, filename, title="auto",
     results = switchBd.results
     A = None  # no brevity restriction: always display
 
-
-    #ADD TABLES HERE
-    addqty(A, 'driftSummaryTable', ws.DriftSummaryTable, results)
+    addqty(A, 'driftSummaryTable', ws.DriftSummaryTable, results, dskey)
+    addqty(A, 'driftDetailsTable', ws.DriftDetailsTable, results)
 
     # Generate plots
     printer.log("*** Generating plots ***")
-    # The power spectrum averaged over circuits and outcomes, but not datasets (that's not always permissable)
-    addqty(A, 'GlobalPowerSpectraPlot', ws.PowerSpectraPlot, results, {'dataset': dskey})
+    # If we are allowed to average power spectra, because they have the same frequencies.
+    if singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1):
+        # The power spectrum averaged over circuits and outcomes, but not datasets
+        addqty(A, 'GlobalPowerSpectraPlot', ws.PowerSpectraPlot, results, {'dataset': dskey})
     # The power spectrum for each length with a germ-fiducial pairing (averaged over outcomes).
     addqty(A, 'GermFiducialPowerSpectraPlot', ws.GermFiducialPowerSpectraPlot, results, gss,
            drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, dskey,

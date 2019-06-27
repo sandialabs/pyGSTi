@@ -333,6 +333,7 @@ class Workspace(object):
 
         from ..extras.drift import driftreport as _driftrpt
         self.DriftSummaryTable = makefactory(_driftrpt.DriftSummaryTable)
+        self.DriftDetailsTable = makefactory(_driftrpt.DriftDetailsTable)
         self.PowerSpectraPlot = makefactory(_driftrpt.PowerSpectraPlot)
         self.ProbTrajectoriesPlot = makefactory(_driftrpt.ProbTrajectoriesPlot)
         self.GermFiducialProbTrajectoriesPlot = makefactory(_driftrpt.GermFiducialProbTrajectoriesPlot)

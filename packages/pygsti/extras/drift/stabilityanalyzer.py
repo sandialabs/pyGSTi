@@ -1356,7 +1356,7 @@ class StabilityAnalyzer(object):
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
         # Gets the drift indices, that we then jut need to convert to frequencies.
-        freqind = self.get_instability_indices(dictlabel={}, detectorkey=detectorkey)
+        freqind = self.get_instability_indices(dictlabel=dictlabel, detectorkey=detectorkey)
         # If this is for a particular circuit, find the circuit index for that circuit.
         if 'circuit' in dictlabel.keys():
             circuitindex = self._index('circuit', dictlabel['circuit'])
@@ -1422,7 +1422,7 @@ class StabilityAnalyzer(object):
         else:
             return self._driftdetected_class[detectorkey][test]
 
-    def do_instability_characterization(self, estimator='mle', modelselector=(None, None), default=True, verbosity=1):
+    def do_instability_characterization(self, estimator='auto', modelselector=(None, None), default=True, verbosity=1):
         """
         docstringtodo.
 
@@ -1486,7 +1486,6 @@ class StabilityAnalyzer(object):
                     # Add in the zero frequency, as it's a hyperparameter of the model
                     freqs = list(freqs)
                     freqs.insert(0, 0)
-
                     # If there is more than just the DC mode there is something non-trivial to do.
                     if len(freqs) > 0:
 
@@ -1498,16 +1497,14 @@ class StabilityAnalyzer(object):
                         timestep = _np.mean(_np.diff(times))
                         numtimes = len(times)
                         # Creates the "raw" filter model, where we've set all non-sig frequencies to zero.
-                        filterptraj = _ptraj.CosineProbTrajectory(outcomes, freqs, parameters,
-                                                                         starttime=starttime, timestep=timestep,
-                                                                         numtimes=numtimes)
+                        filterptraj = _ptraj.CosineProbTrajectory(outcomes, freqs, parameters, starttime=starttime,
+                                                                  timestep=timestep, numtimes=numtimes)
                         # Converts to the "damped" estimator, where amplitudes are reduced to guarantee valid prob.
                         filterptraj, flag = _ptraj.amplitude_compression(filterptraj)
                         # Records this estimate.
                         self._probtrajectories[i, j][detectorkey, test, 'filter'] = filterptraj
 
                         if estimator == 'mle':
-
                             maxlptraj = _ptraj.maxlikelihood(filterptraj, clickstreams, times, verbosity=verbosity - 1)
                             self._probtrajectories[i, j][detectorkey, test, 'mle'] = maxlptraj
 
@@ -1575,3 +1572,20 @@ class StabilityAnalyzer(object):
         maxtvd = 0.5 * summed_abs_amps
 
         return maxtvd
+
+    def get_maxmax_tvd(self, dskey=None, estimatekey=None, estimator=None):
+        """
+        todo
+
+        """
+        if dskey is None:
+            assert(len(self.data.keys()) == 1), "There are multiple datasets, so need a dataset key, as the input `dskey`!"
+            dskey = list(self.data.keys())[0]
+
+        maxtvds = []
+        for circuit in self.data[dskey].keys():
+            maxtvds.append(self.get_max_tvd(circuit, dskey=dskey, estimatekey=estimatekey, estimator=estimator))
+
+        maxmaxtvd = _np.max(maxtvds)
+
+        return maxmaxtvd

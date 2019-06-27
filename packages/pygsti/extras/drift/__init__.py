@@ -15,3 +15,4 @@ from .stabilityanalyzer import StabilityAnalyzer
 from . import driftreport as report
 from . import signal
 from . import probtrajectory
+from . import trmodel
