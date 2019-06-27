@@ -89,7 +89,7 @@ class DriftTestCase(BaseTestCase):
         assert(drift.probtrajectory.negloglikelihood(ptdctmax, clickstream, times) <= drift.probtrajectory.negloglikelihood(ptdct, clickstream, times))
 
         ptdct_invalid = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5,0.5],'1':[0.2,0.5],}, 0, 0.1, 1000)
-        pt, check = drift.probtrajectory.amplitude_compression(ptdct_invalid)
+        pt, check = drift.probtrajectory.amplitude_compression(ptdct_invalid, np.linspace(0,1000,2000))
         assert(check)
         params = pt.get_parameters() 
         assert(np.allclose(params['0'] , np.array([0.5 , 0.15])))
