@@ -1829,7 +1829,7 @@ class Circuit(object):
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func, self.line_labels))
-        return Circuit([l.map_state_space_labels(mapper_func) for l in self._labels],
+        return Circuit([l.map_state_space_labels(mapper_func) for l in self.tup],
                        mapped_line_labels, None, not self._static)
 
     def reorder_lines(self, order):
