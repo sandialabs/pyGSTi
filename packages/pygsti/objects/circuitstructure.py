@@ -517,7 +517,7 @@ class LsGermsStructure(CircuitStructure):
             p.simplify_circuits(None)  # just marks as "simplified"
             return p
 
-    def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
+    def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None, seqs=None):
         """
         Truncate this operation sequence structure to a subset of its current strings.
 
@@ -533,6 +533,9 @@ class LsGermsStructure(CircuitStructure):
             The (Circuit) preparation and effect fiducial sequences to keep.
             If None, then all are kept.
 
+        seqs : list
+            Keep only sequences present in this list of Circuit objects.
+
         Returns
         -------
         LsGermsStructure
@@ -544,12 +547,21 @@ class LsGermsStructure(CircuitStructure):
         cpy = LsGermsStructure(Ls, germs, prepStrs,
                                effectStrs, self.aliases, self.sequenceRules)
 
-        iPreps = [i for i, prepStr in enumerate(self.prepStrs) if prepStr in prepStrs]
-        iEffects = [i for i, eStr in enumerate(self.effectStrs) if eStr in effectStrs]
-        fidpairs = list(_itertools.product(iPreps, iEffects))
+        #OLD iPreps = [i for i, prepStr in enumerate(self.prepStrs) if prepStr in prepStrs]
+        #OLD iEffects = [i for i, eStr in enumerate(self.effectStrs) if eStr in effectStrs]
+        #OLD fidpairs = list(_itertools.product(iPreps, iEffects))
+        all_fidpairs = list(_itertools.product(list(range(len(prepStrs))), list(range(len(effectStrs)))))
 
         for (L, germ), plaq in self._plaquettes.items():
             basestr = plaq.base
+            if seqs is None:
+                fidpairs = all_fidpairs
+            else:
+                fidpairs = []
+                for i, j in all_fidpairs:
+                    if prepStrs[i] + basestr + effectStrs[j] in seqs:
+                        fidpairs.append((i, j))
+
             if (L in Ls) and (germ in germs):
                 cpy.add_plaquette(basestr, L, germ, fidpairs)
 
