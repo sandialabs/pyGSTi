@@ -2533,6 +2533,34 @@ class Circuit(object):
     def __repr__(self):
         return "Circuit(%s)" % self.str
 
+    def display_str(self, width=80):
+        ret = ""
+        circuit_string = str(self).strip()  # get rid of trailing newline
+        line_strings = circuit_string.split('\n')
+        nLines = len(line_strings)  # e.g., number of qubits
+        lineLen = len(line_strings[0])
+        assert(nLines == self.number_of_lines())  # this is assumed...
+        assert(all([len(linestr) == lineLen for linestr in line_strings]))  # assume all lines have same length
+
+        iSegment = iStart = iEnd = 0
+        while(iEnd < lineLen):
+            iStart = iEnd  # start from our last ending point
+            prefix = "" if iSegment == 0 else " >>> "
+            usable_width = width - len(prefix)
+            if iStart + usable_width > lineLen:
+                iEnd = lineLen
+            elif '-' not in line_strings[0][iStart:iStart + usable_width]:
+                iEnd = iStart + usable_width
+            else:
+                iEnd = iStart + line_strings[0][iStart:iStart + usable_width].rfind('-')
+
+            for iLine in range(nLines):
+                ret += prefix + line_strings[iLine][iStart:iEnd] + "\n"
+            ret += "\n"
+            iSegment += 1
+
+        return ret
+
     def _print_labelinfo(self):
         """A useful debug routine for printing the internal label structure of a circuit"""
         def plbl(x, lit):
