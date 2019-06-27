@@ -183,23 +183,6 @@ Gx^4 0.2 100
         if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
 
-    def test_gram(self):
-        ds = pygsti.objects.DataSet(outcomeLabels=[('0',),('1',)])
-        ds.add_count_dict( ('Gx','Gx'), {('0',): 40, ('1',): 60} )
-        ds.add_count_dict( ('Gx','Gy'), {('0',): 40, ('1',): 60} )
-        ds.add_count_dict( ('Gy','Gx'), {('0',): 40, ('1',): 60} )
-        ds.add_count_dict( ('Gy','Gy'), {('0',): 40, ('1',): 60} )
-        ds.done_adding_data()
-
-        basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
-        self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
-
-        model = pygsti.construction.build_explicit_model([('Q0',)],['Gx','Gy'],
-                                                     [ "X(pi/4,Q0)", "Y(pi/4,Q0)"])
-        rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds, model)
-        self.assertEqual(rank, 1)
-
-
     def test_multi_dataset(self):
         multi_dataset_txt = \
 """## Columns = DS0 0 count, DS0 1 count, DS1 0 frequency, DS1 count total
@@ -353,42 +336,7 @@ Gx^4 20 80 0.2 100
         #Finally, add a dataset w/reps to a multidataset without them
         mdsNoReps.add_dataset('DSwReps', mds2['ds1'])
 
-    def test_collisionAction(self):
-        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'], collisionAction="keepseparate")
-        ds.add_count_dict( ('Gx','Gx'), {'0':10, '1':90} )
-        ds.add_count_dict( ('Gx','Gy'), {'0':20, '1':80} )
-        ds.add_count_dict( ('Gx','Gx'), {'0':30, '1':70} ) # a duplicate
-        self.assertEqual( ds.keys(), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','#1') ] )
-        self.assertEqual( ds.keys(stripOccurrenceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
-
-        ds.set_row( ('Gx','Gx'), {'0': 5, '1': 95}, occurrence=1 ) #test set_row with occurrence arg
-
-
     def test_tddataset_construction(self):
-
-        #Create an empty dataset
-        #(Tests done_adding_data without adding any data)
-        dsEmpty = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        dsEmpty.done_adding_data()
-
-        #Create an empty dataset and add data
-        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        ds.add_raw_series_data( ('Gx',), #gate sequence
-                            ['0','0','1','0','1','0','1','1','1','0'], #spam labels
-                            [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], #time stamps
-                            None) #no repeats
-
-        with self.assertRaises(ValueError):
-            ds[('Gx',)].scale(2.0) # can't scale a dataset without repeat counts
-
-        oli = collections.OrderedDict([('0',0), ('1',1)])
-        ds2 = pygsti.objects.DataSet(outcomeLabelIndices=oli)
-        ds2.add_raw_series_data( ('Gy',),  #gate sequence
-                             ['0','1'], #spam labels
-                             [0.0, 1.0], #time stamps
-                             [3,7]) #repeats
-
-
         #Create a non-static already initialized dataset
         circuits = pygsti.construction.circuit_list([('Gx',), ('Gy','Gx')])
         gatestringIndices = collections.OrderedDict([ (mdl,i) for i,mdl in enumerate(circuits)])
@@ -422,18 +370,6 @@ Gx^4 20 80 0.2 100
                                       None, oli, bStatic=True) #provide spam label index dict instead of list
         ds = pygsti.objects.DataSet(oliData, timeData, None, None, gatestringIndices,
                                       None, oli, bStatic=True) #no rep data is OK - just assumes 1
-
-        with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(oliData, timeData, repData, circuits, None,
-                                     ['0','1'], None,  bStatic=True) # NEEDS gatestringIndices b/c static
-
-        with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(circuitIndices=gatestringIndices,
-                                     outcomeLabelIndices=oli, bStatic=True) #must specify data when creating a static dataset
-
-        #with self.assertRaises(ValueError):
-        pygsti.objects.DataSet() #OK now: no longer need at least outcomeLabels or outcomeLabelIndices
-
 
         #Test loading a static set from a saved file
         ds.save(temp_files + "/test_tddataset.saved")
@@ -503,65 +439,8 @@ Gx^4 20 80 0.2 100
         printInfo(ds, ('Gx',) )
         printInfo(ds, ('Gy',) )
 
-        with self.assertRaises(ValueError):
-            ds[('Gx',)].outcomes = ['x','x'] #can't assign outcomes
-
-        dsScaled = ds.copy()
-        for row in dsScaled.values():
-            row.scale(3.141592) # so counts are no longer intergers
-        printInfo(dsScaled, ('Gx',) ) #triggers rounding warnings
-        dsScaled.done_adding_data()
-        printInfo(dsScaled, ('Gx',) ) # (static case)
-
         ds.done_adding_data()
         dsNoReps.done_adding_data()
-
-        #Setting data while static is not allowed
-        #with self.assertRaises(ValueError):
-        #    ds[('Gx',)][0] = ('1',0.1,1) #this is OK b/c doesn't add data...
-        with self.assertRaises(ValueError):
-            ds.add_raw_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
-        with self.assertRaises(ValueError):
-            ds.add_series_from_dataset(ds) #can't add to a static dataset
-        with self.assertRaises(ValueError):
-            dsNoReps.build_repetition_counts() #not allowed on static dataset
-
-        #test contents
-        self.assertTrue( ('Gx',) in ds)
-        self.assertTrue( ('Gx',) in ds.keys())
-        self.assertEqual( list(ds.get_outcome_labels()), [('0',),('1',)] )
-        self.assertEqual( list(ds.get_gate_labels()), ['Gx','Gy'] )
-
-        #Check degrees of freedom
-        ds.get_degrees_of_freedom()
-        ds.get_degrees_of_freedom( [('Gx',)] )
-        dsNoReps.get_degrees_of_freedom()
-        dsNoReps.get_degrees_of_freedom( [('Gx',)] )
-        dsScaled.get_degrees_of_freedom()
-        dsScaled.get_degrees_of_freedom( [('Gx',)] )
-
-
-        #test iteration
-        for opstr,dsRow in ds.items():
-            print(opstr, dsRow)
-            dsRow2 = ds[opstr]
-            spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
-            for spamLblIndex, timestamp, reps in dsRow: # or iterate over
-                print(spamLblIndex, timestamp, reps)
-        for dsRow in ds.values():
-            print(dsRow)
-
-        for opstr,dsRow in dsNoReps.items():
-            print(opstr, dsRow)
-            dsRow2 = dsNoReps[opstr]
-            spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
-            for spamLblIndex, timestamp, reps in dsRow: # or iterate over
-                print(spamLblIndex, timestamp, reps)
-        for dsRow in dsNoReps.values():
-            print(dsRow)
-
-
-        #Later: add_series_from_dataset(otherTDDataSet)
 
         print("Whole thing:")
         print(ds)
@@ -571,10 +450,6 @@ Gx^4 20 80 0.2 100
         dsWritable.add_raw_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
         dsWritable.add_series_from_dataset(ds)
 
-
-        dsWritable2 = dsWritable.copy_nonstatic()
-         #test copy_nonstatic on already non-static dataset
-
         #Pickle and unpickle
         with open(temp_files + '/tddataset.pickle', 'wb') as datasetfile:
             pickle.dump(ds, datasetfile)
@@ -582,33 +457,6 @@ Gx^4 20 80 0.2 100
         with open(temp_files + '/tddataset.pickle', 'rb') as datasetfile:
             ds_from_pkl = pickle.load(datasetfile)
 
-        # LATER: Invoke the DataSet constructor other ways
-
-        #Test truncation
-        dsWritable.truncate( [('Gx',),('Gy',)] ) #non-static
-        ds.truncate( [('Gx',),('Gy',)] ) #static
-        dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="warn" ) #non-static
-        ds.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="ignore" ) #static
-        with self.assertRaises(KeyError):
-            dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="raise" ) #Gz is missing
-        with self.assertRaises(KeyError):
-            ds.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="raise" ) #Gz is missing
-
-        #Test time slicing
-        print("Before [1,2) time slice")
-        print(ds)
-        ds_slice = ds.time_slice(1.0,2.0)
-        ds_empty_slice = ds.time_slice(100.0,101.0)
-        ds_slice2 = dsNoReps.time_slice(1.0,2.0)
-        print("Time slice:")
-        print(ds_slice)
-        ds_slice = ds.time_slice(1.0,2.0,aggregateToTime=0.0)
-        print("Time slice (aggregated to t=0):")
-        print(ds_slice)
-
-        #test copy
-        dsWritable_copy = dsWritable.copy() #non-static
-        ds_copy = ds.copy() #static
 
         #Loading and saving
         ds.save(temp_files + "/nonstatic_tddataset.saved")
@@ -630,13 +478,6 @@ Gx^4 20 80 0.2 100
         dsWritable.load(temp_files + "/static_tddataset.saved.gz")
         with open(temp_files + "/static_tddataset.stream","rb") as streamfile:
             dsWritable.load(streamfile)
-
-        #Test various other methods
-        nStrs = len(ds)
-        #Remove these test for now since TravisCI scipy doesn't like to interpolate
-        #ds.compute_fourier_filtering(verbosity=5)
-        #dsT = ds.create_dataset_at_time(0.2)
-        #dsT2 = ds.create_dataset_from_time_range(0,0.3)
 
     def test_deprecated_dataset(self):
         with open(compare_files + '/deprecated.dataset', 'rb') as datasetfile:
@@ -710,51 +551,6 @@ Gx^4 20 80
         self.assertEqual(ds[('Gx','Gy')].aux, {"can be": "anything", "allowed in": "a python dict", 4: {"example": "this"}})
         self.assertEqual(ds[('Gx',)].aux, { (3,4): "value" })
         self.assertEqual(ds[('Gx','Gx','Gx','Gx')].aux, {})
-
-
-
-
-#OLD
-#    def test_intermediate_measurements(self):
-#        mdl = std.target_model().depolarize(op_noise=0.05, spam_noise=0.1)
-#        E = mdl.povms['Mdefault']['0']
-#        Erem = mdl.povms['Mdefault']['1']
-#        mdl.operations['Gmz_0'] = np.dot(E,E.T)
-#        mdl.operations['Gmz_1'] = np.dot(Erem,Erem.T)
-#        #print(mdl['Gmz_0'] + mdl['Gmz_1'])
-#
-#        circuit_list = pygsti.construction.circuit_list([
-#            (),
-#            ('Zmeas',),
-#            ('Gx','Zmeas')
-#        ])
-#
-#        ds_gen = pygsti.construction.generate_fake_data(mdl, circuit_list, nSamples=100,
-#                                                        sampleError="multinomial", seed=0,
-#                                                        measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
-#        #Test copy operations
-#        ds_gen2 = ds_gen.copy()
-#        ds_gen3 = ds_gen.copy_nonstatic()
-#
-#        #create manually so no randomness
-#        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'],
-#                                    measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
-#        ds.add_count_list( (), [10,90] )
-#        ds.add_count_list( ('Gmz_0',), [9,1] )
-#        ds.add_count_list( ('Gmz_1',), [9,81] )
-#        ds.add_count_list( ('Gx','Gmz_0'), [37,4] )
-#        ds.add_count_list( ('Gx','Gmz_1'), [5,54] )
-#        ds.done_adding_data()
-#
-#        self.assertAlmostEqual( ds[('Gmz_0',)].fraction('0'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
-#        self.assertAlmostEqual( ds[('Gx','Gmz_1')].fraction('1'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
-#
-#        ds[('Gmz_0',)]['0'] = 20
-#        self.assertEqual(ds[('Gmz_0',)]['0'], 20)
-#        self.assertEqual(ds[('Gmz_0',)].total, (20.0 + 1.0 + 9.0 + 81.0) )
-#        ds[('Gmz_0',)].scale(0.5)
-#        self.assertEqual(ds[('Gmz_0',)]['0'], 10)
-#        self.assertEqual(ds[('Gmz_0',)].total, (10.0 + 0.5 + 9.0 + 81.0) )
 
 
 
