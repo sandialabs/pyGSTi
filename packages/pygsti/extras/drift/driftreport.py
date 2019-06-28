@@ -60,7 +60,7 @@ class DriftSummaryTable(_ws.WorkspaceTable):
                       stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
         table.addrow(['Instability detected', stabilityanalyzer.instability_detected(
             detectorkey=detectorkey)], [None, None])
-        table.addrow(['Instability size (maxmaxtvd)', stabilityanalyzer.get_maxmax_tvd(
+        table.addrow(['Instability size', stabilityanalyzer.get_maxmax_tvd_bound(
             dskey=dskey, estimatekey=estimatekey)], [None, None])
         table.finish()
         return table
@@ -87,8 +87,12 @@ class DriftDetailsTable(_ws.WorkspaceTable):
         table.addrow(['Transform', stabilityanalyzer.transform], [None, None])
         table.addrow(['Single detector in the results', len(stabilityanalyzer._driftdetectors) == 1], [None, None])
         table.addrow(['Name of detector', detectorkey], [None, None])
-        table.addrow(['Tests run for detector', str(stabilityanalyzer._condtests)], [None, None])
-        table.addrow(['Type of estimator', str(estimatekey)], [None, None])
+        string_condtestsrun = ''
+        for test in stabilityanalyzer._condtests[detectorkey]: string_condtestsrun += str(test) + ', '
+        string_estimatekey = ''
+        for detail in estimatekey: string_estimatekey += str(detail) + ', '
+        table.addrow(['Tests run for detector', string_condtestsrun], [None, None])
+        table.addrow(['Type of estimator', string_estimatekey], [None, None])
         table.finish()
         return table
 
@@ -522,7 +526,8 @@ def _create_drift_switchboard(ws, results, gss):
     """
     if len(results.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
-            ["Dataset", "Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
+            ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
+             "Outcome             "],
             [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
              [c.str for c in gss.effectStrs],
              [i.str for i in results.data.get_outcome_labels()]],
@@ -652,11 +657,11 @@ def create_drift_report(results, gss, filename, title="auto",
     # The power spectrum for each length with a germ-fiducial pairing (averaged over outcomes).
     addqty(A, 'GermFiducialPowerSpectraPlot', ws.GermFiducialPowerSpectraPlot, results, gss,
            drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, dskey,
-           None, False,)
+           None, True,)
     # The estimated probability trajectoris for each length with a germ-fiducial pairing.
     addqty(A, 'GermFiducialProbTrajectoriesPlot', ws.GermFiducialProbTrajectoriesPlot, results, gss,
            drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, drift_switchBd.outcomes, 1, None,
-           dskey)
+           dskey, None, None, True) 
     # The boxplot summarizing the evidence for drift in each circuit.
     addqty(A, 'driftdetectorColorBoxPlot', ws.ColorBoxPlot, 'driftdetector', gss, None, None, False, False, True, False,
            'compact', .05, 1e-4, None, None, results)

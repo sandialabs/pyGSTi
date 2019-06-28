@@ -1704,7 +1704,7 @@ class ColorBoxPlot(WorkspacePlot):
                     estimator = None
 
                 colormapType = "blueseq"
-                ytitle = "Total Variational Distance (TVD)"
+                ytitle = "Total Variational Distance (TVD) Bound"
                 mx_fn = _mx_fn_drifttvd  # use a *global* function so cache can tell it's the same
                 extra_arg = (stabilityanalyzer, estimatekey, estimator)
 

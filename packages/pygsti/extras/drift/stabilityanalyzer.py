@@ -1306,7 +1306,7 @@ class StabilityAnalyzer(object):
             if estimatekey is None:
                 estimatekey = self._def_probtrajectories
             for circuit in self.data[dskey].keys():
-                maxtvd = self.get_max_tvd(circuit, dskey=dskey, estimatekey=estimatekey, estimator=None)
+                maxtvd = self.get_max_tvd_bound(circuit, dskey=dskey, estimatekey=estimatekey, estimator=None)
                 if circuit in circuits.keys():
                     circuits[circuit] = (circuits[circuit], maxtvd)
                 else:
@@ -1560,7 +1560,7 @@ class StabilityAnalyzer(object):
 
         return probabilities
 
-    def get_max_tvd(self, circuit, dskey=None, estimatekey=None, estimator=None):
+    def get_max_tvd_bound(self, circuit, dskey=None, estimatekey=None, estimator=None):
         """
         todo
 
@@ -1579,7 +1579,7 @@ class StabilityAnalyzer(object):
 
         return maxtvd
 
-    def get_maxmax_tvd(self, dskey=None, estimatekey=None, estimator=None):
+    def get_maxmax_tvd_bound(self, dskey=None, estimatekey=None, estimator=None):
         """
         todo
 
@@ -1591,7 +1591,7 @@ class StabilityAnalyzer(object):
 
         maxtvds = []
         for circuit in self.data[dskey].keys():
-            maxtvds.append(self.get_max_tvd(circuit, dskey=dskey, estimatekey=estimatekey, estimator=estimator))
+            maxtvds.append(self.get_max_tvd_bound(circuit, dskey=dskey, estimatekey=estimatekey, estimator=estimator))
 
         maxmaxtvd = _np.max(maxtvds)
 
