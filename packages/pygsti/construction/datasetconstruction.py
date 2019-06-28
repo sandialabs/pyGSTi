@@ -313,7 +313,7 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
                     if count_dict[new_outcome] == 0:
                         del count_dict[new_outcome]
             count_dict_list.append(count_dict)
-    
+
         merged_dataset.add_series_data(key, count_dict_list, times, aux=dataset[key].aux)
 
     # Old code that doesn't work for time-series data.
@@ -403,7 +403,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
                    new_sectors=None, idle=((),), recordZeroCnts=True,
                    filtercircuits=True):
     """
-    Creates a DataSet is the restriction of `dataset`to the sectors 
+    Creates a DataSet is the restriction of `dataset`to the sectors
     identified by `sectors_to_keep`.
 
     More specifically, this function aggregates (sums) outcomes in `dataset`

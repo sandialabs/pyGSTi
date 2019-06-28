@@ -531,8 +531,9 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         effects = []
 
         if ELbls == "standard":
+            qubit_dim = 4  # 2 if evotype in ('statevec', 'stabilizer') else 4
             if stateSpaceLabels.num_tensor_prod_blocks() == 1 and \
-               all([ldim == 2 for ldim in stateSpaceLabels.tensor_product_block_dims(0)]):
+               all([ldim == qubit_dim for ldim in stateSpaceLabels.tensor_product_block_dims(0)]):
                 # a single tensor product block comprised of qubits: '000', '001', etc.
                 nQubits = len(stateSpaceLabels.tensor_product_block_dims(0))
                 ELbls = [''.join(t) for t in _itertools.product(('0', '1'), repeat=nQubits)]
