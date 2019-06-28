@@ -158,11 +158,12 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         xlim = [-0.05 * xmax, xmax * 1.05]
 
         text = go.Scatter(x=[0.85 * (xlim[1] - xlim[0]) + xlim[0], 0.85 * (xlim[1] - xlim[0]) + xlim[0]],
-                          y=[threshold + 0.05 * (ylim[1] - ylim[0]) + ylim[0], 1 -
-                             0.05 * (ylim[1] - ylim[0]) + ylim[0]],
+                          y=[threshold + 0.05 * (ylim[1] - ylim[0]) + ylim[0],
+                             1 - 0.05 * (ylim[1] - ylim[0]) + ylim[0]],
                           # Todo.
-                          text=['{}% Significance Threshold'.format(stabilityanalyzer.get_statistical_significance(detectorkey) * 100),
-                                'Expected Shot-Noise Level'],
+                          text=['{}% Significance Threshold'.format(
+                              stabilityanalyzer.get_statistical_significance(detectorkey) * 100),
+                              'Expected Shot-Noise Level'],
                           mode='text',
                           showlegend=False
                           )
@@ -230,8 +231,8 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
         """
         todo
         """
-        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas, dskey,
-                                                           detectorkey, showlegend, scale)
+        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas,
+                                                           dskey, detectorkey, showlegend, scale)
 
     def _create(self, stabilityanalyzer, gss, prep, germ, meas, dskey, detectorkey, showlegend, scale):
 
@@ -243,15 +244,16 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
             meas = _Circuit(None, stringrep=meas)
 
         if dskey is None:
-            assert(len(stabilityanalyzer.data.keys()) == 1), "There is more than one DataSet, so must specify the `dskey`!"
+            assert(len(stabilityanalyzer.data.keys()) == 1), \
+                "There is more than one DataSet, so must specify the `dskey`!"
             dskey = list(stabilityanalyzer.data.keys())[0]
 
         prepind = gss.prepStrs.index(prep)
         measind = gss.prepStrs.index(meas)
         circuitdict = {}
 
-        numL = len(gss.Ls)
-        colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
+        #UNUSED: numL = len(gss.Ls)
+        #UNUSED: colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
         for Lind, L in enumerate(gss.Ls):
             for j, k, circuit in gss.get_plaquette(L, germ):
                 if j == prepind:
@@ -268,7 +270,8 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, circuits, outcome, times=None, dskey=None, estimatekey=None, estimator=None, showlegend=True, scale=1.0):
+    def __init__(self, ws, stabilityanalyzer, circuits, outcome, times=None, dskey=None, estimatekey=None,
+                 estimator=None, showlegend=True, scale=1.0):
         """
         todo
         """
@@ -284,8 +287,8 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
                 circuits = {c.str: c for c in circuits}
 
             if dskey is None:
-                assert(len(stabilityanalyzer.data.keys()) ==
-                       1), "There is more than one DataSet, so must specify the `dskey`!"
+                assert(len(stabilityanalyzer.data.keys()) == 1), \
+                    "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
 
             colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", len(circuits))]
@@ -331,8 +334,8 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             circuit = circuits
 
             if dskey is None:
-                assert(len(stabilityanalyzer.data.keys()) ==
-                       1), "There is more than one DataSet, so must specify the `dskey`!"
+                assert(len(stabilityanalyzer.data.keys()) == 1), \
+                    "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
             dtimes, data = stabilityanalyzer.data[dskey][circuit].get_timeseries_for_outcomes()
             if times is None:
@@ -405,8 +408,8 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None, estimatekey=None,
-                 estimator=None, showlegend=False, scale=1.0):
+    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None,
+                 estimatekey=None, estimator=None, showlegend=False, scale=1.0):
         """
         todo
 
@@ -414,10 +417,12 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             Specifies the set of operation sequences along with their structure, e.g. fiducials, germs,
             and maximum lengths.
         """
-        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times,
-                                                               dskey, estimatekey, estimator, showlegend, scale)
+        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ,
+                                                               meas, outcome, minL, times, dskey, estimatekey,
+                                                               estimator, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey, estimator, showlegend, scale):
+    def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey,
+                estimator, showlegend, scale):
 
         if isinstance(germ, str):
             germ = _Circuit(None, stringrep=germ)
@@ -436,10 +441,10 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             if L >= minL:
                 truncatedL.append(L)
 
-        numL = len(gss.Ls)
+        #numL = len(gss.Ls)
         for Lind, L in enumerate(gss.Ls):
             if L >= minL:
-                trace_pt = None
+                #trace_pt = None
                 for j, k, circuit in gss.get_plaquette(L, germ):
                     if j == prepind:
                         if k == measind:
@@ -497,10 +502,12 @@ def _create_drift_switchboard(ws, results, gss):
     """
     if len(results.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
-            ["Dataset", "Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
-                                                                                             [c.str for c in gss.effectStrs],
-                                                                                             [i.str for i in results.data.get_outcome_labels()]],
-            ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0], show=[True, True, True, True, True])
+            ["Dataset", "Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
+            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
+             [c.str for c in gss.effectStrs],
+             [i.str for i in results.data.get_outcome_labels()]],
+            ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
+            show=[True, True, True, True, True])
         drift_switchBd.add("dataset", (0,))
         drift_switchBd.add("germ", (1,))
         drift_switchBd.add("prep", (2,))
@@ -509,8 +516,9 @@ def _create_drift_switchboard(ws, results, gss):
 
     else:
         drift_switchBd = ws.Switchboard(
-            ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [[c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
-                                                                                  [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
+            ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
+            [[c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
+             [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
         drift_switchBd.add("prepStrs", (1,))
@@ -543,7 +551,7 @@ def create_drift_report(results, gss, filename, title="auto",
     connected = advancedOptions.get('connected', False)
     resizable = advancedOptions.get('resizable', True)
     autosize = advancedOptions.get('autosize', 'initial')
-    mdl_sim = advancedOptions.get('simulator', None)  # a model
+    #mdl_sim = advancedOptions.get('simulator', None)  # a model
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"

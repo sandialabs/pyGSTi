@@ -49,7 +49,8 @@ def do_stability_analysis(ds, significance=0.05, transform='auto', marginalize='
     if verbosity > 0: print(" - Running instability detection...", end='')
     if verbosity > 1: print('')
     results.do_instability_detection(significance=significance, freqstest=freqstest, tests=tests,
-                                     inclass_correction=inclass_correction, betweenclass_weighting=betweenclass_weighting,
+                                     inclass_correction=inclass_correction,
+                                     betweenclass_weighting=betweenclass_weighting,
                                      saveas='default', default=True, overwrite=False, verbosity=verbosity - 1)
     if verbosity == 1: print("done!")
 

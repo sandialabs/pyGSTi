@@ -353,8 +353,10 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         nll_seed = negloglikelihood(probtrajectory, clickstreams, times, 0, 1)
         nll_result_adj = negloglikelihood(maxlprobtrajectory, clickstreams, times, minp, maxp)
         nll_result = negloglikelihood(maxlprobtrajectory, clickstreams, times, 0, 1)
-        print("      - The negloglikelihood of the seed = {} (with boundard adjustment = {})".format(nll_seed, nll_seed_adj))
-        print("      - The negloglikelihood of the ouput = {} (with boundard adjustment = {})".format(nll_result, nll_result_adj))
+        print("      - The negloglikelihood of the seed = {} (with boundard adjustment = {})".format(
+            nll_seed, nll_seed_adj))
+        print("      - The negloglikelihood of the ouput = {} (with boundard adjustment = {})".format(
+            nll_result, nll_result_adj))
 
     if returnOptout:
         return maxlprobtrajectory, optout

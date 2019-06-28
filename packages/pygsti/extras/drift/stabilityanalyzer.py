@@ -499,8 +499,8 @@ class StabilityAnalyzer(object):
             mean time step and the number of times, and is a decent option when the time stamps are roughly
             equally spaced for each circuit.
 
-            todo: discuss unit. The units on these frequencies should be consistent with the units on the time stamps of the
-            data. E.g., if the times are in seconds then ... todo.
+            todo: discuss unit. The units on these frequencies should be consistent with the units on the time stamps
+            of the data. E.g., if the times are in seconds then ... todo.
 
         freqpointers : dict, optional
             Specifies which frequencies correspond to which power spectra. The keys are power spectra labels,
@@ -947,8 +947,8 @@ class StabilityAnalyzer(object):
 
         # future: some sort of warning if FWER is not being controlled?
 
-        # Remove duplicate tests (i.e., tests that are equivalent given the data structure) and condense the significance
-        # weighting so that no significance is wasted.
+        # Remove duplicate tests (i.e., tests that are equivalent given the data structure) and condense the
+        # significance weighting so that no significance is wasted.
         condtests, condbetweenclass_weighting = condense_tests(self._shape, tests, betweenclass_weighting)
 
         test_significance = {}
@@ -1080,10 +1080,10 @@ class StabilityAnalyzer(object):
                 #print(iterBenjHoch)
 
                 if verbosity > 1:
-                    print("      - Implementing {} Benjamini-Hockberg procedure statistical tests " +
-                          "each containing {} tests.".format(numBon, numBenjHoch))
-                    print("      - Local statistical significance for each Benjamini-Hockberg " +
-                          "procedure is {}".format(localsig))
+                    print(("      - Implementing {} Benjamini-Hockberg procedure statistical tests "
+                           "each containing {} tests.".format(numBon, numBenjHoch)))
+                    print(("      - Local statistical significance for each Benjamini-Hockberg "
+                           "procedure is {}".format(localsig)))
 
                 # Note that this is a "pseudo-threshold" with Benjamini-Hockberg in that it depends on the data.
                 if numBon > 1:
@@ -1527,7 +1527,8 @@ class StabilityAnalyzer(object):
         docstringtodo
         """
         if dskey is None:
-            assert(len(self.data.keys()) == 1), "There are multiple datasets, so need a dataset key, as the input `dskey`!"
+            assert(len(self.data.keys()) == 1), \
+                "There are multiple datasets, so need a dataset key, as the input `dskey`!"
             dskey = list(self.data.keys())[0]
 
         # Find the index for this dataset, circuit, and an arbitrary outcome.
@@ -1583,7 +1584,8 @@ class StabilityAnalyzer(object):
 
         """
         if dskey is None:
-            assert(len(self.data.keys()) == 1), "There are multiple datasets, so need a dataset key, as the input `dskey`!"
+            assert(len(self.data.keys()) == 1), \
+                "There are multiple datasets, so need a dataset key, as the input `dskey`!"
             dskey = list(self.data.keys())[0]
 
         maxtvds = []
