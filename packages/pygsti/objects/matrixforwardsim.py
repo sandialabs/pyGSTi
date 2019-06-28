@@ -106,7 +106,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             G = _np.identity(self.dim)
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.sos.get_operation(lOp).base
+                    opmx = self.sos.get_operation(lOp).todense()
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -127,7 +127,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         else:
             G = _np.identity(self.dim)
             for lOp in circuit:
-                G = _np.dot(self.sos.get_operation(lOp).base, G)  # product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.sos.get_operation(lOp).todense(), G)  # LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
     def _process_wrtFilter(self, wrtFilter, obj):
@@ -297,13 +297,13 @@ class MatrixForwardSimulator(ForwardSimulator):
         leftProds = []
         G = _np.identity(dim); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G, self.sos.get_operation(opLabel).base)
+            G = _np.dot(G, self.sos.get_operation(opLabel).todense())
             leftProds.append(G)
 
         rightProdsT = []
         G = _np.identity(dim); rightProdsT.append(_np.transpose(G))
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self.sos.get_operation(opLabel).base, G)
+            G = _np.dot(self.sos.get_operation(opLabel).todense(), G)
             rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
@@ -416,7 +416,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             prods[(i, i - 1)] = ident  # product of no gates
             G = ident
             for (j, opLabel2) in enumerate(revOpLabelList[i:], start=i):  # loop over "ending" gate (>= starting gate)
-                G = _np.dot(G, self.sos.get_operation(opLabel2).base)
+                G = _np.dot(G, self.sos.get_operation(opLabel2).todense())
                 prods[(i, j)] = G
         prods[(len(revOpLabelList), len(revOpLabelList) - 1)] = ident  # product of no gates
 
@@ -851,7 +851,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 prodCache[i] = _np.identity(dim)
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
-                gate = self.sos.get_operation(opLabel).base
+                gate = self.sos.get_operation(opLabel).todense()
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)

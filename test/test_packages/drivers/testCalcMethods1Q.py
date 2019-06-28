@@ -224,6 +224,34 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
+    def test_stdgst_prunedpath(self):
+        # Using term-based (path integral) calculation with path pruning
+        # This performs a map-based unitary evolution along each path.
+        cache = {}
+        target_model = std.target_model()
+        target_model.set_all_parameterizations("H+S terms")
+        target_model.set_simtype('termgap:3:0.05:0.001:True', cache)
+        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+                                              std.germs, self.maxLengths, verbosity=3)
+
+        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
+        #if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        #    pygsti.io.json.dump(results.estimates['default'].models['go0'],
+        #                        open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
+
+        print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 7, delta=1.0)
+        #mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_prunedpath.model"))
+
+        # Note: can't easily gauge opt b/c term-based models can't be converted to "full"
+
+        #A direct vector comparison works if python (&numpy?) versions are identical, but
+        # gauge freedoms make this incorrectly fail in other cases - so just check sigmas
+        #print("VEC DIFF = ",(results.estimates['default'].models['go0'].to_vector()
+        #                                       - mdl_compare.to_vector()))
+        #self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
+        #                                       - mdl_compare.to_vector()), 0, places=3)
+
 
     # ## GST using "reduced" models
     # Reduced, meaning that we use composed and embedded gates to form a more complex error model with
@@ -363,6 +391,22 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
+    def test_reducedmod_prunedpath_svterm_errogens(self):
+        cache = {}
+        target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+                                      sim_type="termgap:3:0.05:0.001:True", parameterization="H+S terms", errcomp_type='errorgens')
+        print("Num params = ",target_model.num_params())
+        target_model.from_vector(self.rand_start36)
+        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+
+        print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
+        #Note: we don't compare errorgens models to a reference model yet...
+
+        
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation

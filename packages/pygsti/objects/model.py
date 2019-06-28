@@ -619,9 +619,7 @@ class OpModel(Model):
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params() since the latter calls us!
         off = 0; shift = 0
-
-        #ellist = ", ".join(map(str,list(self.preps.keys()) +list(self.povms.keys()) +list(self.operations.keys())))
-        #print("DEBUG: rebuilding... %s" % ellist)
+        #print("DEBUG: rebuilding...")
 
         #Step 1: remove any unused indices from paramvec and shift accordingly
         used_gpindices = set()
@@ -654,6 +652,14 @@ class OpModel(Model):
                     obj.set_gpindices(new_inds, self, memo)
 
         # Step 2: add parameters that don't exist yet
+        #  Note that iteration order (that of _iter_parameterized_objs) determines
+        #  parameter index ordering, so "normally" an object that occurs before
+        #  another in the iteration order will have gpindices which are lower - and
+        #  when new indices are allocated we try to maintain this normal order by
+        #  inserting them at an appropriate place in the parameter vector.
+        #  off : holds the current point where new params should be inserted
+        #  shift : holds the amount existing parameters that are > offset (not in `memo`) should be shifted
+        # Note: Adding more explicit "> offset" logic may obviate the need for the memo arg?
         memo = set()  # keep track of which object's gpindices have been set
         for lbl, obj in self._iter_parameterized_objs():
 
@@ -665,7 +671,7 @@ class OpModel(Model):
 
             if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
-                num_new_params = obj.allocate_gpindices(off, self)
+                num_new_params = obj.allocate_gpindices(off, self, memo)
                 objvec = obj.to_vector()  # may include more than "new" indices
                 if num_new_params > 0:
                     new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
@@ -680,8 +686,8 @@ class OpModel(Model):
 
                 shift += num_new_params
                 off += num_new_params
-                # print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
-                #       % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
+                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
+                #      % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds) > 0 else -1; L = len(v)

@@ -409,7 +409,7 @@ class LabelStr(Label, strlittype):
 
     @property
     def name(self):
-        return strlittype(self)
+        return strlittype(self[:])
 
     @property
     def sslbls(self):
@@ -653,6 +653,10 @@ class LabelTupTup(Label, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupTup, (self[:],), None)
 
+    def __contains__(self, x):
+        # "recursive" contains checks component containers
+        return any([(x == layer or x in layer) for layer in self.components])
+
     def tonative(self):
         """ Returns this label as native python types.  Useful for
             faster serialization.
@@ -749,7 +753,7 @@ class CircuitLabel(Label, tuple):
         ret = tuple.__new__(cls, (name, stateSpaceLabels, reps) + tupOfLabels)
         if time is None:
             ret.time = 0.0 if len(tupOfLabels) == 0 else \
-                max([lbl.time for lbl in tupOfLabels])
+                sum([lbl.time for lbl in tupOfLabels])  # sum b/c components are *layers* of sub-circuit
         else:
             ret.time = time
         return ret
@@ -880,6 +884,10 @@ class CircuitLabel(Label, tuple):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (CircuitLabel, (self[0], self[3:], self[1], self[2]), None)
+
+    def __contains__(self, x):
+        # "recursive" contains checks component containers
+        return any([(x == layer or x in layer) for layer in self.components])
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
@@ -1300,6 +1308,10 @@ class LabelTupTupWithArgs(Label, tuple):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupTupWithArgs, (self.components, self.time, self.args), None)
+
+    def __contains__(self, x):
+        # "recursive" contains checks component containers
+        return any([(x == layer or x in layer) for layer in self.components])
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for

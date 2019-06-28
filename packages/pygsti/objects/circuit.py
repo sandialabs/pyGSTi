@@ -422,6 +422,10 @@ class Circuit(object):
     def __iter__(self):
         return self._labels.__iter__()
 
+    def __contains__(self, x):
+        """Note: this is not covered by __iter__ for case of contained CircuitLabels """
+        return any([(x == layer or x in layer) for layer in self._labels])
+
     def __add__(self, x):
         if not isinstance(x, Circuit):
             raise ValueError("Can only add Circuits objects to other Circuit objects")
@@ -726,6 +730,8 @@ class Circuit(object):
         # 1) a single Label (possibly compound) if layers is an int
         # 2) a tuple of Labels (possibly compound) otherwise
         if int_layers:
+            if isinstance(lbls, Circuit):  # special case: "box" a circuit assigned to a single layer
+                lbls = lbls.as_label()     # converts Circuit => CircuitLabel
             lbls = toLabel(lbls)
             lbls_sslbls = None if (lbls.sslbls is None) else set(lbls.sslbls)
         else:
@@ -1823,7 +1829,7 @@ class Circuit(object):
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func, self.line_labels))
-        return Circuit([l.map_state_space_labels(mapper_func) for l in self._labels],
+        return Circuit([l.map_state_space_labels(mapper_func) for l in self.tup],
                        mapped_line_labels, None, not self._static)
 
     def reorder_lines(self, order):
@@ -2526,6 +2532,48 @@ class Circuit(object):
 
     def __repr__(self):
         return "Circuit(%s)" % self.str
+
+    def display_str(self, width=80):
+        ret = ""
+        circuit_string = str(self).strip()  # get rid of trailing newline
+        line_strings = circuit_string.split('\n')
+        nLines = len(line_strings)  # e.g., number of qubits
+        lineLen = len(line_strings[0])
+        assert(nLines == self.number_of_lines())  # this is assumed...
+        assert(all([len(linestr) == lineLen for linestr in line_strings]))  # assume all lines have same length
+
+        iSegment = iStart = iEnd = 0
+        while(iEnd < lineLen):
+            iStart = iEnd  # start from our last ending point
+            prefix = "" if iSegment == 0 else " >>> "
+            usable_width = width - len(prefix)
+            if iStart + usable_width > lineLen:
+                iEnd = lineLen
+            elif '-' not in line_strings[0][iStart:iStart + usable_width]:
+                iEnd = iStart + usable_width
+            else:
+                iEnd = iStart + line_strings[0][iStart:iStart + usable_width].rfind('-')
+
+            for iLine in range(nLines):
+                ret += prefix + line_strings[iLine][iStart:iEnd] + "\n"
+            ret += "\n"
+            iSegment += 1
+
+        return ret
+
+    def _print_labelinfo(self):
+        """A useful debug routine for printing the internal label structure of a circuit"""
+        def plbl(x, lit):
+            iscircuit = isinstance(x, _CircuitLabel)
+            extra = "reps=%d" % x.reps if iscircuit else ""
+            print(lit, ": str=", x, " type=", type(x), " ncomps=", len(x.components), extra)
+            if len(x.components) > 1 or iscircuit:
+                for i, cmp in enumerate(x.components):
+                    plbl(cmp, "  %s[%d]" % (lit, i))
+
+        print("--- LABEL INFO for %s (%d layers) ---" % (self.str, self.num_layers()))
+        for j in range(0, self.num_layers()):
+            plbl(self[j], "self[%d]" % j)
 
     def write_Qcircuit_tex(self, filename):  # TODO
         """
