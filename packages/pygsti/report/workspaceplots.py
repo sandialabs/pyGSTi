@@ -1674,9 +1674,11 @@ class ColorBoxPlot(WorkspacePlot):
                 # If these componentes aren't given, we use defaults
                 if detectorkey is None: detectorkey = stabilityanalyzer._def_detection
                 if test is None: test = ('circuit', )
-                assert('circuit' in test), "Cannot create this plot unless considering a per-circuit instability test!"
+                assert('circuit' in test), \
+                    "Cannot create this plot unless considering a per-circuit instability test!"
                 test = stabilityanalyzer._equivalent_implemented_test(test, detectorkey)
-                assert(test is not None), "The automatic test that we default to was not implemented! Must specify the test to use!"
+                assert(test is not None), \
+                    "The automatic test that we default to was not implemented! Must specify the test to use!"
                 assert(len(stabilityanalyzer.data.keys()) == 1), \
                     "Currently cannot create a box-plot for multi-DataSet StabilityAnalyzers!"
 

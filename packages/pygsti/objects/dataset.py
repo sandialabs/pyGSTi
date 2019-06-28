@@ -67,6 +67,7 @@ class DataSet_KeyValIterator(object):
 
     next = __next__
 
+
 class DataSet_ValIterator(object):
     """ Iterator class for DataSetRow values of a DataSet """
 
@@ -220,7 +221,7 @@ class DataSetRow(object):
         #nTimes = len(time_bins_borders) - 1
         #
         #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.get_outcome_labels()}
-        #    
+        #
         #for i in range(nTimes):
         #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
         #    times.append( self.time[slc.start] )
@@ -1310,7 +1311,7 @@ class DataSet(object):
         Creates a DataSet which merges certain outcomes in this DataSet;
         used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
         DataSet.
-    
+
         Parameters
         ----------
         label_merge_dict : dictionary
@@ -1320,12 +1321,12 @@ class DataSet(object):
             we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
             {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
             to use :function:`filter_qubits` which also updates the operation sequences.
-    
+
         recordZeroCnts : bool, optional
             Whether zero-counts are actually recorded (stored) in the returned
             (merged) DataSet.  If False, then zero counts are ignored, except for
             potentially registering new outcome labels.
-    
+
         Returns
         -------
         merged_dataset : DataSet object
@@ -1334,7 +1335,7 @@ class DataSet(object):
 
         #static_self = self.copy()
         #static_self.done_adding_data()  # makes static, so we can assume this below
-        
+
         # strings -> tuple outcome labels in keys and values of label_merge_dict
         to_outcome = _ld.OutcomeLabelDict.to_outcome  # shorthand
         label_merge_dict = {to_outcome(key): list(map(to_outcome, val))
@@ -1405,15 +1406,15 @@ class DataSet(object):
         for key, dsrow in self.items():
 
             last_t = dsrow.time[0]
-            
+
             #Below code is faster version of: mapped_oli = [oli_map[x] for x in dsrow.oli]
             mapped_oli = dsrow.oli.copy()
             for from_oli, to_oli in oli_map.items():
                 mapped_oli[dsrow.oli == from_oli] = to_oli
-                
+
             reps = _np.ones(len(dsrow.time), self.timeType) if (self.repData is None) else dsrow.reps
             cnts = _DefaultDict(lambda: 0)
-            
+
             i = 0  # offset to current timeslice
             for oli, t, reps in zip(mapped_oli, dsrow.time, reps):
                 if t != last_t:

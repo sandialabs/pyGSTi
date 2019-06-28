@@ -121,7 +121,7 @@ class ProbTrajectory(object):
             are the parameter values for the first outcome (the first element of self.outcomes),
             the second set of len(self.hyperparameters) values are for the second outcome in this
             list, and so on, up to the second last value of self.outcomes.
-        
+
         Returns
         -------
         None
