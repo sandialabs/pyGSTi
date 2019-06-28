@@ -227,8 +227,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 #except _np.linalg.LinAlgError:
                 except _scipy.linalg.LinAlgError:
                     success = False
-                except ValueError:  # HACK: Python2.7 test compatibility, in case NaNs occur
-                    success = False
 
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
