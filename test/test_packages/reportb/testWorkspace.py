@@ -337,9 +337,12 @@ class TestWorkspace(ReportBaseCase):
 
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
         #OLD: driftresults = drift.do_basic_drift_characterization(tds)
-        results_gst = drift.do_drift_characterization(tds)
-        plts.append( w.ColorBoxPlot(("driftpwr",), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=True, invert=False, driftresults=(results_gst,None)) ) #"driftpv",
+        results_gst = drift.StabilityAnalyzer(tds, ids=True)
+        results_gst.generate_spectra()
+        results_gst.do_instability_detection(0.05)
+        results_gst.do_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
+        plts.append( w.ColorBoxPlot('driftsize', self.gss, self.ds, self.mdl, boxLabels=False,
+                                    hoverInfo=False, sumUp=True, invert=False, stabilityanalyzer=results_gst) )
 
         with self.assertRaises(ValueError):
             w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.mdl)
