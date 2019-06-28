@@ -1419,7 +1419,7 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, model,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTmodels=None, dscomparator=None, driftresults=None,
+                 directGSTmodels=None, dscomparator=None, stabilityanalyzer=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
                  wildcard=None, colorbar=False):
         """
@@ -1431,7 +1431,7 @@ class ColorBoxPlot(WorkspacePlot):
         Parameters
         ----------
         plottype : {"chi2","logl","tvd","blank","errorrate","directchi2","directlogl","dscmp",
-                    "driftpv","driftpwr"}
+                    "driftdetector", "driftsize"}
             Specifies the type of plot. "errorate", "directchi2" and
             "directlogl" require that `directGSTmodels` be set.
 
@@ -1483,14 +1483,19 @@ class ColorBoxPlot(WorkspacePlot):
         dscomparator : DataComparator, optional
             The data set comparator used to produce the "dscmp" plot type.
 
-        driftresults : tuple containing DriftResults, optional
-            Only used to produce the "driftpv" and "driftpw" boxplots.
-            The first element of the tuple is a DriftResults object, containing
-            The results of a drift analysis. The second element of the tuple
-            is None, or a string specifying which of the DriftDetectors to use
-            (this is only relevant if the DriftResults objects contains multiple
-            analysis, which it won't when created using the canned routines with
-            the default settings).
+        stabilityanalyzer : StabilityAnalyzer or 3-tuple, optional
+            Only used to produce the "driftdetector" and "driftsize" boxplot. If a StabilityAnalyzer, then
+            this contains the results of the drift / stability analysis to be displayed.
+            For non-expert users, this is the best option. If a tuple, then the first
+            element of the tuple is this StabilityAnalyzer object,
+            and the second and third elements of the tuple label which instability detection
+            results to display (a StabilityAnalyzer can contain multiple distinct tests for
+            instability). The second element is the "detectorkey", which can be None (the
+            default), or a string specifying which of the drift detection results to use for
+            the plot. If it is None, then the default set of results are used. The third element
+            of the tuple is either None, or a tuple that specifies which "level" of tests to
+            use from the drift detection run (specified by the detectorkey), e.g., per-circuit
+            with outcomes averaged or per-circuit per-outcome.
 
         submatrices : dict, optional
             A dictionary whose keys correspond to other potential plot
@@ -1524,13 +1529,13 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot, self).__init__(ws, self._create, plottype, gss, dataset, model,
                                            prec, sumUp, boxLabels, hoverInfo,
                                            invert, linlg_pcntle, minProbClipForWeighting,
-                                           directGSTmodels, dscomparator, driftresults,
+                                           directGSTmodels, dscomparator, stabilityanalyzer,
                                            submatrices, typ, scale, comm, wildcard, colorbar)
 
     def _create(self, plottypes, gss, dataset, model,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTmodels, dscomparator, driftresults, submatrices,
+                directGSTmodels, dscomparator, stabilityanalyzer, submatrices,
                 typ, scale, comm, wildcard, colorbar):
 
         probs_precomp_dict = None
@@ -1651,34 +1656,72 @@ class ColorBoxPlot(WorkspacePlot):
                 #         key0 = list(dscomparator.dataset_list_or_multidataset.keys())[0]
                 #         dataset = dscomparator.dataset_list_or_multidataset[key0]
 
-            elif ptyp == "driftpv":
-                assert(driftresults is not None), \
-                    "Must specify `driftresults` argument to create `driftpv` plot!"
-                detectorkey = driftresults[1]
-                driftresults = driftresults[0]
-                assert(driftresults.number_of_entities == 1), \
-                    "Currently cannot create a box-plot for multi-entity DriftResults!"
-                colormapType = "manuallinlog"
-                linlog_color = "green"
-                linlog_trans = _np.log10(
-                    1 / driftresults.get_power_pvalue_significance_threshold(sequence='per', detectorkey=detectorkey))
-                ytitle = "1 / pvalue"
-                mx_fn = _mx_fn_driftpv  # use a *global* function so cache can tell it's the same
-                extra_arg = driftresults
+            elif ptyp == "driftdetector":
 
-            elif ptyp == "driftpwr":
-                assert(driftresults is not None), \
-                    "Must specify `driftresults` argument to create `driftpv` plot!"
-                detectorkey = driftresults[1]
-                driftresults = driftresults[0]
-                assert(driftresults.number_of_entities == 1), \
-                    "Currently cannot create a box-plot for multi-entity DriftResults!"
+                assert(stabilityanalyzer is not None), \
+                    "Must specify `stabilityanalyzer` argument to create `drift` plot!"
+                # If stabilityanalyzer  is a tuple, we expand into its components
+                if isinstance(stabilityanalyzer, tuple):
+
+                    detectorkey = stabilityanalyzer[1]
+                    test = stabilityanalyzer[2]
+                    stabilityanalyzer = stabilityanalyzer[0]
+                # If stabilityanalyzer is a StabilityAnalyzer, we initialize the other components not given
+                else:
+                    detectorkey = None
+                    test = None
+
+                # If these componentes aren't given, we use defaults
+                if detectorkey is None: detectorkey = stabilityanalyzer._def_detection
+                if test is None: test = ('circuit', )
+                assert('circuit' in test), "Cannot create this plot unless considering a per-circuit instability test!"
+                test = stabilityanalyzer._equivalent_implemented_test(test, detectorkey)
+                assert(test is not None), "The automatic test that we default to was not implemented! Must specify the test to use!"
+                assert(len(stabilityanalyzer.data.keys()) == 1), \
+                    "Currently cannot create a box-plot for multi-DataSet StabilityAnalyzers!"
+
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = driftresults.get_power_significance_threshold(sequence='per', detectorkey=detectorkey)
-                ytitle = "Maximum power in spectrum"
-                mx_fn = _mx_fn_driftpwr  # use a *global* function so cache can tell it's the same
-                extra_arg = driftresults
+                pvaluethreshold, junk = stabilityanalyzer.get_pvalue_threshold(test, detectorkey=detectorkey)
+                linlog_trans = -1 * _np.log10(pvaluethreshold)
+                ytitle = "Evidence for instability as quantified by -log10(pvalue)"
+                mx_fn = _mx_fn_driftpv  # use a *global* function so cache can tell it's the same
+                extra_arg = (stabilityanalyzer, test)
+
+            elif ptyp == "driftsize":
+
+                assert(stabilityanalyzer is not None), \
+                    "Must specify `stabilityanalyzer` argument to create `drift` plot!"
+                # If stabilityanalyzer  is a tuple, we expand into its components
+                if isinstance(stabilityanalyzer, tuple):
+
+                    estimatekey = stabilityanalyzer[1]
+                    estimator = stabilityanalyzer[2]
+                    stabilityanalyzer = stabilityanalyzer[0]
+                # If stabilityanalyzer is a StabilityAnalyzer, we initialize the other components not given
+                else:
+                    estimatekey = None
+                    estimator = None
+
+                colormapType = "blueseq"
+                ytitle = "Total Variational Distance (TVD)"
+                mx_fn = _mx_fn_drifttvd  # use a *global* function so cache can tell it's the same
+                extra_arg = (stabilityanalyzer, estimatekey, estimator)
+
+            # future: delete this, or update it and added it back in.
+            # elif ptyp == "driftpwr":
+            #     assert(driftresults is not None), \
+            #         "Must specify `driftresults` argument to create `driftpv` plot!"
+            #     detectorkey = driftresults[1]
+            #     driftresults = driftresults[0]
+            #     assert(driftresults.number_of_entities == 1), \
+            #         "Currently cannot create a box-plot for multi-entity DriftResults!"
+            #     colormapType = "manuallinlog"
+            #     linlog_color = "green"
+            #     linlog_trans = driftresults.get_power_significance_threshold(sequence='per', detectorkey=detectorkey)
+            #     ytitle = "Maximum power in spectrum"
+            #     mx_fn = _mx_fn_driftpwr  # use a *global* function so cache can tell it's the same
+            #     extra_arg = driftresults
 
             elif (submatrices is not None) and ptyp in submatrices:
                 ytitle = ptyp
@@ -1844,12 +1887,16 @@ def _mx_fn_dscmp(plaq, x, y, dscomparator):
     return _ph.dscompare_llr_matrices(plaq, dscomparator)
 
 
-def _mx_fn_driftpv(plaq, x, y, driftresults):
-    return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
+def _mx_fn_driftpv(plaq, x, y, instabilityanalyzertuple):
+    return _ph.drift_neglog10pvalue_matrices(plaq, instabilityanalyzertuple)
 
 
-def _mx_fn_driftpwr(plaq, x, y, driftresults):
-    return _ph.drift_maxpower_matrices(plaq, driftresults)
+def _mx_fn_drifttvd(plaq, x, y, instabilityanalyzertuple):
+    return _ph.drift_maxtvd_matrices(plaq, instabilityanalyzertuple)
+
+# future: delete this, or update it and added it back in.
+# def _mx_fn_driftpwr(plaq, x, y, driftresults):
+#     return _ph.drift_maxpower_matrices(plaq, driftresults)
 
 # Begin "Additional sub-matrix" functions for adding more info to hover text
 

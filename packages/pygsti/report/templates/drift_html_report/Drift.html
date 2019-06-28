@@ -1,0 +1,52 @@
+	<h1>Drift</h1>
+
+        <p>This summarizes the results of instability ("drift") detection and characterization on time-series data. This data analysis is circuit-agnostic, i.e., it can be applied to data from any set of quantum circuit over any number of qubits. It consists of looking for evidence that the "probability trajectories" of the circuits, meaning the potentially time-varying probability distributions over the possible circuit outcomes, are varying over time. In the language of hypothesis testing, the null hypothesis is that each circuit has some static (but otherwise arbitrary) probability distribution over its possible outcomes, and we are testing for violations of this null hypothesis. 
+        </p>
+
+	%(drift_switchBd)s
+
+    <figure id="driftSummaryTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Summary of the results of instability detection and characterization.</span> <span class="captiondetail">Contains the core summary details of the instability detection and characterization analysis. This reports the global statistical signifiance of the hypothesis tests used, and the yes/no result of that
+	  hypothesis testing. Specifically, "Instability detected" is True if we have detected evidence for instability in any of the circuits, and the chance that this will flag up as true when the circuits are actually stable is at most the gloal statistical significance. </span></figcaption>
+	  %(driftSummaryTable)s
+	</figure>
+
+	<figure id="driftDetailsTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Table Caption.</span> <span class="captiondetail">Say what this table is.</span></figcaption>
+	  %(driftDetailsTable)s
+	</figure>
+
+	<figure id="GlobalPowerSpectraPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
+	  %(GlobalPowerSpectraPlot)s
+	</figure>
+
+	<figure id="GermFiducialPowerSpectraPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
+	  %(GermFiducialPowerSpectraPlot)s
+	</figure>
+
+	<figure id="GermFiducialProbTrajectoriesPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
+	  %(GermFiducialProbTrajectoriesPlot)s
+	</figure>
+
+
+    <figure id="driftdetectorColorBoxPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
+	  %(driftdetectorColorBoxPlot)s
+	</figure>
+
+	<figure id="driftsizeColorBoxPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Plot Caption.</span> <span class="captiondetail">Say what this plot is.</span></figcaption>
+	  %(driftsizeColorBoxPlot)s
+	</figure>
+
+
+
+
+
+	
+
+
+
