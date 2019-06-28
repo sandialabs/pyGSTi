@@ -21,7 +21,6 @@ from ..baseobjs import Label as _Label
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .forwardsim import ForwardSimulator
 from . import replib
-from . import model as _model
 
 
 _dummy_profiler = _DummyProfiler()
