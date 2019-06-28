@@ -28,26 +28,38 @@ except:
 
 class ProbTrajectory(object):
     """
-    todo
+    Encapulates a time-dependent probability distribution, as a sum of time-dependent basis functions.
 
     """
-
     def __init__(self, outcomes, hyperparameters, parameters):
         """
-        todo:
+        Initializes a ProbTrajectory object.
 
         Parameters
         ----------
+        outcomes : list
+            What the probability distribution is over. Typically, all possible outcomes for the circuit
+            that this is a probability trajectory for.
 
-        hyperparameters :
+        hyperparameters : list
+            Each derived ProbTrajectory object is intended to encompass a family of parameterized models
+            for a time-varying probability, and this specifies the specific parameterized model in the class.
+            For example, the CosineProbTrajectory object is a derived class whereby each probability is the
+            summation of some number of cosines, and this specifies the number and frequencies of those
+            cosines. The probability trajectory for *each* outcome is parameterized by a value for each
+            hyperparameter.
 
         parameters :
             A dictonary where the keys are all but the last element of `outcomes`, and the elements
-            are lists of the same lengths as `hyperparameters`.
+            are lists of the same lengths as `hyperparameters`. These are the parameters of the parameterized
+            model defined by (the derived class) and `hyperparameters`. The parameter values for the final
+            outcome are assumed to be entirely fixed by the necessity for the probability trajectories
+            to sum to 1 at all times.
 
         Returns
         -------
-        None
+        A new ProbTrajectory object.
+
         """
         self.outcomes = outcomes
         self.numoutcomes = len(outcomes)
@@ -59,14 +71,32 @@ class ProbTrajectory(object):
 
     def basisfunction(self, i, times):
         """
-        todo.
+        The ith basis function of the model, evaluated at the times in `times.
+
+        *** Defined in a derived class ***
+
+        Parameters
+        ----------
+        i : Type specified by derived class.
+            The basis function specified by the hyperparameter `i`. This method should
+            expect all possible hyperparameter values (often ints in some range, or a float)
+            as this input
+
+        times : list
+            The times to evaluate the basis function at.
+
+        Returns
+        -------
+        list
+            The values of the basis function at the specified times.
 
         """
         raise NotImplementedError("This should be defined in derived classes!")
 
     def set_hyperparameters(self, hyperparameters, parameters):
         """
-        todo
+        Sets the hyperparameters -- i.e., defines a new parameterized model -- and
+        the parameters (see init for details).
 
         """
         hyperparameters = list(hyperparameters)
@@ -75,22 +105,34 @@ class ProbTrajectory(object):
 
     def set_parameters(self, parameters):
         """
-        todo
+        Sets the parameters of the model (see init for details).
 
         """
         self.parameters = _copy.deepcopy(parameters)
 
     def set_parameters_from_list(self, parameterslist):
         """
-        todo:
+        Sets the parameters of the model from a list
 
+        Parameters
+        ----------
+        parametersaslist : list
+            The new parameter values as a list, where the first len(self.hyperparameters) values
+            are the parameter values for the first outcome (the first element of self.outcomes),
+            the second set of len(self.hyperparameters) values are for the second outcome in this
+            list, and so on, up to the second last value of self.outcomes.
+        
+        Returns
+        -------
+        None
         """
         self.parameters = {o: parameterslist[oind * len(self.hyperparameters):(1 + oind) * len(self.hyperparameters)]
                            for oind, o in enumerate(self.outcomes[:-1])}
 
     def get_parameters_as_list(self):
         """
-        todo:
+        Returns the parameters as a list, in the same format as when input to `set_parameters_from_list`.
+        See the docstring of that method for more info.
 
         """
         parameterslist = []
@@ -101,7 +143,7 @@ class ProbTrajectory(object):
 
     def get_parameters(self):
         """
-        todo:
+        Returns the values of the parameters, in the dictionary form in which it is internally stored.
 
         """
         return _copy.deepcopy(self.parameters)
@@ -134,7 +176,8 @@ class ProbTrajectory(object):
         for o in self.outcomes[:-1]:
             p = _np.sum(_np.array([self.parameters[o][ind] * self.basisfunction(i, times)
                                    for ind, i in enumerate(self.hyperparameters)]), axis=0)
-            # This trimming means it's possible to have probabilities that don't sum exactly to 1.
+            # This trimming means it is possible to have probabilities that don't sum exactly to 1,
+            # even if they did before this trimming was implemented.
             if trim:
                 p[p > 1] = 1
                 p[p < 0] = 0
@@ -152,9 +195,29 @@ class ProbTrajectory(object):
 
 
 class ConstantProbTrajectory(ProbTrajectory):
+    """
+    Encapulates a time-dependent probability distribution that is actually a constant.
+    Useful when wanting to encode a constant probability distribution in a way that
+    can be used consistently with any other ProbTrajectory object.
 
+    """
     def __init__(self, outcomes, probabilities):
         """
+        Initializes a ConstantProbTrajectory object.
+
+        Parameters
+        ----------
+        outcomes : list
+            What the probability distribution is over. Typically, all possible outcomes for the circuit
+            that this is a probability trajectory for.
+
+        probabilities : dict
+           The static probability to obtained all but the last outcome (which is set by the other
+           probabilities).
+
+        Returns
+        -------
+        A new ConstantProbTrajectory object.
 
         """
         super(ConstantProbTrajectory, self).__init__(outcomes, [0, ], probabilities)
@@ -167,24 +230,79 @@ class ConstantProbTrajectory(ProbTrajectory):
 
 
 class CosineProbTrajectory(ProbTrajectory):
+    """
+    Encapulates a time-dependent probability distribution that is parameterized as a
+    sum of cosines. Specifically, it is parameterized as the sum of the Type-II DCT
+    basis functions.
 
+    """
     def __init__(self, outcomes, hyperparameters, parameters, starttime, timestep, numtimes):
         """
-        todo
+        Initializes a CosineProbTrajectory object.
+
+        Parameters
+        ----------
+        outcomes : list
+            What the probability distribution is over. Typically, all possible outcomes for the circuit
+            that this is a probability trajectory for.
+
+        hyperparameters : list
+            A set of integers, that specify the indices of the the DCT basis functions to include.
+            This *must* include 0 as the first element, corresponding to the constant component of
+            the probability trajectories.
+
+        parameters : dict
+            A dictonary where the keys are all but the last element of `outcomes`, and the elements
+            are lists of the same lengths as `hyperparameters`. These are amplitudes for the DCT basis
+            functions, for each outcome. The first element of each list is the constant component of
+            the that probability trajectory.
+
+        starttime : float
+            The start time of the time period over which the DCT basis functions are being defined.
+            This is typically set to the first data collection time of the circuit that this probability
+            trajectory is being defined for.
+
+        timestep : float
+            The size of the time step used to define the DCT basis functions. This is typically set to
+            the time step between the data collection times of the circuit that this probability trajectory
+            is being defined for
+
+        numtimes : int
+            The number of data collection times defining the DCT basis functions (defines the total number
+            of DCT basis functions: the hyperparameters list is then a subset of this [0,1,2,...,numtimes-1]).
+            This is typically set to the number of data collection times for the circuit that this probability
+            trajectory is being defined for.
+
+        Returns
+        -------
+        A new CosineProbTrajectory object.
 
         """
-
         self.starttime = starttime
         self.timestep = timestep
         self.numtimes = numtimes
-
-        #    self.fullmodelsize = self.numsteps
 
         super(CosineProbTrajectory, self).__init__(outcomes, hyperparameters, parameters)
 
     def basisfunction(self, i, times):
         """
-        Todo
+        The ith Type-II DCT basis function, evaluated at the specified times, where the DCT basis functions
+        under consideration are defined by the time parameters set in the initialization.
+
+        The normalization of the functions is such that the max/min of each function is +1/-1.
+
+        Parameters
+        ----------
+        i : int
+            The frequency index of the DCT basis function.
+
+        times : list
+            The times to evaluate the basis function at
+
+        Returns
+        -------
+        array
+            The value of the basis function at the specified times.
         """
         return _np.array([_np.cos(i * _np.pi * ((t - self.starttime) / self.timestep + 0.5) / self.numtimes)
                           for t in times])
@@ -192,9 +310,8 @@ class CosineProbTrajectory(ProbTrajectory):
 
 def _xlogp_rectified(x, p, minp=0.0001, maxp=0.999999):
     """
-    Returns x*log(p) where p is bound within (0,1], with
-    adjustments at the boundaries that are useful in minimization
-    algorithms.
+    Returns x * log(p) where p is bound within (0,1], with adjustments at the boundaries that are useful in
+    minimization algorithms.
 
     """
     if x == 0: return 0
@@ -223,11 +340,11 @@ def _xlogp_rectified(x, p, minp=0.0001, maxp=0.999999):
 
 def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
     """
-    The negative log-likelihood of a time-resolved probabilities trajectory model.
+    The negative log-likelihood of a ProbTrajectory, modelling a time-dependent probability distribution.
 
     Parameters
     ----------
-    model : ProbTrajectoryModel
+    model : ProbTrajectory
         The model to find the log-likelihood of.
 
     data : dict
@@ -262,6 +379,22 @@ def probsdict_negloglikelihood(probs, clickstreams, minp=0., maxp=1.):
     """
     The negative log-likelihood of varying probabilities `probs`, evaluated for the data streams
     in `clickstreams`.
+
+    Parameters
+    ----------
+    probs : dict
+        A dictionary where the keys are the outcome strings in the clickstream (its keys) and the
+        value for an outcome is the time-dependent probability list for that outcome, at the times
+        associated with the data in the clickstreams.
+
+    clickstreams : dict
+        A dictionary where the keys are the different measurement outcomes, and the values are lists
+        that give counts for that measurement outcome.
+
+    Returns
+    -------
+    float
+        The negative logi-likelihood of the probability trajectories given the clickstream data.
     """
     logl = 0
     for outcome in clickstreams.keys():
@@ -279,7 +412,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
 
     Parameters
     ----------
-    model : ProbTrajectoryModel
+    model : ProbTrajectory
         The model for which to maximize the likelihood of the parameters. The value of the parameters
         in the input model is used as the seed.
 
@@ -313,7 +446,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
 
     Returns
     -------
-    ProbTrajectoryModel
+    ProbTrajectory
         The maximum likelihood model returned by the optimizer.
 
     if returnOptout:
@@ -366,8 +499,9 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
 
 def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
     """
-    Reduces the amplitudes in a CosineProbTrajectory model until the
-    model is valid, i.e., all probabilities are within [0,1].
+    Reduces the amplitudes in a CosineProbTrajectory model until the model is valid, i.e., all probabilities
+    are within [0, 1]. Also rectifies any of the constant components of the probability trajectories that
+    are slightly outside [0, 1].
 
     Parameters
     ----------
@@ -375,15 +509,13 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
         The model on which to perform the amplitude reduction
 
     times: list
-        The times at which to enforce the validity of the model (this algorithm
-        does *not* guarantee that the probabilities will be within [0,1] at all
-        times)
+        The times at which to enforce the validity of the model (this algorithm does *not* guarantee that the
+        probabilities will be within [0, 1] at *all* times in the reals).
 
     epsilon: float, optional
-        The amplitudes are compressed so that all the probabilities are
-        within [0+epsilon,1-epsilon] at all times. Setting this to be
-        larger than 0 can be useful as it guarantees that the resultant
-        probability trajectory has a non-zero likelihood.
+        The amplitudes are compressed so that all the probabilities are within [0+epsilon,1-epsilon] at all
+        times. Setting this to be larger than 0 can be useful as it guarantees that the resultant probability
+        trajectory has a non-zero likelihood.
 
     Returns
     -------
@@ -391,19 +523,10 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
         The new model, that may have had the amplitudes reduced
 
     Bool
-        Whether or not the function did anything non-trivial, i.e, whether any
-        compression was required.
+        Whether or not the function did anything non-trivial, i.e, whether any compression was required.
 
     """
     assert(isinstance(probtrajectory, CosineProbTrajectory)), "Input must be a CosineProbTrajectory!"
-
-    def satisfies_hard_constraint(a, b, epsilon):
-        """
-        Returns True if  a - b >= epsilon and  a + b =< 1 - epsilon. Otherwise
-        Returns False.
-
-        """
-        return (a - b >= epsilon) and (a + b >= 1 - epsilon)
 
     def rectify_alpha0(alpha0):
         """
