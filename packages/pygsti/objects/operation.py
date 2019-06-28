@@ -3491,7 +3491,7 @@ class ComposedOp(LinearOperator):
         """
         if order not in self.terms:
             terms = []
-            
+
             #DEBUG TODO REMOVE
             #print("Composed op getting order",order,"terms:")
             #for i,fop in enumerate(self.factorops):
@@ -4206,7 +4206,7 @@ class EmbeddedOp(LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
         # of the operator being embedded, the total term magnitude is the same:
-        
+
         #DEBUG TODO REMOVE
         #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",self.embedded_op.__class__.__name__)
         #ret = self.embedded_op.get_total_term_magnitude()
@@ -4964,7 +4964,7 @@ class ComposedErrorgen(LinearOperator):
         #    sub_mags = [ abs(t.evaluate_coeff(eg.to_vector()).coeff) for t in sub_egterms ]
         #    print(" -> ",k,": total terms mag = ",sum(sub_mags), "(%d)" % len(sub_mags),"\n", sub_mags)
         #    print("     gpindices = ",eg.gpindices)
-        #    
+        #
         #ret = sum(factor_ttms)
         #egterms = self.get_taylor_order_terms(0)
         #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]

@@ -4,7 +4,8 @@ import scipy.sparse as sps
 
 from ..util import BaseCase, needs_cvxpy
 
-from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, ExplicitOpModel, Basis, FullSPAMVec
+from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, \
+    ExplicitOpModel, Basis, FullSPAMVec, TPInstrument
 from pygsti.baseobjs import basisconstructors as bc
 import pygsti.construction as pc
 import pygsti.objects.operation as op
@@ -710,3 +711,32 @@ class EmbeddedDenseOpTester(ImmutableDenseOpBase, BaseCase):
         mx = np.identity(4, 'd')
         with self.assertRaises(ValueError):
             op.EmbeddedOp([('Q0',), ('Q1',)], ['Q0', 'Q1'], op.FullDenseOp(mx))
+
+
+class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
+    n_params = 28
+
+    @staticmethod
+    def build_gate():
+        # XXX can this be constructed directly?
+        Gmz_plus = np.array([[0.5, 0, 0, 0.5],
+                             [0, 0, 0, 0],
+                             [0, 0, 0, 0],
+                             [0.5, 0, 0, 0.5]])
+        Gmz_minus = np.array([[0.5, 0, 0, -0.5],
+                              [0, 0, 0, 0],
+                              [0, 0, 0, 0],
+                              [-0.5, 0, 0, 0.5]])
+        inst = TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        return inst['plus']
+
+    def test_vector_conversion(self):
+        with self.assertRaises(ValueError):
+            self.gate.to_vector()
+
+    def test_deriv_wrt_params(self):
+        super(TPInstrumentOpTester, self).test_deriv_wrt_params()
+
+        # XXX does this check anything meaningful?
+        deriv = self.gate.deriv_wrt_params([0])
+        self.assertEqual(deriv.shape[1], 1)
