@@ -650,7 +650,7 @@ class OpModel(Model):
                             new_inds.append(i - get_shift(i))
                         new_inds = _np.array(new_inds, _np.int64)
                     obj.set_gpindices(new_inds, self, memo)
-                    
+
         # Step 2: add parameters that don't exist yet
         #  Note that iteration order (that of _iter_parameterized_objs) determines
         #  parameter index ordering, so "normally" an object that occurs before

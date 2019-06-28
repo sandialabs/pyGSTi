@@ -127,7 +127,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         else:
             G = _np.identity(self.dim)
             for lOp in circuit:
-                G = _np.dot(self.sos.get_operation(lOp).todense(), G)  # product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.sos.get_operation(lOp).todense(), G)  # LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
     def _process_wrtFilter(self, wrtFilter, obj):

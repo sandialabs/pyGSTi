@@ -1052,7 +1052,7 @@ class LindbladPOVM(POVM):
         if memo is None: memo = set()
         if id(self) in memo: return 0
         memo.add(id(self))
-        
+
         assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
         num_new_params = self.error_map.allocate_gpindices(startingIndex, parent, memo)  # *same* parent as this SPAMVec
         _gm.ModelMember.set_gpindices(

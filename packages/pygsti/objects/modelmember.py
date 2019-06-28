@@ -12,7 +12,6 @@ from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 
 
-
 class ModelChild(object):
     """
     Base class for all objects contained in a Model that
