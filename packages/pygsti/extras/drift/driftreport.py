@@ -283,7 +283,10 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
 
         spectrumlabel = {'dataset': dskey, 'circuit': circuitdict}
 
-        return PowerSpectraPlot._create(self, stabilityanalyzer, spectrumlabel, detectorkey, showlegend, scale)
+        psp = PowerSpectraPlot(self.ws, stabilityanalyzer, spectrumlabel, detectorkey,
+                               showlegend, scale)
+        assert(len(psp.figs) == 1), "Only one figure should have been created!"
+        return psp.figs[0]
 
 
 class ProbTrajectoriesPlot(_ws.WorkspacePlot):
@@ -474,8 +477,10 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
                         if k == measind:
                             circuitsdict[L] = circuit
 
-        return ProbTrajectoriesPlot._create(self, stabilityanalyzer, circuitsdict, outcome, times, dskey, estimatekey,
-                                            estimator, showlegend, scale)
+        pjp = ProbTrajectoriesPlot(self.ws, stabilityanalyzer, circuitsdict, outcome, times, dskey, estimatekey,
+                                   estimator, showlegend, scale)
+        assert(len(pjp.figs) == 1), "Only one figure should have been created!"
+        return pjp.figs[0]
 
 
 #Note: SAME function as in report/factory.py (copied)
