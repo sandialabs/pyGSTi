@@ -31,6 +31,7 @@ class ProbTrajectory(object):
     todo
 
     """
+
     def __init__(self, outcomes, hyperparameters, parameters):
         """
         todo:
@@ -134,7 +135,7 @@ class ProbTrajectory(object):
             p = _np.sum(_np.array([self.parameters[o][ind] * self.basisfunction(i, times)
                                    for ind, i in enumerate(self.hyperparameters)]), axis=0)
             # This trimming means it's possible to have probabilities that don't sum exactly to 1.
-            if trim: 
+            if trim:
                 p[p > 1] = 1
                 p[p < 0] = 0
             probs[o] = p
@@ -204,14 +205,14 @@ def _xlogp_rectified(x, p, minp=0.0001, maxp=0.999999):
     _xlogp_rectified = x * _np.log(pos_p)  # The f(x_0) term in a Taylor expansion of xlog(y) around pos_p
 
     # Adjusts to the Taylor expansion, to second order, of xlog(y) around minp evaluated at p.
-    if p < minp: 
+    if p < minp:
 
         S = x / minp  # The derivative of xlog(y) evaluated at minp
         S2 = -0.5 * x / (minp**2)  # The 2nd derivative of xlog(y) evaluated at minp
         _xlogp_rectified += S * (p - minp) + S2 * (p - minp)**2
 
     # Adds a fairly arbitrary smooth drop off to the hard boundary at p=1.
-    elif p > maxp:  
+    elif p > maxp:
 
         S = x / maxp  # The derivative of xlog(y) evaluated at maxp
         S2 = -0.5 * x / (maxp**2)  # The 2nd derivative of xlog(y)evaluated at maxp
@@ -245,7 +246,7 @@ def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
 
     maxp : float, optional
         A positive value close to and <= 1. The value of `p` above which x*log(p) the boundary on p
-        being <= 1 is enforced using a smooth, quickly growing function. If set to 1. it gives the 
+        being <= 1 is enforced using a smooth, quickly growing function. If set to 1. it gives the
         true log-likelihood.
 
     Returns
@@ -294,15 +295,15 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
     minp : float, optional
         A positive value close to zero. The value of `p` below which x*log(p) is approximated using
         a Taylor expansion (used to smooth out the parameter boundaries and obtain better fitting
-        performance). The default value should be fine. 
+        performance). The default value should be fine.
 
     maxp : float, optional
         A positive value close to and <= 1. The value of `p` above which x*log(p) the boundary on p
-        being <= 1 is enforced using a smooth, quickly growing function. The default value should be 
-        fine. 
+        being <= 1 is enforced using a smooth, quickly growing function. The default value should be
+        fine.
 
     method : str, optional
-        Any value allowed for the method parameter in scipy.optimize.minimize(). 
+        Any value allowed for the method parameter in scipy.optimize.minimize().
 
     verbosity : int, optional
         The amount of print to screen.
@@ -333,7 +334,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         print("      - Performing MLE over {} parameters...".format(numparams), end='')
     if verbosity > 1:
         print("")
-        options['disp'] = True 
+        options['disp'] = True
 
     start = _tm.time()
     seed = probtrajectory.get_parameters_as_list()
@@ -443,7 +444,7 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
                 if minprob - alpha0s[o] < 0:
                     newmultiplier = (epsilon - alpha0s[o]) / (minprob - alpha0s[o])
                     multiplier = min(multiplier, newmultiplier)
-  
+
             if maxprob > 1 - epsilon:
                 # Find the multipler such that alpha0 + max(probs-alpha0) * multipler = 1 - epsilon
                 if maxprob - alpha0s[o] > 0:

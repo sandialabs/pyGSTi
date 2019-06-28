@@ -281,7 +281,7 @@ def idft(modes, null_hypothesis, counts=1):
         Inverse of the dft function
 
     """
-    z = _np.sqrt(len(x)) * _ifft(modes)
+    z = _np.sqrt(len(modes)) * _ifft(modes)  # TIM CHECK THIS: len(*modes*) correct?
     x = unstandardizer(z, null_hypothesis, counts)
     return x
 
@@ -322,7 +322,7 @@ def lsp(x, times, frequencies='auto', null_hypothesis=None, counts=1):
 
     power = _LombScargle(times, standardized_x, fit_mean=True, center_data=False).power(lspfreq, normalization='psd')
 
-    if freq[0] == 0.: power = _np.array([0,] + list(power))
+    if freq[0] == 0.: power = _np.array([0, ] + list(power))
 
     return freq, power
 
@@ -487,7 +487,7 @@ def get_auto_frequencies(ds, transform='dct'):
     """
     # future: make this function for the lsp.
     assert(transform in ('dct', 'dft', 'lsp')), "The type of transform is invalid!"
-    # todo : This is only reasonable with data that is equally spaced per circuit and with the same 
+    # todo : This is only reasonable with data that is equally spaced per circuit and with the same
     # time-step over circuits
     if isinstance(ds, _obj.MultiDataSet):
         dskey = list(ds.keys())[0]
@@ -690,7 +690,7 @@ def moving_average(sequence, width=100):
     return signal / base
 
 
-def generate_flat_signal(power, nummodes, n, candidatefreqs=None, base=0.5, method ='sharp'):
+def generate_flat_signal(power, nummodes, n, candidatefreqs=None, base=0.5, method='sharp'):
     """
     Generates a minimal sparsity probability trajectory for the specified power, and a specified number of modes
     containing non-zero power. This is a probability trajectory that has a signal power of `power` (where, for a

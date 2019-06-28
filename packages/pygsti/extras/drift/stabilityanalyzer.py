@@ -238,6 +238,7 @@ class StabilityAnalyzer(object):
     in pyGSTi.
 
     """
+
     def __init__(self, ds, transform='auto', marginalize='auto', mergeoutcomes=None, constnumtimes='auto',
                  ids=False):
         """
@@ -412,7 +413,7 @@ class StabilityAnalyzer(object):
         # circuit's spectra.
         self._frequencies = None
         # Will become a dictionary of ``pointers`` that designate the index of the `self._frequencies` list that the
-        # frequencies for a circuit correspond to. The key is the circuit index (in self.data.keys()) and the value 
+        # frequencies for a circuit correspond to. The key is the circuit index (in self.data.keys()) and the value
         # is the index in self._frequncies.
         self._freqpointers = None
         self._dofalt = {}  # A dictionary containing alternative dofs, so that it can be adjusted in special cases.
@@ -442,12 +443,12 @@ class StabilityAnalyzer(object):
     def __str__(self):
 
         if not self._contains_spectra:
-            s = "A StabilityAnalyzer containing times-series data, but waiting for power spectra to be generated," 
+            s = "A StabilityAnalyzer containing times-series data, but waiting for power spectra to be generated,"
             s + " and a stability analysis to be performed."
             return s
 
         if self._def_detection is None:
-            s = "A StabilityAnalyzer containing times-series data and power spectra, but waiting for a stability" 
+            s = "A StabilityAnalyzer containing times-series data and power spectra, but waiting for a stability"
             s + " analysis to be performed."
             return s
 
@@ -681,7 +682,7 @@ class StabilityAnalyzer(object):
         # are for the frequencies stored as self._frequencies[0].
         if len(self._freqpointers) == 0: return True
 
-        iterator = [] # A list of list-like to iterate over to consider all the spectra in question.
+        iterator = []  # A list of list-like to iterate over to consider all the spectra in question.
         for i, axislabel in enumerate(self._axislabels):
             if axislabel in dictlabel.keys():
                 iterator.append([dictlabel[axislabel], ])
@@ -820,7 +821,7 @@ class StabilityAnalyzer(object):
             spectrum = self._basespectra[arrayindices].copy()
             if returnfrequencies:
                 circuitindex = arrayindices[1]
-                freq = self._frequencies[self._freqpointers.get(circuitindex,0)]
+                freq = self._frequencies[self._freqpointers.get(circuitindex, 0)]
                 return freq, spectrum
             else:
                 return spectrum
@@ -898,7 +899,7 @@ class StabilityAnalyzer(object):
 
 
         The inclass_correction is a dictionary with keys 'dataset', 'circuit', 'outcome' and 'spectrum', and values that
-        specify the type of multi-test correction used to account for the multiple tests being implemented. 
+        specify the type of multi-test correction used to account for the multiple tests being implemented.
 
         Returns
         -------
@@ -1023,7 +1024,8 @@ class StabilityAnalyzer(object):
             # Performs the averaging to find the spectra that will be tested.
             spectra = _np.mean(self._basespectra, axis=tuple(axes))
             # Find out how we're doing the false-positives control for this test.
-            test_inclass_correction = [inclass_correction[axislabel] for axislabel in test] + [inclass_correction['spectrum'],]
+            test_inclass_correction = [inclass_correction[axislabel]
+                                       for axislabel in test] + [inclass_correction['spectrum'], ]
             # If we are just doing Bonferroni corrections on everything, we using the following optimized code
             if all([correction == 'Bonferroni' for correction in test_inclass_correction]):
 
@@ -1078,7 +1080,7 @@ class StabilityAnalyzer(object):
                 #print(iterBenjHoch)
 
                 if verbosity > 1:
-                    print("      - Implementing {} Benjamini-Hockberg procedure statistical tests " + 
+                    print("      - Implementing {} Benjamini-Hockberg procedure statistical tests " +
                           "each containing {} tests.".format(numBon, numBenjHoch))
                     print("      - Local statistical significance for each Benjamini-Hockberg " +
                           "procedure is {}".format(localsig))
@@ -1087,7 +1089,7 @@ class StabilityAnalyzer(object):
                 if numBon > 1:
                     sigthreshold[test] = None   # doctstringtodo
                 else:
-                    sigthreshold[test] = {}  # doctstringtodo 
+                    sigthreshold[test] = {}  # doctstringtodo
 
                 if verbosity > 1:
                     print("      - Generating Benjamini-Hochberg power quasi-threshold...", end='')
@@ -1144,7 +1146,8 @@ class StabilityAnalyzer(object):
                             spectraindex = tuple(list(indices) + list(sigpowerind[:-1]))
                             # Record the frequency index that goes with this spectra index, by saving it in a tuple.
                             if spectraindex in driftfreqinds[test].keys():
-                                driftfreqinds[test][spectraindex] = tuple(list(driftfreqinds[test][spectraindex]).append(sigpowerind[-1]))
+                                driftfreqinds[test][spectraindex] = tuple(
+                                    list(driftfreqinds[test][spectraindex]).append(sigpowerind[-1]))
                             else:
                                 driftfreqinds[test][spectraindex] = (sigpowerind[-1],)
 
@@ -1249,7 +1252,7 @@ class StabilityAnalyzer(object):
         # Goes through each test in fromtests, and collates all the circuit with drift.
         for test in fromtests:
 
-            if dskey is not None: 
+            if dskey is not None:
                 assert(len(self.data.keys()) == 1 or dskey == test['dataset'])
             # If 'circuit' is in test, then we assign different drift frequencies to each circuit. Frequency indices
             # added in this loop are "true" hypothesis test results, in that ... docstringtodo. (except when the dataset
@@ -1379,11 +1382,11 @@ class StabilityAnalyzer(object):
         # The test we actually did that equivalent to this test.
         condtest = self._equivalent_implemented_test(test, detectorkey)
         assert(condtest is not None), "A test of this sort -- or an equivalent test -- has not been implemented!" \
-            +  "To create an ad-hoc post-fact threshold use the functions in drift.signal"
+            + "To create an ad-hoc post-fact threshold use the functions in drift.signal"
 
         thresholdset = self._power_sigthreshold[detectorkey][condtest]
         # If it's a float, it's a "true" threshold, so we set the threshold to this.
-        if isinstance(thresholdset, float): 
+        if isinstance(thresholdset, float):
             threshold = thresholdset
             thresholdtype = 'true'
         # Otherwise it's a dict, and it's either a single pseudo-threshold or a set of pseudo-threholds.
@@ -1431,7 +1434,8 @@ class StabilityAnalyzer(object):
             estimator = get_auto_estimator(self.transform)
 
         if self.transform == 'dct':
-            assert(estimator in ('filter', 'mle')), "For the {} transform, the estimator must be `filter` of `mle`".format(self.transform)
+            assert(estimator in ('filter', 'mle')
+                   ), "For the {} transform, the estimator must be `filter` of `mle`".format(self.transform)
         else:
             raise ValueError("Probability trajectory estimation is only currently possible with the DCT!")
 
@@ -1565,7 +1569,7 @@ class StabilityAnalyzer(object):
         summed_abs_amps = 0
 
         for o in params:
-            final_out_amplitudes  += params[o]
+            final_out_amplitudes += params[o]
             summed_abs_amps += _np.sum(_np.abs(params[o][1:]))
 
         summed_abs_amps += _np.sum(_np.abs(final_out_amplitudes[1:]))

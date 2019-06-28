@@ -41,7 +41,7 @@ def do_stability_analysis(ds, significance=0.05, transform='auto', marginalize='
     if verbosity > 0: print("done!")
 
     # Calculate the power spectra.
-    if verbosity > 0: print(" - Calculating power spectra...",end='')
+    if verbosity > 0: print(" - Calculating power spectra...", end='')
     results.generate_spectra(frequencies=frequencies, freqpointers=freqpointers)
     if verbosity > 0: print("done!")
 

@@ -21,6 +21,7 @@ class TimeResolvedModel(object):
     Encapsulates a basic form of time-resolved model, for implementing simple types
     of time-resolved characterization, e.g., time-resolved Ramsey spectroscopy.
     """
+
     def __init__(self, hyperparameters, parameters):
         """
         Initializes a TimResolvedModel object.
@@ -64,7 +65,7 @@ class TimeResolvedModel(object):
         return _copy.deepcopy(self)
 
 
-def negloglikelihood(trmodel, ds, minp=0, maxp=1): 
+def negloglikelihood(trmodel, ds, minp=0, maxp=1):
     """
     The negative loglikelihood for a TimeResolvedModel given the data.
 

@@ -41,9 +41,12 @@ class DriftSummaryTable(_ws.WorkspaceTable):
     def _create(self, stabilityanalyzer, dskey, detectorkey, estimatekey):
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
-        table.addrow(['Global statistical significance level', stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
-        table.addrow(['Instability detected', stabilityanalyzer.instability_detected(detectorkey=detectorkey)], [None, None])
-        table.addrow(['Instability size (maxmaxtvd)', stabilityanalyzer.get_maxmax_tvd(dskey=dskey, estimatekey=estimatekey)], [None, None])
+        table.addrow(['Global statistical significance level',
+                      stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
+        table.addrow(['Instability detected', stabilityanalyzer.instability_detected(
+            detectorkey=detectorkey)], [None, None])
+        table.addrow(['Instability size (maxmaxtvd)', stabilityanalyzer.get_maxmax_tvd(
+            dskey=dskey, estimatekey=estimatekey)], [None, None])
         table.finish()
         return table
 
@@ -52,6 +55,7 @@ class DriftDetailsTable(_ws.WorkspaceTable):
     """
     todo
     """
+
     def __init__(self, ws, stabilityanalyzer, detectorkey=None, estimatekey=None):
         """
         todo
@@ -78,6 +82,7 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
     """
     Plot of time-series data power spectrum
     """
+
     def __init__(self, ws, stabilityanalyzer, spectrumlabel={}, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
@@ -93,7 +98,8 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         # If we're plotting spectra for more than one circuit.
         if isinstance(circuits, dict) or isinstance(circuits, list):
 
-            threshold, thresholdtype = stabilityanalyzer.get_power_threshold(test=tuple(spectrumlabel.keys()), detectorkey=detectorkey)
+            threshold, thresholdtype = stabilityanalyzer.get_power_threshold(
+                test=tuple(spectrumlabel.keys()), detectorkey=detectorkey)
             data = []
             ymax = threshold
             xmax = 0
@@ -119,7 +125,8 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
                 xmax = max(max(xdata), xmax)
                 ymax = max(max(ydata), ymax)
 
-                data.append(go.Scatter(x=insig_xdata, y=insig_ydata, mode='markers', marker=dict(color=colors[ind], size=4), name=circlabel, showlegend=showlegend))
+                data.append(go.Scatter(x=insig_xdata, y=insig_ydata, mode='markers', marker=dict(
+                    color=colors[ind], size=4), name=circlabel, showlegend=showlegend))
                 data.append(go.Scatter(x=sig_xdata, y=sig_ydata, mode='markers', marker=dict(color=colors[ind], size=8),
                                        name=circlabel, showlegend=False))
 
@@ -127,7 +134,8 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         else:
 
             freqs, powers = stabilityanalyzer.get_spectrum(spectrumlabel, returnfrequencies=True, checklevel=2)
-            threshold, thresholdtype = stabilityanalyzer.get_power_threshold(test=tuple(spectrumlabel.keys()), detectorkey=detectorkey)
+            threshold, thresholdtype = stabilityanalyzer.get_power_threshold(
+                test=tuple(spectrumlabel.keys()), detectorkey=detectorkey)
 
             xdata = _np.array(freqs)
             ydata = _np.array(powers)
@@ -149,14 +157,15 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         ylim = [0, ymax * 1.1]
         xlim = [-0.05 * xmax, xmax * 1.05]
 
-        text = go.Scatter(x=[0.85*(xlim[1]-xlim[0]) + xlim[0], 0.85*(xlim[1]-xlim[0]) + xlim[0]],
-                          y=[threshold + 0.05*(ylim[1]-ylim[0]) + ylim[0], 1 - 0.05*(ylim[1]-ylim[0]) + ylim[0]],
+        text = go.Scatter(x=[0.85 * (xlim[1] - xlim[0]) + xlim[0], 0.85 * (xlim[1] - xlim[0]) + xlim[0]],
+                          y=[threshold + 0.05 * (ylim[1] - ylim[0]) + ylim[0], 1 -
+                             0.05 * (ylim[1] - ylim[0]) + ylim[0]],
                           # Todo.
-                         text=['{}% Significance Threshold'.format(stabilityanalyzer.get_statistical_significance(detectorkey)*100),
-                               'Expected Shot-Noise Level'],
-                         mode='text',
-                         showlegend=False
-                         )
+                          text=['{}% Significance Threshold'.format(stabilityanalyzer.get_statistical_significance(detectorkey) * 100),
+                                'Expected Shot-Noise Level'],
+                          mode='text',
+                          showlegend=False
+                          )
 
         data.append(text)
 
@@ -164,42 +173,42 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
                            xaxis=dict(title="Frequency (Hz)", titlefont=dict(size=14), range=xlim,),
                            yaxis=dict(title="Spectral Power", titlefont=dict(size=14), range=ylim,),
                            legend=dict(
-                    traceorder='normal',
-                    font=dict(
-                        size=10,
-                        color='#000'
-                    ),
-                    bgcolor='#ecf0f1',
-                    bordercolor='#bdc3c7',
-                    borderwidth=2,
-                    orientation="v"
-                ),
-                 shapes= [{
-            'type': 'line',
-            'x0': xlim[0],
-            'y0': threshold,
-            'x1': xlim[1],
-            'y1': threshold,
-            'line': {
-                'color': '#3498db',
-                'width': 2,
-                'dash': 'dot',
-                    },
-             },
-             {
-            'type': 'line',
-            'x0': xlim[0],
-            'y0': 1,
-            'x1': xlim[1],
-            'y1': 1,
-            'line': {
-                'color': '#f1c40f',
-                'width': 2,
-                'dash': 'dashdot',
-                    },
-             },
-            ],
-            showlegend=showlegend, 
+                               traceorder='normal',
+                               font=dict(
+                                   size=10,
+                                   color='#000'
+                               ),
+                               bgcolor='#ecf0f1',
+                               bordercolor='#bdc3c7',
+                               borderwidth=2,
+                               orientation="v"
+                           ),
+                           shapes=[{
+                               'type': 'line',
+                               'x0': xlim[0],
+                               'y0': threshold,
+                               'x1': xlim[1],
+                               'y1': threshold,
+                               'line': {
+                                   'color': '#3498db',
+                                   'width': 2,
+                                   'dash': 'dot',
+                               },
+                           },
+                               {
+                               'type': 'line',
+                               'x0': xlim[0],
+                               'y0': 1,
+                               'x1': xlim[1],
+                               'y1': 1,
+                               'line': {
+                                   'color': '#f1c40f',
+                                   'width': 2,
+                                   'dash': 'dashdot',
+                               },
+                           },
+                           ],
+                           showlegend=showlegend,
                            )
 
         pythonVal = {}
@@ -208,11 +217,12 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
             key = tr['name'] if ("name" in tr) else "trace%d" % i
             pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
 
-        return  _reportfigure.ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)
+        return _reportfigure.ReportFigure(go.Figure(data=list(data), layout=layout), None, pythonVal)
+
 
 class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
-    """ 
-    Plot of time-series data power spectrum 
+    """
+    Plot of time-series data power spectrum
     """
 
     def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, dskey=None, detectorkey=None,
@@ -243,26 +253,27 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
         numL = len(gss.Ls)
         colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
         for Lind, L in enumerate(gss.Ls):
-            for j, k, circuit in gss.get_plaquette(L, germ):               
+            for j, k, circuit in gss.get_plaquette(L, germ):
                 if j == prepind:
                     if k == measind:
                         circuitdict[L] = circuit
 
-        spectrumlabel = {'dataset':dskey, 'circuit':circuitdict}
+        spectrumlabel = {'dataset': dskey, 'circuit': circuitdict}
 
         return PowerSpectraPlot._create(self, stabilityanalyzer, spectrumlabel, detectorkey, showlegend, scale)
 
 
 class ProbTrajectoriesPlot(_ws.WorkspacePlot):
-    """ 
+    """
     todo
     """
+
     def __init__(self, ws, stabilityanalyzer, circuits, outcome, times=None, dskey=None, estimatekey=None, estimator=None, showlegend=True, scale=1.0):
         """
         todo
         """
         super(ProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, outcome,
-                                                        times, dskey, estimatekey, estimator, showlegend, scale)
+                                                   times, dskey, estimatekey, estimator, showlegend, scale)
 
     def _create(self, stabilityanalyzer, circuits, outcome, times, dskey, estimatekey, estimator, showlegend, scale):
 
@@ -273,7 +284,8 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
                 circuits = {c.str: c for c in circuits}
 
             if dskey is None:
-                assert(len(stabilityanalyzer.data.keys()) == 1), "There is more than one DataSet, so must specify the `dskey`!"
+                assert(len(stabilityanalyzer.data.keys()) ==
+                       1), "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
 
             colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", len(circuits))]
@@ -296,21 +308,22 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             xlim = [min(xdata), max(xdata)]
 
             layout = go.Layout(width=800 * scale, height=400 * scale, title=None, titlefont=dict(size=16),
-                               xaxis=dict(title="Time (seconds)", titlefont=dict(size=14), range=xlim), #, rangeslider=dict(visible = True)),
+                               # , rangeslider=dict(visible = True)),
+                               xaxis=dict(title="Time (seconds)", titlefont=dict(size=14), range=xlim),
                                yaxis=dict(title="Probability", titlefont=dict(size=14), range=ylim),
                                legend=dict(
-#                    x=0.05,
-#                    y=1.05,
-                    traceorder='normal',
-                    font=dict(
-                        size=10,
-                        color='#000'
-                    ),
-                    bgcolor='#ecf0f1',
-                    bordercolor='#bdc3c7',
-                    borderwidth=2,
-                    orientation="v"
-                ), showlegend=showlegend)
+                #                    x=0.05,
+                #                    y=1.05,
+                traceorder='normal',
+                font=dict(
+                    size=10,
+                    color='#000'
+                ),
+                bgcolor='#ecf0f1',
+                bordercolor='#bdc3c7',
+                borderwidth=2,
+                orientation="v"
+            ), showlegend=showlegend)
 
         # If we're plotting probability trajectories for a single circuit.
         else:
@@ -318,12 +331,14 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             circuit = circuits
 
             if dskey is None:
-                assert(len(stabilityanalyzer.data.keys()) == 1), "There is more than one DataSet, so must specify the `dskey`!"
+                assert(len(stabilityanalyzer.data.keys()) ==
+                       1), "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
             dtimes, data = stabilityanalyzer.data[dskey][circuit].get_timeseries_for_outcomes()
             if times is None:
                 times = _np.linspace(min(dtimes), max(dtimes), 5000)
-            p = stabilityanalyzer.get_probability_trajectory(circuit, times=times, dskey=dskey, estimatekey=estimatekey, estimator=estimator)[outcome]
+            p = stabilityanalyzer.get_probability_trajectory(
+                circuit, times=times, dskey=dskey, estimatekey=estimatekey, estimator=estimator)[outcome]
             lowpass = _sig.moving_average(data[outcome], width=100)
 
             trace_pt = go.Scatter(x=times, y=p, name="Probability Trajectory", line=dict(color='#e74c3c'),
@@ -343,38 +358,38 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
                                         args=[{'visible': [False, True]}, ]),
                                    dict(label='Both',
                                         method='update',
-                                        args=[{'visible': [True, True]},]),
+                                        args=[{'visible': [True, True]}, ]),
                                    ]),
                      xanchor='left',
                      yanchor='top',
                      x=0.02,
-                     y = 1.2, #y=0.98,
+                     y=1.2,  # y=0.98,
                      showactive=True
                      )
             ])
 
             layout = dict(width=800 * scale, height=500 * scale,
-                #title='Probability Trajectory',
-                xaxis=dict(title="Time (seconds)",),
-#                    rangeslider=dict(visible = True),
- #               ),
-                yaxis=dict(title="Probability", titlefont=dict(size=14),range=[0,1]), 
-                updatemenus=updatemenus,
-                legend=dict(
-                   x=0.5,
-                   y=1.05,
-                    traceorder='normal',
-                    font=dict(
-                        size=12,
-                        color='#000'
-                    ),
-                    bgcolor='#ecf0f1',
-                    bordercolor='#bdc3c7',
-                    borderwidth=2,
-                    orientation="h"
-                ), 
-                showlegend=showlegend
-            )
+                          #title='Probability Trajectory',
+                          xaxis=dict(title="Time (seconds)",),
+                          #                    rangeslider=dict(visible = True),
+                          #               ),
+                          yaxis=dict(title="Probability", titlefont=dict(size=14), range=[0, 1]),
+                          updatemenus=updatemenus,
+                          legend=dict(
+                              x=0.5,
+                              y=1.05,
+                              traceorder='normal',
+                              font=dict(
+                                  size=12,
+                                  color='#000'
+                              ),
+                              bgcolor='#ecf0f1',
+                              bordercolor='#bdc3c7',
+                              borderwidth=2,
+                              orientation="h"
+                          ),
+                          showlegend=showlegend
+                          )
 
         pythonVal = {}
         for i, tr in enumerate(data):
@@ -389,6 +404,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     """
     todo
     """
+
     def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None, estimatekey=None,
                  estimator=None, showlegend=False, scale=1.0):
         """
@@ -399,7 +415,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             and maximum lengths.
         """
         super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times,
-                                                       dskey, estimatekey, estimator, showlegend, scale)
+                                                               dskey, estimatekey, estimator, showlegend, scale)
 
     def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey, estimator, showlegend, scale):
 
@@ -474,15 +490,16 @@ def _create_switchboard(ws, results_dict):
 
     return switchBd, dataset_labels
 
+
 def _create_drift_switchboard(ws, results, gss):
     """
     todo
     """
     if len(results.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
-            ["Dataset", "Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)], 
-                                                                    [c.str for c in gss.effectStrs],
-                                                                 [i.str for i in results.data.get_outcome_labels()]],
+            ["Dataset", "Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
+                                                                                             [c.str for c in gss.effectStrs],
+                                                                                             [i.str for i in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0], show=[True, True, True, True, True])
         drift_switchBd.add("dataset", (0,))
         drift_switchBd.add("germ", (1,))
@@ -492,8 +509,8 @@ def _create_drift_switchboard(ws, results, gss):
 
     else:
         drift_switchBd = ws.Switchboard(
-            ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [[c.str for c in gss.germs], [c.str for c in(gss.prepStrs)], 
-            [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
+            ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"], [[c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
+                                                                                  [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
         drift_switchBd.add("prepStrs", (1,))
@@ -554,14 +571,14 @@ def create_drift_report(results, gss, filename, title="auto",
     drift_switchBd = _create_drift_switchboard(ws, results, gss)
     qtys = {}  # stores strings to be inserted into report template
     qtys['drift_switchBd'] = drift_switchBd
-    
+
     # Sets whether or not the dataset key is a switchboard or not.
     if len(results.data.keys()) > 1:
-       dskey = drift_switchBd.dataset
-       arb_dskey = list(singleresults.data.keys())[0]
+        dskey = drift_switchBd.dataset
+        arb_dskey = list(singleresults.data.keys())[0]
     else:
-       dskey = list(singleresults.data.keys())[0]
-       arb_dskey = dskey
+        dskey = list(singleresults.data.keys())[0]
+        arb_dskey = dskey
 
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
