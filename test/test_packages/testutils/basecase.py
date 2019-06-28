@@ -115,3 +115,8 @@ class BaseTestCase(unittest.TestCase):
                 self.assertTrue( abs(cnt - ds2[circuit].counts[ol]) < 1.5 )
                 #Let counts be off by 1 b/c of rounding
                 #self.assertAlmostEqual( cnt, ds2[circuit].counts[ol], places=3 )
+
+    def assertDictsAlmostEqual(self, d1, d2):
+        self.assertEqual(set(d1.keys()), set(d2.keys()))
+        for k in d1.keys():
+            self.assertAlmostEqual(d1[k], d2[k])

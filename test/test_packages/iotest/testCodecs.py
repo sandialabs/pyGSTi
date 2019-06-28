@@ -304,7 +304,23 @@ class TestCodecs(CodecsTestCase):
         pygsti.io.jsoncodec.tostr(b"Hi")
         pygsti.io.jsoncodec.tobin("Hi")
         pygsti.io.jsoncodec.tobin(b"Hi")
-    
+
+    def test_pickle_dataset_with_circuitlabels(self):
+        #A later-added test checking whether Circuits containing CiruitLabels
+        # are correctly pickled within a DataSet.  In particular correct
+        # preservation of the circuit's .str property
+        pygsti.obj.Circuit.default_expand_subcircuits = False # so exponentiation => CircuitLabels
+        ds = pygsti.obj.DataSet(outcomeLabels=('0','1'))
+        c0 = pygsti.obj.Circuit(None,stringrep="[Gx:0Gy:1]")
+        c = c0**2
+        self.assertTrue(isinstance(c.tup[0], pygsti.baseobjs.CircuitLabel))
+        self.assertEqual(c.str, "([Gx:0Gy:1])^2")
+        ds.add_count_dict(c, {'0': 50, '1': 50})
+        s = pickle.dumps(ds)
+        ds2 = pickle.loads(s)
+        c2 = list(ds2.keys())[0]
+        self.assertEqual(c2.str, "([Gx:0Gy:1])^2")
+        pygsti.obj.Circuit.default_expand_subcircuits = True
 
     #Debugging, because there was some weird python3 vs 2 json incompatibility with string labels
     # - turned out to be that the unit test files needed to import unicode_literals from __future__

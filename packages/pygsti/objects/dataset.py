@@ -999,7 +999,7 @@ class DataSet(object):
                     if opLabel not in opLabels: opLabels.append(opLabel)
         return opLabels
 
-    def get_degrees_of_freedom(self, circuitList=None, method="all_outcomes-1",
+    def get_degrees_of_freedom(self, circuitList=None, method="present_outcomes-1",
                                aggregate_times=True):
         """
         Returns the number of independent degrees of freedom in the data for
@@ -1049,7 +1049,7 @@ class DataSet(object):
                 else:
                     #assume final outcome at each time is constrained
                     nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
-                    nDOF += nOutcomes - 1; cur_outcomes = set()
+                    nDOF += nOutcomes - 1; cur_outcomes = set([ol])
                     cur_t = t
             nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
             nDOF += nOutcomes - 1  # last time stamp
@@ -1253,7 +1253,7 @@ class DataSet(object):
         if aux is not None: self.add_auxiliary_info(circuit, aux)
 
     def add_series_data(self, circuit, countDictList, timeStampList,
-                        overwriteExisting=True, aux=None):
+                        overwriteExisting=True, recordZeroCnts=True, aux=None):
         """
         Add a single circuit's counts to this DataSet
 
@@ -1274,6 +1274,12 @@ class DataSet(object):
             If `True`, overwrite any existing data for the `circuit`.  If
             `False`, add the count data with the next non-negative integer
             timestamp.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts (elements of the dictionaries in `countDictList` that
+            are zero) are actually recorded (stored) in this DataSet.  If False, then
+            zero counts are ignored, except for potentially registering new outcome
+            labels.
 
         aux : dict, optional
             A dictionary of auxiliary meta information to be included with
@@ -1297,7 +1303,7 @@ class DataSet(object):
                 expanded_repList.append(cntDict[ol])  # could do this only for counts > 1
         return self.add_raw_series_data(circuit, expanded_outcomeList,
                                         expanded_timeList, expanded_repList,
-                                        overwriteExisting, aux=aux)
+                                        overwriteExisting, recordZeroCnts, aux)
 
     def merge_outcomes(self, label_merge_dict, recordZeroCnts=True):
         """

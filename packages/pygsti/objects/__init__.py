@@ -35,6 +35,8 @@ from .operation import CliffordOp
 from .operation import LindbladErrorgen
 from .operation import ComposedErrorgen
 from .operation import EmbeddedErrorgen
+from .operation import StochasticNoiseOp
+from .operation import DepolarizeOp
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullSPAMVec
@@ -54,6 +56,9 @@ from .povm import ComputationalBasisPOVM
 from .povm import LindbladPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
+from .opfactory import OpFactory
+from .opfactory import EmbeddedOpFactory
+from .opfactory import EmbeddingOpFactory
 
 from .model import Model
 from .explicitmodel import ExplicitOpModel

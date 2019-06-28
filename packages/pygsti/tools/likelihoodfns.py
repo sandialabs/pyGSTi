@@ -218,7 +218,7 @@ def logl_terms(model, dataset, circuit_list=None,
         if firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
                                              for i in indicesOfCircuitsWithOmittedData])
-            v[firsts] += totalCntVec[firsts] * \
+            v[firsts] -= totalCntVec[firsts] * \
                 _np.where(omitted_probs >= a, omitted_probs,
                           (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
@@ -320,7 +320,12 @@ def logl(model, dataset, circuit_list=None,
         A cache object to cache & use previously cached values inside this
         function.
 
-    wildcard : TODO: docstring
+    wildcard : WildcardBudget
+        A wildcard budget to apply to this log-likelihood computation.
+        This increases the returned log-likelihood value by adjusting
+        (by a maximal amount measured in TVD, given by the budget) the
+        probabilities produced by `model` to optimially match the data
+        (within the bugetary constraints) evaluating the log-likelihood.
 
     Returns
     -------
@@ -493,7 +498,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         if firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
                                              for i in indicesOfCircuitsWithOmittedData])
-            v[firsts] += totalCntVec[firsts] * \
+            v[firsts] -= totalCntVec[firsts] * \
                 _np.where(omitted_probs >= a, omitted_probs,
                           (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
@@ -1305,8 +1310,12 @@ def two_delta_logl(model, dataset, circuit_list=None,
         A cache object to cache & use previously cached values inside this
         function.
 
-    wildcard : TODO: docstring
-
+    wildcard : WildcardBudget
+        A wildcard budget to apply to this log-likelihood computation.
+        This increases the returned log-likelihood value by adjusting
+        (by a maximal amount measured in TVD, given by the budget) the
+        probabilities produced by `model` to optimially match the data
+        (within the bugetary constraints) evaluating the log-likelihood.
 
     Returns
     -------
@@ -1351,7 +1360,17 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
                          evaltree_cache=None, comm=None, dof_calc_method=None,
                          smartc=None, wildcard=None):
     """
-    TODO: docstring - similar to two_delta_logl params - may need to add 'wildcard'
+    The vector of twice the difference between the maximum and actual
+    log-likelihood for each operation sequence, aggregated over outcomes.
+
+    Optionally (when `dof_calc_method` is not None) returns parallel vectors
+    containing the Nsigma (# std deviations from mean) and the p-value relative
+    to expected chi^2 distribution for each sequence.
+
+    Parameters
+    ----------
+    This function takes the same arguments as :func:`two_delta_logl` except it
+    doesn't perform the final sum over operation sequences and SPAM labels.
 
     Returns
     -------

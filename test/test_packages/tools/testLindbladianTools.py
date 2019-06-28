@@ -26,7 +26,7 @@ class LindbladianToolsBaseTestCase(BaseTestCase):
 
     def test_stochastic_lindbladian(self):
         a = np.array([[1,2],[3,4]])
-        expected = np.array(
+        expected = 2.0 * np.array(
             [[ 1,  2,  2,  4],
              [ 3,  4,  6,  8],
              [ 3,  6,  4,  8],
@@ -44,7 +44,7 @@ class LindbladianToolsBaseTestCase(BaseTestCase):
     def test_nonham_lindbladian(self):
         a = np.array([[1,2],[3,4]])
         b = np.array([[1,2],[3,4]])
-        expected = np.array(
+        expected = 2.0 * np.array(
                 [[ -9,  -5,  -5,  4],
                  [ -4, -11,   6,  1],
                  [ -4,   6, -11,  1],

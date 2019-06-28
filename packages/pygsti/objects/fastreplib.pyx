@@ -7,7 +7,7 @@ import sys
 import time as pytime
 import numpy as np
 from libc.stdlib cimport malloc, free
-from libc.math cimport log10
+from libc.math cimport log10, sqrt, log
 from libc cimport time
 from libcpp cimport bool
 from libcpp.vector cimport vector
@@ -21,6 +21,7 @@ cimport cython
 import itertools as _itertools
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
+from ..tools import optools as _gt
 from scipy.sparse.linalg import LinearOperator
 
 
@@ -343,6 +344,8 @@ ctypedef void (*sb_innerloopfn_ptr)(vector[vector_SBTermCRep_ptr_ptr],
 ctypedef void (*sv_addpathfn_ptr)(vector[PolyCRep*]*, vector[INT]&, INT, vector[vector_SVTermCRep_ptr_ptr]&,
                                   SVStateCRep**, SVStateCRep**, vector[INT]*,
                                   vector[SVStateCRep*]*, vector[SVStateCRep*]*, vector[PolyCRep]*)
+
+ctypedef double (*TD_obj_fn)(double, double, double, double, double, double, double)
 
         
 #cdef class StateRep:
@@ -1533,6 +1536,215 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
 
     return dpr_cache
 
+#HERE
+cdef double TDchi2_obj_fn(double p, double f, double Ni, double N, double omitted_p, double minProbClipForWeighting, double extra):
+    cdef double cp, v, omitted_cp
+    cp = p if p > minProbClipForWeighting else minProbClipForWeighting
+    cp = cp if cp < 1 - minProbClipForWeighting else 1 - minProbClipForWeighting
+    v = (p - f) * sqrt(N / cp)
+
+    if omitted_p != 0.0:
+        # if this is the *last* outcome at this time then account for any omitted probability
+        if omitted_p < minProbClipForWeighting:        omitted_cp = minProbClipForWeighting
+        elif omitted_p > 1 - minProbClipForWeighting:  omitted_cp = 1 - minProbClipForWeighting
+        else:                                          omitted_cp = omitted_p
+        v = sqrt(v*v + N * omitted_p*omitted_p / omitted_cp)
+    return v  # sqrt(the objective function term)  (the qty stored in cache)
+
+def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                            minProbClipForWeighting, probClipInterval, comm):
+    return DM_compute_TDcache(calc, "chi2", rholabel, elabels, num_outcomes, evalTree,
+                              dataset_rows, comm, minProbClipForWeighting, 0.0)
+
+
+cdef double TDloglpp_obj_fn(double p, double f, double Ni, double N, double omitted_p, double min_p, double a):
+    cdef double freq_term, S, S2, v, tmp
+    cdef double pos_p = max(p, min_p)
+
+    if Ni != 0.0:
+        freq_term = Ni * (log(f) - 1.0)
+    else:
+        freq_term = 0.0
+        
+    S = -Ni / min_p + N
+    S2 = 0.5 * Ni / (min_p*min_p)
+    v = freq_term + -Ni * log(pos_p) + N * pos_p  # dims K x M (K = nSpamLabels, M = nCircuits)
+
+    # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+    v = max(v, 0)
+
+    # quadratic extrapolation of logl at min_p for probabilities < min_p
+    if p < min_p:
+        tmp = (p - min_p)
+        v = v + S * tmp + S2 * tmp * tmp
+
+    if Ni == 0.0:
+        if p >= a:
+            v = N * p
+        else:
+            v = N * ((-1.0 / (3 * a*a)) * p*p*p + p*p / a + a / 3.0)
+    # special handling for f == 0 terms
+    # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+
+    if omitted_p != 0.0:
+        # if this is the *last* outcome at this time then account for any omitted probability
+        v += N * omitted_p if omitted_p >= a else \
+            N * ((-1.0 / (3 * a*a)) * omitted_p*omitted_p*omitted_p + omitted_p*omitted_p / a + a / 3.0)
+
+    return v  # objective function term (the qty stored in cache)
+
+
+def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                              minProbClip, radius, probClipInterval, comm):
+    return DM_compute_TDcache(calc, "logl", rholabel, elabels, num_outcomes, evalTree,
+                              dataset_rows, comm, minProbClip, radius)
+
+
+def DM_compute_TDcache(calc, objective, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm, double fnarg1, double fnarg2):
+
+    cdef INT i, j, k, l, n, kinit, nTotOutcomes, N, Ni
+    cdef double cur_probtotal, t, t0
+    cdef TD_obj_fn objfn
+    if objective == "chi2":
+        objfn = TDchi2_obj_fn
+    else:
+        objfn = TDloglpp_obj_fn
+    
+    cdef INT cacheSize = evalTree.cache_size()
+    cdef np.ndarray ret = np.zeros((len(evalTree), len(elabels)), 'd')  # zeros so we can just add contributions below
+    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+
+    elabels_as_outcomes = [_gt.spamTupleToOutcome((rholabel, e)) for e in elabels]
+    outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
+    dataset_rows = {i: row for i,row in enumerate(dataset_rows) } # change to dict for indexing speed - maybe pass this in? FUTURE
+    num_outcomes = {i: N for i,N in enumerate(num_outcomes) } # change to dict for indexing speed
+
+    #comm is currently ignored
+    #TODO: if evalTree is split, distribute among processors
+    for i in evalTree.get_evaluation_order():
+        iStart, remainder, iCache = evalTree[i]
+        datarow = dataset_rows[i]
+        nTotOutcomes = num_outcomes[i]
+        N = 0; nOutcomes = 0
+        
+        n = len(datarow.reps) # == len(datarow.time)
+        kinit = 0
+        while kinit < n:
+            #Process all outcomes of this datarow occuring at a single time, t0
+            t0 = datarow.time[kinit]
+
+            #Compute N, nOutcomes for t0
+            N = 0; k = kinit
+            while k < n and datarow.time[k] == t0:
+                N += datarow.reps[k]
+                k += 1
+            nOutcomes = k - kinit
+
+            #Compute each outcome's contribution
+            cur_probtotal = 0.0
+            for l in range(kinit,k):
+                t = t0
+                rhoVec.set_time(t)
+                rho = rhoVec.torep('prep')
+                t += rholabel.time
+
+                Ni = datarow.reps[l]
+                outcome = datarow.outcomes[l]
+    
+                for gl in remainder:
+                    op = calc.sos.get_operation(gl)
+                    op.set_time(t); t += gl.time  # time in gate label == gate duration?
+                    rho = op.torep().acton(rho)
+    
+                j = outcome_to_elabel_index[outcome]
+                E = EVecs[j]; E.set_time(t)
+                p = E.torep('effect').probability(rho)  # outcome probability
+                f = float(Ni) / float(N)
+                cur_probtotal += p
+    
+                omitted_p = 1.0 - cur_probtotal if (l == k-1 and nOutcomes < nTotOutcomes) else 0.0
+                # and cur_probtotal < 1.0?
+    
+                ret[i, j] += objfn(p, f, Ni, N, omitted_p, fnarg1, fnarg2)
+            kinit = k
+    return ret
+
+
+def DM_compute_TDdchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                             minProbClipForWeighting, probClipInterval, wrtSlice, comm):
+
+    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+        return DM_compute_TDchi2_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                       minProbClipForWeighting, probClipInterval, fillComm)
+
+    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                     cachefn, wrtSlice, comm)
+
+
+def DM_compute_TDdloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                               minProbClip, radius, probClipInterval, wrtSlice, comm):
+
+    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+        return DM_compute_TDloglpp_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                         minProbClip, radius, probClipInterval, fillComm)
+
+    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                     cachefn, wrtSlice, comm)
+
+
+def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                              cachefn, wrtSlice, comm):
+
+    cdef INT i, ii
+    cdef double eps = 1e-7  # hardcoded?
+
+    #Compute finite difference derivatives, one parameter at a time.
+    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+    cdef INT nDerivCols = len(param_indices)  # *all*, not just locally computed ones
+
+    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    cdef np.ndarray cache = np.empty((len(evalTree), len(elabels)), 'd')
+    cdef np.ndarray dcache = np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
+
+    cdef INT cacheSize = evalTree.cache_size()
+    #assert(cacheSize == 0)
+
+    cache = cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+    all_slices, my_slice, owners, subComm = \
+        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+
+    my_param_indices = param_indices[my_slice]
+    cdef INT st = my_slice.start  # beginning of where my_param_indices results
+    # get placed into dpr_cache
+
+    #Get a map from global parameter indices to the desired
+    # final index within dpr_cache
+    iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
+
+    orig_vec = calc.to_vector().copy()
+    for i in range(calc.Np):
+        #print("dprobs cache %d of %d" % (i,calc.Np))
+        if i in iParamToFinal:
+            iFinal = iParamToFinal[i]
+            vec = orig_vec.copy(); vec[i] += eps
+            calc.from_vector(vec)
+            dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
+                                    - cache) / eps
+    calc.from_vector(orig_vec)
+
+    #Now each processor has filled the relavant parts of dpr_cache,
+    # so gather together:
+    _mpit.gather_slices(all_slices, owners, dcache, [], axes=2, comm=comm)
+
+    #REMOVE
+    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
+    #      (calc.Np, calc.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+
+    return dcache
+#HERE2
+
 
 # Helper functions
 cdef PolyRep_from_allocd_PolyCRep(PolyCRep* crep):
@@ -1638,7 +1850,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(
         innerloop_fn = sv_pr_as_poly_innerloop
 
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
-    #gate_term_prefactors = _np.empty( (nOperations,max_order+1,dim,dim)
+    #gate_term_prefactors = np.empty( (nOperations,max_order+1,dim,dim)
     #cdef unordered_map[INT, vector[vector[unordered_map[INT, complex]]]] gate_term_coeffs
     #cdef vector[vector[unordered_map[INT, complex]]] rho_term_coeffs
     #cdef vector[vector[unordered_map[INT, complex]]] E_term_coeffs
@@ -1821,7 +2033,7 @@ cdef void sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists
         Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
         deref(prps)[Ei].add_inplace(result)
         
-        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        #increment b ~ itertools.product & update vec_index_noop = np.dot(self.multipliers, b)
         for i in range(nFactorLists-1,-1,-1):
             if b[i]+1 < factorListLens[i]:
                 b[i] += 1
@@ -1991,7 +2203,7 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
         #assert(debug < 100) #DEBUG
         #print "DB: end product loop"
         
-        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        #increment b ~ itertools.product & update vec_index_noop = np.dot(self.multipliers, b)
         for i in range(nFactorLists-1,-1,-1):
             if b[i]+1 < factorListLens[i]:
                 b[i] += 1; incd = i
@@ -2014,7 +2226,7 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 
 # State-vector pruned-poly-term calcs -------------------------
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
+def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
                            current_threshold=None):
 
     #t0 = pytime.time()
@@ -2057,8 +2269,24 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
             op_foat_indices[ glmap[glbl] ] = repcel.foat_indices
         else:
             repcel = RepCacheEl()
-            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+            if glbl in opcache:
+                op = opcache[glbl]
+                db_made_op = False
+            else:
+                op = calc.sos.get_operation(glbl)
+                opcache[glbl] = op
+                db_made_op = True
+
+            hmterms, foat_indices = op.get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
+            
+            #DEBUG CHECK TERM MAGNITUDES make sense
+            #chk_tot_mag = sum([t.magnitude for t in hmterms])
+            #chk_tot_mag2 = op.get_total_term_magnitude()
+            #if chk_tot_mag > chk_tot_mag2+1e-5: # give a tolerance here
+            #    print "Warning: highmag terms for ",str(glbl),": ",len(hmterms)," have total mag = ",chk_tot_mag," but max should be ",chk_tot_mag2,"!!"
+            #else:
+            #    print "Highmag terms recomputed (OK) - made op = ", db_made_op
 
             for t in hmterms:
                 rep = (<SVTermRep?>t.torep(mpo,mpv,"gate"))
@@ -2134,7 +2362,8 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
     cdef double max_partial_sopm = calc.sos.get_prep(rholabel).get_total_term_magnitude()
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        max_partial_sopm *= calc.sos.get_operation(glbl).get_total_term_magnitude()
+        op = opcache.get(glbl, calc.sos.get_operation(glbl))
+        max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
         target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() - pathmagnitude_gap
     
@@ -2148,6 +2377,9 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices,
         numEs, calc.max_order, stateDim, <bool>fastmode, pathmagnitude_gap, min_term_mag,
         current_threshold, target_sum_of_pathmags, mpo, mpv, vpi, returnvec)
+
+    if returnvec[2]+pathmagnitude_gap+1e-5 < returnvec[3]: # index 2 = Target, index 3 = Achieved
+        print "Warning: Achieved sum(path mags) exceeds max by ", returnvec[3]-(returnvec[2]+pathmagnitude_gap),"!!!"
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ], int(returnvec[0]), returnvec[1], returnvec[2], returnvec[3]
 
@@ -2185,6 +2417,19 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     factor_lists[N+1] = &E_term_reps
     foat_indices_per_op[N+1] = &E_foat_indices
 
+    #print "CHECK: ",N+2, " op lists"
+    #running=1.0
+    #for i in range(N+1):
+    #    nTerms = deref(factor_lists[i]).size()
+    #    mags = [ deref(factor_lists[i])[j]._magnitude for j in range(nTerms) ]
+    #    running *= sum(mags)
+    #    print i,": ",nTerms,"terms: "," sum=",sum(mags)," running=",running
+    #nETerms = deref(factor_lists[N+1]).size()
+    #mags0 = [ deref(factor_lists[N+1])[j]._magnitude for j in range(nETerms) if E_indices[j] == 0]
+    #mags1 = [ deref(factor_lists[N+1])[j]._magnitude for j in range(nETerms) if E_indices[j] == 1]
+    #print "Final check E0: * ",sum(mags0)," = ",running*sum(mags0)
+    #print "Final check E1: * ",sum(mags1)," = ",running*sum(mags1)
+        
 
     cdef vector[double] achieved_sum_of_pathmags = vector[double](numEs)
     cdef vector[INT] npaths = vector[INT](numEs)
@@ -2661,6 +2906,9 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
         try_larger_threshold = 1 # True
         for i in range(nEffects):
+            #if(mags[i] > target_sum_of_pathmags[i]): #DEBUG TODO REMOVE
+            #    print "MAGS TOO LARGE!!! mags=",mags[i]," target_sum=",target_sum_of_pathmags[i]
+
             if(mags[i] < target_sum_of_pathmags[i]):
                 try_larger_threshold = 0 # False
                 break
@@ -2952,7 +3200,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 #        innerloop_fn = sv_pr_directly_innerloop
 #
 #    #extract raw data from gate_terms dictionary-of-lists for faster lookup
-#    #gate_term_prefactors = _np.empty( (nOperations,max_order+1,dim,dim)
+#    #gate_term_prefactors = np.empty( (nOperations,max_order+1,dim,dim)
 #    #cdef unordered_map[INT, vector[vector[unordered_map[INT, complex]]]] gate_term_coeffs
 #    #cdef vector[vector[unordered_map[INT, complex]]] rho_term_coeffs
 #    #cdef vector[vector[unordered_map[INT, complex]]] E_term_coeffs
@@ -3154,7 +3402,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 #            deref(remainingWeight)[Ei] = wt - cwt # "weight" of this path
 #            nPaths += 1 # just for debuggins
 #        
-#        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+#        #increment b ~ itertools.product & update vec_index_noop = np.dot(self.multipliers, b)
 #        for i in range(nFactorLists-1,-1,-1):
 #            if b[i]+1 < factorListLens[i]:
 #                b[i] += 1
@@ -3325,7 +3573,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 #        #assert(debug < 100) #DEBUG
 #        #print "DB: end product loop"
 #        
-#        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+#        #increment b ~ itertools.product & update vec_index_noop = np.dot(self.multipliers, b)
 #        for i in range(nFactorLists-1,-1,-1):
 #            if b[i]+1 < factorListLens[i]:
 #                b[i] += 1; incd = i
@@ -3447,7 +3695,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
         innerloop_fn = sb_pr_as_poly_innerloop
 
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
-    #gate_term_prefactors = _np.empty( (nOperations,max_order+1,dim,dim)
+    #gate_term_prefactors = np.empty( (nOperations,max_order+1,dim,dim)
     #cdef unordered_map[INT, vector[vector[unordered_map[INT, complex]]]] gate_term_coeffs
     #cdef vector[vector[unordered_map[INT, complex]]] rho_term_coeffs
     #cdef vector[vector[unordered_map[INT, complex]]] E_term_coeffs
@@ -3632,7 +3880,7 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
         Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
         deref(prps)[Ei].add_inplace(result)
         
-        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        #increment b ~ itertools.product & update vec_index_noop = np.dot(self.multipliers, b)
         for i in range(nFactorLists-1,-1,-1):
             if b[i]+1 < factorListLens[i]:
                 b[i] += 1
@@ -3816,7 +4064,7 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         #assert(debug < 100) #DEBUG
         #print "DB: end product loop"
         
-        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        #increment b ~ itertools.product & update vec_index_noop = np.dot(self.multipliers, b)
         for i in range(nFactorLists-1,-1,-1):
             if b[i]+1 < factorListLens[i]:
                 b[i] += 1; incd = i

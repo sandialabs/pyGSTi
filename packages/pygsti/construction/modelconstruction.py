@@ -10,15 +10,18 @@ import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import scipy.linalg as _spl
+import scipy.sparse as _sps
 import warnings as _warnings
 
 
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import compattools as _compat
+from ..tools import internalgates as _itgs
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
+from ..objects import opfactory as _opfactory
 from ..objects import explicitmodel as _emdl
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
@@ -27,6 +30,7 @@ from ..objects.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..baseobjs import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import DirectSumBasis as _DirectSumBasis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 
 
 #############################################
@@ -74,7 +78,7 @@ def basis_build_vector(vecExpr, basis):
     std_basis = basis.equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
-    vecInReducedStdBasis = _np.dot(std_basis.get_from_simple_std(), vecInSimpleStdBasis.flatten())
+    vecInReducedStdBasis = _np.dot(std_basis.get_from_element_std(), vecInSimpleStdBasis.flatten())
     # translates the density matrx / SPAMVec to the std basis with our desired block structure
 
     #TODO REMOVE
@@ -703,10 +707,10 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
     return mdl_new
 
 
-def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
-                                    qubit_labels=None, geometry="line", parameterization='static',
-                                    evotype="auto", sim_type="auto", on_construction_error='raise',
-                                    independent_gates=False, ensure_composed_gates=False, globalIdle=None):
+def build_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+                           availability=None, qubit_labels=None, geometry="line", parameterization='static',
+                           evotype="auto", sim_type="auto", on_construction_error='raise',
+                           independent_gates=False, ensure_composed_gates=False, globalIdle=None):
     """
     Creates a "standard" n-qubit local-noise model, usually of ideal gates.
 
@@ -741,23 +745,51 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
 
     nonstd_gate_unitaries : dict, optional
         A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.
+        of the gate names given by the dictionary's keys.  As an advanced
+        behavior, a unitary-matrix-returning function which takes a single
+        argument - a tuple of label arguments - may be given instead of a
+        single matrix to create an operation *factory* which allows
+        continuously-parameterized gates.  This function must also return
+        an empty/dummy unitary when `None` is given as it's argument.
+
+    custom_gates : dict, optional
+        A dictionary that associates with gate labels
+        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+        objects.  These objects describe the full action of the gate or
+        primitive-layer they're labeled by (so if the model represents
+        states by density matrices these objects are superoperators, not
+        unitaries), and override any standard construction based on builtin
+        gate names or `nonstd_gate_unitaries`.  Keys of this dictionary may
+        be string-type gate *names*, which will be embedded according to
+        `availability`, or labels that include target qubits,
+        e.g. `("Gx",0)`, which override this default embedding behavior.
+        Furthermore, :class:`OpFactory` objects may be used in place of
+        `LinearOperator` objects to allow the evaluation of labels with
+        arguments.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and specifies that the named gate
-        is available to act on the specified qubits.  For example,
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
         `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be available for acting on qubits
-        0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
-        act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
-        `availability` may take the special values `"all-permutations"` and
-        `"all-combinations"`, which as their names imply, equate to all possible
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
         permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).  The default value `"all-edges"`
-        equates to all the edges in the graph given by `geometry`.
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the graphy given by `geometry`.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
@@ -833,7 +865,290 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         `availability`).  For instance, the operation label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    return _LocalNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
-                                           qubit_labels, geometry, parameterization, evotype,
-                                           sim_type, on_construction_error, independent_gates,
-                                           ensure_composed_gates, globalIdle)
+    return _LocalNoiseModel.build_from_parameterization(
+        nQubits, gate_names, nonstd_gate_unitaries, custom_gates,
+        availability, qubit_labels, geometry, parameterization, evotype,
+        sim_type, on_construction_error, independent_gates,
+        ensure_composed_gates, globalIdle)
+
+
+def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
+                               availability=None, qubit_labels=None, geometry="line", parameterization='auto',
+                               evotype="auto", sim_type="auto", on_construction_error='raise',
+                               independent_gates=False, ensure_composed_gates=False):
+    """
+    Create a n-qubit "crosstalk-free" model: one whose operations only act
+    nontrivially on their target qubits.
+
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits.
+
+    gate_names : list
+        A list of string-type gate names (e.g. `"Gx"`) either taken from
+        the list of builtin "standard" gate names or from the
+        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
+        gates that are repeatedly embedded (based on `availability`) to form
+        the resulting model.
+
+    error_rates : dict
+        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
+        determine the type and amount of error placed on that gate.  Values can
+        be floats, tuples or "error-dictionaries".  A float specifies a rate of
+        uniform depolarization, and a tuple of floats specifies Pauli-stochastic
+        error rates for each of the non-trivial Paulis (so a 3-tuple would be
+        expected for a 1Q gate and a 15-tuple for a 2Q gate).  Finally, an error
+        dictionary is a `dict` with keys that specify types of errors and values
+        that specify rates.  Keys are `(termType, basisLabel)` tuples, where
+        `termType` can be `"H"` (Hamiltonian), `"S"` (Stochastic), or `"A"`
+        (Affine), and `basisLabel` is a string of I, X, Y, or Z to describe a
+        Pauli basis element appropriate for the gate (i.e. having the same
+        number of letters as there are qubits in the gate).  For example, you
+        could specify a 0.01-radian Z-rotation error and 0.05 rate of Pauli-
+        stochastic X errors on a 1-qubit gate by using the error dictionary:
+        `{('H','Z'): 0.01, ('S','X'): 0.05}`.  In addition to the gate names,
+        the special values `"prep"`, `"povm"`, and `"idle"` may be used as
+        keys of `error_rates` to specify the error on the state preparation,
+        measurement, and global idle, respectively.
+
+    nonstd_gate_unitaries : dict, optional
+        A dictionary of numpy arrays which specifies the unitary gate action
+        of the gate names given by the dictionary's keys.
+
+    custom_gates : dict, optional
+        A dictionary that associates with gate labels
+        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+        objects.  These objects override any other behavior for constructing
+        their designated operations (e.g. from `error_rates` or
+        `nonstd_gate_unitaries`).  Keys of this dictionary may
+        be string-type gate *names* or labels that include target qubits.
+
+    availability : dict, optional
+        A dictionary whose keys are the same gate names as in
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
+        permutations and combinations of the appropriate number of qubit labels
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the graphy given by `geometry`.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
+
+    qubit_labels : tuple, optional
+        The circuit-line labels for each of the qubits, which can be integers
+        and/or strings.  Must be of length `nQubits`.  If None, then the
+        integers from 0 to `nQubits-1` are used.
+
+    geometry : {"line","ring","grid","torus"} or QubitGraph, optional
+        The type of connectivity among the qubits, specifying a graph used to
+        define neighbor relationships.  Alternatively, a :class:`QubitGraph`
+        object with `qubit_labels` as the node labels may be passed directly.
+        This argument is only used as a convenient way of specifying gate
+        availability (edge connections are used for gates whose availability
+        is unspecified by `availability` or whose value there is `"all-edges"`).
+
+    parameterization : "auto"
+        This argument is for future expansion and currently must be set to `"auto"`.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  If "auto" is specified, "densitymx" is used.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the creation of a gate with the given
+        `parameterization` fails.  Usually you'll want to `"raise"` the error.
+        In some cases, for example when converting as many gates as you can
+        into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+    independent_gates : bool, optional
+        Whether gates are allowed independent local noise or not.  If False,
+        then all gates with the same name (e.g. "Gx") will have the *same*
+        (local) noise (e.g. an overrotation by 1 degree), and the
+        `operation_bks['gates']` dictionary contains a single key per gate
+        name.  If True, then gates with the same name acting on different
+        qubits may have different local noise, and so the
+        `operation_bks['gates']` dictionary contains a key for each gate
+         available gate placement.
+
+    ensure_composed_gates : bool, optional
+        If True then the elements of the `operation_bks['gates']` will always
+        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+        facilitate modifying the gate operations after the model is created.
+        If False, then the appropriately parameterized gate objects (often
+        dense gates) are used directly.
+
+    Returns
+    -------
+    Model
+        A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+        gate name (keys of `gatedict`) and qubit labels (from within
+        `availability`).  For instance, the operation label for the `"Gx"` gate on
+        qubit 2 might be `Label("Gx",1)`.
+    """
+    # E.g. error_rates could == {'Gx': {('H','X'): 0.1, ('S','Y'): 0.2} } # Lindblad, b/c val is dict
+    #                        or {'Gx': 0.1 } # Depolarization b/c val is a float
+    #                        or {'Gx': (0.1,0.2,0.2) } # Pauli-Stochastic b/c val is a tuple
+
+    if parameterization != "auto":
+        raise NotImplementedError(("Future versions of pyGSTi may allow you to specify a non-automatic "
+                                   "parameterization - for instance building DepolarizeOp objects "
+                                   "instead of LindbladOps for depolarization errors."))
+
+    if custom_gates is None: custom_gates = {}
+    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+    std_unitaries = _itgs.get_standard_gatename_unitaries()
+
+    if evotype == "auto":
+        evotype = "densitymx"  # FUTURE: do something more sophisticated?
+
+    def _parameterization_from_errgendict(errs):  # TODO: consolidate with same method in nqnoiseconstruction.py
+        paramtypes = []
+        if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
+        if any([nm[0] == 'S' for nm in errs]): paramtypes.append('S')
+        if any([nm[0] == 'A' for nm in errs]): paramtypes.append('A')
+        if any([nm[0] == 'S' and isinstance(nm, tuple) and len(nm) == 3 for nm in errs]):
+            # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
+            parameterization = "CPTP"
+        else:
+            parameterization = '+'.join(paramtypes)
+        return parameterization
+
+    def create_gate(name, gateMx):
+        """Create a gate object corresponding to a name with appropriate parameterization"""
+        errs = error_rates.get(name, None)
+
+        if isinstance(gateMx, _opfactory.OpFactory):
+            factory = gateMx
+            gateMx = _np.identity(factory.dim, 'd')  # we'll prefix with factory
+        else:
+            factory = None
+
+        if errs is None:
+            if factory: return factory  # gateMx is just identity
+            else: return _op.StaticDenseOp(gateMx, evotype)
+
+        elif isinstance(errs, dict):
+            parameterization = _parameterization_from_errgendict(errs)
+            _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(parameterization)
+            gate_dim = gateMx.shape[0]
+            basis = _BuiltinBasis('pp', gate_dim)  # assume we're always given basis els in a Pauli basis?
+            errgen = _op.LindbladErrorgen(gate_dim, errs, basis, param_mode,
+                                          nonham_mode, truncate=False, mxBasis="pp", evotype=evotype)
+            gate = _op.LindbladOp(gateMx, errgen, sparse_expm=_sps.issparse(gateMx))
+
+            #OLD TODO REMOVE
+            #gate = _op.LindbladOp.from_operation_matrix(gateMx, gateMx, ham_basis="pp", nonham_basis="pp",
+            #                                            param_mode=param_mode, nonham_mode=nonham_mode,
+            #                                            truncate=True, mxBasis="pp", evotype=evotype)
+            #gate.set_error_rates(errs)
+
+        elif isinstance(errs, tuple):
+            #tuple should have length 4^k-1 for a k-qubit gate (with dimension 4^k)
+            assert(len(errs) + 1 == gateMx.shape[0]), \
+                "Invalid number of Pauli stochastic rates: got %d but expected %d" % (len(errs), gateMx.shape[0] - 1)
+            gate = _op.StochasticNoiseOp(len(errs) + 1, "pp", evotype, initial_rates=errs)
+
+        elif isinstance(errs, float):
+            #Make a depolarization operator:
+            gate = _op.LindbladOp.from_operation_matrix(gateMx, ham_basis=None, nonham_basis="pp",
+                                                        param_mode="depol", nonham_mode="diagonal",
+                                                        truncate=True, mxBasis="pp", evotype=evotype)
+            perPauliRate = errs / len(gate.errorgen.other_basis.labels)
+            errdict = {('S', bl): perPauliRate for bl in gate.errorgen.other_basis.labels[1:]}  # skip identity el
+            gate.set_error_rates(errdict)
+
+        else:
+            raise ValueError("Invalid `error_rates` value: %s (type %s)" % (str(errs), type(errs)))
+
+        if factory:
+            #just add errors after whatever factory produces.
+            gate = _opfactory.ComposedOpFactory([factory, gate])
+
+        return gate
+
+    gatedict = _collections.OrderedDict()
+    for name in gate_names:
+        if name in custom_gates:
+            gatedict[name] = custom_gates[name]
+        else:
+            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+            if callable(U):  # then assume a function: args -> unitary
+                U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
+                gateMx = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+            else:
+                if evotype in ("densitymx", "svterm", "cterm"):
+                    gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                else:  # we just store the unitaries
+                    raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+                    #assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
+                    #gateMx = U
+            gatedict[name] = create_gate(name, gateMx)
+
+    #Check for any error rates specific to sslbls that we missed, e.g. ('Gx',0)
+    for errlbl, errdict in error_rates.items():
+        if errlbl not in gate_names and _label.Label(errlbl).sslbls is not None:
+            errlbl = _label.Label(errlbl)
+            name = errlbl.name
+            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
+            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+            if evotype in ("densitymx", "svterm", "cterm"):
+                gateMx = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+            else:  # we just store the unitaries
+                raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+            gatedict[errlbl] = create_gate(errlbl, gateMx)
+
+    #Add anything from custom_gates directly if it wasn't added already (allows overrides of, e.g. ('Gx',0))
+    for lbl, gate in custom_gates.items():
+        if lbl not in gate_names:
+            gatedict[lbl] = gate
+
+    if 'idle' in error_rates:
+        idleOp = create_gate('idle', _np.identity(4))  # 1-qubit idle op
+    else:
+        idleOp = None
+
+    prep_layers = {}
+    if 'prep' in error_rates:
+        assert(isinstance(error_rates['prep'], (dict, float))), "error_rates['prep'] can only be a dict or float!"
+        rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype)
+        prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, create_gate('prep', _np.identity(4)), "prep")
+        prep_factors = [prep1Q.copy() for i in range(nQubits)] if independent_gates else [prep1Q] * nQubits
+        prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+    else:
+        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * nQubits, evotype)
+
+    povm_layers = {}
+    if 'povm' in error_rates:
+        assert(isinstance(error_rates['povm'], (dict, float))), "error_rates['povm'] can only be a dict or float!"
+        Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
+        povm1Q = _povm.LindbladPOVM(create_gate('povm', _np.identity(4)), Mdefault_base1Q, "pp")
+        povm_factors = [povm1Q.copy() for i in range(nQubits)] if independent_gates else [povm1Q] * nQubits
+        povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+    else:
+        povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
+
+    return _LocalNoiseModel(nQubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
+                            geometry, evotype, sim_type, on_construction_error,
+                            independent_gates, ensure_composed_gates, global_idle=idleOp)

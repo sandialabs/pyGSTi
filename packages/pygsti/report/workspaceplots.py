@@ -1421,7 +1421,7 @@ class ColorBoxPlot(WorkspacePlot):
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTmodels=None, dscomparator=None, stabilityanalyzer=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
-                 wildcard=None):
+                 wildcard=None, colorbar=False):
         """
         Create a plot displaying the value of per-circuit quantities.
 
@@ -1515,20 +1515,28 @@ class ColorBoxPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function that increases
+            the goodness of fit by adjusting (by an amount measured in TVD) the
+            probabilities produced by `model` before comparing with the
+            frequencies in `dataset`.  Currently, this functionality is only
+            supported for `plottype == "logl"`.
+
+        colorbar : bool, optional
+            Whether to include a colorbar.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot, self).__init__(ws, self._create, plottype, gss, dataset, model,
                                            prec, sumUp, boxLabels, hoverInfo,
                                            invert, linlg_pcntle, minProbClipForWeighting,
                                            directGSTmodels, dscomparator, stabilityanalyzer,
-                                           submatrices, typ, scale, comm, wildcard)
+                                           submatrices, typ, scale, comm, wildcard, colorbar)
 
     def _create(self, plottypes, gss, dataset, model,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTmodels, dscomparator, stabilityanalyzer, submatrices,
-                typ, scale, comm, wildcard):
+                typ, scale, comm, wildcard, colorbar):
 
         probs_precomp_dict = None
         fig = None
@@ -1778,13 +1786,13 @@ class ColorBoxPlot(WorkspacePlot):
 
             if typ == "boxes":
                 newfig = circuit_color_boxplot(gss, subMxs, colormap,
-                                               False, boxLabels, prec,
+                                               colorbar, boxLabels, prec,
                                                hoverInfo, sumUp, invert,
                                                scale, addl_hover_info)
 
             elif typ == "scatter":
                 newfig = circuit_color_scatterplot(gss, subMxs, colormap,
-                                                   False, hoverInfo, sumUp, ytitle,
+                                                   colorbar, hoverInfo, sumUp, ytitle,
                                                    scale, addl_hover_info)
             elif typ == "histogram":
                 newfig = circuit_color_histogram(gss, subMxs, colormap,
@@ -2593,8 +2601,12 @@ class FitComparisonBarPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
-
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function (`objective`),
+            which increases the goodness of fit by adjusting (by an amount
+            measured in TVD) the probabilities produced by a model before
+            comparing with the frequencies in `dataset`.  Currently, this
+            functionality is only supported for `objective == "logl"`.
         """
         super(FitComparisonBarPlot, self).__init__(ws, self._create,
                                                    Xs, gssByX, modelByX, datasetByX,
@@ -2740,7 +2752,12 @@ class FitComparisonBoxPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function (`objective`),
+            which increases the goodness of fit by adjusting (by an amount
+            measured in TVD) the probabilities produced by a model before
+            comparing with the frequencies in `dataset`.  Currently, this
+            functionality is only supported for `objective == "logl"`.
         """
         super(FitComparisonBoxPlot, self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,

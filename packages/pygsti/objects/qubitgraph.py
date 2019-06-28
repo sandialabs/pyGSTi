@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
+from ..tools import compattools as _compat
 from scipy.sparse.csgraph import floyd_warshall as _fw
 
 
@@ -23,7 +24,7 @@ class QubitGraph(object):
     """
 
     @classmethod
-    def common_graph(cls, nQubits=0, geometry="line", directed=True, qubit_labels=None):
+    def common_graph(cls, nQubits=0, geometry="line", directed=True, qubit_labels=None, all_directions=False):
         """
         Create a QubitGraph that is one of several standard types of graphs.
 
@@ -54,9 +55,13 @@ class QubitGraph(object):
         if nQubits >= 2:
             if geometry in ("line", "ring"):
                 for i in range(nQubits - 1):
-                    edges.append((qls[i], qls[i + 1]))
+                    edges.append((qls[i], qls[i + 1], "right") if directed else (qls[i], qls[i + 1]))
+                    if all_directions:
+                        edges.append((qls[i + 1], qls[i], "left") if directed else (qls[i + 1], qls[i]))
                 if nQubits > 2 and geometry == "ring":
-                    edges.append((qls[nQubits - 1], qls[0]))
+                    edges.append((qls[nQubits - 1], qls[0], "right") if directed else (qls[nQubits - 1], qls[0]))
+                    if all_directions:
+                        edges.append((qls[0], qls[nQubits - 1], "left") if directed else (qls[0], qls[nQubits - 1]))
             elif geometry in ("grid", "torus"):
                 s = int(round(_np.sqrt(nQubits)))
                 assert(nQubits >= 4 and s * s == nQubits), \
@@ -65,19 +70,32 @@ class QubitGraph(object):
                 for irow in range(s):
                     for icol in range(s):
                         if icol + 1 < s:
-                            edges.append((qls[irow * s + icol], qls[irow * s + icol + 1]))  # link right
+                            q0, q1 = qls[irow * s + icol], qls[irow * s + icol + 1]
+                            edges.append((q0, q1, "right") if directed else (q0, q1))  # link right
+                            if all_directions:
+                                edges.append((q1, q0, "left") if directed else (q1, q0))  # link left
                         elif geometry == "torus" and s > 2:
-                            edges.append((qls[irow * s + icol], qls[irow * s + 0]))
+                            q0, q1 = qls[irow * s + icol], qls[irow * s + 0]
+                            edges.append((q0, q1, "right") if directed else (q0, q1))
+                            if all_directions:
+                                edges.append((q1, q0, "left") if directed else (q1, q0))
 
                         if irow + 1 < s:
-                            edges.append((qls[irow * s + icol], qls[(irow + 1) * s + icol]))  # link down
+                            q0, q1 = qls[irow * s + icol], qls[(irow + 1) * s + icol]
+                            edges.append((q0, q1, "down") if directed else (q0, q1))  # link down
+                            if all_directions:
+                                edges.append((q1, q0, "up") if directed else (q1, q0))  # link up
                         elif geometry == "torus" and s > 2:
-                            edges.append((qls[irow * s + icol], qls[0 + icol]))
+                            q0, q1 = qls[irow * s + icol], qls[0 + icol]
+                            edges.append((q0, q1, "down") if directed else (q0, q1))
+                            if all_directions:
+                                edges.append((q1, q0, "up") if directed else (q1, q0))
             else:
                 raise ValueError("Invalid `geometry`: %s" % geometry)
         return cls(qls, initial_edges=edges, directed=directed)
 
-    def __init__(self, qubit_labels, initial_connectivity=None, initial_edges=None, directed=True):
+    def __init__(self, qubit_labels, initial_connectivity=None, initial_edges=None,
+                 directed=True, direction_names=None):
         """
         Initialize a new QubitGraph.
 
@@ -90,27 +108,94 @@ class QubitGraph(object):
             this list equals the number of qubits (nodes) in the graph.
 
         initial_connectivity : numpy.ndarray, optional
-            A (nqubits, nqubits) boolean array giving the initial connectivity
-            of the graph.  That is, if there's an edge from qubit `i` to `j`,
-            then `initial_connectivity[i,j]=True` (integer indices of qubit
+            A (nqubits, nqubits) boolean or integer array giving the initial
+            connectivity of the graph.  If an integer array, then 0 indicates
+            no edge and positive integers indicate present edges in the
+            "direction" given by the positive integer.  For example `1` may
+            corresond to "left" and `2` to "right".  Names must be associated
+            with these directions using `direction_names`.  If a boolean array,
+            if there's an edge from qubit `i` to `j` then
+            `initial_connectivity[i,j]=True` (integer indices of qubit
             labels are given by their position in `qubit_labels`).  When
             `directed=False`, only the upper triangle is used.
 
         initial_edges : list
-            A list of `(qubit_label1, qubit_label2)` 2-tuples specifying which
-            edges are initially present.
+            A list of `(qubit_label1, qubit_label2)` 2-tuples or
+            `(qubit_label1, qubit_label2, direction)` 3-tuples
+            specifying which edges are initially present.  `direction`
+            can either be a positive integer, similar to those used in
+            `initial_connectivity` (in which case `direction_names` must
+            be specified) or a string labeling the direction, e.g. `"left"`.
 
         directed : bool, optional
-            Whether the graph is directed or undirected.
+            Whether the graph is directed or undirected.  Directions can only
+            be used when `directed=True`.
+
+        direction_names : iterable, optional
+            A list (or tuple, etc) of string-valued direction names such as
+            `"left"` or `"right"`.  These strings label the directions
+            referenced by index in either `initial_connectivity` or
+            `initial_edges`, and this argument is required whenever such
+            indices are used.
         """
         self.nqubits = len(qubit_labels)
         self.directed = directed
+
+        #Determine whether we'll be using directions or not: set self.directions
+        if initial_connectivity is not None:
+            if initial_connectivity.dtype == _np.bool:
+                assert(direction_names is None), \
+                    "`initial_connectivity` must have *integer* indices when `direction_names` is non-None"
+            else:
+                #TODO: fix numpy integer-type test here
+                assert(initial_connectivity.dtype == _np.int), \
+                    ("`initial_connectivity` can only have dtype == bool or "
+                     "int (but has dtype=%s)") % str(initial_connectivity.dtype)
+                assert(direction_names is not None), \
+                    "must supply `direction_names` when `initial_connectivity` contains *integers*!"
+            self.directions = list(direction_names) if direction_names is not None else None
+            # either a list of direction names or None, indicating no directions
+
+        elif initial_edges is not None:
+            lens = list(map(len, initial_edges))
+            if len(lens) == 0:
+                # set direction names if we're given any
+                self.directions = list(direction_names) if direction_names is not None else None
+            else:
+                assert(all([x == lens[0] for x in lens])), \
+                    "All elements of `initial_edges` must be tuples of *either* length 2 or 3.  You can't mix them."
+                if lens[0] == 2:
+                    assert(direction_names is None), \
+                        "`initial_edges` elements must be 3-tuples when `direction_names` is non-None"
+                elif lens[0] == 3:
+                    direction_names_chk = set()
+                    contains_direction_indices = False
+                    for edge in initial_edges:
+                        if isinstance(edge[2], int):
+                            contains_direction_indices = True
+                        else:
+                            direction_names_chk.add(edge[2])
+                    if contains_direction_indices:
+                        assert(direction_names is not None), \
+                            "must supply `direction_names` when `initial_edges` contains direction indices!"
+                    if direction_names is not None:
+                        assert(direction_names_chk.issubset(direction_names)), \
+                            "Missing one or more direction names from `direction_names`!"
+                    else:  # direction_name is None, and that's ok b/c no direction indices were used
+                        direction_names = list(sorted(direction_names_chk))
+                self.directions = direction_names  # set direction names if we're given any
+
+        assert(self.directions is None or self.directed), "QubitGraph directions can only be used with `directed==True`"
+
+        # effectively maps node index -> node name
+        self._nodes = tuple(qubit_labels)
 
         # Mapping: node labels -> connectivity matrix index (fixed from here forward)
         self._nodeinds = _collections.OrderedDict([(lbl, i) for i, lbl in enumerate(qubit_labels)])
 
         # Connectivity matrix (could be sparse in future)
-        self._connectivity = _np.zeros((self.nqubits, self.nqubits), dtype=bool)
+        typ = bool if self.directions is None else int
+        self._connectivity = _np.zeros((self.nqubits, self.nqubits), dtype=typ)
 
         if initial_connectivity is not None:
             assert(initial_edges is None), "Cannot specify `initial_connectivity` and `initial_edges`!"
@@ -136,7 +221,7 @@ class QubitGraph(object):
         """
         return QubitGraph(list(self._nodeinds.keys()),
                           initial_connectivity=self._connectivity,
-                          directed=self.directed)
+                          directed=self.directed, direction_names=self.directions)
 
     def _refresh_dists_and_predecessors(self):
         if self._dirty:
@@ -151,10 +236,13 @@ class QubitGraph(object):
     def __setitem__(self, key, val):
         node1, node2 = key
         i, j = self._nodeinds[node1], self._nodeinds[node2]
-        if (not self.directed) and i > j:
+        if (not self.directed) and i > j:  # undirected => no directions
             self._connectivity[j, i] = bool(val)
-        else:
+        elif self.directions is None:
             self._connectivity[i, j] = bool(val)
+        else:  # directions are being used, so connectivity matrix contains ints
+            dir_index = val if isinstance(val, int) else self.directions.index(val)
+            self._connectivity[i, j] = dir_index
         self._dirty = True
 
     def get_node_names(self):
@@ -181,10 +269,10 @@ class QubitGraph(object):
         -------
         None
         """
-        for node1, node2 in edges:
-            self.add_edge(node1, node2)
+        for edge_tuple in edges:  # edge_tuple is either (node1, node2) or (node1, node2, direction)
+            self.add_edge(*edge_tuple)
 
-    def add_edge(self, node1, node2):
+    def add_edge(self, node1, node2, direction=None):
         """
         Add an edge between the qubits labeled by `node1` and `node2`.
 
@@ -193,15 +281,24 @@ class QubitGraph(object):
         node1,node2 : object
             Qubit (node) labels - typically strings or integers.
 
+        direction : str or int, optional
+            Either a direction name or a direction indicex
+
         Returns
         -------
         None
         """
         i, j = self._nodeinds[node1], self._nodeinds[node2]
         assert(i != j), "Cannot add an edge from a node to itself!"
+        assert(self.directed or direction is None), "`direction` can only be specified on directed QuitGraphs"
+        assert(bool(self.directions is None) == bool(direction is None)), "Direction existence mismatch!"
         if not self.directed and i > j:  # undirected => only fill upper triangle (i < j)
             i, j = j, i
-        self._connectivity[i, j] = True
+        if self.directions is not None:
+            dir_index = direction if isinstance(direction, int) else self.directions.index(direction)
+            self._connectivity[i, j] = dir_index + 1  # b/c 0 means "no edge"
+        else:
+            self._connectivity[i, j] = True
         self._dirty = True
 
     def remove_edge(self, node1, node2):
@@ -221,7 +318,7 @@ class QubitGraph(object):
         if not self.directed and i > j:  # undirected => only fill upper triangle (i < j)
             i, j = j, i
         assert(self._connectivity[i, j]), "Edge %s->%s doesn't exist!" % (str(node1), str(node2))
-        self._connectivity[i, j] = False
+        self._connectivity[i, j] = False if (self.directions is None) else 0
         self._dirty = True
 
     def edges(self, double_for_undirected=False):
@@ -561,6 +658,75 @@ class QubitGraph(object):
                     edges.append(edge)
 
         return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed)
+
+    def resolve_relative_nodelabel(self, relative_nodelabel, target_labels):
+        """
+        Resolve a "relative nodelabel" into an actual node in this graph.
+
+        Relative node labels can use "@" to index elements of `target_labels`
+        and can contain "+<dir>" directives to move along directions defined
+        in this graph.
+
+        Parameters
+        ----------
+        relative_nodelabel : int or str
+            An absolute or relative node-label.  For example:
+            `0`, `"@0"`, `"@0+right"`, `"@1+left+up"`
+
+        target_labels : list or tuple
+            A list of (absolute) node labels present in this graph that may
+            be referred to using the "@" syntax within `relative_nodelabel`.
+
+        Returns
+        -------
+        int or str
+        """
+        if relative_nodelabel in self.get_node_names():
+            return relative_nodelabel  # relative_nodelabel is a valid absolute node label
+        elif _compat.isstr(relative_nodelabel) and relative_nodelabel.startswith("@"):
+            # @<target_index> or @<target_index>+<direction>
+            parts = relative_nodelabel.split('+')
+            target_index = int(parts[0][1:])  # we know parts[0] starts with @ and rest should be an int index
+            start_node = target_labels[target_index]
+            return self.move_in_directions(start_node, parts[1:])  # parts[1:] are (optional) directions
+        else:
+            raise ValueError("Unknown node: %s" % str(relative_nodelabel))
+
+    def move_in_directions(self, start_node, directions):
+        node = start_node
+        for direction in directions:
+            node = self.move_in_direction(node, direction)
+            if node is None:
+                return None
+        return node
+
+    def move_in_direction(self, start_node, direction):
+        """
+        Get the node that is one step in `direction` of `start_node`.
+
+        Parameters
+        ----------
+        start_node : int or str
+            the starting point (a node label of this graph)
+
+        direction : str or int
+            the name of a direction or its index within this graphs
+            `.directions` member.
+
+        Returns
+        -------
+        str or int or None
+            the node in the given direction or `None` if there is no
+            node in that direction (e.g. if you reach the end of a
+            chain).
+        """
+        assert(self.directions is not None), "This QubitGraph doesn't have directions!"
+        i = self._nodeinds[start_node]
+        dir_index = direction if isinstance(direction, int) else self.directions.index(direction)
+        for j, d in enumerate(self._connectivity[i, :]):
+            if d == dir_index:
+                return self._nodes[j]
+        return None  # No node in this direction
 
     def __str__(self):
         dirstr = "Directed" if self.directed else "Undirected"

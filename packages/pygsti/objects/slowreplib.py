@@ -17,6 +17,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
+from ..tools import optools as _gt
 
 from scipy.sparse.linalg import LinearOperator
 
@@ -1359,6 +1360,200 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     return dpr_cache
 
 
+def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                            minProbClipForWeighting, probClipInterval, comm):
+
+    def obj_fn(p, f, Ni, N, omitted_p):
+        cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
+        v = (p - f) * _np.sqrt(N / cp)
+
+        if omitted_p != 0:
+            # if this is the *last* outcome at this time then account for any omitted probability
+            omitted_cp = _np.clip(omitted_p, minProbClipForWeighting, 1 - minProbClipForWeighting)
+            v = _np.sqrt(v**2 + N * omitted_p**2 / omitted_cp)
+        return v  # sqrt(the objective function term)  (the qty stored in cache)
+
+    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+
+def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                              minProbClip, radius, probClipInterval, comm):
+
+    min_p = minProbClip; a = radius
+
+    def obj_fn(p, f, Ni, N, omitted_p):
+        pos_p = max(p, min_p)
+        if Ni != 0:
+            freq_term = Ni * (_np.log(f) - 1.0)
+        else:
+            freq_term = 0.0
+        S = -Ni / min_p + N
+        S2 = 0.5 * Ni / (min_p**2)
+        v = freq_term + -Ni * _np.log(pos_p) + N * pos_p  # dims K x M (K = nSpamLabels, M = nCircuits)
+
+        # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+        v = max(v, 0)
+
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        if p < min_p:
+            v = v + S * (p - min_p) + S2 * (p - min_p)**2
+
+        if Ni == 0:
+            if p >= a:
+                v = N * p
+            else:
+                v = N * ((-1.0 / (3 * a**2)) * p**3 + p**2 / a + a / 3.0)
+        # special handling for f == 0 terms
+        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+
+        if omitted_p != 0.0:
+            # if this is the *last* outcome at this time then account for any omitted probability
+            v += N * omitted_p if omitted_p >= a else \
+                N * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
+
+        return v  # objective function term (the qty stored in cache)
+
+    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+
+def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm):
+
+    cacheSize = evalTree.cache_size()
+    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    ret = _np.zeros((len(evalTree), len(elabels)), 'd')  # zeros so we can just add contributions below
+
+    elabels_as_outcomes = [_gt.spamTupleToOutcome((rholabel, e)) for e in elabels]
+    outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
+
+    assert(cacheSize == 0)  # so all elements have None as start and all as remainder
+    #if clipTo is not None:
+    #    _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
+
+    #comm is currently ignored
+    #TODO: if evalTree is split, distribute among processors
+    for i in evalTree.get_evaluation_order():
+        iStart, remainder, iCache = evalTree[i]
+        assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
+        datarow = dataset_rows[i]
+        nTotOutcomes = num_outcomes[i]
+
+        totalCnts = {}  # TODO defaultdict?
+        lastInds = {}; outcome_cnts = {}
+        # consolidate multiple outcomes that occur at same time? or sort?
+        for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):
+            if t0 in totalCnts:
+                totalCnts[t0] += Nreps; outcome_cnts[t0] += 1
+            else:
+                totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
+            lastInds[t0] = k
+
+        cur_probtotal = 0; last_t = 0
+        # consolidate multiple outcomes that occur at same time? or sort?
+        for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):
+            t = t0
+            rhoVec.set_time(t)
+            rho = rhoVec.torep('prep')
+            t += rholabel.time
+
+            for gl in remainder:
+                op = calc.sos.get_operation(gl)
+                op.set_time(t); t += gl.time  # time in gate label == gate duration?
+                rho = op.torep().acton(rho)
+
+            j = outcome_to_elabel_index[outcome]
+            E = EVecs[j]; E.set_time(t)
+            p = E.torep('effect').probability(rho)  # outcome probability
+            N = totalCnts[t0]
+            f = Nreps / N
+
+            if t0 == last_t:
+                cur_probtotal += p
+            else:
+                last_t = t0
+                cur_probtotal = p
+
+            omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
+            # and cur_probtotal < 1.0?
+
+            ret[i, j] += objfn(p, f, Nreps, N, omitted_p)
+
+    return ret
+
+
+def DM_compute_TDdchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                             minProbClipForWeighting, probClipInterval, wrtSlice, comm):
+
+    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+        return DM_compute_TDchi2_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                       minProbClipForWeighting, probClipInterval, fillComm)
+
+    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                     cachefn, wrtSlice, comm)
+
+
+def DM_compute_TDdloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                               minProbClip, radius, probClipInterval, wrtSlice, comm):
+
+    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
+        return DM_compute_TDloglpp_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
+                                         minProbClip, radius, probClipInterval, fillComm)
+
+    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                                     cachefn, wrtSlice, comm)
+
+
+def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+                              cachefn, wrtSlice, comm):
+
+    eps = 1e-7  # hardcoded?
+
+    #Compute finite difference derivatives, one parameter at a time.
+    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+    nDerivCols = len(param_indices)  # *all*, not just locally computed ones
+
+    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    cache = _np.empty((len(evalTree), len(elabels)), 'd')
+    dcache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
+
+    cacheSize = evalTree.cache_size()
+    assert(cacheSize == 0)
+
+    cache = cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+
+    all_slices, my_slice, owners, subComm = \
+        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+
+    my_param_indices = param_indices[my_slice]
+    st = my_slice.start  # beginning of where my_param_indices results
+    # get placed into dpr_cache
+
+    #Get a map from global parameter indices to the desired
+    # final index within dpr_cache
+    iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
+
+    orig_vec = calc.to_vector().copy()
+    for i in range(calc.Np):
+        #print("dprobs cache %d of %d" % (i,calc.Np))
+        if i in iParamToFinal:
+            iFinal = iParamToFinal[i]
+            vec = orig_vec.copy(); vec[i] += eps
+            calc.from_vector(vec)
+            dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
+                                    - cache) / eps
+    calc.from_vector(orig_vec)
+
+    #Now each processor has filled the relavant parts of dpr_cache,
+    # so gather together:
+    _mpit.gather_slices(all_slices, owners, dcache, [], axes=2, comm=comm)
+
+    #REMOVE
+    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
+    #      (calc.Np, calc.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+
+    return dcache
+
+
 def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
     return _prs_as_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
 
@@ -1617,6 +1812,10 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     circuit : Circuit
         The gate sequence to sandwich between the prep and effect labels.
 
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -1628,12 +1827,42 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         A switch between a faster, slighty more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
-    TODO: docstring - additional args and now return polys again
+        pathmagnitude_gap : float, optional
+            The amount less than the perfect sum-of-path-magnitudes that
+            is desired.  This sets the target sum-of-path-magnitudes for each
+            circuit -- the threshold that determines how many paths are added.
+
+        min_term_mag : float, optional
+            A technical parameter to the path pruning algorithm; this value
+            sets a threshold for how small a term magnitude (one factor in
+            a path magnitude) must be before it is removed from consideration
+            entirely (to limit the number of even *potential* paths).  Terms
+            with a magnitude lower than this values are neglected.
+
+        current_threshold : float, optional
+            If the threshold needed to achieve the desired `pathmagnitude_gap`
+            is greater than this value (i.e. if using current_threshold would
+            result in *more* paths being computed) then this function will not
+            compute any paths and exit early, returning `None` in place of the
+            usual list of polynomial representations.
 
     Returns
     -------
-    numpy.ndarray
-        one per element of `elabels`.
+    prps : list of PolynomialRep objects
+        the polynomials for the requested circuit probabilities, computed by
+        selectively summing up high-magnitude paths.
+    npaths : int
+        the number of paths that were included.
+    threshold : float
+        the path-magnitude threshold used.
+    target_sopm : float
+        The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+        less than the perfect "all-paths" sum.  This sums together the
+        contributions of different effects.
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.  Ideally this would equal
+        `target_sopm`. (This also sums together the contributions of
+        different effects.)
     """
     #t0 = _time.time()
 
@@ -1690,7 +1919,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
-        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, len(elabels), foat_indices_per_op,
+        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
         initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 100.0)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
@@ -1819,13 +2048,60 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     #coefficients when needed instead?
 
     #... and we're done!
+
+    #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
+    # in fastreplib.pyx but forgot it here.
     return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
 # foat = first-order always-traversed
 def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op, fn_visitpath,
                                   debug=False):
-    """ TODO: docstring """  # zot = zero-order-terms
+    """
+    Traverse all the paths up to some path-magnitude threshold, calling
+    `fn_visitpath` for each one.
+
+    Parameters
+    ----------
+    oprep_lists : list of lists
+        representations for the terms of each layer of the circuit whose
+        outcome probability we're computing, including prep and POVM layers.
+        `oprep_lists[i]` is a list of the terms available to choose from
+        for the i-th circuit layer, ordered by increasing term-magnitude.
+
+    pathmag_threshold : float
+        the path-magnitude threshold to use.
+
+    num_elabels : int
+        The number of effect labels corresponding whose terms are all
+        amassed in the in final `oprep_lists[-1]` list (knowing which
+        elements of `oprep_lists[-1]` correspond to which effect isn't
+        necessary for this function).
+
+    foat_indices_per_op : list
+        A list of lists of integers, such that `foat_indices_per_op[i]`
+        is a list of indices into `oprep_lists[-1]` that marks out which
+        terms are first-order (Taylor) terms that should therefore always
+        be traversed regardless of their term-magnitude (foat = first-order-
+        always-traverse).
+
+    fn_visitpath : function
+        A function called for each path that is traversed.  Arguments
+        are `(term_indices, magnitude, incd)` where `term_indices` is
+        an array of integers giving the index into each `oprep_lists[i]`
+        list, `magnitude` is the path magnitude, and `incd` is the index
+        of the circuit layer that was just incremented (all elements of
+        `term_indices` less than this index are guaranteed to be the same
+        as they were in the last call to `fn_visitpath`, and this can be
+        used for faster path evaluation.
+
+    debug : bool, optional
+        Whether to print additional debug info.
+
+    Returns
+    -------
+    None
+    """  # zot = zero-order-terms
     n = len(oprep_lists)
     nops = [len(oprep_list) for oprep_list in oprep_lists]
     b = [0] * n  # root
@@ -1902,10 +2178,60 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     return
 
 
-def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_elabels=None,
+def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_pathmags,
                             foat_indices_per_op=None, initial_threshold=0.1, min_threshold=1e-10):
     """
-    TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
+    Find the pathmagnitude-threshold needed to achieve some target sum-of-path-magnitudes:
+    so that the sum of all the path-magnitudes greater than this threshold achieve the
+    target (or get as close as we can).
+
+    Parameters
+    ----------
+    oprep_lists : list of lists
+        representations for the terms of each layer of the circuit whose
+        outcome probability we're computing, including prep and POVM layers.
+        `oprep_lists[i]` is a list of the terms available to choose from
+        for the i-th circuit layer, ordered by increasing term-magnitude.
+
+    E_indices : numpy array
+        The effect-vector index for each element of `oprep_lists[-1]`
+        (representations for *all* effect vectors exist all together
+        in `oprep_lists[-1]`).
+
+    num_elabels : int
+        The total number of different effects whose reps appear in
+        `oprep_lists[-1]` (also one more than the largest index in
+        `E_indices`.
+
+    target_sum_of_pathmags : array
+        An array of floats of length `num_elabels` giving the target sum of path
+        magnitudes desired for each effect (separately).
+
+    foat_indices_per_op : list
+        A list of lists of integers, such that `foat_indices_per_op[i]`
+        is a list of indices into `oprep_lists[-1]` that marks out which
+        terms are first-order (Taylor) terms that should therefore always
+        be traversed regardless of their term-magnitude (foat = first-order-
+        always-traverse).
+
+    initial_threshold : float
+        The starting pathmagnitude threshold to try (this function uses
+        an iterative procedure to find a threshold).
+
+    min_threshold : float
+        The smallest threshold allowed.  If this amount is reached, it
+        is just returned and searching stops.
+
+    Returns
+    -------
+    threshold : float
+        The obtained pathmagnitude threshold.
+    npaths : numpy array
+        An array of length `num_elabels` giving the number of paths selected
+        for each of the effect vectors.
+    achieved_sopm : numpy array
+        An array of length `num_elabels` giving the achieved sum-of-path-
+        magnitudes for each of the effect vectors.
     """
     nIters = 0
     threshold = initial_threshold if (initial_threshold >= 0) else 0.1  # default value
@@ -1923,8 +2249,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
         mag[E_indices[b[-1]]] += mg; nPaths[E_indices[b[-1]]] += 1
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
-        mag = _np.zeros(nEffects, 'd')
-        nPaths = _np.zeros(nEffects, int)
+        mag = _np.zeros(num_elabels, 'd')
+        nPaths = _np.zeros(num_elabels, int)
 
         if _np.all(mag >= target_mag):  # try larger threshold
             threshold_lower_bound = threshold
@@ -1948,8 +2274,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
         nIters += 1
 
     #Run path traversal once more to count final number of paths
-    mag = _np.zeros(nEffects, 'd')
-    nPaths = _np.zeros(nEffects, int)
+    mag = _np.zeros(num_elabels, 'd')
+    nPaths = _np.zeros(num_elabels, int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
                                   foat_indices_per_op, count_path)  # sets mag and nPaths
 
