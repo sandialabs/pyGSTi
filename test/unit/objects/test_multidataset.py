@@ -1,5 +1,6 @@
 import numpy as np
 from collections import OrderedDict
+import pickle
 
 from ..util import BaseCase
 
@@ -25,6 +26,7 @@ mds_time = OrderedDict([('ds1', ds1_time), ('ds2', ds2_time)])
 mds_rep = OrderedDict([('ds1', ds1_rep), ('ds2', ds2_rep)])
 
 
+
 class MultiDataSetTester(BaseCase):
     def test_construct_with_outcome_label_indices(self):
         mds = MultiDataSet(mds_oli, mds_time, mds_rep, circuitIndices=gstrInds,
@@ -38,29 +40,69 @@ class MultiDataSetTester(BaseCase):
 
 
 class MultiDataSetMethodBase:
-    def test_add_dataset_raises_on_spam_label_mismatch(self):
-        ds2 = DataSet(outcomeLabels=['0', 'foobar'])  # different spam labels than multids
-        ds2.add_count_dict((), {'0': 10, 'foobar': 90})
-        ds2.add_count_dict(('Gx',), {'0': 10, 'foobar': 90})
-        ds2.add_count_dict(('Gx', 'Gy'), {'0': 10, 'foobar': 90})
-        ds2.add_count_dict(('Gx', 'Gx', 'Gx', 'Gx'), {'0': 10, 'foobar': 90})
-        ds2.done_adding_data()
+    def _assert_datasets_equal(self, a, b):
+        for a_row, b_row in zip(a, b):
+            for a_element, b_element in zip(a_row, b_row):
+                self.assertEqual(a_element, b_element)
+
+    def test_add_dataset(self):
+        expected_length = len(self.mds) + 1
+        expected_keys = self.mds.keys() + ['newDS']
+        ds = DataSet(outcomeLabels=['0', '1'])
+        ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
+        ds.add_count_dict(('Gx', 'Gy'), {'0': 20, '1': 80})
+        ds.add_count_dict(('Gy',), {'0': 20, '1': 80})
+        ds.done_adding_data()
+        self.mds['newDS'] = ds
+        self.assertTrue('newDS' in self.mds)
+        self.assertEqual(len(self.mds), expected_length)
+        self.assertEqual(self.mds.keys(), expected_keys)
+
+    def test_indexing(self):
+        labels, datasets = tuple(zip(*self.mds.items()))
+        self.assertEqual(labels, tuple(self.mds))
+        self.assertEqual(labels, tuple(self.mds.keys()))
+        for a, b in zip(datasets, self.mds.values()):
+            self._assert_datasets_equal(a, b)
+
+    def test_get_outcome_labels(self):
+        labels = self.mds.get_outcome_labels()
+        # TODO assert correctness
+
+    def test_get_datasets_aggregate(self):
+        keyset = self.mds.keys()
+        sumDS = self.mds.get_datasets_aggregate(*keyset)
+        # TODO assert correctness
+
+    def test_to_string(self):
+        mds_str = str(self.mds)
+        # TODO assert correctness
+
+    def test_copy(self):
+        mds_copy = self.mds.copy()
+        # TODO assert correctness
+
+    def test_pickle(self):
+        s = pickle.dumps(self.mds)
+        mds_unpickle = pickle.loads(s)
+        # TODO assert correctness
+
+    def test_get_datasets_aggregate_raises_on_unknown_name(self):
         with self.assertRaises(ValueError):
-            self.mds['newDS'] = ds2
+            self.mds.get_datasets_aggregate('ds1', 'foobar')
 
     def test_add_dataset_raises_on_gate_mismatch(self):
-        ds3 = DataSet(outcomeLabels=['0','1']) #different operation sequences
-        ds3.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
-        ds3.done_adding_data()
-        with self.assertRaises(ValueError):
-            self.mds['newDS'] = ds3
-
-    def test_add_dataset_raises_on_nonstatic_dataset(self):
-        ds = DataSet(outcomeLabels=['0','1']) #different operation sequences
-        ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
+        ds = DataSet(outcomeLabels=['0', '1'])  # different operation sequences
+        ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
+        ds.done_adding_data()
         with self.assertRaises(ValueError):
             self.mds['newDS'] = ds
 
+    def test_add_dataset_raises_on_nonstatic_dataset(self):
+        ds = DataSet(outcomeLabels=['0', '1'])  # different operation sequences
+        ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
+        with self.assertRaises(ValueError):
+            self.mds['newDS'] = ds
 
 
 class MultiDataSetInstanceTester(MultiDataSetMethodBase, BaseCase):
@@ -69,7 +111,7 @@ class MultiDataSetInstanceTester(MultiDataSetMethodBase, BaseCase):
                                 outcomeLabels=['0', '1'])
 
 
-class MultiDataSetNoRepsInstanceTester(MultiDataSetMethodBase, BaseCase):
+class MultiDataSetNoRepInstanceTester(MultiDataSetMethodBase, BaseCase):
     def setUp(self):
         self.mds = MultiDataSet(mds_oli, mds_time, None, circuitIndices=gstrInds,
                                 outcomeLabels=['0', '1'])

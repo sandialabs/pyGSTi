@@ -48,13 +48,21 @@ class DataSetConstructionTester(BaseCase):
 
     def test_generate_fake_data(self):
         dataset = pc.generate_fake_data(self.dataset, self.circuit_list, nSamples=None,
+                                        sampleError='none', seed=100)
+        dataset = pc.generate_fake_data(self.dataset, self.circuit_list, nSamples=100,
+                                        sampleError='round', seed=100)
+        dataset = pc.generate_fake_data(self.dataset, self.circuit_list, nSamples=100,
                                         sampleError='multinomial', seed=100)
-        dataset = pc.generate_fake_data(dataset, self.circuit_list, nSamples=1000, sampleError='round', seed=100)
 
         randState = np.random.RandomState(1234)
-        dataset = pc.generate_fake_data(dataset, self.circuit_list, nSamples=1000,
+        dataset = pc.generate_fake_data(dataset, self.circuit_list, nSamples=100,
                                         sampleError='binomial', randState=randState)
         # TODO assert correctness
+
+    def test_generate_fake_data_raises_on_bad_sample_error(self):
+        with self.assertRaises(ValueError):
+            pc.generate_fake_data(self.dataset, self.circuit_list, nSamples=None,
+                                  sampleError='foobar', seed=100)
 
     def test_merge_outcomes(self):
         merged_dataset = pc.merge_outcomes(self.dataset, {'merged_outcome_label': [('0',), ('1',)]})

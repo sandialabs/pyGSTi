@@ -143,17 +143,6 @@ Gx^4 0.2 100
         ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
                                                              nSamples=None, sampleError='none')
 
-        #Removed weighted gate strings
-        #weightedStrings = [ pygsti.obj.WeightedOpString( mdl.tup, weight=1.0 ) for mdl in circuits ]
-        #ds_fromwts = pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
-        #                                                    nSamples=1000, sampleError='none')
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.generate_fake_data(depol_gateset, circuits,
-                                                   nSamples=1000, sampleError='FooBar') #invalid sampleError
-
-
-
         # TO SEED SAVED FILE, RUN BELOW LINES:
         if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  circuits)
@@ -244,9 +233,6 @@ Gx^4 20 80 0.2 100
                                                 outcomeLabels=['0','1'])
 
 
-        #mds2.add_dataset_counts("new_ds1", ds1_cnts)
-        sl_none = mds5.get_outcome_labels()
-
         #Create some datasets to test adding datasets to multidataset
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_count_dict( (), {'0': 10, '1': 90} )
@@ -255,61 +241,7 @@ Gx^4 20 80 0.2 100
         ds.add_count_dict( ('Gx','Gx','Gx','Gx'), {'0': 20, '1':80} )
         ds.done_adding_data()
 
-        ds2 = pygsti.objects.DataSet(outcomeLabels=['0','foobar']) #different spam labels than multids
-        ds2.add_count_dict( (), {'0': 10, 'foobar': 90} )
-        ds2.add_count_dict( ('Gx',), {'0': 10, 'foobar': 90} )
-        ds2.add_count_dict( ('Gx','Gy'), {'0': 10, 'foobar':90} )
-        ds2.add_count_dict( ('Gx','Gx','Gx','Gx'), {'0': 10, 'foobar':90} )
-        ds2.done_adding_data()
-
-        ds3 = pygsti.objects.DataSet(outcomeLabels=['0','1']) #different operation sequences
-        ds3.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
-        ds3.done_adding_data()
-
-        ds4 = pygsti.objects.DataSet(outcomeLabels=['0','1']) #non-static dataset
-        ds4.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
-
         multiDS['myDS'] = ds
-        #with self.assertRaises(ValueError):
-        #    multiDS['badDS'] = ds2 # different spam labels
-        with self.assertRaises(ValueError):
-            multiDS['badDS'] = ds3 # different gates
-        with self.assertRaises(ValueError):
-            multiDS['badDS'] = ds4 # not static
-
-        nStrs = len(multiDS)
-        labels = list(multiDS.keys())
-        self.assertEqual(labels, ['DS0', 'DS1', 'myDS'])
-        self.assertTrue('DS0' in multiDS)
-
-        for label in multiDS:
-            DS = multiDS[label]
-            if label in multiDS:
-                pass
-
-        for DS in multiDS.values():
-            pass
-
-        for label,DS in multiDS.items():
-            pass
-
-        #iteration over MultiDataSet without reps (slightly different logic)
-        for label in mdsNoReps:
-            pass
-        for label,ds in mdsNoReps.items():
-            pass
-        for ds in mdsNoReps.values():
-            pass
-
-
-        sumDS = multiDS.get_datasets_aggregate('DS0','DS1')
-        sumDS_noReps = mdsNoReps.get_datasets_aggregate('ds1','ds2')
-        multiDS_str = str(multiDS)
-        multiDS_copy = multiDS.copy()
-
-        with self.assertRaises(ValueError):
-            sumDS = multiDS.get_datasets_aggregate('DS0','foobar') #bad dataset name
-
 
         #Pickle and unpickle
         with open(temp_files + '/multidataset.pickle', 'wb') as picklefile:
