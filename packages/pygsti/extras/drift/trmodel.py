@@ -18,10 +18,16 @@ from scipy.optimize import minimize as _minimize
 
 class TimeResolvedModel(object):
     """
-    Encapsulates a basic form of time-resolved model, for implementing simple types
-    of time-resolved characterization, e.g., time-resolved Ramsey spectroscopy.
-    """
+    Encapsulates a basic form of time-resolved model, for implementing simple types of time-resolved characterization,
+    e.g., time-resolved Ramsey spectroscopy. This object is a container for specifying a particular time-resolved
+    model, which is achieved by defining the method `get_probabilities`. See the docstring of that method for further
+    details.
 
+    This object is *not* intended to be used to encapsulate a time-resolved model that requires any intensive
+    computations, e.g., a time-resolved process matrix model for full time-resolved GST. Instead, it is intend to be
+    used for easy DIY time-resolved tomography on very simple models.
+
+    """
     def __init__(self, hyperparameters, parameters):
         """
         Initializes a TimResolvedModel object.
@@ -29,12 +35,12 @@ class TimeResolvedModel(object):
         Parameters
         ----------
         hyperparameters: list
-            A set of meta-parameters, that define the model. For example, these could
-            be frequencies to include in a Fourier decomposition.
+            A set of meta-parameters, that define the model. For example, these could be frequencies to include in a
+            Fourier decomposition.
 
         parameters: list
-           The values for the parameters of the model. For example, these could be
-           the amplitudes for each frequency in a Fourier decomposition.
+           The values for the parameters of the model. For example, these could be the amplitudes for each frequency
+           in a Fourier decomposition.
 
         Returns
         -------
@@ -46,18 +52,40 @@ class TimeResolvedModel(object):
 
         return None
 
-    def set_hyperparameters(self, hyperparameters):
-        self.hyperparameters = _copy.deepcopy(hyperparameters)
-
     def set_parameters(self, parameters):
+        """
+        Sets the parameters of the model.
+        """
         self.parameters = _copy.deepcopy(parameters)
 
     def get_parameters(self):
+        """
+        Returns the parameters of the model.
+        """
         return _copy.deepcopy(self.parameters)
 
     def get_probabilities(self, circuit, times):
         """
-        todo
+        *** Specified in each derive class ***
+
+        Specifying this method is the core to building a time-resolved model. This method should return the
+        probabiilties for each outcome, for the input circuit at the specified times.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to return the probability trajectories for.
+
+        times : list
+            The times to calculate the probabilities for.
+
+        Returns
+        -------
+        dict
+            A dictionary where the keys are the possible outcomes of the circuit, and the value
+            for an outcome is a list of the probabilities to obtain that outcomes at the specified
+            times (so this list is the same length as `times`).
+
         """
         raise NotImplementedError("Derived classes need to implement this!")
 
@@ -67,7 +95,7 @@ class TimeResolvedModel(object):
 
 def negloglikelihood(trmodel, ds, minp=0, maxp=1):
     """
-    The negative loglikelihood for a TimeResolvedModel given the data.
+    The negative loglikelihood for a TimeResolvedModel given the time-series data.
 
     Parameters
     ----------
@@ -78,8 +106,8 @@ def negloglikelihood(trmodel, ds, minp=0, maxp=1):
         A DataSet, containing time-series data.
 
     minp, maxp: float, optional
-        Value used to smooth the 0 and 1 probability boundaries for
-        the likelihood function. Useful in optimization routines.
+        Value used to smooth the 0 and 1 probability boundaries for the likelihood function.
+        To get the extact nll, leave as 0 and 1.
 
     Returns
     -------
@@ -104,15 +132,14 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=Fal
     Parameters
     ----------
     timeresolvedmodel: TimeResolvedModel
-        The TimeResolvedModel that is used as the seed, and which defines
-        the class of parameterized models to optimize over.
+        The TimeResolvedModel that is used as the seed, and which defines the class of parameterized models to optimize
+        over.
 
     ds: DataSet
         A DataSet, containing time-series data.
 
     minp, maxp: float, optional
-        Value used to smooth the 0 and 1 probability boundaries for
-        the likelihood function.
+        Value used to smooth the 0 and 1 probability boundaries for the likelihood function.
 
     bounds: list or None, optional
         Bounds on the parameters, as specified in scipy.optimize.minimize
