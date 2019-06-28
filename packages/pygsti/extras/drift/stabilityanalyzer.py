@@ -1547,7 +1547,7 @@ class StabilityAnalyzer(object):
         if estimator is not None:
             estimatekey = (estimatekey[0], estimatekey[1], estimator)
 
-        ptraj = self._probtrajectories[dsind, circind][estimatekey]
+        ptraj = self._probtrajectories[dsind, circind][estimatekey].copy()
 
         return ptraj
 

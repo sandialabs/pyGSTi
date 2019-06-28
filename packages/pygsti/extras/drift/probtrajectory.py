@@ -70,7 +70,7 @@ class ProbTrajectory(object):
 
         """
         hyperparameters = list(hyperparameters)
-        self.hyperparameters = _copy.copy(hyperparameters)
+        self.hyperparameters = _copy.deepcopy(hyperparameters)
         self.set_parameters(parameters)
 
     def set_parameters(self, parameters):
@@ -78,7 +78,7 @@ class ProbTrajectory(object):
         todo
 
         """
-        self.parameters = _copy.copy(parameters)
+        self.parameters = _copy.deepcopy(parameters)
 
     def set_parameters_from_list(self, parameterslist):
         """
@@ -104,7 +104,7 @@ class ProbTrajectory(object):
         todo:
 
         """
-        return _copy.copy(self.parameters)
+        return _copy.deepcopy(self.parameters)
 
     def get_probabilities(self, times, trim=True):
         """

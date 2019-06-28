@@ -47,13 +47,13 @@ class TimeResolvedModel(object):
         return None
 
     def set_hyperparameters(self, hyperparameters):
-        self.hyperparameters = _copy.copy(hyperparameters)
+        self.hyperparameters = _copy.deepcopy(hyperparameters)
 
     def set_parameters(self, parameters):
-        self.parameters = _copy.copy(parameters)
+        self.parameters = _copy.deepcopy(parameters)
 
     def get_parameters(self):
-        return _copy.copy(self.parameters)
+        return _copy.deepcopy(self.parameters)
 
     def get_probabilities(self, circuit, times):
         """
