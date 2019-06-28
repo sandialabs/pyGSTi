@@ -157,7 +157,7 @@ class ConstantProbTrajectory(ProbTrajectory):
         """
 
         """
-        super().__init__(outcomes, [0, ], probabilities)
+        super(ConstantProbTrajectory, self).__init__(outcomes, [0, ], probabilities)
 
     def basisfunction(self, i, times):
         """
@@ -180,7 +180,7 @@ class CosineProbTrajectory(ProbTrajectory):
 
         #    self.fullmodelsize = self.numsteps
 
-        super().__init__(outcomes, hyperparameters, parameters)
+        super(CosineProbTrajectory, self).__init__(outcomes, hyperparameters, parameters)
 
     def basisfunction(self, i, times):
         """

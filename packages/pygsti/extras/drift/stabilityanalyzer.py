@@ -11,6 +11,7 @@ from . import probtrajectory as _ptraj
 
 from ... import objects as _obj
 from ...construction import datasetconstruction as _dsconst
+from ...tools import compattools as _compat
 
 import numpy as _np
 import copy as _copy
@@ -348,14 +349,14 @@ class StabilityAnalyzer(object):
         self.transform = transform
 
         # Check that we have valid and consistent `marginalize` and `mergeoutcomes`, and write thems into object
-        if isinstance(marginalize, str):
+        if _compat.isstr(marginalize):
             assert(marginalize == 'auto'), "`marignalize` must be a boolean or 'auto'!"
             if mergeoutcomes is not None:
                 marginalize = False  # A mergOutcomesDictDict means we can't marginalize as well.
             else:
                 marginalize = True  # If there is no mergOutcomesDictDict we marginalize by default.
         else:
-            assert(isinstance(marginalize, bool)), "`marignalize` must be a boolean or 'auto'!"
+            assert(isinstance(marginalize, bool)), "`marginalize` must be a boolean or 'auto'!"
 
         if mergeoutcomes is not None:
             assert(not marginalize), "Cannot marginalize when a `mergeoutcomes` is specified!"
@@ -514,7 +515,7 @@ class StabilityAnalyzer(object):
         None
 
         """
-        if isinstance(frequencies, str):
+        if _compat.isstr(frequencies):
             assert(frequencies == 'auto')
             frequencies, freqpointers = _sig.get_auto_frequencies(self.data, self.transform)
         self._frequencies = frequencies
@@ -923,7 +924,7 @@ class StabilityAnalyzer(object):
         if default or (self._def_detection is None):
             self._def_detection = saveas
 
-        if isinstance(freqstest, str):
+        if _compat.isstr(freqstest):
             assert(freqstest == 'all')
         self._freqstest[saveas] = freqstest
 
@@ -938,7 +939,7 @@ class StabilityAnalyzer(object):
         # Populates the unspecfied parts of the inclass_correction with auto values, and checks the result is valid.
         inclass_correction = populate_inclass_correction(inclass_correction)
 
-        if isinstance(betweenclass_weighting, str):
+        if _compat.isstr(betweenclass_weighting):
             assert(betweenclass_weighting == 'auto'), "If a string, betweenclass_weighting must be a string!"
             betweenclass_weighting = get_auto_betweenclass_weighting(tests)
 
@@ -1225,7 +1226,7 @@ class StabilityAnalyzer(object):
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
 
-        if isinstance(fromtests, str):
+        if _compat.isstr(fromtests):
             assert(fromtests == 'auto')
             validtests = get_valid_tests()
             fromtests = []

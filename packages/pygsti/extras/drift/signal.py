@@ -16,10 +16,11 @@ import warnings as _warnings
 import numpy.random as _rnd
 
 try: from astropy.stats import LombScargle as _LombScargle
-except: pass
+except: _LombScargle = None
 
 from scipy.stats import chi2 as _chi2
 from ... import objects as _obj
+from ...tools import compattools as _compat
 
 
 def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', transform='dct',
@@ -91,10 +92,13 @@ def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', 
             powers = _np.abs(modes)**2
 
         if returnfrequencies:
-            if isinstance(frequencies, str):
+            if _compat.isstr(frequencies):
 
                 if times is None: freqs = None
                 else: freqs = fourier_frequencies_from_times(times)
+
+            else:
+                freqs = frequencies
 
             return freqs, modes, powers
 
@@ -303,7 +307,7 @@ def lsp(x, times, frequencies='auto', null_hypothesis=None, counts=1):
 
     """
     numtimes = len(x)
-    if isinstance(frequencies, str):
+    if _compat.isstr(frequencies):
         freq = frequencies_from_timestep((max(times) - min(times)) / numtimes, numtimes)
     else:
         freq = frequencies
@@ -320,7 +324,11 @@ def lsp(x, times, frequencies='auto', null_hypothesis=None, counts=1):
     else:
         lspfreq = freq
 
-    power = _LombScargle(times, standardized_x, fit_mean=True, center_data=False).power(lspfreq, normalization='psd')
+    if _LombScargle is None:
+        power = [0]  # TIM CHECK THIS??
+    else:
+        power = _LombScargle(times, standardized_x, fit_mean=True, center_data=False).power(lspfreq,
+                                                                                            normalization='psd')
 
     if freq[0] == 0.: power = _np.array([0, ] + list(power))
 
