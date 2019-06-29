@@ -812,6 +812,8 @@ class StabilityAnalyzer(object):
             and 'outcome'. For any of these strings not included, we average over that axis.
             For each string included, the item should be a key for one of the stored DataSets,
             a Circuit in the DataSet, and a possible outcome for that Circuit, respectively.
+            If None then defaults to {}, corresponding to the power spectrum obtained by
+            averarging over all the "base" spectra.
 
         returnfrequences: bool, optional
             Whether to also return the corresponding frequencies, as the first argument.
