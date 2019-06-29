@@ -87,7 +87,7 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
     if omitIdentity:
         # we assume identity gate is always the identity mx regardless of basis
         Identity = _np.identity(target_model.get_dimension(), 'd')
-        
+
         for gate in fidOps:
             if frobeniusdist2(target_model.operations[gate], Identity) < eqThresh:
                 fidOps.remove(gate)
@@ -105,7 +105,7 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
             'verbosity': max(0, verbosity - 1),
             'forceEmpty': forceEmpty,
             'scoreFunc': 'all',
-            }
+        }
 
         if ('slackFrac' not in algorithm_kwargs
                 and 'fixedSlack' not in algorithm_kwargs):
@@ -125,7 +125,6 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
             printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
-            
         measFidList = optimize_integer_fiducials_slack(model=target_model,
                                                        prepOrMeas='meas',
                                                        **algorithm_kwargs)
@@ -224,6 +223,7 @@ def xor(*args):
     output = sum(bool(x) for x in args) == 1
     return output
 
+
 def make_prep_mxs(mdl, prepFidList):
     """Make a list of matrices for the model preparation operations.
 
@@ -253,10 +253,11 @@ def make_prep_mxs(mdl, prepFidList):
     outputMatList = []
     for rho in list(mdl.preps.values()):
         outputMat = _np.zeros([dimRho, numFid], float)
-        for i,prepFid in enumerate(prepFidList):
-            outputMat[:, i] = _np.dot(mdl.product(prepFid), rho)[:,0]
+        for i, prepFid in enumerate(prepFidList):
+            outputMat[:, i] = _np.dot(mdl.product(prepFid), rho)[:, 0]
         outputMatList.append(outputMat)
     return outputMatList
+
 
 def make_meas_mxs(mdl, prepMeasList):
     """Make a list of matrices for the model measurement operations.
@@ -286,10 +287,10 @@ def make_meas_mxs(mdl, prepMeasList):
     outputMatList = []
     for povm in mdl.povms.values():
         for E in povm.values():
-            if isinstance(E, _objs.ComplementSPAMVec): continue # complement is dependent on others
+            if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
-            for i,measFid in enumerate(prepMeasList):
-                outputMat[:, i] = _np.dot(E.T, mdl.product(measFid))[0,:]
+            for i, measFid in enumerate(prepMeasList):
+                outputMat[:, i] = _np.dot(E.T, mdl.product(measFid))[0, :]
             outputMatList.append(outputMat)
     return outputMatList
 
@@ -357,10 +358,10 @@ def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all'
     else:
         raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
                          'or "meas")!'.format(prepOrMeas))
-    
+
     numFids = len(fidList)
-    scoreMx = _np.concatenate(fidArrayList, axis=1) # shape = (dimRho, nFiducials*nPrepsOrEffects)
-    scoreSqMx = _np.dot(scoreMx, scoreMx.T) # shape = (dimRho, dimRho)
+    scoreMx = _np.concatenate(fidArrayList, axis=1)  # shape = (dimRho, nFiducials*nPrepsOrEffects)
+    scoreSqMx = _np.dot(scoreMx, scoreMx.T)  # shape = (dimRho, dimRho)
     spectrum = sorted(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
     specLen = len(spectrum)
     N_nonzero = 0
@@ -510,8 +511,8 @@ def build_bitvec_mx(n, k):
         else:
             subK = k - i
             # Recursive definition allowing arbitrary size
-            last_bit_loc = previous_bit_locs[-1] # More explicit?
-            for bit_loc in range(1+last_bit_loc, diff+subK+1):
+            last_bit_loc = previous_bit_locs[-1]  # More explicit?
+            for bit_loc in range(1 + last_bit_loc, diff + subK + 1):
                 current_bit_locs = previous_bit_locs + (bit_loc,)
 
                 counter = build_mx(current_bit_locs, i - 1, counter)
@@ -520,10 +521,11 @@ def build_bitvec_mx(n, k):
         return counter
 
     counter = 0
-    for bit_loc_0 in range(diff+1):
-        counter = build_mx((bit_loc_0,), k - 1, counter) # Do subK additional iterations
+    for bit_loc_0 in range(diff + 1):
+        counter = build_mx((bit_loc_0,), k - 1, counter)  # Do subK additional iterations
 
     return bitVecMx
+
 
 def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
                                      initialWeights=None, scoreFunc='all',
@@ -669,8 +671,8 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
     elif prepOrMeas == 'meas':
         fidArrayList = make_meas_mxs(model, fidList)
     else:
-        raise ValueError('prepOrMeas must be specified!') # pragma: no cover
-          # unreachable given check within test_fiducial_list above
+        raise ValueError('prepOrMeas must be specified!')  # pragma: no cover
+        # unreachable given check within test_fiducial_list above
     numMxs = len(fidArrayList)
 
     def compute_score(wts, cache_score=True):
@@ -682,12 +684,12 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
 #            score = forceMinScore
         if score is None:
             numFids = _np.sum(wts)
-            scoreMx = _np.zeros([dimRho, int(numFids) *  int(numMxs)], float)
+            scoreMx = _np.zeros([dimRho, int(numFids) * int(numMxs)], float)
             colInd = 0
             wts = _np.array(wts)
             wtsLoc = _np.where(wts)[0]
             for fidArray in fidArrayList:
-                scoreMx[:, colInd:colInd+int(numFids)] = fidArray[:, wtsLoc]
+                scoreMx[:, colInd:colInd + int(numFids)] = fidArray[:, wtsLoc]
                 colInd += int(numFids)
             scoreSqMx = _np.dot(scoreMx, scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
@@ -717,7 +719,7 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
         bitVecMat = build_bitvec_mx(numBits, hammingWeight)
 
         if forceEmpty:
-            bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,
+            bitVecMat = _np.concatenate((_np.array([[1] * int(numFidLists)]).T,
                                          bitVecMat), axis=1)
         best_score = _np.inf
         # Explicitly declare best_weights, even if it will soon be replaced
@@ -727,7 +729,7 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
             # If scores are within machine precision, we want the fiducial set
             # that requires fewer total button operations.
             if abs(temp_score - best_score) < 1e-8:
-#                print "Within machine precision!"
+                #                print "Within machine precision!"
                 bestFidList = []
                 for index, val in enumerate(best_weights):
                     if val == 1:
@@ -759,27 +761,26 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
         else:
             return goodFidList
 
-
     def get_neighbors(boolVec):
         """ Iterate over neighbors of `boolVec` """
         for i in range(nFids):
             v = boolVec.copy()
-            v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
+            v[i] = (v[i] + 1) % 2  # toggle v[i] btwn 0 and 1
             yield v
 
     if initialWeights is not None:
         weights = _np.array([1 if x else 0 for x in initialWeights])
     else:
-        weights = _np.ones(nFids, _np.int64) #default: start with all germs
-        lessWeightOnly = True #we're starting at the max-weight vector
+        weights = _np.ones(nFids, _np.int64)  # default: start with all germs
+        lessWeightOnly = True  # we're starting at the max-weight vector
 
     score = compute_score(weights)
-    L1 = sum(weights) # ~ L1 norm of weights
+    L1 = sum(weights)  # ~ L1 norm of weights
 
     with printer.progress_logging(1):
 
         for iIter in range(maxIter):
-            scoreD_keys = scoreD.keys() #list of weight tuples already computed
+            scoreD_keys = scoreD.keys()  # list of weight tuples already computed
 
             printer.show_progress(iIter, maxIter,
                                   suffix="score=%g, nFids=%d" % (score, L1))
@@ -802,8 +803,7 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
                     printer.log("Found better neighbor: nFids = %d score = %g"
                                 % (L1, score), 3)
 
-
-            if not bFoundBetterNeighbor: # Time to relax our search.
+            if not bFoundBetterNeighbor:  # Time to relax our search.
                 # from now on, don't allow increasing weight L1
                 lessWeightOnly = True
 
@@ -816,7 +816,7 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
 
                 printer.log("No better neighbor. "
                             "Relaxing score w/slack: %g => %g"
-                            % (score, score+slack), 2)
+                            % (score, score + slack), 2)
                 # artificially increase score and see if any neighbor is better
                 # now...
                 score += slack
@@ -830,9 +830,9 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
                         printer.log("Found better neighbor: nFids = %d "
                                     "score = %g" % (L1, score), 3)
 
-                if not bFoundBetterNeighbor: #Relaxing didn't help!
+                if not bFoundBetterNeighbor:  # Relaxing didn't help!
                     printer.log("Stationary point found!", 2)
-                    break # end main for loop
+                    break  # end main for loop
 
             printer.log("Moving to better neighbor", 2)
         else:
@@ -891,7 +891,7 @@ def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
         fidsLens = [len(fiducial) for fiducial in fidsList]
         initialWeights[fidsLens.index(0)] = 1
 
-    getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
+    def getNeighborsFn(weights): return _grasp.get_swap_neighbors(
         weights, forcedWeights=initialWeights)
 
     printer.log("Starting fiducial list optimization. Lower score is better.",
@@ -907,21 +907,21 @@ def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
         'opPenalty': opPenalty,
         'returnAll': False,
         'l1Penalty': 0.0,
-        }
+    }
 
     final_compute_kwargs = compute_kwargs.copy()
     final_compute_kwargs['l1Penalty'] = l1Penalty
 
-    scoreFn = lambda fidList: compute_composite_fiducial_score(
+    def scoreFn(fidList): return compute_composite_fiducial_score(
         fidList=fidList, **compute_kwargs)
 
-    finalScoreFn = lambda fidList: compute_composite_fiducial_score(
+    def finalScoreFn(fidList): return compute_composite_fiducial_score(
         fidList=fidList, **final_compute_kwargs)
 
     dimRho = model.get_dimension()
-    feasibleThreshold=_scoring.CompositeScore(-dimRho, threshold, dimRho)
+    feasibleThreshold = _scoring.CompositeScore(-dimRho, threshold, dimRho)
 
-    rclFn = lambda x: _scoring.composite_rcl_fn(x, alpha)
+    def rclFn(x): return _scoring.composite_rcl_fn(x, alpha)
 
     initialSolns = []
     localSolns = []

@@ -103,9 +103,9 @@ class TestDataSetMethods(BaseTestCase):
             pygsti.objects.DataSet(circuits=gstrs, outcomeLabels=['0','1'], bStatic=True)
               #must specify counts when creating static DataSet
 
-        #Test has_key methods
-        self.assertTrue( ds2.has_key(('Gx',)) )
-        self.assertTrue( ds2[('Gx',)].has_key('0'))
+        #Test __contains__ methods
+        self.assertTrue(('Gx',) in ds2)
+        self.assertTrue('0' in ds2[('Gx',)])
 
         #Test indexing methods
         cnt = 0
@@ -180,11 +180,11 @@ class TestDataSetMethods(BaseTestCase):
         nStrs = len(ds)
         cntDict = ds[('Gx',)].as_dict()
         asStr = str(ds[('Gx',)])
-        
+
         dsWritable[('Gy',)].scale(2.0)
         self.assertEqual(dsWritable[('Gy',)]['0'], 40)
         self.assertEqual(dsWritable[('Gy',)]['1'], 160)
-        
+
 
         #Test loading a deprecated dataset file
         #dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
@@ -205,7 +205,7 @@ Gx^4 20 80
         ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
         self.assertEqual(ds[()][('0',)], 0)
         print(ds.cirIndex.keys())
-        print(ds.has_key(('Gx','Gy')))
+        print(('Gx','Gy') in ds)
         print(('Gx','Gy') in ds.keys())
         self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
 
@@ -402,7 +402,7 @@ Gx^4 20 80 0.2 100
         nStrs = len(multiDS)
         labels = list(multiDS.keys())
         self.assertEqual(labels, ['DS0', 'DS1', 'myDS'])
-        self.assertTrue( multiDS.has_key('DS0') )
+        self.assertTrue('DS0' in multiDS)
 
         for label in multiDS:
             DS = multiDS[label]
@@ -416,13 +416,13 @@ Gx^4 20 80 0.2 100
             pass
 
         #iteration over MultiDataSet without reps (slightly different logic)
-        for label in mdsNoReps: 
+        for label in mdsNoReps:
             pass
         for label,ds in mdsNoReps.items():
             pass
         for ds in mdsNoReps.values():
             pass
-        
+
 
         sumDS = multiDS.get_datasets_aggregate('DS0','DS1')
         sumDS_noReps = mdsNoReps.get_datasets_aggregate('ds1','ds2')
@@ -475,7 +475,7 @@ Gx^4 20 80 0.2 100
         #(Tests done_adding_data without adding any data)
         dsEmpty = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         dsEmpty.done_adding_data()
-        
+
         #Create an empty dataset and add data
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_raw_series_data( ('Gx',), #gate sequence
@@ -516,10 +516,10 @@ Gx^4 20 80 0.2 100
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         CIR = pygsti.objects.Circuit #no auto-convert to Circuits when using circuitIndices
         gatestringIndices = collections.OrderedDict([ #always need this when creating a static dataset
-            ( CIR(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
+            ( CIR(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D
             ( CIR(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
         oliData = np.array([0,1,0,1,1,0])
-        timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0]) 
+        timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0])
         repData = np.array([1,1,1,2,2,2])
         ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
                                       ['0','1'], None,  bStatic=True)
@@ -535,15 +535,15 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             pygsti.objects.DataSet(circuitIndices=gatestringIndices,
                                      outcomeLabelIndices=oli, bStatic=True) #must specify data when creating a static dataset
-            
+
         #with self.assertRaises(ValueError):
         pygsti.objects.DataSet() #OK now: no longer need at least outcomeLabels or outcomeLabelIndices
-        
-        
+
+
         #Test loading a static set from a saved file
         ds.save(temp_files + "/test_tddataset.saved")
         ds3 = pygsti.objects.DataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
-        
+
     def test_tddataset_methods(self):
         # Create a dataset from scratch
 
@@ -564,23 +564,23 @@ Gx^4 20 80 0.2 100
             print( "[0] (int) = ",ds[opstr][0] ) # integer index
             print( "[0.0] (float) = ",ds[opstr][0.0] ) # time index
             print( "['0'] (str) = ",ds[opstr]['0'] ) # outcome-label index
-            print( "[('0',)] (tuple) = ",ds[opstr][('0',)] ) # outcome-label index            
+            print( "[('0',)] (tuple) = ",ds[opstr][('0',)] ) # outcome-label index
             print( "at time 0 = ", ds[opstr].counts_at_time(0.0) )
             all_times, _ = ds[opstr].timeseries('all')
             print( "series('all') = ", ds[opstr].timeseries('all') )
             print( "series('0') = ",ds[opstr].timeseries('0') )
-            print( "series('1') = ",ds[opstr].timeseries('1') )            
+            print( "series('1') = ",ds[opstr].timeseries('1') )
             print( "series('0',alltimes) = ",ds[opstr].timeseries('0', all_times) )
             print( len(ds[opstr]) )
             print("\n")
-        
+
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_raw_series_data( ('Gx',),
                             ['0','0','1','0','1','0','1','1','1','0'],
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
 
         printInfo(ds, ('Gx',) )
-        
+
         ds[('Gy','Gy')] = (['0','1'], [0.0, 1.0]) #add via spam-labels, times
         dsNoReps = ds.copy() #tests copy() before any rep-data is added
 
@@ -607,7 +607,7 @@ Gx^4 20 80 0.2 100
         dsNoReps[('Gy','Gy')][1] = ('0',0.4)    # or be omitted
         printInfo(ds, ('Gx',) )
         printInfo(ds, ('Gy',) )
-        
+
         with self.assertRaises(ValueError):
             ds[('Gx',)].outcomes = ['x','x'] #can't assign outcomes
 
@@ -617,7 +617,7 @@ Gx^4 20 80 0.2 100
         printInfo(dsScaled, ('Gx',) ) #triggers rounding warnings
         dsScaled.done_adding_data()
         printInfo(dsScaled, ('Gx',) ) # (static case)
-        
+
         ds.done_adding_data()
         dsNoReps.done_adding_data()
 
@@ -634,7 +634,6 @@ Gx^4 20 80 0.2 100
         #test contents
         self.assertTrue( ('Gx',) in ds)
         self.assertTrue( ('Gx',) in ds.keys())
-        self.assertTrue( ds.has_key(('Gx',)) )
         self.assertEqual( list(ds.get_outcome_labels()), [('0',),('1',)] )
         self.assertEqual( list(ds.get_gate_labels()), ['Gx','Gy'] )
 
@@ -662,11 +661,11 @@ Gx^4 20 80 0.2 100
             dsRow2 = dsNoReps[opstr]
             spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
             for spamLblIndex, timestamp, reps in dsRow: # or iterate over
-                print(spamLblIndex, timestamp, reps)                
+                print(spamLblIndex, timestamp, reps)
         for dsRow in dsNoReps.values():
             print(dsRow)
 
-            
+
         #Later: add_series_from_dataset(otherTDDataSet)
 
         print("Whole thing:")
@@ -676,8 +675,8 @@ Gx^4 20 80 0.2 100
         dsWritable[('Gx',)][0] = ('1',0.1,1)
         dsWritable.add_raw_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
         dsWritable.add_series_from_dataset(ds)
-        
-        
+
+
         dsWritable2 = dsWritable.copy_nonstatic()
          #test copy_nonstatic on already non-static dataset
 
@@ -711,7 +710,7 @@ Gx^4 20 80 0.2 100
         ds_slice = ds.time_slice(1.0,2.0,aggregateToTime=0.0)
         print("Time slice (aggregated to t=0):")
         print(ds_slice)
-        
+
         #test copy
         dsWritable_copy = dsWritable.copy() #non-static
         ds_copy = ds.copy() #static
@@ -748,7 +747,7 @@ Gx^4 20 80 0.2 100
         with open(compare_files + '/deprecated.dataset', 'rb') as datasetfile:
             ds_from_pkl = pickle.load(datasetfile)
 
-        
+
     def test_tddataset_from_file(self):
         # creating and loading a text-format dataset file
         # NOTE: left of = sign is letter alias, right of = sign is spam label
@@ -777,7 +776,7 @@ Gy 11001100
             output.write(bad_dataset_txt)
         with self.assertRaises(ValueError):
             pygsti.io.load_tddataset(temp_files + "/BadTDDataset.txt")
-        
+
 
     def test_load_old_dataset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
@@ -829,12 +828,12 @@ Gx^4 20 80
 #        mdl.operations['Gmz_1'] = np.dot(Erem,Erem.T)
 #        #print(mdl['Gmz_0'] + mdl['Gmz_1'])
 #
-#        circuit_list = pygsti.construction.circuit_list([ 
+#        circuit_list = pygsti.construction.circuit_list([
 #            (),
 #            ('Zmeas',),
-#            ('Gx','Zmeas') 
+#            ('Gx','Zmeas')
 #        ])
-#        
+#
 #        ds_gen = pygsti.construction.generate_fake_data(mdl, circuit_list, nSamples=100,
 #                                                        sampleError="multinomial", seed=0,
 #                                                        measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
@@ -851,7 +850,7 @@ Gx^4 20 80
 #        ds.add_count_list( ('Gx','Gmz_0'), [37,4] )
 #        ds.add_count_list( ('Gx','Gmz_1'), [5,54] )
 #        ds.done_adding_data()
-#        
+#
 #        self.assertAlmostEqual( ds[('Gmz_0',)].fraction('0'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
 #        self.assertAlmostEqual( ds[('Gx','Gmz_1')].fraction('1'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
 #
@@ -862,7 +861,7 @@ Gx^4 20 80
 #        self.assertEqual(ds[('Gmz_0',)]['0'], 10)
 #        self.assertEqual(ds[('Gmz_0',)].total, (10.0 + 0.5 + 9.0 + 81.0) )
 
-        
+
 
 
 if __name__ == "__main__":

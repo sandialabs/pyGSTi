@@ -1,0 +1,16 @@
+# -*- mode: conf; -*-
+## flake8 critical linting configuration
+#
+# Alternative configuration for flake8 which will only check for
+# "critical" linting errors
+#
+# usage:
+#   $ flake8 --config=.flake8-critical
+
+[flake8]
+# ONLY check for these linting errors:
+# E9**: Runtime errors
+# F7**: Flake8 syntax errors
+# F82*: Undefined names
+# This list may be expanded in the future
+select=E9,F7,F82

@@ -1,5 +1,5 @@
 ####### Requirements #######
 numpy
 scipy
-plotly<=3.7.1
+plotly
 ply

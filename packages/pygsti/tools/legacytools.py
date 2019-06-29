@@ -6,12 +6,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-import warnings  as _warnings
+import warnings as _warnings
 
 from ..baseobjs import parameterized
 
+
 def warn_deprecated(name, replacement=None):
-    """ 
+    """
     Formats and prints a deprecation warning message.
 
     Parameters
@@ -28,9 +29,10 @@ def warn_deprecated(name, replacement=None):
         message += 'Please use {} instead.'.format(replacement)
     _warnings.warn(message)
 
+
 @parameterized
 def deprecated_fn(fn, replacement=None):
-    """ 
+    """
     Decorator for deprecating a function.
 
     Parameters

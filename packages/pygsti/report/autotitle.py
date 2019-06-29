@@ -8,11 +8,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
+
 def generate_name():
     """ Generate a random adjective + noun name """
-    adj = _adjectives[ _np.random.randint(0,len(_adjectives)) ]
-    noun = _nouns[ _np.random.randint(0,len(_nouns)) ]
+    adj = _adjectives[_np.random.randint(0, len(_adjectives))]
+    noun = _nouns[_np.random.randint(0, len(_nouns))]
     return adj + " " + noun
+
 
 _nouns = [
     "goatskin",
@@ -81,7 +83,7 @@ _nouns = [
     "orb",
     "haze",
     "provision",
-    "shackle" ] + \
+    "shackle"] + \
     [
     "factory reset button",
     "blood rage",
@@ -162,7 +164,7 @@ _nouns = [
     "mood",
     "nibblets",
     "striped hyena",
-    "weed whacker" ]
+    "weed whacker"]
 
 _adjectives = [
     "dead",
@@ -251,4 +253,4 @@ _adjectives = [
     "at-the-ready",
     "free-loading",
     "house-broken",
-    "misunderstood" ]
+    "misunderstood"]

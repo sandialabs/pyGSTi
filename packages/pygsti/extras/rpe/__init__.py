@@ -10,4 +10,4 @@ from .rpetools import *
 from .rpeconfig import *
 from .rpeconfig_GxPi2_GyPi2_UpDn import *
 from .rpeconfig_GxPi2_GyPi2_00 import *
-from .rpeconstruction import * 
+from .rpeconstruction import *

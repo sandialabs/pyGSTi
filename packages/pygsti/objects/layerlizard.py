@@ -47,28 +47,50 @@ from ..baseobjs.label import CircuitLabel as _CircuitLabel
 
 
 class LayerLizard(object):
-    """ 
+    """
     Helper class for interfacing a Model and a forward simulator
     (which just deals with *simplified* operations).  Can be thought
     of as a "server" of simplified operations for a forward simulator
     which pieces together layer operations from components.
     """
-    # TODO docstring - add not-implemented members & docstrings?
-    
+
     def __init__(self, model):
         """
-        TODO: docstring
+        Create a new LayerLizard.
+
+        Parameters
+        ----------
+        model : Model
+            The "parent" model for this layer lizard.
         """
         self.model = model
 
     #Helper functions for derived classes:
     def get_circuitlabel_op(self, circuitlbl, dense):
-        """TODO: docstring
-           build an op for this circuit label - a composed op (of sub-circuit)
-           exponentiated to the power N, where N=#of repetitions
+        """
+        A helper function for derived classes, used for processing
+        :class:`CircuitLabel` labels (which encapsulate sub-circuits
+        repeated some integer number of times).
+
+        This method build an operator for `circuitlbl` by creating a composed-op
+        (using either :class:`ComposedOp` or :class:`ComposedDenseOp` depending
+        on the value of `dense`) of the sub-circuit that is exponentiated (using
+        :class:`ExponentiatedOp`) to the power `circuitlbl.reps`.
+
+        Parameters
+        ----------
+        circuitlbl : CircuitLabel
+            The (sub-circuit)^power to create an operator for.
+
+        dense : boolean
+            Whether a dense composed-op should be created (see above).
+
+        Returns
+        -------
+        LinearOperator
         """
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
-        if len(circuitlbl.components) != 1: #works for 0 components too
+        if len(circuitlbl.components) != 1:  # works for 0 components too
             subCircuitOp = Composed([self.get_operation(l) for l in circuitlbl.components],
                                     dim=self.model.dim, evotype=self.model._evotype)
         else:
@@ -76,35 +98,36 @@ class LayerLizard(object):
         if circuitlbl.reps != 1:
             #finalOp = Composed([subCircuitOp]*circuitlbl.reps,
             #                   dim=self.model.dim, evotype=self.model._evotype)
-            finalOp = _op.ExponentiatedOp(subCircuitOp,circuitlbl.reps, evotype=self.model._evotype)
+            finalOp = _op.ExponentiatedOp(subCircuitOp, circuitlbl.reps, evotype=self.model._evotype)
         else:
             finalOp = subCircuitOp
         return finalOp
 
-    
+
 class ExplicitLayerLizard(LayerLizard):
     """
-    This layer lizard (see :class:`LayerLizard`) only serves up layer 
+    This layer lizard (see :class:`LayerLizard`) only serves up layer
     operations it have been explicitly provided upon initialization.
     """
-    def __init__(self,preps,ops,effects,model):
+
+    def __init__(self, preps, ops, effects, model):
         """
         Creates a new ExplicitLayerLizard.
 
         Parameters
         ----------
         preps, ops, effects : OrderedMemberDict
-            Dictionaries of simplified layer operations available for 
+            Dictionaries of simplified layer operations available for
             serving to a forwared simulator.
 
         model : Model
             The model associated with the simplified operations.
         """
-        self.preps, self.ops, self.effects = preps,ops,effects
-        super(ExplicitLayerLizard,self).__init__(model)
-        
+        self.preps, self.ops, self.effects = preps, ops, effects
+        super(ExplicitLayerLizard, self).__init__(model)
+
     def get_evotype(self):
-        """ 
+        """
         Return the evolution type of the operations being served.
 
         Returns
@@ -113,7 +136,7 @@ class ExplicitLayerLizard(LayerLizard):
         """
         return self.model._evotype
 
-    def get_prep(self,layerlbl):
+    def get_prep(self, layerlbl):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
@@ -122,8 +145,8 @@ class ExplicitLayerLizard(LayerLizard):
         LinearOperator
         """
         return self.preps[layerlbl]
-    
-    def get_effect(self,layerlbl):
+
+    def get_effect(self, layerlbl):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
@@ -132,8 +155,8 @@ class ExplicitLayerLizard(LayerLizard):
         LinearOperator
         """
         return self.effects[layerlbl]
-    
-    def get_operation(self,layerlbl):
+
+    def get_operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
 
@@ -141,8 +164,8 @@ class ExplicitLayerLizard(LayerLizard):
         -------
         LinearOperator
         """
-        if isinstance(layerlbl,_CircuitLabel):
-            dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
+        if isinstance(layerlbl, _CircuitLabel):
+            dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
             return self.get_circuitlabel_op(layerlbl, dense)
         else:
             return self.ops[layerlbl]
@@ -156,19 +179,20 @@ class ExplicitLayerLizard(LayerLizard):
         v : numpy.ndarray
             A vector of parameters for `Model` associated with this layer lizard.
         """
-        for _,obj in _itertools.chain(self.preps.items(),
-                                      self.effects.items(),
-                                      self.ops.items()):
-            obj.from_vector( v[obj.gpindices] )
+        for _, obj in _itertools.chain(self.preps.items(),
+                                       self.effects.items(),
+                                       self.ops.items()):
+            obj.from_vector(v[obj.gpindices])
 
 
 class ImplicitLayerLizard(LayerLizard):
-    """ 
+    """
     This layer lizard (see :class:`LayerLizard`) is used as a base class for
     objects which serve up layer operations for implicit models (and so provide
     logic for how to construct layer operations from model components).
     """
-    def __init__(self,preps,ops,effects,model):
+
+    def __init__(self, preps, ops, effects, model):
         """
         Creates a new ExplicitLayerLizard.
 
@@ -182,10 +206,10 @@ class ImplicitLayerLizard(LayerLizard):
         model : Model
             The model associated with the simplified operations.
         """
-        self.prep_blks, self.op_blks, self.effect_blks = preps,ops,effects
-        super(ImplicitLayerLizard,self).__init__(model)
-        
-    def get_prep(self,layerlbl):
+        self.prep_blks, self.op_blks, self.effect_blks = preps, ops, effects
+        super(ImplicitLayerLizard, self).__init__(model)
+
+    def get_prep(self, layerlbl):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
@@ -194,8 +218,8 @@ class ImplicitLayerLizard(LayerLizard):
         LinearOperator
         """
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_preps`")
-    
-    def get_effect(self,layerlbl):
+
+    def get_effect(self, layerlbl):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
@@ -204,8 +228,8 @@ class ImplicitLayerLizard(LayerLizard):
         LinearOperator
         """
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_effect`")
-    
-    def get_operation(self,layerlbl):
+
+    def get_operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
 
@@ -216,7 +240,7 @@ class ImplicitLayerLizard(LayerLizard):
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_operation`")
 
     def get_evotype(self):
-        """ 
+        """
         Return the evolution type of the operations being served.
 
         Returns
@@ -234,8 +258,8 @@ class ImplicitLayerLizard(LayerLizard):
         v : numpy.ndarray
             A vector of parameters for `Model` associated with this layer lizard.
         """
-        for _,objdict in _itertools.chain(self.prep_blks.items(),
-                                          self.effect_blks.items(),
-                                          self.op_blks.items()):
-            for _,obj in objdict.items():
-                obj.from_vector( v[obj.gpindices] )
+        for _, objdict in _itertools.chain(self.prep_blks.items(),
+                                           self.effect_blks.items(),
+                                           self.op_blks.items()):
+            for _, obj in objdict.items():
+                obj.from_vector(v[obj.gpindices])

@@ -19,14 +19,15 @@ hooks/etc/permissions.yml
 **tutorial_files
 *.lprof
 *.cache
+/.eggs/
 
 # Test Metadata #
 #################
 test/output/*
 test/output/pylint/*
 test/output/individual_coverage/*/*
-test/test_packages/.noseids
 test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
+**.noseids
 **tutorial_files
 
 # Compiled source #
@@ -104,4 +105,3 @@ scripts/profiling/data
 # Other Local-only Files #
 ############################
 local
-

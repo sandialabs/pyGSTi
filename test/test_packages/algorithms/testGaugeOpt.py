@@ -92,7 +92,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lgst_tp         = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
                                             spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 
-        mdl_lgst.basis = Basis.cast("gm",2) #so CPTP optimizations can work on mdl_lgst
+        mdl_lgst.basis = Basis.cast("gm",4) #so CPTP optimizations can work on mdl_lgst
         mdl_lgst_cptp       = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
                                             cptp_penalty_factor=1.0, spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 

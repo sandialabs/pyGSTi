@@ -7,12 +7,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import json as _json
-import os   as _os
+import os as _os
+
 
 class NotebookCell(object):
     '''
     Struct representing either a code or markdown cell
     '''
+
     def __init__(self, cellType='code', source=None):
         '''
         Build a notebook cell
@@ -27,7 +29,7 @@ class NotebookCell(object):
         if source is None:
             source = []
         self.cellType = cellType
-        self.source   = source
+        self.source = source
 
     def to_json_dict(self):
         '''
@@ -39,7 +41,7 @@ class NotebookCell(object):
         elif self.cellType == 'code':
             templateFilename = 'CodeCell.json'
         templateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                          'templates', templateFilename )
+                                         'templates', templateFilename)
         with open(templateFilename, 'r') as infile:
             cellDict = _json.load(infile)
         cellDict['source'].extend(self.source)

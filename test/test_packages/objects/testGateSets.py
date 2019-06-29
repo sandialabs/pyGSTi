@@ -18,6 +18,8 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.objects import Label as L
 
 from pygsti.construction import std1Q_XYI
+from pygsti.io import enable_old_object_unpickling
+from pygsti.tools.compattools import patched_UUID
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -25,6 +27,8 @@ def Ls(*args):
 
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
 FD_HESS_PLACES = 1 # looser checking when computing finite difference hessians (currently in map calcs)
+
+SKIP_CVXPY = os.getenv('SKIP_CVXPY')
 
 # This class is for unifying some models that get used in this file and in testGateSets2.py
 class GateSetTestCase(BaseTestCase):
@@ -177,7 +181,7 @@ class TestGateSetMethods(GateSetTestCase):
         deriv = mdl.deriv_wrt_params()
 
 
-
+    @unittest.skipIf(SKIP_CVXPY, "skipping cvxpy tests")
     def test_copy(self):
         cp = self.model.copy()
         self.assertAlmostEqual( self.model.frobeniusdist(cp), 0 )
@@ -192,6 +196,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertAlmostEqual( self.model.frobeniusdist(cp), 0 )
 
 
+    @unittest.skipIf(SKIP_CVXPY, "skipping cvxpy tests")
     def test_transform(self):
         T = np.array([[ 0.36862036,  0.49241519,  0.35903944,  0.90069522],
                       [ 0.12347698,  0.45060548,  0.61671491,  0.64854769],
@@ -1211,7 +1216,7 @@ class TestGateSetMethods(GateSetTestCase):
     def test_load_old_gateset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        with pygsti.io.enable_old_object_unpickling():
+        with enable_old_object_unpickling(), patched_UUID():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl.%s" % vs,'rb') as f:
                 mdl = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
@@ -1219,7 +1224,7 @@ class TestGateSetMethods(GateSetTestCase):
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
             pickle.dump(mdl, f)
 
-        with pygsti.io.enable_old_object_unpickling("0.9.7"):
+        with enable_old_object_unpickling("0.9.7"), patched_UUID():
             with open(compare_files + "/pygsti0.9.7.gateset.pkl.%s" % vs,'rb') as f:
                 mdl = pickle.load(f)
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
@@ -1448,7 +1453,7 @@ Gx^4  0:100
         with open(temp_files + "/SparseDataset.txt",'w') as f:
             f.write(dataset_txt)
 
-        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt")
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt", recordZeroCnts=False)
         self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',), ('2',)])
         self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
@@ -1487,9 +1492,9 @@ Gx^4 100 0
         with open(temp_files + "/SparseDataset2.txt",'w') as f:
             f.write(dataset_txt2)
 
-        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt")
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt", recordZeroCnts=True)
         self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',)])
-        self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
+        self.assertEqual(ds[()].outcomes, [('0',),('1',)]) # both outcomes even though only nonzero count is 1-count
         with self.assertRaises(KeyError):
             ds[()]['2'] # *can't* query '2' b/c it's NOT a valid outcome label here
 

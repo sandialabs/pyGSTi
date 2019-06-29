@@ -48,7 +48,7 @@ class TestStdInputParser(BaseTestCase):
 
         #print "String Tests:"
         for s,expected in string_tests:
-            #print "%s ==> " % s, result
+            #print("%s ==> " % s, expected)
             result,line_labels = std.parse_circuit(s, lookup=lkup)
             self.assertEqual(line_labels, None)
             circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)
@@ -65,6 +65,32 @@ class TestStdInputParser(BaseTestCase):
         with self.assertRaises(ValueError):
             std.parse_circuit("(G1")
 
+    def test_parse_circuit_with_time_and_args(self):
+        std = pygsti.io.StdInputParser()
+        
+        cstr = "Gx;pi/1.2:0:2!1.0"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.0)
+        self.assertEqual(firstLbl.args, ('pi/1.2',))
+        self.assertEqual(firstLbl.sslbls, (0, 2))
+        self.assertEqual(firstLbl.name, 'Gx')
+        self.assertEqual(tuple(firstLbl), ('Gx', 3, 'pi/1.2', 0, 2))
+
+        cstr = "rho0!1.21{}"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.21)
+        self.assertEqual(firstLbl.args, ())
+        self.assertEqual(firstLbl.sslbls, None)
+        self.assertEqual(firstLbl.name, 'rho0')
+        self.assertEqual(str(firstLbl), 'rho0!1.21')
+
+        cstr = "{}M0!1.22"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.22)
+        self.assertEqual(firstLbl.args, ())
+        self.assertEqual(firstLbl.sslbls, None)
+        self.assertEqual(firstLbl.name, 'M0')
+        self.assertEqual(str(firstLbl), 'M0!1.22')
 
     def test_string_exception(self):
         """Test lookup failure and Syntax error"""
@@ -784,11 +810,22 @@ BASIS: pp
         self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
         self.assertArraysAlmostEqual(gs2.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
 
+    def test_parse_complicated_circuits(self):
+        #Test that a bunch of weird nested single layers can be parsed in,
+        # and that this matches what is parsed in when a circuit object is
+        # given to Circuit.__init__ and the parsing just checks for consistency:
 
-
-
-
-
+        for expand in [False, True]:
+            print("Expand = ",expand)
+            for s in ["(Gx:0)Gy:1", "(Gx:0)^4Gy:1", "[Gx:0Gy:1]","[Gx:0Gy:1]^2","[Gx:0[Gz:2Gy:1]]Gz:0",
+                      "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[Gz:2Gy:1]^2]", "[Gx:0([Gz:2Gy:1]^2)]"]:
+                print("FROM ",s,":")
+                c = pygsti.obj.Circuit(None,stringrep=s, expand_subcircuits=expand)
+                print(c)
+                # c._print_labelinfo() #DEBUG - TODO: could check this structure as part of this test
+                c2 = pygsti.obj.Circuit(c, stringrep=c.str, expand_subcircuits=expand)
+                self.assertEqual(c, c2)
+                print("\n\n")
 
 
 if __name__ == "__main__":

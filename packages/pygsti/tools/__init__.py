@@ -25,8 +25,4 @@ from .matrixmod2 import *
 from .hypothesis import *
 #Special case: opttool need to reside in baseobjs,
 # but they're still "tools"
-from ..baseobjs.opttools import * 
-
-
-
-
+from ..baseobjs.opttools import *

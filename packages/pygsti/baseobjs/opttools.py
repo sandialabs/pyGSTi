@@ -7,14 +7,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 
-from time        import time
-from contextlib  import contextmanager
+from time import time
+from contextlib import contextmanager
 from collections import defaultdict
-from datetime    import datetime
-from functools   import wraps
+from datetime import datetime
+from functools import wraps
 import warnings
 
 # note that this decorator ignores **kwargs
+
+
 def cache_by_hashed_args(obj):
     """ Decorator for caching a function values """
     cache = obj.cache = {}
@@ -23,7 +25,7 @@ def cache_by_hashed_args(obj):
     def _memoizer(*args, **kwargs):
         if len(kwargs) > 0:
             #instead of an error, just don't cache in this case
-            warnings.warn('Cannot currently memoize on kwargs') 
+            warnings.warn('Cannot currently memoize on kwargs')
             return obj(*args, **kwargs)
         try:
             if args not in cache:
@@ -92,6 +94,7 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
             if formatStr is not None:
                 label = formatStr.format(label)
             put('{} took {} seconds'.format(label, str(round(t, roundPlaces))))
+
 
 def time_hash():
     """Get string-version of current time"""

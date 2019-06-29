@@ -1,19 +1,9 @@
-dist: trusty
+dist: xenial
 language: python
 
-python:
-  - "2.7"
-  - "3.5"
+python: 3.7
 
-branches:
-  only:
-    - master
-    - beta
-    - develop
-
-# Hold off testing feature & bugfix branches in case this competes w/other testing.
-#    - /^feature-.*$/
-#    - /^bugfix-.*$/
+if: (branch IN (master, beta, develop, ci-fixes)) OR (tag IS present)
 
 env:
   global:
@@ -35,16 +25,15 @@ before_install:
     sudo apt-get update -qq -y &&
     sudo apt-get install -qq -y
     gfortran libblas-dev liblapack-dev openmpi-bin openmpi-common openssh-client
-    openssh-server libopenmpi1.6 libopenmpi1.6-dbg libopenmpi-dev
-    libsuitesparse-dev
-  - export DISPLAY=:99.0
-  - /bin/sh -e /etc/init.d/xvfb start && sleep 3 # some tests require a display
+    openssh-server libopenmpi1.10 libopenmpi-dev libsuitesparse-dev
   - cmake --version
   - gcc --version
 
-# Install python package dependencies
 install:
-  - pip install -e .[travisci]
+  # Install base dependencies
+  - pip install -e .
+  # Install test dependencies
+  - pip install -e .[testing]
 
 # Default `test' stage script
 script:
@@ -57,17 +46,110 @@ cache:
   timeout: 1000
 
 stages:
+  - name: lint
+    if: NOT branch IN (master, beta)
+  - name: lint-comprehensive
+    if: branch IN (master, beta)
   - test
-  - name: deploy # only run deployment for master & develop branches
-    if: branch IN (master, develop)
+  # Run tests on python 2.7 & 3.5, but only on master/beta
+  - name: test-extra
+    if: branch IN (master, beta)
+  - name: push
+    if: (branch = develop) AND (NOT (type = pull_request))
 
 jobs:
   include:
-    - stage: deploy
+    - &lint-job
+      stage: lint
+      name: "PEP8"
+      python: 3.7
+      before_install: skip
+      install:
+        - pip install flake8
+      script:
+        - python -m flake8 --statistics $LINTOPTS packages/pygsti
+    - <<: *lint-job
+      name: "Critical errors"
+      env: LINTOPTS="--config=.flake8-critical"
+    - <<: *lint-job
+      stage: lint-comprehensive
+      name: "Comprehensive linting"
+
+    # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
+    - stage: test-extra
       python: 3.5
-      env: NOSETESTS=none NOSEOPTS=$NOSEOPTS_DEFAULT
+      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
+
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
+
+    - stage: push
+      env: PUSH_BRANCH="beta"
       install: skip
-      script: python CI/deploy
+      before_install:
+        - >-
+          openssl aes-256-cbc
+          -K $encrypted_8f2a7a9a4246_key
+          -iv $encrypted_8f2a7a9a4246_iv
+          -in CI/github_deploy_key.enc
+          -out CI/github_deploy_key
+          -d
+        - chmod 600 CI/github_deploy_key
+        - eval $(ssh-agent -s)
+        - ssh-add CI/github_deploy_key
+      script:
+        - CI/push.sh
+
+  allow_failures:
+    - stage: lint
+      name: "PEP8"
+
+deploy:
+  provider: pypi
+  user: pygsti-ci
+  password:
+    secure: vK9Lm939ZRMgQ/UdpCRSrbiWSN5h0e0/vKV+ZCtUL63KHMaK9AShSJhNOWZ2RUIi3c/ZKTlllCgj9O/r0MjP2qE5N3DLhm0t+QNjgMM4Iz4bsMJx4nPYTrAeiShyffPFJWSVSP9l6054mBGZow6aeZEzDGsF2Y3LzISzE47c8xFxJI2TSM1AJ+j1feRsayTDepBq5+di2z3GgBXT8qDWMS4EY+ljdgsHBQ5xRh3HmT5AcecltwRmNaWprLSukjpmTuX+HKgMazSKCsqvTXSuhKive+7OxONu0JGva14GGk9baO3mGVaYA0+9R72QIQxD2hKdLwzHzYeo1Rue1AAggKdlSUDZ5InrqXx2ASkdqyqw7p6GUyxEQGErSvbqyPqgyCs0wNkxZR9xAGeUX9SztZxhgQyFlZRdq0gahSQB6vuwlbg8NlV/hMW94n/wk+NrARf7fCSw9rglIaTECGjcxaijc4r+EAVwyiEwtoT7wsei1A2sNfxHBJaZfjy7VXPhE5oSswPQV4B5uS9pxuiEWFfFor4e+iHtwQTR/KkKDrm0OOmWSemHgO4MLubupPrTzyViGfHM7BGHNe8D9FpY+IgMV/7Je+WwbDfccY4PZgjKZq1HYHnbQIhIyO7nckU6LXh1YPC/32NxOCThB+0H484B5dvPYjprIXQ+xIDRcKc=
+  distributions: "sdist bdist_wheel"
+  skip_existing: true
+  on:
+    tags: true
 
 notifications:
   email:

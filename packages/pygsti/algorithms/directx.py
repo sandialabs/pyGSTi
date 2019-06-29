@@ -7,17 +7,17 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 
-from .. import tools        as _tools
+from .. import tools as _tools
 from .. import construction as _construction
-from .. import objects      as _objs
-from .  import core         as _core
+from .. import objects as _objs
+from . import core as _core
 
 
 def model_with_lgst_circuit_estimates(
         circuitsToEstimate, dataset, prepStrs, effectStrs,
-        targetModel, includeTargetOps=True, opLabelAliases=None, 
+        targetModel, includeTargetOps=True, opLabelAliases=None,
         guessModelForGauge=None, circuitLabels=None, svdTruncateTo=None,
-        verbosity=0 ):
+        verbosity=0):
     """
     Constructs a model that contains LGST estimates for circuitsToEstimate.
 
@@ -39,7 +39,7 @@ def model_with_lgst_circuit_estimates(
 
     targetModel : Model
         A model used by LGST to specify which operation labels should be estimated,
-        a guess for which gauge these estimates should be returned in, and 
+        a guess for which gauge these estimates should be returned in, and
         used to simplify operation sequences.
 
     includeTargetOps : bool, optional
@@ -80,35 +80,36 @@ def model_with_lgst_circuit_estimates(
         A model containing LGST estimates for all the requested
         operation sequences and possibly the gates in targetModel.
     """
-    opLabels = [] #list of operation labels for LGST to estimate
-    if opLabelAliases is None: aliases = { }
+    opLabels = []  # list of operation labels for LGST to estimate
+    if opLabelAliases is None: aliases = {}
     else: aliases = opLabelAliases.copy()
-    
+
     #Add operation sequences to estimate as aliases
     if circuitLabels is not None:
         assert(len(circuitLabels) == len(circuitsToEstimate))
-        for opLabel,opStr in zip(circuitLabels,circuitsToEstimate):
-            aliases[opLabel] = _tools.find_replace_tuple(opStr,opLabelAliases)
+        for opLabel, opStr in zip(circuitLabels, circuitsToEstimate):
+            aliases[opLabel] = _tools.find_replace_tuple(opStr, opLabelAliases)
             opLabels.append(opLabel)
     else:
         for opStr in circuitsToEstimate:
-            newLabel = 'G'+'.'.join(map(str,tuple(opStr)))
-            aliases[newLabel] = _tools.find_replace_tuple(opStr,opLabelAliases) #use circuit tuple as label
+            newLabel = 'G' + '.'.join(map(str, tuple(opStr)))
+            aliases[newLabel] = _tools.find_replace_tuple(opStr, opLabelAliases)  # use circuit tuple as label
             opLabels.append(newLabel)
 
     #Add target model labels (not aliased) if requested
     if includeTargetOps and targetModel is not None:
         for targetOpLabel in targetModel.operations:
-            if targetOpLabel not in opLabels: #very unlikely that this is false
+            if targetOpLabel not in opLabels:  # very unlikely that this is false
                 opLabels.append(targetOpLabel)
 
-    return _core.do_lgst( dataset, prepStrs, effectStrs, targetModel,
-                          opLabels, aliases, guessModelForGauge,
-                          svdTruncateTo, verbosity )
+    return _core.do_lgst(dataset, prepStrs, effectStrs, targetModel,
+                         opLabels, aliases, guessModelForGauge,
+                         svdTruncateTo, verbosity)
+
 
 def direct_lgst_model(circuitToEstimate, circuitLabel, dataset,
-                        prepStrs, effectStrs, targetModel,
-                        opLabelAliases=None, svdTruncateTo=None, verbosity=0):
+                      prepStrs, effectStrs, targetModel,
+                      opLabelAliases=None, svdTruncateTo=None, verbosity=0):
     """
     Constructs a model of LGST estimates for target gates and circuitToEstimate.
 
@@ -155,11 +156,11 @@ def direct_lgst_model(circuitToEstimate, circuitLabel, dataset,
     return model_with_lgst_circuit_estimates(
         [circuitToEstimate], dataset, prepStrs, effectStrs, targetModel,
         True, opLabelAliases, None, [circuitLabel], svdTruncateTo,
-        verbosity )
+        verbosity)
 
 
 def direct_lgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
-                         opLabelAliases=None, svdTruncateTo=None, verbosity=0):
+                       opLabelAliases=None, svdTruncateTo=None, verbosity=0):
     """
     Constructs a dictionary with keys == operation sequences and values == Direct-LGST Models.
 
@@ -207,20 +208,19 @@ def direct_lgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
     directLGSTmodels = {}
     printer.log("--- Direct LGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(circuits):
-            printer.show_progress(i, len(circuits), prefix="--- Computing model for string -", suffix='---' )
+        for i, sigma in enumerate(circuits):
+            printer.show_progress(i, len(circuits), prefix="--- Computing model for string -", suffix='---')
             directLGSTmodels[sigma] = direct_lgst_model(
                 sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetModel,
                 opLabelAliases, svdTruncateTo, verbosity)
     return directLGSTmodels
 
 
-
-def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
-                           prepStrs, effectStrs, targetModel,
-                           opLabelAliases=None, svdTruncateTo=None,
-                           minProbClipForWeighting=1e-4,
-                           probClipInterval=(-1e6,1e6), verbosity=0 ):
+def direct_mc2gst_model(circuitToEstimate, circuitLabel, dataset,
+                        prepStrs, effectStrs, targetModel,
+                        opLabelAliases=None, svdTruncateTo=None,
+                        minProbClipForWeighting=1e-4,
+                        probClipInterval=(-1e6, 1e6), verbosity=0):
     """
     Constructs a model of LSGST estimates for target gates and circuitToEstimate.
 
@@ -289,27 +289,27 @@ def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
         True, opLabelAliases, None, [circuitLabel], svdTruncateTo, verbosity)
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
-    circuits = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
+    circuits = prepStrs + effectStrs + [prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs]
     for opLabel in direct_lgst.operations:
-        circuits.extend( [ prepStr + _objs.Circuit( (opLabel,) ) + effectStr
-                              for prepStr in prepStrs for effectStr in effectStrs ] )
+        circuits.extend([prepStr + _objs.Circuit((opLabel,)) + effectStr
+                         for prepStr in prepStrs for effectStr in effectStrs])
 
     aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
-    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate,opLabelAliases)
-    
+    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate, opLabelAliases)
+
     _, direct_lsgst = _core.do_mc2gst(
         dataset, direct_lgst, circuits,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity,
-        opLabelAliases=aliases )
+        opLabelAliases=aliases)
 
     return direct_lsgst
 
 
 def direct_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
-                           targetModel, opLabelAliases=None,
-                           svdTruncateTo=None, minProbClipForWeighting=1e-4,
-                           probClipInterval=(-1e6,1e6), verbosity=0):
+                         targetModel, opLabelAliases=None,
+                         svdTruncateTo=None, minProbClipForWeighting=1e-4,
+                         probClipInterval=(-1e6, 1e6), verbosity=0):
     """
     Constructs a dictionary with keys == operation sequences and values == Direct-LSGST Models.
 
@@ -364,20 +364,20 @@ def direct_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
     directLSGSTmodels = {}
     printer.log("--- Direct LSGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(circuits):
+        for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string-", suffix='---')
             directLSGSTmodels[sigma] = direct_mc2gst_model(
                 sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetModel,
                 opLabelAliases, svdTruncateTo, minProbClipForWeighting,
                 probClipInterval, verbosity)
-            
+
     return directLSGSTmodels
 
 
-def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
-                          prepStrs, effectStrs, targetModel,
-                          opLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
-                          probClipInterval=(-1e6,1e6), verbosity=0 ):
+def direct_mlgst_model(circuitToEstimate, circuitLabel, dataset,
+                       prepStrs, effectStrs, targetModel,
+                       opLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
+                       probClipInterval=(-1e6, 1e6), verbosity=0):
     """
     Constructs a model of MLEGST estimates for target gates and circuitToEstimate.
 
@@ -446,24 +446,24 @@ def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
         True, opLabelAliases, None, [circuitLabel], svdTruncateTo, verbosity)
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
-    circuits = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
+    circuits = prepStrs + effectStrs + [prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs]
     for opLabel in direct_lgst.operations:
-        circuits.extend( [ prepStr + _objs.Circuit( (opLabel,) ) + effectStr
-                              for prepStr in prepStrs for effectStr in effectStrs ] )
+        circuits.extend([prepStr + _objs.Circuit((opLabel,)) + effectStr
+                         for prepStr in prepStrs for effectStr in effectStrs])
 
     aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
-    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate,opLabelAliases)
+    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate, opLabelAliases)
 
     _, direct_mlegst = _core.do_mlgst(
         dataset, direct_lgst, circuits, minProbClip=minProbClip,
         probClipInterval=probClipInterval, verbosity=verbosity,
-        opLabelAliases=aliases )
+        opLabelAliases=aliases)
     return direct_mlegst
 
 
 def direct_mlgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
-                          opLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
-                          probClipInterval=(-1e6,1e6), verbosity=0):
+                        opLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
+                        probClipInterval=(-1e6, 1e6), verbosity=0):
     """
     Constructs a dictionary with keys == operation sequences and values == Direct-MLEGST Models.
 
@@ -518,20 +518,20 @@ def direct_mlgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
     directMLEGSTmodels = {}
     printer.log("--- Direct MLEGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(circuits):
+        for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string ", suffix="---")
             directMLEGSTmodels[sigma] = direct_mlgst_model(
                 sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetModel,
                 opLabelAliases, svdTruncateTo, minProbClip,
                 probClipInterval, verbosity)
-            
+
     return directMLEGSTmodels
 
 
-def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
-                            prepStrs, effectStrs, startModel,
-                            opLabelAliases=None, minProbClipForWeighting=1e-4,
-                            probClipInterval=(-1e6,1e6), verbosity=0 ):
+def focused_mc2gst_model(circuitToEstimate, circuitLabel, dataset,
+                         prepStrs, effectStrs, startModel,
+                         opLabelAliases=None, minProbClipForWeighting=1e-4,
+                         probClipInterval=(-1e6, 1e6), verbosity=0):
     """
     Constructs a model containing a single LSGST estimate of circuitToEstimate.
 
@@ -581,7 +581,7 @@ def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
     Model
         A model containing LSGST estimate of circuitToEstimate.
     """
-    circuits = [ prepStr + circuitToEstimate + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
+    circuits = [prepStr + circuitToEstimate + effectStr for prepStr in prepStrs for effectStr in effectStrs]
 
     _, focused_lsgst = _core.do_mc2gst(
         dataset, startModel, circuits,
@@ -591,14 +591,14 @@ def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
         verbosity=verbosity)
 
     focused_lsgst.operations[circuitLabel] = _objs.FullDenseOp(
-            focused_lsgst.product(circuitToEstimate)) #add desired string as a separate labeled gate
+        focused_lsgst.product(circuitToEstimate))  # add desired string as a separate labeled gate
     return focused_lsgst
 
 
 def focused_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
-                            startModel, opLabelAliases=None,
-                            minProbClipForWeighting=1e-4,
-                            probClipInterval=(-1e6,1e6), verbosity=0):
+                          startModel, opLabelAliases=None,
+                          minProbClipForWeighting=1e-4,
+                          probClipInterval=(-1e6, 1e6), verbosity=0):
     """
     Constructs a dictionary with keys == operation sequences and values == Focused-LSGST Models.
 
@@ -647,7 +647,7 @@ def focused_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
     focusedLSGSTmodels = {}
     printer.log("--- Focused LSGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(circuits):
+        for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string", suffix='---')
             focusedLSGSTmodels[sigma] = focused_mc2gst_model(
                 sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, startModel,

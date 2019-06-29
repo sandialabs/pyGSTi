@@ -11,8 +11,9 @@ import os as _os
 from . import stdinput as _stdinput
 from .. import objects as _objs
 
+
 def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 verbosity=1):
+                 recordZeroCnts=True, verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -34,6 +35,14 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for potentially
+        registering new outcome labels.  When reading from a cache file
+        (using `cache==True`) this argument is ignored: the presence of zero-
+        counts is dictated by the value of `recordZeroCnts` when the cache file
+        was created.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -57,13 +66,13 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         if cache:
             #bReadCache = False
             cache_filename = filename + ".cache"
-            if _os.path.exists( cache_filename ) and \
+            if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("WARNING: Failed to load from cache file") # pragma: no cover
+                except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
                 printer.log("Cache file not found or is tool old -- one will"
                             + "be created after loading is completed")
@@ -71,7 +80,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction)
+                                       collisionAction=collisionAction,
+                                       recordZeroCnts=recordZeroCnts)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -80,12 +90,13 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction)
+                                       collisionAction=collisionAction,
+                                       recordZeroCnts=recordZeroCnts)
         return ds
 
 
 def load_multidataset(filename, cache=False, collisionAction="aggregate",
-                      verbosity=1):
+                      recordZeroCnts=True, verbosity=1):
     """
     Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -108,6 +119,14 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
 
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        MultiDataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.  When reading from a cache
+        file (using `cache==True`) this argument is ignored: the presence of
+        zero-counts is dictated by the value of `recordZeroCnts` when the cache
+        file was created.
+
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
         loading progress is shown.
@@ -127,17 +146,17 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         #Parser functions don't take a VerbosityPrinter yet, and so
         # always output to stdout (TODO)
         bToStdout = (printer.verbosity > 0 and printer.filename is None)
-        
+
         if cache:
             # bReadCache = False
             cache_filename = filename + ".cache"
-            if _os.path.exists( cache_filename ) and \
+            if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("WARNING: Failed to load from cache file") # pragma: no cover
+                except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
                 printer.log("Cache file not found or is too old -- one will be"
                             + "created after loading is completed")
@@ -145,9 +164,10 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename, bToStdout,
-                                             collisionAction=collisionAction)
+                                             collisionAction=collisionAction,
+                                             recordZeroCnts=recordZeroCnts)
 
-            printer.log("Writing cache file (to speed future loads): %s" 
+            printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
             mds.save(cache_filename)
 
@@ -155,16 +175,35 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename, bToStdout,
-                                             collisionAction=collisionAction)
+                                             collisionAction=collisionAction,
+                                             recordZeroCnts=recordZeroCnts)
     return mds
 
 
-def load_tddataset(filename, cache=False):
+def load_tddataset(filename, cache=False, recordZeroCnts=True):
     """
-    Load a TDDataSet (time-dependent data set) from a file.
+    Load time-dependent (time-stamped) data as a DataSet.
+
+    Parameters
+    ----------
+    filename : string
+        The name of the file
+
+    cache : bool, optional
+        Reserved to perform caching similar to `load_dataset`.  Currently
+        this argument doesn't do anything.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    Returns
+    -------
+    DataSet
     """
     parser = _stdinput.StdInputParser()
-    tdds = parser.parse_tddatafile(filename)
+    tdds = parser.parse_tddatafile(filename, recordZeroCnts=recordZeroCnts)
     return tdds
 
 
@@ -184,6 +223,7 @@ def load_model(filename):
     """
     return _stdinput.read_model(filename)
 
+
 def load_circuit_dict(filename):
     """
     Load a operation sequence dictionary from a file, formatted
@@ -202,6 +242,7 @@ def load_circuit_dict(filename):
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
 
+
 def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_lines=None):
     """
     Load a operation sequence list from a file, formatted
@@ -218,9 +259,9 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
 
     line_labels : iterable, optional
         The (string valued) line labels used to initialize :class:`Circuit`
-        objects when line label information is absent from the one-line text 
+        objects when line label information is absent from the one-line text
         representation contained in `filename`.  If `'auto'`, then line labels
-        are taken to be the list of all state-space labels present in the 
+        are taken to be the list of all state-space labels present in the
         circuit's layers.  If there are no such labels then the special value
         `'*'` is used as a single line label.
 
@@ -238,7 +279,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
             for line in circuitlist:
                 if len(line.strip()) == 0: continue
                 if len(line) == 0 or line[0] == '#': continue
-                rawList.append( line.strip() )
+                rawList.append(line.strip())
         return rawList
     else:
         std = _stdinput.StdInputParser()

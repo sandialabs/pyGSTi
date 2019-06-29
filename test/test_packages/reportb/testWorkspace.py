@@ -21,6 +21,8 @@ try:
 except ImportError:
     bPandas = False
 
+HEADLESS = os.getenv('DISPLAY') is None
+    
 #HACK for tracking open files
 # try:
 #     import __builtin__ as builtins # Python2.7
@@ -63,6 +65,7 @@ class TestWorkspace(ReportBaseCase):
         self.mdl = self.results.estimates['default'].models['go0']
         self.gss = self.results.circuit_structs['final']
 
+    @unittest.skipIf(HEADLESS, "skipping while IPython display is not available")
     def test_notebook_mode(self):
         wnb = pygsti.report.Workspace()
         wnb.init_notebook_mode(connected=True, autodisplay=True)
@@ -334,9 +337,12 @@ class TestWorkspace(ReportBaseCase):
 
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
         #OLD: driftresults = drift.do_basic_drift_characterization(tds)
-        results_gst = drift.do_drift_characterization(tds)
-        plts.append( w.ColorBoxPlot(("driftpwr",), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=True, invert=False, driftresults=(results_gst,None)) ) #"driftpv",
+        results_gst = drift.StabilityAnalyzer(tds, ids=True)
+        results_gst.generate_spectra()
+        results_gst.do_instability_detection(0.05)
+        results_gst.do_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
+        plts.append( w.ColorBoxPlot('driftsize', self.gss, self.ds, self.mdl, boxLabels=False,
+                                    hoverInfo=False, sumUp=True, invert=False, stabilityanalyzer=results_gst) )
 
         with self.assertRaises(ValueError):
             w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.mdl)
