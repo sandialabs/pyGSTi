@@ -701,7 +701,8 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     estimator = drifttuple[2]
     for i, j, opstr in gsplaq:
         try:
-            ret[i, j] = stabilityanalyzer.get_max_tvd_bound(opstr, dskey=None, estimatekey=estimatekey, estimator=estimator)
+            ret[i, j] = stabilityanalyzer.get_max_tvd_bound(opstr, dskey=None,
+                                                            estimatekey=estimatekey, estimator=estimator)
         except:
             pass
     return ret

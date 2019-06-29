@@ -666,7 +666,7 @@ def create_drift_report(results, gss, filename, title="auto",
     # The estimated probability trajectoris for each length with a germ-fiducial pairing.
     addqty(A, 'GermFiducialProbTrajectoriesPlot', ws.GermFiducialProbTrajectoriesPlot, results, gss,
            drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, drift_switchBd.outcomes, 1, None,
-           dskey, None, None, True) 
+           dskey, None, None, True)
     # The boxplot summarizing the evidence for drift in each circuit.
     addqty(A, 'driftdetectorColorBoxPlot', ws.ColorBoxPlot, 'driftdetector', gss, None, None, False, False, True, False,
            'compact', .05, 1e-4, None, None, results)
