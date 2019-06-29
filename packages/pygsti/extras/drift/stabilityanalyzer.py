@@ -1187,7 +1187,7 @@ class StabilityAnalyzer(object):
                 if numBon > 1:
                     sigthreshold[test] = None
                 else:
-                    sigthreshold[test] = {}  
+                    sigthreshold[test] = {}
 
                 if verbosity > 1:
                     print("      - Generating Benjamini-Hochberg power quasi-threshold...", end='')

@@ -236,7 +236,7 @@ def do_stability_analysis(ds, significance=0.05, transform='auto', marginalize='
 #     exponential form Pm = A + Bp^m.
 
 #     """
-#     mergeoutcomes = 
+#     mergeoutcomes =
 #     trrb_tests = ((),)
 #     trrb_inclass_correction = {}
 #     trrb_modelselector = ('default', ((),))
