@@ -274,7 +274,7 @@ class StabilityAnalyzer(object):
                             experimental feature, and the results are unreliable with this transform ***
 
                 - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an experimental feature, and the code is
-                            untested with this transform *** 
+                            untested with this transform ***
 
         marginalize : str or bool, optional
             True, False or 'auto'. Whether or not to marginalize multi-qubit data, to look for instability
@@ -881,7 +881,7 @@ class StabilityAnalyzer(object):
 
     def get_maxpower(self, dictlabel={}, freqsubset=None):
         """
-        Returns the maximum power in a power spectrum. 
+        Returns the maximum power in a power spectrum.
 
         Parameters
         ----------
@@ -1344,7 +1344,7 @@ class StabilityAnalyzer(object):
             Only relevant if more than one set of instability detection was run. The "saveas" key that
             was used when running do_instability_detection() for the detection results that you wish
             to access.
-        
+
         fromtests : str or tuple, optional
             The test results to use when deciding what circuits are unstable. If a tuple, it should
             be a subset of the "test classes" run, each specified by a tuple. If "auto", then all
