@@ -523,7 +523,7 @@ class StabilityAnalyzer(object):
         for freqs in self._frequencies[1:]:
             assert(numfrequencies == len(freqs)), "The number of frequencies must be fixed for all circuits!"
 
-        self._axislabels = ('dataset', 'circuit', 'outcome')  # docstringtodo.
+        self._axislabels = ('dataset', 'circuit', 'outcome')  # todo: explain.
 
         dskeys = tuple(self.data.keys())
         circuits = tuple(self.data[dskeys[0]].keys())
@@ -533,7 +533,7 @@ class StabilityAnalyzer(object):
         self._shape = arrayshape
         self._numfrequencies = numfrequencies
 
-        self._tupletoindex = {}  # docstringtodo
+        self._tupletoindex = {}  # todo: explain
         self._basespectra = _np.zeros(tuple(arrayshape), float)  # An empty array that will be populated with spectra.
         self._derivedspectra = {}  # Stores derivative spectra, eg, the spectrum obtained by averaging along all axes.
 
@@ -624,7 +624,7 @@ class StabilityAnalyzer(object):
             The label specifying power spectrum, or type of power spectrum
 
         adjusted: bool, optional
-            todo.
+            Currently does nothing. Placeholder for future improvement
 
         Returns
         -------
@@ -1136,16 +1136,16 @@ class StabilityAnalyzer(object):
                     if len(driftindtuple) > 0:
                         driftfreqinds[test][indices] = driftindtuple
 
-            # If we're doing the Benjamini-Hochberg procedure we go into this bit of code. Currently the
-            # Benjamini-Hockerg part is *required* to be "nested" in so much as ... doctstringtodo.
+            # If we're doing the Benjamini-Hochberg procedure we go into this bit of code. The
+            # Benjamini-Hockerg part has to be nested.
             else:
                 assert(inclass_correction['spectrum'] == 'Benjamini-Hochberg'), "If not `Bonferroni, only \
                      'Benjamini-Hochberg correction is allowed!"
 
                 numBon = 1
-                # Bonferroni iterators (for outer iteration), that contains interators ... doctstringtodo
+                # Bonferroni iterators (for outer iteration).
                 iterBon = []
-                # Benjamini-Hochberg iterators (for inner iteration), doctstringtodo.
+                # Benjamini-Hochberg iterators (for inner iteration).
                 iterBenjHoch = []
 
                 # Sets the iterators for "dataset", "circuit" and "outcome" (where relevant)
@@ -1183,10 +1183,11 @@ class StabilityAnalyzer(object):
                            "procedure is {}".format(localsig)))
 
                 # Note that this is a "pseudo-threshold" with Benjamini-Hockberg in that it depends on the data.
+                # todo : this bit of code is being over-ridden later? It should be, and this should be removed.
                 if numBon > 1:
-                    sigthreshold[test] = None   # doctstringtodo
+                    sigthreshold[test] = None
                 else:
-                    sigthreshold[test] = {}  # doctstringtodo
+                    sigthreshold[test] = {}  
 
                 if verbosity > 1:
                     print("      - Generating Benjamini-Hochberg power quasi-threshold...", end='')
@@ -1403,7 +1404,7 @@ class StabilityAnalyzer(object):
             if dskey is not None:
                 assert(len(self.data.keys()) == 1 or dskey == test['dataset'])
             # If 'circuit' is in test, then we assign different drift frequencies to each circuit. Frequency indices
-            # added in this loop are "true" hypothesis test results, in that ... docstringtodo. (except when the dataset
+            # added in this loop are "true" hypothesis test results (todo: explain). (except when the dataset
             # contains only one circuit, in which case we go into the loop below).
             if 'circuit' in test:
 
