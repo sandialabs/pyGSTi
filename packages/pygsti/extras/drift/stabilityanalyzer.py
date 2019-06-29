@@ -231,22 +231,21 @@ class StabilityAnalyzer(object):
     The StabilityAnalyzer is designed to implement a stability analysis on time-series data from quantum
     circuits. It stores this time-series data, and contains methods for implementing instability detection
     and characterization, using spectral analysis techniques. These methods work on time-series data from
-    any set of circuits, because they are model-free (e.g., they are not based on the process matrix model of
-    GST, or the decay model of RB) and entirely agnostic to the details of the circuits.
+    any set of circuits, because they are entirely agnostic to the details of the circuits, e.g., they
+    are not based on the process matrix model of GST.
 
-    This object is encapsulates stand-alone data analysis methods, but it is also the basis for implementing
+    This object encapsulates stand-alone data analysis methods, but it is also the basis for implementing
     time-resolved benchmarking or tomography (e.g., time-resolved RB, GST or Ramsey spectroscopy).
     in pyGSTi.
 
     """
-
     def __init__(self, ds, transform='auto', marginalize='auto', mergeoutcomes=None, constnumtimes='auto',
                  ids=False):
         """
         Initialize a StabilityAnalyzer, by inputing time-series data and some information on how it should be
         processed.
 
-        *** Some of the nominally allowed values for the inputs are not yet functional. In all such cases, for
+        *** Some of the nominally allowed values for the inputs are not yet functional. For
         entirely non-functional code an assert() will flag up the input as not yet allowed, and for untested
         and perhaps unreliable code a warning will be flagged but the code will still run ***
 
@@ -266,7 +265,7 @@ class StabilityAnalyzer(object):
                             sophisticated.
 
                 - 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
-                            the most well-tested option, and it is our recommended option when the data is
+                            the only tested option, and it is our recommended option when the data is
                             approximately equally-spaced, i.e., the time-step between each "click" for each
                             circuit is almost a constant. (the DCT transform implicitly assumes that this
                             time-step is exactly constant)
@@ -275,7 +274,7 @@ class StabilityAnalyzer(object):
                             experimental feature, and the results are unreliable with this transform ***
 
                 - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an experimental feature, and the code is
-                            untested with this transform ***
+                            untested with this transform *** 
 
         marginalize : str or bool, optional
             True, False or 'auto'. Whether or not to marginalize multi-qubit data, to look for instability
@@ -500,8 +499,7 @@ class StabilityAnalyzer(object):
             mean time step and the number of times, and is a decent option when the time stamps are roughly
             equally spaced for each circuit.
 
-            todo: discuss unit. The units on these frequencies should be consistent with the units on the time stamps
-            of the data. E.g., if the times are in seconds then ... todo.
+            These frequencies should be in units of 1/t where 't' is the unit of the time stamps.
 
         freqpointers : dict, optional
             Specifies which frequencies correspond to which power spectra. The keys are power spectra labels,
@@ -752,18 +750,6 @@ class StabilityAnalyzer(object):
 
             return True
 
-    # todo : delete
-    # def _dictlabel_to_array_indices(self, dictlabel):
-    #     """
-    #     Converts a dictlabel, for a "base" power spectra, into
-    #     """
-    #     #codetodo: update to call the dictionary, or just delete?
-    #     indices = []
-    #     for axislabel in dictlabel.keys():
-    #         indices.append(self._index(axislabel, dictlabel[axislabel]))
-
-    #     return tuple(indices)
-
     def _index(self, axislabel, key):
         """
         Returns the spectra array index for a key along a specific axis. For example,
@@ -781,7 +767,25 @@ class StabilityAnalyzer(object):
 
     def _dictlabel_to_averaging_axes_and_array_indices(self, dictlabel):
         """
-        todo
+        Returns the axes to average over, and the indices of the reduced array, for a spectrum
+        labelled by the input dictionary
+
+        Parameters
+        ----------
+        dictlabel: dict
+            A dictionary labelling a spectrum, with keys are some subset of 'dataset', 'circuit'
+            and 'outcome', and values that are valid options for those keys. E.g., for 'circuit'
+            this is one of the Circuits in the stored DataSet.
+
+        Returns
+        -------
+        tuple
+            The axes to average over. This is the axes corresponding to each of 'dataset', 'circuit'
+            and 'outcome' that aren't elements of the input dictionary
+
+        tuple
+            The indices for the spectrum after any averaging. This is the indices for the values
+            of the keys.
         """
         indices = []
         averageaxes = []
@@ -793,28 +797,41 @@ class StabilityAnalyzer(object):
 
         return tuple(averageaxes), tuple(indices)
 
-    def get_spectrum(self, dictlabel={}, returnfrequencies=True, checklevel=2):
+    def get_spectrum(self, dictlabel={}, returnfrequencies=True, checklevel=1):
         """
         Returns a power spectrum.
 
         Parameters
         ----------
-        dictlabel : Dict, optional
-            A dictionary that labels the power spectrum to be returned. This
-            ...... docstringtodo
+        dictlabel : dict, optional
+            A power spectra has been calculated for each (DataSet, Circuit, circuit) outcome
+            triple of the stored data. We can average over any of these axes. The `dictlabel`
+            specifies which axes to average over, and which value to specify for the parameters
+            that we are not averaging over. The keys are a subset of  'dataset', 'circuit'
+            and 'outcome'. For any of these strings not included, we average over that axis.
+            For each string included, the item should be a key for one of the stored DataSets,
+            a Circuit in the DataSet, and a possible outcome for that Circuit, respectively.
 
         returnfrequences: bool, optional
-            Whether to also return the corresponding frequencies, as the
-            first argument.
+            Whether to also return the corresponding frequencies, as the first argument.
 
-        save : bool, optional
-            Whether to save the spectrum if it had to be generated (because
-            it wasn't a "base" spectrum, and it hadn't yet been generated and
-            saved).
+        checklevel : int, optional
+            The level of checking to do, when averaging over axes, for whether averaging over
+            that axis is a meaningful thing to do. If checklevel = 0 then no checks are performed.
+            If checklevel > 0 then the function checks that all the power spectra to be averaged
+            are associated with the same frequencies. If checklevel > 1 we can also check that
+            we can calculate the DOF for that averaged power spectrum, so that hypothesis testing
+            can be implemented on it.
 
         Returns
         -------
-        docstringtodo.
+        if returnfrequencies:
+            array
+                The frequencies associated with the returned powers.
+
+        array
+            The power spectrum.
+
         """
         assert(self._contains_spectra is not None), "Spectra must be generated before they can be accessed!"
         if len(dictlabel) == len(self._axislabels):
@@ -837,9 +854,6 @@ class StabilityAnalyzer(object):
         # Check whether the requested averaging is allowed, with a check at the specified rigour level.
         assert(self.averaging_allowed(dictlabel, checklevel=checklevel)), "This averaging is not permissable! To do it \
             anyway, reduce `checklevel`."
-        #assert(self._done_adding_spectra), "Cannot get an averaged spectrum until you've finished adding spectra! Use \
-        #    .done_adding_spectra() method to finalize the spectra!"
-
         # Find the axes we're averaging over, and the array indices for the averaged spectra array.
         axes, indices = self._dictlabel_to_averaging_axes_and_array_indices(dictlabel)
         # Performs the averaging a picks out the specified spectrum
@@ -863,8 +877,21 @@ class StabilityAnalyzer(object):
 
     def get_maxpower(self, dictlabel={}, freqsubset=None):
         """
-        doctstringtodo
+        Returns the maximum power in a power spectrum. 
 
+        Parameters
+        ----------
+        dictlabel : dict, optional
+            The dictionary labelling the spectrum. The same format as in the get_spectrum() method.
+            See the docstring of that method for more details.
+
+        freqsubset : list, optional
+            A list of indices, that specify the subset of frequency indices to maximize over.
+
+        Returns
+        -------
+        float
+            The maximal power in the spectrum.
         """
         spectrum = self.get_spectrum(dictlabel)
         if freqsubset is None:
@@ -876,7 +903,24 @@ class StabilityAnalyzer(object):
 
     def get_pvalue(self, dictlabel={}, freqsubset=None, cutoff=0):
         """
-        doctstringtodo
+        The p-value of the maximum power in a power spectrum.
+
+        Parameters
+        ----------
+        dictlabel : dict, optional
+            The dictionary labelling the spectrum. The same format as in the get_spectrum() method.
+            See the docstring of that method for more details.
+
+        freqsubset : list, optional
+            A list of indices, that specify the subset of frequency indices to consider.
+
+        cutoof : float, optional
+            The minimal allowed p-value.
+
+        Returns
+        -------
+        float
+            The p-value of the maximal power in the specified spectrum.
 
         """
         maxpower = self.get_maxpower(dictlabel=dictlabel, freqsubset=freqsubset)
@@ -891,16 +935,65 @@ class StabilityAnalyzer(object):
                                  betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
                                  verbosity=1):
         """
-        doctstringtodo
+        Runs instability detection, by performing statistical hypothesis tests on the power spectra generated
+        from the time-series data. Before running this method it is necessary to generate power spectra using
+        the generate_spectra() method.
+
         Parameters
         ----------
-
         significance : float, optional
-            The global significance level. This is ...
+            The global significance level. With defaults for all other inputs (a wide range of non-default options),
+            the family-wise error rate of the set of all hypothesis tests performed is controlled to this value.
 
+        freqstest : None or list, optional
+            If not not None, a list of the frequency indices at which to test the powers. Leave as None to perform
+            comprehensive testing of the power spectra.
 
-        The inclass_correction is a dictionary with keys 'dataset', 'circuit', 'outcome' and 'spectrum', and values that
-        specify the type of multi-test correction used to account for the multiple tests being implemented.
+        tests : 'auto' or tuple, optional
+            Specifies the set of hypothesis tests to perform. If 'auto' then an set of tests is automatically
+            chosen. This set of tests will be suitable for most purposes, but sometimes it is useful to override
+            this. If a tuple, the elements are "test classes", that specifies a set of hypothesis tests to run,
+            and each test class is itself specified by a tuple. The tests specified by each test class in this
+            tuple are all implemented. A test class is a tuple containing some subset of 'dataset', 'circuit'
+            and 'outcome', which specifies a set of power spectra. Specifically, a power spectra has been calculated
+            for the clickstream for every combination of eachinput DataSet (e.g., there are multiple DataSets if there
+            has been marginalization of multi-qubit data), each Circuit in the DataSet, and each possible outcome in
+            the DataSet. For each of "dataset", "circuit" and "outcome" *not* included in a tuple defining a test class,
+            the coresponding "axis" of the 3-dimensional array of spectra is averaged over, and these spectra are then
+            tested. So the tuple () specifies the "test class" whereby we test the power spectrum obtained by averaging
+            all power spectra; the tuple ('dataset','circuit') specifies the "test class" whereby we average  only over
+            outcomes, obtaining a single power spectrum for each DataSet and Circuit combination, which we test.
+
+            The default option for "tests" is appropriate for most circumstances, and it consists of (), ('dataset')
+            and ('dataset', 'circuit') with duplicates removed (e.g., if there is a single DataSet then () is equivalent
+            to ('dataset')).
+
+        inclass_correction : dict, optional
+            A dictionary with keys 'dataset', 'circuit', 'outcome' and 'spectrum', and values that specify the type of
+            multi-test correction used to account for the multiple tests being implemented. This specifies how the
+            statistically significance is maintained within the tests implemented in a single "test class".
+
+        betweenclass_weighting : 'auto' or dict, optional
+            The weighting to use to maintain statistical significance between the different classes of test being
+            implemented. If 'auto' then a standard Bonferroni correction is used.
+
+        default : bool, optional
+            This method can be run multiple times, to implement independent instability detection runs (if you are
+            doing this, make sure you know what you're doing! For example, deciding on-the-fly what hypothesis
+            tests to run is statistically very dubious!). One of these is set as the default: unless specified otherwise
+            its results are returned by all of the "get" methods. One the first call to this method, this is
+            is ignored and it is always set to True.
+
+        saveas : str, optional
+            This string specifies the name under which the results of this run of instability detection is saved.
+            If not implementing multiple calls to this function there is no need to change this from 'default'.
+
+        overwrite : bool, optional
+            If this method has already been called, and results saved under the string "saveas", this specifies
+            whether to overwrite the old results or to raise an error.
+
+        verbosity : int, optional
+            The amount of print-to-screen.
 
         Returns
         -------
@@ -946,7 +1039,7 @@ class StabilityAnalyzer(object):
         if isinstance(get_auto_betweenclass_weighting, bool):
             betweenclass_weighting = get_auto_betweenclass_weighting(betweenclass_weighting)
 
-        # future: some sort of warning if FWER is not being controlled?
+        # future: some sort of warning if FWER, or FDR, is not being controlled?
 
         # Remove duplicate tests (i.e., tests that are equivalent given the data structure) and condense the
         # significance weighting so that no significance is wasted.
@@ -960,7 +1053,7 @@ class StabilityAnalyzer(object):
         self._condbetweenclass_weighting[saveas] = condbetweenclass_weighting
         self._test_significance[saveas] = test_significance
 
-        # codetodo: add back in our delete.
+        # future: add back in our delete.
         # # Work out the type of test error rate control that the testing is enforcing.
         # control = 'gBonferroni'  # Global family-wise error rate.
         # if not betweenClassCorrection and len(testsUpdated) > 1:
@@ -972,7 +1065,6 @@ class StabilityAnalyzer(object):
         #             control = 'none'
         #         elif control != 'none' and ctype == 'Benjamini-Hochberg':
         #             control = control[0] + 'Benjamini-Hochberg'
-        # codetodo : what happens to this?
         # sumweightings = 0
         # for test in tests:
         #     sumweightings += betweenclass_weighting[test]
@@ -985,8 +1077,8 @@ class StabilityAnalyzer(object):
         if freqstest is None:
             freqstest = _np.arange(self._shape[3])
         else:
-            # codetodo: fix. Note that code later doesn't work with a freq subset.
-            raise NotImplementedError()
+            # future: add this functionality in. Don't think there is any major reason it can't be included.
+            raise NotImplementedError("Cannot currently test only a subset of the frequencies!")
             freqstest = _np.sort(freqstest)
 
         sigthreshold = {}
@@ -1195,7 +1287,19 @@ class StabilityAnalyzer(object):
 
     def get_statistical_significance(self, detectorkey=None):
         """
-        todo
+        The statistical significance level of the instability detection
+
+        Parameters
+        ----------
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
+
+        Returns
+        -------
+        float
+            The statistical significance level of the instability detection
         """
         if detectorkey is None: detectorkey = self._def_detection
 
@@ -1203,7 +1307,10 @@ class StabilityAnalyzer(object):
 
     def _equivalent_implemented_test(self, test, detectorkey=None):
         """
-        doctstringtodo
+        Finds an equivalent test that was implemented. For example, if () was implemented, the input
+        is ('dataset'), and self.data contains only 1 DataSet, then () will be returned -- because then
+        averaging or not averaging over DataSets is trivial, and so () and ('dataset') are equivalent
+        tests. If there is no equivalent test, then None is returned.
 
         """
         if detectorkey is None: detectorkey = self._def_detection
@@ -1219,10 +1326,46 @@ class StabilityAnalyzer(object):
     def get_unstable_circuits(self, getmaxtvd=False, detectorkey=None, fromtests='auto', freqindices=False,
                               estimatekey=None, dskey=None):
         """
-        doctstringtodo
+        Returns a dictionary, containing all the circuits that instability has been detected for as keys,
+        with the values being the frequencies of the detected instability.
+
+        Parameters
+        ----------
+        getmaxtvd: bool, optional
+            Whether to also return the bound on the TVD deviation, as given by the get_max_tvd_bound() method.
+            If True, then the values of the returned dictionary are a 2-element list: the first element is
+            the frequencies detected for the unstable circuits, and the second element is this TVD bound.
+
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
+        
+        fromtests : str or tuple, optional
+            The test results to use when deciding what circuits are unstable. If a tuple, it should
+            be a subset of the "test classes" run, each specified by a tuple. If "auto", then all
+            tests that individually look at the data from each circuit are included. This includes
+            every test implemented of the null hypothesis that that circuit is stable.
+
+        freqindices : bool, optional
+            If True then the frequencies are returned as a list of integers, which are the indices
+            in the frequency list corresponding to the power spectrum for that circuit. If False then
+            the frequencies are returned in units of 1/t where 't' is the units of the time stamps.
+
+        estimatekey : None or tuple, optional
+            Only relevant if `getmaxtvd` is True. The name of the estimate of the probability trajectories
+            to use for calculating the TVD bound.
+
+        dskey : None or string, optional
+            The DataSet to return the results for. Need if more than one DataSet has been analyzed,
+            but otherwise can be left as None.
+
+        Returns
+        -------
+        dict
+            A dictionary of the unstable circuits.
 
         """
-        # todo: this function will fail with a single-circuit dataset, although it shouldn't really.
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
 
@@ -1317,18 +1460,24 @@ class StabilityAnalyzer(object):
 
     def get_instability_indices(self, dictlabel={}, detectorkey=None):
         """
-        Returns the frequency indices that instability has been detected at, according to ...
+        Returns the frequency indices that instability has been detected at in the specified
+        power spectrum
 
         Parameters
         ----------
         dictlabel: dict, optional
-            The drift detection (generally) implements multiple tests on the data from a circuit, e.g., it can test that
-            power spectrum for circuit when averaged with the spectra for all other circuits, it can test the power
-            spectrum for a circuit broken into the spectrum for each outcome, and/or it can test the power spectrum for
-            a circuit when implemented
+            The label for the spectrum to extract the instability frequency indices for.
+
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
 
         Returns
         -------
+        list
+            The instability frequency indices.
+
         """
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
@@ -1354,7 +1503,23 @@ class StabilityAnalyzer(object):
 
     def get_instability_frequencies(self, dictlabel={}, detectorkey=None):
         """
-        doctstringtodo
+        Returns the frequencies that instability has been detected at in the specified power spectrum.
+        These frequencies are given in units of 1/t where 't' is the unit of the time stamps.
+
+        Parameters
+        ----------
+        dictlabel: dict, optional
+            The label for the spectrum to extract the instability frequencyies for.
+
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
+
+        Returns
+        -------
+        list
+            The instability frequencies
 
         """
         # If we're not given a detectorkey, we default to the standard detection results.
@@ -1376,7 +1541,34 @@ class StabilityAnalyzer(object):
 
     def get_power_threshold(self, test, detectorkey=None):
         """
-        doctstringtodo
+        The statistical significance threshold for any power spectrum in the set specified by the tuple `test`.
+
+        test
+            A tuple specifying the class of power spectra, to extract the power threshold for. Contains
+            some subset of 'dataset', 'circuit' and 'outcome', and it should correspond to a test that
+            was implemented.
+
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
+
+        Returns
+        -------
+        float
+            The power threshold.
+
+        string
+            The type of threshold. This is 'true' if it is true threshold, in the sense that
+            it is data-independent and can be precalculated without the data. This is the sort
+            of threshold one obtains when doing a Bonferroni correction. This is 'pseudo' if it
+            is a threshold obtained from a p-value ordering procedure, like the Holms' method or
+            the Benjamini-Hochberg procedure, because it is not a true threshold in the sane that
+            it depends on the data. This is 'maxpseudo' if multiple independent p-value ordering
+            procedures have been performed with the test class specified by `test`. In this case,
+            all the powers that have been deemed to be statistically significant are not necessarily
+            above this threshold.
+
         """
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
@@ -1404,7 +1596,34 @@ class StabilityAnalyzer(object):
 
     def get_pvalue_threshold(self, test, detectorkey=None):
         """
-        doctstringtodo
+        The statistical significance threshold for any p-value of a power in the power spectra
+        set specified by the tuple `test`.
+
+        test
+            A tuple specifying the class of power spectra, to extract the power threshold for. Contains
+            some subset of 'dataset', 'circuit' and 'outcome', and it should correspond to a test that
+            was implemented.
+
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
+
+        Returns
+        -------
+        float
+            The power threshold.
+
+        string
+            The type of threshold. This is 'true' if it is true threshold, in the sense that
+            it is data-independent and can be precalculated without the data. This is the sort
+            of threshold one obtains when doing a Bonferroni correction. This is 'pseudo' if it
+            is a threshold obtained from a p-value ordering procedure, like the Holms' method or
+            the Benjamini-Hochberg procedure, because it is not a true threshold in the sane that
+            it depends on the data. This is 'maxpseudo' if multiple independent p-value ordering
+            procedures have been performed with the test class specified by `test`. In this case,
+            all the powers that have been deemed to be statistically significant are not necessarily
+            above this threshold.
 
         """
         powerthreshold, thresholdtype = self.get_power_threshold(test, detectorkey=detectorkey)
@@ -1416,7 +1635,26 @@ class StabilityAnalyzer(object):
 
     def instability_detected(self, detectorkey=None, test=None):
         """
-        docstringtodo.
+        Whether instability was detected.
+
+        Parameters
+        ----------
+        detectorkey : None or string, optional
+            Only relevant if more than one set of instability detection was run. The "saveas" key that
+            was used when running do_instability_detection() for the detection results that you wish
+            to access.
+
+        test : None or tuple, optional
+            If None, then this method returns True if instability was detected in *any* statistical
+            hypothesis test that we implemented. If a tuple, then it should be a tuple specifying
+            a class of power spectra, so it contains some subset of 'dataset', 'circuit' and 'outcome',
+            and it should correspond to a test that was implemented. If this tuple is specified, then
+            this method returns True iff the tests specified by this tuple detected instability.
+
+        Returns
+        -------
+        bool
+            True if instability was detected, and returns False otherwise
 
         """
         # If we're not given a detectorkey, we default to the standard detection results.
@@ -1428,7 +1666,52 @@ class StabilityAnalyzer(object):
 
     def do_instability_characterization(self, estimator='auto', modelselector=(None, None), default=True, verbosity=1):
         """
-        docstringtodo.
+        Run instability characterization: estimates probability trajectories for every circuit. The estimation methods
+        are based on model selection from the results of hypothesis testing, so it is is necessary to first perform this
+        hypothesis testing by running the do_instability_detection method.
+
+        Parameters
+        ----------
+        estimator : str, optional
+            The name of the estimator to use. This is the method used to estimate the parameters of a parameterized
+            model for each probability trajectory, after that parameterized model has been selected with the model
+            selection methods. Allowed values are:
+
+                - 'auto'. The estimation method is chosen automatically, default to the fast method that is also
+                    reasonably reliable.
+
+                - 'filter'. Performs a type of signal filtering: implements the transform used for generating power
+                    spectra (e.g., the DCT), sets the amplitudes to zero for all freuquencies that the model selection
+                    has not included in the model, inverts the transform, and then performs some minor post-processing
+                    to guarantee probabilities within [0, 1]. This method is less statically well-founded than 'mle',
+                    but it is faster and typically gives similar results. This method is not an option for
+                    non-invertable transforms, such as the Lomb-Scargle periodogram.
+
+                - 'mle'. Implements maximum likelihood estimation, on the parameterized model chosen by the model
+                    selection. The most statistically well-founded option, but can be slower than 'filter' and relies
+                    on numerical optimization.
+
+        modelselection : tuple, optional
+            The model selection method. If not None, the first element of the tuple is a string that is a "detectorkey",
+            i.e., the `saveas` string for a set of instability detection results. If None then the default instability
+            detection results are used. If do_instability_detection() has only been called once then there is only one
+            set of results and there is no reason to set this to anything over than None. This is the instability
+            detection resutls that will be used to select the models for the probability trajectories. If not None,
+            the second element of the tuple is a "test class" tuple, specifying which test results to use to decide
+            which frequencies are significant for each circuit. This can be typically set to None, and it will be
+            chosen automatically. But if you wish to use specific test results for the model selection then this
+            should be set.
+
+        default : bool, optional
+            This method can be called multiple times. This sets whether these results will be the default results
+            used when probability trajectory estimates are later requested.
+
+        verbosity : int, optional
+            The amount of print-to-screen
+
+        Returns
+        -------
+        None
 
         """
         if estimator == 'auto':
@@ -1525,7 +1808,36 @@ class StabilityAnalyzer(object):
 
     def get_probability_trajectory_model(self, circuit, dskey=None, estimatekey=None, estimator=None):
         """
-        docstringtodo
+        Returns the probability trajectory for a circuit, in the form of a ProbTrajectory object.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to return the probability trajectories for.
+
+        dskey : None or string, optional
+            The DataSet to return the probability trajectories for. Need if more than one DataSet has
+            been analyzed, but otherwise can be left as None.
+
+        estimatekey : None or tuple, optional
+            The estimate to return (typically, multiple estimates have been generated). If None, then the
+            default estimate is returned. If do_instability_characterization() has been called only
+            once then it is the estimate obtained by the method specified in that single call (but
+            multiple estimates may have been recorded, and so are accessable, as a side-product of
+            creating that estimate). If not None, a tuple where the first element is the `modelselector`
+            and the second element is the `estimator`, as specified as arguments to the
+            do_instability_characterization() method.
+
+        estimator : None or string, optional
+            Override for the second element of estimatekey', to easily extract the 'filter' and
+            'mle' estimates, if both have been created (if 'mle' was chosen then the 'filter' estimate
+            is also created as a by-product).
+
+        Returns
+        -------
+        ProbTrajectory
+            The estimated probability trajectory for the specified circuit.
+
         """
         if dskey is None:
             assert(len(self.data.keys()) == 1), \
@@ -1553,7 +1865,41 @@ class StabilityAnalyzer(object):
 
     def get_probability_trajectory(self, circuit, times, dskey=None, estimatekey=None, estimator=None):
         """
-        docstringtodo
+        Returns the probability trajectory for a circuit. See also get_probability_trajectory_model(),
+        which provides are more complex, but more general-purpose, output.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to return the probability trajectories for.
+
+        times : list
+            The times to obtain the probabilities for.
+
+        dskey : None or string, optional
+            The DataSet to return the probability trajectories for. Need if more than one DataSet has
+            been analyzed, but otherwise can be left as None.
+
+        estimatekey : None or tuple, optional
+            The estimate to return (typically, multiple estimates have been generated). If None, then the
+            default estimate is returned. If do_instability_characterization() has been called only
+            once then it is the estimate obtained by the method specified in that single call (but
+            multiple estimates may have been recorded, and so are accessable, as a side-product of
+            creating that estimate). If not None, a tuple where the first element is the `modelselector`
+            and the second element is the `estimator`, as specified as arguments to the
+            do_instability_characterization() method.
+
+        estimator : None or string, optional
+            Override for the second element of `estimatekey`, to easily extract the 'filter' and
+            'mle' estimates, if both have been created (if 'mle' was chosen then the 'filter' estimate
+            is also created as a by-product).
+
+        Returns
+        -------
+        dict
+            The probability trajectory at the specified times. The keys are the possible circuit outcomes
+            and the value for an outcome is a list, which is the probability trajectory for that outcome.
+
         """
         ptraj = self.get_probability_trajectory_model(circuit, dskey, estimatekey, estimator)
         probabilities = ptraj.get_probabilities(times)
@@ -1562,8 +1908,33 @@ class StabilityAnalyzer(object):
 
     def get_max_tvd_bound(self, circuit, dskey=None, estimatekey=None, estimator=None):
         """
-        todo
+        Summarizes the size of the detected instability in the input circuit, as half the sum of the absolute values
+        of the amplitudes in front of the non-constant basis functions in the estimate of the probability trajectories
+        for that circuit.
 
+        This is an upper bound on the maximum TVD between the instaneous probability distribution (over circuit
+        outcomes) and the mean of this time-varying probability distribution, with this maximization over all times.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to estimate the size of the instability for.
+
+        dskey : None or string, optional
+            The DataSet to estimate the size of the instability for. Need if more than one DataSet has
+            been analyzed, but otherwise can be left as None.
+
+        estimatekey : None or tuple, optional
+            The probability trajectory estimate to use. If None, then the default estimate is used.
+
+        estimator : None or string, optional
+            Overrides the second element of `estimatekey`, to easily select the 'filter' and 'mle' estimates.
+
+        Returns
+        -------
+        float
+            The size of the instability in the circuit, as quantified by the amplitudes in the probability trajectory
+            model.
         """
         ptraj = self.get_probability_trajectory_model(circuit, dskey, estimatekey, estimator)
         params = ptraj.get_parameters()
@@ -1581,7 +1952,8 @@ class StabilityAnalyzer(object):
 
     def get_maxmax_tvd_bound(self, dskey=None, estimatekey=None, estimator=None):
         """
-        todo
+        The quantity returned by `get_max_tvd_bound` maximized over circuits. See the docstring of that method
+        for more details.
 
         """
         if dskey is None:
