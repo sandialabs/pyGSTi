@@ -797,7 +797,8 @@ class StabilityAnalyzer(object):
 
         return tuple(averageaxes), tuple(indices)
 
-    def get_spectrum(self, dictlabel={}, returnfrequencies=True, checklevel=1):
+    def get_spectrum(self, dictlabel=None, returnfrequencies=True, checklevel=2):
+
         """
         Returns a power spectrum.
 
@@ -833,9 +834,10 @@ class StabilityAnalyzer(object):
             The power spectrum.
 
         """
+        if dictlabel is None: dictlabel = {}
         assert(self._contains_spectra is not None), "Spectra must be generated before they can be accessed!"
         if len(dictlabel) == len(self._axislabels):
-            arrayindices = self._tupletoindex[tuple(dictlabel.values())]
+            arrayindices = self._tupletoindex[(dictlabel['dataset'], dictlabel['circuit'], dictlabel['outcome'])]
             spectrum = self._basespectra[arrayindices].copy()
             if returnfrequencies:
                 circuitindex = arrayindices[1]
