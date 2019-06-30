@@ -56,6 +56,8 @@ stages:
     if: branch IN (master, beta)
   - name: push
     if: (branch = develop) AND (NOT (type = pull_request))
+  - name: deploy
+    if: tag IS present
 
 jobs:
   include:
@@ -137,6 +139,14 @@ jobs:
       script:
         - CI/push.sh
 
+    - stage: deploy
+      env: PYPI_DEPLOY=1
+      install:
+        - pip install -e .[extension_modules]
+      script:
+        - echo "Pushing $TRAVIS_TAG to PyPI"
+
+
   allow_failures:
     - stage: lint
       name: "PEP8"
@@ -150,6 +160,7 @@ deploy:
   skip_existing: true
   on:
     tags: true
+    condition: $PYPI_DEPLOY = 1
 
 notifications:
   email:
