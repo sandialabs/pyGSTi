@@ -2918,8 +2918,11 @@ class LindbladOp(LinearOperator):
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
-        #TODO REMOVE: print("DB: LindbladOp.get_totat_term_magnitude is exp(",self.errorgen.get_total_term_magnitude(),
-        # ") - ",self.errorgen.__class__.__name__)
+        #TODO REMOVE:
+        #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
+        #egttm = self.errorgen.get_total_term_magnitude()
+        #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
+        #return _np.exp(egttm)
         return _np.exp(self.errorgen.get_total_term_magnitude())
 
     def num_params(self):
@@ -6724,6 +6727,7 @@ class LindbladErrorgen(LinearOperator):
         #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
         #print("LindbladErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
+        #print("  DB: LindbladErrorgen coeffs = ",coeffs)
 
         return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
 

@@ -70,9 +70,11 @@ class TermForwardSimulator(ForwardSimulator):
     """
 
     def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None,
-                 min_term_mag=None, opt_mode=False, cache=None):
+                 min_term_mag=None, max_paths_per_outcome=500, required_achieve_factor=2.0,
+                 opt_mode=False, cache=None):
         """
         Construct a new TermForwardSimulator object.
+        TODO: fix this docstring (and maybe other fwdsim __init__ functions?
 
         Parameters
         ----------
@@ -96,6 +98,16 @@ class TermForwardSimulator(ForwardSimulator):
             The maximum order of error-rate terms to include in probability
             computations.
 
+        max_paths_per_outcome : int, optional
+            The maximum number of paths that are allowed to be traversed when
+            computing any single circuit outcome probability.
+
+        required_achieve_factor : float, optional
+            A factor specifying how far the acheieved sum-of-path-magnitudes (SOPM)
+            for a circuit outcome probability can fall below its target value.  In
+            particular, if `required_achieve_factor * achieved_SOPM < target_SOPM`
+            then we raise an error and abort the calculation.
+
         cache : dict, optional
             A dictionary of pre-computed compact polynomial objects.  Keys are
             `(max_order, rholabel, elabel, circuit)` tuples, where
@@ -114,6 +126,8 @@ class TermForwardSimulator(ForwardSimulator):
         self.max_order = max_order  # only used in "taylor-order" mode
         self.pathmagnitude_gap = pathmag_gap  # only used in "pruned" mode
         self.min_term_mag = min_term_mag  # only used in "pruned" mode
+        self.max_paths_per_outcome = max_paths_per_outcome
+        self.required_achieve_factor = required_achieve_factor
         self.opt_mode = opt_mode
         self.cache = cache
         self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
@@ -208,6 +222,8 @@ class TermForwardSimulator(ForwardSimulator):
                                memLimit=None,
                                pathmagnitude_gap=0.0,
                                min_term_mag=0.01,
+                               max_paths=500,
+                               required_achieve_factor=2.0,
                                current_threshold=None):
         """
         Computes polynomial-representations of the probabilities for multiple
@@ -292,13 +308,14 @@ class TermForwardSimulator(ForwardSimulator):
         if self.evotype == "svterm":
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag,
-                                              current_threshold)
+                                              fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+                                              required_achieve_factor, current_threshold)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag)
+                                              fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+                                              required_achieve_factor, current_threshold)
 
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
@@ -751,6 +768,8 @@ class TermForwardSimulator(ForwardSimulator):
                                                            None,
                                                            self.pathmagnitude_gap,
                                                            self.min_term_mag,
+                                                           self.max_paths_per_outcome,
+                                                           self.required_achieve_factor,
                                                            recalc_threshold=not self.opt_mode)
                 else:  # self.mode == "taylor-order"
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm)  # computes polys if necessary
@@ -898,6 +917,8 @@ class TermForwardSimulator(ForwardSimulator):
                                                                None,
                                                                self.pathmagnitude_gap,
                                                                self.min_term_mag,
+                                                               self.max_paths_per_outcome,
+                                                               self.required_achieve_factor,
                                                                recalc_threshold=True)
 
                     for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):

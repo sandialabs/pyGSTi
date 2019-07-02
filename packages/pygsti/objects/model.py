@@ -793,7 +793,9 @@ class OpModel(Model):
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['pathmag_gap'] = float(self._sim_args[1])
             kwargs['min_term_mag'] = float(self._sim_args[2])
-            kwargs['opt_mode'] = bool(self._sim_args[3]) if len(self._sim_args) > 3 else False
+            kwargs['max_paths_per_outcome'] = int(self._sim_args[3]) if len(self._sim_args) > 3 else 500
+            kwargs['required_achieve_factor'] = float(self._sim_args[4]) if len(self._sim_args) > 4 else 2.0
+            kwargs['opt_mode'] = bool(self._sim_args[5]) if len(self._sim_args) > 5 else True
             # indicates fwdsim is being used within an optimization loop (only recomp paths on deriv evals)
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type == "map":

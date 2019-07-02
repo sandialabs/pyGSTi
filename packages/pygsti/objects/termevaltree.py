@@ -414,6 +414,8 @@ class TermEvalTree(EvalTree):
                            memLimit,
                            pathmagnitude_gap,
                            min_term_mag,
+                           max_paths,
+                           required_achieve_factor,
                            recalc_threshold=True):
 
         elabels = tuple(elabels)  # make sure this is hashable
@@ -423,6 +425,14 @@ class TermEvalTree(EvalTree):
         tot_npaths = 0
         tot_target_sopm = 0; tot_achieved_sopm = 0  # "sum of path magnitudes"
         repcache = {}
+
+        #DEBUG TODO REMOVE
+        #print("DEBUG TOTAL OP MAGNITUDES: ")
+        #for glbl in ('Gx','Gy','Gi'):
+        #    op = calc.sos.get_operation(glbl)
+        #    tot = op.get_total_term_magnitude()
+        #    print(glbl, "op=", str(type(op)), " mag=", tot)
+            
         #opcache = {}
         for opstr in circuit_list:
             if (rholabel, elabels, opstr) in self.p_polys:
@@ -441,6 +451,8 @@ class TermEvalTree(EvalTree):
                                                 memLimit,
                                                 pathmagnitude_gap,
                                                 min_term_mag,
+                                                max_paths,
+                                                required_achieve_factor,
                                                 current_threshold)
             else:
                 #Could just recompute sopm and npaths?

@@ -1778,21 +1778,24 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
     raise NotImplementedError("No direct mode yet")
 
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, current_threshold=None):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap,
-                                min_term_mag, current_threshold)
+def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
+                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, required_achieve_factor=2.0,
+                           current_threshold=None):
+    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
+                                pathmagnitude_gap, min_term_mag, max_paths, required_achieve_factor, current_threshold)
 
 
-def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap,
-                                min_term_mag)
+def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
+                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, required_achieve_factor=2.0,
+                           current_threshold=None):
+    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
+                                pathmagnitude_gap, min_term_mag, max_paths, required_achieve_factor, current_threshold)
 
+global_cnt = 0
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True,
-                         pathmagnitude_gap=0.0, min_term_mag=0.01, current_threshold=None):
+def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
+                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, required_achieve_factor=2.0, current_threshold=None):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -1814,6 +1817,10 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
 
     repcache : dict, optional
         Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
+    opcache : dict, optional
+        Dictionary used to cache operator objects to speed up future
         calls to this function that would use the same set of operations.
 
     comm : mpi4py.MPI.Comm, optional
@@ -1920,11 +1927,18 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
-        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 100.0)
+        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 100.0, max_npaths=max_paths)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
+    #REMOVE (and global_cnt definition above)
+    #global global_cnt
+    #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt, " time=%.3fs" % (_time.time()-t0))
+    #global_cnt += 1
+
     if current_threshold >= 0 and threshold >= current_threshold:  # then just keep existing (cached) polys
-        return None, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
+        #assert(required_achieve_factor * sum(achieved_sum_of_pathmags) > sum(target_sum_of_pathmags)), \
+        #    "Could not achieve targets to within a factor of %.2f - aborting!" % required_achieve_factor
+        return [], sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
@@ -1996,8 +2010,6 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
 
     else:
         def add_path(b, mag, incd):
-            # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no
-            # ability to cache?)
             factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
             res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
             pLeft = _unitary_sim_pre(factors, comm, memLimit)
@@ -2049,14 +2061,20 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
 
     #... and we're done!
 
+    target_miss = sum(achieved_sum_of_pathmags) - sum(target_sum_of_pathmags + pathmagnitude_gap)
+    if target_miss > 1e-5:
+        print("Warning: Achieved sum(path mags) exceeds max by ", target_miss, "!!!")
+    assert(required_achieve_factor * sum(achieved_sum_of_pathmags) > sum(target_sum_of_pathmags)), \
+        "Could not achieve targets to within a factor of %.2f - aborting!" % required_achieve_factor
+
     #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
     # in fastreplib.pyx but forgot it here.
     return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
 # foat = first-order always-traversed
-def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op, fn_visitpath,
-                                  debug=False):
+def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op,
+                                  fn_visitpath, debug=False):
     """
     Traverse all the paths up to some path-magnitude threshold, calling
     `fn_visitpath` for each one.
@@ -2094,6 +2112,11 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
         `term_indices` less than this index are guaranteed to be the same
         as they were in the last call to `fn_visitpath`, and this can be
         used for faster path evaluation.
+
+    max_npaths : int, optional
+        The maximum number of paths to traverse.  If this is 0, then there
+        is no limit.  Otherwise this function will return as soon as
+        `max_npaths` paths are traversed.
 
     debug : bool, optional
         Whether to print additional debug info.
@@ -2137,8 +2160,9 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 else:
                     mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i] - 1].magnitude)
 
-                fn_visitpath(b, mag, i)
-                traverse_tree(b, i, log_thres, mag, logmag, sub_order)  # add any allowed paths beneath this one
+                if fn_visitpath(b, mag, i): return True  # fn_visitpath can signal early return
+                if traverse_tree(b, i, log_thres, mag, logmag, sub_order):  # add any allowed paths beneath this one
+                    return True
             elif sub_order <= 1:
                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
                 # to accept b[i] or term indices higher than it is to include "foat" terms, so we now
@@ -2152,8 +2176,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                         mag = 0 if oprep_lists[i][orig_bi - 1].magnitude == 0 else \
                             current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][orig_bi - 1].magnitude)
 
-                        fn_visitpath(b, mag, i)
-
+                        if fn_visitpath(b, mag, i): return True
+                        
                         if i != n - 1:
                             # if we're not incrementing (from a zero-order term) the final index, then we
                             # need to to increment it until we hit num_elabels (*all* zero-th order paths)
@@ -2162,7 +2186,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                                 b[n - 1] = k
                                 mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude
                                               / oprep_lists[i][orig_bn].magnitude)
-                                fn_visitpath(b, mag2, n - 1)
+                                if fn_visitpath(b, mag2, n - 1): return True
 
                             b[n - 1] = orig_bn
 
@@ -2170,6 +2194,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 
             b[i] -= 1  # so we don't have to copy b
         #print("END: ",root)
+        return False  # return value == "do we need to terminate traversal immediately?"
 
     current_mag = 1.0; current_logmag = 0.0
     fn_visitpath(b, current_mag, 0)  # visit root (all 0s) path
@@ -2179,7 +2204,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 
 
 def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_pathmags,
-                            foat_indices_per_op=None, initial_threshold=0.1, min_threshold=1e-10):
+                            foat_indices_per_op=None, initial_threshold=0.1,
+                            min_threshold=1e-10, max_npaths=1000000):
     """
     Find the pathmagnitude-threshold needed to achieve some target sum-of-path-magnitudes:
     so that the sum of all the path-magnitudes greater than this threshold achieve the
@@ -2222,6 +2248,9 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
         The smallest threshold allowed.  If this amount is reached, it
         is just returned and searching stops.
 
+    max_npaths : int, optional
+        The maximum number of paths allowed per effect.
+
     Returns
     -------
     threshold : float
@@ -2247,12 +2276,17 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
 
     def count_path(b, mg, incd):
         mag[E_indices[b[-1]]] += mg; nPaths[E_indices[b[-1]]] += 1
+        return (nPaths[E_indices[b[-1]]] == max_npaths)  # trigger immediate return if hit max_npaths
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(num_elabels, 'd')
         nPaths = _np.zeros(num_elabels, int)
+        
+        traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels,
+                                      foat_indices_per_op, count_path, max_npaths)  # sets mag and nPaths
+        assert(max_npaths == 0 or _np.all(nPaths <= max_npaths)),"STOP: %s" % nPaths
 
-        if _np.all(mag >= target_mag):  # try larger threshold
+        if _np.all(mag >= target_mag) or _np.any(nPaths >= max_npaths):  # try larger threshold
             threshold_lower_bound = threshold
             if threshold_upper_bound is not None:
                 threshold = (threshold_upper_bound + threshold_lower_bound) / 2
@@ -2277,7 +2311,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
     mag = _np.zeros(num_elabels, 'd')
     nPaths = _np.zeros(num_elabels, int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
-                                  foat_indices_per_op, count_path)  # sets mag and nPaths
+                                  foat_indices_per_op, count_path, max_npaths)  # sets mag and nPaths
 
     return threshold_lower_bound, nPaths, mag
 
