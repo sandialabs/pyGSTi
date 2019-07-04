@@ -218,9 +218,11 @@ class RankOneTerm(object):
 
         self.coeff = coeff  # potentially a Polynomial
         if isinstance(self.coeff, _numbers.Number):
+            #self.evaluated_coeff = coeff #REMOVE
             self.magnitude = abs(coeff)
             self.logmagnitude = _np.log10(self.magnitude) if self.magnitude > 0 else -LARGE
         else:
+            #self.evaluated_coeff = None #REMOVE
             self.magnitude = 1.0
             self.logmagnitude = 0.0
 
@@ -285,6 +287,13 @@ class RankOneTerm(object):
         """
         self.magnitude = mag
         self.logmagnitude = _np.log10(mag) if mag > 0 else -LARGE
+
+#TODO REMOVE
+#     def set_evaluated_coeff(self, evaluated_coeff):
+#         """
+#         TODO: docstring
+#         """
+#         self.evaluated_coeff = evaluated_coeff
 
     def compose(self, term):
         """

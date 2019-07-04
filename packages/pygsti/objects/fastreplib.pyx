@@ -2225,10 +2225,11 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 
 
 # State-vector pruned-poly-term calcs -------------------------
+def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
+                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None):
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
-                           current_threshold=None):
-
+    opcache = {} # DEBUG - test if this is responsible for warnings
+    
     #t0 = pytime.time()
     #if debug is not None:
     #    debug['tstartup'] += pytime.time()-t0
@@ -2362,7 +2363,7 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
     cdef double max_partial_sopm = calc.sos.get_prep(rholabel).get_total_term_magnitude()
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = opcache.get(glbl, calc.sos.get_operation(glbl))
+        op = calc.sos.get_operation(glbl) #opcache.get(glbl, calc.sos.get_operation(glbl)) #DEBUG
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
         target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() - pathmagnitude_gap
@@ -2376,10 +2377,10 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
         cgatestring, rho_term_reps, op_term_reps, E_term_reps,
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices,
         numEs, calc.max_order, stateDim, <bool>fastmode, pathmagnitude_gap, min_term_mag,
-        current_threshold, target_sum_of_pathmags, mpo, mpv, vpi, returnvec)
+        max_paths, current_threshold, target_sum_of_pathmags, mpo, mpv, vpi, returnvec)
 
-    if returnvec[2]+pathmagnitude_gap+1e-5 < returnvec[3]: # index 2 = Target, index 3 = Achieved
-        print "Warning: Achieved sum(path mags) exceeds max by ", returnvec[3]-(returnvec[2]+pathmagnitude_gap),"!!!"
+    if returnvec[2]+numEs*pathmagnitude_gap+1e-5 < returnvec[3]: # index 2 = Target, index 3 = Achieved
+        print "Warning: Achieved sum(path mags) exceeds max by ", returnvec[3]-(returnvec[2]+numEs*pathmagnitude_gap),"!!!"
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ], int(returnvec[0]), returnvec[1], returnvec[2], returnvec[3]
 
@@ -2388,7 +2389,7 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     vector[INT]& circuit,
     vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
     vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] E_indices,
-    INT numEs, INT max_order, INT dim, bool fastmode, double pathmagnitude_gap, double min_term_mag, double current_threshold,
+    INT numEs, INT max_order, INT dim, bool fastmode, double pathmagnitude_gap, double min_term_mag, INT max_paths, double current_threshold,
     vector[double]& target_sum_of_pathmags, INT max_poly_order, INT max_poly_vars, INT vindices_per_int, vector[float]& returnvec):
 
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
@@ -2436,12 +2437,13 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     cdef vector[PolyCRep_ptr] empty_prps = vector[PolyCRep_ptr](0)
 
     threshold = pathmagnitude_threshold(factor_lists, E_indices, numEs, target_sum_of_pathmags, foat_indices_per_op,
-                                        current_threshold, pathmagnitude_gap/100.0, achieved_sum_of_pathmags, npaths)
+                                        current_threshold, pathmagnitude_gap/1000.0, max_paths,
+                                        achieved_sum_of_pathmags, npaths)
     #DEBUG
     #print("FOAT: ")
     #for i in range(nFactorLists):
     #    print(deref(foat_indices_per_op[i]))
-    #print("Threshold = ",threshold," Paths=",npaths)
+    #print("Threshold = ", threshold, " Paths=", npaths)
 
     #Construct all our return values (HACK - return these as a vector of floats)
     returnvec[0] = 0.0
@@ -2784,10 +2786,10 @@ cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_S
 
                 
 
-cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_lists,
+cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_lists,
                       vector[vector_INT_ptr]& foat_indices_per_op, INT num_elabels,
                       vector[INT]& nops, vector[INT]& E_indices, vector[double]& pathmags, vector[INT]& nPaths,
-                      INT incd, double log_thres, double current_mag, double current_logmag, INT order):
+                      INT incd, double log_thres, double current_mag, double current_logmag, INT order, INT max_npaths):
     """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
     cdef INT i, j, k, orig_bi, orig_bn
     cdef INT n = b.size()
@@ -2817,11 +2819,14 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
             ## fn_visitpath(b, mag, i) ##
             pathmags[E_indices[b[n-1]]] += mag
             nPaths[E_indices[b[n-1]]] += 1
+            if nPaths[E_indices[b[n-1]]] == max_npaths: return True
             #print("Adding ",b)
             ## --------------------------
-            
-            count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops,
-                        E_indices, pathmags, nPaths, i, log_thres, mag, logmag, sub_order) #add any allowed paths beneath this one
+
+            #add any allowed paths beneath this one
+            if count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops,
+                           E_indices, pathmags, nPaths, i, log_thres, mag, logmag, sub_order, max_npaths): 
+                return True
             
         elif sub_order <= 1:
             #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -2839,6 +2844,7 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
                     ## fn_visitpath(b, mag, i) ##
                     pathmags[E_indices[b[n-1]]] += mag
                     nPaths[E_indices[b[n-1]]] += 1
+                    if nPaths[E_indices[b[n-1]]] == max_npaths: return True
                     #print("FOAT Adding ",b)
                     ## --------------------------
 
@@ -2853,15 +2859,18 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
                             ## fn_visitpath(b, mag2, n-1) ##
                             pathmags[E_indices[b[n-1]]] += mag2
                             nPaths[E_indices[b[n-1]]] += 1
+                            if nPaths[E_indices[b[n-1]]] == max_npaths: return True
                             #print("FOAT Adding ",b)
                             ## --------------------------
                         b[n-1] = orig_bn
             b[i] = orig_bi
         b[i] -= 1 # so we don't have to copy b
+    return False
 
         
 cdef void count_paths_upto_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lists, double pathmag_threshold, INT num_elabels,
-                                vector[vector_INT_ptr] foat_indices_per_op, vector[INT]& E_indices, vector[double]& pathmags, vector[INT]& nPaths):
+                                     vector[vector_INT_ptr] foat_indices_per_op, vector[INT]& E_indices, INT max_npaths,
+                                     vector[double]& pathmags, vector[INT]& nPaths):
     """ TODO: docstring """
     cdef INT i
     cdef INT n = oprep_lists.size()
@@ -2880,13 +2889,16 @@ cdef void count_paths_upto_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lis
     nPaths[E_indices[0]] += 1
     #print("Adding ",b)
     ## -------------------------------
-    count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices, pathmags, nPaths, 0, log_thres, current_mag, current_logmag, 0)
+    count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices, pathmags, nPaths,
+                0, log_thres, current_mag, current_logmag, 0, max_npaths)
     return
 
 
 cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lists, vector[INT]& E_indices,
-        INT nEffects, vector[double] target_sum_of_pathmags, vector[vector_INT_ptr] foat_indices_per_op,
-        double initial_threshold, double min_threshold, vector[double]& mags, vector[INT]& nPaths):
+                                    INT nEffects, vector[double] target_sum_of_pathmags,
+                                    vector[vector_INT_ptr] foat_indices_per_op,
+                                    double initial_threshold, double min_threshold, INT max_npaths,
+                                    vector[double]& mags, vector[INT]& nPaths):
     """
     TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
     """
@@ -2902,7 +2914,8 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
         for i in range(nEffects):
             mags[i] = 0.0; nPaths[i] = 0
         count_paths_upto_threshold(oprep_lists, threshold, nEffects, 
-                                   foat_indices_per_op, E_indices, mags, nPaths)
+                                   foat_indices_per_op, E_indices, max_npaths,
+                                   mags, nPaths)
 
         try_larger_threshold = 1 # True
         for i in range(nEffects):
@@ -2940,7 +2953,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
     for i in range(nEffects):
         mags[i] = 0.0; nPaths[i] = 0
     count_paths_upto_threshold(oprep_lists, threshold_lower_bound, nEffects, 
-                               foat_indices_per_op, E_indices, mags, nPaths) # sets mags and nPaths
+                               foat_indices_per_op, E_indices, max_npaths, mags, nPaths) # sets mags and nPaths
 
     return threshold_lower_bound
 

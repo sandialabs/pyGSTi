@@ -415,7 +415,6 @@ class TermEvalTree(EvalTree):
                            pathmagnitude_gap,
                            min_term_mag,
                            max_paths,
-                           required_achieve_factor,
                            recalc_threshold=True):
 
         elabels = tuple(elabels)  # make sure this is hashable
@@ -428,6 +427,7 @@ class TermEvalTree(EvalTree):
 
         #DEBUG TODO REMOVE
         #print("DEBUG TOTAL OP MAGNITUDES: ")
+        #print("Paramvec norm:", _np.linalg.norm(calc.paramvec))
         #for glbl in ('Gx','Gy','Gi'):
         #    op = calc.sos.get_operation(glbl)
         #    tot = op.get_total_term_magnitude()
@@ -452,7 +452,6 @@ class TermEvalTree(EvalTree):
                                                 pathmagnitude_gap,
                                                 min_term_mag,
                                                 max_paths,
-                                                required_achieve_factor,
                                                 current_threshold)
             else:
                 #Could just recompute sopm and npaths?

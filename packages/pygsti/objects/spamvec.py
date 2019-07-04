@@ -2113,8 +2113,6 @@ class PureStateSPAMVec(SPAMVec):
         Return this SPAM vector as a (dense) numpy array.  The memory
         in `scratch` maybe used when it is not-None.
         """
-        assert(self._evotype == "densitymx"), \
-            "todense(...) is only implemented for the 'densitymx' evotype"
         dmVec_std = _gt.state_to_dmvec(self.pure_state_vec.todense())
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 

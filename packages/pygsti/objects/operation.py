@@ -208,8 +208,7 @@ def convert(gate, toType, basis, extra=None):
         if isinstance(gate, FullDenseOp):
             return gate  # no conversion necessary
         else:
-            ret = FullDenseOp(gate.todense())
-            return ret
+            return FullDenseOp(gate.todense())
 
     elif toType == "TP":
         if isinstance(gate, TPDenseOp):
@@ -232,7 +231,7 @@ def convert(gate, toType, basis, extra=None):
         if isinstance(gate, StaticDenseOp):
             return gate  # no conversion necessary
         else:
-            return StaticDenseOp(gate)
+            return StaticDenseOp(gate.todense())
 
     elif toType == "static unitary":
         op_std = _bt.change_basis(gate, basis, 'std')
@@ -568,17 +567,19 @@ class LinearOperator(_modelmember.ModelMember):
         taylor_order = 0
         terms = []; last_len = -1
         while len(terms) > last_len:  # while we keep adding something
-            #print("order ",taylor_order," : ",len(terms), "terms")
             terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, True)
             coeffs = _bulk_eval_complex_compact_polys(
                 cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
             for coeff, t in zip(coeffs, terms_at_order):
                 t.set_magnitude(abs(coeff))
+                #t.set_evaluated_coeff(coeff) #REMOVE
 
             last_len = len(terms)
             for t in terms_at_order:
                 if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
                     terms.append((taylor_order, t))
+            #print("order ", taylor_order, " : ", len(terms_at_order), " maxmag=",
+            #      max([t.magnitude for t in terms_at_order]), len(terms), " running terms")
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -2756,15 +2757,25 @@ class LindbladOp(LinearOperator):
         """
         Return this operation as a dense matrix.
         """
-        if self.sparse_expm: raise NotImplementedError(
-            "todense() not implemented for sparse-expm-mode LindbladOp objects")
-        if self._evotype in ("svterm", "cterm"):
-            raise NotImplementedError("todense() not implemented for term-based LindbladOp objects")
+        if self.exp_err_gen is None:  # when self.sparse_expm is True or term-based mode
+            exp_errgen = _spl.expm(self.errorgen.todense())
+        else:
+            exp_errgen = self.exp_err_gen
 
         if self.unitary_postfactor is not None:
-            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+            if self._evotype in ("svterm", "cterm"):
+                if self._evotype == "cterm":
+                    assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
+                    U = self.unitary_postfactor.unitary
+                else: U = self.unitary_postfactor
+                op_std = _gt.unitary_to_process_mx(U)
+                upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
+            else:
+                upost = self.unitary_postfactor
+
+            dense = _np.dot(exp_errgen, upost)
         else:
-            dense = self.exp_err_gen
+            dense = exp_errgen
         return dense
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
@@ -6612,10 +6623,51 @@ class LindbladErrorgen(LinearOperator):
     def todense(self):
         """
         Return this error generator as a dense matrix.
-        """
-        if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladErrorgen objects")
+        """                
         if self._evotype in ("svterm", "cterm"):
-            raise NotImplementedError("todense() not implemented for term-based LindbladErrorgen objects")
+            #Need to do similar things to __init__ - maybe consolidate?
+            
+            hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
+                self.paramvals, self.ham_basis_size, self.other_basis_size,
+                self.param_mode, self.nonham_mode)
+
+            hamGens, otherGens = self._init_generators()
+
+            if self.sparse:
+                if hamCoeffs is not None:
+                    lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, hamGens)])
+                else:
+                    lnd_error_gen = _sps.csr_matrix((self.dim, self.dim))
+    
+                if otherCoeffs is not None:
+                    if self.nonham_mode == "diagonal":
+                        lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, otherGens)])
+                    else:  # nonham_mode in ("diag_affine", "all")
+                        lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, otherGens)
+                                             for c,gen in zip(cRow,genRow)])
+
+                lnd_error_gen = lnd_error_gen.toarray()  # could implement tosparse() using up to this block?
+            else:  # dense matrices
+                
+                if hamCoeffs is not None:
+                    lnd_error_gen = _np.tensordot(hamCoeffs, hamGens, (0, 0))
+                else:
+                    lnd_error_gen = _np.zeros((self.dim, self.dim), 'complex')
+
+                if otherCoeffs is not None:
+                    if self.nonham_mode == "diagonal":
+                        lnd_error_gen += _np.tensordot(otherCoeffs, otherGens, (0, 0))
+                    else:  # nonham_mode in ("diag_affine", "all")
+                        lnd_error_gen += _np.tensordot(otherCoeffs, otherGens, ((0, 1), (0, 1)))
+
+            assert(_np.isclose(_mt.safenorm(lnd_error_gen, 'imag'), 0)), \
+                "Imaginary error gen norm: %g" % _mt.safenorm(lnd_error_gen, 'imag')
+            err_gen_mx = _mt.safereal(lnd_error_gen, inplace=True)
+            return err_gen_mx
+
+        elif self.sparse:
+            return self.err_gen_mx.toarray()
+
         return self.err_gen_mx
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
