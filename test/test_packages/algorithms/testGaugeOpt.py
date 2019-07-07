@@ -27,29 +27,29 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lgst.basis = self.model.basis.copy()
         mdl_clgst_cp    = self.runSilent(pygsti.contract, mdl_lgst, "CP",verbosity=10, tol=10.0, useDirectCP=False) #non-direct CP contraction
 
-        #Gauge Opt to Target using non-frobenius metrics
-        mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
-                                            gatesMetric='fidelity', verbosity=10, checkJac=True)
+        # #Gauge Opt to Target using non-frobenius metrics
+        # mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
+        #                                     gatesMetric='fidelity', verbosity=10, checkJac=True)
 
-        mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
-                                            gatesMetric='tracedist', verbosity=10, checkJac=True)
+        # mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
+        #                                     gatesMetric='tracedist', verbosity=10, checkJac=True)
 
-        mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
-                                            spamMetric='fidelity', verbosity=10, checkJac=True)
+        # mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
+        #                                     spamMetric='fidelity', verbosity=10, checkJac=True)
 
-        mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
-                                            spamMetric='tracedist', verbosity=10, checkJac=True)
+        # mdl_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
+        #                                     spamMetric='tracedist', verbosity=10, checkJac=True)
 
-        #Using other methods
-        mdl_BFGS = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, method='BFGS', verbosity=10)
-        with self.assertRaises(ValueError): #Invalid metric
-            self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, method='BFGS', spamMetric='foobar', verbosity=10)
-        with self.assertRaises(ValueError): #Invalid metric
-            self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, method='BFGS', gatesMetric='foobar', verbosity=10)
-            
-        with self.assertRaises(ValueError): #can't use least-squares for anything but frobenius metric
-            self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
-                           spamMetric='tracedist', method='ls', verbosity=10, checkJac=True)
+        # #Using other methods
+        # mdl_BFGS = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, method='BFGS', verbosity=10)
+        # with self.assertRaises(ValueError): #Invalid metric
+        #     self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, method='BFGS', spamMetric='foobar', verbosity=10)
+        # with self.assertRaises(ValueError): #Invalid metric
+        #     self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, method='BFGS', gatesMetric='foobar', verbosity=10)
+
+        # with self.assertRaises(ValueError): #can't use least-squares for anything but frobenius metric
+        #     self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
+        #                    spamMetric='tracedist', method='ls', verbosity=10, checkJac=True)
 
 
         #with self.assertRaises(ValueError):
@@ -59,7 +59,7 @@ class TestCoreMethods(AlgorithmsBase):
         #with self.assertRaises(ValueError):
         #    self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst_target, self.model,
         #                   spamMetric='foobar', verbosity=10) #bad spamMetric
-                
+
 
         #Contractions
         mdl_clgst_tp    = self.runSilent(pygsti.contract, mdl_lgst_target, "TP",verbosity=10, tol=10.0)
@@ -83,44 +83,44 @@ class TestCoreMethods(AlgorithmsBase):
         #with self.assertRaises(ValueError):
         #    self.runSilent(pygsti.contract, mdl_lgst_target, "foobar",verbosity=10, tol=10.0) #bad toWhat
 
-            
-        #More gauge optimizations
-        TP_gauge_group = pygsti.obj.TPGaugeGroup(mdl_lgst.dim)
-        mdl_lgst_target_cp  = self.runSilent(pygsti.gaugeopt_to_target, mdl_clgst_cptp, self.model, 
-                                            cptp_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True)
 
-        mdl_lgst_tp         = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
-                                            spam_penalty_factor=1.0, verbosity=10, checkJac=True)
+        # #More gauge optimizations
+        # TP_gauge_group = pygsti.obj.TPGaugeGroup(mdl_lgst.dim)
+        # mdl_lgst_target_cp  = self.runSilent(pygsti.gaugeopt_to_target, mdl_clgst_cptp, self.model,
+        #                                     cptp_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True)
 
-        mdl_lgst.basis = Basis.cast("gm",4) #so CPTP optimizations can work on mdl_lgst
-        mdl_lgst_cptp       = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
-                                            cptp_penalty_factor=1.0, spam_penalty_factor=1.0, verbosity=10, checkJac=True)
+        # mdl_lgst_tp         = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
+        #                                     spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 
-        mdl_lgst_cptp_tp    = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
-                                            cptp_penalty_factor=1.0, spam_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
+        # mdl_lgst.basis = Basis.cast("gm",4) #so CPTP optimizations can work on mdl_lgst
+        # mdl_lgst_cptp       = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
+        #                                     cptp_penalty_factor=1.0, spam_penalty_factor=1.0, verbosity=10, checkJac=True)
+
+        # mdl_lgst_cptp_tp    = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, None,
+        #                                     cptp_penalty_factor=1.0, spam_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
 
         #I'm not sure why moving this test upward fixes a singlar matrix error (TODO LATER? - could one of above tests modify mdl_lgst??)
         #mdl_lgst_tp         = self.runSilent(pygsti.gaugeopt_to_target( mdl_lgst, None,
         #                                    spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 
-        mdl_lgst_tptarget   = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model,
-                                            spam_penalty_factor=1.0, verbosity=10, checkJac=True)
+        # mdl_lgst_tptarget   = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model,
+        #                                     spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 
-        mdl_lgst_cptptarget = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model,
-                                            cptp_penalty_factor=1.0, spam_penalty_factor=1.0, verbosity=10, checkJac=True)
+        # mdl_lgst_cptptarget = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model,
+        #                                     cptp_penalty_factor=1.0, spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 
-        mdl_lgst_cptptarget2= self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model,
-                                            cptp_penalty_factor=1.0, spam_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
+        # mdl_lgst_cptptarget2= self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model,
+        #                                     cptp_penalty_factor=1.0, spam_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
 
-        #Use "None" gauge group
-        mdl_none = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, gauge_group=None, verbosity=10)
-        soln, trivialEl, mdl_none = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, gauge_group=None, verbosity=10, returnAll=True)
+        # #Use "None" gauge group
+        # mdl_none = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, gauge_group=None, verbosity=10)
+        # soln, trivialEl, mdl_none = self.runSilent(pygsti.gaugeopt_to_target, mdl_lgst, self.model, gauge_group=None, verbosity=10, returnAll=True)
 
-        #Use "None" default gauge group
-        mdl_none = self.model.copy()
-        mdl_none.default_gauge_group = None
-        self.runSilent(pygsti.gaugeopt_to_target, mdl_none, self.model, verbosity=10)
-        soln, trivialEl, mdl_none = self.runSilent(pygsti.gaugeopt_to_target, mdl_none, self.model, verbosity=10, returnAll=True)
+        # #Use "None" default gauge group
+        # mdl_none = self.model.copy()
+        # mdl_none.default_gauge_group = None
+        # self.runSilent(pygsti.gaugeopt_to_target, mdl_none, self.model, verbosity=10)
+        # soln, trivialEl, mdl_none = self.runSilent(pygsti.gaugeopt_to_target, mdl_none, self.model, verbosity=10, returnAll=True)
 
 
         #TODO: check output lies in space desired
@@ -131,7 +131,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_badspam = mdl_bigkick.copy()
         mdl_badspam.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',np.array( [[2],[0],[0],[4]], 'd'))] )
           #set a bad evec so vSPAM has to work...
-        
+
 
         mdl_clgst_tp    = self.runSilent(pygsti.contract,mdl_bigkick, "TP", verbosity=10, tol=10.0)
         mdl_clgst_cp    = self.runSilent(pygsti.contract,mdl_bigkick, "CP", verbosity=10, tol=10.0)
