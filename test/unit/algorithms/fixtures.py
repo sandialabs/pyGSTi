@@ -3,6 +3,7 @@ from ..util import Namespace
 
 from pygsti.construction import std1Q_XYI as std
 import pygsti.construction as pc
+import pygsti.algorithms as alg
 
 ns = Namespace()
 ns.model = std.target_model()
@@ -56,6 +57,14 @@ def ds_lgst(self):
     return pc.generate_fake_data(
         self.datagen_gateset, self.lgstStrings,
         nSamples=10000, sampleError='binomial', seed=100
+    )
+
+
+@ns.memo
+def mdl_lgst(self):
+    return alg.do_lgst(
+        self.ds, self.fiducials, self.fiducials, self.model,
+        svdTruncateTo=4, verbosity=0
     )
 
 

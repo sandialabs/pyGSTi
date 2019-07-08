@@ -67,11 +67,7 @@ class GaugeOptWithGaugeGroupInstance(GaugeOptInstanceBase):
     @classmethod
     def setUpClass(cls):
         super(GaugeOptWithGaugeGroupInstance, cls).setUpClass()
-        cls._mdl_lgst = alg.do_lgst(
-            fixtures.ds, fixtures.fiducials, fixtures.fiducials, fixtures.model,
-            svdTruncateTo=4, verbosity=0
-        )
-        cls.gauge_group = TPGaugeGroup(cls._mdl_lgst.dim)
+        cls.gauge_group = TPGaugeGroup(fixtures.mdl_lgst.dim)
 
     def test_gaugeopt_with_gauge_group(self):
         go_result = go.gaugeopt_to_target(
@@ -98,7 +94,7 @@ class LGSTGaugeOptInstance(GaugeOptWithGaugeGroupInstance):
         # )
 
         # TODO construct directly
-        mdl_lgst_target = go.gaugeopt_to_target(cls._mdl_lgst, fixtures.model, checkJac=True)
+        mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, checkJac=True)
         cls._model = mdl_lgst_target
 
 
@@ -162,7 +158,7 @@ class CPTPGaugeOptTester(GaugeOptMethodBase, GaugeOptWithGaugeGroupInstance, Bas
     def setUpClass(cls):
         super(CPTPGaugeOptTester, cls).setUpClass()
         # TODO construct directly
-        mdl_lgst_target = go.gaugeopt_to_target(cls._mdl_lgst, fixtures.model, checkJac=True)
+        mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, checkJac=True)
         mdl_clgst_cptp = alg.contract(mdl_lgst_target, "CPTP", verbosity=10, tol=10.0)
         cls._model = mdl_clgst_cptp
 
