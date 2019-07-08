@@ -1,4 +1,5 @@
 from ..util import BaseCase
+from ..algorithms import fixtures
 
 from pygsti.objects import Circuit, Label
 
@@ -207,4 +208,8 @@ class CircuitConstructionTester(BaseCase):
 
         results = cc.manipulate_circuit_list([tuple('ABC'), tuple('GHI')], sequenceRules)
         results_trivial = cc.manipulate_circuit_list([tuple('ABC'), tuple('GHI')], None)  # special case
+        # TODO assert correctness
+
+    def test_list_strings_lgst_can_estimate(self):
+        strs = cc.list_strings_lgst_can_estimate(fixtures.ds, fixtures.fiducials, fixtures.fiducials)
         # TODO assert correctness

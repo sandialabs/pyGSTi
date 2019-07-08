@@ -10,7 +10,7 @@ ns.model = std.target_model()
 ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
-ns.maxLengthList = [0, 1, 2, 4, 8]
+ns.maxLengthList = [0, 1, 2]
 
 
 @ns.memo
@@ -66,6 +66,18 @@ def mdl_lgst(self):
         self.ds, self.fiducials, self.fiducials, self.model,
         svdTruncateTo=4, verbosity=0
     )
+
+
+@ns.memo
+def mdl_lgst_go(self):
+    return alg.gaugeopt_to_target(
+        self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, checkJac=True
+    )
+
+
+@ns.memo
+def mdl_clgst(self):
+    return alg.contract(self.mdl_lgst_go, 'CPTP')
 
 
 ns.patch_module(__name__)
