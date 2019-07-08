@@ -2,13 +2,41 @@ import numpy as np
 
 from ..util import BaseCase
 
+from pygsti.construction import std1Q_XYI as std
 from pygsti.construction.modelconstruction import build_explicit_model, build_operation
 import pygsti.objects.explicitmodel as mdl
 
 
-class GateSetToolTester(BaseCase):
+class ExplicitOpModelStrictAccessTester(BaseCase):
+    def setUp(self):
+        mdl.ExplicitOpModel._strict = True
+        self.model = std.target_model().randomize_with_unitary(0.001, seed=1234)
+
+    def test_strict_access(self):
+        #test strict mode, which forbids all these accesses
+        with self.assertRaises(KeyError):
+            self.model['identity'] = [1, 0, 0, 0]
+        with self.assertRaises(KeyError):
+            self.model['Gx'] = np.identity(4, 'd')
+        with self.assertRaises(KeyError):
+            self.model['E0'] = [1, 0, 0, 0]
+        with self.assertRaises(KeyError):
+            self.model['rho0'] = [1, 0, 0, 0]
+
+        with self.assertRaises(KeyError):
+            self.model['identity']
+        with self.assertRaises(KeyError):
+            self.model['Gx']
+        with self.assertRaises(KeyError):
+            self.model['E0']
+        with self.assertRaises(KeyError):
+            self.model['rho0']
+
+
+class ExplicitOpModelToolTester(BaseCase):
     def setUp(self):
         mdl.ExplicitOpModel._strict = False
+        # XXX can these be constructed directly?
         self.model = build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
