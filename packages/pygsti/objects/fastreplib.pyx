@@ -486,10 +486,10 @@ cdef class DMOpRep:
 
         
 cdef class DMOpRep_Dense(DMOpRep):
-    cdef np.ndarray data_ref
+    cdef public np.ndarray base
 
     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] data):
-        self.data_ref = data
+        self.base = data
         #print("PYX dense gate constructed w/dim ",data.shape[0])
         self.c_gate = new DMOpCRep_Dense(<double*>data.data,
                                            <INT>data.shape[0])
@@ -629,16 +629,16 @@ cdef class DMOpRep_Lindblad(DMOpRep):
                                               <INT*>unitarypost_indptr.data, upost_nnz)
 
 cdef class DMOpRep_Sparse(DMOpRep):
-    cdef np.ndarray data_ref1
-    cdef np.ndarray data_ref2
-    cdef np.ndarray data_ref3
+    cdef public np.ndarray data
+    cdef public np.ndarray indices
+    cdef public np.ndarray indptr
 
     def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] A_data,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] A_indices,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] A_indptr):
-        self.data_ref1 = A_data
-        self.data_ref2 = A_indices
-        self.data_ref3 = A_indptr
+        self.data = A_data
+        self.indices = A_indices
+        self.indptr = A_indptr
         cdef INT nnz = A_data.shape[0]
         cdef INT dim = A_indptr.shape[0]-1
         self.c_gate = new DMOpCRep_Sparse(<double*>A_data.data, <INT*>A_indices.data,
