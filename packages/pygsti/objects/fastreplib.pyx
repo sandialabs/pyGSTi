@@ -354,14 +354,14 @@ ctypedef double (*TD_obj_fn)(double, double, double, double, double, double, dou
 # Density matrix (DM) propagation wrapper classes
 cdef class DMStateRep: #(StateRep):
     cdef DMStateCRep* c_state
-    cdef np.ndarray data_ref
+    cdef public np.ndarray base
     #cdef double [:] data_view # alt way to hold a reference
 
     def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
         #print("PYX state constructed w/dim ",data.shape[0])
         #cdef np.ndarray[double, ndim=1, mode='c'] np_cbuf = np.ascontiguousarray(data, dtype='d') # would allow non-contig arrays
         #cdef double [:] view = data;  self.data_view = view # ALT: holds reference...
-        self.data_ref = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+        self.base = data # holds reference to data so it doesn't get garbage collected - or could copy=true
         #self.c_state = new DMStateCRep(<double*>np_cbuf.data,<INT>np_cbuf.shape[0],<bool>0)
         self.c_state = new DMStateCRep(<double*>data.data,<INT>data.shape[0],<bool>0)
 
@@ -867,9 +867,9 @@ cdef class SVOpRep_Exponentiated(SVOpRep):
 # Stabilizer state (SB) propagation wrapper classes
 cdef class SBStateRep: #(StateRep):
     cdef SBStateCRep* c_state
-    cdef np.ndarray data_ref1
-    cdef np.ndarray data_ref2
-    cdef np.ndarray data_ref3
+    cdef public np.ndarray smatrix
+    cdef public np.ndarray pvectors
+    cdef public np.ndarray amps
 
     def __cinit__(self, np.ndarray[np.int64_t, ndim=2, mode='c'] smatrix,
                   np.ndarray[np.int64_t, ndim=2, mode='c'] pvectors,
@@ -885,6 +885,10 @@ cdef class SBStateRep: #(StateRep):
     @property
     def nqubits(self):
         return self.c_state._n
+
+    @property
+    def dim(self):
+        return 2**(self.c_state._n) # assume "unitary evolution"-type mode
 
     def __dealloc__(self):
         del self.c_state
@@ -916,6 +920,11 @@ cdef class SBEffectRep:
     @property
     def nqubits(self):
         return self.c_effect._n
+
+    @property
+    def dim(self):
+        return 2**(self.c_effect._n)  # assume "unitary evolution"-type mode
+
 
     def probability(self, SBStateRep state not None):
         #unnecessary (just put in signature): cdef SBStateRep st = <SBStateRep?>state
