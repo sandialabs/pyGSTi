@@ -117,22 +117,22 @@ class MapForwardSimulator(ForwardSimulator):
             the elements of `elabels`.
         """
         if time is None:  # time-independent state propagation
-            rhorep = self.sos.get_prep(rholabel).torep('prep')
-            ereps = [self.sos.get_effect(elabel).torep('effect') for elabel in elabels]
-            rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl).torep() for gl in circuit])
+            rhorep = self.sos.get_prep(rholabel)._rep
+            ereps = [self.sos.get_effect(elabel)._rep for elabel in elabels]
+            rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl)._rep for gl in circuit])
             ps = _np.array([erep.probability(rhorep) for erep in ereps], 'd')
             #outcome probabilities
         else:
             t = time
             op = self.sos.get_prep(rholabel); op.set_time(t); t += rholabel.time
-            state = op.torep('prep')
+            state = op._rep
             for gl in circuit:
                 op = self.sos.get_operation(gl); op.set_time(t); t += gl.time  # time in labels == duration
-                state = op.torep().acton(state)
+                state = op._rep.acton(state)
             ps = []
             for elabel in elabels:
                 op = self.sos.get_effect(elabel); op.set_time(t)  # don't advance time (all effects occur at same time)
-                ps.append(op.torep('effect').probability(state))
+                ps.append(op._rep.probability(state))
             ps = _np.array(ps, 'd')
 
         if _np.any(_np.isnan(ps)):

@@ -1348,10 +1348,10 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
     pCache = np.empty((len(evalTree),len(EVecs)),'d')
 
     #Get (extension-type) representation objects
-    rhorep = rhoVec.torep('prep')
-    ereps = [ E.torep('effect') for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
+    rhorep = rhoVec._rep
+    ereps = [ E._rep for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
     
     # convert to C-mode:  evaltree, operation_lookup, operationreps
     cdef c_evalTree = convert_evaltree(evalTree, operation_lookup)
@@ -1459,11 +1459,11 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #print("BEGIN dpr_cache")
 
     #Get (extension-type) representation objects
-    rhorep = calc.sos.get_prep(rholabel).torep('prep')
-    ereps = [ calc.sos.get_effect(el).torep('effect') for el in elabels]
+    rhorep = calc.sos.get_prep(rholabel)._rep
+    ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
     operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # it should be safe to do this *once*
-    operationreps = { i:op.torep() for i,op in operations.items() }
+    operationreps = { i:op._rep for i,op in operations.items() }
     #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
     #print("compute_dpr_cache has %d operations" % len(operation_lookup))
     
@@ -1508,10 +1508,10 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             #t_fromvec += pytime.time()-t1; t1 = pytime.time() # REMOVE
 
             #rebuild reps (not evaltree or operation_lookup)
-            rhorep = calc.sos.get_prep(rholabel).torep('prep')
-            ereps = [ calc.sos.get_effect(el).torep('effect') for el in elabels]
+            rhorep = calc.sos.get_prep(rholabel)._rep
+            ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
             operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
-            operationreps = { k:op.torep() for k,op in operations.items() } 
+            operationreps = { k:op._rep for k,op in operations.items() } 
             
             #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
             #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
@@ -1654,7 +1654,7 @@ def DM_compute_TDcache(calc, objective, rholabel, elabels, num_outcomes, evalTre
             for l in range(kinit,k):
                 t = t0
                 rhoVec.set_time(t)
-                rho = rhoVec.torep('prep')
+                rho = rhoVec._rep
                 t += rholabel.time
 
                 Ni = datarow.reps[l]
@@ -1663,11 +1663,11 @@ def DM_compute_TDcache(calc, objective, rholabel, elabels, num_outcomes, evalTre
                 for gl in remainder:
                     op = calc.sos.get_operation(gl)
                     op.set_time(t); t += gl.time  # time in gate label == gate duration?
-                    rho = op.torep().acton(rho)
+                    rho = op._rep.acton(rho)
     
                 j = outcome_to_elabel_index[outcome]
                 E = EVecs[j]; E.set_time(t)
-                p = E.torep('effect').probability(rho)  # outcome probability
+                p = E._rep.probability(rho)  # outcome probability
                 f = float(Ni) / float(N)
                 cur_probtotal += p
     

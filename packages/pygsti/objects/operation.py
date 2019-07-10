@@ -922,21 +922,32 @@ class DenseOperator(LinearOperator):
     common base class for all specific parameterizations of a gate.
     """
 
-    def __init__(self, mx, evotype, rep=None):
+    def __init__(self, mx, evotype):
         """ Initialize a new LinearOperator """
-        assert(evotype in ("densitymx", "statevec")), \
-            "Invalid evotype for a DenseOperator: %s" % evotype
-
-        if rep is None:
-            if evotype == "statevec":
-                rep = replib.SVOpRep_Dense(_np.ascontiguousarray(mx, complex))
-            elif self._evotype == "densitymx":
-                rep = replib.DMOpRep_Dense(_np.ascontiguousarray(mx, 'd'))
+        dtype = complex if evotype == "statevec" else 'd'
+        if isinstance(mx, _ProtectedArray):
+            protected = mx
+            mx = mx.base
+            assert(mx.flags['C_CONTIGUOUS']), \
+                "ProtectedArrays given to initialize a DenseOperator must hold contiguous data!"
+            assert(mx.dtype == _np.dtype(dtype)), "ProtectedArray has wrong dtype! (expected %s)" % str(dtype)
         else:
-            assert(mx is None), "Cannot initialize a DenseOperator with `mx` *and* `rep`!"
+            protected = None
+            mx = _np.ascontiguousarray(mx, dtype)
+
+        if evotype == "statevec":
+            rep = replib.SVOpRep_Dense(mx)
+        elif evotype == "densitymx":
+            rep = replib.DMOpRep_Dense(mx)
+        else:
+            raise ValueError("Invalid evotype for a DenseOperator: %s" % evotype)
 
         super(DenseOperator, self).__init__(rep, evotype)
-        self.base = rep.base  # == mx == rep.base? It should... but what about restrictions (e.g. TP)
+        if protected is not None:
+            assert(rep.base is protected.base), "Internal memory referencing error"
+            self.base = protected
+        else:
+            self.base = rep.base
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1237,9 +1248,9 @@ class TPDenseOp(DenseOperator):
                 and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create TPDenseOp: "
                              "invalid form for 1st row!")
-        DenseOperator.__init__(self, _ProtectedArray(
-            mx, indicesToProtect=(0, slice(None, None, None))), "densitymx")
-        assert(isinstance(self.base, _ProtectedArray)), "ascontiguousarray seems to have changed array type!"
+        pa = _ProtectedArray(_np.ascontiguousarray(mx), indicesToProtect=(0, slice(None, None, None)))
+        DenseOperator.__init__(self, pa, "densitymx")  # this will set self.base to array(pa)
+        assert(isinstance(self.base, _ProtectedArray))
 
     def set_value(self, M):
         """
@@ -2051,7 +2062,7 @@ class StochasticNoiseOp(LinearOperator):
             self.params[:] = self._rates_to_params(initial_rates)
         assert(evotype in ("densitymx", "svterm", "cterm"))
 
-        if self._evotype == "densitymx":  # for now just densitymx is supported
+        if evotype == "densitymx":  # for now just densitymx is supported
             rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.identity(dim, 'd')))
         else:
             raise NotImplementedError("Nonimplemented evotype '%s' for %s.torep(...)" %
@@ -3446,7 +3457,7 @@ class LindbladDenseOp(LindbladOp):
     form is referred to as the "projection basis".
     """
 
-    def __init__(self, unitaryPostfactor, errorgen):
+    def __init__(self, unitaryPostfactor, errorgen, dense_rep=True):
         """
         Create a new LinbladDenseOp based on an error generator and postfactor.
 
@@ -3472,6 +3483,7 @@ class LindbladDenseOp(LindbladOp):
             The error generator for this operator.  That is, the `L` if this
             operator is `exp(L)*unitaryPostfactor`.
         """
+        assert(dense_rep), "LindbladDenseOp must be created with `dense_rep == True`"
         assert(errorgen._evotype == "densitymx"), \
             "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
         #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
@@ -4299,12 +4311,12 @@ class ExponentiatedOp(LinearOperator):
             evotype = op_to_exponentiate._evotype
 
         if evotype == "densitymx":
-            rep = replib.DMOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, dim)
+            rep = replib.DMOpRep_Exponentiated(self.exponentiated_op._rep, self.power, dim)
         elif evotype == "statevec":
-            rep = replib.SVOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, dim)
+            rep = replib.SVOpRep_Exponentiated(self.exponentiated_op._rep, self.power, dim)
         elif evotype == "stabilizer":
             nQubits = int(round(_np.log2(dim)))  # "stabilizer" is a unitary-evolution type mode
-            rep = replib.SVOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, nQubits)
+            rep = replib.SVOpRep_Exponentiated(self.exponentiated_op._rep, self.power, nQubits)
         else:
             raise ValueError("Invalid evotype: %s for ExponentiatedOp object" % evotype)
 
@@ -6329,7 +6341,7 @@ class LindbladErrorgen(LinearOperator):
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
         self.hamGens = self.otherGens = None
-        self.Lmx = self.err_gen_mx = None
+        self.Lmx = None
 
         if evotype == "densitymx":
             self.hamGens, self.otherGens = self._init_generators(dim)
@@ -6361,7 +6373,7 @@ class LindbladErrorgen(LinearOperator):
                                             _np.ascontiguousarray(indices, _np.int64),
                                             _np.ascontiguousarray(indptr, _np.int64))
             else:
-                rep = replib.DMOpRep_Dense(_np.ascontiguousarray(self.err_gen_mx, 'd'))                
+                rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.zeros((dim, dim), 'd')))
 
         else:  # Term-based evolution
 
@@ -7100,8 +7112,9 @@ class LindbladErrorgen(LinearOperator):
             Uinv = S.get_transform_matrix_inverse()
 
             #conjugate Lindbladian exponent by U:
-            self.err_gen_mx = _mt.safedot(Uinv, _mt.safedot(self.err_gen_mx, U))
-            self._set_params_from_matrix(self.err_gen_mx, truncate=True)
+            err_gen_mx = self.tosparse() if self.sparse else self.todense()
+            err_gen_mx = _mt.safedot(Uinv, _mt.safedot(err_gen_mx, U))
+            self._set_params_from_matrix(err_gen_mx, truncate=True)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -7141,14 +7154,15 @@ class LindbladErrorgen(LinearOperator):
            isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
-
+            err_gen_mx = self.tosparse() if self.sparse else self.todense()
+            
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
-                self.err_gen_mx = _mt.safedot(Uinv, self.err_gen_mx)
+                err_gen_mx = _mt.safedot(Uinv, err_gen_mx)
             else:
-                self.err_gen_mx = _mt.safedot(self.err_gen_mx, U)
+                err_gen_mx = _mt.safedot(err_gen_mx, U)
 
-            self._set_params_from_matrix(self.err_gen_mx, truncate=True)
+            self._set_params_from_matrix(err_gen_mx, truncate=True)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances

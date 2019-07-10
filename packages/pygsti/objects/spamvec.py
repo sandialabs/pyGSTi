@@ -828,24 +828,42 @@ class DenseSPAMVec(SPAMVec):
 
     def __init__(self, vec, evotype, prep_or_effect):
         """ Initialize a new SPAM Vector """
+        dtype = complex if evotype == "statevec" else 'd'
+        if isinstance(vec, _ProtectedArray):  # Special case for handling ProtectedArrays
+            protected = vec
+            vec = vec.base.view()
+            vec.shape = (vec.size,)  # get 1D view of vec b/c spam vecs have (N,1) shape but reps just hold 1D array
+            assert(vec.flags['C_CONTIGUOUS']), \
+                "ProtectedArrays given to initialize a DenseSPAMVec must hold contiguous data!"
+            assert(vec.dtype == _np.dtype(dtype)), "ProtectedArray has wrong dtype! (expected %s)" % str(dtype)
+        else:
+            protected = None
+            vec = _np.ascontiguousarray(vec[:, 0], dtype) # b/c spam vecs have (N,1) shape but reps just hold 1D array
 
         if prep_or_effect == "prep":
             if evotype == "statevec":
                 rep = replib.SVStateRep(vec)
             elif evotype == "densitymx":
                 rep = replib.DMStateRep(vec)
-            raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
+            else:
+                raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
         elif prep_or_effect == "effect":
             if evotype == "statevec":
                 rep = replib.SVEffectRep_Dense(vec)
-            elif self._evotype == "densitymx":
+            elif evotype == "densitymx":
                 rep = replib.DMEffectRep_Dense(vec)
-            raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
+            else:
+                raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
         else:
             raise ValueError("Invalid `prep_or_effect` argument: %s" % prep_or_effect)
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
-        self.base = rep.base
+        if protected is not None:
+            assert(rep.base.base is protected.base.base), "Internal memory referencing error"
+            #two .bases here: 1st gets to numpy array of Rep or ProtectedArray; 2nd accesses ndarray's "base" memory ptr
+            self.base = protected
+        else:
+            self.base = rep.base
 
     def todense(self, scratch=None):
         """
@@ -853,7 +871,7 @@ class DenseSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         #don't use scratch since we already have memory allocated
-        return _np.asarray(self.base[:, 0])
+        return _np.asarray(self.base[:])
         # *must* be a numpy array for Cython arg conversion
 
     def __copy__(self):
@@ -1007,7 +1025,7 @@ class FullSPAMVec(DenseSPAMVec):
         vec = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
-        self.base[:, :] = vec
+        self.base[:] = vec[:, 0]
         self.dirty = True
 
     def num_params(self):
@@ -1050,9 +1068,9 @@ class FullSPAMVec(DenseSPAMVec):
         None
         """
         if self._evotype == "statevec":
-            self.base[:, 0] = v[0:self.dim] + 1j * v[self.dim:]
+            self.base[:] = v[0:self.dim] + 1j * v[self.dim:]
         else:
-            self.base[:, 0] = v
+            self.base[:] = v
         self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1121,9 +1139,9 @@ class TPSPAMVec(DenseSPAMVec):
         if not _np.isclose(vector[0, 0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
-        DenseSPAMVec.__init__(self, _ProtectedArray(
-            vector, indicesToProtect=(0, 0)), "densitymx", "prep")
-        assert(isinstance(self.base, _ProtectedArray)), "ascontiguousarray seems to have changed array type!"
+        pa = _ProtectedArray(_np.ascontiguousarray(vector), indicesToProtect=(0, 0))
+        DenseSPAMVec.__init__(self, pa, "densitymx", "prep")
+        assert(isinstance(self.base, _ProtectedArray))
 
     def set_value(self, vec):
         """
@@ -1147,7 +1165,7 @@ class TPSPAMVec(DenseSPAMVec):
         if not _np.isclose(vec[0, 0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
-        self.base[1:, :] = vec[1:, :]
+        self.base[1:] = vec[1:, 0]
         self.dirty = True
 
     def num_params(self):
@@ -1186,8 +1204,8 @@ class TPSPAMVec(DenseSPAMVec):
         -------
         None
         """
-        assert(_np.isclose(self.base[0, 0], (self.dim)**-0.25))
-        self.base[1:, 0] = v
+        assert(_np.isclose(self.base[0], (self.dim)**-0.25))
+        self.base[1:] = v
         self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1262,7 +1280,7 @@ class ComplementSPAMVec(DenseSPAMVec):
 
     def _construct_vector(self):
         self.base.flags.writeable = True
-        self.base[:, :] = self.identity - sum(self.other_vecs)
+        self.base[:] = self.identity[:,0] - sum(self.other_vecs)[:,0]
         self.base.flags.writeable = False
 
     def num_params(self):
@@ -1472,7 +1490,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         vec = _np.real(vec)
 
         self.base.flags.writeable = True
-        self.base[:, :] = vec[:, None]  # so shape is (dim,1) - the convention for spam vectors
+        self.base[:] = vec[:]
         self.base.flags.writeable = False
 
     def set_value(self, vec):
@@ -1682,7 +1700,7 @@ class TensorProdSPAMVec(SPAMVec):
         if evotype in ("statevec", "densitymx") and typ == "effect":  # types that require fast kronecker prods
             max_factor_dim = max(fct.dim for fct in factors)
             self._fast_kron_array = _np.ascontiguousarray(
-                _np.empty((len(factors), max_factor_dim), complex if self._evotype == "statevec" else 'd'))
+                _np.empty((len(factors), max_factor_dim), complex if evotype == "statevec" else 'd'))
             self._fast_kron_factordims = _np.ascontiguousarray(
                 _np.array([fct.dim for fct in factors], _np.int64))
         else:  # "stabilizer", "svterm", "cterm"
