@@ -58,6 +58,8 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMEffectCRep_TensorProd(double*, INT*, INT, INT, INT) except +
         double probability(DMStateCRep* state)
         INT _dim
+        INT _nfactors
+        INT _max_factor_dim
 
     cdef cppclass DMEffectCRep_Computational(DMEffectCRep):
         DMEffectCRep_Computational() except +
@@ -70,6 +72,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMEffectCRep_Errgen(DMOpCRep*, DMEffectCRep*, INT, INT) except +
         double probability(DMStateCRep* state)
         INT _dim
+        INT _errgen_id
 
     cdef cppclass DMOpCRep:
         DMOpCRep(INT) except +
@@ -88,6 +91,10 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMOpCRep_Embedded(DMOpCRep*, INT*, INT*, INT*, INT*, INT, INT, INT, INT, INT) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
+        INT _nComponents
+        INT _embeddedDim
+        INT _iActiveBlock
+        INT _nBlocks
 
     cdef cppclass DMOpCRep_Composed(DMOpCRep):
         DMOpCRep_Composed(vector[DMOpCRep*], INT) except +
@@ -111,13 +118,17 @@ cdef extern from "fastreps.h" namespace "CReps":
                             INT* unitarypost_indptr, INT unitarypost_nnz) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
+        double _mu
+        double _eta
+        INT _m_star
+        INT _s
 
     cdef cppclass DMOpCRep_Sparse(DMOpCRep):
         DMOpCRep_Sparse(double* A_data, INT* A_indices, INT* A_indptr,
                           INT nnz, INT dim) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
-
+        
 
     # State vector (SV) propagation classes
     cdef cppclass SVStateCRep:
@@ -149,6 +160,8 @@ cdef extern from "fastreps.h" namespace "CReps":
         double probability(SVStateCRep* state)
         double complex amplitude(SVStateCRep* state)
         INT _dim
+        INT _nfactors
+        INT _max_factor_dim
 
     cdef cppclass SVEffectCRep_Computational(SVEffectCRep):
         SVEffectCRep_Computational() except +
@@ -174,6 +187,10 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVOpCRep_Embedded(SVOpCRep*, INT*, INT*, INT*, INT*, INT, INT, INT, INT, INT) except +
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
+        INT _nComponents
+        INT _embeddedDim
+        INT _iActiveBlock
+        INT _nBlocks
 
     cdef cppclass SVOpCRep_Composed(SVOpCRep):
         SVOpCRep_Composed(vector[SVOpCRep*], INT) except +
@@ -365,6 +382,9 @@ cdef class DMStateRep: #(StateRep):
         #self.c_state = new DMStateCRep(<double*>np_cbuf.data,<INT>np_cbuf.shape[0],<bool>0)
         self.c_state = new DMStateCRep(<double*>data.data,<INT>data.shape[0],<bool>0)
 
+    def __reduce__(self):
+        return (DMStateRep, (self.base,))    
+
     def todense(self):
         return self.data_ref
 
@@ -397,12 +417,16 @@ cdef class DMEffectRep:
 
 
 cdef class DMEffectRep_Dense(DMEffectRep):
-    cdef np.ndarray data_ref
+    cdef public np.ndarray base
 
     def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
-        self.data_ref = data # holds reference to data
+        self.base = data # holds reference to data
         self.c_effect = new DMEffectCRep_Dense(<double*>data.data,
                                                <INT>data.shape[0])
+
+    def __reduce__(self):
+        return (DMEffectRep_Dense, (self.base,))    
+
 
 cdef class DMEffectRep_TensorProd(DMEffectRep):
     cdef np.ndarray data_ref1
@@ -417,8 +441,17 @@ cdef class DMEffectRep_TensorProd(DMEffectRep):
                                                     <INT*>factor_dims.data,
                                                     nfactors, max_factor_dim, dim)
 
+    def __reduce__(self):
+        return (DMEffectRep_TensorProd,
+                (self.data_ref1, self.data_ref2,
+                 (<DMEffectCRep_TensorProd*>self.c_effect)._nfactors,
+                 (<DMEffectCRep_TensorProd*>self.c_effect)._max_factor_dim,
+                 self.c_effect._dim
+                ))
+
 
 cdef class DMEffectRep_Computational(DMEffectRep):
+    cdef np.ndarray data_ref
 
     def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
         # cdef INT dim = 4**zvals.shape[0] -- just send as argument
@@ -429,7 +462,11 @@ cdef class DMEffectRep_Computational(DMEffectRep):
         for i in range(nfactors):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
+        self.data_ref = zvals
         self.c_effect = new DMEffectCRep_Computational(nfactors, zvals_int, abs_elval, dim)
+
+    def __reduce__(self):
+        return (DMEffectRep_Computational, (self.data_ref, self.c_effect._dim))
 
         
 cdef class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
@@ -444,12 +481,17 @@ cdef class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
                                                 effect_rep.c_effect,
                                                 <INT>errgen_id, dim)
 
+    def __reduce__(self):
+        return (DMEffectRep_Errgen, (self.errgen, self.effect,
+                                     (<DMEffectCRep_Errgen*>self.c_effect)._errgen_id))
+
+
 cdef class DMOpRep:
     cdef DMOpCRep* c_gate
 
     def __cinit__(self):
         pass # self.c_gate = NULL ?
-    
+
     def __dealloc__(self):
         del self.c_gate
 
@@ -493,6 +535,10 @@ cdef class DMOpRep_Dense(DMOpRep):
         #print("PYX dense gate constructed w/dim ",data.shape[0])
         self.c_gate = new DMOpCRep_Dense(<double*>data.data,
                                            <INT>data.shape[0])
+
+    def __reduce__(self):
+        return (DMOpRep_Dense, (self.base,))    
+
     def __str__(self):
         s = ""
         cdef DMOpCRep_Dense* my_cgate = <DMOpCRep_Dense*>self.c_gate # b/c we know it's a _Dense gate...
@@ -510,6 +556,8 @@ cdef class DMOpRep_Embedded(DMOpRep):
     cdef np.ndarray data_ref2
     cdef np.ndarray data_ref3
     cdef np.ndarray data_ref4
+    cdef np.ndarray data_ref5
+    cdef np.ndarray data_ref6
     cdef DMOpRep embedded
 
     def __cinit__(self, DMOpRep embedded_op,
@@ -561,12 +609,23 @@ cdef class DMOpRep_Embedded(DMOpRep):
         self.data_ref2 = numBasisEls_noop_blankaction
         self.data_ref3 = baseinds
         self.data_ref4 = blocksizes
+        self.data_ref5 = numBasisEls
+        self.data_ref6 = actionInds
         self.embedded = embedded_op # needed to prevent garbage collection?
         self.c_gate = new DMOpCRep_Embedded(embedded_op.c_gate,
                                               <INT*>noop_incrementers.data, <INT*>numBasisEls_noop_blankaction.data,
                                               <INT*>baseinds.data, <INT*>blocksizes.data,
                                               embedded_dim, nComponentsInActiveBlock,
                                               iActiveBlock, nBlocks, dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Embedded, (self.embedded,
+                                   self.data_ref5, self.data_ref6, self.data_ref4,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._embeddedDim,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._nComponents,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._iActiveBlock,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._nBlocks,
+                                   self.c_gate._dim))
 
 
 cdef class DMOpRep_Composed(DMOpRep):
@@ -581,6 +640,9 @@ cdef class DMOpRep_Composed(DMOpRep):
             gate_creps[i] = (<DMOpRep?>factor_op_reps[i]).c_gate
         self.c_gate = new DMOpCRep_Composed(gate_creps, dim)
 
+    def __reduce__(self):
+        return (DMOpRep_Composed, (self.list_of_factors, self.c_gate._dim))
+
 
 cdef class DMOpRep_Sum(DMOpRep):
     cdef object list_of_factors # list of DMOpRep objs?
@@ -594,6 +656,9 @@ cdef class DMOpRep_Sum(DMOpRep):
             factor_creps[i] = (<DMOpRep?>factor_reps[i]).c_gate
         self.c_gate = new DMOpCRep_Sum(factor_creps, dim)
 
+    def __reduce__(self):
+        return (DMOpRep_Sum, (self.list_of_factors, self.c_gate._dim))
+
 
 cdef class DMOpRep_Exponentiated(DMOpRep):
     cdef DMOpRep exponentiated_op
@@ -603,6 +668,9 @@ cdef class DMOpRep_Exponentiated(DMOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         self.c_gate = new DMOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Exponentiated, (self.exponentiated_op, self.power, self.c_gate._dim))
 
 
 cdef class DMOpRep_Lindblad(DMOpRep):
@@ -628,6 +696,15 @@ cdef class DMOpRep_Lindblad(DMOpRep):
                                               <INT*>unitarypost_indices.data,
                                               <INT*>unitarypost_indptr.data, upost_nnz)
 
+    def __reduce__(self):
+        return (DMOpRep_Lindblad, (self.data_ref1,
+                                   (<DMOpCRep_Lindblad*>self.c_gate)._mu,
+                                   (<DMOpCRep_Lindblad*>self.c_gate)._eta,
+                                   (<DMOpCRep_Lindblad*>self.c_gate)._m_star,
+                                   (<DMOpCRep_Lindblad*>self.c_gate)._s,
+                                   self.data_ref2, self.data_ref3, self.data_ref4))
+
+    
 cdef class DMOpRep_Sparse(DMOpRep):
     cdef public np.ndarray data
     cdef public np.ndarray indices
@@ -644,15 +721,21 @@ cdef class DMOpRep_Sparse(DMOpRep):
         self.c_gate = new DMOpCRep_Sparse(<double*>A_data.data, <INT*>A_indices.data,
                                              <INT*>A_indptr.data, nnz, dim);
 
+    def __reduce__(self):
+        return (DMOpRep_Sparse, (self.data, self.indices, self.indptr))
+
 
 # State vector (SV) propagation wrapper classes
 cdef class SVStateRep: #(StateRep):
     cdef SVStateCRep* c_state
-    cdef np.ndarray data_ref
+    cdef public np.ndarray base
 
     def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data):
-        self.data_ref = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+        self.base = data # holds reference to data so it doesn't get garbage collected - or could copy=true
         self.c_state = new SVStateCRep(<double complex*>data.data,<INT>data.shape[0],<bool>0)
+
+    def __reduce__(self):
+        return (SVStateRep, (self.base,))
 
     @property
     def dim(self):
@@ -683,12 +766,16 @@ cdef class SVEffectRep:
 
 
 cdef class SVEffectRep_Dense(SVEffectRep):
-    cdef np.ndarray data_ref
+    cdef public np.ndarray base
 
     def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data):
-        self.data_ref = data # holds reference to data
+        self.base = data # holds reference to data
         self.c_effect = new SVEffectCRep_Dense(<double complex*>data.data,
                                                <INT>data.shape[0])
+
+    def __reduce__(self):
+        return (SVEffectRep_Dense, (self.base,))
+
 
 cdef class SVEffectRep_TensorProd(SVEffectRep):
     cdef np.ndarray data_ref1
@@ -703,9 +790,16 @@ cdef class SVEffectRep_TensorProd(SVEffectRep):
                                                     <INT*>factor_dims.data,
                                                     nfactors, max_factor_dim, dim)
 
+    def __reduce__(self):
+        return (SVEffectRep_TensorProd, (self.data_ref1, self.data_ref2,
+                                         (<SVEffectCRep_TensorProd*>self.c_effect)._nfactors,
+                                         (<SVEffectCRep_TensorProd*>self.c_effect)._max_factor_dim,
+                                         self.c_effect._dim))
+
         
 cdef class SVEffectRep_Computational(SVEffectRep):
-
+    cdef np.ndarray data_ref;
+    
     def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
         # cdef INT dim = 2**zvals.shape[0] -- just send as argument
         cdef INT nfactors = zvals.shape[0]
@@ -715,9 +809,12 @@ cdef class SVEffectRep_Computational(SVEffectRep):
         for i in range(nfactors):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
+        self.data_ref = zvals
         self.c_effect = new SVEffectCRep_Computational(nfactors, zvals_int, dim)
 
-
+    def __reduce__(self):
+        return (SVEffectRep_Computational, (self.data_ref, self.c_effect._dim))
+                                         
 
 cdef class SVOpRep:
     cdef SVOpCRep* c_gate
@@ -743,13 +840,16 @@ cdef class SVOpRep:
 
         
 cdef class SVOpRep_Dense(SVOpRep):
-    cdef np.ndarray data_ref
+    cdef public np.ndarray base
 
     def __cinit__(self, np.ndarray[np.complex128_t, ndim=2, mode='c'] data):
-        self.data_ref = data
+        self.base = data
         #print("PYX dense gate constructed w/dim ",data.shape[0])
         self.c_gate = new SVOpCRep_Dense(<double complex*>data.data,
                                            <INT>data.shape[0])
+
+    def __reduce__(self):
+        return (SVOpRep_Dense, (self.base,))
 
     def __str__(self):
         s = ""
@@ -768,8 +868,9 @@ cdef class SVOpRep_Embedded(SVOpRep):
     cdef np.ndarray data_ref2
     cdef np.ndarray data_ref3
     cdef np.ndarray data_ref4
+    cdef np.ndarray data_ref5
+    cdef np.ndarray data_ref6
     cdef SVOpRep embedded
-
 
     def __cinit__(self, SVOpRep embedded_op,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] numBasisEls,
@@ -820,12 +921,23 @@ cdef class SVOpRep_Embedded(SVOpRep):
         self.data_ref2 = numBasisEls_noop_blankaction
         self.data_ref3 = baseinds
         self.data_ref4 = blocksizes
+        self.data_ref5 = numBasisEls
+        self.data_ref6 = actionInds
         self.embedded = embedded_op # needed to prevent garbage collection?
         self.c_gate = new SVOpCRep_Embedded(embedded_op.c_gate,
                                               <INT*>noop_incrementers.data, <INT*>numBasisEls_noop_blankaction.data,
                                               <INT*>baseinds.data, <INT*>blocksizes.data,
                                               embedded_dim, nComponentsInActiveBlock,
                                               iActiveBlock, nBlocks, dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Embedded, (self.embedded,
+                                   self.data_ref5, self.data_ref6, self.data_ref4,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._embeddedDim,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._nComponents,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._iActiveBlock,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._nBlocks,
+                                   self.c_gate._dim))
 
 
 cdef class SVOpRep_Composed(SVOpRep):
@@ -840,6 +952,9 @@ cdef class SVOpRep_Composed(SVOpRep):
             gate_creps[i] = (<SVOpRep?>factor_op_reps[i]).c_gate
         self.c_gate = new SVOpCRep_Composed(gate_creps, dim)
 
+    def __reduce__(self):
+        return (SVOpRep_Composed, (self.list_of_factors, self.c_gate._dim))
+
 
 cdef class SVOpRep_Sum(SVOpRep):
     cdef object list_of_factors # list of SVOpRep objs?
@@ -853,6 +968,10 @@ cdef class SVOpRep_Sum(SVOpRep):
             factor_creps[i] = (<SVOpRep?>factor_reps[i]).c_gate
         self.c_gate = new SVOpCRep_Sum(factor_creps, dim)
 
+    def __reduce__(self):
+        return (SVOpRep_Sum, (self.list_of_factors, self.c_gate._dim))
+
+
 cdef class SVOpRep_Exponentiated(SVOpRep):
     cdef SVOpRep exponentiated_op
     cdef INT power
@@ -862,6 +981,8 @@ cdef class SVOpRep_Exponentiated(SVOpRep):
         self.power = power
         self.c_gate = new SVOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
 
+    def __reduce__(self):
+        return (SVOpRep_Exponentiated, (self.exponentiated_op, self.power, self.c_gate._dim))
 
         
 # Stabilizer state (SB) propagation wrapper classes
@@ -882,6 +1003,9 @@ cdef class SBStateRep: #(StateRep):
         self.c_state = new SBStateCRep(<INT*>smatrix.data,<INT*>pvectors.data,
                                        <double complex*>amps.data, namps, n)
 
+    def __reduce__(self):
+        return (SBStateRep, (self.smatrix, self.pvectors, self.amps))
+        
     @property
     def nqubits(self):
         return self.c_state._n
@@ -913,6 +1037,9 @@ cdef class SBEffectRep:
         self.data_ref = zvals
         self.c_effect = new SBEffectCRep(<INT*>zvals.data,
                                          <INT>zvals.shape[0])
+
+    def __reduce__(self):
+        return (SBEffectRep, (self.data_ref,))
 
     def __dealloc__(self):
         del self.c_effect # check for NULL?
@@ -978,6 +1105,9 @@ cdef class SBOpRep_Embedded(SBOpRep):
         self.c_gate = new SBOpCRep_Embedded(embedded_op.c_gate, n,
                                               <INT*>qubits.data, <INT>qubits.shape[0])
 
+    def __reduce__(self):
+        return (SBOpRep_Embedded, (self.embedded, self.c_gate._n, self.data_ref))
+
 
 cdef class SBOpRep_Composed(SBOpRep):
     cdef object list_of_factors # list of SBOpRep objs?
@@ -990,6 +1120,9 @@ cdef class SBOpRep_Composed(SBOpRep):
         for i in range(nfactors):
             gate_creps[i] = (<SBOpRep?>factor_op_reps[i]).c_gate
         self.c_gate = new SBOpCRep_Composed(gate_creps, n)
+
+    def __reduce__(self):
+        return (SBOpRep_Composed, (self.list_of_factors, self.c_gate._n))
 
 
 cdef class SBOpRep_Sum(SBOpRep):
@@ -1004,6 +1137,10 @@ cdef class SBOpRep_Sum(SBOpRep):
             factor_creps[i] = (<SBOpRep?>factor_reps[i]).c_gate
         self.c_gate = new SBOpCRep_Sum(factor_creps, n)
 
+    def __reduce__(self):
+        return (SBOpRep_Sum, (self.list_of_factors, self.c_gate._n))
+
+
 cdef class SBOpRep_Exponentiated(SBOpRep):
     cdef SBOpRep exponentiated_op
     cdef INT power
@@ -1013,6 +1150,8 @@ cdef class SBOpRep_Exponentiated(SBOpRep):
         self.power = power
         self.c_gate = new SBOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, n)
 
+    def __reduce__(self):
+        return (SBOpRep_Exponentiated, (self.exponentiated_op, self.power, self.c_gate._n))
 
 
 cdef class SBOpRep_Clifford(SBOpRep):
@@ -1040,6 +1179,10 @@ cdef class SBOpRep_Clifford(SBOpRep):
         self.c_gate = new SBOpCRep_Clifford(<INT*>smatrix.data, <INT*>svector.data, <double complex*>unitary.data,
                                               <INT*>smatrix_inv.data, <INT*>svector_inv.data,
                                               <double complex*>self.data_ref6.data, n)
+
+    def __reduce__(self):
+        return (SBOpRep_Clifford, (self.data_ref1, self.data_ref2, self.data_ref4, self.data_ref5, self.data_ref3)) 
+
 
 # Other classes
 cdef class PolyRep:
