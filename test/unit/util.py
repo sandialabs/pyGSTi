@@ -53,6 +53,11 @@ def needs_deap(fn):
     )
 
 
+def needs_matplotlib(fn):
+    """Shortcut decorator for skipping tests that require matplotlib"""
+    return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")
+
+
 def version_label():
     """Get the label used internally for this python version.
 
@@ -339,6 +344,7 @@ class BaseCase(unittest.TestCase):
 
 class Namespace(object):
     """Namespace for package-level fixtures"""
+
     def __init__(self, **kwargs):
         self.__patched_module__ = None
         for k, v in kwargs.items():
