@@ -133,7 +133,8 @@ def convert(spamvec, toType, basis, extra=None):
         if isinstance(spamvec, FullSPAMVec):
             return spamvec  # no conversion necessary
         else:
-            return FullSPAMVec(spamvec.todense())
+            typ = spamvec._prep_or_effect if isinstance(spamvec, SPAMVec) else "prep"
+            return FullSPAMVec(spamvec.todense(), typ=typ)
 
     elif toType == "TP":
         if isinstance(spamvec, TPSPAMVec):
@@ -153,12 +154,13 @@ def convert(spamvec, toType, basis, extra=None):
         if isinstance(spamvec, StaticSPAMVec):
             return spamvec  # no conversion necessary
         else:
-            return StaticSPAMVec(spamvec)
+            typ = spamvec._prep_or_effect if isinstance(spamvec, SPAMVec) else "prep"
+            return StaticSPAMVec(spamvec, typ=typ)
 
     elif toType == "static unitary":
         dmvec = _bt.change_basis(spamvec.todense(), basis, 'std')
         purevec = _gt.dmvec_to_state(dmvec)
-        return StaticSPAMVec(purevec, "statevec")
+        return StaticSPAMVec(purevec, "statevec", spamvec._prep_or_effect)
 
     elif _gt.is_valid_lindblad_paramtype(toType):
 
@@ -171,9 +173,10 @@ def convert(spamvec, toType, basis, extra=None):
         nQubits = _np.log2(spamvec.dim) / 2.0
         bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+        typ = spamvec._prep_or_effect if isinstance(spamvec, SPAMVec) else "prep"
 
         return LindbladSPAMVec.from_spamvec_obj(
-            spamvec, "prep", toType, None, proj_basis, basis,
+            spamvec, typ, toType, None, proj_basis, basis,
             truncate=True, lazy=True)
 
     elif toType == "clifford":
@@ -197,16 +200,16 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
     if vec._evotype == new_evotype and vec.num_params() == 0:
         return vec  # no conversion necessary
     if new_evotype == "densitymx":
-        return StaticSPAMVec(vec.todense(), "densitymx")
+        return StaticSPAMVec(vec.todense(), "densitymx", typ)
     if new_evotype in ("svterm", "cterm"):
         if isinstance(vec, ComputationalSPAMVec):  # special case when conversion is easy
-            return ComputationalSPAMVec(vec._zvals, new_evotype)
+            return ComputationalSPAMVec(vec._zvals, new_evotype, typ)
         elif vec._evotype == "densitymx":
             # then try to extract a (static) pure state from vec wth
             # evotype 'statevec' or 'stabilizer' <=> 'svterm', 'cterm'
             if isinstance(vec, DenseSPAMVec):
                 dmvec = _bt.change_basis(vec, mxBasis, 'std')
-                purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec), 'statevec')
+                purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec), 'statevec', typ)
             elif isinstance(vec, PureStateSPAMVec):
                 purestate = vec.pure_state_vec  # evotype 'statevec'
             else:
@@ -218,7 +221,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
                 else:  # type == "effect"
                     purestate = StabilizerEffectVec.from_dense_purevec(purestate.todense())
 
-            return PureStateSPAMVec(purestate, new_evotype, mxBasis)
+            return PureStateSPAMVec(purestate, new_evotype, mxBasis, typ)
 
     raise ValueError("Could not convert %s (evotype %s) to %s w/0 params!" %
                      (str(type(vec)), vec._evotype, new_evotype))
@@ -2510,13 +2513,13 @@ class LindbladSPAMVec(SPAMVec):
         """
 
         if not isinstance(spamvec, SPAMVec):
-            spamvec = StaticSPAMVec(spamvec)  # assume spamvec is just a vector
+            spamvec = StaticSPAMVec(spamvec, typ=typ)  # assume spamvec is just a vector
 
         if purevec is None:
             purevec = spamvec  # right now, we don't try to extract a "closest pure vec"
             # to spamvec - below will fail if spamvec isn't pure.
         elif not isinstance(purevec, SPAMVec):
-            purevec = StaticSPAMVec(purevec)  # assume spamvec is just a vector
+            purevec = StaticSPAMVec(purevec, typ=typ)  # assume spamvec is just a vector
 
         #Break paramType in to a "base" type and an evotype
         from .operation import LindbladOp as _LPGMap
@@ -2634,9 +2637,9 @@ class LindbladSPAMVec(SPAMVec):
         assert(pureVec is not None), "Must supply `pureVec`!"  # since there's no good default?
 
         if not isinstance(spamVec, SPAMVec):
-            spamVec = StaticSPAMVec(spamVec, evotype)  # assume spamvec is just a vector
+            spamVec = StaticSPAMVec(spamVec, evotype, typ)  # assume spamvec is just a vector
         if not isinstance(pureVec, SPAMVec):
-            pureVec = StaticSPAMVec(pureVec, evotype)  # assume spamvec is just a vector
+            pureVec = StaticSPAMVec(pureVec, evotype, typ)  # assume spamvec is just a vector
         d2 = pureVec.dim
 
         #Determine whether we're using sparse bases or not
@@ -2749,7 +2752,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         #Need a dimension for error map construction (basisdict could be completely empty)
         if not isinstance(pureVec, SPAMVec):
-            pureVec = StaticSPAMVec(pureVec, evotype)  # assume spamvec is just a vector
+            pureVec = StaticSPAMVec(pureVec, evotype, typ)  # assume spamvec is just a vector
         d2 = pureVec.dim
 
         from .operation import LindbladOp as _LPGMap
@@ -2791,7 +2794,7 @@ class LindbladSPAMVec(SPAMVec):
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if not isinstance(pureVec, SPAMVec):
-            pureVec = StaticSPAMVec(pureVec, evotype)  # assume spamvec is just a vector
+            pureVec = StaticSPAMVec(pureVec, evotype, typ)  # assume spamvec is just a vector
 
         assert(pureVec._evotype == evotype), \
             "`pureVec` evotype must match `errormap` ('%s' != '%s')" % (pureVec._evotype, evotype)
@@ -3517,10 +3520,10 @@ class ComputationalSPAMVec(SPAMVec):
         if order == 0:  # only 0-th order term exists
             if self._evotype == "svterm":
                 tt = "dense"
-                purevec = ComputationalSPAMVec(self._zvals, "statevec")
+                purevec = ComputationalSPAMVec(self._zvals, "statevec", self._prep_or_effect)
             elif self._evotype == "cterm":
                 tt = "clifford"
-                purevec = ComputationalSPAMVec(self._zvals, "stabilizer")
+                purevec = ComputationalSPAMVec(self._zvals, "stabilizer", self._prep_or_effect)
             else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
             coeff = _Polynomial({(): 1.0})

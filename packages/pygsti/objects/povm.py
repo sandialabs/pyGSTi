@@ -875,7 +875,7 @@ class ComputationalBasisPOVM(POVM):
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
-            effect = _sv.ComputationalSPAMVec(outcomes, self._evotype)  # "statevec" or "densitymx"
+            effect = _sv.ComputationalSPAMVec(outcomes, self._evotype, "effect")  # "statevec" or "densitymx"
             effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

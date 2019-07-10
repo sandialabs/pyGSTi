@@ -183,12 +183,12 @@ class OpGaugeGroupElement(GaugeGroupElement):
 
     def get_transform_matrix(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix` """
-        return _np.asarray(self.gate)
+        return self.gate.todense()
 
     def get_transform_matrix_inverse(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
         if self._inv_matrix is None:
-            self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
+            self._inv_matrix = _np.linalg.inv(self.gate.todense())
         return self._inv_matrix
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -268,7 +268,7 @@ class TPGaugeGroupElement(OpGaugeGroupElement):
     def get_transform_matrix_inverse(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
         if self._inv_matrix is None:
-            self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
+            self._inv_matrix = _np.linalg.inv(self.gate.todense())
             self._inv_matrix[0, :] = 0.0  # ensure invers is *exactly* TP
             self._inv_matrix[0, 0] = 1.0  # as otherwise small variations can get amplified
         return self._inv_matrix
