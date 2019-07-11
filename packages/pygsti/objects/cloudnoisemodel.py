@@ -991,7 +991,7 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
         errgen = Composed(termops)
         LindbladOp = _op.LindbladDenseOp if sim_type == "matrix" \
             else _op.LindbladOp
-        return LindbladOp(None, errgen, sparse)
+        return LindbladOp(None, errgen, dense_rep=not sparse)
     else: assert(False)
 
 
