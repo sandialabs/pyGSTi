@@ -2,7 +2,7 @@ import copy
 
 from ..util import BaseCase, unittest
 
-from pygsti.baseobjs.label import Label
+from pygsti.baseobjs.label import Label, CircuitLabel
 from pygsti.tools import symplectic
 from pygsti.objects import circuit, ProcessorSpec
 
@@ -78,6 +78,125 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'], editable=True)
         cnew = circuit.Circuit(c)
         self.assertEqual(cnew, c)
+
+    def test_create_circuitlabel(self):
+        # test automatic creation of "power" subcircuits when needed
+        Gi = circuit.Circuit(None, stringrep='Gi(Gx)^256000', editable=True, expand_subcircuits=False)
+        self.assertTrue(isinstance(Gi.tup[1], CircuitLabel))
+
+        cl = Gi.tup[1]
+        self.assertEqual(str(cl), "Gx^256000")
+        self.assertEqual(cl.components, ('Gx',))
+        self.assertEqual(cl.reps, 256000)
+        self.assertEqual(Gi.tup, ('Gi', CircuitLabel(name='', tupOfLayers=('Gx',),
+                                                     stateSpaceLabels=None, reps=256000)))
+
+    def test_expand_and_factorize_circuitlabel(self):
+        c = circuit.Circuit(None, stringrep='Gi(Gx:1)^2', num_lines=3, editable=True, expand_subcircuits=False)
+        c[1, 0] = "Gx"
+        self.assertEqual(c, ('Gi', (CircuitLabel('', [('Gx', 1)], (1,), 2), ('Gx', 0))))
+
+        c.expand_subcircuits()
+        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)))
+
+        c2 = circuit.Circuit(None, stringrep='GiGxGxGxGxGy', editable=True)
+        self.assertEqual(c2, ('Gi', 'Gx', 'Gx', 'Gx', 'Gx', 'Gy'))
+
+        c2.factorize_repetitions()
+        self.assertEqual(c2, ('Gi', CircuitLabel('', ['Gx'], None, 4), 'Gy'))
+
+    def test_circuitlabel_inclusion(self):
+        c = circuit.Circuit(None, stringrep="GxGx(GyGiGi)^2", expand_subcircuits=False)
+        self.assertTrue('Gi' in c)
+        self.assertEqual(['Gi' in layer for layer in c], [False, False, True])
+
+        c = circuit.Circuit(None, stringrep="Gx:0[Gx:0(Gy:1GiGi)^2]", num_lines=2, expand_subcircuits=False)
+        self.assertTrue('Gi' in c)
+        self.assertEqual(['Gi' in layer for layer in c], [False, True])
+
+    def test_circuit_str_is_updated(self):
+        #Test that .str is updated
+        c = circuit.Circuit(None, stringrep="GxGx(GyGiGi)^2", editable=True)
+        self.assertTrue(c._str is None)
+        self.assertEqual(c.str, "GxGxGyGiGiGyGiGi")
+
+        c.delete_layers(slice(1, 4))
+        self.assertTrue(c._str is None)
+        self.assertEqual(c.str, "GxGiGyGiGi")
+        c.done_editing()
+        self.assertEqual(c.str, "GxGiGyGiGi")
+
+        c = circuit.Circuit('Gi')
+        c = c.copy(editable=True)
+        self.assertEqual(c.str, "Gi")
+        c.replace_gatename_inplace('Gi', 'Gx')
+        self.assertTrue(c._str is None)
+        self.assertEqual(c.str, "Gx")
+
+    def test_circuit_exponentiation(self):
+        circuit.Circuit.default_expand_subcircuits = False
+        try:
+            Gi = circuit.Circuit("Gi")
+            Gy = circuit.Circuit("Gy")
+
+            c = Gi + Gy**2048
+            # more a label test? - but tests circuit exponentiation
+            self.assertEqual(c[1].tonative(), ('', None, 2048, 'Gy'))
+        finally:
+            circuit.Circuit.default_expand_subcircuits = True
+
+    def test_circuit_as_label(self):
+        #test Circuit -> CircuitLabel conversion w/exponentiation
+        c1 = circuit.Circuit(None, stringrep='Gi[][]', num_lines=4, editable=True)
+        c2 = circuit.Circuit(None, stringrep='[Gx:0Gx:1][Gy:1]', num_lines=2)
+
+        #Insert the 2Q circuit c2 into the 4Q circuit c as an exponentiated block (so c2 is exponentiated as well)
+        c = c1.copy()
+        c[1, 0:2] = c2.as_label(nreps=2)
+
+        self.assertEqual(c, ('Gi', ('', (0, 1), 2, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()))
+        self.assertEqual(c.num_layers(), 3)
+        self.assertEqual(c.depth(), 6)
+        # Qubit 0 ---|Gi|-||([Gx:0Gx:1]Gy:1)^2||-| |---
+        # Qubit 1 ---|Gi|-||([Gx:0Gx:1]Gy:1)^2||-| |---
+        # Qubit 2 ---|Gi|-|                    |-| |---
+        # Qubit 3 ---|Gi|-|                    |-| |---
+
+        c = c1.copy()
+        c[1, 0:2] = c2  # special behavior: c2 is converted to a label to cram it into a single layer
+        self.assertEqual(c, ('Gi', ('', (0, 1), 1, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()))
+        self.assertEqual(c.num_layers(), 3)
+        self.assertEqual(c.depth(), 4)
+
+        # Qubit 0 ---|Gi|-||([Gx:0Gx:1]Gy:1)||-| |---
+        # Qubit 1 ---|Gi|-||([Gx:0Gx:1]Gy:1)||-| |---
+        # Qubit 2 ---|Gi|-|                  |-| |---
+        # Qubit 3 ---|Gi|-|                  |-| |---
+
+        c = c1.copy()
+        c[(1, 2), 0:2] = c2  # writes into described block
+        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)))
+        self.assertEqual(c.num_layers(), 3)
+        self.assertEqual(c.depth(), 3)
+        # Qubit 0 ---|Gi|-|Gx|-|  |---
+        # Qubit 1 ---|Gi|-|Gx|-|Gy|---
+        # Qubit 2 ---|Gi|-|  |-|  |---
+        # Qubit 3 ---|Gi|-|  |-|  |---
+
+        c = c1.copy()
+        c[(1, 2), 0:2] = c2.as_label().components  # same as above, but more roundabout
+        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)))
+        self.assertEqual(c.num_layers(), 3)
+        self.assertEqual(c.depth(), 3)
+
+    def test_empty_tuple_makes_idle_layer(self):
+        c = circuit.Circuit(['Gi', Label(())])
+        self.assertEqual(len(c), 2)
+
+    def test_replace_with_idling_line(self):
+        c = circuit.Circuit([('Gcnot', 0, 1)], editable=True)
+        c.replace_with_idling_line(0)
+        self.assertEqual(c, ((),))
 
     def test_to_pythonstr(self):
         mdl = circuit.Circuit(None, stringrep="Gx^3Gy^2GxGz")

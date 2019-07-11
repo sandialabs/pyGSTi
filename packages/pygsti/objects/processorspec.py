@@ -51,8 +51,10 @@ class ProcessorSpec(object):
             The number of qubits in the device.
 
         gate_names : list of strings
-            The names of gates in the device that correspond to standard gates known by pyGSTi.
-            The set of standard gates includes, but is not limited to:
+            The names of gates in the device.  This may include standard gate
+            names known by pyGSTi (see below) or names which appear in the
+            `nonstd_gate_unitaries` argument. The set of standard gate names
+            includes, but is not limited to:
 
             - 'Gi' : the 1Q idle operation
             - 'Gx','Gy','Gz' : 1-qubit pi/2 rotations
@@ -61,17 +63,23 @@ class ProcessorSpec(object):
             - 'Gp' : phase or S-gate (i.e., ((1,0),(0,i)))
             - 'Gcphase','Gcnot','Gswap' : standard 2-qubit gates
 
-            Alternative names can be used for all or any of these gates, but then they must be explicitly defined
-            in the `nonstd_gate_unitaries` dictionary.
+            Alternative names can be used for all or any of these gates, but
+            then they must be explicitly defined in the `nonstd_gate_unitaries`
+            dictionary.  Including any standard names in `nonstd_gate_unitaries`
+            overrides the default (builtin) unitary with the one supplied.
 
         nonstd_gate_unitaries: dictionary of numpy arrays
             A dictionary with keys that are gate names (strings) and values that are numpy arrays specifying
-            quantum gates in terms of unitary matrices. Together with the gates specified in the `gate_names`
-            list, these matrices specify the set of all (target) native gates that can be implemented in the device.
+            quantum gates in terms of unitary matrices. This is an additional "lookup" database of unitaries -
+            to add a gate to this `ProcessorSpec` its names still needs to appear in the `gate_names` list.
+            This dictionary's values specify additional (target) native gates that can be implemented in the device
             as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries
             need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified
             by a key that is the desired name for CNOT, and a value that is the standard 4 x 4 complex matrix for CNOT.
-            All gate names must start with 'G'.
+            All gate names must start with 'G'.  As an advanced behavior, a unitary-matrix-returning function which
+            takes a single argument - a tuple of label arguments - may be given instead of a single matrix to create
+            an operation *factory* which allows continuously-parameterized gates.  This function must also return
+            an empty/dummy unitary when `None` is given as it's argument.
 
         availability : dict, optional
             A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` and the
@@ -109,18 +117,20 @@ class ProcessorSpec(object):
         self.number_of_qubits = nQubits
         self.root_gate_names = gate_names[:]  # copy this list
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy()
-        self.root_gate_names += list(self.nonstd_gate_unitaries.keys())
+        #self.root_gate_names += list(self.nonstd_gate_unitaries.keys())  # must specify all names in `gate_names`
         self.availability = availability.copy()
 
         # Stores the basic unitary matrices defining the gates, as it is convenient to have these easily accessable.
-        self.root_gate_unitaries = nonstd_gate_unitaries.copy()
+        self.root_gate_unitaries = _collections.OrderedDict()
         std_gate_unitaries = _itgs.get_standard_gatename_unitaries()
         for gname in gate_names:
-            try:
+            if gname in nonstd_gate_unitaries:
+                self.root_gate_unitaries[gname] = nonstd_gate_unitaries[gname]
+            elif gname in std_gate_unitaries:
                 self.root_gate_unitaries[gname] = std_gate_unitaries[gname]
-            except:
+            else:
                 raise ValueError(
-                    str(gname) + " is not a valid 'standard' gate name, so should not be an element of `gate_names`!")
+                    str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
         # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.
         if qubit_labels is None:
@@ -243,25 +253,26 @@ class ProcessorSpec(object):
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto', 'map')), "Clifford model must use 'map' simulation type"
-            model = _LocalNoiseModel.build_standard(self.number_of_qubits,
-                                                    self.root_gate_names,
-                                                    self.nonstd_gate_unitaries,
-                                                    self.availability,
-                                                    self.qubit_labels,
-                                                    parameterization='clifford',
-                                                    sim_type=sim_type,
-                                                    on_construction_error='warn',  # *drop* gates that aren't cliffords
-                                                    independent_gates=False,
-                                                    ensure_composed_gates=False)  # change these? add `geometry`?
+            model = _LocalNoiseModel.build_from_parameterization(
+                self.number_of_qubits,
+                self.root_gate_names,
+                self.nonstd_gate_unitaries, None,
+                self.availability,
+                self.qubit_labels,
+                parameterization='clifford',
+                sim_type=sim_type,
+                on_construction_error='warn',  # *drop* gates that aren't cliffords
+                independent_gates=False,
+                ensure_composed_gates=False)  # change these? add `geometry`?
 
         elif model_name in ('target', 'Target', 'static', 'TP', 'full'):
             param = model_name if (parameterization == 'auto') \
                 else parameterization
             if param in ('target', 'Target'): param = 'static'  # special case for 'target' model
 
-            model = _LocalNoiseModel.build_standard(
+            model = _LocalNoiseModel.build_from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability,
+                self.nonstd_gate_unitaries, None, self.availability,
                 self.qubit_labels, parameterization=param, sim_type=sim_type,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
 
@@ -269,9 +280,9 @@ class ProcessorSpec(object):
             if parameterization == 'auto':
                 raise ValueError(
                     "Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
-            model = _LocalNoiseModel.build_standard(
+            model = _LocalNoiseModel.build_from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability,
+                self.nonstd_gate_unitaries, None, self.availability,
                 self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
 
@@ -355,12 +366,14 @@ class ProcessorSpec(object):
             # Look to see if we have a CNOT gate in the model (with any name).
             cnot_name = None
             for gn in self.root_gate_names:
+                if callable(self.root_gate_unitaries[gn]): continue  # can't pre-process factories
                 if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn], 'CNOT'):
                     cnot_name = gn
                     break
 
             H_name = None
             for gn in self.root_gate_names:
+                if callable(self.root_gate_unitaries[gn]): continue  # can't pre-process factories
                 if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn], 'H'):
                     H_name = gn
                     break
@@ -369,6 +382,7 @@ class ProcessorSpec(object):
             # to find a gate that is Pauli-equivalent to Hadamard.
             if H_name is None and compile_type == 'paulieq':
                 for gn in self.root_gate_names:
+                    if callable(self.root_gate_unitaries[gn]): continue  # can't pre-process factories
                     if _symp.unitary_is_a_clifford(self.root_gate_unitaries[gn]):
                         if _itgs.is_gate_pauli_equivalent_to_this_standard_unitary(self.root_gate_unitaries[gn], 'H'):
                             H_name = gn
@@ -386,6 +400,7 @@ class ProcessorSpec(object):
             else:
                 cphase_name = None
                 for gn in self.root_gate_names:
+                    if callable(self.root_gate_unitaries[gn]): continue  # can't pre-process factories
                     if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn], 'CPHASE'):
                         cphase_name = gn
                         break
@@ -453,6 +468,8 @@ class ProcessorSpec(object):
         Id = _np.identity(4, float)
         nontrivial_gname_pauligate_pairs = []
         for gname in self.root_gate_names:
+            if callable(self.root_gate_unitaries[gname]): continue  # can't pre-process factories
+
             # We convert to process matrices, to avoid global phase problems.
             u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
             if u.shape == (4, 4):
@@ -493,10 +510,13 @@ class ProcessorSpec(object):
         None
         """
         for gname1 in self.root_gate_names:
+            if callable(self.root_gate_unitaries[gname1]): continue  # can't pre-process factories
+
             # We convert to process matrices, to avoid global phase problems.
             u1 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname1])
             if _np.shape(u1) != (4, 4):
                 for gname2 in self.root_gate_names:
+                    if callable(self.root_gate_unitaries[gname2]): continue  # can't pre-process factories
                     u2 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname2])
                     if _np.shape(u2) == _np.shape(u1):
                         ucombined = _np.dot(u2, u1)

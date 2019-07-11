@@ -86,6 +86,14 @@ def with_temp_path(filename=None):
     else:
         return decorator
 
+def for_each_case(iterable):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def generator():
+            for i in iterable:
+                yield fn, i
+        return generator
+    return decorator
 
 class BaseCase(unittest.TestCase):
     def assertArraysAlmostEqual(self, a, b, **kwargs):

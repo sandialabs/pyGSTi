@@ -367,8 +367,8 @@ class TermEvalTree(EvalTree):
                 subTree[ik] = circuit
 
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
-            subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[k]
-                                                     for k in _slct.indices(subTree.myFinalToParentFinalMap)]
+            subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[kk]
+                                                     for kk in _slct.indices(subTree.myFinalToParentFinalMap)]
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             final_el_startstops = []; i = 0
@@ -376,8 +376,8 @@ class TermEvalTree(EvalTree):
                 final_el_startstops.append((i, i + len(spamTuples)))
                 i += len(spamTuples)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
-                [_np.arange(*final_el_startstops[k])
-                 for k in _slct.indices(subTree.myFinalToParentFinalMap)])
+                [_np.arange(*final_el_startstops[kk])
+                 for kk in _slct.indices(subTree.myFinalToParentFinalMap)])
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in simplified_circuit_spamTuples)
 
@@ -423,7 +423,7 @@ class TermEvalTree(EvalTree):
         tot_npaths = 0
         tot_target_sopm = 0; tot_achieved_sopm = 0  # "sum of path magnitudes"
         repcache = {}
-        opcache = {}
+        #opcache = {}
         for opstr in circuit_list:
             if (rholabel, elabels, opstr) in self.p_polys:
                 current_threshold, current_polys = self.p_polys[(rholabel, elabels, opstr)]
@@ -435,8 +435,8 @@ class TermEvalTree(EvalTree):
                     calc.prs_as_pruned_polyreps(rholabel,
                                                 elabels,
                                                 opstr,
-                                                repcache, #self.repcache,
-                                                self.repcache, #opcache,
+                                                repcache,  # self.repcache,
+                                                self.repcache,  # opcache,
                                                 comm,
                                                 memLimit,
                                                 pathmagnitude_gap,

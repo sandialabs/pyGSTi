@@ -160,3 +160,31 @@ class BasisTester(BaseCase):
         large_sparsePP = basis.Basis.cast("pp", 256, sparse=True)
         large_sparsePP2 = basis.Basis.cast("pp", 256, sparse=True)
         self.assertEqual(large_sparsePP, large_sparsePP2)
+
+    def test_basis_cast(self):
+        pp1 = basis.Basis.cast('pp', 16)
+        pp2 = basis.Basis.cast('pp', (4, 4))
+        pp3 = basis.Basis.cast('pp', [(4, 4)])
+        self.assertTrue(isinstance(pp1, basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp2, basis.DirectSumBasis))
+        self.assertTrue(isinstance(pp3, basis.DirectSumBasis))
+        self.assertTrue(isinstance(pp2.component_bases[0], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp2.component_bases[1], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp3.component_bases[0], basis.TensorProdBasis))
+        self.assertTrue(isinstance(pp3.component_bases[0].component_bases[0], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp3.component_bases[0].component_bases[1], basis.BuiltinBasis))
+
+    def test_tensorprod_basis(self):
+        pp1 = basis.Basis.cast('pp', 4)  # 1Q
+        tpb = basis.TensorProdBasis([pp1, pp1])
+        self.assertTrue(tpb.is_simple())
+        self.assertEqual(pp1.dim, 4)
+        self.assertEqual(tpb.dim, 4 * 4)
+
+    def test_directsum_basis(self):
+        s1 = basis.BuiltinBasis('std', 1)
+        s2 = basis.BuiltinBasis('std', 4)
+        dsb = basis.DirectSumBasis([s2, s1, s2])
+        self.assertEqual(dsb.dim, 4 + 1 + 4)
+        self.assertEqual(len(dsb.component_bases), 3)
+        self.assertEqual([x.dim for x in dsb.component_bases], [4, 1, 4])

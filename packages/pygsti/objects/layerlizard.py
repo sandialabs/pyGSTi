@@ -53,19 +53,41 @@ class LayerLizard(object):
     of as a "server" of simplified operations for a forward simulator
     which pieces together layer operations from components.
     """
-    # TODO docstring - add not-implemented members & docstrings?
 
     def __init__(self, model):
         """
-        TODO: docstring
+        Create a new LayerLizard.
+
+        Parameters
+        ----------
+        model : Model
+            The "parent" model for this layer lizard.
         """
         self.model = model
 
     #Helper functions for derived classes:
     def get_circuitlabel_op(self, circuitlbl, dense):
-        """TODO: docstring
-           build an op for this circuit label - a composed op (of sub-circuit)
-           exponentiated to the power N, where N=#of repetitions
+        """
+        A helper function for derived classes, used for processing
+        :class:`CircuitLabel` labels (which encapsulate sub-circuits
+        repeated some integer number of times).
+
+        This method build an operator for `circuitlbl` by creating a composed-op
+        (using either :class:`ComposedOp` or :class:`ComposedDenseOp` depending
+        on the value of `dense`) of the sub-circuit that is exponentiated (using
+        :class:`ExponentiatedOp`) to the power `circuitlbl.reps`.
+
+        Parameters
+        ----------
+        circuitlbl : CircuitLabel
+            The (sub-circuit)^power to create an operator for.
+
+        dense : boolean
+            Whether a dense composed-op should be created (see above).
+
+        Returns
+        -------
+        LinearOperator
         """
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         if len(circuitlbl.components) != 1:  # works for 0 components too

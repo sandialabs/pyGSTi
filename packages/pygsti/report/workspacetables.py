@@ -627,7 +627,9 @@ class GatesVsTargetTable(WorkspaceTable):
             (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
 
-        wildcard: TODO: docstring
+        wildcard: PrimitiveOpsWildcardBudget
+            A wildcard budget with a `get_op_budget` method that is used to
+            fill in the "unmodeled" error column when it is requested.
 
         Returns
         -------
@@ -1139,16 +1141,14 @@ class NQubitErrgenTable(WorkspaceTable):
                 if not params.issubset(displayed_params):
                     displayed_params.update(params)
 
-                    Ldict, basisDict = gate.get_errgen_coeffs()
-                    if len(basisDict) > 0:
-                        sparse = _sps.issparse(list(basisDict.values())[0])
-                    else: sparse = False
+                    Ldict, basis = gate.get_errgen_coeffs(return_basis=True)
+                    sparse = basis.sparse
 
                     #Try to find good labels for these basis elements
                     # (so far, just try to match with "pp" basis els)
                     ref_basis = _objs.BuiltinBasis("pp", gate.dim, sparse=sparse)
                     basisLbls = {}
-                    for bl1, mx in basisDict.items():
+                    for bl1, mx in zip(basis.labels, basis.elements):
                         for bl2, mx2 in zip(ref_basis.labels, ref_basis.elements):
                             if (sparse and _tools.sparse_equal(mx, mx2)) or (not sparse and _np.allclose(mx, mx2)):
                                 basisLbls[bl1] = bl2; break
@@ -1869,8 +1869,12 @@ class FitComparisonTable(WorkspaceTable):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        wildcard : TODO: docstring
-
+        wildcard : WildcardBudget
+            A wildcard budget to apply to the objective function (`objective`),
+            which increases the goodness of fit by adjusting (by an amount
+            measured in TVD) the probabilities produced by a model before
+            comparing with the frequencies in `dataset`.  Currently, this
+            functionality is only supported for `objective == "logl"`.
 
         Returns
         -------

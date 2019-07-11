@@ -28,8 +28,10 @@ before_install:
   - cmake --version
   - gcc --version
 
-# Install python package dependencies
 install:
+  # Install base dependencies
+  - pip install -e .
+  # Install test dependencies
   - pip install -e .[testing]
 
 # Default `test' stage script

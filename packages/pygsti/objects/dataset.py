@@ -166,6 +166,188 @@ class DataSetRow(object):
             return _np.array(times, dtype=self.dataset.timeType)
         else: return self.time.copy()
 
+    def get_times(self):
+        """
+        Returns the a list containing the unique data collection times
+        at which there is at least one measurement result.
+        """
+        times = []
+        last_time = None
+        for t in self.time:
+            if t != last_time:
+                times.append(t)
+                last_time = t
+
+        return times
+
+    def get_timeseries_for_outcomes(self):
+        """
+        Returns data in a time-series format. This can be a much less
+        succinct format than returned by `get_timeseries`. E.g., it is
+        highly inefficient for many-qubit data.
+
+        Returns
+        -------
+        times : list
+            The time steps, containing the unique data collection times.
+
+        reps : dict
+            A dictionary of lists containing the number of times each
+            measurement outcome was observed at the unique data collection
+            times in `times`.
+        """
+        times = []
+        last_time = None
+        seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.get_outcome_labels()}
+
+        #REMOVED: (though this gives slightly different behavior)
+        #for outcome_label in self.outcomes:
+        #    if outcome_label not in seriesDict.keys():
+        #        seriesDict[outcome_label] = []
+
+        if self.reps is None:
+            reps = _np.ones(len(self.time), int)
+        else: reps = self.reps
+
+        # An alternate implementation that appears to be (surprisingly?) slower...
+        ##Get time bin locations
+        #time_bins_borders = []
+        #last_time = None
+        #for i, t in enumerate(self.time):
+        #    if t != last_time:
+        #        time_bins_borders.append(i)
+        #        last_time = t
+        #time_bins_borders.append(len(self.time))
+        #nTimes = len(time_bins_borders) - 1
+        #
+        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.get_outcome_labels()}
+        #
+        #for i in range(nTimes):
+        #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
+        #    times.append( self.time[slc.start] )
+        #    for oli, rep in zip(self.oli[slc], reps[slc]):
+        #        seriesDict[oli][i] += rep
+
+        for t, oli, rep in zip(self.time, self.oli, reps):
+
+            if t != last_time:
+                times.append(t)
+                last_time = t
+
+                for sd_oli in seriesDict.keys():
+                    if sd_oli == oli: seriesDict[sd_oli].append(rep)
+                    else: seriesDict[sd_oli].append(0)
+            else:
+                seriesDict[oli][-1] += rep
+
+        return times, {ol: seriesDict[oli] for ol, oli in self.dataset.olIndex.items()}
+
+    def get_timeseries(self):
+        """
+        Returns data in a time-series format.
+
+        Returns
+        -------
+        times : list
+            The time steps, containing the unique data collection times.
+
+        reps : list
+            A list of dictionaries containing the counts dict corresponding
+            to the list of unique data collection times in `times`.
+        """
+        times = []
+        series = []
+        last_time = None
+
+        if self.reps is None:
+            reps = list(_np.ones(len(self.time), int))
+        else: reps = self.reps
+
+        for t, outcome_label, rep in zip(self.time, self.outcomes, reps):
+
+            if t != last_time:
+                times.append(t)
+                last_time = t
+                series.append({outcome_label: rep})
+
+            else:
+                if outcome_label in series[-1]:
+                    series[-1][outcome_label] += rep
+                else:
+                    series[-1][outcome_label] = rep
+
+        return times, series
+
+    def get_reps_timeseries(self):
+        """
+        Tthe number of measurement results at each
+        data collection time.
+
+        Returns
+        -------
+        times : list
+            The time steps.
+
+        reps : list
+            The total number of counts at each time step.
+        """
+        times = []
+        reps = []
+        last_time = None
+
+        if self.reps is None:
+            return list(self.time), list(_np.ones(len(self.time), int))
+
+        else:
+            for t, rep in zip(self.time, self.reps):
+                if t != last_time:
+                    times.append(t)
+                    last_time = t
+                    reps.append(rep)
+                else:
+                    reps[-1] += rep
+
+            return times, reps
+
+    def get_number_of_times(self):
+        """
+        Returns the number of data collection times.
+        """
+        return len(self.get_times())
+
+    def has_constant_totalcounts(self):
+        """
+        Returns True if the numbers of counts is the same at
+        all data collection times. Otherwise returns False.
+        """
+        times, reps = self.get_reps_timeseries()
+        firstrep = reps[0]
+        fixedtotalcounts = all([firstrep == i for i in reps])
+
+        return fixedtotalcounts
+
+    def get_totalcounts_per_timestep(self):
+        """
+        Returns the number of total counts per time-step, when this
+        is constant. If it varies over the times that there is at least
+        one measurement result for then this function will raise an error.
+        """
+        times, reps = self.get_reps_timeseries()
+        firstrep = reps[0]
+        assert(all([firstrep == i for i in reps])), "The total counts is not the same at all time steps!"
+
+        return firstrep
+
+    def get_meantimestep(self):
+        """
+        Returns the mean time-step. Will raise an error for data that is
+        a trivial time-series (i.e., data all at one time).
+        """
+        times = _np.array(self.get_times())
+        assert(len(times) >= 2), "Mean time-step is ill-defined when there is not multiple data times!"
+
+        return _np.mean(_np.diff(times))
+
     def __iter__(self):
         if self.reps is not None:
             return ((self.dataset.ol[i], t, n) for (i, t, n) in zip(self.oli, self.time, self.reps))
@@ -868,7 +1050,7 @@ class DataSet(object):
                 else:
                     #assume final outcome at each time is constrained
                     nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
-                    nDOF += nOutcomes - 1; cur_outcomes = set()
+                    nDOF += nOutcomes - 1; cur_outcomes = set([ol])
                     cur_t = t
             nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
             nDOF += nOutcomes - 1  # last time stamp
@@ -1072,7 +1254,7 @@ class DataSet(object):
         if aux is not None: self.add_auxiliary_info(circuit, aux)
 
     def add_series_data(self, circuit, countDictList, timeStampList,
-                        overwriteExisting=True, aux=None):
+                        overwriteExisting=True, recordZeroCnts=True, aux=None):
         """
         Add a single circuit's counts to this DataSet
 
@@ -1093,6 +1275,12 @@ class DataSet(object):
             If `True`, overwrite any existing data for the `circuit`.  If
             `False`, add the count data with the next non-negative integer
             timestamp.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts (elements of the dictionaries in `countDictList` that
+            are zero) are actually recorded (stored) in this DataSet.  If False, then
+            zero counts are ignored, except for potentially registering new outcome
+            labels.
 
         aux : dict, optional
             A dictionary of auxiliary meta information to be included with
@@ -1116,7 +1304,132 @@ class DataSet(object):
                 expanded_repList.append(cntDict[ol])  # could do this only for counts > 1
         return self.add_raw_series_data(circuit, expanded_outcomeList,
                                         expanded_timeList, expanded_repList,
-                                        overwriteExisting, aux=aux)
+                                        overwriteExisting, recordZeroCnts, aux)
+
+    def merge_outcomes(self, label_merge_dict, recordZeroCnts=True):
+        """
+        Creates a DataSet which merges certain outcomes in this DataSet;
+        used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+        DataSet.
+
+        Parameters
+        ----------
+        label_merge_dict : dictionary
+            The dictionary whose keys define the new DataSet outcomes, and whose items
+            are lists of input DataSet outcomes that are to be summed together.  For example,
+            if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
+            we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
+            {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
+            to use :function:`filter_qubits` which also updates the operation sequences.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            (merged) DataSet.  If False, then zero counts are ignored, except for
+            potentially registering new outcome labels.
+
+        Returns
+        -------
+        merged_dataset : DataSet object
+            The DataSet with outcomes merged according to the rules given in label_merge_dict.
+        """
+
+        #static_self = self.copy()
+        #static_self.done_adding_data()  # makes static, so we can assume this below
+
+        # strings -> tuple outcome labels in keys and values of label_merge_dict
+        to_outcome = _ld.OutcomeLabelDict.to_outcome  # shorthand
+        label_merge_dict = {to_outcome(key): list(map(to_outcome, val))
+                            for key, val in label_merge_dict.items()}
+
+        merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
+        if not set(self.get_outcome_labels()).issubset(merge_dict_old_outcomes):
+            raise ValueError(
+                "`label_merge_dict` must account for all the outcomes in original dataset."
+                " It's missing directives for:\n%s" %
+                '\n'.join(set(map(str, self.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+            )
+
+        new_outcomes = sorted(list(label_merge_dict.keys()))
+        new_outcome_indices = _OrderedDict([(ol, i) for i, ol in enumerate(new_outcomes)])
+        nNewOutcomes = len(new_outcomes)
+
+        #Count the number of time steps so we allocate enough space
+        nSteps = 0
+        for key, dsrow in self.items():
+            cur_t = None
+            for t in dsrow.time:
+                if t != cur_t:
+                    nSteps += 1
+                    cur_t = t
+
+        #idea is that we create oliData, timeData, repData, and circuitIndices for the
+        # merged dataset rather than looping over insertion, as this is faster
+        oliData = _np.empty(nSteps * nNewOutcomes, self.oliType)
+        repData = _np.empty(nSteps * nNewOutcomes, self.repType)
+        timeData = _np.empty(nSteps * nNewOutcomes, self.timeType)
+
+        oli_map = {}  # maps old outcome label indices to new ones
+        for new_outcome, old_outcome_list in label_merge_dict.items():
+            new_index = new_outcome_indices[new_outcome]
+            for old_outcome in old_outcome_list:
+                oli_map[self.olIndex[old_outcome]] = new_index
+
+        #Future - when recordZeroCnts=False these may not need to be so large
+        new_olis = _np.array(range(nNewOutcomes), _np.int64)
+        new_cnts = _np.zeros(nNewOutcomes, self.repType)
+
+        if recordZeroCnts:
+            def add_cnts(t, cnts, offset):  # cnts is an array here
+                new_cnts[:] = 0
+                for nonzero_oli, cnt in cnts.items():
+                    new_cnts[nonzero_oli] = cnt
+                timeData[offset:offset + nNewOutcomes] = t
+                oliData[offset:offset + nNewOutcomes] = new_olis
+                repData[offset:offset + nNewOutcomes] = new_cnts  # a length-nNewOutcomes array
+                return nNewOutcomes
+
+        else:
+            def add_cnts(t, cnts, offset):  # cnts is a dict here
+                nNewCnts = len(cnts)
+                #new_olis = _np.empty(nNewCnts, _np.int64)
+                #new_cnts = _np.empty(nNewCnts, self.repType)
+                for ii, (nonzero_oli, cnt) in enumerate(cnts.items()):
+                    new_olis[ii] = nonzero_oli
+                    new_cnts[ii] = cnt
+                timeData[offset:offset + nNewCnts] = t
+                oliData[offset:offset + nNewCnts] = new_olis[0:nNewCnts]
+                repData[offset:offset + nNewCnts] = new_cnts[0:nNewCnts]
+                return nNewCnts  # return the number of added counts
+
+        k = 0  # beginning of current circuit data in 1D arrays: oliData, timeData, repData
+        circuitIndices = _OrderedDict()
+        for key, dsrow in self.items():
+
+            last_t = dsrow.time[0]
+
+            #Below code is faster version of: mapped_oli = [oli_map[x] for x in dsrow.oli]
+            mapped_oli = dsrow.oli.copy()
+            for from_oli, to_oli in oli_map.items():
+                mapped_oli[dsrow.oli == from_oli] = to_oli
+
+            reps = _np.ones(len(dsrow.time), self.timeType) if (self.repData is None) else dsrow.reps
+            cnts = _DefaultDict(lambda: 0)
+
+            i = 0  # offset to current timeslice
+            for oli, t, reps in zip(mapped_oli, dsrow.time, reps):
+                if t != last_t:
+                    i += add_cnts(last_t, cnts, k + i)
+                    last_t = t; cnts.clear()
+                cnts[oli] += reps
+            if len(cnts) > 0:
+                i += add_cnts(last_t, cnts, k + i)
+
+            circuitIndices[key] = slice(k, k + i)
+            k += i
+
+        merged_dataset = DataSet(oliData[0:k], timeData[0:k], repData[0:k], circuitIndices=circuitIndices,
+                                 outcomeLabelIndices=new_outcome_indices, bStatic=True)
+        return merged_dataset
 
     def add_auxiliary_info(self, circuit, aux):
         """
@@ -1169,6 +1482,64 @@ class DataSet(object):
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
         for circuit, dsRow in otherDataSet.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
+
+    def get_meantimestep(self):
+        """
+        Returns the mean time-step, averaged over the time-step for each
+        circuit and over circuits.
+        """
+        timesteps = []
+        for key in self.keys():
+            timesteps.append(self[key].get_meantimestep())
+
+        return _np.mean(timesteps)
+
+    def has_constant_totalcounts_pertime(self):
+        """
+        Returns True if the data for every circuit has the same number of
+        total counts at every data collection time. Otherwise, returns False.
+
+        This will return True if there is a different number of total counts
+        per circuit (i.e., after aggregating over time), as long as every
+        circuit has the same total counts per time step (this will happen
+        when the number of time-steps varies between circuit).
+        """
+        for key in self.keys():
+            numtotalcountspertime = None
+            dsrow = self[key]
+            if not dsrow.has_constant_totalcounts():
+                return False
+            if numtotalcountspertime is None:
+                numtotalcountspertime = dsrow.get_totalcounts_per_timestep()
+            else:
+                if numtotalcountspertime != dsrow.get_totalcounts_per_timestep():
+                    return False
+
+        return True
+
+    def totalcounts_pertime(self):
+        """
+        Returns the total counts per time, if this is constant over times
+        and circuits. When that doesn't hold, an error is raised.
+        """
+        self.has_constant_totalcounts_pertime()
+        key = list(self.keys())[0]
+        totalcountspertime = self[key].get_totalcounts_per_timestep()
+
+        return totalcountspertime
+
+    def has_constant_totalcounts(self):
+        """
+        Returns True if the data for every circuit has the same number of
+        total counts.
+        """
+        reps = []
+        for key in self.keys():
+            reps.append(sum(list(self[key].counts.values())))
+        firstrep = reps[0]
+        fixedtotalcounts = all([firstrep == i for i in reps])
+
+        return fixedtotalcounts
 
     def __str__(self):
         return self.to_str()

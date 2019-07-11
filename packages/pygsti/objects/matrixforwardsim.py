@@ -106,7 +106,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             G = _np.identity(self.dim)
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.sos.get_operation(lOp).base
+                    opmx = self.sos.get_operation(lOp).todense()
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -127,7 +127,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         else:
             G = _np.identity(self.dim)
             for lOp in circuit:
-                G = _np.dot(self.sos.get_operation(lOp).base, G)  # product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.sos.get_operation(lOp).todense(), G)  # LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
     def _process_wrtFilter(self, wrtFilter, obj):
@@ -297,13 +297,13 @@ class MatrixForwardSimulator(ForwardSimulator):
         leftProds = []
         G = _np.identity(dim); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G, self.sos.get_operation(opLabel).base)
+            G = _np.dot(G, self.sos.get_operation(opLabel).todense())
             leftProds.append(G)
 
         rightProdsT = []
         G = _np.identity(dim); rightProdsT.append(_np.transpose(G))
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self.sos.get_operation(opLabel).base, G)
+            G = _np.dot(self.sos.get_operation(opLabel).todense(), G)
             rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
@@ -416,7 +416,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             prods[(i, i - 1)] = ident  # product of no gates
             G = ident
             for (j, opLabel2) in enumerate(revOpLabelList[i:], start=i):  # loop over "ending" gate (>= starting gate)
-                G = _np.dot(G, self.sos.get_operation(opLabel2).base)
+                G = _np.dot(G, self.sos.get_operation(opLabel2).todense())
                 prods[(i, j)] = G
         prods[(len(revOpLabelList), len(revOpLabelList) - 1)] = ident  # product of no gates
 
@@ -509,7 +509,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             return _np.rollaxis(flattened_d2prod, 0, 3).reshape((vec_kl_size, vec_ij_size, dim, dim))
             # axes = (model_parameter1, model_parameter2, model_element_row, model_element_col)
 
-    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False):
+    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
         operation sequence.  The spam tuples may only vary in their effect-label (their
@@ -537,12 +537,16 @@ class MatrixForwardSimulator(ForwardSimulator):
           product will overflow and the subsequent trace operation will
           yield nan as the returned probability.
 
+        time : float, optional
+          The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         numpy.ndarray
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
+        assert(time is None), "MatrixForwardSimulator cannot be used to simulate time-dependent circuits"
         rho, Es = self._rhoEs_from_spamTuples(rholabel, elabels)
         #shapes: rho = (N,1), Es = (len(elabels),N)
 
@@ -847,7 +851,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 prodCache[i] = _np.identity(dim)
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
-                gate = self.sos.get_operation(opLabel).base
+                gate = self.sos.get_operation(opLabel).todense()
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
@@ -1153,8 +1157,26 @@ class MatrixForwardSimulator(ForwardSimulator):
 
     def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
-        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
+
+        Parameters
+        ----------
+        simplified_circuits : list
+            A list of Circuits or tuples of operation labels which specify
+            the operation sequences to create an evaluation tree out of
+            (most likely because you want to computed their probabilites).
+            These are a "simplified" circuits in that they should only contain
+            "deterministic" elements (no POVM or Instrument labels).
+
+        numSubtreeComms : int
+            The number of processor groups that will be assigned to
+            subtrees of the created tree.  This aids in the tree construction
+            by giving the tree information it needs to distribute itself
+            among the available processors.
+
+        Returns
+        -------
+        MatrixEvalTree
         """
         evTree = _MatrixEvalTree()
         evTree.initialize(simplified_circuits, numSubtreeComms)

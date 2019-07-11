@@ -114,5 +114,54 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         #print("sparse errgen = \n"); pygsti.tools.print_mx(sparseGate2.err_gen.toarray(),width=4,prec=1)
         self.assertArraysAlmostEqual(op2.errorgen.err_gen_mx,sparseGate2.errorgen.err_gen_mx.toarray())
 
+    def test_setting_lindblad_stochastic_error_rates(self):
+        mdl_std1Q_HS = std1Q_XYI.target_model("H+S")
+
+        ps_err = 0.01 # per-Pauli error - the p_i in usual operator rep of a depol channel
+        d = 4 # number of Paulis (and dim of space)
+        alpha = d*ps_err # per-Pauli error * num-Paulis
+        depol_err = alpha * (d-1)/d # == (d-1) * ps_err
+        Gx_depol = mdl_std1Q_HS.operations['Gx'].copy()
+        #Gx_depol.depolarize( (alpha,alpha,0) )
+        Gx_depol.set_error_rates( {('S','X'): 0.01, ('S','Y'): 0.01, ('S','Z'): 0.01} )
+        print("Infidelity = ",pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']))
+        self.assertAlmostEqual(pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']), depol_err)
+
+        
+        print("error rate of depol channel = ", depol_err)
+        print("Each of %d pauli stochastic parts has error rate of " % (d-1),alpha * 1/d)
+
+        expected_coeff = -np.log(1-d*ps_err) / d
+        print("Errgen S-coeff should be:", expected_coeff )
+        #pygsti.tools.print_mx(Gx_depol.todense())
+
+        print("Coeffs are:")
+        print(Gx_depol.get_errgen_coeffs())
+        print("Rates are:")
+        print(Gx_depol.get_error_rates())
+        
+        self.assertAlmostEqual(Gx_depol.get_error_rates()[('S','X')],ps_err)
+        self.assertAlmostEqual(Gx_depol.get_error_rates()[('S','Y')],ps_err)
+        self.assertAlmostEqual(Gx_depol.get_error_rates()[('S','Z')],ps_err)
+        self.assertAlmostEqual(Gx_depol.get_errgen_coeffs()[('S','X')],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.get_errgen_coeffs()[('S','Y')],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.get_errgen_coeffs()[('S','Z')],expected_coeff)
+
+    def test_setting_lindblad_hamiltonian_error_rates(self):
+        mdl_std1Q_HS = std1Q_XYI.target_model("H+S")
+        Gx_rot = mdl_std1Q_HS.operations['Gx'].copy()
+
+        #Test 3 different ways of setting rotation angles.
+        Gx_rot.rotate( (0.2,0.0,0) )
+        self.assertAlmostEqual(Gx_rot.get_errgen_coeffs()[('H','X')], 0.2)
+        self.assertAlmostEqual(Gx_rot.get_error_rates()[('H','X')], 0.2)
+        Gx_rot.set_error_rates({('H','Y'): 0.1})
+        self.assertAlmostEqual(Gx_rot.get_errgen_coeffs()[('H','Y')], 0.1)
+        self.assertAlmostEqual(Gx_rot.get_error_rates()[('H','Y')], 0.1)
+        Gx_rot.set_errgen_coeffs({('H','Z'): 0.3})
+        self.assertAlmostEqual(Gx_rot.get_errgen_coeffs()[('H','Z')], 0.3)
+        self.assertAlmostEqual(Gx_rot.get_error_rates()[('H','Z')], 0.3)
+        
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

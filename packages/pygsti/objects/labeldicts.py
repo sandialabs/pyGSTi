@@ -415,7 +415,11 @@ class StateSpaceLabels(object):
             of dimension d is a vector of `d` probabilities.  If `None`, then
             all labels are assumed to be quantum.
 
-        TODO: docstring evotype - used just for default dimensions
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+            The evolution type that this state-space will be used with.  This
+            information is needed just to select the appropriate default
+            dimensions, e.g. whether a qubit has a 2- or 4-dimensional state
+            space.
         """
 
         #Allow initialization via another StateSpaceLabels object

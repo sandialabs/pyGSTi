@@ -24,7 +24,7 @@ from pprint import pprint
 def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                        sampleError="multinomial", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate",
-                       recordZeroCnts=True, comm=None, memLimit=None):
+                       recordZeroCnts=True, comm=None, memLimit=None, times=None):
     """Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
@@ -98,6 +98,13 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         A rough memory limit in bytes which is used to determine job allocation
         when there are multiple processors.
 
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `nSamples` samples will be simulated at each time value, meaning that
+        each circuit in `circuit_list` will be evaluated with the given time
+        value as its *start time*.
+
+
     Returns
     -------
     DataSet
@@ -121,7 +128,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         aliasDict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                      for ky, val in aliasDict.items()}  # convert to use Labels
 
-    if gsGen:
+    if gsGen and times is None:
         trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
                               for s in circuit_list]
         all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
@@ -139,92 +146,105 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
 
             #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
             trans_s = _gstrc.translate_circuit(s, aliasDict)
-            if gsGen:
-                ps = all_probs[trans_s]
+            circuit_times = times if times is not None else ["N/A dummy"]
 
-                if sampleError in ("binomial", "multinomial"):
-                    #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                    for ol in ps:
-                        if ps[ol] < 0:
-                            if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
-                            ps[ol] = 0.0
-                        elif ps[ol] > 1:
-                            if ps[ol] > (1 + TOL): _warnings.warn("Clipping probs > 1 to 1")
-                            ps[ol] = 1.0
-            else:
-                ps = _collections.OrderedDict([(ol, frac) for ol, frac
-                                               in dsGen[trans_s].fractions.items()])
-
-            if gsGen and sampleError in ("binomial", "multinomial"):
-                #Check that sum ~= 1 (and nudge if needed) since binomial and
-                #  multinomial random calls assume this.
-                psum = sum(ps.values())
-                adjusted = False
-                if psum > 1 + TOL:
-                    adjusted = True
-                    _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                if psum < 1 - TOL:
-                    adjusted = True
-                    _warnings.warn("Adjusting sum(probs) < 1 to 1")
-
-                # A cleaner probability cleanup.. lol
-                OVERTOL = 1.0 + TOL
-                UNDERTOL = 1.0 - TOL
-                def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
-                if not normalized():
-                    m = max(ps.values())
-                    ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
-                    print(sum(ps.values()))
-
-                assert normalized(), 'psum={}'.format(sum(ps.values()))
-                if adjusted:
-                    _warnings.warn('Adjustment finished')
-
-            if nSamples is None and dsGen is not None:
-                N = dsGen[trans_s].total  # use the number of samples from the generating dataset
-                #Note: total() accounts for other intermediate-measurment branches automatically
-            else:
-                try:
-                    N = nSamples[k]  # try to treat nSamples as a list
-                except:
-                    N = nSamples  # if not indexable, nSamples should be a single number
-
-            nWeightedSamples = N
-
-            counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
-            labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
-            # "outcome labels" - sort by prob for consistent generation
-            if sampleError == "binomial":
-
-                if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
-                    counts[labels[0]] = nWeightedSamples
-                else:
-                    assert(len(labels) == 2)
-                    ol0, ol1 = labels[0], labels[1]
-                    counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
-                    counts[ol1] = nWeightedSamples - counts[ol0]
-
-            elif sampleError == "multinomial":
-                countsArray = rndm.multinomial(nWeightedSamples,
-                                               [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
-                for i, ol in enumerate(labels):
-                    counts[ol] = countsArray[0, i]
-            else:
-                for outcomeLabel, p in ps.items():
-                    pc = _np.clip(p, 0, 1)  # Note: *not* used in "none" case
-                    if sampleError == "none":
-                        counts[outcomeLabel] = float(nWeightedSamples * p)
-                    elif sampleError == "clip":
-                        counts[outcomeLabel] = float(nWeightedSamples * pc)
-                    elif sampleError == "round":
-                        counts[outcomeLabel] = int(round(nWeightedSamples * pc))
+            counts_list = []
+            for tm in circuit_times:
+                if gsGen:
+                    if times is None:
+                        ps = all_probs[trans_s]
                     else:
-                        raise ValueError(
-                            "Invalid sample error parameter: '%s'  "
-                            "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
-                        )
+                        ps = gsGen.probs(trans_s, time=tm)
 
-            dataset.add_count_dict(s, counts, recordZeroCnts=recordZeroCnts)
+                    if sampleError in ("binomial", "multinomial"):
+                        #Adjust to probabilities if needed (and warn if not close to in-bounds)
+                        for ol in ps:
+                            if ps[ol] < 0:
+                                if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                                ps[ol] = 0.0
+                            elif ps[ol] > 1:
+                                if ps[ol] > (1 + TOL): _warnings.warn("Clipping probs > 1 to 1")
+                                ps[ol] = 1.0
+                else:
+                    ps = _collections.OrderedDict([(ol, frac) for ol, frac
+                                                   in dsGen[trans_s].fractions.items()])
+
+                if gsGen and sampleError in ("binomial", "multinomial"):
+                    #Check that sum ~= 1 (and nudge if needed) since binomial and
+                    #  multinomial random calls assume this.
+                    psum = sum(ps.values())
+                    adjusted = False
+                    if psum > 1 + TOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                    if psum < 1 - TOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) < 1 to 1")
+
+                    # A cleaner probability cleanup.. lol
+                    OVERTOL = 1.0 + TOL
+                    UNDERTOL = 1.0 - TOL
+                    def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
+                    if not normalized():
+                        m = max(ps.values())
+                        ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
+                        print(sum(ps.values()))
+
+                    assert normalized(), 'psum={}'.format(sum(ps.values()))
+                    if adjusted:
+                        _warnings.warn('Adjustment finished')
+
+                if nSamples is None and dsGen is not None:
+                    N = dsGen[trans_s].total  # use the number of samples from the generating dataset
+                    #Note: total() accounts for other intermediate-measurment branches automatically
+                else:
+                    try:
+                        N = nSamples[k]  # try to treat nSamples as a list
+                    except:
+                        N = nSamples  # if not indexable, nSamples should be a single number
+
+                nWeightedSamples = N
+
+                counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
+                labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
+                # "outcome labels" - sort by prob for consistent generation
+                if sampleError == "binomial":
+
+                    if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
+                        counts[labels[0]] = nWeightedSamples
+                    else:
+                        assert(len(labels) == 2)
+                        ol0, ol1 = labels[0], labels[1]
+                        counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
+                        counts[ol1] = nWeightedSamples - counts[ol0]
+
+                elif sampleError == "multinomial":
+                    countsArray = rndm.multinomial(nWeightedSamples,
+                                                   [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
+                    for i, ol in enumerate(labels):
+                        counts[ol] = countsArray[0, i]
+                else:
+                    for outcomeLabel, p in ps.items():
+                        pc = _np.clip(p, 0, 1)  # Note: *not* used in "none" case
+                        if sampleError == "none":
+                            counts[outcomeLabel] = float(nWeightedSamples * p)
+                        elif sampleError == "clip":
+                            counts[outcomeLabel] = float(nWeightedSamples * pc)
+                        elif sampleError == "round":
+                            counts[outcomeLabel] = int(round(nWeightedSamples * pc))
+                        else:
+                            raise ValueError(
+                                "Invalid sample error parameter: '%s'  "
+                                "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
+                            )
+                counts_list.append(counts)
+
+            if times is None:
+                assert(len(counts_list) == 1)
+                dataset.add_count_dict(s, counts_list[0], recordZeroCnts=recordZeroCnts)
+            else:
+                dataset.add_series_data(s, counts_list, times, recordZeroCnts=recordZeroCnts)
+
         dataset.done_adding_data()
 
     if comm is not None:  # broadcast to non-root procs
@@ -278,15 +298,35 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
             '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
         )
 
+    # New code that works for time-series data.
     for key in dataset.keys():
-        linecounts = dataset[key].counts
-        count_dict = {}
-        for new_outcome in new_outcomes:
-            count_dict[new_outcome] = 0
-            for old_outcome in label_merge_dict[new_outcome]:
-                count_dict[new_outcome] += linecounts.get(old_outcome, 0)
-        merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux,
-                                      recordZeroCnts=recordZeroCnts)
+        times, linecounts = dataset[key].get_timeseries()
+        count_dict_list = []
+        for i in range(len(times)):
+            count_dict = {}
+            for new_outcome in new_outcomes:
+                count_dict[new_outcome] = 0
+                for old_outcome in label_merge_dict[new_outcome]:
+                    count_dict[new_outcome] += linecounts[i].get(old_outcome, 0)
+            if recordZeroCnts is False:
+                for new_outcome in new_outcomes:
+                    if count_dict[new_outcome] == 0:
+                        del count_dict[new_outcome]
+            count_dict_list.append(count_dict)
+
+        merged_dataset.add_series_data(key, count_dict_list, times, aux=dataset[key].aux)
+
+    # Old code that doesn't work for time-series data.
+    #for key in dataset.keys():
+    #    linecounts = dataset[key].counts
+    #    count_dict = {}
+    #    for new_outcome in new_outcomes:
+    #        count_dict[new_outcome] = 0
+    #        for old_outcome in label_merge_dict[new_outcome]:
+    #            count_dict[new_outcome] += linecounts.get(old_outcome, 0)
+    #    merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux,
+    #                                  recordZeroCnts=recordZeroCnts)
+
     merged_dataset.done_adding_data()
     return merged_dataset
 
@@ -360,10 +400,11 @@ def create_merge_dict(indices_to_keep, outcome_labels):
 
 
 def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle=((),), recordZeroCnts=True):
+                   new_sectors=None, idle=((),), recordZeroCnts=True,
+                   filtercircuits=True):
     """
-    Creates a DataSet that restricts is the restriction of `dataset`
-    to the sectors identified by `sectors_to_keep`.
+    Creates a DataSet is the restriction of `dataset`to the sectors
+    identified by `sectors_to_keep`.
 
     More specifically, this function aggregates (sums) outcomes in `dataset`
     which differ only in sectors (usually qubits - see below)  *not* in
@@ -424,6 +465,10 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
         zero counts are ignored, except for potentially registering new
         outcome labels.
 
+    filtercircuits : bool, optional
+        Whether or not to "filter" the circuits, by removing gates that act
+        outside of the `sectors_to_keep`.
+
     Returns
     -------
     filtered_dataset : DataSet object
@@ -432,11 +477,49 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     if sindices_to_keep is None:
         sindices_to_keep = sectors_to_keep
 
-    ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
-                                                          dataset.get_outcome_labels()),
-                               recordZeroCnts=recordZeroCnts)
+    #ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
+    #                                                      dataset.get_outcome_labels()),
+    #                           recordZeroCnts=recordZeroCnts)
+    ds_merged = dataset.merge_outcomes(create_merge_dict(sindices_to_keep,
+                                                         dataset.get_outcome_labels()),
+                                       recordZeroCnts=recordZeroCnts)
     ds_merged = ds_merged.copy_nonstatic()
-    ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
-        s, sectors_to_keep, new_sectors, idle), aggregate=True)
+    if filtercircuits:
+        ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
+            s, sectors_to_keep, new_sectors, idle), aggregate=True)
     ds_merged.done_adding_data()
     return ds_merged
+
+
+def trim_to_constant_numtimesteps(ds):
+    """
+    Returns a new dataset that has data for the same number of time steps for
+    every circuit. This is achieved by discarding all time-series data for every
+    circuit with a time step index beyond 'min-time-step-index', where
+    'min-time-step-index' is the minimum number of time steps over circuits.
+
+    Parameters
+    ----------
+    ds : DataSet
+        The dataset to trim.
+
+    Returns
+    -------
+    DataSet
+        The trimmed dataset, obtained by potentially discarding some of the data.
+    """
+    trimmedds = ds.copy_nonstatic()
+    numtimes = []
+    for circuit in ds.keys():
+        numtimes.append(ds[circuit].get_number_of_times())
+    minnumtimes = min(numtimes)
+
+    for circuit in ds.keys():
+        times, series = ds[circuit].get_timeseries()
+        trimmedtimes = times[0:minnumtimes]
+        trimmedseries = series[0:minnumtimes]
+        trimmedds.add_series_data(circuit, trimmedseries, trimmedtimes, aux=ds.auxInfo[circuit])
+
+    trimmedds.done_adding_data()
+
+    return trimmedds
