@@ -1,16 +1,22 @@
 dist: xenial
 language: python
 
-python: 3.7
+python:
+  - 3.7
+  - 3.5
+  - 2.7
 
 if: (branch IN (master, beta, develop, refactor-unit-tests)) OR (tag IS present)
 
 env:
   global:
     - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
+    - NOSEOPTS_COVER="--with-coverage --cover-package=pygsti"
     - NOSEOPTS_PARALLEL="--processes=-1 --process-timeout=2400" # timeout after 40 minutes (travis job timeout is 50 minutes)
-    - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
+    - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_COVER $NOSEOPTS_PARALLEL"
     - SKIP_DEAP=1 # skip evolutionary optimization
+  matrix:
+    - NOSEOPTS="$NOSEOPTS_ALL"
 
 # Install native package dependencies & initialize build environment
 before_install:
@@ -29,7 +35,7 @@ install:
 # Default `test' stage script
 script:
   - cd test/test_packages
-  - nosetests $NOSEOPTS $NOSETESTS
+  - nosetests $NOSEOPTS test.unit
 
 # Cache pip packages
 cache:
@@ -50,13 +56,6 @@ stages:
 
 jobs:
   include:
-    # TODO make this a normal job w/ matrix expansion
-    - stage: test
-      name: "Unit tests"
-      script:
-        - python -m test.unit.fixture_gen --force
-        - nosetests --with-coverage --cover-package=pygsti test.unit
-
     - &lint-job
       stage: lint
       name: "PEP8"
