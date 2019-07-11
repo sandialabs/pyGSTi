@@ -1164,7 +1164,7 @@ class FullDenseOp(DenseOperator):
         else:
             return self.base.flatten()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -1184,7 +1184,7 @@ class FullDenseOp(DenseOperator):
                 1j * v[self.dim**2:].reshape((self.dim, self.dim))
         else:
             self.base[:, :] = v.reshape((self.dim, self.dim))
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1300,7 +1300,7 @@ class TPDenseOp(DenseOperator):
         """
         return self.base.flatten()[self.dim:]  # .real in case of complex matrices?
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -1316,7 +1316,7 @@ class TPDenseOp(DenseOperator):
         """
         assert(self.base.shape == (self.dim, self.dim))
         self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1498,7 +1498,7 @@ class LinearlyParamDenseOp(DenseOperator):
         """
         return self.parameterArray
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -1514,7 +1514,7 @@ class LinearlyParamDenseOp(DenseOperator):
         """
         self.parameterArray[:] = v
         self._construct_matrix()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1943,7 +1943,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         """
         return self.paramvals
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -1960,7 +1960,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_matrix()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -2065,8 +2065,7 @@ class StochasticNoiseOp(LinearOperator):
         if evotype == "densitymx":  # for now just densitymx is supported
             rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.identity(dim, 'd')))
         else:
-            raise NotImplementedError("Nonimplemented evotype '%s' for %s.torep(...)" %
-                                      (evotype, self.__class__.__name__))
+            raise ValueError("Invalid evotype '%s' for %s" % (evotype, self.__class__.__name__))
 
         LinearOperator.__init__(self, rep, evotype)
 
@@ -2163,19 +2162,15 @@ class StochasticNoiseOp(LinearOperator):
                     self.gpindices, _np.array(x, _np.int64))))
             return terms
 
-        if self._evotype == "svterm": tt = "dense"
-        elif self._evotype == "cterm": tt = "clifford"
-        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-
         IDENT = None  # sentinel for the do-nothing identity op
         if order == 0:
             polydict = {(): 1.0}
             for pd in self._get_rate_poly_dicts():
                 polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
-            loc_terms = [_term.RankOneTerm(_Polynomial(polydict), IDENT, IDENT, tt)]
+            loc_terms = [_term.RankOneTerm(_Polynomial(polydict), IDENT, IDENT, "gate", self._evotype)]
 
         elif order == 1:
-            loc_terms = [_term.RankOneTerm(_Polynomial(pd), bel, bel, tt)
+            loc_terms = [_term.RankOneTerm(_Polynomial(pd), bel, bel, "gate", self._evotype)
                          for i, (pd, bel) in enumerate(zip(self._get_rate_poly_dicts(), self.basis.elements[1:]))]
         else:
             loc_terms = []  # only first order "taylor terms"
@@ -2238,7 +2233,7 @@ class StochasticNoiseOp(LinearOperator):
         """
         return self.params
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -2259,7 +2254,7 @@ class StochasticNoiseOp(LinearOperator):
         for rate, ss in zip(self._params_to_rates(v), self.stochastic_superops):
             errormap += rate * ss
         self._rep.base[:, :] = errormap
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     #Transform functions? (for gauge opt)
 
@@ -2665,7 +2660,7 @@ class LindbladOp(LinearOperator):
             dense_rep = True  # we need *dense* unitary postfactors for the term-based processing below
         self.dense_rep = dense_rep
         
-        # make unitary postfactor sparse when sparse_expm == True and vice versa.
+        # make unitary postfactor sparse when dense_rep == False and vice versa.
         # (This doens't have to be the case, but we link these two "sparseness" notions:
         #  when we perform matrix exponentiation in a "sparse" way we assume the matrices
         #  are large and so the unitary postfactor (if present) should be sparse).
@@ -2795,7 +2790,7 @@ class LindbladOp(LinearOperator):
             else:
                 mu, m_star, s, eta = _mt.expop_multiply_prep(
                     self.errorgen._rep.aslinearoperator())
-                self._rep.set_exp_params(mu, m_star, s, eta)
+                self._rep.set_exp_params(mu, eta, m_star, s)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -3076,16 +3071,12 @@ class LindbladOp(LinearOperator):
             return terms
 
         if order not in self.terms:
-            if self._evotype == "svterm": tt = "dense"
-            elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-
             assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
             assert(not _sps.issparse(self.unitary_postfactor)
                    ), "Unitary post-factor needs to be dense for term-based evotypes"
             # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
-                                         self.unitary_postfactor, tt)
+                                         self.unitary_postfactor, "gate", self._evotype)
             #Note: for now, *all* of an error generator's terms are considered 0-th order,
             # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
             # we might want to allow a distinction among the error generator terms, in which
@@ -3156,7 +3147,7 @@ class LindbladOp(LinearOperator):
         """
         return self.errorgen.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -3172,7 +3163,7 @@ class LindbladOp(LinearOperator):
         """
         self.errorgen.from_vector(v)
         self._update_rep()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def get_errgen_coeffs(self, return_basis=False, logscale_nonham=False):
         """
@@ -3763,7 +3754,7 @@ class TPInstrumentOp(DenseOperator):
         raise ValueError(("TPInstrumentOp.to_vector() should never be called"
                           " - use TPInstrument.to_vector() instead"))
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize this partially-implemented gate using a vector of its parameters.
 
@@ -3787,7 +3778,7 @@ class TPInstrumentOp(DenseOperator):
                 if i == 0 and self.index > 0: continue  # 0th param-gate already init by index==0 element
                 paramop_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, self.param_ops[i].gpindices)
-                self.param_ops[i].from_vector(v[paramop_local_inds])
+                self.param_ops[i].from_vector(v[paramop_local_inds], nodirty)
 
         self._construct_matrix()
 
@@ -4138,7 +4129,7 @@ class ComposedOp(LinearOperator):
             v[factorgate_local_inds] = gate.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -4156,7 +4147,7 @@ class ComposedOp(LinearOperator):
         for gate in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, gate.gpindices)
-            gate.from_vector(v[factorgate_local_inds])
+            gate.from_vector(v[factorgate_local_inds], nodirty)
         if self.dense_rep: self._update_denserep()
         self.dirty = True
 
@@ -4182,14 +4173,14 @@ class ComposedOp(LinearOperator):
             deriv.shape = (self.dim, self.dim, op.num_params())
 
             if i > 0:  # factors before ith
-                pre = self.factorops[0]
+                pre = self.factorops[0].todense()
                 for opA in self.factorops[1:i]:
                     pre = _np.dot(opA.todense(), pre)
                 #deriv = _np.einsum("ija,jk->ika", deriv, pre )
                 deriv = _np.transpose(_np.tensordot(deriv, pre, (1, 0)), (0, 2, 1))
 
             if i + 1 < len(self.factorops):  # factors after ith
-                post = self.factorops[i + 1]
+                post = self.factorops[i + 1].todense()
                 for opA in self.factorops[i + 2:]:
                     post = _np.dot(opA.todense(), post)
                 #deriv = _np.einsum("ij,jka->ika", post, deriv )
@@ -4410,7 +4401,7 @@ class ExponentiatedOp(LinearOperator):
         """
         return self.exponentiated_op.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -4425,8 +4416,8 @@ class ExponentiatedOp(LinearOperator):
         None
         """
         assert(len(v) == self.num_params())
-        self.exponentiated_op.from_vector(v)
-        self.dirty = True
+        self.exponentiated_op.from_vector(v, nodirty)
+        if not nodirty: self.dirty = True
 
     def __str__(self):
         """ Return string representation """
@@ -4854,7 +4845,7 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -4869,9 +4860,9 @@ class EmbeddedOp(LinearOperator):
         None
         """
         assert(len(v) == self.num_params())
-        self.embedded_op.from_vector(v)
+        self.embedded_op.from_vector(v, nodirty)
         if self.dense_rep: self._update_denserep()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -5108,10 +5099,10 @@ class CliffordOp(LinearOperator):
         #Update members so they reference the same (contiguous) memory as the rep
         U = self.unitary.todense() if isinstance(self.unitary, LinearOperator) else self.unitary
         self._dense_unitary = _np.ascontiguousarray(U, complex)
-        self.smatrix = _np.ascontiguousarray(self.smatrix, _np.int64),
-        self.svector = _np.ascontiguousarray(self.svector, _np.int64),
-        self.inv_smatrix = _np.ascontiguousarray(self.inv_smatrix, _np.int64),
-        self.inv_svector = _np.ascontiguousarray(self.inv_svector, _np.int64),
+        self.smatrix = _np.ascontiguousarray(self.smatrix, _np.int64)
+        self.svector = _np.ascontiguousarray(self.svector, _np.int64)
+        self.inv_smatrix = _np.ascontiguousarray(self.inv_smatrix, _np.int64)
+        self.inv_svector = _np.ascontiguousarray(self.inv_svector, _np.int64)
 
         #Create representation
         rep = replib.SBOpRep_Clifford(self.smatrix, self.svector,
@@ -5221,14 +5212,14 @@ class ComposedErrorgen(LinearOperator):
         #Create representation object
         factor_reps = [op._rep for op in self.factors]
         if evotype == "densitymx":
-            rep = replib.DMOpRep_Sum(factor_reps, self.dim)
+            rep = replib.DMOpRep_Sum(factor_reps, dim)
         elif evotype == "statevec":
-            rep = replib.SVOpRep_Sum(factor_reps, self.dim)
+            rep = replib.SVOpRep_Sum(factor_reps, dim)
         elif evotype == "stabilizer":
-            nQubits = int(round(_np.log2(self.dim)))  # "stabilizer" is a unitary-evolution type mode
+            nQubits = int(round(_np.log2(dim)))  # "stabilizer" is a unitary-evolution type mode
             rep = replib.SBOpRep_Sum(factor_reps, nQubits)
         else:
-            raise ValueError("Invalid evotype: %s for %s" % (evotype, self.__class__.__name__))
+            rep = dim  # no representations for term-based evotypes
 
         LinearOperator.__init__(self, rep, evotype)
 
@@ -5749,7 +5740,7 @@ class ComposedErrorgen(LinearOperator):
             v[factor_local_inds] = eg.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the error generator using a vector of parameters.
 
@@ -5767,8 +5758,8 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            eg.from_vector(v[factor_local_inds])
-        self.dirty = True
+            eg.from_vector(v[factor_local_inds], nodirty)
+        if not nodirty: self.dirty = True
 
     def transform(self, S):
         """
@@ -5887,7 +5878,7 @@ class EmbeddedErrorgen(EmbeddedOp):
     #    return EmbeddedOp(self.state_space_labels, self.targetLabels,
     #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -5901,8 +5892,8 @@ class EmbeddedErrorgen(EmbeddedOp):
         -------
         None
         """
-        EmbeddedOp.from_vector(self, v)
-        self.dirty = True
+        EmbeddedOp.from_vector(self, v, nodirty)
+        if not nodirty: self.dirty = True
 
     def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """
@@ -6380,8 +6371,7 @@ class LindbladErrorgen(LinearOperator):
             assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
             #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             
-            termtype = "dense" if evotype == "svterm" else "clifford"
-            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, termtype, dim)
+            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, evotype, dim)
             rep = dim  # rep = None for term-based evotypes
 
         LinearOperator.__init__(self, rep, evotype)  # sets self.dim
@@ -6494,7 +6484,7 @@ class LindbladErrorgen(LinearOperator):
         assert(bsO == self.other_basis_size)
         return hamGens, otherGens
 
-    def _init_terms(self, Ltermdict, basis, termtype, dim):
+    def _init_terms(self, Ltermdict, basis, evotype, dim):
 
         d2 = dim
 
@@ -6505,7 +6495,6 @@ class LindbladErrorgen(LinearOperator):
         hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.ham_basis.labels)}
         otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.other_basis.labels)}
 
-        tt = termtype  # shorthand - used to construct RankOneTerm objects below,
         # as we expect `basis` will contain *dense* basis
         # matrices (maybe change in FUTURE?)
         numHamParams = len(hamBasisIndices) - 1  # compensate for first basis el
@@ -6520,9 +6509,9 @@ class LindbladErrorgen(LinearOperator):
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
                 k = hamBasisIndices[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basis[termLbl[1]], IDENT, tt))
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basis[termLbl[1]], IDENT, "gate", evotype))
                 Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}),
-                                                IDENT, basis[termLbl[1]].conjugate().T, tt))
+                                                IDENT, basis[termLbl[1]].conjugate().T, "gate", evotype))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
@@ -6537,9 +6526,11 @@ class LindbladErrorgen(LinearOperator):
                     Lm_dag = Lm.conjugate().T
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}), Ln, Lm_dag, tt))
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), IDENT, _np.dot(Ln_dag, Lm), tt))
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), _np.dot(Lm_dag, Ln), IDENT, tt))
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}), Ln, Lm_dag, "gate", evotype))
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), IDENT, _np.dot(Ln_dag, Lm),
+                                                    "gate", evotype))
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), _np.dot(Lm_dag, Ln), IDENT,
+                                                    "gate", evotype))
 
                 else:
                     i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
@@ -6573,10 +6564,12 @@ class LindbladErrorgen(LinearOperator):
 
                     base_poly = _Polynomial(polyTerms)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOneTerm(1.0 * base_poly, Ln, Lm, tt))
+                    Lterms.append(_term.RankOneTerm(1.0 * base_poly, Ln, Lm, "gate", evotype))
                     # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm), tt))
-                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT, tt))
+                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm),
+                                                    "gate", evotype))
+                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT,
+                                                    "gate", evotype))
 
             elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
@@ -6594,7 +6587,8 @@ class LindbladErrorgen(LinearOperator):
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,): 1.0}), _np.dot(L, B), B, tt))  # /(d2-1.)
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,): 1.0}), _np.dot(L, B), B,
+                                                    "gate", evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 
@@ -6671,7 +6665,7 @@ class LindbladErrorgen(LinearOperator):
             # __init__, so we just update the *data* array).
             assert(_np.isclose(_np.linalg.norm(data.imag), 0)), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(data.imag)
-            self._rep.data[:] = data
+            self._rep.data[:] = data.real
 
         else:  # dense matrices
             if hamCoeffs is not None:
@@ -6707,7 +6701,7 @@ class LindbladErrorgen(LinearOperator):
                 hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
                     self.paramvals, self.ham_basis_size, self.other_basis_size,
                     self.param_mode, self.nonham_mode)
-    
+
                 hamGens, otherGens = self._init_generators(self.dim)
 
                 if hamCoeffs is not None:
@@ -6724,7 +6718,7 @@ class LindbladErrorgen(LinearOperator):
                 assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
                     "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
                 return lnd_error_gen.real
-            
+
             else:  # dense rep
                 return self._rep.base
 
@@ -6758,7 +6752,8 @@ class LindbladErrorgen(LinearOperator):
 
                 return lnd_error_gen
             else:
-                return _sps.csr_matrix(self._rep.data, self._rep.indices, self._rep.indptr)
+                return _sps.csr_matrix((self._rep.data, self._rep.indices, self._rep.indptr),
+                                       shape=(self.dim, self.dim))
 
         else:
             return _sps.csr_matrix(self.todense())            
@@ -6885,7 +6880,7 @@ class LindbladErrorgen(LinearOperator):
         """
         return self.paramvals
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -6903,7 +6898,7 @@ class LindbladErrorgen(LinearOperator):
         self.paramvals = v
         if self._evotype == "densitymx":
             self._update_rep()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def get_coeffs(self, return_basis=False, logscale_nonham=False):
         """

@@ -95,7 +95,7 @@ class ForwardSimulator(object):
         # POVMs and Instruments rely on a fixed from_vector ordering
         # of their simplified effects/gates.
         self.paramvec = v.copy()
-        self.sos.from_vector(v)
+        self.sos.from_vector(v, nodirty=True)
 
         #Re-init reps for computation
         #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }

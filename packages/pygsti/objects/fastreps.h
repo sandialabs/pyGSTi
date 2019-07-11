@@ -508,11 +508,10 @@ namespace CReps {
   class PolyCRep {
     public:
     std::unordered_map<PolyVarsIndex, dcomplex> _coeffs;
-    INT _max_order;
     INT _max_num_vars;
     INT _vindices_per_int;
     PolyCRep();
-    PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_order, INT max_num_vars, INT vindices_per_int);
+    PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int);
     PolyCRep(const PolyCRep& other);
     ~PolyCRep();
     PolyCRep mult(const PolyCRep& other);

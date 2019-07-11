@@ -493,7 +493,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
     sparse : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `nQubits`-qubit gates are sparse or not.
+        `nQubits`-qubit gates have sparse representations or not.
 
     errcomp_type : {"gates","errorgens"}
         How errors are composed when creating layer operations in the returned
@@ -745,7 +745,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
-            return _op.LindbladOp(None, errgen, sparse_expm=sparse)
+            return _op.LindbladOp(None, errgen, dense_rep=not sparse)
         else:
             return errgen
 

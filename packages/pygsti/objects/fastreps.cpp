@@ -2604,26 +2604,20 @@ namespace CReps {
   |* PolyCRep                                                                 *|
   \****************************************************************************/
   
-  //std::unordered_map[INT, dcomplex] _coeffs;
-  //INT _max_order;
-  //INT _max_num_vars;
   PolyCRep::PolyCRep() {
     _coeffs = std::unordered_map<PolyVarsIndex, dcomplex>();
-    _max_order = 0;
     _max_num_vars = 0;
     _vindices_per_int = 0;
   }
   
-  PolyCRep::PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_order, INT max_num_vars, INT vindices_per_int) {
+  PolyCRep::PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int) {
     _coeffs = coeffs;
-    _max_order = max_order;
     _max_num_vars = max_num_vars;
     _vindices_per_int = vindices_per_int;
   }
 
   PolyCRep::PolyCRep(const PolyCRep& other) {
     _coeffs = other._coeffs;
-    _max_order = other._max_order;
     _max_num_vars = other._max_num_vars;
   }
 
@@ -2646,7 +2640,7 @@ namespace CReps {
 	else result[k] = val;
       }
     }
-    PolyCRep ret(result, _max_order, _max_num_vars, _vindices_per_int);
+    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
     return ret; // need a copy constructor?
   }
 

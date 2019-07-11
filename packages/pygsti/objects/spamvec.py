@@ -690,7 +690,7 @@ class SPAMVec(_modelmember.ModelMember):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1061,7 +1061,7 @@ class FullSPAMVec(DenseSPAMVec):
         else:
             return self.base.flatten()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1079,7 +1079,7 @@ class FullSPAMVec(DenseSPAMVec):
             self.base[:, 0] = v[0:self.dim] + 1j * v[self.dim:]
         else:
             self.base[:, 0] = v
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1227,7 +1227,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         return self.base.flatten()[1:]  # .real in case of complex matrices?
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1243,7 +1243,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         assert(_np.isclose(self.base[0, 0], (self.dim)**-0.25))
         self.base[1:, 0] = v
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1343,7 +1343,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         raise ValueError(("ComplementSPAMVec.to_vector() should never be called"
                           " - use TPPOVM.to_vector() instead"))
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize this SPAM vector using a vector of its parameters.
 
@@ -1359,7 +1359,8 @@ class ComplementSPAMVec(DenseSPAMVec):
         #Rely on prior .from_vector initialization of self.other_vecs, so
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
-        self._construct_vector()
+        self._construct_vector(nodirty)
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1575,7 +1576,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         """
         return self.params
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1592,7 +1593,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         assert(len(v) == self.num_params())
         self.params[:] = v[:]
         self._construct_vector()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1991,10 +1992,6 @@ class TensorProdSPAMVec(SPAMVec):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        if self._evotype == "svterm": tt = "dense"
-        elif self._evotype == "cterm": tt = "clifford"
-        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-
         from .operation import EmbeddedOp as _EmbeddedGateMap
         terms = []
         fnq = [int(round(_np.log2(f.dim))) // 2 for f in self.factors]  # num of qubits per factor
@@ -2029,7 +2026,7 @@ class TensorProdSPAMVec(SPAMVec):
                                                     if (f.pre_ops[0] is not None)])
                 post_op = TensorProdSPAMVec("prep", [f.post_ops[0] for f in factors
                                                      if (f.post_ops[0] is not None)])
-                term = _term.RankOneTerm(coeff, pre_op, post_op, tt)
+                term = _term.RankOneTerm(coeff, pre_op, post_op, "prep", self._evotype)
 
                 if not collapsible:  # then may need to add more ops.  Assume factor ops are clifford gates
                     # Embed each factors ops according to their target qubit(s) and just daisy chain them
@@ -2089,7 +2086,7 @@ class TensorProdSPAMVec(SPAMVec):
                               " TensorProdSPAMVecs (instead it should be called"
                               " on the POVM)"))
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2105,7 +2102,7 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._prep_or_effect == "prep":
             for sv in self.factors:
-                sv.from_vector(v[sv.gpindices])  # factors hold local indices
+                sv.from_vector(v[sv.gpindices], nodirty)  # factors hold local indices
 
         elif all([self.effectLbls[i] == list(povm.keys())[0]
                   for i, povm in enumerate(self.factors)]):
@@ -2114,7 +2111,7 @@ class TensorProdSPAMVec(SPAMVec):
             for povm in self.factors:
                 local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
-                povm.from_vector(v[local_inds])
+                povm.from_vector(v[local_inds], nodirty)
 
         #Update representation, which may be a dense matrix or
         # just fast-kron arrays or a stabilizer state.
@@ -2321,13 +2318,9 @@ class PureStateSPAMVec(SPAMVec):
                               "pure state vector has 0 parameters (is static)"))
 
         if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
-            if self._evotype == "svterm": tt = "dense"
-            elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
-
             purevec = self.pure_state_vec
             coeff = _Polynomial({(): 1.0})
-            terms = [_term.RankOneTerm(coeff, purevec, purevec, tt)]
+            terms = [_term.RankOneTerm(coeff, purevec, purevec, self._prep_or_effect, self._evotype)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(force_complex=True)
@@ -2393,7 +2386,7 @@ class PureStateSPAMVec(SPAMVec):
         """
         return self.pure_state_vec.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2407,7 +2400,7 @@ class PureStateSPAMVec(SPAMVec):
         -------
         None
         """
-        self.pure_state_vec.from_vector(v)
+        self.pure_state_vec.from_vector(v, nodirty)
         #Update dense rep if one is created (TODO)
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -3103,7 +3096,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return self.error_map.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -3117,9 +3110,9 @@ class LindbladSPAMVec(SPAMVec):
         -------
         None
         """
-        self.error_map.from_vector(v)
+        self.error_map.from_vector(v, nodirty)
         self._update_rep()
-        self.dirty = True
+        if not nodirty: self.dirty = True
 
     def transform(self, S, typ):
         """
@@ -3519,15 +3512,13 @@ class ComputationalSPAMVec(SPAMVec):
         """
         if order == 0:  # only 0-th order term exists
             if self._evotype == "svterm":
-                tt = "dense"
                 purevec = ComputationalSPAMVec(self._zvals, "statevec", self._prep_or_effect)
             elif self._evotype == "cterm":
-                tt = "clifford"
                 purevec = ComputationalSPAMVec(self._zvals, "stabilizer", self._prep_or_effect)
             else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
             coeff = _Polynomial({(): 1.0})
-            terms = [_term.RankOneTerm(coeff, purevec, purevec, tt)]
+            terms = [_term.RankOneTerm(coeff, purevec, purevec, self._prep_or_effect, self._evotype)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(force_complex=True)
@@ -3564,7 +3555,7 @@ class ComputationalSPAMVec(SPAMVec):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v):
+    def from_vector(self, v, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
