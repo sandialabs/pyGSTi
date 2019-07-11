@@ -8,7 +8,7 @@ import pygsti.algorithms.fiducialpairreduction as fpr
 _SEED = 1234
 
 
-class FiducialPairReductionStdData:
+class FiducialPairReductionStdData(object):
     def setUp(self):
         super(FiducialPairReductionStdData, self).setUp()
         self.model = fixtures.model
@@ -43,7 +43,7 @@ class FiducialPairReductionSmallData(FiducialPairReductionStdData):
 # TODO optimize!!!!
 
 
-class FindSufficientFiducialPairsBase:
+class FindSufficientFiducialPairsBase(object):
     def test_find_sufficient_fiducial_pairs_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
@@ -59,7 +59,7 @@ class FindSufficientFiducialPairsBase:
         # TODO assert correctness
 
 
-class FindSufficientFiducialPairsPerGermBase:
+class FindSufficientFiducialPairsPerGermBase(object):
     def test_find_sufficient_fiducial_pairs_per_germ_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
@@ -104,7 +104,7 @@ class FindSufficientFiducialPairsExceptionTester(FiducialPairReductionStdData, B
 
 
 # TODO optimize
-class _TestFiducialPairsBase:
+class _TestFiducialPairsBase(object):
     def test_test_fiducial_pairs_from_list(self):
         n_amplified = fpr.test_fiducial_pairs(
             self.fiducial_pairs, self.model, self.preps, self.effects,

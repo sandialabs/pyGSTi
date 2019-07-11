@@ -98,7 +98,7 @@ class DataSetTester(BaseCase):
             DataSet(circuits=self.gstrs, outcomeLabels=['0', '1'], bStatic=True)
 
 
-class DefaultDataSetInstance:
+class DefaultDataSetInstance(object):
     def setUp(self):
         super(DefaultDataSetInstance, self).setUp()
         self.ds = DataSet(outcomeLabels=['0', '1'])
@@ -117,7 +117,7 @@ class DefaultDataSetInstance:
             self.ds[('Gx',)]['new'] = 20  # assignment can't create *new* outcome labels (yet)
 
 
-class RawSeriesDataSetInstance:
+class RawSeriesDataSetInstance(object):
     def setUp(self):
         super(RawSeriesDataSetInstance, self).setUp()
         self.ds = DataSet(outcomeLabels=['0', '1'])
@@ -128,7 +128,7 @@ class RawSeriesDataSetInstance:
         # TODO test construction
 
 
-class DataSetMethodBase:
+class DataSetMethodBase(object):
     def setUp(self):
         super(DataSetMethodBase, self).setUp()
         for opstr in self.ds:  # XXX is there a direct way of indexing the first row?

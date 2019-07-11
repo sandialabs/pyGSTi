@@ -9,7 +9,7 @@ from pygsti.extras.rpe import rpetools as tools, rpeconstruction as rpc
 _SEED = 1969
 
 
-class RPEToolsFuncBase:
+class RPEToolsFuncBase(object):
     def setUp(self):
         super(RPEToolsFuncBase, self).setUp()
         self.target = stdXY.target_model()

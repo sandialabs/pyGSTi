@@ -5,7 +5,7 @@ from pygsti.objects import DataSet
 from pygsti.algorithms import grammatrix as gm
 
 
-class DataSetInstance:
+class DataSetInstance(object):
     def setUp(self):
         super(DataSetInstance, self).setUp()
         self.ds = DataSet(outcomeLabels=[('0',), ('1',)])

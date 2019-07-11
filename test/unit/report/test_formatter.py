@@ -65,7 +65,7 @@ class FormatterTester(BaseCase):
 
 # Refactored from test.test_packages.reportb.testEBFormatters
 # TODO assert correct elements instead of directly comparing rendered strings
-class EBFormatterBase:
+class EBFormatterBase(object):
     def test_render_EB_formatter(self):
         n = 1.819743  # Six digits after decimal
         render = render_pair((n, n), self.formatter, formattype=self.target, precision=6)
@@ -118,7 +118,7 @@ class PiHTMLEBFormatterTester(EBFormatterBase, BaseCase):
     )
 
 
-class PrecisionFormatterBase:
+class PrecisionFormatterBase(object):
     expected_LaTeX_fmt = '\\begin{{tabular}}[l]{{|c|}}\n\hline\n{0} \\\\ \hline\n\end{{tabular}}\n'
     expected_HTML_fmt = '<table><thead><tr><th> <span title="{0}">{1}</span> </th></tr></thead><tbody></tbody></table>'
 

@@ -8,7 +8,7 @@ from pygsti.construction import std1Q_XYI as std
 from pygsti.objects import instrument as inst, FullGaugeGroupElement
 
 
-class InstrumentMethodBase:
+class InstrumentMethodBase(object):
     def test_num_elements(self):
         self.assertEqual(self.instrument.num_elements(), self.n_elements)
 
@@ -46,7 +46,7 @@ class InstrumentMethodBase:
             inst.convert(self.instrument, "foobar", self.model.basis)
 
 
-class InstrumentInstanceBase:
+class InstrumentInstanceBase(object):
     def setUp(self):
         # Initialize standard target model for instruments
         # XXX can instruments be tested independently of a model?

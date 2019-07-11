@@ -6,7 +6,7 @@ from pygsti.construction import std1Q_XYI as std
 import pygsti.objects.modelfunction as mf
 
 
-class ModelFunctionBase:
+class ModelFunctionBase(object):
     def setUp(self):
         self.model = std.target_model()
 

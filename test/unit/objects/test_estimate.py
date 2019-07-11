@@ -8,7 +8,7 @@ from pygsti.objects.results import Results
 from pygsti.objects import estimate
 
 
-class EstimateBase:
+class EstimateBase(object):
     @classmethod
     def setUpClass(cls):
         cls.model = pkg.mdl_lsgst_go

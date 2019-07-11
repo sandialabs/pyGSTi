@@ -7,7 +7,7 @@ from pygsti.construction import std1Q_Cliffords, std1Q_XY, std1Q_XYI
 from pygsti.extras import rb
 
 
-class GaugeTransformBase:
+class GaugeTransformBase(object):
     def test_transform_to_rb_gauge(self):
         # A test that the RB gauge transformation behaves as expected -- a model that does not
         # have r = infidelity in its initial gauge does have this in the RB gauge. This also
@@ -18,7 +18,7 @@ class GaugeTransformBase:
         self.assertAlmostEqual(r_pred_EI, REI, places=10)
 
 
-class InfidelityBase:
+class InfidelityBase(object):
     weights = None
 
     def test_gateset_infidelity_AGI(self):

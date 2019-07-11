@@ -22,14 +22,14 @@ class ColormapHelperTester(BaseCase):
         self.assertEqual(cmap.interpolate_plotly_colorscale(plotlyColorscale, 1.0), 'rgb(0,0,0)')
 
 
-class ColormapInstanceBase:
+class ColormapInstanceBase(object):
     @needs_matplotlib
     def test_get_matplotlib_norm_and_cmap(self):
         mpl_norm, mpl_cmap = self.cmap.get_matplotlib_norm_and_cmap()
         # TODO assert correctness
 
 
-class MulticolorInstance:
+class MulticolorInstance(object):
     """Derived test case base class for Colormaps supporting a finite set of color parameters"""
 
     def setUp(self):

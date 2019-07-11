@@ -6,7 +6,7 @@ from pygsti.io import jsoncodec
 from pygsti.baseobjs import label
 
 
-class LabelBase:
+class LabelBase(object):
     def testLabels(self):
         labels = []
         labels.append(label.Label('Gx', 0))  # a LabelTup

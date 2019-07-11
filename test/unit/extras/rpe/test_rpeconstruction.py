@@ -7,7 +7,7 @@ import pygsti.construction as pc
 import pygsti.extras.rpe.rpeconstruction as rc
 
 
-class RPEConstructionFuncBase:
+class RPEConstructionFuncBase(object):
     lengths = [2, 4, 8, 16, 32]
 
     def build_lists(self, fids1, fids2, germ):

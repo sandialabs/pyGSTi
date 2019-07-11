@@ -39,7 +39,7 @@ class MultiDataSetTester(BaseCase):
         # TODO assert correctness
 
 
-class MultiDataSetMethodBase:
+class MultiDataSetMethodBase(object):
     def _assert_datasets_equal(self, a, b):
         for a_row, b_row in zip(a, b):
             for a_element, b_element in zip(a_row, b_row):

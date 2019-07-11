@@ -15,7 +15,7 @@ class NonHermitianReportableQtyTester(BaseCase):
             r.hermitian_to_real()
 
 
-class ReportableQtyBase:
+class ReportableQtyBase(object):
     def setUp(self):
         self.q = rq.ReportableQty(self.val)
 
@@ -79,17 +79,17 @@ class ReportableQtyErrorbarBase(ReportableQtyBase):
         self.assertTrue(self.q.has_eb())
 
 
-class BasicReportableQtyData:
+class BasicReportableQtyData(object):
     val = 0.0
     eb = 0.01
 
 
-class VectorReportableQtyData:
+class VectorReportableQtyData(object):
     val = np.ones(4, 'd')
     eb = 0.1 * np.ones(4, 'd')
 
 
-class MatrixReportableQtyData:
+class MatrixReportableQtyData(object):
     val = np.identity(4, 'd')
     eb = 0.1 * np.ones((4, 4), 'd')
 

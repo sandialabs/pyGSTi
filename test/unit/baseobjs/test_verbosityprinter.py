@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import pickle
 import sys
 from io import StringIO
@@ -12,7 +14,7 @@ error_message = 'Something terrible happened'
 log_message = 'Data received'
 
 
-class VerbosityPrinterMethodBase:
+class VerbosityPrinterMethodBase(object):
     def test_log(self):
         with self.redirect_output() as out:
             self.vbp.log(log_message)
@@ -51,7 +53,7 @@ class VerbosityPrinterMethodBase:
         # TODO assert correctness
 
 
-class VerbosityPrinterStreamInstance:
+class VerbosityPrinterStreamInstance(object):
     def setUp(self):
         super(VerbosityPrinterStreamInstance, self).setUp()
         self.vbp = VerbosityPrinter.build_printer(self.verbosity)
@@ -67,7 +69,7 @@ class VerbosityPrinterStreamInstance:
             yield mock_stderr.getvalue
 
 
-class VerbosityPrinterFileInstance:
+class VerbosityPrinterFileInstance(object):
     def setUp(self):
         super(VerbosityPrinterFileInstance, self).setUp()
         self.redirect_output = self.redirect_file_io

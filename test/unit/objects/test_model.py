@@ -32,7 +32,7 @@ def smallness_threshold(threshold=10):
 ##
 # Model base classes, controlling the parameterization of the tested model
 #
-class ModelBase:
+class ModelBase(object):
     @classmethod
     def setUpClass(cls):
         #OK for these tests, since we test user interface?
@@ -81,7 +81,7 @@ class StaticModelBase(ModelBase):
 ##
 # Method base classes, controlling which methods will be tested
 #
-class GeneralMethodBase:
+class GeneralMethodBase(object):
     def _assert_model_params(self, *, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
         self.assertEqual(self.model.num_params(), nParams)
@@ -237,7 +237,7 @@ class GeneralMethodBase:
             self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
 
 
-class ThresholdMethodBase:
+class ThresholdMethodBase(object):
     """Tests for model methods affected by the mapforwardsim smallness threshold"""
 
     def test_product(self):
@@ -302,7 +302,7 @@ class ThresholdMethodBase:
         # TODO assert correctness for all of the above
 
 
-class SimMethodBase:
+class SimMethodBase(object):
     """Tests for model methods which can use different forward sims"""
     # XXX is there any reason this shouldn't be refactored into test_forwardsim?
 

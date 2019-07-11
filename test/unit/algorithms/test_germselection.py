@@ -10,7 +10,7 @@ from pygsti.algorithms import germselection as germsel, scoring
 _SEED = 2019
 
 
-class GermSelectionData:
+class GermSelectionData(object):
     @classmethod
     def setUpClass(cls):
         super(GermSelectionData, cls).setUpClass()

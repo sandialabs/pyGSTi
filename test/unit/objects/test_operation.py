@@ -11,7 +11,7 @@ import pygsti.construction as pc
 import pygsti.objects.operation as op
 
 
-class OpBase:
+class OpBase(object):
     def setUp(self):
         ExplicitOpModel._strict = False
         self.gate = self.build_gate()
@@ -526,7 +526,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
         )
 
 
-class LindbladOpBase:
+class LindbladOpBase(object):
     def test_has_nonzero_hessian(self):
         self.assertTrue(self.gate.has_nonzero_hessian())
 

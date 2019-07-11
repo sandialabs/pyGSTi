@@ -14,7 +14,7 @@ class KCoverageTester(BaseCase):
         nc.check_kcoverage_template(rows, n, k, verbosity=1)
 
 
-class StdModuleBase:
+class StdModuleBase(object):
     def test_upgrade_to_multiq_module(self):
         newmod = nc.stdmodule_to_smqmodule(self.std)
         opLabels = list(newmod.target_model().operations.keys())

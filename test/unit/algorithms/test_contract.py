@@ -5,7 +5,7 @@ from pygsti.objects import UnconstrainedPOVM
 from pygsti.algorithms.contract import contract
 
 
-class ContractFunctionBase:
+class ContractFunctionBase(object):
     def setUp(self):
         super(ContractFunctionBase, self).setUp()
         self.options = dict(
@@ -26,7 +26,7 @@ class ContractFunctionWithDataset(ContractFunctionBase):
         )
 
 
-class ContractLGSTModelBase:
+class ContractLGSTModelBase(object):
     def setUp(self):
         super(ContractLGSTModelBase, self).setUp()
         self.model = fixtures.mdl_lgst.copy()

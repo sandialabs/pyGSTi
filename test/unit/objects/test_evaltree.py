@@ -10,7 +10,7 @@ import pygsti.objects.evaltree as et
 from pygsti.objects import MapEvalTree, MatrixEvalTree
 
 
-class EvalTreeBase:
+class EvalTreeBase(object):
     @classmethod
     def setUpClass(cls):
         opLabels = list(cls.target_model.operations.keys())
@@ -150,7 +150,7 @@ class EvalTree2QBase(EvalTreeBase):
         super(EvalTree2QBase, cls).setUpClass()
 
 
-class MapEvalTreeBase:
+class MapEvalTreeBase(object):
     constructor = MapEvalTree
 
     def test_num_applies(self):
@@ -166,7 +166,7 @@ class MapEvalTreeBase:
         # TODO assert correctness
 
 
-class MatrixEvalTreeBase:
+class MatrixEvalTreeBase(object):
     constructor = MatrixEvalTree
 
     def test_get_min_tree_size(self):

@@ -5,7 +5,7 @@ from ..util import BaseCase
 from pygsti.objects import gaugegroup as ggrp, operation as op
 
 
-class GaugeGroupBase:
+class GaugeGroupBase(object):
     def test_construction(self):
         params = self.gg.get_initial_params()
         self.assertEqual(len(params), self.n_params)

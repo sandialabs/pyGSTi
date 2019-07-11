@@ -11,7 +11,7 @@ except ImportError:
     _FASTREPLIB_LOADED = False
 
 
-class ReplibBase:
+class ReplibBase(object):
     def test_DMStateRep(self):
         x = np.zeros(4, 'd')
         staterep = self.replib.DMStateRep(x)  # state rep

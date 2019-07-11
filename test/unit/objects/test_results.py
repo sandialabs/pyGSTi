@@ -7,7 +7,7 @@ from pygsti.objects import results, estimate
 from pygsti.construction import std1Q_XYI as std
 
 
-class ResultsBase:
+class ResultsBase(object):
     def setUp(self):
         # prepare a results object
         self.model = pkg.mdl_lsgst_go

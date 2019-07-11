@@ -8,7 +8,7 @@ from pygsti.objects import Circuit, Label
 from pygsti.algorithms import core
 
 
-class CoreStdData:
+class CoreStdData(object):
     def setUp(self):
         super(CoreStdData, self).setUp()
         self.ds = fixtures.ds.copy()

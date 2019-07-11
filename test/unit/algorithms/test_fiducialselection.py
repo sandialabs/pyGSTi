@@ -13,7 +13,7 @@ class FiducialSelectionUtilTester(BaseCase):
         # TODO assert correctness
 
 
-class FiducialSelectionStdModel:
+class FiducialSelectionStdModel(object):
     def setUp(self):
         super(FiducialSelectionStdModel, self).setUp()
         self.model = fixtures.model.copy()
@@ -30,7 +30,7 @@ class FiducialSelectionExtendedModel(FiducialSelectionStdModel):
 # optimize_integer_fiducials_slack
 #
 
-class OptimizeIntegerFiducialsBase:
+class OptimizeIntegerFiducialsBase(object):
     def setUp(self):
         super(OptimizeIntegerFiducialsBase, self).setUp()
         self.options = dict(
@@ -144,7 +144,7 @@ class MeasOptimizeIntegerFiducialsExtendedModelTester(
 #
 
 # XXX class names prefixed with "Test" will be picked up by nose
-class _TestFiducialListBase:
+class _TestFiducialListBase(object):
     def setUp(self):
         super(_TestFiducialListBase, self).setUp()
         self.fiducials_list = fs.optimize_integer_fiducials_slack(

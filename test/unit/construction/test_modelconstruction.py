@@ -80,7 +80,7 @@ class ModelConstructionTester(BaseCase):
                                                      effectLabels=['0', '1'], effectExpressions=["FooBar", "1"])
 
 
-class GateConstructionBase:
+class GateConstructionBase(object):
     def setUp(self):
         pygsti.objects.ExplicitOpModel._strict = False
 

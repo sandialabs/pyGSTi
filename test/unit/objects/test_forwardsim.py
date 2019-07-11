@@ -40,7 +40,7 @@ class AbstractForwardSimTester(BaseCase):
             self.fwdsim.bulk_fill_hprobs(None, None)
 
 
-class ForwardSimBase:
+class ForwardSimBase(object):
     @classmethod
     def setUpClass(cls):
         # XXX can this be constructed directly instead of taking it from a model instance?

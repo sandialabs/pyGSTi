@@ -6,7 +6,7 @@ from pygsti.tools import matrixmod2
 import pygsti.tools.symplectic as symplectic
 
 
-class SymplecticBase:
+class SymplecticBase(object):
     # Tests that check the symplectic random sampler, check_symplectic, the convention converter,
     # and the symplectic form constructing function are working.
 

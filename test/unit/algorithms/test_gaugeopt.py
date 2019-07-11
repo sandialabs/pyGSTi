@@ -7,7 +7,7 @@ import pygsti.algorithms as alg
 import pygsti.algorithms.gaugeopt as go
 
 
-class GaugeOptMethodBase:
+class GaugeOptMethodBase(object):
     def setUp(self):
         super(GaugeOptMethodBase, self).setUp()
         self.options = dict(
@@ -56,7 +56,7 @@ class GaugeOptMetricMethods(GaugeOptMethodBase):
             )
 
 
-class GaugeOptInstanceBase:
+class GaugeOptInstanceBase(object):
     def setUp(self):
         super(GaugeOptInstanceBase, self).setUp()
         self.target = fixtures.model

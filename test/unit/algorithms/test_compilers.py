@@ -108,7 +108,7 @@ class CompileSymplecticSubsetTester(CompileSymplecticTester):
         )
 
 
-class CompileCliffordBase:
+class CompileCliffordBase(object):
     def setUp(self):
         super(CompileCliffordBase, self).setUp()
         self.options = dict(
@@ -183,7 +183,7 @@ class CompileCliffordSubsetiAGvGETester(CompileCliffordSubsetTester):
         )
 
 
-class CompileCNOTCircuitBase:
+class CompileCNOTCircuitBase(object):
     def test_compile_cnot_circuit(self):
         compiled = compilers.compile_cnot_circuit(
             fixture_2Q.cnot_circuit_sym,
@@ -224,7 +224,7 @@ class CompileCNOTCircuitROCAGETester(CompileCNOTCircuitBase, BaseCase):
     aargs = []
 
 
-class CompileStabilizerBase:
+class CompileStabilizerBase(object):
     def setUp(self):
         super(CompileStabilizerBase, self).setUp()
         self.options = {}

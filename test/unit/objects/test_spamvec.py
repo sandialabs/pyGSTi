@@ -38,7 +38,7 @@ class SpamvecUtilTester(BaseCase):
             raw.depolarize(0.01)
 
 
-class SpamvecBase:
+class SpamvecBase(object):
     def setUp(self):
         self.vec = self.build_vec()
         ExplicitOpModel._strict = False
