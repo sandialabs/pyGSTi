@@ -84,7 +84,7 @@ class ForwardSimulator(object):
         """
         return self.paramvec
 
-    def from_vector(self, v, close=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         The inverse of to_vector.  Initializes the Model-like members of this
         calculator based on `v`. Used for computing finite-difference derivatives.
@@ -95,8 +95,8 @@ class ForwardSimulator(object):
         # POVMs and Instruments rely on a fixed from_vector ordering
         # of their simplified effects/gates.
         self.paramvec = v.copy()  # now self.paramvec is *not* the same as the Model's paramvec
-        self.sos.from_vector(v, close)  # so don't want ", nodirty=False)" - we need to set dirty
-        # flags so *parent* will re-init it's paramvec...
+        self.sos.from_vector(v, close, nodirty)  # so don't always want ", nodirty=True)" - we
+        # need to set dirty flags so *parent* will re-init it's paramvec...
 
         #Re-init reps for computation
         #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }

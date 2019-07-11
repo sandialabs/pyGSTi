@@ -1649,6 +1649,17 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     # final index within dpr_cache
     iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
+    #Get reps *once* because these are peristent objects within the operation objects
+    # and so there's no need to regenerate them.
+    rhorep = calc.sos.get_prep(rholabel)._rep
+    ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
+    operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
+    operationreps = { k:op._rep for k,op in operations.items() }
+    c_rho = convert_rhorep(rhorep)
+    c_ereps = convert_ereps(ereps)
+    c_gatereps = convert_gatereps(operationreps)
+    # --check - does from_vector regen *all* of these?
+
     #tStart = pytime.time(); #REMOVE
     #t_pr = 0; t_reps = 0; t_conv=0; t_copy=0; t_fromvec=0; t_gather=0;   #REMOVE
     #time_dict = {'expon':0.0, 'composed': 0.0, 'dense':0.0, 'lind': 0.0} #REMOVE
@@ -1660,21 +1671,22 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             #t1 = pytime.time() # REMOVE
             vec = orig_vec.copy(); vec[i] += eps
             #t_copy += pytime.time()-t1; t1 = pytime.time() # REMOVE
-            calc.from_vector(vec, close=True)
+            calc.from_vector(vec, close=True, nodirty=True)
             #t_fromvec += pytime.time()-t1; t1 = pytime.time() # REMOVE
 
+            #OLD REMOVE
             #rebuild reps (not evaltree or operation_lookup)
-            rhorep = calc.sos.get_prep(rholabel)._rep
-            ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
-            operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
-            operationreps = { k:op._rep for k,op in operations.items() } 
+            # rhorep = calc.sos.get_prep(rholabel)._rep
+            # ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
+            # operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
+            # operationreps = { k:op._rep for k,op in operations.items() } 
             
             #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
             #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
             #t_reps += pytime.time()-t1; t1 = pytime.time() #REMOVE
-            c_rho = convert_rhorep(rhorep)
-            c_ereps = convert_ereps(ereps)
-            c_gatereps = convert_gatereps(operationreps)
+            # c_rho = convert_rhorep(rhorep)
+            # c_ereps = convert_ereps(ereps)
+            # c_gatereps = convert_gatereps(operationreps)
             #t_conv += pytime.time()-t1; t1 = pytime.time() #REMOVE
 
             dm_compute_pr_cache(pCache_delta, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
