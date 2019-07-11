@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 from ..util import BaseCase, mock
 
-from pygsti.baseobjs import VerbosityPrinter
+from pygsti.baseobjs import verbosityprinter as vbp
 
 warn_message = 'This might go badly'
 error_message = 'Something terrible happened'
@@ -56,7 +56,7 @@ class VerbosityPrinterMethodBase(object):
 class VerbosityPrinterStreamInstance(object):
     def setUp(self):
         super(VerbosityPrinterStreamInstance, self).setUp()
-        self.vbp = VerbosityPrinter.build_printer(self.verbosity)
+        self.vbp = vbp.VerbosityPrinter.build_printer(self.verbosity)
 
     @contextmanager
     def redirect_output(self):
@@ -75,11 +75,11 @@ class VerbosityPrinterFileInstance(object):
         self.redirect_output = self.redirect_file_io
         self.redirect_error = self.redirect_file_io
         with self.redirect_file_io():
-            self.vbp = VerbosityPrinter(self.verbosity, filename='/tmp/test_file.log')
+            self.vbp = vbp.VerbosityPrinter(self.verbosity, filename='/tmp/test_file.log')
 
     @contextmanager
     def redirect_file_io(self):
-        with mock.patch('builtins.open', mock.mock_open()) as mock_open:
+        with mock.patch.object(vbp, 'open', mock.mock_open()) as mock_open:
             sio = StringIO()
             sio.close = mock.MagicMock()
             mock_open.return_value = sio
