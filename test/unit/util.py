@@ -54,6 +54,11 @@ def needs_matplotlib(fn):
     return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")
 
 
+def needs_python3(fn):
+    """Shortcut decorator for skipping tests of features not supported in Python 2"""
+    return unittest.skipIf(sys.version_info < (3, 0), "feature not supported in Python 2")
+
+
 def version_label():
     """Get the label used internally for this python version.
 

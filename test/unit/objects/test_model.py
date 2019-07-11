@@ -82,7 +82,7 @@ class StaticModelBase(ModelBase):
 # Method base classes, controlling which methods will be tested
 #
 class GeneralMethodBase(object):
-    def _assert_model_params(self, *, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
+    def _assert_model_params(self, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
         self.assertEqual(self.model.num_params(), nParams)
         # TODO does this actually assert correctness?

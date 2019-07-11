@@ -225,29 +225,34 @@ class LongSequenceGSTBase(LongSequenceBase):
     def test_long_sequence_gst(self):
         result = ls.do_long_sequence_gst(
             self.ds, self.model, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, advancedOptions={**self.options})
+            self.germs, self.maxLens, advancedOptions=self.options)
         # TODO assert correctness
 
 
 class LongSequenceGSTWithChi2(LongSequenceGSTBase):
     def test_long_sequence_gst_chi2(self):
+        self.options.update(
+            objective='chi2'
+        )
         result = ls.do_long_sequence_gst(
             self.ds, self.model, self.fiducials, self.fiducials,
             self.germs, self.maxLens,
-            advancedOptions={**self.options, 'objective': "chi2"})
+            advancedOptions=self.options)
         # TODO assert correctness
 
 
 class LongSequenceGSTTester(LongSequenceGSTWithChi2):
     def test_long_sequence_gst_advanced_options(self):
         # TODO what exactly is being tested?
+        self.options.update({
+            'starting point': self.model,
+            'depolarizeStart': 0.05,
+            'cptpPenaltyFactor': 1.0
+        })
         result = ls.do_long_sequence_gst(
             self.ds, self.model, self.fiducials, None,
             self.germs, self.maxLens,
-            advancedOptions={**self.options,
-                             'starting point': self.model,
-                             'depolarizeStart': 0.05,
-                             'cptpPenaltyFactor': 1.0}
+            advancedOptions=self.options
         )
         # TODO assert correctness
 
@@ -290,13 +295,15 @@ class WholeGermPowersTester(LongSequenceGSTWithChi2):
         io.write_circuit_list(fiducial_path, self.fiducials)
         io.write_circuit_list(germ_path, self.germs)
 
+        self.options.update(
+            randomizeStart=1e-6,
+            profile=2,
+            verbosity=10,
+            memoryLimitInBytes=2 * 1000**3
+        )
         result = ls.do_long_sequence_gst(
             ds_path, model_path, fiducial_path, fiducial_path, germ_path, self.maxLens,
-            advancedOptions={**self.options,
-                             'randomizeStart': 1e-6,
-                             'profile': 2,
-                             'verbosity': 10,
-                             'memoryLimitInBytes': 2 * 1000**3}
+            advancedOptions=self.options
         )
         # TODO assert correctness
 

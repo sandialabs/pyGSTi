@@ -111,7 +111,7 @@ class BootstrapUtilityTester(BootstrapBase):
 
     def setUp(self):
         super(BootstrapUtilityTester, self).setUp()
-        self.bootgs_p = self.bootgs_p.copy()
+        self.bootgs_p = self.bootgs_p[:]  # python2-compatible copy
 
     def test_gauge_optimize_model_list(self):
         bs.gauge_optimize_model_list(
