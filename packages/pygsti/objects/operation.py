@@ -4471,6 +4471,7 @@ class EmbeddedOp(LinearOperator):
         self.targetLabels = targetLabels
         self.embedded_op = gate_to_embed
         self.dense_rep = dense_rep
+        self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly 
 
         evotype = gate_to_embed._evotype
         opDim = self.state_space_labels.dim
@@ -4589,9 +4590,45 @@ class EmbeddedOp(LinearOperator):
                        self.embedded_op.copy(parent))
         return self._copy_gpindices(copyOfMe, parent)
 
+    def _iter_matrix_elements_precalc(self):
+        divisor = 1; divisors = []
+        for l in self.targetLabels:
+            divisors.append(divisor)
+            divisor *= self.state_space_labels.labeldims[l]  # e.g. 4 or 2 for qubits (depending on evotype)
+    
+        iTensorProdBlk = [self.state_space_labels.tpb_index[label] for label in self.targetLabels][0]
+        tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
+        basisInds = [list(range(self.state_space_labels.labeldims[l])) for l in tensorProdBlkLabels]
+        # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
+
+        basisInds_noop = basisInds[:]
+        basisInds_noop_blankaction = basisInds[:]
+        labelIndices = [tensorProdBlkLabels.index(label) for label in self.targetLabels]
+        for labelIndex in sorted(labelIndices, reverse=True):
+            del basisInds_noop[labelIndex]
+            basisInds_noop_blankaction[labelIndex] = [0]
+
+        sorted_bili = sorted(list(enumerate(labelIndices)), key=lambda x: x[1])
+        # for inserting target-qubit basis indices into list of noop-qubit indices
+
+        # multipliers to go from per-label indices to tensor-product-block index
+        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
+        multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
+            reversed(list(map(len, basisInds[1:])))))), _np.int64)
+
+        # number of basis elements preceding our block's elements
+        blockDims = self.state_space_labels.tpb_dims
+        offset = sum([blockDims[i] for i in range(0, iTensorProdBlk)])
+
+        return divisors, multipliers, sorted_bili, basisInds_noop, offset
+
     def _iter_matrix_elements(self, relToBlock=False):
         """ Iterates of (op_i,op_j,embedded_op_i,embedded_op_j) tuples giving mapping
             between nonzero elements of operation matrix and elements of the embedded gate matrx """
+        if self._iter_elements_cache is not None:
+            for item in self._iter_elements_cache:
+                yield item
+            return
 
         def _merge_op_and_noop_bases(op_b, noop_b, sorted_bili):
             """
@@ -4617,45 +4654,12 @@ class EmbeddedOp(LinearOperator):
                 ret.append(indx // d)
                 indx = indx % d
             return ret
-
-        #PREPROCESSING before main loop.  If we want this function to work faster, we could
-        # cache some of these qtys, namely: divisors, multipliers, and sorted_bili.  As it is,
-        # we don't care so much about the speed of this function and do this precompuational
-        # work every time it's called, which arguably yields increased code clarity.
-
-        divisor = 1; divisors = []
-        for l in self.targetLabels:
-            divisors.append(divisor)
-            divisor *= self.state_space_labels.labeldims[l]  # e.g. 4 or 2 for qubits (depending on evotype)
-
-        iTensorProdBlk = [self.state_space_labels.tpb_index[label] for label in self.targetLabels][0]
-        tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
-        basisInds = [list(range(self.state_space_labels.labeldims[l])) for l in tensorProdBlkLabels]
-        # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
-
-        basisInds_noop = basisInds[:]
-        basisInds_noop_blankaction = basisInds[:]
-        labelIndices = [tensorProdBlkLabels.index(label) for label in self.targetLabels]
-        for labelIndex in sorted(labelIndices, reverse=True):
-            del basisInds_noop[labelIndex]
-            basisInds_noop_blankaction[labelIndex] = [0]
-
-        sorted_bili = sorted(list(enumerate(labelIndices)), key=lambda x: x[1])
-        # for inserting target-qubit basis indices into list of noop-qubit indices
-
-        # multipliers to go from per-label indices to tensor-product-block index
-        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
-            reversed(list(map(len, basisInds[1:])))))), _np.int64)
-
-        if relToBlock:
-            offset = 0
-        else:
-            # number of basis elements preceding our block's elements
-            blockDims = self.state_space_labels.tpb_dims
-            offset = sum([blockDims[i] for i in range(0, iTensorProdBlk)])
+        
+        divisors, multipliers, sorted_bili, basisInds_noop, nonrel_offset = self._iter_matrix_elements_precalc()
+        offset = 0 if relToBlock else nonrel_offset
 
         #Begin iteration loop
+        self._iter_elements_cache = []
         for op_i in range(self.embedded_op.dim):     # rows ~ "output" of the gate map
             for op_j in range(self.embedded_op.dim):  # cols ~ "input"  of the gate map
                 op_b1 = _decomp_op_index(op_i, divisors)  # op_b? are lists of dm basis indices, one index per
@@ -4673,7 +4677,9 @@ class EmbeddedOp(LinearOperator):
                     # index of input dm basis el within vec(tensor block basis)
                     in_vec_index = _np.dot(multipliers, tuple(b_in))
 
-                    yield (out_vec_index + offset, in_vec_index + offset, op_i, op_j)
+                    item = (out_vec_index + offset, in_vec_index + offset, op_i, op_j)
+                    self._iter_elements_cache.append(item)
+                    yield item
 
     #def torep(self):
     #    """
