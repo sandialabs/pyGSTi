@@ -551,12 +551,12 @@ cdef class DMOpRep_Dense(DMOpRep):
 
 
 cdef class DMOpRep_Embedded(DMOpRep):
-    cdef public np.ndarray data_ref1
-    cdef public np.ndarray data_ref2
-    cdef public np.ndarray data_ref3
-    cdef public np.ndarray data_ref4
-    cdef public np.ndarray data_ref5
-    cdef public np.ndarray data_ref6
+    cdef np.ndarray data_ref1
+    cdef np.ndarray data_ref2
+    cdef np.ndarray data_ref3
+    cdef np.ndarray data_ref4
+    cdef np.ndarray data_ref5
+    cdef np.ndarray data_ref6
     cdef public DMOpRep embedded
 
     def __cinit__(self, DMOpRep embedded_op,
@@ -628,7 +628,7 @@ cdef class DMOpRep_Embedded(DMOpRep):
 
 
 cdef class DMOpRep_Composed(DMOpRep):
-    cdef public object factor_reps # list of DMOpRep objs?
+    cdef public object factorop_reps # list of DMOpRep objs?
 
     def __cinit__(self, factor_op_reps, INT dim):
         self.factor_reps = factor_op_reps
@@ -644,10 +644,10 @@ cdef class DMOpRep_Composed(DMOpRep):
 
 
 cdef class DMOpRep_Sum(DMOpRep):
-    cdef object list_of_factors # list of DMOpRep objs?
+    cdef public object factor_reps # list of DMOpRep objs?
 
     def __cinit__(self, factor_reps, INT dim):
-        self.list_of_factors = factor_reps
+        self.factor_reps = factor_reps
         cdef INT i
         cdef INT nfactors = len(factor_reps)
         cdef vector[DMOpCRep*] factor_creps = vector[DMGateCRep_ptr](nfactors)
@@ -656,12 +656,12 @@ cdef class DMOpRep_Sum(DMOpRep):
         self.c_gate = new DMOpCRep_Sum(factor_creps, dim)
 
     def __reduce__(self):
-        return (DMOpRep_Sum, (self.list_of_factors, self.c_gate._dim))
+        return (DMOpRep_Sum, (self.factor_reps, self.c_gate._dim))
 
 
 cdef class DMOpRep_Exponentiated(DMOpRep):
-    cdef DMOpRep exponentiated_op
-    cdef INT power
+    cdef public DMOpRep exponentiated_op
+    cdef public INT power
 
     def __cinit__(self, DMOpRep exponentiated_op_rep, INT power, INT dim):
         self.exponentiated_op = exponentiated_op_rep
@@ -673,10 +673,10 @@ cdef class DMOpRep_Exponentiated(DMOpRep):
 
 
 cdef class DMOpRep_Lindblad(DMOpRep):
-    cdef public object data_ref1
-    cdef public np.ndarray data_ref2
-    cdef public np.ndarray data_ref3
-    cdef public np.ndarray data_ref4
+    cdef object data_ref1
+    cdef np.ndarray data_ref2
+    cdef np.ndarray data_ref3
+    cdef np.ndarray data_ref4
 
     def __cinit__(self, errgen_rep,
                   double mu, double eta, INT m_star, INT s,
@@ -812,7 +812,7 @@ cdef class SVEffectRep_TensorProd(SVEffectRep):
 
         
 cdef class SVEffectRep_Computational(SVEffectRep):
-    cdef np.ndarray data_ref;
+    cdef public np.ndarray zvals;
     
     def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
         # cdef INT dim = 2**zvals.shape[0] -- just send as argument
@@ -823,11 +823,11 @@ cdef class SVEffectRep_Computational(SVEffectRep):
         for i in range(nfactors):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
-        self.data_ref = zvals
+        self.zvals = zvals
         self.c_effect = new SVEffectCRep_Computational(nfactors, zvals_int, dim)
 
     def __reduce__(self):
-        return (SVEffectRep_Computational, (self.data_ref, self.c_effect._dim))
+        return (SVEffectRep_Computational, (self.zvals, self.c_effect._dim))
                                          
 
 cdef class SVOpRep:
@@ -955,10 +955,10 @@ cdef class SVOpRep_Embedded(SVOpRep):
 
 
 cdef class SVOpRep_Composed(SVOpRep):
-    cdef object list_of_factors # list of SVOpRep objs?
+    cdef public object factor_reps # list of SVOpRep objs?
 
     def __cinit__(self, factor_op_reps, INT dim):
-        self.list_of_factors = factor_op_reps
+        self.factor_reps = factor_op_reps
         cdef INT i
         cdef INT nfactors = len(factor_op_reps)
         cdef vector[SVOpCRep*] gate_creps = vector[SVGateCRep_ptr](nfactors)
@@ -967,14 +967,14 @@ cdef class SVOpRep_Composed(SVOpRep):
         self.c_gate = new SVOpCRep_Composed(gate_creps, dim)
 
     def __reduce__(self):
-        return (SVOpRep_Composed, (self.list_of_factors, self.c_gate._dim))
+        return (SVOpRep_Composed, (self.factor_reps, self.c_gate._dim))
 
 
 cdef class SVOpRep_Sum(SVOpRep):
-    cdef object list_of_factors # list of SVOpRep objs?
+    cdef public object factor_reps # list of SVOpRep objs?
 
     def __cinit__(self, factor_reps, INT dim):
-        self.list_of_factors = factor_reps
+        self.factor_reps = factor_reps
         cdef INT i
         cdef INT nfactors = len(factor_reps)
         cdef vector[SVOpCRep*] factor_creps = vector[SVGateCRep_ptr](nfactors)
@@ -983,12 +983,12 @@ cdef class SVOpRep_Sum(SVOpRep):
         self.c_gate = new SVOpCRep_Sum(factor_creps, dim)
 
     def __reduce__(self):
-        return (SVOpRep_Sum, (self.list_of_factors, self.c_gate._dim))
+        return (SVOpRep_Sum, (self.factor_reps, self.c_gate._dim))
 
 
 cdef class SVOpRep_Exponentiated(SVOpRep):
-    cdef SVOpRep exponentiated_op
-    cdef INT power
+    cdef public SVOpRep exponentiated_op
+    cdef public INT power
 
     def __cinit__(self, SVOpRep exponentiated_op_rep, INT power, INT dim):
         self.exponentiated_op = exponentiated_op_rep
@@ -1045,15 +1045,15 @@ cdef class SBStateRep: #(StateRep):
 
 cdef class SBEffectRep:
     cdef SBEffectCRep* c_effect
-    cdef np.ndarray data_ref
+    cdef public np.ndarray zvals
 
     def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals):
-        self.data_ref = zvals
+        self.zvals = zvals
         self.c_effect = new SBEffectCRep(<INT*>zvals.data,
                                          <INT>zvals.shape[0])
 
     def __reduce__(self):
-        return (SBEffectRep, (self.data_ref,))
+        return (SBEffectRep, (self.zvals,))
 
     def __dealloc__(self):
         del self.c_effect # check for NULL?
@@ -1112,25 +1112,25 @@ cdef class SBOpRep:
 
 
 cdef class SBOpRep_Embedded(SBOpRep):
-    cdef np.ndarray data_ref
-    cdef SBOpRep embedded
+    cdef public np.ndarray qubits
+    cdef public SBOpRep embedded
 
     def __cinit__(self, SBOpRep embedded_op, INT n, 
                   np.ndarray[np.int64_t, ndim=1, mode='c'] qubits):
-        self.data_ref = qubits
+        self.qubits = qubits
         self.embedded = embedded_op # needed to prevent garbage collection?
         self.c_gate = new SBOpCRep_Embedded(embedded_op.c_gate, n,
                                               <INT*>qubits.data, <INT>qubits.shape[0])
 
     def __reduce__(self):
-        return (SBOpRep_Embedded, (self.embedded, self.c_gate._n, self.data_ref))
+        return (SBOpRep_Embedded, (self.embedded, self.c_gate._n, self.qubits))
 
 
 cdef class SBOpRep_Composed(SBOpRep):
-    cdef object list_of_factors # list of SBOpRep objs?
+    cdef public object factor_reps # list of SBOpRep objs?
 
     def __cinit__(self, factor_op_reps, INT n):
-        self.list_of_factors = factor_op_reps
+        self.factor_reps = factor_op_reps
         cdef INT i
         cdef INT nfactors = len(factor_op_reps)
         cdef vector[SBOpCRep*] gate_creps = vector[SBGateCRep_ptr](nfactors)
@@ -1139,14 +1139,14 @@ cdef class SBOpRep_Composed(SBOpRep):
         self.c_gate = new SBOpCRep_Composed(gate_creps, n)
 
     def __reduce__(self):
-        return (SBOpRep_Composed, (self.list_of_factors, self.c_gate._n))
+        return (SBOpRep_Composed, (self.factor_reps, self.c_gate._n))
 
 
 cdef class SBOpRep_Sum(SBOpRep):
-    cdef object list_of_factors # list of SBOpRep objs?
+    cdef public object factor_reps # list of SBOpRep objs?
 
     def __cinit__(self, factor_reps, INT n):
-        self.list_of_factors = factor_reps
+        self.factor_reps = factor_reps
         cdef INT i
         cdef INT nfactors = len(factor_reps)
         cdef vector[SBOpCRep*] factor_creps = vector[SBGateCRep_ptr](nfactors)
@@ -1155,12 +1155,12 @@ cdef class SBOpRep_Sum(SBOpRep):
         self.c_gate = new SBOpCRep_Sum(factor_creps, n)
 
     def __reduce__(self):
-        return (SBOpRep_Sum, (self.list_of_factors, self.c_gate._n))
+        return (SBOpRep_Sum, (self.factor_reps, self.c_gate._n))
 
 
 cdef class SBOpRep_Exponentiated(SBOpRep):
-    cdef SBOpRep exponentiated_op
-    cdef INT power
+    cdef public SBOpRep exponentiated_op
+    cdef public INT power
 
     def __cinit__(self, SBOpRep exponentiated_op_rep, INT power, INT n):
         self.exponentiated_op = exponentiated_op_rep
@@ -1172,12 +1172,12 @@ cdef class SBOpRep_Exponentiated(SBOpRep):
 
 
 cdef class SBOpRep_Clifford(SBOpRep):
-    cdef np.ndarray data_ref1
-    cdef np.ndarray data_ref2
-    cdef np.ndarray data_ref3
-    cdef np.ndarray data_ref4
-    cdef np.ndarray data_ref5
-    cdef np.ndarray data_ref6
+    cdef public np.ndarray smatrix
+    cdef public np.ndarray svector
+    cdef public np.ndarray unitary
+    cdef public np.ndarray smatrix_inv
+    cdef public np.ndarray svector_inv
+    cdef public np.ndarray unitary_dagger
 
     def __cinit__(self, np.ndarray[np.int64_t, ndim=2, mode='c'] smatrix,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] svector,
@@ -1185,20 +1185,20 @@ cdef class SBOpRep_Clifford(SBOpRep):
                   np.ndarray[np.int64_t, ndim=1, mode='c'] svector_inv,
                   np.ndarray[np.complex128_t, ndim=2, mode='c'] unitary):
         
-        self.data_ref1 = smatrix
-        self.data_ref2 = svector
-        self.data_ref3 = unitary
-        self.data_ref4 = smatrix_inv
-        self.data_ref5 = svector_inv
-        self.data_ref6 = np.ascontiguousarray(np.conjugate(np.transpose(unitary)))
+        self.smatrix = smatrix
+        self.svector = svector
+        self.unitary = unitary
+        self.smatrix_inv = smatrix_inv
+        self.svector_inv = svector_inv
+        self.unitary_dagger = np.ascontiguousarray(np.conjugate(np.transpose(unitary)))
            # the "ascontiguousarray" is crucial, since we just use the .data below
         cdef INT n = smatrix.shape[0] // 2
         self.c_gate = new SBOpCRep_Clifford(<INT*>smatrix.data, <INT*>svector.data, <double complex*>unitary.data,
                                               <INT*>smatrix_inv.data, <INT*>svector_inv.data,
-                                              <double complex*>self.data_ref6.data, n)
+                                              <double complex*>self.unitary_dagger.data, n)
 
     def __reduce__(self):
-        return (SBOpRep_Clifford, (self.data_ref1, self.data_ref2, self.data_ref4, self.data_ref5, self.data_ref3)) 
+        return (SBOpRep_Clifford, (self.smatrix, self.svector, self.smatrix_inv, self.svector_inv, self.unitary)) 
 
 
 # Other classes
