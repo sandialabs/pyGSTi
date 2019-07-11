@@ -5,6 +5,7 @@ import pygsti.objects.circuitstructure as cs
 
 
 class AbstractCircuitStructureTester(BaseCase):
+    # XXX is testing an abstract base class really useful?
     def setUp(self):
         self.gss = cs.CircuitStructure()
 
@@ -45,5 +46,23 @@ class LSGermsStructureTester(AbstractCircuitStructureTester):
         self.gss.truncate([1, 2])
         # TODO assert correctness
 
-    # TODO coverage for all other member units
-    # TODO test cases for other members
+    def test_xvals(self):
+        self.skipTest("TODO")
+
+    def test_yvals(self):
+        self.skipTest("TODO")
+
+    def test_minor_xvals(self):
+        self.skipTest("TODO")
+
+    def test_minor_yvals(self):
+        self.skipTest("TODO")
+
+    def test_create_plaquette(self):
+        self.skipTest("TODO")
+
+    def test_get_plaquette(self):
+        self.skipTest("TODO")
+
+    def test_plaquette_rows_cols(self):
+        self.skipTest("TODO")

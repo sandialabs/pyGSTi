@@ -203,29 +203,6 @@ class GeneralMethodBase:
         g._clean_paramvec()
         self.assertAlmostEqual(self.model.frobeniusdist(g), 0.0)
 
-    def test_gpindices(self):
-        # XXX what is being tested here?
-        # TODO break apart
-
-        # Test instrument construction with elements whose gpindices
-        # are already initialized.  Since this isn't allowed currently
-        # (a future functionality), we need to do some hacking
-        mdl = self.model.copy()
-        mdl.operations['Gnew1'] = FullDenseOp(np.identity(4, 'd'))
-        del mdl.operations['Gnew1']
-
-        v = mdl.to_vector()
-        Np = mdl.num_params()
-        gate_with_gpindices = FullDenseOp(np.identity(4, 'd'))
-        gate_with_gpindices[0, :] = v[0:4]
-        gate_with_gpindices.set_gpindices(np.concatenate(
-            (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
-        mdl.operations['Gnew2'] = gate_with_gpindices
-        mdl.operations['Gnew3'] = FullDenseOp(np.identity(4, 'd'))
-        del mdl.operations['Gnew3']  # this causes update of Gnew2 indices
-        del mdl.operations['Gnew2']
-        # TODO assert correctness
-
     def test_raises_on_get_bad_key(self):
         with self.assertRaises(KeyError):
             self.model['Non-existent-key']
@@ -258,12 +235,6 @@ class GeneralMethodBase:
     def test_set_gate_raises_on_bad_dimension(self):
         with self.assertRaises(ValueError):
             self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
-
-    def test_check_paramvec_raises_on_error(self):
-        # XXX is this test needed?
-        self.model._paramvec[:] = 0.0  # mess with paramvec to get error below
-        with self.assertRaises(ValueError):
-            self.model._check_paramvec(debug=True)  # param vec is now out of sync!
 
 
 class ThresholdMethodBase:
@@ -337,7 +308,6 @@ class SimMethodBase:
 
     @classmethod
     def setUpClass(cls):
-        # def setUp(self):
         super(SimMethodBase, cls).setUpClass()
         cls.gatestring1 = ('Gx', 'Gy')
         cls.gatestring2 = ('Gx', 'Gy', 'Gy')
@@ -388,11 +358,6 @@ class SimMethodBase:
             self.assertArraysAlmostEqual(hprobs[('0',)], hprobs2[('0',)][0])
             self.assertArraysAlmostEqual(hprobs[('1',)], hprobs2[('1',)][0])
         # TODO assert correctness
-
-    def test_probs_warns_on_nan_in_input(self):
-        self.model['rho0'][:] = np.nan
-        with self.assertWarns(Warning):
-            self.model.probs(self.gatestring1)
 
     def test_bulk_probs(self):
         with self.assertNoWarns():
@@ -614,6 +579,37 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
             for effectLabel, eVec in cp.povms[povmLabel].items():
                 self.assertArraysAlmostEqual(eVec, np.dot(np.transpose(T), self.model.povms[povmLabel][effectLabel]))
 
+    def test_gpindices(self):
+        # Test instrument construction with elements whose gpindices
+        # are already initialized.  Since this isn't allowed currently
+        # (a future functionality), we need to do some hacking
+        mdl = self.model.copy()
+        mdl.operations['Gnew1'] = FullDenseOp(np.identity(4, 'd'))
+        del mdl.operations['Gnew1']
+
+        v = mdl.to_vector()
+        Np = mdl.num_params()
+        gate_with_gpindices = FullDenseOp(np.identity(4, 'd'))
+        gate_with_gpindices[0, :] = v[0:4]
+        gate_with_gpindices.set_gpindices(np.concatenate(
+            (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
+        mdl.operations['Gnew2'] = gate_with_gpindices
+        mdl.operations['Gnew3'] = FullDenseOp(np.identity(4, 'd'))
+        del mdl.operations['Gnew3']  # this causes update of Gnew2 indices
+        del mdl.operations['Gnew2']
+        # TODO assert correctness
+
+    def test_check_paramvec_raises_on_error(self):
+        # XXX is this test needed?
+        self.model._paramvec[:] = 0.0  # mess with paramvec to get error below
+        with self.assertRaises(ValueError):
+            self.model._check_paramvec(debug=True)  # param vec is now out of sync!
+
+    def test_probs_warns_on_nan_in_input(self):
+        self.model['rho0'][:] = np.nan
+        with self.assertWarns(Warning):
+            self.model.probs(self.gatestring1)
+
 
 class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
     def test_tp_dist(self):
@@ -627,6 +623,15 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
         Gi_test_dense_op = FullDenseOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+
+    def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
+        self.skipTest("TODO should probably warn user?")
+
+    def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
+        self.skipTest("TODO should probably warn user?")
+
+    def test_bulk_hprobs_by_block(self):
+        self.skipTest("TODO should probably warn user?")
 
 
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):

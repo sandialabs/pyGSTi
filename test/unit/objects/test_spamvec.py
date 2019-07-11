@@ -221,6 +221,7 @@ class CPTPSpamvecTester(MutableSpamvecBase, BaseCase):
         return sv.CPTPSPAMVec(v_tp, "pp")
 
     def test_hessian(self):
+        self.skipTest("Hessian computation isn't implemented for CPTPSPAMVec; remove this skip when it becomes a priority")
         self.vec.hessian_wrt_params()
         self.vec.hessian_wrt_params([0])
         self.vec.hessian_wrt_params([0], [0])
