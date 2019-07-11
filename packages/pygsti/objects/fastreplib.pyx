@@ -1660,7 +1660,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             #t1 = pytime.time() # REMOVE
             vec = orig_vec.copy(); vec[i] += eps
             #t_copy += pytime.time()-t1; t1 = pytime.time() # REMOVE
-            calc.from_vector(vec)
+            calc.from_vector(vec, close=True)
             #t_fromvec += pytime.time()-t1; t1 = pytime.time() # REMOVE
 
             #rebuild reps (not evaltree or operation_lookup)
@@ -1681,7 +1681,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             dpr_cache[:,:,iFinal] = (pCache_delta - pCache)/eps
             #t_pr += pytime.time()-t1 #REMOVE
 
-    calc.from_vector(orig_vec)
+    calc.from_vector(orig_vec, close=True)
     free_rhocache(rho_cache)
     
     #Now each processor has filled the relavant parts of dpr_cache,
@@ -1893,10 +1893,10 @@ def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, d
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            calc.from_vector(vec)
+            calc.from_vector(vec, close=True)
             dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
                                     - cache) / eps
-    calc.from_vector(orig_vec)
+    calc.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:

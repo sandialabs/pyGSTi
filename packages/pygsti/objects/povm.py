@@ -205,7 +205,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -453,7 +453,7 @@ class _BasePOVM(POVM):
             v[effect.gpindices] = effect.to_vector()
         return v
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -469,7 +469,7 @@ class _BasePOVM(POVM):
         """
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
-            effect.from_vector(v[effect.gpindices], nodirty)
+            effect.from_vector(v[effect.gpindices], close, nodirty)
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 
@@ -750,7 +750,7 @@ class TensorProdPOVM(POVM):
             v[povm.gpindices] = povm.to_vector()
         return v
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -765,7 +765,7 @@ class TensorProdPOVM(POVM):
         None
         """
         for povm in self.factorPOVMs:
-            povm.from_vector(v[povm.gpindices], nodirty)
+            povm.from_vector(v[povm.gpindices], close, nodirty)
 
     def depolarize(self, amount):
         """
@@ -1146,7 +1146,7 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         return self.error_map.to_vector()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -1161,7 +1161,7 @@ class LindbladPOVM(POVM):
         None
         """
         # Recall self.base_povm.num_params() == 0
-        self.error_map.from_vector(v, nodirty)
+        self.error_map.from_vector(v, close, nodirty)
 
     def transform(self, S):
         """

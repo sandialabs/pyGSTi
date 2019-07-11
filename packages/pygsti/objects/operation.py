@@ -1164,7 +1164,7 @@ class FullDenseOp(DenseOperator):
         else:
             return self.base.flatten()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -1300,7 +1300,7 @@ class TPDenseOp(DenseOperator):
         """
         return self.base.flatten()[self.dim:]  # .real in case of complex matrices?
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -1498,7 +1498,7 @@ class LinearlyParamDenseOp(DenseOperator):
         """
         return self.parameterArray
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -1943,7 +1943,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         """
         return self.paramvals
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -2233,7 +2233,7 @@ class StochasticNoiseOp(LinearOperator):
         """
         return self.params
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -2772,7 +2772,7 @@ class LindbladOp(LinearOperator):
         copyOfMe = cls(upost, self.errorgen.copy(parent), self.dense_rep)
         return self._copy_gpindices(copyOfMe, parent)
 
-    def _update_rep(self):
+    def _update_rep(self, close=False):
         """
         Updates self._rep as needed after parameters have changed.
         """
@@ -2787,7 +2787,8 @@ class LindbladOp(LinearOperator):
                 self._rep.base.flags.writeable = False
                 self.base_deriv = None
                 self.base_hessian = None
-            else:
+            elif not close:
+                # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
                 mu, m_star, s, eta = _mt.expop_multiply_prep(
                     self.errorgen._rep.aslinearoperator())
                 self._rep.set_exp_params(mu, eta, m_star, s)
@@ -3147,7 +3148,7 @@ class LindbladOp(LinearOperator):
         """
         return self.errorgen.to_vector()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -3161,8 +3162,8 @@ class LindbladOp(LinearOperator):
         -------
         None
         """
-        self.errorgen.from_vector(v)
-        self._update_rep()
+        self.errorgen.from_vector(v, close, nodirty)
+        self._update_rep(close)
         if not nodirty: self.dirty = True
 
     def get_errgen_coeffs(self, return_basis=False, logscale_nonham=False):
@@ -3754,7 +3755,7 @@ class TPInstrumentOp(DenseOperator):
         raise ValueError(("TPInstrumentOp.to_vector() should never be called"
                           " - use TPInstrument.to_vector() instead"))
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this partially-implemented gate using a vector of its parameters.
 
@@ -3778,7 +3779,7 @@ class TPInstrumentOp(DenseOperator):
                 if i == 0 and self.index > 0: continue  # 0th param-gate already init by index==0 element
                 paramop_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, self.param_ops[i].gpindices)
-                self.param_ops[i].from_vector(v[paramop_local_inds], nodirty)
+                self.param_ops[i].from_vector(v[paramop_local_inds], close, nodirty)
 
         self._construct_matrix()
 
@@ -4129,7 +4130,7 @@ class ComposedOp(LinearOperator):
             v[factorgate_local_inds] = gate.to_vector()
         return v
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -4147,7 +4148,7 @@ class ComposedOp(LinearOperator):
         for gate in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, gate.gpindices)
-            gate.from_vector(v[factorgate_local_inds], nodirty)
+            gate.from_vector(v[factorgate_local_inds], close, nodirty)
         if self.dense_rep: self._update_denserep()
         self.dirty = True
 
@@ -4401,7 +4402,7 @@ class ExponentiatedOp(LinearOperator):
         """
         return self.exponentiated_op.to_vector()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -4416,7 +4417,7 @@ class ExponentiatedOp(LinearOperator):
         None
         """
         assert(len(v) == self.num_params())
-        self.exponentiated_op.from_vector(v, nodirty)
+        self.exponentiated_op.from_vector(v, close, nodirty)
         if not nodirty: self.dirty = True
 
     def __str__(self):
@@ -4845,7 +4846,7 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.to_vector()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -4860,7 +4861,7 @@ class EmbeddedOp(LinearOperator):
         None
         """
         assert(len(v) == self.num_params())
-        self.embedded_op.from_vector(v, nodirty)
+        self.embedded_op.from_vector(v, close, nodirty)
         if self.dense_rep: self._update_denserep()
         if not nodirty: self.dirty = True
 
@@ -5740,7 +5741,7 @@ class ComposedErrorgen(LinearOperator):
             v[factor_local_inds] = eg.to_vector()
         return v
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the error generator using a vector of parameters.
 
@@ -5758,7 +5759,7 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            eg.from_vector(v[factor_local_inds], nodirty)
+            eg.from_vector(v[factor_local_inds], close, nodirty)
         if not nodirty: self.dirty = True
 
     def transform(self, S):
@@ -5878,7 +5879,7 @@ class EmbeddedErrorgen(EmbeddedOp):
     #    return EmbeddedOp(self.state_space_labels, self.targetLabels,
     #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of parameters.
 
@@ -5892,7 +5893,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         -------
         None
         """
-        EmbeddedOp.from_vector(self, v, nodirty)
+        EmbeddedOp.from_vector(self, v, close, nodirty)
         if not nodirty: self.dirty = True
 
     def get_coeffs(self, return_basis=False, logscale_nonham=False):
@@ -6880,7 +6881,7 @@ class LindbladErrorgen(LinearOperator):
         """
         return self.paramvals
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 

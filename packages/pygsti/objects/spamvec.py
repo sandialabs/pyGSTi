@@ -258,7 +258,7 @@ def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
     for i in range(spamvec.num_params()):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
-        spamvec2.from_vector(p_plus_dp)
+        spamvec2.from_vector(p_plus_dp, close=True)
         fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
 
     fd_deriv.shape = [dim, spamvec.num_params()]
@@ -690,7 +690,7 @@ class SPAMVec(_modelmember.ModelMember):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1061,7 +1061,7 @@ class FullSPAMVec(DenseSPAMVec):
         else:
             return self.base.flatten()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1227,7 +1227,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         return self.base.flatten()[1:]  # .real in case of complex matrices?
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1343,7 +1343,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         raise ValueError(("ComplementSPAMVec.to_vector() should never be called"
                           " - use TPPOVM.to_vector() instead"))
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this SPAM vector using a vector of its parameters.
 
@@ -1359,7 +1359,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         #Rely on prior .from_vector initialization of self.other_vecs, so
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
-        self._construct_vector(nodirty)
+        self._construct_vector()
         if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1576,7 +1576,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         """
         return self.params
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2086,7 +2086,7 @@ class TensorProdSPAMVec(SPAMVec):
                               " TensorProdSPAMVecs (instead it should be called"
                               " on the POVM)"))
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2102,7 +2102,7 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._prep_or_effect == "prep":
             for sv in self.factors:
-                sv.from_vector(v[sv.gpindices], nodirty)  # factors hold local indices
+                sv.from_vector(v[sv.gpindices], close, nodirty)  # factors hold local indices
 
         elif all([self.effectLbls[i] == list(povm.keys())[0]
                   for i, povm in enumerate(self.factors)]):
@@ -2111,7 +2111,7 @@ class TensorProdSPAMVec(SPAMVec):
             for povm in self.factors:
                 local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
-                povm.from_vector(v[local_inds], nodirty)
+                povm.from_vector(v[local_inds], close, nodirty)
 
         #Update representation, which may be a dense matrix or
         # just fast-kron arrays or a stabilizer state.
@@ -2386,7 +2386,7 @@ class PureStateSPAMVec(SPAMVec):
         """
         return self.pure_state_vec.to_vector()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2400,7 +2400,7 @@ class PureStateSPAMVec(SPAMVec):
         -------
         None
         """
-        self.pure_state_vec.from_vector(v, nodirty)
+        self.pure_state_vec.from_vector(v, close, nodirty)
         #Update dense rep if one is created (TODO)
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -3096,7 +3096,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return self.error_map.to_vector()
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the gate using a vector of its parameters.
 
@@ -3110,7 +3110,7 @@ class LindbladSPAMVec(SPAMVec):
         -------
         None
         """
-        self.error_map.from_vector(v, nodirty)
+        self.error_map.from_vector(v, close, nodirty)
         self._update_rep()
         if not nodirty: self.dirty = True
 
@@ -3555,7 +3555,7 @@ class ComputationalSPAMVec(SPAMVec):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, nodirty=False):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 

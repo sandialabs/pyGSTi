@@ -233,7 +233,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         return self._paramvec
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -249,7 +249,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == self.num_params())
         for gate in self.values():
-            gate.from_vector(v[gate.gpindices])
+            gate.from_vector(v[gate.gpindices], close, nodirty)
         self._paramvec = v
 
     def transform(self, S):
@@ -502,7 +502,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             v[gate.gpindices] = gate.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -517,7 +517,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         None
         """
         for gate in self.param_ops:
-            gate.from_vector(v[gate.gpindices])
+            gate.from_vector(v[gate.gpindices], close, nodirty)
         for instGate in self.values():
             instGate._construct_matrix()
 

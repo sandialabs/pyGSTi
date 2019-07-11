@@ -186,9 +186,9 @@ class MapForwardSimulator(ForwardSimulator):
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
-            self.from_vector(vec)
+            self.from_vector(vec, close=True)
             dp[0, i] = (self.prs(spamTuple[0], [spamTuple[1]], circuit, clipTo) - p)[0] / eps
-        self.from_vector(orig_vec)
+        self.from_vector(orig_vec, close=True)
 
         if returnPr:
             if clipTo is not None: p = _np.clip(p, clipTo[0], clipTo[1])
@@ -247,9 +247,9 @@ class MapForwardSimulator(ForwardSimulator):
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
-            self.from_vector(vec)
+            self.from_vector(vec, close=True)
             hp[0, i, :] = (self.dpr(spamTuple, circuit, False, clipTo) - dp) / eps
-        self.from_vector(orig_vec)
+        self.from_vector(orig_vec, close=True)
 
         if returnPr and clipTo is not None:
             p = _np.clip(p, clipTo[0], clipTo[1])
@@ -308,10 +308,10 @@ class MapForwardSimulator(ForwardSimulator):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec)
+                self.from_vector(vec, close=True)
                 hpr_cache[:, :, iFinal, :] = (self._compute_dpr_cache(
                     rholabel, elabels, evalTree, wrtSlice2, subComm, dpr_scratch) - dpCache) / eps
-        self.from_vector(orig_vec)
+        self.from_vector(orig_vec, close=True)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
