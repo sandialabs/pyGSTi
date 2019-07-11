@@ -1018,3 +1018,21 @@ def fast_fas_helper_3d(np.ndarray[double, ndim=3] a,
                         b[0] += 1
                     else:
                         break # can't increment anything - break while(True) loop
+
+                    
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_csr_sum_flat(np.ndarray[np.complex128_t, ndim=1, mode="c"] data,
+                      np.ndarray[np.complex128_t, ndim=1, mode="c"] coeffs,
+                      np.ndarray[np.int64_t, ndim=1, mode="c"] flat_dest_index_array,
+                      np.ndarray[np.complex128_t, ndim=1, mode="c"] flat_csr_mx_data,
+                      np.ndarray[np.int64_t, ndim=1, mode="c"] mx_nnz_indptr):
+    cdef int Nmxs = mx_nnz_indptr.size - 1  # the number of CSR matrices
+    cdef int iMx
+    cdef int i
+    cdef double complex coeff
+    
+    for iMx in range(Nmxs):
+        coeff = coeffs[iMx]
+        for i in range(mx_nnz_indptr[iMx], mx_nnz_indptr[iMx+1]):
+            data[flat_dest_index_array[i]] = data[flat_dest_index_array[i]] + coeff * flat_csr_mx_data[i]

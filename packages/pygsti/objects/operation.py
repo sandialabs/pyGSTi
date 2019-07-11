@@ -6358,8 +6358,9 @@ class LindbladErrorgen(LinearOperator):
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         #Fast CSR-matrix summing variables: N/A if not sparse or using terms
-        self.hamCSRSumIndices = None
-        self.otherCSRSumIndices = None
+        self._CSRSumIndices = self._CSRSumData = self._CSRSumPtr = None
+        #self.hamCSRSumIndices = None  #REMOVE
+        #self.otherCSRSumIndices = None #REMOVE
         self.sparse_err_gen_template = None
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
@@ -6398,11 +6399,19 @@ class LindbladErrorgen(LinearOperator):
                         oList = [mx for mxRow in self.otherGens for mx in mxRow]
                     all_csr_matrices.extend(oList)
 
-                csr_sum_array, indptr, indices, N = \
-                    _mt.get_csr_sum_indices(all_csr_matrices)
-                self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
-                self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
-                self._data_scratch = _np.zeros(len(indices), 'complex')  # *complex* scratch space for updating rep
+                #OLD REMOVE
+                # csr_sum_array, indptr, indices, N = \
+                #     _mt.get_csr_sum_indices(all_csr_matrices)
+                #self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
+                #self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
+
+                flat_dest_indices, flat_src_data, flat_nnzptr, indptr, indices, N = \
+                    _mt.get_csr_sum_flat_indices(all_csr_matrices)
+                self._CSRSumIndices = flat_dest_indices
+                self._CSRSumData = flat_src_data
+                self._CSRSumPtr = flat_nnzptr
+
+                self._data_scratch = _np.zeros(len(indices), complex)  # *complex* scratch space for updating rep
                 rep = replib.DMOpRep_Sparse(_np.ascontiguousarray(_np.zeros(len(indices), 'd')),
                                             _np.ascontiguousarray(indices, _np.int64),
                                             _np.ascontiguousarray(indptr, _np.int64))
@@ -6685,33 +6694,53 @@ class LindbladErrorgen(LinearOperator):
 
         #Finally, build operation matrix from generators and coefficients:
         if self.sparse:
+            coeffs = None
             data = self._data_scratch
             data.fill(0.0)  # data starts at zero
 
             if hamCoeffs is not None:
-                # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
-                _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
                 onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
+                if otherCoeffs is not None:
+                    coeffs = _np.concatenate((hamCoeffs, otherCoeffs.flat), axis=0)
+                else:
+                    coeffs = hamCoeffs
+            elif otherCoeffs is not None:
+                onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
+                coeffs = otherCoeffs.flatten()
 
-            if otherCoeffs is not None:
-                if self.nonham_mode == "diagonal":
-                    # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
-                    _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
-                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
+            if coeffs is not None:
+                _mt.csr_sum_flat(data, coeffs, self._CSRSumIndices, self._CSRSumData, self._CSRSumPtr)                
 
-                else:  # nonham_mode in ("diag_affine", "all")
-                    # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
-                    #                      for c,gen in zip(cRow,genRow)])
-                    _mt.csr_sum(data, otherCoeffs.flat,
-                                [oGen for oGenRow in self.otherGens for oGen in oGenRow],
-                                self.otherCSRSumIndices)
-                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
+            #TODO: REMOVE
+            # data.fill(0.0)  # data starts at zero
+            # 
+            # if hamCoeffs is not None:
+            #     # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
+            #     _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
+            #     onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
+            # 
+            # if otherCoeffs is not None:
+            #     if self.nonham_mode == "diagonal":
+            #         # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
+            #         _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
+            #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
+            # 
+            #     else:  # nonham_mode in ("diag_affine", "all")
+            #         # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
+            #         #                      for c,gen in zip(cRow,genRow)])
+            #         _mt.csr_sum(data, otherCoeffs.flat,
+            #                     [oGen for oGenRow in self.otherGens for oGen in oGenRow],
+            #                     self.otherCSRSumIndices)
+            #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
+
+            #Don't perform this check as this function is called a *lot* and it
+            # could adversely impact performance
+            #assert(_np.isclose(_np.linalg.norm(data.imag), 0)), \
+            #    "Imaginary error gen norm: %g" % _np.linalg.norm(data.imag)
 
             #Update the rep's sparse matrix data stored in self._rep_data (the rep already
             # has the correct sparse matrix structure, as given by indices and indptr in
             # __init__, so we just update the *data* array).
-            assert(_np.isclose(_np.linalg.norm(data.imag), 0)), \
-                "Imaginary error gen norm: %g" % _np.linalg.norm(data.imag)
             self._rep.data[:] = data.real
 
         else:  # dense matrices
