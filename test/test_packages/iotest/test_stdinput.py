@@ -1,7 +1,7 @@
 import functools
 import numpy as np
 
-from ..util import BaseCase, with_temp_path, with_temp_file, Path
+from . import IOBase, with_temp_path, with_temp_file, Path
 
 from pygsti.construction import std1Q_XYI as std
 from pygsti.objects import Circuit, CircuitLabel
@@ -15,7 +15,7 @@ class StdInputBase:
         self.std = stdin.StdInputParser()
 
 
-class ParserTester(StdInputBase, BaseCase):
+class ParserTester(StdInputBase, IOBase):
     def test_parse_circuit(self):
         lkup = {'1': ('G1',),
                 '2': ('G1', 'G2'),
@@ -117,7 +117,7 @@ class ParserTester(StdInputBase, BaseCase):
         )
 
 
-class FileInputTester(StdInputBase, BaseCase):
+class FileInputTester(StdInputBase, IOBase):
     def _write_dictfile(self, file_path):
         """Helper used for dict tests"""
         contents = """#My Dictionary file
@@ -240,8 +240,7 @@ G2            0   0
 G3            0.2 100
 """)
     def test_parse_datafile_warns_on_missing_counts(self, tmp_path):
-        with self.assertWarns(Warning):
-            ds = self.std.parse_datafile(tmp_path)
+        self.assertWarns(self.std.parse_datafile, tmp_path)
         # TODO assert correctness
 
     @with_temp_file("""#Data File with bad columns
@@ -263,8 +262,7 @@ G2            3.4 100
 G3            0.2 100
 """)
     def test_parse_datafile_warns_on_frequency_out_of_range(self, tmp_path):
-        with self.assertWarns(Warning):
-            ds = self.std.parse_datafile(tmp_path)
+        self.assertWarns(self.std.parse_datafile, tmp_path)
         # TODO assert correctness
 
     @with_temp_file("""#Data File with bad counts
@@ -275,8 +273,7 @@ G2            0.2 100
 G3            0.1 100
 """)
     def test_parse_datafile_warns_on_counts_out_of_range(self, tmp_path):
-        with self.assertWarns(Warning):
-            ds = self.std.parse_datafile(tmp_path)
+        self.assertWarns(self.std.parse_datafile, tmp_path)
         # TODO assert correctness
 
     @with_temp_file("""#Multi Data File with default cols
@@ -607,8 +604,7 @@ BASIS: pp 4
 GAUGEGROUP: Foobar
 """)
     def test_read_model_warns_on_invalid_gauge_group(self, tmp_path):
-        with self.assertWarns(Warning):
-            stdin.read_model(tmp_path)
+        self.assertWarns(stdin.read_model, tmp_path)
 
     @with_temp_file("""# Invalid item type
 

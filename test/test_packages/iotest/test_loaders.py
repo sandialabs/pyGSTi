@@ -1,17 +1,17 @@
 import numpy as np
 
-from ..util import BaseCase, with_temp_path
-from ..reference_gen import io_gen
+from . import IOBase, with_temp_path
+from .references import generator as io_gen
 
 from pygsti import io
 import pygsti.construction as pc
 from pygsti.io import loaders
 
 
-class LoadersTester(BaseCase):
+class LoadersTester(IOBase):
     def test_load_dataset(self):
         ds2 = loaders.load_dataset(str(self.reference_path('dataset_loadwrite.txt')))
-        ds = io_gen._ds
+        ds = io_gen.ds
         for s in ds:
             self.assertEqual(ds[s]['0'], ds2[s][('0',)])
             self.assertEqual(ds[s]['1'], ds2[s][('1',)])
@@ -19,7 +19,7 @@ class LoadersTester(BaseCase):
     @with_temp_path
     def test_load_dataset_from_cache(self, tmp_path):
         tmp_path = str(tmp_path)
-        ds = io_gen._ds
+        ds = io_gen.ds
         io.write_dataset(tmp_path, ds)
         ds3 = loaders.load_dataset(tmp_path, cache=True)  # creates cache file
         ds4 = loaders.load_dataset(tmp_path, cache=True)  # loads from cache file
@@ -37,7 +37,7 @@ class LoadersTester(BaseCase):
         ds2a = loaders.load_dataset(str(self.reference_path('sparse_dataset2a.txt')))
         ds1b = loaders.load_dataset(str(self.reference_path('sparse_dataset1b.txt')))
         ds2b = loaders.load_dataset(str(self.reference_path('sparse_dataset2b.txt')))
-        ds = io_gen._sparse_ds
+        ds = io_gen.sparse_ds
         for s in ds:
             self.assertEqual(ds[s].counts, ds1a[s].counts)
             self.assertEqual(ds[s].counts, ds2a[s].counts)
@@ -67,13 +67,13 @@ class LoadersTester(BaseCase):
         path = str(self.reference_path('gatestringlist_loadwrite.txt'))
         circuit_list2 = loaders.load_circuit_list(path)
         python_circuit_list = loaders.load_circuit_list(path, readRawStrings=True)
-        circuit_list = io_gen._circuit_list
+        circuit_list = io_gen.circuit_list
 
         self.assertEqual(circuit_list, circuit_list2)
         self.assertEqual(python_circuit_list[2], 'GxGy')
 
     def test_load_model(self):
-        model = io_gen._std_model
+        model = io_gen.std_model
         model2 = loaders.load_model(str(self.reference_path('gateset_loadwrite.txt')))
         self.assertAlmostEqual(model2.frobeniusdist(model), 0)
 
