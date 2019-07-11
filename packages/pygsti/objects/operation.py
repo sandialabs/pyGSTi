@@ -2790,7 +2790,8 @@ class LindbladOp(LinearOperator):
             elif not close:
                 # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
                 mu, m_star, s, eta = _mt.expop_multiply_prep(
-                    self.errorgen._rep.aslinearoperator())
+                    self.errorgen._rep.aslinearoperator(),
+                    A_1_norm=self.errorgen.onenorm_upperbound())
                 self._rep.set_exp_params(mu, eta, m_star, s)
 
     def set_gpindices(self, gpindices, parent, memo=None):
@@ -3858,7 +3859,7 @@ class ComposedOp(LinearOperator):
             rep = dim  # no proper representation (_rep will be set to None by LinearOperator)
 
         LinearOperator.__init__(self, rep, evotype)
-        if self.dense_rep: self._update_denserep() # update dense rep if needed
+        if self.dense_rep: self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):
         if len(self.factorops) == 0:
@@ -5094,8 +5095,8 @@ class CliffordOp(LinearOperator):
         self.inv_smatrix, self.inv_svector = _symp.inverse_clifford(
             self.smatrix, self.svector)  # cache inverse since it's expensive
 
-        nQubits = len(self.svector) // 2
-        dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
+        #nQubits = len(self.svector) // 2
+        #dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
 
         #Update members so they reference the same (contiguous) memory as the rep
         U = self.unitary.todense() if isinstance(self.unitary, LinearOperator) else self.unitary
@@ -5784,6 +5785,18 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             eg.transform(S)
 
+    def onenorm_upperbound(self):
+        """
+        Returns an upper bound on the 1-norm for this error generator (
+        viewed as a matrix).
+
+        Returns
+        -------
+        float
+        """
+        # b/c ||A + B|| <= ||A|| + ||B||
+        return sum([eg.onenorm_upperbound() for eg in self.factors])
+
     def __str__(self):
         """ Return string representation """
         s = "Composed error generator of %d factors:\n" % len(self.factors)
@@ -6101,6 +6114,18 @@ class EmbeddedErrorgen(EmbeddedOp):
         """
         raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorGen objects")
 
+    def onenorm_upperbound(self):
+        """
+        Returns an upper bound on the 1-norm for this error generator (
+        viewed as a matrix).
+
+        Returns
+        -------
+        float
+        """
+        return self.embedded_op.onenorm_upperbound()
+        # b/c ||A x B|| == ||A|| ||B|| and ||I|| == 1.0
+
     def __str__(self):
         """ Return string representation """
         s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
@@ -6333,10 +6358,21 @@ class LindbladErrorgen(LinearOperator):
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
         self.hamGens = self.otherGens = None
+        self.hamGens_1norms = self.otherGens_1norms = None
+        self._onenorm_upbound = None
         self.Lmx = None
 
         if evotype == "densitymx":
             self.hamGens, self.otherGens = self._init_generators(dim)
+
+            if self.hamGens is not None:
+                self.hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.hamGens], 'd')
+            if self.otherGens is not None:
+                if self.nonham_mode == "diagonal":
+                    self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.otherGens], 'd')
+                else:
+                    self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
+                                                       for oGenRow in self.otherGens for mx in oGenRow], 'd')
 
             #Allocate space fo Cholesky mx (used in _construct_errgen_matrix)
             # (intermediate storage for matrix and for deriv computation)
@@ -6639,6 +6675,7 @@ class LindbladErrorgen(LinearOperator):
         hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
+        onenorm = 0.0
 
         #Finally, build operation matrix from generators and coefficients:
         if self.sparse:
@@ -6648,11 +6685,13 @@ class LindbladErrorgen(LinearOperator):
             if hamCoeffs is not None:
                 # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
                 _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
+                onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
 
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
                     _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
+                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
 
                 else:  # nonham_mode in ("diag_affine", "all")
                     # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
@@ -6660,6 +6699,7 @@ class LindbladErrorgen(LinearOperator):
                     _mt.csr_sum(data, otherCoeffs.flat,
                                 [oGen for oGenRow in self.otherGens for oGen in oGenRow],
                                 self.otherCSRSumIndices)
+                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
 
             #Update the rep's sparse matrix data stored in self._rep_data (the rep already
             # has the correct sparse matrix structure, as given by indices and indptr in
@@ -6672,6 +6712,7 @@ class LindbladErrorgen(LinearOperator):
             if hamCoeffs is not None:
                 #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
                 lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0, 0))
+                onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
             else:
                 lnd_error_gen = _np.zeros((d2, d2), 'complex')
 
@@ -6679,16 +6720,19 @@ class LindbladErrorgen(LinearOperator):
                 if self.nonham_mode == "diagonal":
                     #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
                     lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0, 0))
+                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
 
                 else:  # nonham_mode in ("diag_affine", "all")
                     #lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
                     #                            self.otherGens)
                     lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0, 1), (0, 1)))
+                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
 
             assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)
             self._rep.base[:, :] = lnd_error_gen.real
+        self._onenorm_upbound = onenorm
 
     def todense(self):
         """
@@ -7453,6 +7497,19 @@ class LindbladErrorgen(LinearOperator):
             else:
                 return _np.take(_np.take(hessianMx, wrtFilter1, axis=1),
                                 wrtFilter2, axis=2)
+
+    def onenorm_upperbound(self):
+        """
+        Returns an upper bound on the 1-norm for this error generator (
+        viewed as a matrix).
+
+        Returns
+        -------
+        float
+        """
+        # computes sum of 1-norms of error generator terms multiplied by abs(coeff) values
+        # because ||A + B|| <= ||A|| + ||B|| and ||cA|| == abs(c)||A||
+        return self._onenorm_upbound
 
     def __str__(self):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \

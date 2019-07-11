@@ -1177,6 +1177,25 @@ def safenorm(A, part=None):
         return _np.linalg.norm(takepart(A))
     # could also use _spsl.norm(A)
 
+    
+def safe_onenorm(A):
+    """
+    Computes the 1-norm of the dense or sparse matrix `A`.
+
+    Parameters
+    ----------
+    A : ndarray or sparse matrix
+        The matrix or vector to take the norm of.
+
+    Returns
+    -------
+    float
+    """
+    if _sps.isspmatrix(A):
+        return sparse_onenorm(A)
+    else:
+        return _np.linalg.norm(A, 1)
+
 
 def get_csr_sum_indices(csr_matrices):
     """
@@ -1375,7 +1394,7 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta):  # t == 1.
 #    else:
 #        return np.linalg.norm(A, 1)
 
-def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
+def expop_multiply_prep(op, A_1_norm=None, tol=EXPM_DEFAULT_TOL):
     """
     Returns "prepared" meta-info about operation op,
       which is assumed to be traceless (so no shift is needed).
@@ -1392,7 +1411,8 @@ def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
     #ASSUME op is *traceless*
 
     #FUTURE: get exact_1_norm specific for our ops - now just use approximate
-    A_1_norm = _spsl.onenormest(op)
+    if A_1_norm is None:
+        A_1_norm = _spsl.onenormest(op)
 
     #t = 1.0 # always, so t*<X> => just <X> below
     if A_1_norm == 0:
@@ -1443,3 +1463,19 @@ def sparse_equal(A, B, atol=1e-8):
         V1 = v1[sidx1]
         V2 = v2[sidx2]
     return _np.allclose(V1, V2, atol=atol)
+
+
+def sparse_onenorm(A):
+    """
+    Computes the 1-norm of the scipy sparse matrix `A`.
+
+    Parameters
+    ----------
+    A : scipy sparse matrix
+        The matrix or vector to take the norm of.
+
+    Returns
+    -------
+    float
+    """
+    return max(abs(A).sum(axis=0).flat)
