@@ -382,7 +382,7 @@ cdef class DMStateRep: #(StateRep):
         self.c_state = new DMStateCRep(<double*>data.data,<INT>data.shape[0],<bool>0)
 
     def __reduce__(self):
-        return (DMStateRep, (self.base,))    
+        return (DMStateRep, (self.base,))
 
     def todense(self):
         return self.base
@@ -406,6 +406,7 @@ cdef class DMEffectRep:
         pass # no init; could set self.c_effect = NULL? could assert(False)?
     def __dealloc__(self):
         del self.c_effect # check for NULL?
+        
     @property
     def dim(self):
         return self.c_effect._dim
@@ -450,7 +451,7 @@ cdef class DMEffectRep_TensorProd(DMEffectRep):
 
 
 cdef class DMEffectRep_Computational(DMEffectRep):
-    cdef np.ndarray data_ref
+    cdef public np.ndarray zvals
 
     def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
         # cdef INT dim = 4**zvals.shape[0] -- just send as argument
@@ -461,27 +462,27 @@ cdef class DMEffectRep_Computational(DMEffectRep):
         for i in range(nfactors):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
-        self.data_ref = zvals
+        self.zvals = zvals
         self.c_effect = new DMEffectCRep_Computational(nfactors, zvals_int, abs_elval, dim)
 
     def __reduce__(self):
-        return (DMEffectRep_Computational, (self.data_ref, self.c_effect._dim))
+        return (DMEffectRep_Computational, (self.zvals, self.c_effect._dim))
 
         
 cdef class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
-    cdef DMOpRep errgen
-    cdef DMEffectRep effect
+    cdef public DMOpRep errgen_rep
+    cdef public DMEffectRep effect_rep
     
     def __cinit__(self, DMOpRep errgen_oprep not None, DMEffectRep effect_rep not None, errgen_id):
         cdef INT dim = effect_rep.c_effect._dim
-        self.errgen = errgen_oprep
-        self.effect = effect_rep
+        self.errgen_rep = errgen_oprep
+        self.effect_rep = effect_rep
         self.c_effect = new DMEffectCRep_Errgen(errgen_oprep.c_gate,
                                                 effect_rep.c_effect,
                                                 <INT>errgen_id, dim)
 
     def __reduce__(self):
-        return (DMEffectRep_Errgen, (self.errgen, self.effect,
+        return (DMEffectRep_Errgen, (self.errgen_rep, self.effect_rep,
                                      (<DMEffectCRep_Errgen*>self.c_effect)._errgen_id))
 
 
@@ -536,7 +537,7 @@ cdef class DMOpRep_Dense(DMOpRep):
                                            <INT>data.shape[0])
 
     def __reduce__(self):
-        return (DMOpRep_Dense, (self.base,))    
+        return (DMOpRep_Dense, (self.base,))
 
     def __str__(self):
         s = ""
@@ -673,7 +674,7 @@ cdef class DMOpRep_Exponentiated(DMOpRep):
 
 
 cdef class DMOpRep_Lindblad(DMOpRep):
-    cdef object data_ref1
+    cdef public object errgen_rep
     cdef np.ndarray data_ref2
     cdef np.ndarray data_ref3
     cdef np.ndarray data_ref4
@@ -683,7 +684,7 @@ cdef class DMOpRep_Lindblad(DMOpRep):
                   np.ndarray[double, ndim=1, mode='c'] unitarypost_data,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] unitarypost_indices,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] unitarypost_indptr):
-        self.data_ref1 = errgen_rep
+        self.errgen_rep = errgen_rep
         self.data_ref2 = unitarypost_data
         self.data_ref3 = unitarypost_indices
         self.data_ref4 = unitarypost_indptr
@@ -708,7 +709,7 @@ cdef class DMOpRep_Lindblad(DMOpRep):
                  (<DMOpCRep_Lindblad*>self.c_gate)._s)
         
     def __reduce__(self):
-        return (DMOpRep_Lindblad, (self.data_ref1,
+        return (DMOpRep_Lindblad, (self.errgen_rep,
                                    (<DMOpCRep_Lindblad*>self.c_gate)._mu,
                                    (<DMOpCRep_Lindblad*>self.c_gate)._eta,
                                    (<DMOpCRep_Lindblad*>self.c_gate)._m_star,
@@ -884,7 +885,7 @@ cdef class SVOpRep_Embedded(SVOpRep):
     cdef np.ndarray data_ref4
     cdef np.ndarray data_ref5
     cdef np.ndarray data_ref6
-    cdef SVOpRep embedded
+    cdef public SVOpRep embedded
 
     def __cinit__(self, SVOpRep embedded_op,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] numBasisEls,
@@ -1090,7 +1091,7 @@ cdef class SBOpRep:
 
     @property
     def dim(self):
-        return 2**(self.c_gate._n) # assume "unitary evolution"-type mode
+        return 2**(self.c_gate._n)  # assume "unitary evolution"-type mode
 
     def acton(self, SBStateRep state not None):
         cdef INT n = self.c_gate._n

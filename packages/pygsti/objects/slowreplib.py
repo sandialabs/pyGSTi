@@ -27,20 +27,23 @@ DEBUG_FCOUNT = 0
 
 class DMStateRep(object):
     def __init__(self, data):
-        self.data = _np.asarray(data, 'd')
+        self.base = _np.asarray(data, 'd')
+
+    def __reduce__(self):
+        return (DMStateRep, (self.base,))
 
     def copy_from(self, other):
-        self.data = other.data.copy()
+        self.base = other.base.copy()
 
     def todense(self):
-        return self.data
+        return self.base
 
     @property
     def dim(self):
-        return len(self.data)
+        return len(self.base)
 
     def __str__(self):
-        return str(self.data)
+        return str(self.base)
 
 
 class DMEffectRep(object):
@@ -53,12 +56,15 @@ class DMEffectRep(object):
 
 class DMEffectRep_Dense(DMEffectRep):
     def __init__(self, data):
-        self.data = _np.array(data, 'd')
-        super(DMEffectRep_Dense, self).__init__(len(self.data))
+        self.base = _np.array(data, 'd')
+        super(DMEffectRep_Dense, self).__init__(len(self.base))
+
+    def __reduce__(self):
+        return (DMEffectRep_Dense, (self.base,))    
 
     def probability(self, state):
         # can assume state is a DMStateRep
-        return _np.dot(self.data, state.data)  # not vdot b/c *real* data
+        return _np.dot(self.base, state.base)  # not vdot b/c *real* data
 
 
 class DMEffectRep_TensorProd(DMEffectRep):
@@ -70,6 +76,10 @@ class DMEffectRep_TensorProd(DMEffectRep):
         self.nfactors = nfactors
         self.max_factor_dim = max_factor_dim  # Unused
         super(DMEffectRep_TensorProd, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMEffectRep_TensorProd,
+                (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
 
     def todense(self, outvec):
         N = self.dim
@@ -124,10 +134,14 @@ class DMEffectRep_Computational(DMEffectRep):
             self.zvals_int += base * v
             base *= 2  # or left shift?
 
+        self.zvals = zvals
         self.nfactors = len(zvals)  # (or nQubits)
         self.abs_elval = 1 / (_np.sqrt(2)**self.nfactors)
 
         super(DMEffectRep_Computational, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMEffectRep_Computational, (self.zvals, self.dim))
 
     def parity(self, x):
         """recursively divide the (64-bit) integer into two equal
@@ -193,6 +207,9 @@ class DMEffectRep_Errgen(DMEffectRep):  # TODO!! Need to make SV version
         self.errgen_id = errgen_id
         super(DMEffectRep_Errgen, self).__init__(dim)
 
+    def __reduce__(self):
+        return (DMEffectRep_Errgen, (self.errgen_rep, self.effect_rep, self.errgen_id))
+
     def probability(self, state):
         state = self.errgen_rep.acton(state)  # *not* acton_adjoint
         return self.effect_rep.probability(state)
@@ -223,17 +240,20 @@ class DMOpRep(object):
 
 class DMOpRep_Dense(DMOpRep):
     def __init__(self, data):
-        self.data = data
-        super(DMOpRep_Dense, self).__init__(self.data.shape[0])
+        self.base = data
+        super(DMOpRep_Dense, self).__init__(self.base.shape[0])
+
+    def __reduce__(self):
+        return (DMOpRep_Dense, (self.base,))
 
     def acton(self, state):
-        return DMStateRep(_np.dot(self.data, state.data))
+        return DMStateRep(_np.dot(self.base, state.base))
 
     def adjoint_acton(self, state):
-        return DMStateRep(_np.dot(self.data.T, state.data))  # no conjugate b/c *real* data
+        return DMStateRep(_np.dot(self.base.T, state.base))  # no conjugate b/c *real* data
 
     def __str__(self):
-        return "DMOpRep_Dense:\n" + str(self.data)
+        return "DMOpRep_Dense:\n" + str(self.base)
 
 
 class DMOpRep_Embedded(DMOpRep):
@@ -241,7 +261,7 @@ class DMOpRep_Embedded(DMOpRep):
                  blocksizes, embedded_dim, nComponentsInActiveBlock,
                  iActiveBlock, nBlocks, dim):
 
-        self.embedded_op = embedded_op
+        self.embedded = embedded_op
         self.numBasisEls = numBasisEls
         self.actionInds = actionInds
         self.blocksizes = blocksizes
@@ -257,10 +277,18 @@ class DMOpRep_Embedded(DMOpRep):
         self.basisInds_action = [list(range(numBasisEls[i])) for i in actionInds]
 
         self.embeddedDim = embedded_dim
+        self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
         self.offset = sum(blocksizes[0:iActiveBlock])
         super(DMOpRep_Embedded, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Embedded, (self.embedded,
+                                   self.numBasisEls, self.actionInds,
+                                   self.blocksizes, self.embeddedDim,
+                                   self.nComponents, self.iActiveBlock,
+                                   self.nBlocks, self.dim))
 
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
@@ -286,7 +314,7 @@ class DMOpRep_Embedded(DMOpRep):
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
             embedded_instate = DMStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.acton(embedded_instate)
+            embedded_outstate = self.embedded.acton(embedded_instate)
             output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -309,7 +337,7 @@ class DMOpRep_Embedded(DMOpRep):
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
             embedded_instate = DMStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.adjoint_acton(embedded_instate)
+            embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
             output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -320,18 +348,21 @@ class DMOpRep_Embedded(DMOpRep):
 class DMOpRep_Composed(DMOpRep):
     def __init__(self, factor_op_reps, dim):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorops = factor_op_reps
+        self.factor_reps = factor_op_reps
         super(DMOpRep_Composed, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Composed, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorops:
+        for gate in self.factor_reps:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factorops):
+        for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
         return state
 
@@ -339,20 +370,23 @@ class DMOpRep_Composed(DMOpRep):
 class DMOpRep_Sum(DMOpRep):
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Summed gates must contain at least one factor gate!"
-        self.factors = factor_reps
+        self.factor_reps = factor_reps
         super(DMOpRep_Sum, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Sum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
         output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
-        for f in self.factors:
+        for f in self.factor_reps:
             output_state.data += f.acton(state).data
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
-        for f in self.factors:
+        for f in self.factor_reps:
             output_state.data += f.adjoint_acton(state).data
         return output_state
 
@@ -362,6 +396,9 @@ class DMOpRep_Exponentiated(DMOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         super(DMOpRep_Exponentiated, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Exponentiated, (self.exponentiated_op, self.power, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -395,6 +432,20 @@ class DMOpRep_Lindblad(DMOpRep):
         self.s = s
         super(DMOpRep_Lindblad, self).__init__(dim)
 
+    def set_exp_params(self, mu, eta, m_star, s):
+        self.mu = mu
+        self.eta = eta
+        self.m_star = m_star
+        self.s = s
+
+    def get_exp_params(self):
+        return (self.mu, self.eta, self.m_star, self.s)
+
+    def __reduce__(self):
+        return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                   self.unitary_postfactor.data, self.unitary_postfactor.indices,
+                                   self.unitary_postfactor.indptr))
+
     def acton(self, state):
         """ Act this gate map on an input state """
         if self.unitary_postfactor is not None:
@@ -419,6 +470,21 @@ class DMOpRep_Sparse(DMOpRep):
         self.A = _sps.csr_matrix((A_data, A_indices, A_indptr), shape=(dim, dim))
         super(DMOpRep_Sparse, self).__init__(dim)
 
+    def __reduce__(self):
+        return (DMOpRep_Sparse, (self.A.data, self.A.indices, self.A.indptr))
+
+    @property
+    def data(self):
+        return self.A.data
+
+    @property
+    def indices(self):
+        return self.A.indices
+
+    @property
+    def indptr(self):
+        return self.A.indptr
+
     def acton(self, state):
         """ Act this gate map on an input state """
         return DMStateRep(self.A.dot(state.data))
@@ -432,14 +498,20 @@ class DMOpRep_Sparse(DMOpRep):
 # State vector (SV) propagation wrapper classes
 class SVStateRep(object):
     def __init__(self, data):
-        self.data = _np.asarray(data, complex)
+        self.base = _np.asarray(data, complex)
+
+    def __reduce__(self):
+        return (SVStateRep, (self.base,))
 
     def copy_from(self, other):
-        self.data = other.data.copy()
+        self.base = other.base.copy()
 
     @property
     def dim(self):
         return len(self.data)
+
+    def todense(self):
+        return self.base
 
     def __str__(self):
         return str(self.data)
@@ -458,12 +530,15 @@ class SVEffectRep(object):
 
 class SVEffectRep_Dense(SVEffectRep):
     def __init__(self, data):
-        self.data = _np.array(data, complex)
-        super(SVEffectRep_Dense, self).__init__(len(self.data))
+        self.base = _np.array(data, complex)
+        super(SVEffectRep_Dense, self).__init__(len(self.base))
+
+    def __reduce__(self):
+        return (SVEffectRep_Dense, (self.base,))
 
     def amplitude(self, state):
         # can assume state is a SVStateRep
-        return _np.vdot(self.data, state.data)  # (or just 'dot')
+        return _np.vdot(self.base, state.base)  # (or just 'dot')
 
 
 class SVEffectRep_TensorProd(SVEffectRep):
@@ -475,6 +550,10 @@ class SVEffectRep_TensorProd(SVEffectRep):
         self.nfactors = nfactors
         self.max_factor_dim = max_factor_dim  # Unused
         super(SVEffectRep_TensorProd, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVEffectRep_TensorProd, (self.kron_array, self.factor_dims,
+                                         self.nfactors, self.max_factor_dim, self.dim))
 
     def todense(self, outvec):
         N = self.dim
@@ -532,12 +611,16 @@ class SVEffectRep_Computational(SVEffectRep):
 
         base = 2**(len(zvals) - 1)
         self.nonzero_index = 0
+        self.zvals = zvals
         for k, v in enumerate(zvals):
             assert(v in (0, 1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base * v
             base //= 2  # or right shift?
         super(SVEffectRep_Computational, self).__init__(dim)
 
+    def __reduce__(self):
+        return (SVEffectRep_Computational, (self.zvals, self.dim))
+        
     def todense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
@@ -566,17 +649,20 @@ class SVOpRep(object):
 
 class SVOpRep_Dense(SVOpRep):
     def __init__(self, data):
-        self.data = data
-        super(SVOpRep_Dense, self).__init__(self.data.shape[0])
+        self.base = data
+        super(SVOpRep_Dense, self).__init__(self.base.shape[0])
+
+    def __reduce__(self):
+        return (SVOpRep_Dense, (self.base,))
 
     def acton(self, state):
-        return SVStateRep(_np.dot(self.data, state.data))
+        return SVStateRep(_np.dot(self.base, state.base))
 
     def adjoint_acton(self, state):
-        return SVStateRep(_np.dot(_np.conjugate(self.data.T), state.data))
+        return SVStateRep(_np.dot(_np.conjugate(self.base.T), state.base))
 
     def __str__(self):
-        return "SVOpRep_Dense:\n" + str(self.data)
+        return "SVOpRep_Dense:\n" + str(self.base)
 
 
 class SVOpRep_Embedded(SVOpRep):
@@ -585,7 +671,7 @@ class SVOpRep_Embedded(SVOpRep):
                  blocksizes, embedded_dim, nComponentsInActiveBlock,
                  iActiveBlock, nBlocks, dim):
 
-        self.embedded_op = embedded_op
+        self.embedded = embedded_op
         self.numBasisEls = numBasisEls
         self.actionInds = actionInds
         self.blocksizes = blocksizes
@@ -606,6 +692,13 @@ class SVOpRep_Embedded(SVOpRep):
         self.nBlocks = nBlocks
         self.offset = sum(blocksizes[0:iActiveBlock])
         super(SVOpRep_Embedded, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Embedded, (self.embedded,
+                                   self.numBasisEls, self.actionInds,
+                                   self.blocksizes, self.embeddedDim,
+                                   self.nComponents, self.iActiveBlock,
+                                   self.nBlocks, self.dim))
 
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
@@ -628,7 +721,7 @@ class SVOpRep_Embedded(SVOpRep):
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
             embedded_instate = SVStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.acton(embedded_instate)
+            embedded_outstate = self.embedded.acton(embedded_instate)
             output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -651,7 +744,7 @@ class SVOpRep_Embedded(SVOpRep):
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
             embedded_instate = SVStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.adjoint_acton(embedded_instate)
+            embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
             output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -663,18 +756,21 @@ class SVOpRep_Composed(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_op_reps, dim):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorsgates = factor_op_reps
+        self.factors_reps = factor_op_reps
         super(SVOpRep_Composed, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Composed, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorops:
+        for gate in self.factor_reps:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factorops):
+        for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
         return state
 
@@ -683,20 +779,23 @@ class SVOpRep_Sum(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factors = factor_reps
+        self.factor_reps = factor_reps
         super(SVOpRep_Sum, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Sum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
         output_state = SVStateRep(_np.zeros(state.data.shape, complex))
-        for f in self.factors:
+        for f in self.factor_reps:
             output_state.data += f.acton(state).data
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         output_state = SVStateRep(_np.zeros(state.data.shape, complex))
-        for f in self.factors:
+        for f in self.factor_reps:
             output_state.data += f.adjoint_acton(state).data
         return output_state
 
@@ -706,6 +805,9 @@ class SVOpRep_Exponentiated(SVOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         super(SVOpRep_Exponentiated, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Exponentiated, (self.exponentiated_op, self.power, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -727,14 +829,29 @@ class SBStateRep(object):
         self.sframe = _StabilizerFrame(smatrix, pvectors, amps)
         # just rely on StabilizerFrame class to do all the heavy lifting...
 
-    def copy(self):
-        cpy = SBStateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
-        cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
-        return cpy
+    def __reduce__(self):
+        return (SBStateRep, (self.sframe.s, self.sframe.ps, self.sframe.a))
+
+    @property
+    def smatrix(self):
+        return self.sframe.s
+    
+    @property
+    def pvectors(self):
+        return self.sframe.ps
+    
+    @property
+    def amps(self):
+        return self.sframe.a
 
     @property
     def nqubits(self):
         return self.sframe.n
+
+    def copy(self):
+        cpy = SBStateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
+        cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
+        return cpy
 
     def __str__(self):
         return "SBStateRep:\n" + str(self.sframe)
@@ -743,6 +860,9 @@ class SBStateRep(object):
 class SBEffectRep(object):
     def __init__(self, zvals):
         self.zvals = zvals
+
+    def __reduce__(self):
+        return (SBEffectRep, (self.zvals,))
 
     @property
     def nqubits(self):
@@ -769,25 +889,32 @@ class SBOpRep(object):
     def nqubits(self):
         return self.n
 
+    @property
+    def dim(self):
+        return 2**(self.n)  # assume "unitary evolution"-type mode
+
 
 class SBOpRep_Embedded(SBOpRep):
     def __init__(self, embedded_op, n, qubits):
-        self.embedded_op = embedded_op
-        self.qubit_indices = qubits
+        self.embedded = embedded_op
+        self.qubits = qubits  #qubit *indices*
         super(SBOpRep_Embedded, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Embedded, (self.embedded, self.n, self.qubits))
 
     def acton(self, state):
         state = state.copy()  # needed?
-        state.sframe.push_view(self.qubit_indices)
-        outstate = self.embedded_op.acton(state)  # works b/c sfame has "view filters"
+        state.sframe.push_view(self.qubits)
+        outstate = self.embedded.acton(state)  # works b/c sfame has "view filters"
         state.sframe.pop_view()  # return input state to original view
         outstate.sframe.pop_view()
         return outstate
 
     def adjoint_acton(self, state):
         state = state.copy()  # needed?
-        state.sframe.push_view(self.qubit_indices)
-        outstate = self.embedded_op.adjoint_acton(state)  # works b/c sfame has "view filters"
+        state.sframe.push_view(self.qubits)
+        outstate = self.embedded.adjoint_acton(state)  # works b/c sfame has "view filters"
         state.sframe.pop_view()  # return input state to original view
         outstate.sframe.pop_view()
         return outstate
@@ -797,18 +924,21 @@ class SBOpRep_Composed(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_op_reps, n):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorops = factor_op_reps
+        self.factor_reps = factor_op_reps
         super(SBOpRep_Composed, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Composed, (self.factor_reps, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorops:
+        for gate in self.factor_reps:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factorops):
+        for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
         return state
 
@@ -817,8 +947,11 @@ class SBOpRep_Sum(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_reps, n):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factors = factor_reps
+        self.factor_reps = factor_reps
         super(SBOpRep_Sum, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Sum, (self.factor_reps, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -836,6 +969,9 @@ class SBOpRep_Exponentiated(SBOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         super(SBOpRep_Exponentiated, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Exponentiated, (self.exponentiated_op, self.power, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -858,6 +994,13 @@ class SBOpRep_Clifford(SBOpRep):
         self.svector_inv = svector_inv
         self.unitary = unitary
         super(SBOpRep_Clifford, self).__init__(smatrix.shape[0] // 2)
+
+    def __reduce__(self):
+        return (SBOpRep_Clifford, (self.smatrix, self.svector, self.smatrix_inv, self.svector_inv, self.unitary)) 
+
+    @property
+    def unitary_dagger(self):
+        return _np.conjugate(self.unitary.T)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -1273,12 +1416,12 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
     ret = _np.empty((len(evalTree), len(elabels)), 'd')
 
     #Get rho & rhoCache
-    rho = rhoVec.torep('prep')
+    rho = rhoVec._rep
     rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
 
-    #Get operationreps and ereps now so we don't make unnecessary .torep() calls
-    operationreps = {gl: calc.sos.get_operation(gl).torep() for gl in evalTree.opLabels}
-    ereps = [E.torep('effect') for E in EVecs]
+    #Get operationreps and ereps now so we don't make unnecessary ._rep references
+    operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in evalTree.opLabels}
+    ereps = [E._rep for E in EVecs]
 
     #REMOVE?? - want some way to speed tensorprod effect actions...
     #if self.evotype in ("statevec", "densitymx"):
@@ -1452,17 +1595,17 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
         for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):
             t = t0
             rhoVec.set_time(t)
-            rho = rhoVec.torep('prep')
+            rho = rhoVec._rep
             t += rholabel.time
 
             for gl in remainder:
                 op = calc.sos.get_operation(gl)
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
-                rho = op.torep().acton(rho)
+                rho = op._rep.acton(rho)
 
             j = outcome_to_elabel_index[outcome]
             E = EVecs[j]; E.set_time(t)
-            p = E.torep('effect').probability(rho)  # outcome probability
+            p = E._rep.probability(rho)  # outcome probability
             N = totalCnts[t0]
             f = Nreps / N
 
@@ -1603,7 +1746,6 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     #print("DB: prs_as_polys(",spamTuple,circuit,calc.max_order,")")
 
     #NOTE for FUTURE: to adapt this to work with numerical rather than polynomial coeffs:
-    # mpo = mpv = None # (these shouldn't matter)
     # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of get_taylor_order_terms??
     # below: replace prps with: prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
     #  use *= or * instead of .mult( and .scale(
@@ -1612,18 +1754,17 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
 
     mpv = calc.Np  # max_poly_vars
-    mpo = calc.max_order * 2  # max_poly_order
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = {glbl:
                     [
-                        [t.torep(mpo, mpv, "gate") for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
+                        [t.torep(mpv) for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
                         for order in range(calc.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.torep(mpo, mpv, "prep") for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
+    rho_term_reps = [[t.torep(mpv) for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
                      for order in range(calc.max_order + 1)]
 
     E_term_reps = []
@@ -1632,7 +1773,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo, mpv, "effect") for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order)]
+            term_reps = [t.torep(mpv) for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -1873,7 +2014,6 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
 
     # Construct dict of gate term reps
     mpv = calc.Np  # max_poly_vars
-    mpo = 1000  # PLATFORM_BITS / _np.log2(mpv) #max_poly_order allowed for our integer storage
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -1882,13 +2022,13 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
         if glbl not in repcache:
             hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
-            repcache[glbl] = ([t.torep(mpo, mpv, "gate") for t in hmterms], foat_indices)
+            repcache[glbl] = ([t.torep(mpv) for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order)
-        repcache[rholabel] = ([t.torep(mpo, mpv, "prep") for t in hmterms], foat_indices)
+        repcache[rholabel] = ([t.torep(mpv) for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -1898,7 +2038,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
             hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(mpo, mpv, "effect"), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(mpv), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
