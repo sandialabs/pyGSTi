@@ -619,9 +619,7 @@ class OpModel(Model):
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params() since the latter calls us!
         off = 0; shift = 0
-
-        #ellist = ", ".join(map(str,list(self.preps.keys()) +list(self.povms.keys()) +list(self.operations.keys())))
-        #print("DEBUG: rebuilding... %s" % ellist)
+        #print("DEBUG: rebuilding...")
 
         #Step 1: remove any unused indices from paramvec and shift accordingly
         used_gpindices = set()
@@ -654,6 +652,14 @@ class OpModel(Model):
                     obj.set_gpindices(new_inds, self, memo)
 
         # Step 2: add parameters that don't exist yet
+        #  Note that iteration order (that of _iter_parameterized_objs) determines
+        #  parameter index ordering, so "normally" an object that occurs before
+        #  another in the iteration order will have gpindices which are lower - and
+        #  when new indices are allocated we try to maintain this normal order by
+        #  inserting them at an appropriate place in the parameter vector.
+        #  off : holds the current point where new params should be inserted
+        #  shift : holds the amount existing parameters that are > offset (not in `memo`) should be shifted
+        # Note: Adding more explicit "> offset" logic may obviate the need for the memo arg?
         memo = set()  # keep track of which object's gpindices have been set
         for lbl, obj in self._iter_parameterized_objs():
 
@@ -665,7 +671,7 @@ class OpModel(Model):
 
             if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
-                num_new_params = obj.allocate_gpindices(off, self)
+                num_new_params = obj.allocate_gpindices(off, self, memo)
                 objvec = obj.to_vector()  # may include more than "new" indices
                 if num_new_params > 0:
                     new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
@@ -680,8 +686,8 @@ class OpModel(Model):
 
                 shift += num_new_params
                 off += num_new_params
-                # print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
-                #       % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
+                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
+                #      % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds) > 0 else -1; L = len(v)
@@ -913,16 +919,6 @@ class OpModel(Model):
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
-        # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-        def spamTupleToOutcome(spamTuple):
-            if spamTuple is None:
-                return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
-            else:
-                prep_lbl, povm_and_effect_lbl = spamTuple
-                last_underscore = povm_and_effect_lbl.rindex('_')
-                effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
-                return (effect_lbl,)  # effect label *is* the outcome
-
         def resolveSPAM(circuit):
             """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
@@ -1010,7 +1006,7 @@ class OpModel(Model):
                     #if action == "add":
                     od = raw_spamTuples_dict[s]  # ordered dict
                     for spamtup in spamtuples:
-                        outcome_tup = op_outcomes + spamTupleToOutcome(spamtup)
+                        outcome_tup = op_outcomes + _gt.spamTupleToOutcome(spamtup)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
@@ -1027,7 +1023,7 @@ class OpModel(Model):
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + spamTupleToOutcome(x) for x in spamtuples]
+                    outcome_tuples = [op_outcomes + _gt.spamTupleToOutcome(x) for x in spamtuples]
 
                     if observed_outcomes is not None:
                         # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
@@ -1105,7 +1101,7 @@ class OpModel(Model):
         return (raw_spamTuples_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
 
-    def simplify_circuit(self, circuit):
+    def simplify_circuit(self, circuit, dataset=None):
         """
         Simplifies a single :class:`Circuit`.
 
@@ -1131,12 +1127,34 @@ class OpModel(Model):
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
+
+        dataset : DataSet, optional
+            If not None, restrict what is simplified to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
         """
-        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit])
+        raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit], dataset)
         assert(len(outcomes[0]) == nEls)
         return raw_dict, outcomes[0]
 
-    def probs(self, circuit, clipTo=None):
+    def get_num_outcomes(self, circuit):
+        """
+        Returns the number of outcomes of `circuit`, given by it's existing
+        or implied POVM label.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The operation sequence to simplify
+
+        Returns
+        -------
+        int
+        """
+        _, outcomes = self.simplify_circuit(circuit, dataset=None)
+        return len(outcomes)
+
+    def probs(self, circuit, clipTo=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -1149,6 +1167,9 @@ class OpModel(Model):
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
+        time : float, optional
+            The *start* time at which `circuit` is evaluated.
+
         Returns
         -------
         probs : dictionary
@@ -1156,7 +1177,7 @@ class OpModel(Model):
             probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
-        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo)
+        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo, time)
 
     def dprobs(self, circuit, returnPr=False, clipTo=None):
         """

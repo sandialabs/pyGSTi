@@ -152,8 +152,11 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
     """
     if isinstance(lst, slice):
         if require_contiguous:
-            assert(lst.step is None or lst.step == 1), \
-                "Slice must be contiguous!"
+            if not(lst.step is None or lst.step == 1):
+                if array_ok:
+                    return _np.array(range(lst.start, lst.stop, 1 if (lst.step is None) else lst.step))
+                else:
+                    raise ValueError("Slice must be contiguous!")
         return lst
     if lst is None or len(lst) == 0: return slice(0, 0)
     start = lst[0]

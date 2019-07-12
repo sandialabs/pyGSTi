@@ -13,7 +13,7 @@ from .. import objects as _objs
 
 
 def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 verbosity=1):
+                 recordZeroCnts=True, verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -35,6 +35,14 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for potentially
+        registering new outcome labels.  When reading from a cache file
+        (using `cache==True`) this argument is ignored: the presence of zero-
+        counts is dictated by the value of `recordZeroCnts` when the cache file
+        was created.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -72,7 +80,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction)
+                                       collisionAction=collisionAction,
+                                       recordZeroCnts=recordZeroCnts)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -81,12 +90,13 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction)
+                                       collisionAction=collisionAction,
+                                       recordZeroCnts=recordZeroCnts)
         return ds
 
 
 def load_multidataset(filename, cache=False, collisionAction="aggregate",
-                      verbosity=1):
+                      recordZeroCnts=True, verbosity=1):
     """
     Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -108,6 +118,14 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        MultiDataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.  When reading from a cache
+        file (using `cache==True`) this argument is ignored: the presence of
+        zero-counts is dictated by the value of `recordZeroCnts` when the cache
+        file was created.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -146,7 +164,8 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename, bToStdout,
-                                             collisionAction=collisionAction)
+                                             collisionAction=collisionAction,
+                                             recordZeroCnts=recordZeroCnts)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -156,16 +175,35 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename, bToStdout,
-                                             collisionAction=collisionAction)
+                                             collisionAction=collisionAction,
+                                             recordZeroCnts=recordZeroCnts)
     return mds
 
 
-def load_tddataset(filename, cache=False):
+def load_tddataset(filename, cache=False, recordZeroCnts=True):
     """
-    Load a TDDataSet (time-dependent data set) from a file.
+    Load time-dependent (time-stamped) data as a DataSet.
+
+    Parameters
+    ----------
+    filename : string
+        The name of the file
+
+    cache : bool, optional
+        Reserved to perform caching similar to `load_dataset`.  Currently
+        this argument doesn't do anything.
+
+    recordZeroCnts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    Returns
+    -------
+    DataSet
     """
     parser = _stdinput.StdInputParser()
-    tdds = parser.parse_tddatafile(filename)
+    tdds = parser.parse_tddatafile(filename, recordZeroCnts=recordZeroCnts)
     return tdds
 
 

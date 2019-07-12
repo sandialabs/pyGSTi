@@ -630,12 +630,10 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
 
 
 @smart_cached
-def drift_oneoverpvalue_matrices(gsplaq, driftresults):
+def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     """
-    Computes matrix of 1 / pvalues for testing the
-    "no drift" null hypothesis in each sequence, using the
-    "max power in spectra" test. These are the pvalues associated
-    with the quantities returned by `drift_maxpower_matrices`.
+    Computes matrix of -log10(pvalues) for testing the stable-circuit ("no drift") null hypothesis
+    in each cirucit, using the "max power in spectra" test.
 
     Parameters
     ----------
@@ -644,37 +642,37 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
         specifies which matrix indices should be computed and which operation sequences
         they correspond to.
 
-    driftresults : BasicDriftResults
-        The drift analysis results.
+    drifttuple : 2-tuple
+        The first element of the tuple is a StabilityAnalyzer. The second element is a
+        tuple that specifies the hypothesis test(s) from which to extract the p-values.
+        This can be None, and then the default is used.
 
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        1 / pvalues for testing the "no drift" null hypothesis, using the "max power in
+        -log10(pvalues) for testing the "no drift" null hypothesis, using the "max power in
         spectra" test, on the relevant sequences. This operation sequences correspond to the
         operation sequences where a base circuit is sandwiched between the each prep-fiducial
         and effect-fiducial pair.
 
     """
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    stabilityanalyzer = drifttuple[0]
+    dictlabel = drifttuple[1]
+    assert(dictlabel == ('circuit',)), "Currently can only create these matrices for this single type of test!"
     for i, j, opstr in gsplaq:
         try:
-            pval = driftresults.get_maxpower_pvalue(sequence=opstr)
-            if pval <= 0.:
-                ret[i, j] = 16
-            else:
-                ret[i, j] = _np.log10(1. / pval)
+            pval = stabilityanalyzer.get_pvalue(dictlabel={'circuit': opstr}, cutoff=1e-16)
+            ret[i, j] = -1 * _np.log10(pval)
         except:
             pass
     return ret
 
 
 @smart_cached
-def drift_maxpower_matrices(gsplaq, driftresults):
+def drift_maxtvd_matrices(gsplaq, drifttuple):
     """
-    Computes matrix of max powers in the time-series power spectra. This
-    value is a reasonable proxy for how "drifty" the sequence appears
-    to be.
+    Computes matrix of max-tvds for quantifying the size of any detected drift.
 
     Parameters
     ----------
@@ -683,23 +681,65 @@ def drift_maxpower_matrices(gsplaq, driftresults):
         specifies which matrix indices should be computed and which operation sequences
         they correspond to.
 
-    driftresults : BasicDriftResults
-        The drift analysis results.
+    drifttuple : 2-tuple
+        The first element of the tuple is a StabilityAnalyzer. The second element is a
+        tuple that specifies the estimatorkey, and the third element is an estimator
+        name, that specifies the estimates to use (both can be None, and then the
+        default is used).
 
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        Matrix of max powers in the time-series power spectra forthe operation sequences where a
-        base circuit is sandwiched between the each prep-fiducial and effect-fiducial pair.
+        The max tvd for quantifying deviations from the data mean. This
+        operation sequences correspond to the operation sequences where a base circuit
+        is sandwiched between the each prep-fiducial and effect-fiducial pair.
 
     """
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    stabilityanalyzer = drifttuple[0]
+    estimatekey = drifttuple[1]
+    estimator = drifttuple[2]
     for i, j, opstr in gsplaq:
         try:
-            ret[i, j] = driftresults.get_maxpower(sequence=opstr)
+            ret[i, j] = stabilityanalyzer.get_max_tvd_bound(opstr, dskey=None,
+                                                            estimatekey=estimatekey, estimator=estimator)
         except:
             pass
     return ret
+
+
+# future: delete this if we decide not to add this option back in.
+# @smart_cached
+# def drift_maxpower_matrices(gsplaq, driftresults):
+#     """
+#     Computes matrix of max powers in the time-series power spectra. This
+#     value is a reasonable proxy for how "drifty" the sequence appears
+#     to be.
+
+#     Parameters
+#     ----------
+#     gsplaq : CircuitPlaquette
+#         Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#         specifies which matrix indices should be computed and which operation sequences
+#         they correspond to.
+
+#     driftresults : BasicDriftResults
+#         The drift analysis results.
+
+#     Returns
+#     -------
+#     numpy array of shape ( len(effectStrs), len(prepStrs) )
+#         Matrix of max powers in the time-series power spectra forthe operation sequences where a
+#         base circuit is sandwiched between the each prep-fiducial and effect-fiducial pair.
+
+#     """
+#     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+#     for i, j, opstr in gsplaq:
+#         try:
+#             ret[i, j] = driftresults.get_maxpower(sequence=opstr)
+#         except:
+#             pass
+#     return ret
 
 
 def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAll=False,
@@ -730,7 +770,12 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         The number of free parameters in the model.  If None, then
         `model.num_nongauge_params()` is used.
 
-    wildcard : TODO: docstring
+    wildcard : WildcardBudget
+        A wildcard budget to apply to the objective function (`objective`),
+        which increases the goodness of fit by adjusting (by an amount measured
+        in TVD) the probabilities produced by `model` before comparing with
+        the frequencies in `dataset`.  Currently, this functionality is only
+        supported for `objective == "logl"`.
 
     returnAll : bool, optional
         Returns additional information such as the raw and expected model

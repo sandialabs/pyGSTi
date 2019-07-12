@@ -257,12 +257,12 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
         assert stdBasis1.dim < stdBasis2.dim
-        right = _np.dot(mx, stdBasis1.get_from_simple_std())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
-        mid = _np.dot(stdBasis1.get_to_simple_std(), right)  # want Ai st.   Ai * A = I(dim)
+        right = _np.dot(mx, stdBasis1.get_from_element_std())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
+        mid = _np.dot(stdBasis1.get_to_element_std(), right)  # want Ai st.   Ai * A = I(dim)
     elif resize == 'contract':
         assert stdBasis1.dim > stdBasis2.dim
-        right = _np.dot(mx, stdBasis2.get_to_simple_std())  # (dim,dim) (dim,expdim) => dim,expdim
-        mid = _np.dot(stdBasis2.get_from_simple_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
+        right = _np.dot(mx, stdBasis2.get_to_element_std())  # (dim,dim) (dim,expdim) => dim,expdim
+        mid = _np.dot(stdBasis2.get_from_element_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
     return mid
 
 

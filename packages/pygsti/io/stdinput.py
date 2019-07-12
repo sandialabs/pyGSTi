@@ -243,7 +243,7 @@ class StdInputParser(object):
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,
-                       collisionAction="aggregate"):
+                       collisionAction="aggregate", recordZeroCnts=True):
         """
         Parse a data set file into a DataSet object.
 
@@ -260,6 +260,11 @@ class StdInputParser(object):
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" operation label to the
             duplicated gate sequence.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            DataSet.  If False, then zero counts are ignored, except for potentially
+            registering new outcome labels.
 
         Returns
         -------
@@ -364,7 +369,7 @@ class StdInputParser(object):
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                 circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
                                         line_labels=circuitLbls, check=False)  # , lookup=lookupDict)
-                dataset.add_count_dict(circuit, countDict, aux=commentDict)
+                dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts)
 
         if warnings:
             _warnings.warn('\n'.join(warnings))  # to be displayed at end, after potential progress updates
@@ -443,7 +448,7 @@ class StdInputParser(object):
         return countDict
 
     def parse_multidatafile(self, filename, showProgress=True,
-                            collisionAction="aggregate"):
+                            collisionAction="aggregate", recordZeroCnts=True):
         """
         Parse a multiple data set file into a MultiDataSet object.
 
@@ -460,6 +465,11 @@ class StdInputParser(object):
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" operation label to the
             duplicated gate sequence.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            MultiDataSet.  If False, then zero counts are ignored, except for
+            potentially registering new outcome labels.
 
         Returns
         -------
@@ -530,7 +540,7 @@ class StdInputParser(object):
                                       check=False)  # , lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
                 for dsLabel, countDict in dsCountDicts.items():
-                    datasets[dsLabel].add_count_dict(opStr, countDict)
+                    datasets[dsLabel].add_count_dict(opStr, countDict, recordZeroCnts=recordZeroCnts)
 
         mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel, ds in datasets.items():
@@ -614,9 +624,9 @@ class StdInputParser(object):
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
-    def parse_tddatafile(self, filename, showProgress=True):
+    def parse_tddatafile(self, filename, showProgress=True, recordZeroCnts=True):
         """
-        Parse a data set file into a TDDataSet object.
+        Parse a timstamped data set file into a DataSet object.
 
         Parameters
         ----------
@@ -626,10 +636,15 @@ class StdInputParser(object):
         showProgress : bool, optional
             Whether or not progress should be displayed
 
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            DataSet.  If False, then zero counts are ignored, except for
+            potentially registering new outcome labels.
+
         Returns
         -------
-        TDDataSet
-            A static TDDataSet object.
+        DataSet
+            A static DataSet object.
         """
 
         #Parse preamble -- lines beginning with # or ## until first non-# line
@@ -689,7 +704,8 @@ class StdInputParser(object):
 
                 seriesList = [outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr]  # iter over characters in str
                 timesList = list(range(len(seriesList)))  # FUTURE: specify an offset and step??
-                dataset.add_raw_series_data(circuit, seriesList, timesList)
+                dataset.add_raw_series_data(circuit, seriesList, timesList,
+                                            recordZeroCnts=recordZeroCnts)
 
         dataset.done_adding_data()
         return dataset
