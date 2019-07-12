@@ -29,6 +29,7 @@ from ..tools import symplectic as _symp
 from ..tools import lindbladtools as _lbt
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
+from . import stabilizer as _stabilizer
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
@@ -436,6 +437,36 @@ class LinearOperator(_modelmember.ModelMember):
         Return this operation as a dense matrix.
         """
         raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
+
+    def acton(self, state):
+        """
+        Act with this operator upon `state`
+
+        Parameters
+        ----------
+        state : SPAMVec
+            The state to act on
+
+        Returns
+        -------
+        SPAMVec
+            The output state
+        """
+        from . import spamvec as _sv  # can we move this to top?
+        assert(self._evotype in ('densitymx', 'statevec', 'stabilizer')), \
+            "acton(...) cannot be used with the %s evolution type!" % self._evotype
+        assert(self._rep is not None), "Internal Error: representation is None!"
+        assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
+
+        #Perform actual 'acton' operation
+        output_rep = self._rep.acton(state._rep)
+
+        #Build a SPAMVec around output_rep
+        if self._evotype in ("densitymx", "statevec"):
+            return _sv.StaticSPAMVec(output_rep.todense(), self._evotype, 'prep')
+        else:  # self._evotype == "stabilizer"
+            return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
+                output_rep.smatrix, output_rep.pvectors, output_rep.amps))
 
     #def torep(self):
     #    """

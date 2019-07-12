@@ -270,6 +270,32 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         return sum([E.size for E in self.values()])
 
+    def acton(self, state):
+        """
+        Compute the outcome probabilities the result from
+        acting on `state` with this POVM.
+
+        Parameters
+        ----------
+        state : SPAMVec
+            The state to act on
+
+        Returns
+        -------
+        OrderedDict
+            A dictionary whose keys are the outcome labels (strings)
+            and whose values are the probabilities of seeing each outcome.
+        """
+        assert(self._evotype in ('densitymx', 'statevec', 'stabilizer')), \
+            "probabilities(...) cannot be used with the %s evolution type!" % self._evotype
+        assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
+
+        staterep = state._rep
+        outcome_probs = _collections.OrderedDict()
+        for lbl, E in self.items():
+            outcome_probs[lbl] = E._rep.probability(staterep)
+        return outcome_probs
+
     def __str__(self):
         s = "%s with effect vectors:\n" % self.__class__.__name__
         for lbl, effect in self.items():

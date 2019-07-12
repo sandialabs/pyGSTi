@@ -3207,7 +3207,7 @@ class StabilizerSPAMVec(SPAMVec):
         raise ValueError(("Given `purevec` must be a z-basis product state - "
                           "cannot construct StabilizerSPAMVec"))
 
-    def __init__(self, nqubits, zvals=None):
+    def __init__(self, nqubits, zvals=None, sframe=None):
         """
         Initialize a StabilizerSPAMVec object.
 
@@ -3220,8 +3220,16 @@ class StabilizerSPAMVec(SPAMVec):
             An iterable over anything that can be cast as True/False
             to indicate the 0/1 value of each qubit in the Z basis.
             If None, the all-zeros state is created.
+
+        sframe : StabilizerFrame, optional
+            A complete stabilizer frame to initialize this state from.
+            If this is not None, then `nqubits` and `zvals` must be None.
         """
-        self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits, zvals)
+        if sframe is not None:
+            assert(nqubits is None and zvals is None), "`nqubits` and `zvals` must be None when `sframe` isn't!"
+            self.sframe = sframe
+        else:
+            self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits, zvals)
         rep = self.sframe.torep()  # dim == 2**nqubits
         SPAMVec.__init__(self, rep, "stabilizer", "prep")
 
