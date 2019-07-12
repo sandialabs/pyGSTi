@@ -27,7 +27,8 @@ DEBUG_FCOUNT = 0
 
 class DMStateRep(object):
     def __init__(self, data):
-        self.base = _np.asarray(data, 'd')
+        assert(data.dtype == _np.dtype('d'))
+        self.base = data
 
     def __reduce__(self):
         return (DMStateRep, (self.base,))
@@ -56,7 +57,8 @@ class DMEffectRep(object):
 
 class DMEffectRep_Dense(DMEffectRep):
     def __init__(self, data):
-        self.base = _np.array(data, 'd')
+        assert(data.dtype == _np.dtype('d'))
+        self.base = data
         super(DMEffectRep_Dense, self).__init__(len(self.base))
 
     def __reduce__(self):
@@ -117,7 +119,7 @@ class DMEffectRep_TensorProd(DMEffectRep):
     def probability(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, 'd')
         Edense = self.todense(scratch)
-        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
+        return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
 class DMEffectRep_Computational(DMEffectRep):
@@ -196,7 +198,7 @@ class DMEffectRep_Computational(DMEffectRep):
     def probability(self, state):
         scratch = _np.empty(self.dim, 'd')
         Edense = self.todense(scratch)
-        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
+        return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
 class DMEffectRep_Errgen(DMEffectRep):  # TODO!! Need to make SV version
@@ -294,11 +296,11 @@ class DMOpRep_Embedded(DMOpRep):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
             if iBlk != self.iActiveBlock:
-                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
+                output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
@@ -313,9 +315,9 @@ class DMOpRep_Embedded(DMOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = DMStateRep(state.data[inds])
+            embedded_instate = DMStateRep(state.base[inds])
             embedded_outstate = self.embedded.acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -324,7 +326,7 @@ class DMOpRep_Embedded(DMOpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -336,9 +338,9 @@ class DMOpRep_Embedded(DMOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = DMStateRep(state.data[inds])
+            embedded_instate = DMStateRep(state.base[inds])
             embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -366,6 +368,9 @@ class DMOpRep_Composed(DMOpRep):
             state = gate.adjoint_acton(state)
         return state
 
+    def reinit_factor_op_reps(self, new_factor_op_reps):
+        self.factor_reps = new_factor_op_reps
+
 
 class DMOpRep_Sum(DMOpRep):
     def __init__(self, factor_reps, dim):
@@ -378,16 +383,16 @@ class DMOpRep_Sum(DMOpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
         for f in self.factor_reps:
-            output_state.data += f.acton(state).data
+            output_state.base += f.acton(state).base
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
         for f in self.factor_reps:
-            output_state.data += f.adjoint_acton(state).data
+            output_state.base += f.adjoint_acton(state).base
         return output_state
 
 
@@ -442,16 +447,20 @@ class DMOpRep_Lindblad(DMOpRep):
         return (self.mu, self.eta, self.m_star, self.s)
 
     def __reduce__(self):
-        return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
-                                   self.unitary_postfactor.data, self.unitary_postfactor.indices,
-                                   self.unitary_postfactor.indptr))
+        if self.unitary_postfactor is None:
+            return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                       _np.empty(0,'d'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
+        else:
+            return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                       self.unitary_postfactor.data, self.unitary_postfactor.indices,
+                                       self.unitary_postfactor.indptr))
 
     def acton(self, state):
         """ Act this gate map on an input state """
         if self.unitary_postfactor is not None:
-            statedata = self.unitary_postfactor.dot(state.data)
+            statedata = self.unitary_postfactor.dot(state.base)
         else:
-            statedata = state.data
+            statedata = state.base
 
         tol = 1e-16  # 2^-53 (=Scipy default) -- TODO: make into an arg?
         A = self.errgen_rep.aslinearoperator()  # ~= a sparse matrix for call below
@@ -487,18 +496,19 @@ class DMOpRep_Sparse(DMOpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        return DMStateRep(self.A.dot(state.data))
+        return DMStateRep(self.A.dot(state.base))
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         Aadj = self.A.conjugate(copy=True).transpose()
-        return DMStateRep(Aadj.dot(state.data))
+        return DMStateRep(Aadj.dot(state.base))
 
 
 # State vector (SV) propagation wrapper classes
 class SVStateRep(object):
     def __init__(self, data):
-        self.base = _np.asarray(data, complex)
+        assert(data.dtype == _np.dtype(complex))
+        self.base = data
 
     def __reduce__(self):
         return (SVStateRep, (self.base,))
@@ -530,7 +540,8 @@ class SVEffectRep(object):
 
 class SVEffectRep_Dense(SVEffectRep):
     def __init__(self, data):
-        self.base = _np.array(data, complex)
+        assert(data.dtype == _np.dtype(complex))
+        self.base = data
         super(SVEffectRep_Dense, self).__init__(len(self.base))
 
     def __reduce__(self):
@@ -591,7 +602,7 @@ class SVEffectRep_TensorProd(SVEffectRep):
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.todense(scratch)
-        return _np.vdot(Edense, state.data)
+        return _np.vdot(Edense, state.base)
 
 
 class SVEffectRep_Computational(SVEffectRep):
@@ -633,7 +644,7 @@ class SVEffectRep_Computational(SVEffectRep):
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.todense(scratch)
-        return _np.vdot(Edense, state.data)
+        return _np.vdot(Edense, state.base)
 
 
 class SVOpRep(object):
@@ -704,11 +715,11 @@ class SVOpRep_Embedded(SVOpRep):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
             if iBlk != self.iActiveBlock:
-                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
+                output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -720,9 +731,9 @@ class SVOpRep_Embedded(SVOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = SVStateRep(state.data[inds])
+            embedded_instate = SVStateRep(state.base[inds])
             embedded_outstate = self.embedded.acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -731,7 +742,7 @@ class SVOpRep_Embedded(SVOpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -743,9 +754,9 @@ class SVOpRep_Embedded(SVOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = SVStateRep(state.data[inds])
+            embedded_instate = SVStateRep(state.base[inds])
             embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -774,6 +785,9 @@ class SVOpRep_Composed(SVOpRep):
             state = gate.adjoint_acton(state)
         return state
 
+    def reinit_factor_op_reps(self, new_factor_op_reps):
+        self.factors_reps = new_factor_op_reps
+
 
 class SVOpRep_Sum(SVOpRep):
     # exactly the same as DM case
@@ -787,16 +801,16 @@ class SVOpRep_Sum(SVOpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
         for f in self.factor_reps:
-            output_state.data += f.acton(state).data
+            output_state.base += f.acton(state).base
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
         for f in self.factor_reps:
-            output_state.data += f.adjoint_acton(state).data
+            output_state.base += f.adjoint_acton(state).base
         return output_state
 
 

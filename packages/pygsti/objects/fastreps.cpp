@@ -448,6 +448,13 @@ namespace CReps {
   {
   }
   DMOpCRep_Composed::~DMOpCRep_Composed() { }
+
+  void DMOpCRep_Composed::reinit_factor_op_creps(std::vector<DMOpCRep*> new_factor_gate_creps) {
+    _factor_gate_creps.clear(); //removes all elements
+    _factor_gate_creps.insert(_factor_gate_creps.end(),
+			      new_factor_gate_creps.begin(),
+			      new_factor_gate_creps.end());  //inserts contents of new array
+  }
   
   DMStateCRep* DMOpCRep_Composed::acton(DMStateCRep* state, DMStateCRep* out_state) {
 
@@ -1177,6 +1184,13 @@ namespace CReps {
   {
   }
   SVOpCRep_Composed::~SVOpCRep_Composed() { }
+
+  void SVOpCRep_Composed::reinit_factor_op_creps(std::vector<SVOpCRep*> new_factor_gate_creps) {
+    _factor_gate_creps.clear(); //removes all elements
+    _factor_gate_creps.insert(_factor_gate_creps.end(),
+			      new_factor_gate_creps.begin(),
+			      new_factor_gate_creps.end());  //inserts contents of new array
+  }
   
   SVStateCRep* SVOpCRep_Composed::acton(SVStateCRep* state, SVStateCRep* out_state) {
 

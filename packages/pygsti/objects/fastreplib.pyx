@@ -98,6 +98,7 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass DMOpCRep_Composed(DMOpCRep):
         DMOpCRep_Composed(vector[DMOpCRep*], INT) except +
+        void reinit_factor_op_creps(vector[DMOpCRep*])
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
@@ -194,6 +195,7 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass SVOpCRep_Composed(SVOpCRep):
         SVOpCRep_Composed(vector[SVOpCRep*], INT) except +
+        void reinit_factor_op_creps(vector[SVOpCRep*])
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
@@ -629,7 +631,7 @@ cdef class DMOpRep_Embedded(DMOpRep):
 
 
 cdef class DMOpRep_Composed(DMOpRep):
-    cdef public object factorop_reps # list of DMOpRep objs?
+    cdef public object factor_reps # list of DMOpRep objs?
 
     def __cinit__(self, factor_op_reps, INT dim):
         self.factor_reps = factor_op_reps
@@ -642,6 +644,14 @@ cdef class DMOpRep_Composed(DMOpRep):
 
     def __reduce__(self):
         return (DMOpRep_Composed, (self.factor_reps, self.c_gate._dim))
+
+    def reinit_factor_op_reps(self, new_factor_op_reps):
+        cdef INT i
+        cdef INT nfactors = len(new_factor_op_reps)
+        cdef vector[DMOpCRep*] creps = vector[DMGateCRep_ptr](nfactors)
+        for i in range(nfactors):
+            creps[i] = (<DMOpRep?>new_factor_op_reps[i]).c_gate
+        (<DMOpCRep_Composed*>self.c_gate).reinit_factor_op_creps(creps)
 
 
 cdef class DMOpRep_Sum(DMOpRep):
@@ -966,6 +976,14 @@ cdef class SVOpRep_Composed(SVOpRep):
         for i in range(nfactors):
             gate_creps[i] = (<SVOpRep?>factor_op_reps[i]).c_gate
         self.c_gate = new SVOpCRep_Composed(gate_creps, dim)
+
+    def reinit_factor_op_reps(self, new_factor_op_reps):
+        cdef INT i
+        cdef INT nfactors = len(new_factor_op_reps)
+        cdef vector[SVOpCRep*] creps = vector[SVGateCRep_ptr](nfactors)
+        for i in range(nfactors):
+            creps[i] = (<SVOpRep?>new_factor_op_reps[i]).c_gate
+        (<SVOpCRep_Composed*>self.c_gate).reinit_factor_op_creps(creps)
 
     def __reduce__(self):
         return (SVOpRep_Composed, (self.factor_reps, self.c_gate._dim))
