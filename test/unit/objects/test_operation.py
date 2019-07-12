@@ -741,3 +741,33 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
         # XXX does this check anything meaningful?
         deriv = self.gate.deriv_wrt_params([0])
         self.assertEqual(deriv.shape[1], 1)
+
+
+class StochasticNoiseOpTester(BaseCase):
+    def test_instance(self):
+        sop = op.StochasticNoiseOp(4)
+
+        sop.from_vector(np.array([0.1, 0.0, 0.0]))
+        self.assertArraysAlmostEqual(sop.to_vector(), np.array([0.1, 0., 0.]))
+
+        expected_mx = np.identity(4); expected_mx[2, 2] = expected_mx[3, 3] = 0.98  # = 2*(0.1^2)
+        self.assertArraysAlmostEqual(sop.todense(), expected_mx)
+
+        rho = pc.build_vector([4], ['Q0'], "0", 'pp')
+        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.todense(), rho))),
+                               0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
+
+
+class DepolarizeOpTester(BaseCase):
+    def test_depol_noise_op(self):
+        dop = op.DepolarizeOp(4)
+
+        dop.from_vector(np.array([0.1]))
+        self.assertArraysAlmostEqual(dop.to_vector(), np.array([0.1]))
+
+        expected_mx = np.identity(4); expected_mx[1, 1] = expected_mx[2, 2] = expected_mx[3, 3] = 0.96  # = 4*(0.1^2)
+        self.assertArraysAlmostEqual(dop.todense(), expected_mx)
+
+        rho = pc.build_vector([4], ['Q0'], "0", 'pp')
+        # b/c both X and Y dephasing rates => 0.01 reduction
+        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.todense(), rho))), 0.98)

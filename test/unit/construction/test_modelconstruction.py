@@ -1,3 +1,4 @@
+import scipy
 import numpy as np
 
 from ..util import BaseCase
@@ -13,11 +14,11 @@ class ModelConstructionTester(BaseCase):
         pygsti.objects.ExplicitOpModel._strict = False
 
     def test_build_basis_gateset(self):
-        modelA = pygsti.construction.build_explicit_model(
+        modelA = mc.build_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
-        modelB = pygsti.construction.basis_build_explicit_model(
+        modelB = mc.basis_build_explicit_model(
             [('Q0',)], pygsti.Basis.cast('gm', 4),
             ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
@@ -37,6 +38,12 @@ class ModelConstructionTester(BaseCase):
         model1['Gy'] = mc.build_operation(stateSpace, spaceLabels, "Y(pi/2,Q0)")
 
     def test_build_explicit_model(self):
+        model = mc.build_explicit_model([('Q0',)],
+                                        ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        self.assertEqual(set(model.operations.keys()), set(['Gi', 'Gx', 'Gy']))
+        self.assertAlmostEqual(sum(model.probs(('Gx', 'Gi', 'Gy')).values()), 1.0)
+        self.assertEqual(model.num_params(), 60)
+
         model2 = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
         gateset2b = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
@@ -52,32 +59,115 @@ class ModelConstructionTester(BaseCase):
                                              basis="pp")
         # TODO assert correctness
 
+    def test_build_crosstalk_free_model(self):
+        nQubits = 2
+
+        mdl = mc.build_crosstalk_free_model(
+            nQubits, ('Gi', 'Gx', 'Gy', 'Gcnot'),
+            {}, ensure_composed_gates=True,
+            independent_gates=False
+        )
+        assert(set(mdl.operation_blks['gates'].keys()) == set(["Gi", "Gx", "Gy", "Gcnot"]))
+        assert(set(mdl.operation_blks['layers'].keys()) == set(
+            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0)]))
+        self.assertEqual(mdl.num_params(), 0)
+
+        addlErr = pygsti.obj.TPDenseOp(np.identity(4, 'd'))  # adds 12 params
+        addlErr2 = pygsti.obj.TPDenseOp(np.identity(4, 'd'))  # adds 12 params
+
+        mdl.operation_blks['gates']['Gx'].append(addlErr)
+        mdl.operation_blks['gates']['Gy'].append(addlErr2)
+        mdl.operation_blks['gates']['Gi'].append(addlErr)
+
+        self.assertEqual(mdl.num_params(), 24)
+
+        self.assertEqual(mdl.operation_blks['layers'][('Gx', 0)].gpindices, slice(0, 12))
+        self.assertEqual(mdl.operation_blks['layers'][('Gy', 0)].gpindices, slice(12, 24))
+        self.assertEqual(mdl.operation_blks['layers'][('Gi', 0)].gpindices, slice(0, 12))
+        self.assertEqual(mdl.operation_blks['gates']['Gx'].gpindices, slice(0, 12))
+        self.assertEqual(mdl.operation_blks['gates']['Gy'].gpindices, slice(12, 24))
+        self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice(0, 12))
+
+        # Case: ensure_composed_gates=False, independent_gates=True
+        cfmdl = mc.build_crosstalk_free_model(
+            nQubits, ('Gx', 'Gy', 'Gcnot'),
+            {'Gx': 0.1,  # depol
+             'Gy': (0.02, 0.02, 0.02),  # pauli stochastic
+             # errgen: BUG? when SIX too large -> no coeff corresponding to rate?
+             'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
+             'idle': 0.01, 'prep': 0.01, 'povm': 0.01
+             }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+            ensure_composed_gates=False, independent_gates=True)
+
+        self.assertEqual(cfmdl.num_params(), 17)
+
+        # Case: ensure_composed_gates=True, independent_gates=False
+        cfmdl2 = mc.build_crosstalk_free_model(
+            nQubits, ('Gx', 'Gy', 'Gcnot'),
+            {'Gx': 0.1,  # depol
+             'Gy': (0.02, 0.02, 0.02),  # pauli stochastic
+             'Gcnot': {'HZZ': 0.01, 'SIX': 0.01},  # errgen: BUG? when SIX too large -> no coeff corresponding to rate?
+             'idle': 0.01, 'prep': 0.01, 'povm': 0.01
+             }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+            ensure_composed_gates=True, independent_gates=False)
+        self.assertEqual(cfmdl2.num_params(), 11)
+
+        # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
+        cfmdl3 = mc.build_crosstalk_free_model(
+            nQubits, ('Gx', 'Gy', 'Gcnot'),
+            {'Gx': 0.1,  # depol
+             ('Gx', 'qb0'): 0.2,  # adds another independent depol param for Gx:qb0
+             'Gy': (0.02, 0.02, 0.02),  # pauli stochastic
+             'Gcnot': {'HZZ': 0.01, 'SIX': 0.01},  # errgen: BUG? when SIX too large -> no coeff corresponding to rate?
+             'idle': 0.01, 'prep': 0.01, 'povm': 0.01
+             }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+            ensure_composed_gates=True, independent_gates=False)
+        self.assertEqual(cfmdl3.num_params(), 12)
+
+    def test_build_crosstalk_free_model_with_nonstd_gate_unitary_factory(self):
+        nQubits = 2
+
+        def fn(args):
+            if args is None: args = (0,)
+            a, = args
+            sigmaZ = np.array([[1, 0], [0, -1]], 'd')
+            return scipy.linalg.expm(1j * float(a) * sigmaZ)
+
+        cfmdl = mc.build_crosstalk_free_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
+                                              {}, nonstd_gate_unitaries={'Ga': fn})
+
+        c = pygsti.obj.Circuit("Gx:1Ga;0.3:1Gx:1")
+        p = cfmdl.probs(c)
+
+        self.assertAlmostEqual(p['00'], 0.08733219254516078)
+        self.assertAlmostEqual(p['01'], 0.9126678074548386)
+
     def test_build_operation_raises_on_bad_parameterization(self):
         with self.assertRaises(ValueError):
             mc.build_operation([(4, 4)], [('Q0', 'Q1')], "X(pi,Q0)", "gm", parameterization="FooBar")
 
     def test_build_explicit_model_raises_on_bad_state(self):
         with self.assertRaises(ValueError):
-            pygsti.construction.build_explicit_model([('A0',)], ['Gi', 'Gx', 'Gy'],
-                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"])
+            mc.build_explicit_model([('A0',)], ['Gi', 'Gx', 'Gy'],
+                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
     def test_build_explicit_model_raises_on_bad_basis(self):
         with self.assertRaises(AssertionError):
-            pygsti.construction.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                                     basis="FooBar")
+            mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                    basis="FooBar")
 
     def test_build_explicit_model_raises_on_bad_rho_expression(self):
         with self.assertRaises(ValueError):
-            pygsti.construction.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                                     prepLabels=['rho0'], prepExpressions=["FooBar"],)
+            mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                    prepLabels=['rho0'], prepExpressions=["FooBar"],)
 
     def test_build_explicit_model_raises_on_bad_effect_expression(self):
         with self.assertRaises(ValueError):
-            pygsti.construction.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                                     effectLabels=['0', '1'], effectExpressions=["FooBar", "1"])
+            mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                    effectLabels=['0', '1'], effectExpressions=["FooBar", "1"])
 
 
 class GateConstructionBase(object):
