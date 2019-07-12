@@ -785,6 +785,9 @@ cdef class SVEffectRep:
         #unnecessary (just put in signature): cdef SVStateRep st = <SVStateRep?>state
         return self.c_effect.probability(state.c_state)
 
+    def amplitude(self, SVStateRep state not None):
+        return self.c_effect.amplitude(state.c_state)
+
     @property
     def dim(self):
         return self.c_effect._dim
