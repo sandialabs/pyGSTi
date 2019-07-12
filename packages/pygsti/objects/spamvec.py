@@ -866,11 +866,13 @@ class DenseSPAMVec(SPAMVec):
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
         if protected is not None:
-            assert(rep.base.base is protected.base.base), "Internal memory referencing error"
+            assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(protected.base)), "Internal memory referencing error"
+            #OLD: assert(rep.base.base is protected.base.base), "Internal memory referencing error"
             #two .bases here: 1st gets to numpy array of Rep or ProtectedArray; 2nd accesses ndarray's "base" memory ptr
             self.base = protected
         else:
-            assert(rep.base.base is vec), "Internal memory referencing error"
+            assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
+            #OLD assert(rep.base.base is vec)
             self.base = vec
 
     def todense(self, scratch=None):

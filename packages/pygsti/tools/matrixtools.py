@@ -1566,3 +1566,16 @@ def sparse_onenorm(A):
     float
     """
     return max(abs(A).sum(axis=0).flat)
+
+
+def ndarray_base(a, debug=False):
+    """
+    Get the base memory object for numpy array `a`,
+    found by following `.base` until it comes up None.
+    """
+    if debug: print("ndarray_base debug:")
+    while a.base is not None:
+        if debug: print(" -> base = ", id(a.base))
+        a = a.base
+    if debug: print(" ==> ", id(a))
+    return a

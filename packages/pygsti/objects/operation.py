@@ -944,7 +944,7 @@ class DenseOperator(LinearOperator):
 
         super(DenseOperator, self).__init__(rep, evotype)
         if protected is not None:
-            assert(rep.base is protected.base), "Internal memory referencing error"
+            assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(protected.base)), "Internal memory referencing error"
             self.base = protected
         else:
             self.base = rep.base
@@ -2686,7 +2686,8 @@ class LindbladOp(LinearOperator):
                 #Allocate sparse matrix arrays for rep
                 if self.unitary_postfactor is None:
                     Udata = _np.empty(0, 'd')
-                    Uindices = Uindptr = _np.empty(0, _np.int64)
+                    Uindices = _np.empty(0, _np.int64)
+                    Uindptr = _np.zeros(1, _np.int64)
                 else:
                     assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
                         "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
