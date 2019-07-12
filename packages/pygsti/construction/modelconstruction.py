@@ -512,11 +512,11 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
     for label, rhoExpr in zip(prepLabels, prepExpressions):
         vec = basis_build_vector(rhoExpr, basis)
         if parameterization == "full":
-            ret.preps[label] = _spamvec.FullSPAMVec(vec, 'densitymx')
+            ret.preps[label] = _spamvec.FullSPAMVec(vec, 'densitymx', 'prep')
         elif parameterization == "TP":
-            ret.preps[label] = _spamvec.TPSPAMVec(vec)
+            ret.preps[label] = _spamvec.TPSPAMVec(vec)  # only a "prep"
         elif parameterization == "static":
-            ret.preps[label] = _spamvec.StaticSPAMVec(vec, 'densitymx')
+            ret.preps[label] = _spamvec.StaticSPAMVec(vec, 'densitymx', 'prep')
         else:
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
@@ -545,9 +545,9 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         for label, EExpr in zip(ELbls, EExprs):
             evec = basis_build_vector(EExpr, basis)
             if parameterization == "static":
-                effects.append((label, _spamvec.StaticSPAMVec(evec, 'densitymx')))
+                effects.append((label, _spamvec.StaticSPAMVec(evec, 'densitymx', 'effect')))
             else:
-                effects.append((label, _spamvec.FullSPAMVec(evec, 'densitymx')))
+                effects.append((label, _spamvec.FullSPAMVec(evec, 'densitymx', 'effect')))
 
         if len(effects) > 0:  # don't add POVMs with 0 effects
             if parameterization == "TP":
@@ -1056,7 +1056,7 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
             basis = _BuiltinBasis('pp', gate_dim)  # assume we're always given basis els in a Pauli basis?
             errgen = _op.LindbladErrorgen(gate_dim, errs, basis, param_mode,
                                           nonham_mode, truncate=False, mxBasis="pp", evotype=evotype)
-            gate = _op.LindbladOp(gateMx, errgen, sparse_expm=_sps.issparse(gateMx))
+            gate = _op.LindbladOp(gateMx, errgen, dense_rep=not _sps.issparse(gateMx))
 
             #OLD TODO REMOVE
             #gate = _op.LindbladOp.from_operation_matrix(gateMx, gateMx, ham_basis="pp", nonham_basis="pp",
@@ -1133,12 +1133,12 @@ def build_crosstalk_free_model(nQubits, gate_names, error_rates, nonstd_gate_uni
     prep_layers = {}
     if 'prep' in error_rates:
         assert(isinstance(error_rates['prep'], (dict, float))), "error_rates['prep'] can only be a dict or float!"
-        rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype)
-        prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, create_gate('prep', _np.identity(4)), "prep")
+        rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
+        prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, create_gate('prep', _np.identity(4)), 'prep')
         prep_factors = [prep1Q.copy() for i in range(nQubits)] if independent_gates else [prep1Q] * nQubits
         prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
     else:
-        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * nQubits, evotype)
+        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * nQubits, evotype, 'prep')
 
     povm_layers = {}
     if 'povm' in error_rates:

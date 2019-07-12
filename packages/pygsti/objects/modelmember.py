@@ -345,7 +345,7 @@ class ModelMember(ModelChild):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this object using a vector of parameters.
 

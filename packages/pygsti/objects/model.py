@@ -556,6 +556,9 @@ class OpModel(Model):
             before their use."""
 
         #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
+        #import inspect, pprint
+        #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
+        
         if self._need_to_rebuild:
             self._rebuild_paramvec()
             self._need_to_rebuild = False
@@ -589,9 +592,11 @@ class OpModel(Model):
             #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
             for _, obj in self._iter_parameterized_objs():
-                obj.from_vector(self._paramvec[obj.gpindices])
+                obj.from_vector(self._paramvec[obj.gpindices], nodirty=True)
                 reset_dirty(obj)  # like "obj.dirty = False" but recursive
                 #object is known to be consistent with _paramvec
+                
+            self.dirty = False
 
         if OpModel._pcheck: self._check_paramvec()
 

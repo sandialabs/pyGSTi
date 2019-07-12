@@ -448,6 +448,13 @@ namespace CReps {
   {
   }
   DMOpCRep_Composed::~DMOpCRep_Composed() { }
+
+  void DMOpCRep_Composed::reinit_factor_op_creps(std::vector<DMOpCRep*> new_factor_gate_creps) {
+    _factor_gate_creps.clear(); //removes all elements
+    _factor_gate_creps.insert(_factor_gate_creps.end(),
+			      new_factor_gate_creps.begin(),
+			      new_factor_gate_creps.end());  //inserts contents of new array
+  }
   
   DMStateCRep* DMOpCRep_Composed::acton(DMStateCRep* state, DMStateCRep* out_state) {
 
@@ -1177,6 +1184,13 @@ namespace CReps {
   {
   }
   SVOpCRep_Composed::~SVOpCRep_Composed() { }
+
+  void SVOpCRep_Composed::reinit_factor_op_creps(std::vector<SVOpCRep*> new_factor_gate_creps) {
+    _factor_gate_creps.clear(); //removes all elements
+    _factor_gate_creps.insert(_factor_gate_creps.end(),
+			      new_factor_gate_creps.begin(),
+			      new_factor_gate_creps.end());  //inserts contents of new array
+  }
   
   SVStateCRep* SVOpCRep_Composed::acton(SVStateCRep* state, SVStateCRep* out_state) {
 
@@ -2604,26 +2618,20 @@ namespace CReps {
   |* PolyCRep                                                                 *|
   \****************************************************************************/
   
-  //std::unordered_map[INT, dcomplex] _coeffs;
-  //INT _max_order;
-  //INT _max_num_vars;
   PolyCRep::PolyCRep() {
     _coeffs = std::unordered_map<PolyVarsIndex, dcomplex>();
-    _max_order = 0;
     _max_num_vars = 0;
     _vindices_per_int = 0;
   }
   
-  PolyCRep::PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_order, INT max_num_vars, INT vindices_per_int) {
+  PolyCRep::PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int) {
     _coeffs = coeffs;
-    _max_order = max_order;
     _max_num_vars = max_num_vars;
     _vindices_per_int = vindices_per_int;
   }
 
   PolyCRep::PolyCRep(const PolyCRep& other) {
     _coeffs = other._coeffs;
-    _max_order = other._max_order;
     _max_num_vars = other._max_num_vars;
   }
 
@@ -2646,7 +2654,7 @@ namespace CReps {
 	else result[k] = val;
       }
     }
-    PolyCRep ret(result, _max_order, _max_num_vars, _vindices_per_int);
+    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
     return ret; // need a copy constructor?
   }
 

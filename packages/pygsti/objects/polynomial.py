@@ -399,7 +399,7 @@ class Polynomial(dict):
     def __copy__(self):
         return self.copy()
 
-    def torep(self, max_order=None, max_num_vars=None):
+    def torep(self, max_num_vars=None):
         """
         Construct a representation of this polynomial.
 
@@ -410,10 +410,6 @@ class Polynomial(dict):
 
         Parameters
         ----------
-        max_order : int, optional
-            The maximum order (degree) terms are allowed to have.  If None,
-            then it is taken as the current degree of this polynomial.
-
         max_num_vars : int, optional
             The maximum number of variables the represenatation is allowed to
             have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
@@ -423,13 +419,6 @@ class Polynomial(dict):
         -------
         PolyRep
         """
-        # Set max_order (determines based on coeffs if necessary)
-        default_max_order = self.get_degree()
-        if max_order is None:
-            max_order = default_max_order
-        else:
-            assert(default_max_order <= max_order)
-
         # Set max_num_vars (determines based on coeffs if necessary)
         default_max_vars = 0 if len(self) == 0 else \
             max([(max(k) + 1 if k else 0) for k in self.keys()])
@@ -438,12 +427,10 @@ class Polynomial(dict):
         else:
             assert(default_max_vars <= max_num_vars)
 
-        #new.max_order = max_order
-        #new.max_num_vars = max_num_vars
         vindices_per_int = Polynomial.get_vindices_per_int(max_num_vars)
 
         def vinds_to_int(vinds):
-            """ Convert tuple index of ints to single int given max_order,max_numvars """
+            """ Convert tuple index of ints to single int given max_numvars """
             ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
             ret_tup = []
             for k in range(ints_in_key):
@@ -462,7 +449,7 @@ class Polynomial(dict):
         # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
         vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
 
-        return replib.PolyRep(int_coeffs, max_order, max_num_vars, vindices_per_int)
+        return replib.PolyRep(int_coeffs, max_num_vars, vindices_per_int)
 
 
 def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):

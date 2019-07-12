@@ -205,7 +205,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -269,6 +269,32 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         int
         """
         return sum([E.size for E in self.values()])
+
+    def acton(self, state):
+        """
+        Compute the outcome probabilities the result from
+        acting on `state` with this POVM.
+
+        Parameters
+        ----------
+        state : SPAMVec
+            The state to act on
+
+        Returns
+        -------
+        OrderedDict
+            A dictionary whose keys are the outcome labels (strings)
+            and whose values are the probabilities of seeing each outcome.
+        """
+        assert(self._evotype in ('densitymx', 'statevec', 'stabilizer')), \
+            "probabilities(...) cannot be used with the %s evolution type!" % self._evotype
+        assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
+
+        staterep = state._rep
+        outcome_probs = _collections.OrderedDict()
+        for lbl, E in self.items():
+            outcome_probs[lbl] = E._rep.probability(staterep)
+        return outcome_probs
 
     def __str__(self):
         s = "%s with effect vectors:\n" % self.__class__.__name__
@@ -453,7 +479,7 @@ class _BasePOVM(POVM):
             v[effect.gpindices] = effect.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -469,7 +495,7 @@ class _BasePOVM(POVM):
         """
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
-            effect.from_vector(v[effect.gpindices])
+            effect.from_vector(v[effect.gpindices], close, nodirty)
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 
@@ -750,7 +776,7 @@ class TensorProdPOVM(POVM):
             v[povm.gpindices] = povm.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -765,7 +791,7 @@ class TensorProdPOVM(POVM):
         None
         """
         for povm in self.factorPOVMs:
-            povm.from_vector(v[povm.gpindices])
+            povm.from_vector(v[povm.gpindices], close, nodirty)
 
     def depolarize(self, amount):
         """
@@ -875,7 +901,7 @@ class ComputationalBasisPOVM(POVM):
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
-            effect = _sv.ComputationalSPAMVec(outcomes, self._evotype)  # "statevec" or "densitymx"
+            effect = _sv.ComputationalSPAMVec(outcomes, self._evotype, "effect")  # "statevec" or "densitymx"
             effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
@@ -1146,7 +1172,7 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         return self.error_map.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -1161,7 +1187,7 @@ class LindbladPOVM(POVM):
         None
         """
         # Recall self.base_povm.num_params() == 0
-        self.error_map.from_vector(v)
+        self.error_map.from_vector(v, close, nodirty)
 
     def transform(self, S):
         """

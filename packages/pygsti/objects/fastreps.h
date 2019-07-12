@@ -195,6 +195,7 @@ namespace CReps {
     public:
     std::vector<DMOpCRep*> _factor_gate_creps;
     DMOpCRep_Composed(std::vector<DMOpCRep*> factor_gate_creps, INT dim);
+    void reinit_factor_op_creps(std::vector<DMOpCRep*> new_factor_gate_creps);
     virtual ~DMOpCRep_Composed();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -361,6 +362,7 @@ namespace CReps {
     public:
     std::vector<SVOpCRep*> _factor_gate_creps;
     SVOpCRep_Composed(std::vector<SVOpCRep*> factor_gate_creps, INT dim);
+    void reinit_factor_op_creps(std::vector<SVOpCRep*> new_factor_gate_creps);
     virtual ~SVOpCRep_Composed();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
@@ -508,11 +510,10 @@ namespace CReps {
   class PolyCRep {
     public:
     std::unordered_map<PolyVarsIndex, dcomplex> _coeffs;
-    INT _max_order;
     INT _max_num_vars;
     INT _vindices_per_int;
     PolyCRep();
-    PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_order, INT max_num_vars, INT vindices_per_int);
+    PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int);
     PolyCRep(const PolyCRep& other);
     ~PolyCRep();
     PolyCRep mult(const PolyCRep& other);

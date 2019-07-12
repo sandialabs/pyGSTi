@@ -170,7 +170,7 @@ class ExplicitLayerLizard(LayerLizard):
         else:
             return self.ops[layerlbl]
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Re-initialize the simplified operators from model-parameter-vector `v`.
 
@@ -182,7 +182,7 @@ class ExplicitLayerLizard(LayerLizard):
         for _, obj in _itertools.chain(self.preps.items(),
                                        self.effects.items(),
                                        self.ops.items()):
-            obj.from_vector(v[obj.gpindices])
+            obj.from_vector(v[obj.gpindices], close, nodirty)
 
 
 class ImplicitLayerLizard(LayerLizard):
@@ -249,7 +249,7 @@ class ImplicitLayerLizard(LayerLizard):
         """
         return self.model._evotype
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Re-initialize the simplified operators from model-parameter-vector `v`.
 
@@ -262,4 +262,4 @@ class ImplicitLayerLizard(LayerLizard):
                                            self.effect_blks.items(),
                                            self.op_blks.items()):
             for _, obj in objdict.items():
-                obj.from_vector(v[obj.gpindices])
+                obj.from_vector(v[obj.gpindices], close, nodirty)

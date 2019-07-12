@@ -117,22 +117,22 @@ class MapForwardSimulator(ForwardSimulator):
             the elements of `elabels`.
         """
         if time is None:  # time-independent state propagation
-            rhorep = self.sos.get_prep(rholabel).torep('prep')
-            ereps = [self.sos.get_effect(elabel).torep('effect') for elabel in elabels]
-            rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl).torep() for gl in circuit])
+            rhorep = self.sos.get_prep(rholabel)._rep
+            ereps = [self.sos.get_effect(elabel)._rep for elabel in elabels]
+            rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl)._rep for gl in circuit])
             ps = _np.array([erep.probability(rhorep) for erep in ereps], 'd')
             #outcome probabilities
         else:
             t = time
             op = self.sos.get_prep(rholabel); op.set_time(t); t += rholabel.time
-            state = op.torep('prep')
+            state = op._rep
             for gl in circuit:
                 op = self.sos.get_operation(gl); op.set_time(t); t += gl.time  # time in labels == duration
-                state = op.torep().acton(state)
+                state = op._rep.acton(state)
             ps = []
             for elabel in elabels:
                 op = self.sos.get_effect(elabel); op.set_time(t)  # don't advance time (all effects occur at same time)
-                ps.append(op.torep('effect').probability(state))
+                ps.append(op._rep.probability(state))
             ps = _np.array(ps, 'd')
 
         if _np.any(_np.isnan(ps)):
@@ -186,9 +186,9 @@ class MapForwardSimulator(ForwardSimulator):
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
-            self.from_vector(vec)
+            self.from_vector(vec, close=True)
             dp[0, i] = (self.prs(spamTuple[0], [spamTuple[1]], circuit, clipTo) - p)[0] / eps
-        self.from_vector(orig_vec)
+        self.from_vector(orig_vec, close=True)
 
         if returnPr:
             if clipTo is not None: p = _np.clip(p, clipTo[0], clipTo[1])
@@ -247,9 +247,9 @@ class MapForwardSimulator(ForwardSimulator):
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
-            self.from_vector(vec)
+            self.from_vector(vec, close=True)
             hp[0, i, :] = (self.dpr(spamTuple, circuit, False, clipTo) - dp) / eps
-        self.from_vector(orig_vec)
+        self.from_vector(orig_vec, close=True)
 
         if returnPr and clipTo is not None:
             p = _np.clip(p, clipTo[0], clipTo[1])
@@ -308,10 +308,10 @@ class MapForwardSimulator(ForwardSimulator):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec)
+                self.from_vector(vec, close=True)
                 hpr_cache[:, :, iFinal, :] = (self._compute_dpr_cache(
                     rholabel, elabels, evalTree, wrtSlice2, subComm, dpr_scratch) - dpCache) / eps
-        self.from_vector(orig_vec)
+        self.from_vector(orig_vec, close=True)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:

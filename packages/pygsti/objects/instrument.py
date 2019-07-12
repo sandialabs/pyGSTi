@@ -14,6 +14,7 @@ from ..tools import matrixtools as _mt
 #from . import labeldicts as _ld
 from . import modelmember as _gm
 from . import operation as _op
+from . import spamvec as _sv
 
 
 def convert(instrument, toType, basis, extra=None):
@@ -233,7 +234,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         return self._paramvec
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -249,7 +250,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == self.num_params())
         for gate in self.values():
-            gate.from_vector(v[gate.gpindices])
+            gate.from_vector(v[gate.gpindices], close, nodirty)
         self._paramvec = v
 
     def transform(self, S):
@@ -322,6 +323,40 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             gate.rotate(amount, mxBasis)
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
+
+    def acton(self, state):
+        """
+        Act with this instrument upon `state`
+
+        Parameters
+        ----------
+        state : SPAMVec
+            The state to act on
+
+        Returns
+        -------
+        OrderedDict
+            A dictionary whose keys are the outcome labels (strings)
+            and whose values are `(prob, normalized_state)` tuples
+            giving the probability of seeing the given outcome and
+            the resulting state that would be obtained if and when
+            that outcome is observed.
+        """
+        # Note: no 'stabilizer' or 'statevec' support yet (how renormalize sframe or how does state vec work?)
+        assert(self._evotype in ('densitymx',)), \
+            "acton(...) cannot be used with the %s evolution type!" % self._evotype
+        assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
+
+        staterep = state._rep
+        outcome_probs_and_states = _collections.OrderedDict()
+        for lbl, element in self.items():
+            output_rep = element._rep.acton(staterep)
+            output_unnormalized_state = output_rep.todense()
+            prob = output_unnormalized_state[0] * state.dim**0.25
+            output_normalized_state = output_unnormalized_state / prob  # so [0]th == 1/state_dim**0.25
+            outcome_probs_and_states[lbl] = (prob, _sv.StaticSPAMVec(output_normalized_state, self._evotype, 'prep'))
+
+        return outcome_probs_and_states
 
     def __str__(self):
         s = "Instrument with elements:\n"
@@ -502,7 +537,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             v[gate.gpindices] = gate.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -517,7 +552,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         None
         """
         for gate in self.param_ops:
-            gate.from_vector(v[gate.gpindices])
+            gate.from_vector(v[gate.gpindices], close, nodirty)
         for instGate in self.values():
             instGate._construct_matrix()
 
