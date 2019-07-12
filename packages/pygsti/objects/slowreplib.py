@@ -518,13 +518,13 @@ class SVStateRep(object):
 
     @property
     def dim(self):
-        return len(self.data)
+        return len(self.base)
 
     def todense(self):
         return self.base
 
     def __str__(self):
-        return str(self.data)
+        return str(self.base)
 
 
 class SVEffectRep(object):
@@ -862,6 +862,10 @@ class SBStateRep(object):
     def nqubits(self):
         return self.sframe.n
 
+    @property
+    def dim(self):
+        return 2**self.nqubits # assume "unitary evolution"-type mode
+
     def copy(self):
         cpy = SBStateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
         cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
@@ -881,6 +885,10 @@ class SBEffectRep(object):
     @property
     def nqubits(self):
         return len(self.zvals)
+
+    @property
+    def dim(self):
+        return 2**self.nqubits  # assume "unitary evolution"-type mode
 
     def probability(self, state):
         return state.sframe.measurement_probability(self.zvals, check=True)  # use check for now?
@@ -1044,7 +1052,7 @@ class PolyRep(dict):
     variables.
     """
 
-    def __init__(self, int_coeffs, max_order, max_num_vars, vindices_per_int):
+    def __init__(self, int_coeffs, max_num_vars, vindices_per_int):
         """
         Create a new PolyRep object.
 
@@ -1055,17 +1063,12 @@ class PolyRep(dict):
             integers corresponding to variable-index-tuples (i.e poly
             terms).
 
-        max_order : int
-            The maximum order (exponent) allowed for any single variable
-            in each monomial term.
-
         max_num_vars : int
             The maximum number of variables allowed.  For example, if
             set to 2, then only "x0" and "x1" are allowed to appear
             in terms.
         """
 
-        self.max_order = max_order
         self.max_num_vars = max_num_vars
         self.vindices_per_int = vindices_per_int
 
@@ -1078,7 +1081,7 @@ class PolyRep(dict):
         """ The coefficient dictionary (with encoded integer keys) """
         return dict(self)  # for compatibility w/C case which can't derive from dict...
 
-    def set_maximums(self, max_num_vars=None, max_order=None):
+    def set_maximums(self, max_num_vars=None):
         """
         Alter the maximum order and number of variables (and hence the
         tuple-to-int mapping) for this polynomial representation.
@@ -1088,17 +1091,12 @@ class PolyRep(dict):
         max_num_vars : int
             The maximum number of variables allowed.
 
-        max_order : int
-            The maximum order (exponent) allowed for any single variable
-            in each monomial term.
-
         Returns
         -------
         None
         """
         coeffs = {self._int_to_vinds(k): v for k, v in self.items()}
         if max_num_vars is not None: self.max_num_vars = max_num_vars
-        if max_order is not None: self.max_order = max_order
         int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
         self.clear()
         self.update(int_coeffs)
@@ -1157,7 +1155,7 @@ class PolyRep(dict):
                 del l[ivar.index(wrtParam)]
                 dcoeffs[tuple(l)] = cnt * coeff
         int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
-        return PolyRep(int_dcoeffs, self.max_order, self.max_num_vars, self.vindices_per_int)
+        return PolyRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
 
     def evaluate(self, variable_values):
         """
@@ -1224,7 +1222,7 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        cpy = PolyRep(None, self.max_order, self.max_num_vars, self.vindices_per_int)
+        cpy = PolyRep(None, self.max_num_vars, self.vindices_per_int)
         cpy.update(self)  # constructor expects dict w/var-index keys, not ints like self has
         return cpy
 
@@ -1261,9 +1259,8 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        assert(self.max_order == x.max_order and self.max_num_vars == x.max_num_vars)
-        # assume same *fixed* max_order, even during mult
-        newpoly = PolyRep(None, self.max_order, self.max_num_vars, self.vindices_per_int)
+        assert(self.max_num_vars == x.max_num_vars)
+        newpoly = PolyRep(None, self.max_num_vars, self.vindices_per_int)
         for k1, v1 in self.items():
             for k2, v2 in x.items():
                 inds = sorted(self._int_to_vinds(k1) + x._int_to_vinds(k2))
@@ -1338,7 +1335,7 @@ class PolyRep(dict):
     def __add__(self, x):
         newpoly = self.copy()
         if isinstance(x, PolyRep):
-            assert(self.max_order == x.max_order and self.max_num_vars == x.max_num_vars)
+            assert(self.max_num_vars == x.max_num_vars)
             for k, v in x.items():
                 if k in newpoly: newpoly[k] += v
                 else: newpoly[k] = v
@@ -1357,7 +1354,7 @@ class PolyRep(dict):
         return self.__mul__(x)
 
     def __pow__(self, n):
-        ret = PolyRep({0: 1.0}, self.max_order, self.max_num_vars, self.vindices_per_int)
+        ret = PolyRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
         cur = self
         for i in range(int(_np.floor(_np.log2(n))) + 1):
             rem = n % 2  # gets least significant bit (i-th) of n
@@ -1371,8 +1368,8 @@ class PolyRep(dict):
 
     def debug_report(self):
         actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
-        return "PolyRep w/max_vars=%d and max_order=%d: nterms=%d, actual max-order=%d" % \
-            (self.max_num_vars, self.max_order, len(self), actual_max_order)
+        return "PolyRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
+            (self.max_num_vars, len(self), actual_max_order)
 
     def degree(self):
         return max([len(self._int_to_vinds(k)) for k in self.keys()])
