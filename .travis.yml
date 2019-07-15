@@ -33,6 +33,8 @@ install:
   - pip install -e .
   # Install test dependencies
   - pip install -e .[testing]
+  # Show pip environment, for diagnostics
+  - pip freeze
 
 # Default `test' stage script
 script:
