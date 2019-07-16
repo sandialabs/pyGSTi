@@ -1548,6 +1548,9 @@ class OpModel(Model):
                 assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
                 #all procs should have *same* paramBlkSize2
 
+        #Prepare any computationally intensive preparation
+        calc.bulk_prep_probs(evt, comm)
+        
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 
     def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
@@ -1636,6 +1639,26 @@ class OpModel(Model):
 
         assert(evalTree.num_final_elements() == nEls)
         return evalTree, elIndices, outcomes
+
+    def bulk_prep_probs(self, evalTree, comm=None):
+        """
+        Performs initial computation, such as computing probability polynomials,
+        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        the creation of an evaluation tree, but is separated from it because this
+        "preparation" may use `comm` to distribute a computationally intensive task.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+        """
+        self._fwdsim().bulk_prep_probs(evalTree, comm)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):

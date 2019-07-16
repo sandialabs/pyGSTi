@@ -109,6 +109,7 @@ class TermEvalTree(EvalTree):
         #Storage for polynomial expressions for probabilities and
         # their derivatives
         self.raw_polys = {}
+        self.all_p_polys = {}
         self.p_polys = {}
         self.dp_polys = {}
         self.hp_polys = {}
@@ -354,6 +355,7 @@ class TermEvalTree(EvalTree):
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
             subTree[:] = [None] * len(parentIndices)
+            subTree.all_p_polys = {}
             subTree.p_polys = {}
             subTree.dp_polys = {}
             subTree.hp_polys = {}
@@ -406,16 +408,16 @@ class TermEvalTree(EvalTree):
         cpy = self._copyBase(TermEvalTree(self[:]))
         return cpy
 
-    def get_p_pruned_polys(self,
-                           calc,
-                           rholabel,
-                           elabels,
-                           comm,
-                           memLimit,
-                           pathmagnitude_gap,
-                           min_term_mag,
-                           max_paths,
-                           recalc_threshold=True):
+    def compute_p_pruned_polys(self,
+                               calc,
+                               rholabel,
+                               elabels,
+                               comm,
+                               memLimit,
+                               pathmagnitude_gap,
+                               min_term_mag,
+                               max_paths,
+                               recalc_threshold=True):
 
         elabels = tuple(elabels)  # make sure this is hashable
         circuit_list = self.generate_circuit_list(permute=False)
@@ -485,9 +487,11 @@ class TermEvalTree(EvalTree):
                   (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC))
             print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
                   (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
-        return ret
 
-    def get_p_polys(self, calc, rholabel, elabels, comm):
+        self.all_p_polys[(rholabel, elabels)] = ret  # just cache this
+        #return ret
+
+    def compute_p_polys(self, calc, rholabel, elabels, comm):
         """
         Get the compact-form polynomials that evaluate to the probabilities
         corresponding to all this tree's operation sequences sandwiched between
@@ -546,7 +550,7 @@ class TermEvalTree(EvalTree):
         #        self.p_polys[ (rholabel,elabel) ] = (vtape, ctape)
         #    ret.append( self.p_polys[ (rholabel,elabel) ] )
 
-        return ret
+        self.all_p_polys[(rholabel, elabels)] = ret  # just cache this
 
     def get_dp_polys(self, calc, rholabel, elabels, wrtSlice, comm):
         """

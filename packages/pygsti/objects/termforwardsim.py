@@ -682,6 +682,48 @@ class TermForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
+    def bulk_prep_probs(self, evalTree, comm=None):
+        """
+        Performs initial computation, such as computing probability polynomials,
+        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        the creation of an evaluation tree, but is separated from it because this
+        "preparation" may use `comm` to distribute a computationally intensive task.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+        """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+
+            def calc_polys(rholabel, elabels):
+                """ Compute and fill result quantities for given arguments """
+                if self.mode == "pruned":
+                    evalSubTree.compute_p_pruned_polys(self,
+                                                       rholabel,
+                                                       elabels,
+                                                       mySubComm,
+                                                       None,
+                                                       self.pathmagnitude_gap,
+                                                       self.min_term_mag,
+                                                       self.max_paths_per_outcome,
+                                                       recalc_threshold=not self.opt_mode)
+                elif self.mode == "taylor-order":                    
+                    evalSubTree.compute_p_polys(self, rholabel, elabels, mySubComm)
+
+            self._compute_collectrho(evalSubTree, calc_polys)
+    
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
         """
@@ -751,18 +793,8 @@ class TermForwardSimulator(ForwardSimulator):
                 """ Compute and fill result quantities for given arguments """
                 if self.mode == "direct":
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
-                elif self.mode == "pruned":
-                    polys = evalSubTree.get_p_pruned_polys(self,
-                                                           rholabel,
-                                                           elabels,
-                                                           mySubComm,
-                                                           None,
-                                                           self.pathmagnitude_gap,
-                                                           self.min_term_mag,
-                                                           self.max_paths_per_outcome,
-                                                           recalc_threshold=not self.opt_mode)
-                else:  # self.mode == "taylor-order"
-                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm)  # computes polys if necessary
+                else: # "pruned" or "taylor order"
+                    polys = evalSubTree.all_p_polys[(rholabel, tuple(elabels))]
 
                 for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                     #use cached data to final values
@@ -897,18 +929,8 @@ class TermForwardSimulator(ForwardSimulator):
                                               memLimit=None, resetWts=True, repcache=repcache)
 
                 if prMxToFill is not None:
-                    if self.mode == "taylor-order":
-                        polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
-                    elif self.mode == "pruned":
-                        polys = evalSubTree.get_p_pruned_polys(self,
-                                                               rholabel,
-                                                               elabels,
-                                                               fillComm,
-                                                               None,
-                                                               self.pathmagnitude_gap,
-                                                               self.min_term_mag,
-                                                               self.max_paths_per_outcome,
-                                                               recalc_threshold=not self.opt_mode) #True to always attempt to re-compute at each outer iteration
+                    if self.mode in ("taylor-order", "pruned"):
+                        polys = evalSubTree.all_p_polys[(rholabel, tuple(elabels))]
 
                     for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                         if self.mode == "direct":
@@ -941,13 +963,16 @@ class TermForwardSimulator(ForwardSimulator):
                                                                       resetWts=False,
                                                                       repcache=repcache) - probs) / eps
                     self.from_vector(orig_vec)
-                elif self.mode == "pruned":
-                    #Take derivative here
+                else:  # "pruned" or "taylor-order"
+                    #Take evaluate derivative of polys
                     slcInds = _slct.indices(paramSlice if (paramSlice is not None) else slice(0, self.Np))
                     slcInds = _np.ascontiguousarray(slcInds, _np.int64)  # for Cython arg mapping
                     dpolys = [_compact_deriv(polys[i][0], polys[i][1], slcInds) for i in range(len(elabels))]
-                else:  # self.mode == "taylor-order"
-                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
+
+                    #OR Use cache (not implemented for pruned polys yet...)
+                    #dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm) # taylor-order only
+                    # - but see TODO below
+                    
                 nP = self.Np if (paramSlice is None or paramSlice.start is None) else _slct.length(paramSlice)
                 for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
                     if self.mode == 'direct':

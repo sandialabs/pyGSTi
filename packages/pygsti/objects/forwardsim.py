@@ -104,6 +104,9 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
+    def propagate(self, state, simplified_circuit, time=None):
+        pass #HERE TODO - create an interface for running circuits
+        
     def probs(self, simplified_circuit, clipTo=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
@@ -576,6 +579,46 @@ class ForwardSimulator(object):
             calc_and_fill_fn(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, False)
 
         return
+
+    def _compute_collectrho(self, evalTree, calc_fn):
+        """
+        Like above function but for preparation steps, not to actually fill anything
+        """
+
+        collected = _collections.OrderedDict()  # keys are rho labels
+        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
+            # fInds = "final indices" = the "element" indices in the final
+            #          filled quantity combining both spam and gate-sequence indices
+            # gInds  = "gate sequence indices" = indices into the (tree-) list of
+            #          all of the raw operation sequences which need to be computed
+            #          for the current spamTuple (this list has the SAME length as fInds).
+            rholabel, elabel = spamTuple  # this should always be the case... (no "custom" / "raw" labels)
+            if rholabel not in collected: collected[rholabel] = [list()]
+            collected[rholabel][0].append(elabel)
+
+        for rholabel, (elabels,) in collected.items():
+            calc_fn(rholabel, elabels)
+        return
+
+    def bulk_prep_probs(self, evalTree, comm=None):
+        """
+        Performs initial computation, such as computing probability polynomials,
+        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        the creation of an evaluation tree, but is separated from it because this
+        "preparation" may use `comm` to distribute a computationally intensive task.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+        """
+        pass  # default is to have no pre-computed quantities (but not an error to call this fn)
 
     def bulk_fill_probs(self, mxToFill, evalTree,
                         clipTo=None, check=False, comm=None):
