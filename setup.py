@@ -186,7 +186,7 @@ setup(name='pyGSTi',
       classifiers=[
           "Development Status :: 4 - Beta",
           "Intended Audience :: Science/Research",
-          "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+          "License :: OSI Approved :: Apache Software License",
           "Programming Language :: Python",
           "Topic :: Scientific/Engineering :: Physics",
           "Operating System :: Microsoft :: Windows",
