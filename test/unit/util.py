@@ -59,41 +59,14 @@ def needs_python3(fn):
     return unittest.skipIf(sys.version_info < (3, 0), "feature not supported in Python 2")
 
 
-def version_label():
-    """Get the label used internally for this python version.
-
-    This is mainly used to identify version-specific test reference data
-    """
-    return "v{}".format(sys.version_info.major)
-
-
-def with_temp_path(filename=None):
+def with_temp_path(fn):
     """Decorator version of ``BaseCase.temp_path``"""
-    arg_fn = None
-    if isinstance(filename, types.FunctionType):
-        # Decorator was used without calling, so `filename' is actually the decorated function
-        arg_fn = filename
-        filename = None
+    @functools.wraps(fn)
+    def inner(self, *args, **kwargs):
+        with self.temp_path() as tmp_path:
+            return fn(self, tmp_path, *args, **kwargs)
+    return inner
 
-    def decorator(fn):
-        @functools.wraps(fn)
-        def inner(self, *args, **kwargs):
-            with self.temp_path(filename) as tmp_path:
-                return fn(self, tmp_path, *args, **kwargs)
-        return inner
-    if arg_fn is not None:
-        return decorator(arg_fn)
-    else:
-        return decorator
-
-def for_each_case(iterable):
-    def decorator(fn):
-        @functools.wraps(fn)
-        def generator():
-            for i in iterable:
-                yield fn, i
-        return generator
-    return decorator
 
 class BaseCase(unittest.TestCase):
     def assertArraysAlmostEqual(self, a, b, **kwargs):
@@ -127,23 +100,19 @@ class BaseCase(unittest.TestCase):
         """
         self.assertTrue(np.array_equal(a, b), **kwargs)
 
-    def assertDictContainsSubset(self, subset, dictionary, places=7, msg=None):
-        """Assert that `dictionary` contains each key-value pair in `subset`
-
-        Array-type and numeric values are compared as "almost equal"
-        """
-        for k, v in subset.items():
-            self.assertIn(k, dictionary, msg=msg)
-            e = dictionary[k]
-            if isinstance(v, np.ndarray) and isinstance(e, np.ndarray):
-                self.assertArraysAlmostEqual(v, e, places=7, msg=msg)
-            elif isinstance(v, numbers.Number) and isinstance(e, numbers.Number):
-                self.assertAlmostEqual(v, e, places=7, msg=msg)
-            else:
-                self.assertEqual(v, e, msg=msg)
-
     @contextmanager
     def assertNoWarns(self, category=Warning):
+        """Asserts that nothing in the enclosed context generates a warning
+
+        Parameters
+        ----------
+        category: ``Warning``, optional
+            This assertion will fail only if a warning descended from
+            this type is generated in the context. Since all warnings
+            are derived from ``Warning``, by default this will fail on
+            any warning.
+        """
+
         with warnings.catch_warnings(record=True) as warns:
             yield  # yield to context
 
