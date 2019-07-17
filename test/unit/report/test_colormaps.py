@@ -66,7 +66,7 @@ class LinlogColormapTester(MulticolorInstance, BaseCase):
         self.skipTest("TODO assert correctness")
 
 
-class DivergingColormapTester(ColormapInstanceBase, BaseCase):
+class DivergingColormapTester(MulticolorInstance, BaseCase):
     colors = ['RdBu']
 
     def _construct(self, **kwargs):
@@ -76,7 +76,7 @@ class DivergingColormapTester(ColormapInstanceBase, BaseCase):
         self.skipTest("TODO assert correctness")
 
 
-class SequentialColormapTester(ColormapInstanceBase, BaseCase):
+class SequentialColormapTester(MulticolorInstance, BaseCase):
     colors = ['whiteToBlack', 'blackToWhite', 'whiteToBlue', 'whiteToRed']
 
     def _construct(self, **kwargs):

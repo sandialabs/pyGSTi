@@ -1,4 +1,4 @@
-"""Test fixtures for pygsti.drivers unit tests"""
+"""Shared test fixtures for pygsti.drivers unit tests"""
 from ..util import Namespace
 from pygsti.construction import std1Q_XYI as std
 import pygsti.construction as pc
@@ -30,6 +30,3 @@ def dataset(self):
         self.datagen_gateset, self.lsgstStrings[-1],
         nSamples=1000, sampleError='binomial', seed=100
     )
-
-
-ns.patch_module(__name__)

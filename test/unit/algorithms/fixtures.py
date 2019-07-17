@@ -1,4 +1,4 @@
-"""Test fixtures for pygsti.algorithms unit tests"""
+"""Shared test fixtures for pygsti.algorithms unit tests"""
 from ..util import Namespace
 
 from pygsti.construction import std1Q_XYI as std
@@ -85,6 +85,3 @@ def mdl_clgst(self):
 @ns.memo
 def mdl_target_noisy(self):
     return self.model.randomize_with_unitary(0.001, seed=_SEED)
-
-
-ns.patch_module(__name__)

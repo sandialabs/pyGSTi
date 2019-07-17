@@ -37,26 +37,22 @@ else:
 
 def needs_cvxpy(fn):
     """Shortcut decorator for skipping tests that require CVXPY"""
-    return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(
-        fn
-    )
+    return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(fn)
 
 
 def needs_deap(fn):
     """Shortcut decorator for skipping tests that require deap"""
-    return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(
-        fn
-    )
+    return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(fn)
 
 
 def needs_matplotlib(fn):
     """Shortcut decorator for skipping tests that require matplotlib"""
-    return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")
+    return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
 
 
 def needs_python3(fn):
     """Shortcut decorator for skipping tests of features not supported in Python 2"""
-    return unittest.skipIf(sys.version_info < (3, 0), "feature not supported in Python 2")
+    return unittest.skipIf(sys.version_info < (3, 0), "feature not supported in Python 2")(fn)
 
 
 def with_temp_path(fn):
@@ -224,10 +220,25 @@ class BaseCase(unittest.TestCase):
 
 
 class Namespace(object):
-    """Namespace for package-level fixtures"""
+    """Namespace for shared test fixtures.
+
+    This is included as an alternative to ``types.SimpleNamespace``,
+    which may be absent from earlier python versions.
+
+    This implementation is included for convenience and does not
+    implicitly protect members from modification. When using a
+    ``Namespace`` for module- or package-level fixtures, take care
+    that any mutable members are used safely.
+
+    Parameters
+    ----------
+    **kwargs
+        Initial members of the namespace. Members may also be assigned
+        after initialization, either directly or annotated via the
+        ``Namespace.property`` and ``Namespace.memo`` decorators.
+    """
 
     def __init__(self, **kwargs):
-        self.__patched_module__ = None
         for k, v in kwargs.items():
             setattr(self, k, v)
         self.__ns_props__ = {}
@@ -238,17 +249,25 @@ class Namespace(object):
         except AttributeError as err:
             if name in self.__ns_props__:
                 return self.__ns_props__[name](self)
-            elif self.__patched_module__ is not None:
-                return self.__patched_module__.__getattribute__(name)
             else:
-                raise(err)
+                raise err
 
     def property(self, fn):
         """Dynamic namespace property"""
         self.__ns_props__[fn.__name__] = fn
 
     def memo(self, fn):
-        """Memoized namespace property"""
+        """Memoized namespace property
+
+        Memoized properties may be used to efficiently compose
+        namespace members from other memoized members, which could
+        otherwise be prohibitively expensive to repeatedly generate.
+
+        Memoization should only be used when you want to reuse
+        previously computed values. Accordingly, it doesn't make sense
+        to memoize functions with side-effects, or impure functions
+        like time().
+        """
         fn.__memo__ = None
         @functools.wraps(fn)
         def inner(self):
@@ -256,9 +275,3 @@ class Namespace(object):
                 fn.__memo__ = fn(self)
             return fn.__memo__
         self.property(inner)
-
-    def patch_module(self, module):
-        """Patch a module with this namespace"""
-        self.__warningregistry__ = None
-        self.__patched_module__ = sys.modules[module]
-        sys.modules[module] = self

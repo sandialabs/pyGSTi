@@ -1,4 +1,4 @@
-"""Test fixtures for pygsti.objects unit tests"""
+"""Shared test fixtures for pygsti.objects unit tests"""
 from ..util import Namespace
 
 import pygsti
@@ -77,6 +77,3 @@ def mdl_lsgst(self):
 def mdl_lsgst_go(self):
     # Was previously written to disk as 'analysis.model'
     return pygsti.gaugeopt_to_target(self.mdl_lsgst, self.model, {'spam': 1.0})
-
-
-ns.patch_module(__name__)
