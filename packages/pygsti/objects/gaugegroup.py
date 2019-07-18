@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-
+from . import operation as _op
 
 class GaugeGroup(object):
     """
@@ -145,6 +145,8 @@ class OpGaugeGroup(GaugeGroup):
             A name for this group - used for reporting what type of
             gauge optimization was performed.
         """
+        if not isinstance(gate, _op.LinearOperator):
+            gate = _op.StaticDenseOp(gate)
         self.gate = gate
         self.element = elementcls
         GaugeGroup.__init__(self, name)
@@ -177,6 +179,8 @@ class OpGaugeGroupElement(GaugeGroupElement):
             The gate to base this element on. It provides both parameterization
             information and the gauge transformation matrix itself.
         """
+        if not isinstance(gate, _op.LinearOperator):
+            gate = _op.StaticDenseOp(gate)
         self.gate = gate
         self._inv_matrix = None
         GaugeGroupElement.__init__(self)

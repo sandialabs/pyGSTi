@@ -836,11 +836,12 @@ class DenseSPAMVec(SPAMVec):
             protected = vec
             vec = vec.base
             assert(vec.dtype == _np.dtype(dtype)), "ProtectedArray has wrong dtype! (expected %s)" % str(dtype)
-            assert(vec.flags['C_CONTIGUOUS']), \
-                "ProtectedArrays given to initialize a DenseSPAMVec must hold contiguous data!"
+            assert(vec.flags['C_CONTIGUOUS'] and vec.flags['OWNDATA']), \
+                "ProtectedArrays given to initialize a DenseSPAMVec must hold it's own contiguous data!"
         else:
             protected = None
-            vec = _np.ascontiguousarray(vec, dtype)
+            #OLD: vec = _np.ascontiguousarray(vec, dtype)  # BAD b/c can give result which doesn't own its data
+            vec = _np.require(vec, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
         # For DenseSPAMVec objects, we want self.base to have shape (N,1) shape but rep
         # just holds (N,)-shaped 1D array pointing to same memory.
@@ -870,10 +871,12 @@ class DenseSPAMVec(SPAMVec):
             #OLD: assert(rep.base.base is protected.base.base), "Internal memory referencing error"
             #two .bases here: 1st gets to numpy array of Rep or ProtectedArray; 2nd accesses ndarray's "base" memory ptr
             self.base = protected
+            assert(self.base.flags.owndata)
         else:
             assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
             #OLD assert(rep.base.base is vec)
             self.base = vec
+            assert(self.base.flags.owndata)
 
     def todense(self, scratch=None):
         """

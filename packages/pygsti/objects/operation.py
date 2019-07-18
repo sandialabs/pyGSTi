@@ -959,12 +959,13 @@ class DenseOperator(LinearOperator):
         if isinstance(mx, _ProtectedArray):
             protected = mx
             mx = mx.base
-            assert(mx.flags['C_CONTIGUOUS']), \
-                "ProtectedArrays given to initialize a DenseOperator must hold contiguous data!"
+            assert(mx.flags['C_CONTIGUOUS'] and mx.flags['OWNDATA']), \
+                "ProtectedArrays given to initialize a DenseOperator must hold their own contiguous data!"
             assert(mx.dtype == _np.dtype(dtype)), "ProtectedArray has wrong dtype! (expected %s)" % str(dtype)
         else:
             protected = None
-            mx = _np.ascontiguousarray(mx, dtype)
+            mx = _np.ascontiguousarray(mx, dtype)  # may not give mx it's own data
+            mx = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
         if evotype == "statevec":
             rep = replib.SVOpRep_Dense(mx)
@@ -1279,7 +1280,8 @@ class TPDenseOp(DenseOperator):
                 and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create TPDenseOp: "
                              "invalid form for 1st row!")
-        pa = _ProtectedArray(_np.ascontiguousarray(mx), indicesToProtect=(0, slice(None, None, None)))
+        pa = _ProtectedArray(_np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS']),
+                             indicesToProtect=(0, slice(None, None, None)))
         DenseOperator.__init__(self, pa, "densitymx")  # this will set self.base to array(pa)
         assert(isinstance(self.base, _ProtectedArray))
 
