@@ -974,7 +974,7 @@ def _fas(a, inds, rhs, add=False):
                     remove_single_int_dims = [b[i][0] if (i in single_int_inds) else slice(None)
                                               for i in range(nDims)]  # e.g. [:,2,:] if index 1 is a single int
                     for ii in reversed(single_int_inds): del b[ii]  # remove single-int els of b
-                    av = a[remove_single_int_dims]  # a view into a
+                    av = a[tuple(remove_single_int_dims)]  # a view into a
                     nDims -= len(single_int_inds)  # for cython routines below
                 else:
                     av = a
