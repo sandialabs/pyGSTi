@@ -167,7 +167,7 @@ setup(name='pyGSTi',
       install_requires=[
           'numpy>=1.15.0',
           'scipy',
-          'plotly',
+          'plotly==3.10.0',
           'ply'
       ],
       extras_require=extras,
