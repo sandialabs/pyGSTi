@@ -819,7 +819,7 @@ class SPAMVec(_modelmember.ModelMember):
                 vector = _np.array(V, typ)[:, None]  # make into a 2-D column vec
 
         assert(len(vector.shape) == 2 and vector.shape[1] == 1)
-        return vector
+        return vector.flatten()  # HACK for convention change -> (N,) instead of (N,1)
 
 
 class DenseSPAMVec(SPAMVec):
@@ -832,51 +832,32 @@ class DenseSPAMVec(SPAMVec):
     def __init__(self, vec, evotype, prep_or_effect):
         """ Initialize a new SPAM Vector """
         dtype = complex if evotype == "statevec" else 'd'
-        if isinstance(vec, _ProtectedArray):  # Special case for handling ProtectedArrays
-            protected = vec
-            vec = vec.base
-            assert(vec.dtype == _np.dtype(dtype)), "ProtectedArray has wrong dtype! (expected %s)" % str(dtype)
-            assert(vec.flags['C_CONTIGUOUS'] and vec.flags['OWNDATA']), \
-                "ProtectedArrays given to initialize a DenseSPAMVec must hold it's own contiguous data!"
-        else:
-            protected = None
-            #OLD: vec = _np.ascontiguousarray(vec, dtype)  # BAD b/c can give result which doesn't own its data
-            vec = _np.require(vec, requirements=['OWNDATA', 'C_CONTIGUOUS'])
-
-        # For DenseSPAMVec objects, we want self.base to have shape (N,1) shape but rep
-        # just holds (N,)-shaped 1D array pointing to same memory.
-        vec1D = vec.view()  # vec is a normal ndnarray, but shape (N,1)
-        vec1D.shape = (vec.size,)  # no copying, just reset how memory is interpreted
+        vec = _np.asarray(vec, dtype=dtype)
+        vec.shape = (vec.size,)  # just store 1D array flatten
+        vec = _np.require(vec, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
         if prep_or_effect == "prep":
             if evotype == "statevec":
-                rep = replib.SVStateRep(vec1D)
+                rep = replib.SVStateRep(vec)
             elif evotype == "densitymx":
-                rep = replib.DMStateRep(vec1D)
+                rep = replib.DMStateRep(vec)
             else:
                 raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
         elif prep_or_effect == "effect":
             if evotype == "statevec":
-                rep = replib.SVEffectRep_Dense(vec1D)
+                rep = replib.SVEffectRep_Dense(vec)
             elif evotype == "densitymx":
-                rep = replib.DMEffectRep_Dense(vec1D)
+                rep = replib.DMEffectRep_Dense(vec)
             else:
                 raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
         else:
             raise ValueError("Invalid `prep_or_effect` argument: %s" % prep_or_effect)
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
-        if protected is not None:
-            assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(protected.base)), "Internal memory referencing error"
-            #OLD: assert(rep.base.base is protected.base.base), "Internal memory referencing error"
-            #two .bases here: 1st gets to numpy array of Rep or ProtectedArray; 2nd accesses ndarray's "base" memory ptr
-            self.base = protected
-            assert(self.base.flags.owndata)
-        else:
-            assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
-            #OLD assert(rep.base.base is vec)
-            self.base = vec
-            assert(self.base.flags.owndata)
+
+        assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
+        self.base1D = vec
+        assert(self.base1D.flags.owndata)
 
     def todense(self, scratch=None):
         """
@@ -884,8 +865,13 @@ class DenseSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         #don't use scratch since we already have memory allocated
-        return _np.asarray(self.base[:, 0])
-        # *must* be a numpy array for Cython arg conversion
+        return self.base1D  # *must* be a numpy array for Cython arg conversion
+
+    @property
+    def base(self):
+        bv = self.base1D.view()
+        bv.shape = (bv.size, 1)  # 'base' is by convention a (N,1)-shaped array
+        return bv
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -924,7 +910,7 @@ class DenseSPAMVec(SPAMVec):
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        ret = getattr(self.__dict__['base'], attr)
+        ret = getattr(self.base, attr)
         self.dirty = True
         return ret
 
@@ -1038,7 +1024,7 @@ class FullSPAMVec(DenseSPAMVec):
         vec = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
-        self.base[:, :] = vec
+        self.base1D[:] = vec
         self.dirty = True
 
     def num_params(self):
@@ -1062,9 +1048,9 @@ class FullSPAMVec(DenseSPAMVec):
             The parameters as a 1D array with length num_params().
         """
         if self._evotype == "statevec":
-            return _np.concatenate((self.base.real.flatten(), self.base.imag.flatten()), axis=0)
+            return _np.concatenate((self.base1D.real, self.base1D.imag), axis=0)
         else:
-            return self.base.flatten()
+            return self.base1D
 
     def from_vector(self, v, close=False, nodirty=False):
         """
@@ -1081,9 +1067,9 @@ class FullSPAMVec(DenseSPAMVec):
         None
         """
         if self._evotype == "statevec":
-            self.base[:, 0] = v[0:self.dim] + 1j * v[self.dim:]
+            self.base1D[:] = v[0:self.dim] + 1j * v[self.dim:]
         else:
-            self.base[:, 0] = v
+            self.base1D[:] = v
         if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1149,41 +1135,17 @@ class TPSPAMVec(DenseSPAMVec):
         """
         vector = SPAMVec.convert_to_vector(vec)
         firstEl = len(vector)**-0.25
-        if not _np.isclose(vector[0, 0], firstEl):
+        if not _np.isclose(vector[0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
-        pa = _ProtectedArray(_np.ascontiguousarray(vector), indicesToProtect=(0, 0))
-        DenseSPAMVec.__init__(self, pa, "densitymx", "prep")
+        DenseSPAMVec.__init__(self, vec, "densitymx", "prep")
         assert(isinstance(self.base, _ProtectedArray))
 
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        result = cls.__new__(cls)
-        memo[id(self)] = result
-        for k, v in self.__dict__.items():
-            if k != "_rep":
-                setattr(result, k, _copy.deepcopy(v, memo))
-    
-        #Create a new rep from from the copied ProtectedArray that is result.base,
-        # otherwise the deep-copied result._rep won't point to the same memory as result.base.
-        #The usual deepcopy memo-ing causes this to work fine in non-protected-array cases
-        vec = result.base.base  # numpy array contained in the copied ProtectedArray - shape (N,1)
-        assert(vec.flags['C_CONTIGUOUS']), "Deep-copied contiguous array is non-contiguous!!"
-
-        vec1D = vec.view()
-        vec1D.shape = (vec.size,)  # no copying, just reset how memory is interpreted
-
-        if result._prep_or_effect == "prep":
-            if result._evotype == "statevec":
-                result._rep = replib.SVStateRep(vec1D)
-            elif result._evotype == "densitymx":
-                result._rep = replib.DMStateRep(vec1D)
-        else:  # result._prep_or_effect == "effect":
-            if result._evotype == "statevec":
-                result._rep = replib.SVEffectRep_Dense(vec1D)
-            elif result._evotype == "densitymx":
-                result._rep = replib.DMEffectRep_Dense(vec1D)
-        return result
+    @property
+    def base(self):
+        bv = self.base1D.view()
+        bv.shape = (bv.size, 1)
+        return _ProtectedArray(bv, indicesToProtect=(0, 0))
 
     def set_value(self, vec):
         """
@@ -1207,7 +1169,7 @@ class TPSPAMVec(DenseSPAMVec):
         if not _np.isclose(vec[0, 0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
-        self.base[1:, :] = vec[1:, :]
+        self.base1D[1:] = vec[1:]
         self.dirty = True
 
     def num_params(self):
@@ -1230,7 +1192,7 @@ class TPSPAMVec(DenseSPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return self.base.flatten()[1:]  # .real in case of complex matrices?
+        return self.base1D[1:]  # .real in case of complex matrices?
 
     def from_vector(self, v, close=False, nodirty=False):
         """
@@ -1246,8 +1208,8 @@ class TPSPAMVec(DenseSPAMVec):
         -------
         None
         """
-        assert(_np.isclose(self.base[0, 0], (self.dim)**-0.25))
-        self.base[1:, 0] = v
+        assert(_np.isclose(self.base1D[0], (self.dim)**-0.25))
+        self.base1D[1:] = v
         if not nodirty: self.dirty = True
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1321,9 +1283,9 @@ class ComplementSPAMVec(DenseSPAMVec):
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):
-        self.base.flags.writeable = True
-        self.base[:, :] = self.identity - sum(self.other_vecs)
-        self.base.flags.writeable = False
+        self.base1D.flags.writeable = True
+        self.base1D[:] = self.identity.base1D - sum([vec.base1D for vec in self.other_vecs])
+        self.base1D.flags.writeable = False
 
     def num_params(self):
         """
@@ -1532,9 +1494,9 @@ class CPTPSPAMVec(DenseSPAMVec):
         assert(_np.linalg.norm(_np.imag(vec)) < IMAG_TOL)
         vec = _np.real(vec)
 
-        self.base.flags.writeable = True
-        self.base[:, :] = vec[:, None]  # so shape is (dim,1) - the convention for spam vectors
-        self.base.flags.writeable = False
+        self.base1D.flags.writeable = True
+        self.base1D[:] = vec[:]  # so shape is (dim,1) - the convention for spam vectors
+        self.base1D.flags.writeable = False
 
     def set_value(self, vec):
         """
