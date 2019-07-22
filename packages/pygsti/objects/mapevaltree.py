@@ -63,8 +63,16 @@ class MapEvalTree(EvalTree):
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        circuit_list = [tuple(mdl) for mdl in simplified_circuit_list.keys()]
+        circuit_list = [tuple(simple_circuit) for simple_circuit in simplified_circuit_list.keys()]
         self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
+        self.element_offsets_for_circuit = _np.cumsum(
+            [0] + [len(spamtupList) for spamtupList in self.simplified_circuit_spamTuples])[:-1]
+        self.rhoLabels = set()  # the unique rho labels found in this tree
+        for spamTuples in self.simplified_circuit_spamTuples:
+            for rhoLbl, _ in spamTuples:
+                self.rhoLabels.add(rhoLbl)
+        self.rhoLabels = sorted(list(self.rhoLabels))
+        
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
         self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
@@ -641,6 +649,13 @@ class MapEvalTree(EvalTree):
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
             subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[k]
                                                      for k in _slct.indices(subTree.myFinalToParentFinalMap)]
+            subTree.element_offsets_for_circuit = _np.cumsum([0] + [len(spamtupList) for spamtupList in subTree.simplified_circuit_spamTuples])[:-1]
+            subTree.rhoLabels = set()  # the unique rho labels found in this tree
+            for spamTuples in subTree.simplified_circuit_spamTuples:
+                for rhoLbl, _ in spamTuples:
+                    subTree.rhoLabels.add(rhoLbl)
+            subTree.rhoLabels = sorted(list(subTree.rhoLabels))
+
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             #t2 = _time.time() #REMOVE

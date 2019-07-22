@@ -75,6 +75,12 @@ class MapForwardSimulator(ForwardSimulator):
         """ Return a shallow copy of this MatrixForwardSimulator """
         return MapForwardSimulator(self.dim, self.sos, self.paramvec)
 
+    def _rho_from_label(self, rholabel):
+        return self.sos.get_prep(rholabel)
+
+    def _Es_from_labels(self, elabels):
+        return [self.sos.get_effect(elabel) for elabel in elabels]
+
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
         rho = self.sos.get_prep(rholabel)
@@ -440,6 +446,156 @@ class MapForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
+    def OLD_bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
+                            comm=None):
+
+        #get distribution across subtrees (groups if needed)
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+
+            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
+                #Fill cache info
+                prCache = self._compute_pr_cache(rholabel, elabels, evalSubTree, mySubComm)
+
+                #use cached data to final values
+                ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits, len(elabels))
+                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
+                    _fas(mxToFill, [fInds], ps[gInds, i], add=sumInto)
+
+            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
+                                               slice(None), slice(None), calc_and_fill)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill, [], 0, comm)
+        #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
+
+        if clipTo is not None:
+            _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
+
+    def DM_fill_probs(calc, mxToFill, evalTree, comm, bUseParentIndices=False):
+        for rholabel in evalTree.rhoLabels:
+            calc.DM_fill_probs_with_rholabel(mxToFill, rholabel, evalTree, comm, bUseParentIndices)
+            
+    def DM_fill_probs_with_rholabel(calc, mxToFill, rholabel, evalTree, comm, bUseParentIndices):
+
+        cacheSize = evalTree.cache_size()
+        rhoVec = calc._rho_from_label(rholabel)
+    
+        #Get rho & rhoCache
+        rho = rhoVec._rep
+        rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
+    
+        #Get operationreps and ereps now so we don't make unnecessary ._rep references
+        operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in evalTree.opLabels}
+        
+        #comm is currently ignored
+        #TODO: if evalTree is split, distribute among processors
+        for i in evalTree.get_evaluation_order():
+            iStart, remainder, iCache = evalTree[i]
+            if iStart is None: init_state = rho
+            else: init_state = rho_cache[iStart]  # [:,None]
+    
+            #OLD final_state = self.propagate_state(init_state, remainder)
+            final_state = replib.propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
+            if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
+
+            #elabels = elabels_dict[i]
+            element_offset = evalTree.element_offsets_for_circuit[i]  # offset to i-th simple circuits elements
+            final_indices = []
+            elabels = []
+
+            if bUseParentIndices:
+                # then mxToFill is an array corresponding to the evalTree's parent's elements not evalTree's
+                # so final elements must get mapped to the parent's index space.
+                for j, spamlabel in enumerate(evalTree.simplified_circuit_spamTuples[i]):
+                    if spamlabel[0] == rholabel:
+                        elabels.append(spamlabel[1])
+                        final_indices.append(evalTree.myFinalElsToParentFinalElsMap[element_offset + j])
+            else:
+                for j, spamlabel in enumerate(evalTree.simplified_circuit_spamTuples[i]):
+                    if spamlabel[0] == rholabel:
+                        elabels.append(spamlabel[1])
+                        final_indices.append(element_offset + j)
+            
+            ereps = [E._rep for E in calc._Es_from_labels(elabels)] #cache these in future
+            for j, erep in zip(final_indices, ereps):
+                mxToFill[j] = erep.probability(final_state)  # outcome probability
+
+    def DM_fill_dprobs(calc, mxToFill, felIndices, fpoffset, evalTree, param_indices, comm):
+
+        eps = 1e-7  # hardcoded?
+
+        if param_indices is None:
+            param_indices = list(range(calc.Np))
+            
+        all_slices, my_slice, owners, subComm = \
+            _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+
+        my_param_indices = param_indices[my_slice]
+        st = my_slice.start  # beginning of where my_param_indices results
+        # get placed into dpr_cache
+
+        #Get a map from global parameter indices to the desired
+        # final index within mxToFill (fpoffset = final parameter offset)
+        iParamToFinal = {i: st + ii + fpoffset for ii, i in enumerate(my_param_indices)}
+
+        probs = _np.empty(evalTree.num_final_elements(), 'd')
+        probs2 = _np.empty(evalTree.num_final_elements(), 'd')
+        calc.DM_fill_probs(probs, evalTree, comm)
+
+        orig_vec = calc.to_vector().copy()
+        for i in range(calc.Np):
+            #print("dprobs cache %d of %d" % (i,self.Np))
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                calc.from_vector(vec)
+                calc.DM_fill_probs(probs2, evalTree, subComm)
+                _fas(mxToFill, [felIndices, iFinal], (probs2 - probs) / eps)
+        calc.from_vector(orig_vec)
+
+    def DM_fill_hprobs(calc, mxToFill, felIndices, fpoffset1, fpoffset2, evalTree,
+                       param_indices1, param_indices2, comm):
+
+        eps = 1e-4  # hardcoded?
+
+        if param_indices1 is None:
+            param_indices1 = list(range(calc.Np))
+        if param_indices2 is None:
+            param_indices2 = list(range(calc.Np))
+
+        all_slices, my_slice, owners, subComm = \
+            _mpit.distribute_slice(slice(0, len(param_indices1)), comm)
+
+        my_param_indices = param_indices1[my_slice]
+        st = my_slice.start
+
+        #Get a map from global parameter indices to the desired
+        # final index within mxToFill (fpoffset = final parameter offset)
+        iParamToFinal = {i: st + ii + fpoffset1 for ii, i in enumerate(my_param_indices)}
+
+        dprobs = _np.empty((evalTree.num_final_elements(), len(param_indices2)), 'd')
+        dprobs2 = _np.empty((evalTree.num_final_elements(), len(param_indices2)), 'd')
+        calc.DM_fill_dprobs(dprobs, slice(None), 0, evalTree, param_indices2, comm)
+        final_indices2 = slice(fpoffset2, fpoffset2 + len(param_indices2))
+
+        orig_vec = calc.to_vector().copy()
+        for i in range(calc.Np):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                calc.from_vector(vec, close=True)
+                calc.DM_fill_dprobs(dprobs2, slice(None), 0, evalTree, param_indices2, subComm)
+                _fas(mxToFill, [felIndices, iFinal, final_indices2], (dprobs2 - dprobs) / eps)
+        calc.from_vector(orig_vec)
+
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
         """
@@ -493,19 +649,7 @@ class MapForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #Fill cache info
-                prCache = self._compute_pr_cache(rholabel, elabels, evalSubTree, mySubComm)
-
-                #use cached data to final values
-                ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits, len(elabels))
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds], ps[gInds, i], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
+            self.DM_fill_probs(mxToFill, evalSubTree, mySubComm, bUseParentIndices=True)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -516,11 +660,7 @@ class MapForwardSimulator(ForwardSimulator):
         if clipTo is not None:
             _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
 
-#Will this work?? TODO
-#        if check:
-#            self._check(evalTree, spam_label_rows, mxToFill, clipTo=clipTo)
-
-    def bulk_fill_dprobs(self, mxToFill, evalTree,
+    def OLD_bulk_fill_dprobs(self, mxToFill, evalTree,
                          prMxToFill=None, clipTo=None, check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
@@ -705,7 +845,169 @@ class MapForwardSimulator(ForwardSimulator):
         profiler.add_count("bulk_fill_dprobs count")
         profiler.mem_check("bulk_fill_dprobs: end")
 
-    def bulk_fill_hprobs(self, mxToFill, evalTree,
+    def bulk_fill_dprobs(self, mxToFill, evalTree,
+                         prMxToFill=None, clipTo=None, check=False,
+                         comm=None, wrtFilter=None, wrtBlockSize=None,
+                         profiler=None, gatherMemLimit=None):
+        """
+        Compute the outcome probability-derivatives for an entire tree of gate
+        strings.
+
+        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
+        probability-derivatives for each "final element" of `evalTree`.
+
+        Parameters
+        ----------
+        mxToFill : numpy ndarray
+          an already-allocated ExM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M is the
+          number of model parameters.
+
+        evalTree : EvalTree
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+           strings to compute the bulk operation on.
+
+        prMxToFill : numpy array, optional
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
+
+        clipTo : 2-tuple, optional
+           (min,max) to clip return value if not None.
+
+        check : boolean, optional
+          If True, perform extra checks within code to verify correctness,
+          generating warnings when checks fail.  Used for testing, and runs
+          much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see
+           wrtBlockSize).
+
+        wrtFilter : list of ints, optional
+          If not None, a list of integers specifying which parameters
+          to include in the derivative dimension. This argument is used
+          internally for distributing calculations across multiple
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
+
+        wrtBlockSize : int or float, optional
+          The maximum number of derivative columns to compute *products*
+          for simultaneously.  None means compute all requested columns
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
+          non-None to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
+
+        Returns
+        -------
+        None
+        """
+
+        tStart = _time.time()
+        if profiler is None: profiler = _dummy_profiler
+
+        if wrtFilter is not None:
+            assert(wrtBlockSize is None)  # Cannot specify both wrtFilter and wrtBlockSize
+            wrtSlice = _slct.list_to_slice(wrtFilter)  # for now, require the filter specify a slice
+        else:
+            wrtSlice = None
+
+        profiler.mem_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
+                           % (mxToFill.nbytes / (1024.0**3)))
+
+        #get distribution across subtrees (groups if needed)
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+
+            if prMxToFill is not None:
+                self.DM_fill_probs(prMxToFill, evalSubTree, mySubComm, bUseParentIndices=True)
+            
+            #Set wrtBlockSize to use available processors if it isn't specified
+            if wrtFilter is None:
+                blkSize = wrtBlockSize  # could be None
+                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
+                    comm_blkSize = self.Np / mySubComm.Get_size()
+                    blkSize = comm_blkSize if (blkSize is None) \
+                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
+            else:
+                blkSize = None  # wrtFilter dictates block
+
+            if blkSize is None:
+                #Compute all requested derivative columns at once
+                self.DM_fill_dprobs(mxToFill, felInds, 0, evalSubTree, wrtSlice, mySubComm)
+                profiler.mem_check("bulk_fill_dprobs: post fill")
+
+            else:  # Divide columns into blocks of at most blkSize
+                assert(wrtFilter is None)  # cannot specify both wrtFilter and blkSize
+                nBlks = int(_np.ceil(self.Np / blkSize))
+                # num blocks required to achieve desired average size == blkSize
+                blocks = _mpit.slice_up_range(self.Np, nBlks)
+
+                #distribute derivative computation across blocks
+                myBlkIndices, blkOwners, blkComm = \
+                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
+                if blkComm is not None:
+                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+                                   + " than derivative columns(%d)!" % self.Np
+                                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
+
+                for iBlk in myBlkIndices:
+                    paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
+                    assert(paramSlice.step is None)  # so we can just use .start as an offset below
+                    self.DM_fill_dprobs(mxToFill, felInds, paramSlice.start, evalSubTree, paramSlice, blkComm)
+                    profiler.mem_check("bulk_fill_dprobs: post fill blk")
+
+                #gather results
+                tm = _time.time()
+                _mpit.gather_slices(blocks, blkOwners, mxToFill, [felInds],
+                                    1, mySubComm, gatherMemLimit)
+                #note: gathering axis 1 of mxToFill[:,fslc], dim=(ks,M)
+                profiler.add_time("MPI IPC", tm)
+                profiler.mem_check("bulk_fill_dprobs: post gather blocks")
+
+        #collect/gather results
+        tm = _time.time()
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill, [], 0, comm, gatherMemLimit)
+        #note: pass mxToFill, dim=(KS,M), so gather mxToFill[felInds] (axis=0)
+
+        if prMxToFill is not None:
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 prMxToFill, [], 0, comm)
+            #note: pass prMxToFill, dim=(KS,), so gather prMxToFill[felInds] (axis=0)
+
+        profiler.add_time("MPI IPC", tm)
+        profiler.mem_check("bulk_fill_dprobs: post gather subtrees")
+
+        if clipTo is not None and prMxToFill is not None:
+            _np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)  # in-place clip
+
+        #TODO: will this work?
+        #if check:
+        #    self._check(evalTree, spam_label_rows, prMxToFill, mxToFill,
+        #                clipTo=clipTo)
+        profiler.add_time("bulk_fill_dprobs: total", tStart)
+        profiler.add_count("bulk_fill_dprobs count")
+        profiler.mem_check("bulk_fill_dprobs: end")
+
+
+    def OLD_bulk_fill_hprobs(self, mxToFill, evalTree,
                          prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
                          clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
                          wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
@@ -904,6 +1206,203 @@ class MapForwardSimulator(ForwardSimulator):
                     #Note: deriv2MxToFill gets computed on every inner loop completion
                     # (to save mem) but isn't gathered until now (but using blk1Comm).
                     # (just as prMxToFill is computed fully on each inner loop *iteration*!)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill, [], 0, comm, gatherMemLimit)
+        if deriv1MxToFill is not None:
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 deriv1MxToFill, [], 0, comm, gatherMemLimit)
+        if deriv2MxToFill is not None:
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 deriv2MxToFill, [], 0, comm, gatherMemLimit)
+        if prMxToFill is not None:
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 prMxToFill, [], 0, comm)
+
+        if clipTo is not None and prMxToFill is not None:
+            _np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)  # in-place clip
+
+        #TODO: check if this works
+        #if check:
+        #    self._check(evalTree, spam_label_rows,
+        #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
+
+
+    def bulk_fill_hprobs(self, mxToFill, evalTree,
+                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
+                         clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
+                         wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
+        """
+        Compute the outcome probability-Hessians for an entire tree of gate
+        strings.
+
+        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
+        probability-Hessians for each "final element" of `evalTree`.
+
+        Parameters
+        ----------
+        mxToFill : numpy ndarray
+          an already-allocated ExMxM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
+
+        evalTree : EvalTree
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+           strings to compute the bulk operation on.
+
+        prMxToFill : numpy array, optional
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
+
+        derivMxToFill1, derivMxToFill2 : numpy array, optional
+          when not None, an already-allocated ExM numpy array that is filled
+          with probability derivatives, similar to bulk_fill_dprobs(...), but
+          where M is the number of model parameters selected for the 1st and 2nd
+          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
+
+        clipTo : 2-tuple, optional
+           (min,max) to clip return value if not None.
+
+        check : boolean, optional
+          If True, perform extra checks within code to verify correctness,
+          generating warnings when checks fail.  Used for testing, and runs
+          much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see
+           wrtBlockSize).
+
+        wrtFilter1, wrtFilter2 : list of ints, optional
+          If not None, a list of integers specifying which model parameters
+          to differentiate with respect to in the first (row) and second (col)
+          derivative operations, respectively.
+
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
+
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
+
+        Returns
+        -------
+        None
+        """
+
+        if wrtFilter1 is not None:
+            assert(wrtBlockSize1 is None and wrtBlockSize2 is None)  # Cannot specify both wrtFilter and wrtBlockSize
+            wrtSlice1 = _slct.list_to_slice(wrtFilter1)  # for now, require the filter specify a slice
+        else:
+            wrtSlice1 = None
+
+        if wrtFilter2 is not None:
+            assert(wrtBlockSize1 is None and wrtBlockSize2 is None)  # Cannot specify both wrtFilter and wrtBlockSize
+            wrtSlice2 = _slct.list_to_slice(wrtFilter2)  # for now, require the filter specify a slice
+        else:
+            wrtSlice2 = None
+
+        #get distribution across subtrees (groups if needed)
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+
+            if prMxToFill is not None:
+                self.DM_fill_probs(prMxToFill, evalSubTree, mySubComm, bUseParentIndices=True)
+
+            #Set wrtBlockSize to use available processors if it isn't specified
+            if wrtFilter1 is None and wrtFilter2 is None:
+                blkSize1 = wrtBlockSize1  # could be None
+                blkSize2 = wrtBlockSize2  # could be None
+                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
+                    comm_blkSize = self.Np / mySubComm.Get_size()
+                    blkSize1 = comm_blkSize if (blkSize1 is None) \
+                        else min(comm_blkSize, blkSize1)  # override with smaller comm_blkSize
+                    blkSize2 = comm_blkSize if (blkSize2 is None) \
+                        else min(comm_blkSize, blkSize2)  # override with smaller comm_blkSize
+            else:
+                blkSize1 = blkSize2 = None  # wrtFilter1 & wrtFilter2 dictates block
+
+            if blkSize1 is None and blkSize2 is None:
+                #Compute all requested derivative columns at once
+                if deriv1MxToFill is not None:
+                    self.DM_fill_dprobs(deriv1MxToFill, felInds, 0, evalSubTree, wrtSlice1, mySubComm)
+                if deriv2MxToFill is not None:
+                    if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
+                        deriv2MxToFill[:, :] = deriv1MxToFill
+                    else:
+                        self.DM_fill_dprobs(deriv2MxToFill, felInds, 0, evalSubTree, wrtSlice2, mySubComm)
+                        
+                self.DM_fill_hprobs(mxToFill, felInds, 0, 0, evalSubTree, wrtSlice1, wrtSlice2, mySubComm)
+
+            else:  # Divide columns into blocks of at most blkSize
+                assert(wrtFilter1 is None and wrtFilter2 is None)  # cannot specify both wrtFilter and blkSize
+                nBlks1 = int(_np.ceil(self.Np / blkSize1))
+                nBlks2 = int(_np.ceil(self.Np / blkSize2))
+                # num blocks required to achieve desired average size == blkSize1 or blkSize2
+                blocks1 = _mpit.slice_up_range(self.Np, nBlks1)
+                blocks2 = _mpit.slice_up_range(self.Np, nBlks2)
+
+                #distribute derivative computation across blocks
+                myBlk1Indices, blk1Owners, blk1Comm = \
+                    _mpit.distribute_indices(list(range(nBlks1)), mySubComm)
+
+                myBlk2Indices, blk2Owners, blk2Comm = \
+                    _mpit.distribute_indices(list(range(nBlks2)), blk1Comm)
+
+                if blk2Comm is not None:
+                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+                                   + " than hessian elements(%d)!" % (self.Np**2)
+                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
+
+                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                # will always be the same whenever they're desired (they'll both cover the entire range of params)
+                derivMxToFill = deriv1MxToFill if (deriv1MxToFill is not None) else deriv2MxToFill  # first non-None
+
+                for iBlk1 in myBlk1Indices:
+                    paramSlice1 = blocks1[iBlk1]
+                    if derivMxToFill is not None:
+                        assert(paramSlice1.step is None)  # so we can just use .start as an offset below
+                        self.DM_fill_dprobs(derivMxToFill, felInds, paramSlice1.start, evalSubTree,
+                                            paramSlice1, blk1Comm)
+                    
+                    for iBlk2 in myBlk2Indices:
+                        paramSlice2 = blocks2[iBlk2]                        
+                        self.DM_fill_hprobs(mxToFill, felInds, paramSlice1.start, paramSlice2.start, evalSubTree,
+                                            paramSlice1, paramSlice2, blk2Comm)
+
+                    #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
+                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds, blocks1[iBlk1]],
+                                        2, blk1Comm, gatherMemLimit)
+
+                #gather row results; gather axis 1 of mxToFill[felInds], dim=(ks,M,M)
+                _mpit.gather_slices(blocks1, blk1Owners, mxToFill, [felInds],
+                                    1, mySubComm, gatherMemLimit)
+                if derivMxToFill is not None:
+                    _mpit.gather_slices(blocks1, blk1Owners, derivMxToFill, [felInds],
+                                        1, mySubComm, gatherMemLimit)
+
+                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                # will always be the same whenever they're desired (they'll both cover the entire range of params)
+                if deriv1MxToFill is not None: deriv1MxToFill[:, :] = derivMxToFill[:, :]
+                if deriv2MxToFill is not None: deriv2MxToFill[:, :] = derivMxToFill[:, :]
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]

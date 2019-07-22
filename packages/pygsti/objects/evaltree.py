@@ -604,7 +604,7 @@ class EvalTree(list):
         #print("PT3 = %.3fs" % (_time.time()-t0)); t0 = _time.time()  # REMOVE
 
         # Setting simplified_circuit_spamTuples, (re)sets the element ordering,
-        # so before doint this compute the old_to_new mapping and update
+        # so before doing this compute the old_to_new mapping and update
         # elIndicesDict.
         old_finalStringToElsMap = []; i = 0
         for k, spamTuples in enumerate(self.simplified_circuit_spamTuples):
