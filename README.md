@@ -1,5 +1,5 @@
 ********************************************************************************
-  pyGSTi 0.9 
+  pyGSTi 0.9
 ********************************************************************************
 
 [![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=master)](https://travis-ci.org/pyGSTio/pyGSTi)
@@ -7,8 +7,8 @@
 pyGSTi
 ------
 **pyGSTi** is an open-source software for *modeling and characterizing noisy quantum information processors*
-(QIPs), i.e., systems of one or more qubits.  It is licensed under the GNU General Public License (GPL).
-Copyright and license information can be found in ``license.txt``, and the GPL itself in ``COPYING``.
+(QIPs), i.e., systems of one or more qubits.  It is licensed under the Apache License, Version 2.0.
+Copyright information can be found in ``NOTICE``, and the license itself in ``LICENSE``.
 
 There are three main objects in pyGSTi:
 - `Circuit`: a quantum circuit (can have many qubits).
@@ -153,7 +153,7 @@ There are numerous tutorials (meant to be pedagogical) and examples (meant to be
 how to do some particular thing) in the form of Jupyter notebooks beneath the `pyGSTi/jupyter_notebooks`
 directory.  The root "START HERE" notebook will direct you where to go based on what you're most
 interested in learning about.  You can view the
-[read-only GitHub version of this notebook](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb) 
+[read-only GitHub version of this notebook](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb)
 or you can [explore the tutorials interactively](https://mybinder.org/v2/gh/pyGSTio/pyGSTi/master)
 using JupyterHub via Binder.  Note the existence of a
 [FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
@@ -185,7 +185,7 @@ Online documentation is hosted on [Read the Docs](http://pygsti.readthedocs.io).
 
 License
 -------
-PyGSTi is licensed under the [GNU General Public License (GPL)](https://github.com/pyGSTio/pyGSTi/blob/master/license.txt).
+PyGSTi is licensed under the [Apache License Version 2.0](https://github.com/pyGSTio/pyGSTi/blob/master/LICENSE).
 
 
 Questions?

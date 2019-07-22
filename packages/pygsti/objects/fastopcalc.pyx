@@ -3,6 +3,16 @@
 # cython: linetrace=False
 # filename: fastcalc.pyx
 
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import numpy as np
 from libc.stdlib cimport malloc, free
 from libcpp.algorithm cimport sort as stdsort
@@ -26,13 +36,13 @@ def test_map(s):
     cdef vector[string] v
     v = vector[string](3)
     v[0] = st
-    
+
     my_map[1]=3.0+2.0j
     my_map[2]=6.2
     my_map2 = my_map
     my_map2[2]=10.0
     my_map2[3]=20.0
-    
+
     print my_map[1],my_map[2]
     print my_map2[1], my_map2[2],my_map2[3]
     print("HELLO!!!")
@@ -61,7 +71,7 @@ def fast_bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
                                  dest_shape):
     cdef INT dest_size = np.product(dest_shape)
     cdef np.ndarray[np.float64_t, ndim=1, mode="c"] res = np.empty(dest_size, np.float64)
-    
+
     cdef INT c = 0
     cdef INT i = 0
     cdef INT r = 0
@@ -72,7 +82,7 @@ def fast_bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
     cdef INT nVars
     cdef double a;
     cdef double poly_val;
-    
+
     while i < vtape_sz:
         poly_val = 0.0
         nTerms = vtape[i]; i+=1
@@ -99,7 +109,7 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
                                          dest_shape):
     cdef INT dest_size = np.product(dest_shape)
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] res = np.empty(dest_size, np.complex128)
-    
+
     cdef INT c = 0
     cdef INT i = 0
     cdef INT r = 0
@@ -110,7 +120,7 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
     cdef INT nVars
     cdef double complex a;
     cdef double complex poly_val;
-    
+
     while i < vtape_sz:
         poly_val = 0.0
         nTerms = vtape[i]; i+=1
@@ -132,7 +142,7 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
 def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
                        np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
                        np.ndarray[np.int64_t, ndim=1, mode="c"] wrtParams):
-    
+
     #Note: assumes wrtParams is SORTED but doesn't assert it like Python version does
 
     cdef INT c = 0
@@ -159,7 +169,7 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
         i = j; c += nTerms; nPolys += 1
 
     #print "MAX vtape-sz-per-poly = %d, MAX nTerms = %d, WRT size = %d" % (max_vsz, max_nTerms, wrt_sz)
-        
+
     #Allocate space
     cdef INT vstride = max_vsz+1 # +1 for nTerms insertion
     cdef double complex* dctapes = <double complex *>malloc(wrt_sz * max_nTerms * sizeof(double complex))
@@ -178,15 +188,15 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] result_ctape = np.empty( nPolys*wrt_sz*max_nTerms, np.complex128 )
     #print "TAPE SIZE = %d" % vtape_sz
     #print "RESULT SIZE = %d" % result_vtape.size
-    
-    c = 0; i = 0    
+
+    c = 0; i = 0
     while i < vtape_sz:
         j = i # increment j instead of i for this poly
         nTerms = vtape[j]; j+=1
         #print "POLY w/%d terms (i=%d)" % (nTerms,i)
 
         # reset/clear dctapes, dvtapes, dnterms for this poly
-        for k in range(wrt_sz): 
+        for k in range(wrt_sz):
             cptr[k] = 0
             vptr[k] = 1 # leave room to insert nTerms at end
             dnterms[k] = 0
@@ -205,9 +215,9 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
             # see it any more (the var indices are sorted).
             while j < j1: #loop over variable indices for this term
                 # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
-                
+
                 #find an iVar that is also in wrt.
-                # - increment the cur_iWrt or j as needed                
+                # - increment the cur_iWrt or j as needed
                 while cur_iWrt < wrt_sz and vtape[j] > wrtParams[cur_iWrt]: #condition to increment cur_iWrt
                     cur_iWrt += 1 # so wrtParams[cur_iWrt] >= vtape[j]
                 if cur_iWrt == wrt_sz: break  # no more possible iVars we're interested in;
@@ -244,7 +254,7 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
             # We continue processing terms, adding to these tape lists, until all the terms of the
             # current poly are processed.  Then we can concatenate the tapes for each wrtParams element.
             j = j1 # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
-            
+
         #Now all terms are processed - concatenate tapes for wrtParams and add to resulting tape.
         for k in range(wrt_sz):
             off = k*vstride
@@ -259,7 +269,7 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
             #Use numpy, but still slower than above C-able code
             #result_vtape[res_vptr:res_vptr+vptr[k]] = dvtapes[k,0:vptr[k]]; res_vptr += vptr[k]
             #result_ctape[res_cptr:res_cptr+cptr[k]] = dctapes[k,0:cptr[k]]; res_cptr += cptr[k]
-            
+
             #result_vtape = np.concatenate( (result_vtape, dvtapes[k,0:vptr[k]]) ) # SLOW!
             #result_ctape = np.concatenate( (result_ctape, dctapes[k,0:cptr[k]]) ) # SLOW!
         i = j # update location in vtape after processing poly - actually could just use i instead of j it seems??
@@ -271,16 +281,16 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
     free(vptr)
 
     return result_vtape[0:res_vptr], result_ctape[0:res_cptr]
-    
+
 
 
 def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
                       int stabilizer_evo):
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
-    
+
     #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",self.max_order)
-    
+
 
     #cdef double complex *pLeft = <double complex*>malloc(len(Es) * sizeof(double complex))
     #cdef double complex *pRight = <double complex*>malloc(len(Es) * sizeof(double complex))
@@ -300,7 +310,7 @@ def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int
 
     for gl in gate_terms.keys():
         gn = gl
-        gate_term_coeffs[gn] = extract_term_coeffs(gate_terms[gl], max_order, 
+        gate_term_coeffs[gn] = extract_term_coeffs(gate_terms[gl], max_order,
                                                    max_poly_vars, max_poly_order)
     rho_term_coeffs = extract_term_coeffs(rho_terms, max_order,
                                           max_poly_vars, max_poly_order)
@@ -331,19 +341,19 @@ def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int
     #            gate_term_coeffs[gn][order][i] = polymap
 
     #        gate_term_prefactors[igl][order] = vector( GateObj(term.pre_ops[0]).acton_fn for term in gate_terms[gl][order] ) # assume all terms collapsed?
-    
+
     assert(max_order <= 2) # only support this partitioning below (so far)
 
     cdef vector[ unordered_map[int, complex] ] prps = vector[ unordered_map[int, complex] ](numEs)
     #prps_chk = [None]*numEs
     for order in range(max_order+1):
         #print("DB: pr_as_poly order=",order)
-        
+
         #for p in partition_into(order, N):
         for i in range(N+2): p[i] = 0 # clear p
         factor_lists = [None]*(N+2)
         coeff_lists = vector[vector[unordered_map[int, complex]]](N+2)
-        
+
         if order == 0:
             #inner loop(p)
             #factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(circuit,p) ]
@@ -357,12 +367,12 @@ def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int
             factor_lists[N+1] = E_terms[p[N+1]]
             coeff_lists[N+1] = E_term_coeffs[p[N+1]]
             Einds = E_indices[p[N+1]]
-        
+
             #print("Part0 ",p)
             pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars,
                                  max_poly_order, stabilizer_evo, &prps) #, prps_chk)
 
-            
+
         elif order == 1:
             for i in range(N+2):
                 p[i] = 1
@@ -383,7 +393,7 @@ def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int
                                      max_poly_vars, max_poly_order,
                                      stabilizer_evo, &prps) #, prps_chk)
                 p[i] = 0
-            
+
         elif order == 2:
             for i in range(N+2):
                 p[i] = 2
@@ -432,7 +442,7 @@ def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int
 
     return prps
 
-                
+
 
 cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                           int max_poly_vars, int max_poly_order, int stabilizer_evo,
@@ -455,7 +465,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
     for i in range(nFactorLists):
         factorListLens[i] = len(factor_lists[i])
         if factorListLens[i] == 0: return # nothing to loop over!
-    
+
     cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
     for i in range(nFactorLists): b[i] = 0
 
@@ -465,7 +475,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
     #    for i in range(nFactorLists):
     #        print factorListLens[i]
     assert(nFactorLists > 0), "Number of factor lists must be > 0!"
-    
+
     if fastmode: # filter factor_lists to matrix-compose all length-1 lists
 
         leftSaved = [None]*(nFactorLists-1)  # saved[i] is state after i-th
@@ -493,7 +503,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 for j in range(1,len(factor.post_ops)):
                     rhoVecR = factor.post_ops[j].acton(rhoVecR)
                 rightSaved[0] = rhoVecR
-                
+
                 coeff = factor_coeff_lists[0][b[0]]
                 coeffSaved[0] = coeff
                 incd += 1
@@ -508,7 +518,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 for j in range(len(factor.pre_ops)):
                     rhoVecL = factor.pre_ops[j].acton(rhoVecL)
                 leftSaved[i] = rhoVecL
-                            
+
                 for j in range(len(factor.post_ops)):
                     rhoVecR = factor.post_ops[j].acton(rhoVecR)
                 rightSaved[i] = rhoVecR
@@ -525,7 +535,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.post_ops[j].acton(EVec)
                 pLeft = np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
-    
+
                 EVec = factor.pre_ops[0].todense() # TODO USE scratch here
                 for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.pre_ops[j].acton(EVec)
@@ -554,7 +564,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             add_polys_inplace(deref(prps)[Ei], result)
 
             #assert(debug < 100) #DEBUG
-            
+
             #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
             for i in range(nFactorLists-1,-1,-1):
                 if b[i]+1 < factorListLens[i]:
@@ -570,7 +580,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
         #for factors in _itertools.product(*factor_lists):
         while(True):
             # In this loop, b holds "current" indices into factor_lists
-            
+
     #        print "Inner loop", b
 
             #OLD - now that spams are factors to, nFactorLists should always be >= 2
@@ -580,22 +590,22 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             #    coeff = unordered_map[int,complex](); coeff[0] = 1.0
             #else:
             coeff = factor_coeff_lists[0][b[0]] # an unordered_map (copies to new "coeff" variable)
-    
+
             # CHECK POLY MATH
             #print "\n----- PRE MULT ---------"
             #coeff_check = factor_lists[0][b[0]].coeff
             #checkpolys(coeff, coeff_check)
-            
+
             for i in range(1,nFactorLists):
                 coeff = mult_polys(coeff, factor_coeff_lists[i][b[i]],
                                    max_poly_vars, max_poly_order)
-    
+
                 #CHECK POLY MATH
                 #print "\n----- MULT ---------"
                 #coeff_check = coeff_check.mult_poly(factor_lists[i][b[i]].coeff) # DEBUG
                 #checkpolys(coeff, coeff_check)
-    
-                
+
+
             #pLeft  = self.unitary_sim_pre(rhoLeft,Es, factors, comm, memLimit, pLeft)
             #pRight = self.unitary_sim_post(rhoRight,Es, factors, comm, memLimit, pRight) \
             #         if not self.unitary_evolution else 1
@@ -625,7 +635,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
                 pLeft = rhoVec.extract_amplitude(EVec.outcomes)
 
-                
+
             #pRight / "post" sim
             factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
             rhoVec = factor.post_ops[0].todense()
@@ -662,16 +672,16 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             #print "pLeft, pRight = ",pLeft,pRight
             #checkpolys(result, res)
             #if prps_chk[Ei] is None:  prps_chk[Ei] = res
-            #else:                    prps_chk[Ei] += res 
-            
+            #else:                    prps_chk[Ei] += res
+
             add_polys_inplace(deref(prps)[Ei], result)
-            
+
             #CHECK POLY MATH
             #print "\n---------- PRPS Check ----------",Ei
             #checkpolys(deref(prps)[Ei], prps_chk[Ei])
-    
+
             #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
-    
+
             #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
             for i in range(nFactorLists-1,-1,-1):
                 if b[i]+1 < factorListLens[i]:
@@ -743,7 +753,7 @@ cdef void scale_poly(unordered_map[int, complex]& poly,
 cdef vinds_to_int(vector[int] vinds, int max_num_vars, int max_order):
     cdef int ret = 0
     cdef int i,m = 1
-    for i in vinds: # last tuple index is most significant                                                                                                          
+    for i in vinds: # last tuple index is most significant
         ret += (i+1)*m
         m *= max_num_vars+1
     return ret
@@ -806,7 +816,7 @@ cdef double stabilizer_measurement_prob(state_sp_tuple, moutcomes):
     #TODO: make this routine faster - port pauli_z_measurement to C?
     cdef float p = 1.0
     state_s, state_p = state_sp_tuple
-    for i,outcm in enumerate(moutcomes): 
+    for i,outcm in enumerate(moutcomes):
         p0,p1,ss0,ss1,sp0,sp1 = symplectic.pauli_z_measurement(state_s, state_p, i)
 
         if outcm == 0:
@@ -817,7 +827,7 @@ cdef double stabilizer_measurement_prob(state_sp_tuple, moutcomes):
 
 
 
-    
+
 def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
     cdef long N = f.shape[0]
     cdef float ret = 0.0
@@ -825,4 +835,3 @@ def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
     for i in range(N):
         ret += f[i]*g[i]
     return ret
-
