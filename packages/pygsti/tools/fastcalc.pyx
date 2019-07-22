@@ -824,14 +824,14 @@ def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
-                       np.ndarray[double, mode="c", ndim=1] rhs,
+def fast_fas_helper_1d(np.ndarray[double, ndim=1] a,
+                       np.ndarray[double, ndim=1] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0):
-    #Note: can retain mode="c" for a and rhs above since they're 1D
     
     cdef INT nDims = 1
     cdef INT b[1]
     cdef INT a_strides[1]
+    cdef INT rhs_strides[1]
     cdef INT rhs_dims[1]
     cdef INT rhs_indx = 0
     cdef INT a_indx = 0
@@ -839,6 +839,7 @@ def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
     for i in range(nDims):
         b[i] = 0
         a_strides[i] = a.strides[i] // a.itemsize
+        rhs_strides[i] = rhs.strides[i] // rhs.itemsize
         rhs_dims[i] = rhs.shape[i]
 
     a_indx += inds0[0] * a_strides[0]
@@ -846,28 +847,42 @@ def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
     cdef double* a_ptr = <double*>a.data
     cdef double* rhs_ptr = <double*>rhs.data
 
-    while(True):
-        a_ptr[a_indx] = rhs_ptr[rhs_indx]
-        rhs_indx += 1 # always increments by 1 (1D and contiguous)
-
-        #increment b ~ itertools.product        
-        if b[0]+1 < rhs_dims[0]: # "i = 0" loop
-            a_indx += (inds0[b[0]+1] - inds0[b[0]]) * a_strides[0]
-            b[0] += 1
-        else:
-            break # can't increment anything - break while(True) loop
+    if rhs.flags['C_CONTIGUOUS']:
+        while(True):
+            a_ptr[a_indx] = rhs_ptr[rhs_indx]
+            rhs_indx += 1 # always increments by 1 (1D and contiguous)
+    
+            #increment b ~ itertools.product        
+            if b[0]+1 < rhs_dims[0]: # "i = 0" loop
+                a_indx += (inds0[b[0]+1] - inds0[b[0]]) * a_strides[0]
+                b[0] += 1
+            else:
+                break # can't increment anything - break while(True) loop
         
-        #For general nDims (but we unroll for speed)
-        #for i in range(nDims-1,-1,-1):
-        #    if b[i]+1 < rhs_dims[i]:
-        #        a_indx += (indsPerDim[i][b[i]+1] - indsPerDim[i][b[i]]) * a_strides[i]
-        #        b[i] += 1
-        #        break
-        #    else:
-        #        a_indx += (indsPerDim[i][0]-indsPerDim[i][b[i]]) * a_strides[i]
-        #        b[i] = 0
-        #else:
-        #    break # can't increment anything - break while(True) loop
+            #For general nDims (but we unroll for speed)
+            #for i in range(nDims-1,-1,-1):
+            #    if b[i]+1 < rhs_dims[i]:
+            #        a_indx += (indsPerDim[i][b[i]+1] - indsPerDim[i][b[i]]) * a_strides[i]
+            #        b[i] += 1
+            #        break
+            #    else:
+            #        a_indx += (indsPerDim[i][0]-indsPerDim[i][b[i]]) * a_strides[i]
+            #        b[i] = 0
+            #else:
+            #    break # can't increment anything - break while(True) loop
+            
+    else: # rhs is *not* c-contiguous, so need to use its rhs_strides
+        while(True):
+            a_ptr[a_indx] = rhs_ptr[rhs_indx]
+            rhs_indx += rhs_strides[0] # always increments by strides[0] (only 1D)
+
+            #increment b ~ itertools.product        
+            if b[0]+1 < rhs_dims[0]: # "i = 0" loop
+                a_indx += (inds0[b[0]+1] - inds0[b[0]]) * a_strides[0]
+                b[0] += 1
+            else:
+                break # can't increment anything - break while(True) loop
+
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
