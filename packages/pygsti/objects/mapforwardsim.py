@@ -446,6 +446,18 @@ class MapForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
+    def _setParamBlockSize(self, wrtFilter, wrtBlockSize, comm):
+        if wrtFilter is None:
+            blkSize = wrtBlockSize  # could be None
+            if (comm is not None) and (comm.Get_size() > 1):
+                comm_blkSize = self.Np / comm.Get_size()
+                blkSize = comm_blkSize if (blkSize is None) \
+                    else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
+        else:
+            blkSize = None  # wrtFilter dictates block
+        return blkSize
+
+
     def OLD_bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                             comm=None):
 
@@ -479,11 +491,12 @@ class MapForwardSimulator(ForwardSimulator):
         if clipTo is not None:
             _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
 
-    def DM_fill_probs(calc, mxToFill, evalTree, comm, bUseParentIndices=False):
+    def _fill_probs_block(self, mxToFill, dest_indices, evalTree, comm):
+        dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
         for rholabel in evalTree.rhoLabels:
-            calc.DM_fill_probs_with_rholabel(mxToFill, rholabel, evalTree, comm, bUseParentIndices)
+            self.DM_fill_probs_with_rholabel(mxToFill, dest_indices, rholabel, evalTree, comm)
             
-    def DM_fill_probs_with_rholabel(calc, mxToFill, rholabel, evalTree, comm, bUseParentIndices):
+    def DM_fill_probs_with_rholabel(calc, mxToFill, dest_indices, rholabel, evalTree, comm):
 
         cacheSize = evalTree.cache_size()
         rhoVec = calc._rho_from_label(rholabel)
@@ -511,30 +524,27 @@ class MapForwardSimulator(ForwardSimulator):
             final_indices = []
             elabels = []
 
-            if bUseParentIndices:
-                # then mxToFill is an array corresponding to the evalTree's parent's elements not evalTree's
-                # so final elements must get mapped to the parent's index space.
-                for j, spamlabel in enumerate(evalTree.simplified_circuit_spamTuples[i]):
-                    if spamlabel[0] == rholabel:
-                        elabels.append(spamlabel[1])
-                        final_indices.append(evalTree.myFinalElsToParentFinalElsMap[element_offset + j])
-            else:
-                for j, spamlabel in enumerate(evalTree.simplified_circuit_spamTuples[i]):
-                    if spamlabel[0] == rholabel:
-                        elabels.append(spamlabel[1])
-                        final_indices.append(element_offset + j)
-            
+            for j, spamlabel in enumerate(evalTree.simplified_circuit_spamTuples[i]):
+                if spamlabel[0] == rholabel:
+                    elabels.append(spamlabel[1])
+                    final_indices.append(dest_indices[element_offset + j])
+                                
             ereps = [E._rep for E in calc._Es_from_labels(elabels)] #cache these in future
             for j, erep in zip(final_indices, ereps):
                 mxToFill[j] = erep.probability(final_state)  # outcome probability
 
-    def DM_fill_dprobs(calc, mxToFill, felIndices, fpoffset, evalTree, param_indices, comm):
+    def _fill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, evalTree, param_indices, comm):
 
         eps = 1e-7  # hardcoded?
 
         if param_indices is None:
             param_indices = list(range(calc.Np))
-            
+        if dest_param_indices is None:
+            dest_param_indices = list(range(calc.Np))
+
+        param_indices = _slct.as_array(param_indices)
+        dest_param_indices = _slct.as_array(dest_param_indices)
+
         all_slices, my_slice, owners, subComm = \
             _mpit.distribute_slice(slice(0, len(param_indices)), comm)
 
@@ -544,11 +554,12 @@ class MapForwardSimulator(ForwardSimulator):
 
         #Get a map from global parameter indices to the desired
         # final index within mxToFill (fpoffset = final parameter offset)
-        iParamToFinal = {i: st + ii + fpoffset for ii, i in enumerate(my_param_indices)}
+        iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
-        probs = _np.empty(evalTree.num_final_elements(), 'd')
-        probs2 = _np.empty(evalTree.num_final_elements(), 'd')
-        calc.DM_fill_probs(probs, evalTree, comm)
+        nEls = evalTree.num_final_elements()
+        probs = _np.empty(nEls, 'd')
+        probs2 = _np.empty(nEls, 'd')
+        calc._fill_probs_block(probs, slice(0, nEls), evalTree, comm)
 
         orig_vec = calc.to_vector().copy()
         for i in range(calc.Np):
@@ -556,13 +567,16 @@ class MapForwardSimulator(ForwardSimulator):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                calc.from_vector(vec)
-                calc.DM_fill_probs(probs2, evalTree, subComm)
-                _fas(mxToFill, [felIndices, iFinal], (probs2 - probs) / eps)
-        calc.from_vector(orig_vec)
+                calc.from_vector(vec, close=True)
+                calc._fill_probs_block(probs2, slice(0, nEls), evalTree, subComm)
+                _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
+        calc.from_vector(orig_vec, close=True)
 
-    def DM_fill_hprobs(calc, mxToFill, felIndices, fpoffset1, fpoffset2, evalTree,
-                       param_indices1, param_indices2, comm):
+        #Now each processor has filled the relavant parts of mxToFill, so gather together:
+        _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
+
+    def _fill_hprobs_block(calc, mxToFill, dest_indices, dest_param_indices1, dest_param_indices2,
+                           evalTree, param_indices1, param_indices2, comm):
 
         eps = 1e-4  # hardcoded?
 
@@ -570,6 +584,14 @@ class MapForwardSimulator(ForwardSimulator):
             param_indices1 = list(range(calc.Np))
         if param_indices2 is None:
             param_indices2 = list(range(calc.Np))
+        if dest_param_indices1 is None:
+            dest_param_indices1 = list(range(calc.Np))
+        if dest_param_indices2 is None:
+            dest_param_indices1 = list(range(calc.Np))
+
+        param_indices1 = _slct.as_array(param_indices1)
+        dest_param_indices1 = _slct.as_array(dest_param_indices1)
+        #dest_param_indices2 = _slct.as_array(dest_param_indices2)  # OK if a slice
 
         all_slices, my_slice, owners, subComm = \
             _mpit.distribute_slice(slice(0, len(param_indices1)), comm)
@@ -579,12 +601,13 @@ class MapForwardSimulator(ForwardSimulator):
 
         #Get a map from global parameter indices to the desired
         # final index within mxToFill (fpoffset = final parameter offset)
-        iParamToFinal = {i: st + ii + fpoffset1 for ii, i in enumerate(my_param_indices)}
+        iParamToFinal = {i: dest_param_indices1[st + ii] for ii, i in enumerate(my_param_indices)}
 
-        dprobs = _np.empty((evalTree.num_final_elements(), len(param_indices2)), 'd')
-        dprobs2 = _np.empty((evalTree.num_final_elements(), len(param_indices2)), 'd')
-        calc.DM_fill_dprobs(dprobs, slice(None), 0, evalTree, param_indices2, comm)
-        final_indices2 = slice(fpoffset2, fpoffset2 + len(param_indices2))
+        nEls = evalTree.num_final_elements()
+        nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
+        dprobs = _np.empty((nEls, nP2), 'd')
+        dprobs2 = _np.empty((nEls, nP2), 'd')
+        calc._fill_dprobs_block(dprobs, slice(0, nEls), None, evalTree, param_indices2, comm)
 
         orig_vec = calc.to_vector().copy()
         for i in range(calc.Np):
@@ -592,9 +615,12 @@ class MapForwardSimulator(ForwardSimulator):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 calc.from_vector(vec, close=True)
-                calc.DM_fill_dprobs(dprobs2, slice(None), 0, evalTree, param_indices2, subComm)
-                _fas(mxToFill, [felIndices, iFinal, final_indices2], (dprobs2 - dprobs) / eps)
+                calc._fill_dprobs_block(dprobs2, slice(0, nEls), None, evalTree, param_indices2, subComm)
+                _fas(mxToFill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
         calc.from_vector(orig_vec)
+
+        #Now each processor has filled the relavant parts of mxToFill, so gather together:
+        _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
@@ -647,9 +673,14 @@ class MapForwardSimulator(ForwardSimulator):
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
         #eval on each local subtree
+
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            self.DM_fill_probs(mxToFill, evalSubTree, mySubComm, bUseParentIndices=True)
+            felInds = evalSubTree.final_element_indices(evalTree)
+
+            # mxToFill is an array corresponding to the evalSubTree's parent's elements,
+            # not evalSubTree's so pass felInds to _fill_probs_block
+            self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -935,21 +966,14 @@ class MapForwardSimulator(ForwardSimulator):
             felInds = evalSubTree.final_element_indices(evalTree)
 
             if prMxToFill is not None:
-                self.DM_fill_probs(prMxToFill, evalSubTree, mySubComm, bUseParentIndices=True)
+                self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm)
             
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-            else:
-                blkSize = None  # wrtFilter dictates block
+            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, comm)
 
-            if blkSize is None:
+            if blkSize is None:  # wrtFilter gives entire computed parameter block
                 #Compute all requested derivative columns at once
-                self.DM_fill_dprobs(mxToFill, felInds, 0, evalSubTree, wrtSlice, mySubComm)
+                self._fill_dprobs_block(mxToFill, felInds, None, evalSubTree, wrtSlice, mySubComm)
                 profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
@@ -968,8 +992,7 @@ class MapForwardSimulator(ForwardSimulator):
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    assert(paramSlice.step is None)  # so we can just use .start as an offset below
-                    self.DM_fill_dprobs(mxToFill, felInds, paramSlice.start, evalSubTree, paramSlice, blkComm)
+                    self._fill_dprobs_block(mxToFill, felInds, paramSlice, evalSubTree, paramSlice, blkComm)
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
@@ -1229,7 +1252,6 @@ class MapForwardSimulator(ForwardSimulator):
         #    self._check(evalTree, spam_label_rows,
         #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
 
-
     def bulk_fill_hprobs(self, mxToFill, evalTree,
                          prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
                          clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
@@ -1325,32 +1347,24 @@ class MapForwardSimulator(ForwardSimulator):
             felInds = evalSubTree.final_element_indices(evalTree)
 
             if prMxToFill is not None:
-                self.DM_fill_probs(prMxToFill, evalSubTree, mySubComm, bUseParentIndices=True)
+                self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter1 is None and wrtFilter2 is None:
-                blkSize1 = wrtBlockSize1  # could be None
-                blkSize2 = wrtBlockSize2  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize1 = comm_blkSize if (blkSize1 is None) \
-                        else min(comm_blkSize, blkSize1)  # override with smaller comm_blkSize
-                    blkSize2 = comm_blkSize if (blkSize2 is None) \
-                        else min(comm_blkSize, blkSize2)  # override with smaller comm_blkSize
-            else:
-                blkSize1 = blkSize2 = None  # wrtFilter1 & wrtFilter2 dictates block
+            blkSize1 = self._setParamBlockSize(wrtFilter1, wrtBlockSize1, mySubComm)
+            blkSize2 = self._setParamBlockSize(wrtFilter2, wrtBlockSize2, mySubComm)
 
-            if blkSize1 is None and blkSize2 is None:
+            if blkSize1 is None and blkSize2 is None:  # wrtFilter1 & wrtFilter2 dictate block
                 #Compute all requested derivative columns at once
                 if deriv1MxToFill is not None:
-                    self.DM_fill_dprobs(deriv1MxToFill, felInds, 0, evalSubTree, wrtSlice1, mySubComm)
+                    self._fill_dprobs_block(deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1, mySubComm)
                 if deriv2MxToFill is not None:
                     if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
                         deriv2MxToFill[:, :] = deriv1MxToFill
                     else:
-                        self.DM_fill_dprobs(deriv2MxToFill, felInds, 0, evalSubTree, wrtSlice2, mySubComm)
+                        self._fill_dprobs_block(deriv2MxToFill, felInds, None, evalSubTree, wrtSlice2, mySubComm)
                         
-                self.DM_fill_hprobs(mxToFill, felInds, 0, 0, evalSubTree, wrtSlice1, wrtSlice2, mySubComm)
+                self._fill_hprobs_block(mxToFill, felInds, None, None, evalSubTree,
+                                        wrtSlice1, wrtSlice2, mySubComm)
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrtFilter1 is None and wrtFilter2 is None)  # cannot specify both wrtFilter and blkSize
@@ -1379,14 +1393,13 @@ class MapForwardSimulator(ForwardSimulator):
                 for iBlk1 in myBlk1Indices:
                     paramSlice1 = blocks1[iBlk1]
                     if derivMxToFill is not None:
-                        assert(paramSlice1.step is None)  # so we can just use .start as an offset below
-                        self.DM_fill_dprobs(derivMxToFill, felInds, paramSlice1.start, evalSubTree,
-                                            paramSlice1, blk1Comm)
+                        self._fill_dprobs_block(derivMxToFill, felInds, paramSlice1, evalSubTree,
+                                                paramSlice1, blk1Comm)
                     
                     for iBlk2 in myBlk2Indices:
                         paramSlice2 = blocks2[iBlk2]                        
-                        self.DM_fill_hprobs(mxToFill, felInds, paramSlice1.start, paramSlice2.start, evalSubTree,
-                                            paramSlice1, paramSlice2, blk2Comm)
+                        self._fill_hprobs_block(mxToFill, felInds, paramSlice1, paramSlice2, evalSubTree,
+                                                paramSlice1, paramSlice2, blk2Comm)
 
                     #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
                     _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds, blocks1[iBlk1]],

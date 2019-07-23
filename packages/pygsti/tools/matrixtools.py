@@ -956,7 +956,7 @@ def _fas(a, inds, rhs, add=False):
         single_int_inds = []  # for Cython, a and rhs must have the same
         # number of dims.  This keeps track of single-ints
         for ii, i in enumerate(inds):
-            if isinstance(i, int):
+            if isinstance(i, (int, _np.int64)):
                 b.append(_np.array([i], _np.int64))
                 single_int_inds.append(ii)
             elif isinstance(i, slice):
