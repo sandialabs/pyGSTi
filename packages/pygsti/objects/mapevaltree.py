@@ -40,6 +40,7 @@ class MapEvalTree(EvalTree):
 
           Parameters
           ----------
+          TODO: docstring update needed
           circuit_list : list of (tuples or Circuits)
               A list of tuples of operation labels or Circuit
               objects, specifying the operation sequences that

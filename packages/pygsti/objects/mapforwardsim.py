@@ -446,18 +446,6 @@ class MapForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
-    def _setParamBlockSize(self, wrtFilter, wrtBlockSize, comm):
-        if wrtFilter is None:
-            blkSize = wrtBlockSize  # could be None
-            if (comm is not None) and (comm.Get_size() > 1):
-                comm_blkSize = self.Np / comm.Get_size()
-                blkSize = comm_blkSize if (blkSize is None) \
-                    else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-        else:
-            blkSize = None  # wrtFilter dictates block
-        return blkSize
-
-
     def OLD_bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                             comm=None):
 
@@ -502,9 +490,9 @@ class MapForwardSimulator(ForwardSimulator):
         if param_indices2 is None:
             param_indices2 = list(range(calc.Np))
         if dest_param_indices1 is None:
-            dest_param_indices1 = list(range(calc.Np))
+            dest_param_indices1 = list(range(_slct.length(param_indices1)))
         if dest_param_indices2 is None:
-            dest_param_indices1 = list(range(calc.Np))
+            dest_param_indices1 = list(range(_slct.length(param_indices2)))
 
         param_indices1 = _slct.as_array(param_indices1)
         dest_param_indices1 = _slct.as_array(dest_param_indices1)
@@ -1276,7 +1264,7 @@ class MapForwardSimulator(ForwardSimulator):
                     replib.DM_mapfill_dprobs_block(self, deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1, mySubComm)
                 if deriv2MxToFill is not None:
                     if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
-                        deriv2MxToFill[:, :] = deriv1MxToFill
+                        deriv2MxToFill[felInds, :] = deriv1MxToFill[felInds, :]
                     else:
                         replib.DM_mapfill_dprobs_block(self, deriv2MxToFill, felInds, None, evalSubTree, wrtSlice2, mySubComm)
                         
@@ -1331,8 +1319,8 @@ class MapForwardSimulator(ForwardSimulator):
 
                 #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
                 # will always be the same whenever they're desired (they'll both cover the entire range of params)
-                if deriv1MxToFill is not None: deriv1MxToFill[:, :] = derivMxToFill[:, :]
-                if deriv2MxToFill is not None: deriv2MxToFill[:, :] = derivMxToFill[:, :]
+                if deriv1MxToFill is not None: deriv1MxToFill[felInds, :] = derivMxToFill[felInds, :]
+                if deriv2MxToFill is not None: deriv2MxToFill[felInds, :] = derivMxToFill[felInds, :]
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]

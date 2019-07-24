@@ -506,6 +506,17 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("construct_evaltree(...) is not implemented!")
 
+    def _setParamBlockSize(self, wrtFilter, wrtBlockSize, comm):
+        if wrtFilter is None:
+            blkSize = wrtBlockSize  # could be None
+            if (comm is not None) and (comm.Get_size() > 1):
+                comm_blkSize = self.Np / comm.Get_size()
+                blkSize = comm_blkSize if (blkSize is None) \
+                    else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
+        else:
+            blkSize = None  # wrtFilter dictates block
+        return blkSize
+
     def _fill_result_tuple(self, result_tup, evalTree,
                            param_slice1, param_slice2, calc_and_fill_fn):
         """

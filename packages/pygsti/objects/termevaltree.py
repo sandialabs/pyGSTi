@@ -49,6 +49,7 @@ class TermEvalTree(EvalTree):
 
         Parameters
         ----------
+        TODO: docstring update needed
         circuit_list : list of (tuples or Circuits)
             A list of tuples of operation labels or Circuit
             objects, specifying the operation sequences that
@@ -74,10 +75,10 @@ class TermEvalTree(EvalTree):
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
         circuit_list = [tuple(opstr) for opstr in simplified_circuit_list.keys()]
-        self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
-        self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
+        self.simplified_circuit_elabels = list(simplified_circuit_list.values())
+        self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
+        #UNNEEDED? self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
@@ -85,34 +86,31 @@ class TermEvalTree(EvalTree):
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
         del self[:]  # clear self (a list)
-
-        #Final Indices
-        # The first len(circuit_list) elements of the tree correspond
-        # to computing the operation sequences requested in circuit_list.  Doing
-        # this make later extraction much easier (views can be used), but
-        # requires a non-linear order of evaluation, held in the eval_order list.
-        self.eval_order = []
-
-        #initialize self as a list of Nones
+        self[:] = circuit_list
         self.num_final_strs = len(circuit_list)
-        self[:] = [None] * self.num_final_strs
 
-        #Sort the operation sequences "alphabetically" - not needed now, but may
-        # be useful later for prefixing...
-        sorted_strs = sorted(list(enumerate(circuit_list)), key=lambda x: x[1])
+        #DON'T sort b/c then we'd need to keep track of element ordering
+        # so that we can build arrays of probabilities for all the elements
+        # in the appropriate order.
+        # FUTURE TODO: clean up this class to take advantage of the fact that the evaluation order is linear.
 
-        for k, (iStr, circuit) in enumerate(sorted_strs):
-            #Add info for this string
-            self[iStr] = circuit
-            self.eval_order.append(iStr)
+        # REMOVE #Evaluate the operation sequences "alphabetically" - not needed now, but may
+        # REMOVE # be useful later for prefixing?
+        # REMOVE sorted_strs = sorted(list(enumerate(circuit_list)), key=lambda x: x[1])
+        # REMOVE self.eval_order = [iStr for (iStr, circuit) in sorted_strs]
+
+        self.eval_order = list(range(self.num_final_strs))
 
         #Storage for polynomial expressions for probabilities and
         # their derivatives
-        self.raw_polys = {}
-        self.all_p_polys = {}
-        self.p_polys = {}
-        self.dp_polys = {}
-        self.hp_polys = {}
+
+        #self.raw_polys = {}
+        #self.all_p_polys = {}
+        #self.p_polys = {}
+        #self.dp_polys = {}
+        #self.hp_polys = {}
+        self.percircuit_p_polys = {}
+        self.merged_compact_polys = None
         self.repcache = {}
 
         self.myFinalToParentFinalMap = None  # this tree has no "children",
@@ -355,10 +353,12 @@ class TermEvalTree(EvalTree):
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
             subTree[:] = [None] * len(parentIndices)
-            subTree.all_p_polys = {}
-            subTree.p_polys = {}
-            subTree.dp_polys = {}
-            subTree.hp_polys = {}
+            # REMOVE subTree.all_p_polys = {}
+            # REMOVE subTree.p_polys = {}
+            # REMOVE subTree.dp_polys = {}
+            # REMOVE subTree.hp_polys = {}
+            subTree.percircuit_p_polys = {}
+            subTree.merged_compact_polys = None
             subTree.repcache = {}
 
             for ik in fullEvalOrder:  # includes any initial indices
@@ -369,22 +369,22 @@ class TermEvalTree(EvalTree):
                 subTree[ik] = circuit
 
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
-            subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[kk]
+            subTree.simplified_circuit_elabels = [self.simplified_circuit_elabels[kk]
                                                      for kk in _slct.indices(subTree.myFinalToParentFinalMap)]
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             final_el_startstops = []; i = 0
-            for spamTuples in parentTree.simplified_circuit_spamTuples:
-                final_el_startstops.append((i, i + len(spamTuples)))
-                i += len(spamTuples)
+            for elabels in parentTree.simplified_circuit_elabels:
+                final_el_startstops.append((i, i + len(elabels)))
+                i += len(elabels)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
                 [_np.arange(*final_el_startstops[kk])
                  for kk in _slct.indices(subTree.myFinalToParentFinalMap)])
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in simplified_circuit_spamTuples)
 
-            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
-            subTree.recompute_spamtuple_indices(bLocal=False)
+            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_elabels])
+            #NEEDED? subTree.recompute_spamtuple_indices(bLocal=False)
 
             subTree.opLabels = self._get_opLabels(subTree.generate_circuit_list(permute=False))
 
@@ -408,21 +408,9 @@ class TermEvalTree(EvalTree):
         cpy = self._copyBase(TermEvalTree(self[:]))
         return cpy
 
-    def compute_p_pruned_polys(self,
-                               calc,
-                               rholabel,
-                               elabels,
-                               comm,
-                               memLimit,
-                               pathmagnitude_gap,
-                               min_term_mag,
-                               max_paths,
-                               recalc_threshold=True):
+    def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
+                             min_term_mag, max_paths, recalc_threshold=True):
 
-        elabels = tuple(elabels)  # make sure this is hashable
-        circuit_list = self.generate_circuit_list(permute=False)
-
-        polys = []
         tot_npaths = 0
         tot_target_sopm = 0; tot_achieved_sopm = 0  # "sum of path magnitudes"
         repcache = {}
@@ -434,15 +422,22 @@ class TermEvalTree(EvalTree):
         #    op = calc.sos.get_operation(glbl)
         #    tot = op.get_total_term_magnitude()
         #    print(glbl, "op=", str(type(op)), " mag=", tot)
-            
+        
         #opcache = {}
-        for opstr in circuit_list:
-            if (rholabel, elabels, opstr) in self.p_polys:
-                current_threshold, current_polys = self.p_polys[(rholabel, elabels, opstr)]
+        all_compact_polys = []  # holds one compact polynomial per final *element*
+        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+            circuit = self[i]
+
+            if circuit in self.percircuit_p_polys:
+                current_threshold, compact_polys = self.percircuit_p_polys[circuit]
             else:
-                current_threshold, current_polys = None, None
+                current_threshold, compact_polys = None, None
 
             if current_threshold is None or recalc_threshold:
+                rholabel = circuit[0]
+                opstr = circuit[1:]
+                elabels = self.simplified_circuit_elabels[i]
+                
                 raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
                     calc.prs_as_pruned_polyreps(rholabel,
                                                 elabels,
@@ -462,36 +457,31 @@ class TermEvalTree(EvalTree):
                 target_sopm = 0
                 achieved_sopm = 0
 
-            if raw_polyreps is None:  # signal to use existing current_cache
-                compact_polys = current_polys
-            else:
+            if raw_polyreps is not None:  # otherwise use existing compact_polys
                 compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
-                self.p_polys[(rholabel, elabels, opstr)] = (threshold, compact_polys)
-            polys.append(compact_polys)
+                self.percircuit_p_polys[opstr] = (threshold, compact_polys)
+                
+            all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
             tot_npaths += npaths
             tot_target_sopm += target_sopm
             tot_achieved_sopm += achieved_sopm
 
-        ret = []
-        for i, elabel in enumerate(elabels):
-            tapes = [p[i] for p in polys]
-            vtape = _np.concatenate([t[0] for t in tapes])
-            ctape = _np.concatenate([t[1] for t in tapes])
-            ret.append((vtape, ctape))  # Note: ctape should always be complex here
+        tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
 
         if tot_npaths > 0:
             #if comm is None or comm.Get_rank() == 0:
             rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
-            nC = len(circuit_list)
+            nC = self.num_final_strings()
             print("%sPruned path-integral: kept %d paths w/magnitude %.4g (target=%.4g, #circuits=%d)" %
                   (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC))
             print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
                   (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
-        self.all_p_polys[(rholabel, elabels)] = ret  # just cache this
-        #return ret
+        self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
-    def compute_p_polys(self, calc, rholabel, elabels, comm):
+    def cache_p_polys(self, calc, comm):
         """
         Get the compact-form polynomials that evaluate to the probabilities
         corresponding to all this tree's operation sequences sandwiched between
@@ -503,179 +493,162 @@ class TermEvalTree(EvalTree):
         calc : TermForwardSimulator
             A calculator object for computing the raw polynomials (if necessary)
 
-        rholabel : Label
-            The (simplified) state preparation label.
-
-        elabels : list
-            A list of (simplified) POVM effect labels.
-
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
         Returns
         -------
-        list
-            A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
-            2-tuple containing the concatenated compact-form tapes of all N
-            polynomials for that (rholabel,elabel) pair, where N is the number
-            of operation sequences in this tree.
+        None
         """
-        #Check if everything is computed already
-        if all([((rholabel, elabel) in self.p_polys) for elabel in elabels]):
-            return [self.p_polys[(rholabel, elabel)] for elabel in elabels]
-
         #Otherwise compute poly
-        polys = [calc.prs_as_compact_polys(rholabel, elabels, opstr, comm)
-                 for opstr in self.generate_circuit_list(permute=False)]
+        all_compact_polys = []  # holds one compact polynomial per final *element*
+        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+            circuit = self[i]
 
-        ret = []
-        for i, elabel in enumerate(elabels):
-            if (rholabel, elabel) not in self.p_polys:
-                tapes = [p[i] for p in polys]
-                vtape = _np.concatenate([t[0] for t in tapes])
-                ctape = _np.concatenate([t[1] for t in tapes])
-                self.p_polys[(rholabel, elabel)] = (vtape, _np.asarray(ctape, complex))
-                # create ctape *complex* so they're all the same type?
-            ret.append(self.p_polys[(rholabel, elabel)])
+            if circuit in self.percircuit_p_polys:
+                compact_polys = self.percircuit_p_polys[circuit]
+            else:
+                rholabel = circuit[0]
+                opstr = circuit[1:]
+                elabels = self.simplified_circuit_elabels[i]
+                compact_polys = calc.prs_as_compact_polys(rholabel, elabels, opstr, comm)
+                
+            all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
+            
+        tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
 
-        #OLD - using raw polys via get_raw_polys
-        #ret = []
-        #polys = self.get_raw_polys(calc, rholabel, elabels, comm)
-        #for i,elabel in enumerate(elabels):
-        #    if (rholabel,elabel) not in self.p_polys:
-        #        tapes = [ poly.compact() for poly in polys[i] ]
-        #        vtape = _np.concatenate( [ t[0] for t in tapes ] )
-        #        ctape = _np.concatenate( [ t[1] for t in tapes ] )
-        #        self.p_polys[ (rholabel,elabel) ] = (vtape, ctape)
-        #    ret.append( self.p_polys[ (rholabel,elabel) ] )
+        self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
-        self.all_p_polys[(rholabel, elabels)] = ret  # just cache this
-
-    def get_dp_polys(self, calc, rholabel, elabels, wrtSlice, comm):
-        """
-        Similar to :method:`get_p_polys` except returns the compact-form
-        polynomials that evaluate to the Jacobian of the probabilities
-        with respect to the parameters given by `wrtSlice`.  The result is
-        cached to speed up subsequent calls.
-
-        Parameters
-        ----------
-        calc : TermForwardSimulator
-            A calculator object for computing the raw polynomials (if necessary)
-
-        rholabel : Label
-            The (simplified) state preparation label.
-
-        elabels : list
-            A list of (simplified) POVM effect labels.
-
-        wrtSlice : slice
-            The parameter slice to differentiate with respect to.
-
-        comm : mpi4py.MPI.Comm
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        Returns
-        -------
-        list
-            A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
-            2-tuple containing the concatenated compact-form tapes of all N*K
-            polynomials for that (rholabel,elabel) pair, where N is the number
-            of operation sequences in this tree and K is the number of parameters
-            we've differentiated with respect to (~`len(wrtSlice)`).
-        """
-        slcTup = (wrtSlice.start, wrtSlice.stop, wrtSlice.step) \
-            if (wrtSlice is not None) else (None, None, None)
-        slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0, calc.Np))
-        slcInds = _np.ascontiguousarray(slcInds, _np.int64)  # for Cython arg mapping
-
-        #Check if everything is computed already
-        if all([((rholabel, elabel, slcTup) in self.dp_polys) for elabel in elabels]):
-            return [self.dp_polys[(rholabel, elabel, slcTup)] for elabel in elabels]
-
-        #print("*** getDP POLYS ***"); t0= _time.time()
-
-        #Otherwise compute poly
-        ret = []
-        compact_polys = self.get_p_polys(calc, rholabel, elabels, comm)
-        for i, elabel in enumerate(elabels):
-            if (rholabel, elabel, slcTup) not in self.dp_polys:
-                vtape, ctape = _compact_deriv(compact_polys[i][0], compact_polys[i][1], slcInds)
-                self.dp_polys[(rholabel, elabel, slcTup)] = (vtape, ctape)
-            ret.append(self.dp_polys[(rholabel, elabel, slcTup)])
-
-        #OLD - using raw polys
-        #polys = self.get_raw_polys(calc, rholabel, elabels, comm)
-        #for i,elabel in enumerate(elabels):
-        #    if (rholabel,elabel,slcTup) not in self.dp_polys:
-        #        tapes = [ p.deriv(k).compact() for p in polys[i] for k in slcInds ]
-        #        vtape = _np.concatenate( [ t[0] for t in tapes ] )
-        #        ctape = _np.concatenate( [ t[1] for t in tapes ] )
-        #        self.dp_polys[ (rholabel,elabel,slcTup) ] = (vtape, ctape)
-        #    ret.append( self.dp_polys[ (rholabel,elabel,slcTup) ] )
-
-        #print("*** DONE DP POLYS in %.1fs ***" % (_time.time()-t0))
-        return ret
-
-    def get_hp_polys(self, calc, rholabel, elabels, wrtSlice1, wrtSlice2, comm):
-        """
-        Similar to :method:`get_p_polys` except returns the compact-form
-        polynomials that evaluate to the Hessian of the probabilities
-        with respect to the parameters given by `wrtSlice1` and `wrtSlice2`.
-        The result is cached to speed up subsequent calls.
-
-        Parameters
-        ----------
-        calc : TermForwardSimulator
-            A calculator object for computing the raw polynomials (if necessary)
-
-        rholabel : Label
-            The (simplified) state preparation label.
-
-        elabels : list
-            A list of (simplified) POVM effect labels.
-
-        wrtSlice1, wrtSlice2 : slice
-            The parameter slices to differentiate with respect to.
-
-        comm : mpi4py.MPI.Comm
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        Returns
-        -------
-        list
-            A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
-            2-tuple containing the concatenated compact-form tapes of all N*K1*K2
-            polynomials for that (rholabel,elabel) pair, where N is the number
-            of operation sequences in this tree and K1,K2 are the number of parameters
-            we've differentiated with respect to.
-        """
-        slcTup1 = (wrtSlice1.start, wrtSlice1.stop, wrtSlice1.step) \
-            if (wrtSlice1 is not None) else (None, None, None)
-        slcTup2 = (wrtSlice2.start, wrtSlice2.stop, wrtSlice2.step) \
-            if (wrtSlice2 is not None) else (None, None, None)
-        slcInds1 = _slct.indices(wrtSlice1 if (wrtSlice1 is not None) else slice(0, calc.Np))
-        slcInds2 = _slct.indices(wrtSlice2 if (wrtSlice2 is not None) else slice(0, calc.Np))
-
-        #Check if everything is computed already
-        if all([((rholabel, elabel, slcTup1, slcTup2) in self.hp_polys) for elabel in elabels]):
-            return [self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] for elabel in elabels]
-
-        #Otherwise compute poly -- FUTURE: do this faster w/
-        # some self.prs_as_polys(rholabel, elabels, circuit, ...) function
-        #TODO: add use of caches & compact polys here -- this fn is OUTDATED
-        ret = []
-        for elabel in elabels:
-            if (rholabel, elabel, slcTup1, slcTup2) not in self.hp_polys:
-                polys = [calc.pr_as_poly((rholabel, elabel), opstr, comm)
-                         for opstr in self.generate_circuit_list(permute=False)]
-                dpolys = [p.deriv(k) for p in polys for k in slcInds2]
-                tapes = [p.deriv(k).compact() for p in dpolys for k in slcInds1]
-                vtape = _np.concatenate([t[0] for t in tapes])
-                ctape = _np.concatenate([t[1] for t in tapes])
-                self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] = (vtape, ctape)
-            ret.append(self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)])
-        return ret
+    #UNUSED - could perhaps use these to cache derivative polys in the future so TermForwardSimulator
+    # doesn't need to always compute them, but this would typically be needed for many-qubit cases
+    # when there wouldn't be adequate storage to hold the cached polys... so probably TODO REMOVE this.
+    #def get_dp_polys(self, calc, wrtSlice, comm):
+    #    """
+    #    Similar to :method:`get_p_polys` except returns the compact-form
+    #    polynomials that evaluate to the Jacobian of the probabilities
+    #    with respect to the parameters given by `wrtSlice`.  The result is
+    #    cached to speed up subsequent calls.
+    #
+    #    Parameters
+    #    ----------
+    #    calc : TermForwardSimulator
+    #        A calculator object for computing the raw polynomials (if necessary)
+    #
+    #    rholabel : Label
+    #        The (simplified) state preparation label.
+    #
+    #    elabels : list
+    #        A list of (simplified) POVM effect labels.
+    #
+    #    wrtSlice : slice
+    #        The parameter slice to differentiate with respect to.
+    #
+    #    comm : mpi4py.MPI.Comm
+    #        When not None, an MPI communicator for distributing the computation
+    #        across multiple processors.
+    #
+    #    Returns
+    #    -------
+    #    list
+    #        A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
+    #        2-tuple containing the concatenated compact-form tapes of all N*K
+    #        polynomials for that (rholabel,elabel) pair, where N is the number
+    #        of operation sequences in this tree and K is the number of parameters
+    #        we've differentiated with respect to (~`len(wrtSlice)`).
+    #    """
+    #    slcTup = (wrtSlice.start, wrtSlice.stop, wrtSlice.step) \
+    #        if (wrtSlice is not None) else (None, None, None)
+    #    slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0, calc.Np))
+    #    slcInds = _np.ascontiguousarray(slcInds, _np.int64)  # for Cython arg mapping
+    #
+    #    #Check if everything is computed already
+    #    if all([((rholabel, elabel, slcTup) in self.dp_polys) for elabel in elabels]):
+    #        return [self.dp_polys[(rholabel, elabel, slcTup)] for elabel in elabels]
+    #
+    #    #print("*** getDP POLYS ***"); t0= _time.time()
+    #
+    #    #Otherwise compute poly
+    #    ret = []
+    #    compact_polys = self.get_p_polys(calc, rholabel, elabels, comm)
+    #    for i, elabel in enumerate(elabels):
+    #        if (rholabel, elabel, slcTup) not in self.dp_polys:
+    #            vtape, ctape = _compact_deriv(compact_polys[i][0], compact_polys[i][1], slcInds)
+    #            self.dp_polys[(rholabel, elabel, slcTup)] = (vtape, ctape)
+    #        ret.append(self.dp_polys[(rholabel, elabel, slcTup)])
+    #
+    #    #OLD - using raw polys
+    #    #polys = self.get_raw_polys(calc, rholabel, elabels, comm)
+    #    #for i,elabel in enumerate(elabels):
+    #    #    if (rholabel,elabel,slcTup) not in self.dp_polys:
+    #    #        tapes = [ p.deriv(k).compact() for p in polys[i] for k in slcInds ]
+    #    #        vtape = _np.concatenate( [ t[0] for t in tapes ] )
+    #    #        ctape = _np.concatenate( [ t[1] for t in tapes ] )
+    #    #        self.dp_polys[ (rholabel,elabel,slcTup) ] = (vtape, ctape)
+    #    #    ret.append( self.dp_polys[ (rholabel,elabel,slcTup) ] )
+    #
+    #    #print("*** DONE DP POLYS in %.1fs ***" % (_time.time()-t0))
+    #    return ret
+    #
+    #def get_hp_polys(self, calc, rholabel, elabels, wrtSlice1, wrtSlice2, comm):
+    #    """
+    #    Similar to :method:`get_p_polys` except returns the compact-form
+    #    polynomials that evaluate to the Hessian of the probabilities
+    #    with respect to the parameters given by `wrtSlice1` and `wrtSlice2`.
+    #    The result is cached to speed up subsequent calls.
+    #
+    #    Parameters
+    #    ----------
+    #    calc : TermForwardSimulator
+    #        A calculator object for computing the raw polynomials (if necessary)
+    #
+    #    rholabel : Label
+    #        The (simplified) state preparation label.
+    #
+    #    elabels : list
+    #        A list of (simplified) POVM effect labels.
+    #
+    #    wrtSlice1, wrtSlice2 : slice
+    #        The parameter slices to differentiate with respect to.
+    #
+    #    comm : mpi4py.MPI.Comm
+    #        When not None, an MPI communicator for distributing the computation
+    #        across multiple processors.
+    #
+    #    Returns
+    #    -------
+    #    list
+    #        A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
+    #        2-tuple containing the concatenated compact-form tapes of all N*K1*K2
+    #        polynomials for that (rholabel,elabel) pair, where N is the number
+    #        of operation sequences in this tree and K1,K2 are the number of parameters
+    #        we've differentiated with respect to.
+    #    """
+    #    slcTup1 = (wrtSlice1.start, wrtSlice1.stop, wrtSlice1.step) \
+    #        if (wrtSlice1 is not None) else (None, None, None)
+    #    slcTup2 = (wrtSlice2.start, wrtSlice2.stop, wrtSlice2.step) \
+    #        if (wrtSlice2 is not None) else (None, None, None)
+    #    slcInds1 = _slct.indices(wrtSlice1 if (wrtSlice1 is not None) else slice(0, calc.Np))
+    #    slcInds2 = _slct.indices(wrtSlice2 if (wrtSlice2 is not None) else slice(0, calc.Np))
+    #
+    #    #Check if everything is computed already
+    #    if all([((rholabel, elabel, slcTup1, slcTup2) in self.hp_polys) for elabel in elabels]):
+    #        return [self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] for elabel in elabels]
+    #
+    #    #Otherwise compute poly -- FUTURE: do this faster w/
+    #    # some self.prs_as_polys(rholabel, elabels, circuit, ...) function
+    #    #TODO: add use of caches & compact polys here -- this fn is OUTDATED
+    #    ret = []
+    #    for elabel in elabels:
+    #        if (rholabel, elabel, slcTup1, slcTup2) not in self.hp_polys:
+    #            polys = [calc.pr_as_poly((rholabel, elabel), opstr, comm)
+    #                     for opstr in self.generate_circuit_list(permute=False)]
+    #            dpolys = [p.deriv(k) for p in polys for k in slcInds2]
+    #            tapes = [p.deriv(k).compact() for p in dpolys for k in slcInds1]
+    #            vtape = _np.concatenate([t[0] for t in tapes])
+    #            ctape = _np.concatenate([t[1] for t in tapes])
+    #            self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] = (vtape, ctape)
+    #        ret.append(self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)])
+    #    return ret
