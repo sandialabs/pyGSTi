@@ -1655,7 +1655,7 @@ def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTr
     cacheSize = evalTree.cache_size()
 
     EVecs = calc._Es_from_labels(evalTree.elabels)
-    elabels_as_outcomes = [ (_gt.eLabelToOutcome(e),) for e in evalTree.elabels]
+    elabels_as_outcomes = [(_gt.eLabelToOutcome(e),) for e in evalTree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
@@ -1727,8 +1727,8 @@ def DM_mapfill_TDdchi2_terms(calc, mxToFill, dest_indices, dest_param_indices, n
         DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, n_outcomes,
                                 evTree, dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
 
-    return DM_mapfill_timedep_terms(calc, mxToFill, dest_indices, dest_param_indices,
-                                    num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
+    return DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices,
+                                     num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
 
 
 def DM_mapfill_TDdloglpp_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes,
@@ -1738,12 +1738,12 @@ def DM_mapfill_TDdloglpp_terms(calc, mxToFill, dest_indices, dest_param_indices,
         DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, n_outcomes,
                                   evTree, dataset_rows, minProbClip, radius, probClipInterval, fillComm)
 
-    return DM_mapfill_timedep_terms(calc, mxToFill, dest_indices, dest_param_indices,
-                                    num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
+    return DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices,
+                                     num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
 
 
-def DM_mapfill_timedep_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree,
-                             dataset_rows, fillfn, wrtSlice, comm):
+def DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree,
+                              dataset_rows, fillfn, wrtSlice, comm):
 
     eps = 1e-7  # hardcoded?
 
