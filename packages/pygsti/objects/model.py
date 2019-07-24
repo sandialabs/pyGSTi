@@ -1126,6 +1126,11 @@ class OpModel(Model):
         circuit : Circuit
             The operation sequence to simplify
 
+        dataset : DataSet, optional
+            If not None, restrict what is simplified to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
         Returns
         -------
         TODO: docstring - update to raw_elabels_dict
@@ -1144,11 +1149,6 @@ class OpModel(Model):
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
-
-        dataset : DataSet, optional
-            If not None, restrict what is simplified to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
         """
         raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit], dataset)
         assert(len(outcomes[0]) == nEls)

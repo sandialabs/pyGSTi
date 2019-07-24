@@ -884,9 +884,9 @@ class MapForwardSimulator(ForwardSimulator):
 
             if prMxToFill is not None:
                 replib.DM_mapfill_probs_block(self, prMxToFill, felInds, evalSubTree, mySubComm)
-            
+
             #Set wrtBlockSize to use available processors if it isn't specified
-            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, comm)
+            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, mySubComm)
 
             if blkSize is None:  # wrtFilter gives entire computed parameter block
                 #Compute all requested derivative columns at once
@@ -1512,24 +1512,14 @@ class MapForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
             num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #Fill cache info
-                chi2Cache = replib.DM_compute_TDchi2_cache(self, rholabel, elabels, num_outcomes,
-                                                           evalSubTree, dataset_rows, minProbClipForWeighting,
-                                                           probClipInterval, mySubComm)
-
-                #use cached data to final values
-                ps = evalSubTree.final_view(chi2Cache, axis=0)  # ( nCircuits, len(elabels))
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds], ps[gInds, i], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
-
+            replib.DM_mapfill_TDchi2_terms(self, mxToFill, felInds, num_outcomes,
+                                           evalSubTree, dataset_rows, minProbClipForWeighting,
+                                           probClipInterval, mySubComm)
+            
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
@@ -1593,13 +1583,15 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dchi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
-            return replib.DM_compute_TDdchi2_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
-                                                   minProbClipForWeighting, probClipInterval, wrtSlice, fillComm)
+        def dchi2(mxToFill, dest_indices, dest_param_indices, num_tot_outcomes, evalSubTree,
+                  dataset_rows, wrtSlice, fillComm):
+            replib.DM_mapfill_TDdchi2_terms(self, mxToFill, dest_indices, dest_param_indices, num_tot_outcomes,
+                                            evalSubTree, dataset_rows, minProbClipForWeighting,
+                                            probClipInterval, wrtSlice, fillComm)
 
-        def chi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
-            return replib.DM_compute_TDchi2_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
-                                                  minProbClipForWeighting, probClipInterval, fillComm)
+        def chi2(mxToFill, dest_indices, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_mapfill_TDchi2_terms(self, mxToFill, dest_indices, num_tot_outcomes, evalSubTree,
+                                                  dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
 
         return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
                                             mxToFill, dchi2, chi2MxToFill, chi2,
@@ -1668,23 +1660,13 @@ class MapForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
             num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #Fill cache info
-                loglCache = replib.DM_compute_TDloglpp_cache(self, rholabel, elabels, num_outcomes,
-                                                             evalSubTree, dataset_rows, minProbClip,
-                                                             radius, probClipInterval, mySubComm)
-
-                #use cached data to final values
-                logl = evalSubTree.final_view(loglCache, axis=0)  # ( nCircuits, len(elabels))
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds], logl[gInds, i], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
+            replib.DM_mapfill_TDloglpp_terms(self, mxToFill, felInds, num_outcomes,
+                                             evalSubTree, dataset_rows, minProbClip,
+                                             radius, probClipInterval, mySubComm)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -1749,13 +1731,14 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dloglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
-            return replib.DM_compute_TDdloglpp_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree,
-                                                     dataset_rows, minProbClip, radius, probClipInterval,
-                                                     wrtSlice, fillComm)
+        def dloglpp(mxToFill, dest_indices, dest_param_indices, num_tot_outcomes, evalSubTree,
+                    dataset_rows, wrtSlice, fillComm):
+            return replib.DM_mapfill_TDdloglpp_terms(self, mxToFill, dest_indices, dest_param_indices,
+                                                     num_tot_outcomes, evalSubTree, dataset_rows, minProbClip,
+                                                     radius, probClipInterval, wrtSlice, fillComm)
 
-        def loglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
-            return replib.DM_compute_TDloglpp_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree,
+        def loglpp(mxToFill, dest_indices, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_mapfill_TDloglpp_terms(self, mxToFill, dest_indices, num_tot_outcomes, evalSubTree,
                                                     dataset_rows, minProbClip, radius, probClipInterval, fillComm)
 
         return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
@@ -1764,7 +1747,7 @@ class MapForwardSimulator(ForwardSimulator):
 
     #A generic function - move to base class?
     def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
-                                derivMxToFill, deriv_fn, mxToFill=None, fn=None,
+                                derivMxToFill, deriv_fill_fn, mxToFill=None, fill_fn=None,
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
         """
@@ -1878,45 +1861,16 @@ class MapForwardSimulator(ForwardSimulator):
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
             num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice = slice(None)
-            fillComm = mySubComm  # comm used by calc_and_fill
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #tm = _time.time()
-
-                if mxToFill is not None:
-                    cache = fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows, fillComm)
-                    cache = evalSubTree.final_view(cache, axis=0)  # ( nCircuits, len(elabels))
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(mxToFill, [fInds], cache[gInds, i], add=sumInto)
-
-                #Fill cache info
-                dcache = deriv_fn(rholabel, elabels, num_outcomes, evalSubTree,
-                                  dataset_rows, paramSlice, fillComm)
-                dcache = evalSubTree.final_view(dcache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(derivMxToFill, [fInds, pslc1], dcache[gInds, i], add=sumInto)
-                #profiler.add_time("bulk_fill_timedep_dchi2: calc_and_fill", tm)
+            if mxToFill is not None:
+                fill_fn(mxToFill, felInds, num_outcomes, evalSubTree, dataset_rows, mySubComm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-            else:
-                blkSize = None  # wrtFilter dictates block
+            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, mySubComm)
 
-            if blkSize is None:
+            if blkSize is None:  # wrtFilter gives entire computed parameter block
                 #Fill derivative cache info
-                paramSlice = wrtSlice  # specifies which deriv cols calc_and_fill computes
-
-                #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho((mxToFill, derivMxToFill), evalSubTree,
-                                                   slice(None), slice(None), calc_and_fill)
+                deriv_fill_fn(mxToFill, felInds, None, num_outcomes, evalSubTree,
+                              dataset_rows, wrtSlice, mySubComm)
                 #profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
@@ -1932,13 +1886,11 @@ class MapForwardSimulator(ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than derivative columns(%d)!" % self.Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-                fillComm = blkComm  # comm used by calc_and_fill
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_result_tuple_collectrho(
-                        (derivMxToFill,), evalSubTree,
-                        blocks[iBlk], slice(None), calc_and_fill)
+                    deriv_fill_fn(mxToFill, felInds, paramSlice, num_outcomes, evalSubTree,
+                                  dataset_rows, paramSlice, mySubComm)
                     #profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results

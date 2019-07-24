@@ -1422,8 +1422,8 @@ def propagate_staterep(staterep, operationreps):
 
 
 def DM_mapfill_probs_block(calc, mxToFill, dest_indices, evalTree, comm):
+    
     dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
-
     cacheSize = evalTree.cache_size()
 
     #Create rhoCache
@@ -1593,7 +1593,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     return dpr_cache
 
 
-def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+def DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows,
                             minProbClipForWeighting, probClipInterval, comm):
 
     def obj_fn(p, f, Ni, N, omitted_p):
@@ -1606,10 +1606,10 @@ def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dat
             v = _np.sqrt(v**2 + N * omitted_p**2 / omitted_cp)
         return v  # sqrt(the objective function term)  (the qty stored in cache)
 
-    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+    return DM_mapfill_TDterms(calc, obj_fn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm)
 
 
-def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+def DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows,
                               minProbClip, radius, probClipInterval, comm):
 
     min_p = minProbClip; a = radius
@@ -1646,32 +1646,37 @@ def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, d
 
         return v  # objective function term (the qty stored in cache)
 
-    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+    return DM_mapfill_TDterms(calc, obj_fn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm)
 
 
-def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm):
+def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm):
 
+    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = evalTree.cache_size()
-    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    ret = _np.zeros((len(evalTree), len(elabels)), 'd')  # zeros so we can just add contributions below
 
-    elabels_as_outcomes = [_gt.spamTupleToOutcome((rholabel, e)) for e in elabels]
+    EVecs = calc._Es_from_labels(evalTree.elabels)
+    elabels_as_outcomes = [_gt.eLabelToOutcome(e) for e in evalTree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
-    assert(cacheSize == 0)  # so all elements have None as start and all as remainder
+    assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
     #if clipTo is not None:
     #    _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
 
+    mxToFill[dest_indices] = 0.0  # reset destination (we sum into it)
+    
     #comm is currently ignored
     #TODO: if evalTree is split, distribute among processors
     for i in evalTree.get_evaluation_order():
         iStart, remainder, iCache = evalTree[i]
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
+        rholabel = remainder[0]; remainder = remainder[1:]
+        rhoVec = calc._rho_from_label(rholabel)
         datarow = dataset_rows[i]
         nTotOutcomes = num_outcomes[i]
 
         totalCnts = {}  # TODO defaultdict?
         lastInds = {}; outcome_cnts = {}
+        
         # consolidate multiple outcomes that occur at same time? or sort?
         for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):
             if t0 in totalCnts:
@@ -1679,6 +1684,10 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
             else:
                 totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
             lastInds[t0] = k
+
+        elbl_indices = evalTree.eLbl_indices_per_circuit[i]
+        final_indices = [dest_indices[j] for j in evalTree.final_indices_per_circuit[i]]
+        elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
 
         cur_probtotal = 0; last_t = 0
         # consolidate multiple outcomes that occur at same time? or sort?
@@ -1708,50 +1717,45 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
             omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
             # and cur_probtotal < 1.0?
 
-            ret[i, j] += objfn(p, f, Nreps, N, omitted_p)
-
-    return ret
+            mxToFill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
 
 
-def DM_compute_TDdchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+def DM_mapfill_TDdchi2_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree, dataset_rows,
                              minProbClipForWeighting, probClipInterval, wrtSlice, comm):
 
-    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
-        return DM_compute_TDchi2_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
-                                       minProbClipForWeighting, probClipInterval, fillComm)
+    def fillfn(mxToFill, dest_indices, n_outcomes, evTree, dataset_rows, fillComm):
+        DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, n_outcomes,
+                                evTree, dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
 
-    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                                     cachefn, wrtSlice, comm)
-
-
-def DM_compute_TDdloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                               minProbClip, radius, probClipInterval, wrtSlice, comm):
-
-    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
-        return DM_compute_TDloglpp_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
-                                         minProbClip, radius, probClipInterval, fillComm)
-
-    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                                     cachefn, wrtSlice, comm)
+    return DM_mapfill_timedep_terms(calc, mxToFill, dest_indices, dest_param_indices,
+                                    num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
 
 
-def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                              cachefn, wrtSlice, comm):
+def DM_mapfill_TDdloglpp_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes,
+                               evalTree, dataset_rows, minProbClip, radius, probClipInterval, wrtSlice, comm):
+
+    def fillfn(mxToFill, dest_indices, n_outcomes, evTree, dataset_rows, fillComm):
+        DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, n_outcomes,
+                                  evTree, dataset_rows, minProbClip, radius, probClipInterval, fillComm)
+
+    return DM_mapfill_timedep_terms(calc, mxToFill, dest_indices, dest_param_indices,
+                                    num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
+
+
+def DM_mapfill_timedep_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree,
+                             dataset_rows, fillfn, wrtSlice, comm):
 
     eps = 1e-7  # hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
     param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-    nDerivCols = len(param_indices)  # *all*, not just locally computed ones
 
-    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    cache = _np.empty((len(evalTree), len(elabels)), 'd')
-    dcache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
+    nEls = evalTree.num_final_elements()
+    vals = _np.empty(nEls, 'd')
+    vals2 = _np.empty(nEls, 'd')
+    assert(evalTree.cache_size() == 0)  # so all elements have None as start and remainder[0] is a prep label
 
-    cacheSize = evalTree.cache_size()
-    assert(cacheSize == 0)
-
-    cache = cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+    fillfn(vals, slice(0, nEls), num_outcomes, evalTree, dataset_rows, comm)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1770,21 +1774,19 @@ def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, d
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            calc.from_vector(vec)
-            dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
-                                    - cache) / eps
-    calc.from_vector(orig_vec)
+            calc.from_vector(vec, close=True)
+            fillfn(vals2, slice(0, nEls), num_outcomes, evalTree, dataset_rows, subComm)
+            _fas(mxToFill, [dest_indices, iFinal], (vals2 - vals) / eps)
+    calc.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
-    _mpit.gather_slices(all_slices, owners, dcache, [], axes=2, comm=comm)
+    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
 
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
     #      (calc.Np, calc.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-
-    return dcache
 
 
 def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):

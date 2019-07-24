@@ -105,7 +105,7 @@ class ForwardSimulator(object):
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
     def propagate(self, state, simplified_circuit, time=None):
-        pass #HERE TODO - create an interface for running circuits
+        raise NotImplementedError() # TODO - create an interface for running circuits
         
     def probs(self, simplified_circuit, clipTo=None, time=None):
         """
