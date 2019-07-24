@@ -1166,7 +1166,7 @@ class TPSPAMVec(DenseSPAMVec):
         firstEl = (self.dim)**-0.25
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
-        if not _np.isclose(vec[0, 0], firstEl):
+        if not _np.isclose(vec[0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
         self.base1D[1:] = vec[1:]
