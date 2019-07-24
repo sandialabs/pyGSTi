@@ -1170,8 +1170,8 @@ def logl_max_terms(model, dataset, circuit_list=None,
         #construct raw_dict & nEls from tree (holds keys & vals separately)
         #tree_circuit_list = evalTree.generate_circuit_list()
         # Note: this is != circuit_list, as the tree hold *simplified* circuits
-        raw_dict = _OrderedDict(list(zip(circuit_list,
-                                         evalTree.simplified_circuit_spamTuples)))
+        #raw_dict = _OrderedDict(list(zip(circuit_list,
+        #                                 evalTree.simplified_circuit_spamTuples)))
         nEls = evalTree.num_final_elements()
     else:
         if circuit_list is None:

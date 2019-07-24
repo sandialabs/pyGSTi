@@ -18,6 +18,7 @@ from ..tools import slicetools as _slct
 from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
 from ..tools import optools as _gt
+from ..tools.matrixtools import _fas
 
 from scipy.sparse.linalg import LinearOperator
 
@@ -1418,6 +1419,84 @@ def propagate_staterep(staterep, operationreps):
     for oprep in operationreps:
         ret = oprep.acton(ret)
     return ret
+
+
+def DM_mapfill_probs_block(calc, mxToFill, dest_indices, evalTree, comm):
+    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+
+    cacheSize = evalTree.cache_size()
+
+    #Create rhoCache
+    rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
+
+    #Get operationreps and ereps now so we don't make unnecessary ._rep references
+    rhoreps = {rholbl: calc._rho_from_label(rholbl)._rep for rholbl in evalTree.rholabels}
+    operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in evalTree.opLabels}
+    effectreps = {i: E._rep for i, E in enumerate(calc._Es_from_labels(evalTree.elabels))}  # cache these in future
+
+    #comm is currently ignored
+    #TODO: if evalTree is split, distribute among processors
+    for i in evalTree.get_evaluation_order():
+        iStart, remainder, iCache = evalTree[i]
+        if iStart is None:  # then first element of remainder is a state prep label
+            rholabel = remainder[0]
+            init_state = rhoreps[rholabel]
+            remainder = remainder[1:]
+        else:
+            init_state = rho_cache[iStart]  # [:,None]
+
+        #OLD final_state = self.propagate_state(init_state, remainder)
+        final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
+        if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
+
+        ereps = [effectreps[j] for j in evalTree.eLbl_indices_per_circuit[i]]
+        final_indices = [dest_indices[j] for j in evalTree.final_indices_per_circuit[i]]
+
+        for j, erep in zip(final_indices, ereps):
+            mxToFill[j] = erep.probability(final_state)  # outcome probability
+
+
+def DM_mapfill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, evalTree, param_indices, comm):
+
+    eps = 1e-7  # hardcoded?
+
+    if param_indices is None:
+        param_indices = list(range(calc.Np))
+    if dest_param_indices is None:
+        dest_param_indices = list(range(calc.Np))
+
+    param_indices = _slct.as_array(param_indices)
+    dest_param_indices = _slct.as_array(dest_param_indices)
+
+    all_slices, my_slice, owners, subComm = \
+        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+
+    my_param_indices = param_indices[my_slice]
+    st = my_slice.start  # beginning of where my_param_indices results
+    # get placed into dpr_cache
+
+    #Get a map from global parameter indices to the desired
+    # final index within mxToFill (fpoffset = final parameter offset)
+    iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
+
+    nEls = evalTree.num_final_elements()
+    probs = _np.empty(nEls, 'd')
+    probs2 = _np.empty(nEls, 'd')
+    DM_mapfill_probs_block(calc, probs, slice(0, nEls), evalTree, comm)
+
+    orig_vec = calc.to_vector().copy()
+    for i in range(calc.Np):
+        #print("dprobs cache %d of %d" % (i,self.Np))
+        if i in iParamToFinal:
+            iFinal = iParamToFinal[i]
+            vec = orig_vec.copy(); vec[i] += eps
+            calc.from_vector(vec, close=True)
+            DM_mapfill_probs_block(calc, probs2, slice(0, nEls), evalTree, subComm)
+            _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
+    calc.from_vector(orig_vec, close=True)
+
+    #Now each processor has filled the relavant parts of mxToFill, so gather together:
+    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
 
 
 def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None):  # TODO remove scratch

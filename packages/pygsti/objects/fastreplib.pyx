@@ -22,6 +22,7 @@ import itertools as _itertools
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import optools as _gt
+from ..tools.matrixtools import _fas
 from scipy.sparse.linalg import LinearOperator
 
 
@@ -1470,7 +1471,7 @@ def propagate_staterep(staterep, operationreps):
     return ret
 
 
-cdef vector[vector[INT]] convert_evaltree(evalTree, operation_lookup):
+cdef vector[vector[INT]] convert_mapevaltree(evalTree, operation_lookup, rho_lookup):
     # c_evalTree :
     # an array of INT-arrays; each INT-array is [i,iStart,iCache,<remainder gate indices>]
     cdef vector[INT] intarray
@@ -1483,11 +1484,41 @@ cdef vector[vector[INT]] convert_evaltree(evalTree, operation_lookup):
         intarray[0] = ii
         intarray[1] = iStart
         intarray[2] = iCache
-        for jj,gl in enumerate(remainder,start=3):
-            intarray[jj] = operation_lookup[gl]
+        if iStart == -1:  # then first element of remainder is a rholabel
+            intarray[3] = rho_lookup[remainder[0]]
+            for jj,gl in enumerate(remainder[1:],start=4):
+                intarray[jj] = operation_lookup[gl]
+        else:
+            for jj,gl in enumerate(remainder,start=3):
+                intarray[jj] = operation_lookup[gl]
         c_evalTree[kk] = intarray
         
     return c_evalTree
+
+cdef vector[vector[INT]] convert_dict_of_intlists(d):
+    # d is an dict of lists of integers, whose keys are integer
+    # indices from 0 to len(d).  We can convert this
+    # to a vector of vector[INT] elements.
+    cdef INT i, j;
+    cdef vector[vector[INT]] ret = vector[vector[INT]](len(d))
+    for i, intlist in d.items():
+        ret[i] = vector[INT](len(intlist))
+        for j in range(len(intlist)):
+            ret[i][j] = intlist[j]
+    return ret
+
+cdef vector[vector[INT]] convert_and_wrap_dict_of_intlists(d, wrapper):
+    # d is an dict of lists of integers, whose keys are integer
+    # indices from 0 to len(d).  We can convert this
+    # to a vector of vector[INT] elements.
+    cdef INT i, j;
+    cdef vector[vector[INT]] ret = vector[vector[INT]](len(d))
+    for i, intlist in d.items():
+        ret[i] = vector[INT](len(intlist))
+        for j in range(len(intlist)):
+            ret[i][j] = wrapper[intlist[j]]
+    return ret
+
 
 cdef vector[DMStateCRep*] create_rhocache(INT cacheSize, INT state_dim):
     cdef INT i
@@ -1513,6 +1544,12 @@ cdef DMStateCRep* convert_rhorep(rhorep):
     # extract c-reps from rhorep and ereps => c_rho and c_ereps
     return (<DMStateRep?>rhorep).c_state
 
+cdef vector[DMStateCRep*] convert_rhoreps(rhoreps):
+    cdef vector[DMStateCRep*] c_rhoreps = vector[DMStateCRep_ptr](len(rhoreps))
+    for ii,rrep in rhoreps.items(): # (ii = python variable)
+        c_rhoreps[ii] = (<DMStateRep?>rrep).c_state
+    return c_rhoreps
+
 cdef vector[DMEffectCRep*] convert_ereps(ereps):
     cdef vector[DMEffectCRep*] c_ereps = vector[DMEffectCRep_ptr](len(ereps))
     for i in range(len(ereps)):
@@ -1520,55 +1557,63 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
     return c_ereps
 
 
-def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
-
-    rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    pCache = np.empty((len(evalTree),len(EVecs)),'d')
+def DM_mapfill_probs_block(calc, np.ndarray[double, mode="c", ndim=1] mxToFill,
+                           dest_indices, evalTree, comm):
+    
+    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    #dest_indices = np.ascontiguousarray(dest_indices) #unneeded
 
     #Get (extension-type) representation objects
-    rhorep = rhoVec._rep
-    ereps = [ E._rep for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
+    rho_lookup = { lbl:i for i,lbl in enumerate(evalTree.rholabels) } # rho labels -> ints for faster lookup
+    rhoreps = { i: calc._rho_from_label(rholbl)._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
     operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
-    
+    ereps = [E._rep for E in calc._Es_from_labels(evalTree.elabels)]  # cache these in future
+
     # convert to C-mode:  evaltree, operation_lookup, operationreps
-    cdef c_evalTree = convert_evaltree(evalTree, operation_lookup)
-    cdef DMStateCRep *c_rho = convert_rhorep(rhorep)
-    cdef vector[DMOpCRep*] c_gatereps = convert_gatereps(operationreps)
+    cdef c_evalTree = convert_mapevaltree(evalTree, operation_lookup, rho_lookup)
+    cdef vector[DMStateCRep*] c_rhos = convert_rhoreps(rhoreps)
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
+    cdef vector[DMOpCRep*] c_gatereps = convert_gatereps(operationreps)
 
     # create rho_cache = vector of DMStateCReps
     #print "DB: creating rho_cache of size %d * %g GB => %g GB" % \
-    #   (evalTree.cache_size(), 8.0 * c_rho._dim / 1024.0**3, evalTree.cache_size() * 8.0 * c_rho._dim / 1024.0**3)
-    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
+    #   (evalTree.cache_size(), 8.0 * calc.dim / 1024.0**3, evalTree.cache_size() * 8.0 * calc.dim / 1024.0**3)
+    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), calc.dim)
 
-    dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
-
+    cdef vector[vector[INT]] elabel_indices_per_circuit = convert_dict_of_intlists(evalTree.eLbl_indices_per_circuit)
+    cdef vector[vector[INT]] final_indices_per_circuit = convert_and_wrap_dict_of_intlists(
+        evalTree.final_indices_per_circuit, dest_indices)
+            
+    dm_mapfill_probs(mxToFill, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
+                     elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+    
     free_rhocache(rho_cache)  #delete cache entries
-    return pCache
-        
 
 
-cdef dm_compute_pr_cache(double[:,:] ret,
-                         vector[vector[INT]] c_evalTree,
-                         vector[DMOpCRep*] c_gatereps,
-                         DMStateCRep *c_rho, vector[DMEffectCRep*] c_ereps,
-                         vector[DMStateCRep*]* prho_cache, comm): # any way to transmit comm?
+cdef dm_mapfill_probs(double[:] mxToFill,
+                      vector[vector[INT]] c_evalTree,
+                      vector[DMOpCRep*] c_gatereps,
+                      vector[DMStateCRep*] c_rhoreps, vector[DMEffectCRep*] c_ereps,
+                      vector[DMStateCRep*]* prho_cache,
+                      vector[vector[INT]] elabel_indices_per_circuit,                      
+                      vector[vector[INT]] final_indices_per_circuit,
+                      INT dim, comm): # any way to transmit comm?
+
     #Note: we need to take in rho_cache as a pointer b/c we may alter the values its
     # elements point to (instead of copying the states) - we just guarantee that in the end
     # all of the cache entries are filled with allocated (by 'new') states that the caller
     # can deallocate at will.
-    cdef INT k,l,i,istart, icache
+    cdef INT k,l,i,istart, icache, iFirstOp
     cdef double p
-    cdef INT dim = c_rho._dim
     cdef DMStateCRep *init_state
     cdef DMStateCRep *prop1
     cdef DMStateCRep *tprop
     cdef DMStateCRep *final_state
     cdef DMStateCRep *prop2 = new DMStateCRep(dim)
     cdef DMStateCRep *shelved = new DMStateCRep(dim)
-
-    #print "BEGIN"
+    cdef vector[INT] final_indices
+    cdef vector[INT] elabel_indices
 
     #Invariants required for proper memory management:
     # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
@@ -1580,8 +1625,12 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         istart = intarray[1]
         icache = intarray[2]
 
-        if istart == -1:  init_state = c_rho
-        else:             init_state = deref(prho_cache)[istart]
+        if istart == -1:
+            init_state = c_rhoreps[intarray[3]]
+            iFirstOp = 4
+        else:
+            init_state = deref(prho_cache)[istart]
+            iFirstOp = 3
         
         #DEBUG
         #print "LOOP i=",i," istart=",istart," icache=",icache," remcnt=",(intarray.size()-3)
@@ -1593,7 +1642,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         prop1.copy_from(init_state) # copy init_state -> prop1 
         #print " prop1:";  print [ prop1._dataptr[t] for t in range(4) ]
         #t1 = pytime.time() # DEBUG
-        for l in range(3,<INT>intarray.size()): #during loop, both prop1 & prop2 are alloc'd        
+        for l in range(iFirstOp,<INT>intarray.size()): #during loop, both prop1 & prop2 are alloc'd        
             #print "begin acton %d: %.2fs since last, %.2fs elapsed" % (l-2,pytime.time()-t1,pytime.time()-t0) # DEBUG
             #t1 = pytime.time() #DEBUG
             c_gatereps[intarray[l]].acton(prop1,prop2)
@@ -1604,10 +1653,10 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         #print " final:"; print [ final_state._dataptr[t] for t in range(4) ]
         
         #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (pytime.time()-t1, pytime.time()-t0) # DEBUG
-        for j in range(<INT>c_ereps.size()):
-            p = c_ereps[j].probability(final_state) #outcome probability
-            #print("processing ",i,j,p)
-            ret[i,j] = p
+        final_indices = final_indices_per_circuit[i]
+        elabel_indices = elabel_indices_per_circuit[i]
+        for j in range(<INT>elabel_indices.size()):
+            mxToFill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability(final_state) #outcome probability
 
         if icache != -1:
             deref(prho_cache)[icache] = final_state # store this state in the cache
@@ -1622,120 +1671,294 @@ cdef dm_compute_pr_cache(double[:,:] ret,
     del shelved
 
 
-    
-def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
-    # can remove unused 'scratch' arg once we move hpr_cache to replibs
+def DM_mapfill_dprobs_block(calc,
+                            np.ndarray[double, mode="c", ndim=2] mxToFill,
+                            dest_indices,
+                            dest_param_indices,
+                            evalTree, param_indices, comm):
+
     cdef double eps = 1e-7 #hardcoded?
 
-    #Compute finite difference derivatives, one parameter at a time.
-    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-    nDerivCols = len(param_indices) # *all*, not just locally computed ones
+    if param_indices is None:
+        param_indices = list(range(calc.Np))
+    if dest_param_indices is None:
+        dest_param_indices = list(range(calc.Np))
 
-    rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    pCache = np.empty((len(evalTree),len(elabels)),'d')
-    dpr_cache  = np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
-    #print("BEGIN dpr_cache")
+    param_indices = _slct.as_array(param_indices)
+    dest_param_indices = _slct.as_array(dest_param_indices)
+
+    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
-    rhorep = calc.sos.get_prep(rholabel)._rep
-    ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
+    rho_lookup = { lbl:i for i,lbl in enumerate(evalTree.rholabels) } # rho labels -> ints for faster lookup
+    rhoreps = { i: calc._rho_from_label(rholbl)._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # it should be safe to do this *once*
-    operationreps = { i:op._rep for i,op in operations.items() }
-    #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
-    #print("compute_dpr_cache has %d operations" % len(operation_lookup))
-    
+    operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
+    ereps = [E._rep for E in calc._Es_from_labels(evalTree.elabels)]  # cache these in future
+
     # convert to C-mode:  evaltree, operation_lookup, operationreps
-    cdef c_evalTree = convert_evaltree(evalTree, operation_lookup)
-    cdef DMStateCRep *c_rho = convert_rhorep(rhorep)
-    cdef vector[DMOpCRep*] c_gatereps = convert_gatereps(operationreps)
+    cdef c_evalTree = convert_mapevaltree(evalTree, operation_lookup, rho_lookup)
+    cdef vector[DMStateCRep*] c_rhos = convert_rhoreps(rhoreps)
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
+    cdef vector[DMOpCRep*] c_gatereps = convert_gatereps(operationreps)
 
     # create rho_cache = vector of DMStateCReps
-    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
+    #print "DB: creating rho_cache of size %d * %g GB => %g GB" % \
+    #   (evalTree.cache_size(), 8.0 * calc.dim / 1024.0**3, evalTree.cache_size() * 8.0 * calc.dim / 1024.0**3)
+    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), calc.dim)
 
-    #print("DB: params = ", calc.paramvec)
-    dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
-    pCache_delta = pCache.copy() # for taking finite differences
-    #print("DB: Initial = ", np.linalg.norm(pCache), np.linalg.norm(pCache_delta))
-    #print("p = ",pCache)
+    cdef vector[vector[INT]] elabel_indices_per_circuit = convert_dict_of_intlists(evalTree.eLbl_indices_per_circuit)
+    cdef vector[vector[INT]] final_indices_per_circuit = convert_dict_of_intlists(evalTree.final_indices_per_circuit)
 
     all_slices, my_slice, owners, subComm = \
-            _mpit.distribute_slice(slice(0,len(param_indices)), comm)
+        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
 
     my_param_indices = param_indices[my_slice]
-    st = my_slice.start #beginning of where my_param_indices results
-                        # get placed into dpr_cache
-    
+    st = my_slice.start  # beginning of where my_param_indices results get placed into dpr_cache
+
     #Get a map from global parameter indices to the desired
-    # final index within dpr_cache
-    iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
+    # final index within mxToFill (fpoffset = final parameter offset)
+    iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
-    #Get reps *once* because these are peristent objects within the operation objects
-    # and so there's no need to regenerate them.
-    rhorep = calc.sos.get_prep(rholabel)._rep
-    ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
-    operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
-    operationreps = { k:op._rep for k,op in operations.items() }
-    c_rho = convert_rhorep(rhorep)
-    c_ereps = convert_ereps(ereps)
-    c_gatereps = convert_gatereps(operationreps)
-    # --check - does from_vector regen *all* of these?
-
-    #tStart = pytime.time(); #REMOVE
-    #t_pr = 0; t_reps = 0; t_conv=0; t_copy=0; t_fromvec=0; t_gather=0;   #REMOVE
-    #time_dict = {'expon':0.0, 'composed': 0.0, 'dense':0.0, 'lind': 0.0} #REMOVE
+    nEls = evalTree.num_final_elements()
+    probs = np.empty(nEls, 'd') #must be contiguous!
+    probs2 = np.empty(nEls, 'd') #must be contiguous!
+    dm_mapfill_probs(probs, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
+                     elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+        
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
-        #print("dprobs cache %d of %d" % (i,calc.Np))
+        #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
-            #t1 = pytime.time() # REMOVE
             vec = orig_vec.copy(); vec[i] += eps
-            #t_copy += pytime.time()-t1; t1 = pytime.time() # REMOVE
-            calc.from_vector(vec, close=True, nodirty=True)
-            #t_fromvec += pytime.time()-t1; t1 = pytime.time() # REMOVE
-
-            #OLD REMOVE
-            #rebuild reps (not evaltree or operation_lookup)
-            # rhorep = calc.sos.get_prep(rholabel)._rep
-            # ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
-            # operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
-            # operationreps = { k:op._rep for k,op in operations.items() } 
-            
-            #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
-            #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
-            #t_reps += pytime.time()-t1; t1 = pytime.time() #REMOVE
-            # c_rho = convert_rhorep(rhorep)
-            # c_ereps = convert_ereps(ereps)
-            # c_gatereps = convert_gatereps(operationreps)
-            #t_conv += pytime.time()-t1; t1 = pytime.time() #REMOVE
-
-            dm_compute_pr_cache(pCache_delta, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
-            dpr_cache[:,:,iFinal] = (pCache_delta - pCache)/eps
-            #t_pr += pytime.time()-t1 #REMOVE
-
+            calc.from_vector(vec, close=True)
+            dm_mapfill_probs(probs2, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
+                             elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+            _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
     calc.from_vector(orig_vec, close=True)
-    free_rhocache(rho_cache)
-    
-    #Now each processor has filled the relavant parts of dpr_cache,
-    # so gather together:
-    #t3 = pytime.time() #REMOVE
-    _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-    #t_gather = pytime.time()-t3 #REMOVE
-    
-    # DEBUG LINE USED FOR MONITORING N-QUBIT GST TESTS
-    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
-    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), pytime.time()-tStart)) #DEBUG
 
-    # DEBUG FOR PROFILING THIS FUNCTION
-    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs" % (pytime.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather))
-#, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs"
-#, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
+    #Now each processor has filled the relavant parts of mxToFill, so gather together:
+    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
 
-    return dpr_cache
 
-#HERE
+#def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
+#
+#    rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+#    pCache = np.empty((len(evalTree),len(EVecs)),'d')
+#
+#    #Get (extension-type) representation objects
+#    rhorep = rhoVec._rep
+#    ereps = [ E._rep for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
+#    operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
+#    operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
+#    
+#    # convert to C-mode:  evaltree, operation_lookup, operationreps
+#    cdef c_evalTree = convert_mapevaltree(evalTree, operation_lookup)
+#    cdef DMStateCRep *c_rho = convert_rhorep(rhorep)
+#    cdef vector[DMOpCRep*] c_gatereps = convert_gatereps(operationreps)
+#    cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
+#
+#    # create rho_cache = vector of DMStateCReps
+#    #print "DB: creating rho_cache of size %d * %g GB => %g GB" % \
+#    #   (evalTree.cache_size(), 8.0 * c_rho._dim / 1024.0**3, evalTree.cache_size() * 8.0 * c_rho._dim / 1024.0**3)
+#    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
+#
+#    dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
+#
+#    free_rhocache(rho_cache)  #delete cache entries
+#    return pCache
+#        
+#
+#
+#cdef dm_compute_pr_cache(double[:,:] ret,
+#                         vector[vector[INT]] c_evalTree,
+#                         vector[DMOpCRep*] c_gatereps,
+#                         DMStateCRep *c_rho, vector[DMEffectCRep*] c_ereps,
+#                         vector[DMStateCRep*]* prho_cache, comm): # any way to transmit comm?
+#    #Note: we need to take in rho_cache as a pointer b/c we may alter the values its
+#    # elements point to (instead of copying the states) - we just guarantee that in the end
+#    # all of the cache entries are filled with allocated (by 'new') states that the caller
+#    # can deallocate at will.
+#    cdef INT k,l,i,istart, icache
+#    cdef double p
+#    cdef INT dim = c_rho._dim
+#    cdef DMStateCRep *init_state
+#    cdef DMStateCRep *prop1
+#    cdef DMStateCRep *tprop
+#    cdef DMStateCRep *final_state
+#    cdef DMStateCRep *prop2 = new DMStateCRep(dim)
+#    cdef DMStateCRep *shelved = new DMStateCRep(dim)
+#
+#    #print "BEGIN"
+#
+#    #Invariants required for proper memory management:
+#    # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
+#    # - all rho_cache entries have been allocated via "new"
+#    for k in range(<INT>c_evalTree.size()):
+#        #t0 = pytime.time() # DEBUG
+#        intarray = c_evalTree[k]
+#        i = intarray[0]
+#        istart = intarray[1]
+#        icache = intarray[2]
+#
+#        if istart == -1:  init_state = c_rho
+#        else:             init_state = deref(prho_cache)[istart]
+#        
+#        #DEBUG
+#        #print "LOOP i=",i," istart=",istart," icache=",icache," remcnt=",(intarray.size()-3)
+#        #print [ init_state._dataptr[t] for t in range(4) ]
+#    
+#        #Propagate state rep
+#        # prop2 should already be alloc'd; need to "allocate" prop1 - either take from cache or from "shelf"
+#        prop1 = shelved if icache == -1 else deref(prho_cache)[icache]
+#        prop1.copy_from(init_state) # copy init_state -> prop1 
+#        #print " prop1:";  print [ prop1._dataptr[t] for t in range(4) ]
+#        #t1 = pytime.time() # DEBUG
+#        for l in range(3,<INT>intarray.size()): #during loop, both prop1 & prop2 are alloc'd        
+#            #print "begin acton %d: %.2fs since last, %.2fs elapsed" % (l-2,pytime.time()-t1,pytime.time()-t0) # DEBUG
+#            #t1 = pytime.time() #DEBUG
+#            c_gatereps[intarray[l]].acton(prop1,prop2)
+#            #print " post-act prop2:"; print [ prop2._dataptr[t] for t in range(4) ]
+#            tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+#        final_state = prop1 # output = prop1 (after swap from loop above)
+#        # Note: prop2 is the other alloc'd state and this maintains invariant
+#        #print " final:"; print [ final_state._dataptr[t] for t in range(4) ]
+#        
+#        #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (pytime.time()-t1, pytime.time()-t0) # DEBUG
+#        for j in range(<INT>c_ereps.size()):
+#            p = c_ereps[j].probability(final_state) #outcome probability
+#            #print("processing ",i,j,p)
+#            ret[i,j] = p
+#
+#        if icache != -1:
+#            deref(prho_cache)[icache] = final_state # store this state in the cache
+#        else: # our 2nd state was pulled from the shelf before; return it
+#            shelved = final_state
+#            final_state = NULL
+#        #print "%d of %d (i=%d,istart=%d,remlen=%d): %.1fs" % (k, c_evalTree.size(), i, istart,
+#        #                                                      intarray.size()-3, pytime.time()-t0)
+#
+#    #delete our temp states
+#    del prop2
+#    del shelved
+#
+#
+#    
+#def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
+#    # can remove unused 'scratch' arg once we move hpr_cache to replibs
+#    cdef double eps = 1e-7 #hardcoded?
+#
+#    #Compute finite difference derivatives, one parameter at a time.
+#    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+#    nDerivCols = len(param_indices) # *all*, not just locally computed ones
+#
+#    rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+#    pCache = np.empty((len(evalTree),len(elabels)),'d')
+#    dpr_cache  = np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
+#    #print("BEGIN dpr_cache")
+#
+#    #Get (extension-type) representation objects
+#    rhorep = calc.sos.get_prep(rholabel)._rep
+#    ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
+#    operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
+#    operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # it should be safe to do this *once*
+#    operationreps = { i:op._rep for i,op in operations.items() }
+#    #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+#    #print("compute_dpr_cache has %d operations" % len(operation_lookup))
+#    
+#    # convert to C-mode:  evaltree, operation_lookup, operationreps
+#    cdef c_evalTree = convert_mapevaltree(evalTree, operation_lookup)
+#    cdef DMStateCRep *c_rho = convert_rhorep(rhorep)
+#    cdef vector[DMOpCRep*] c_gatereps = convert_gatereps(operationreps)
+#    cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
+#
+#    # create rho_cache = vector of DMStateCReps
+#    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
+#
+#    #print("DB: params = ", calc.paramvec)
+#    dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
+#    pCache_delta = pCache.copy() # for taking finite differences
+#    #print("DB: Initial = ", np.linalg.norm(pCache), np.linalg.norm(pCache_delta))
+#    #print("p = ",pCache)
+#
+#    all_slices, my_slice, owners, subComm = \
+#            _mpit.distribute_slice(slice(0,len(param_indices)), comm)
+#
+#    my_param_indices = param_indices[my_slice]
+#    st = my_slice.start #beginning of where my_param_indices results
+#                        # get placed into dpr_cache
+#    
+#    #Get a map from global parameter indices to the desired
+#    # final index within dpr_cache
+#    iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
+#
+#    #Get reps *once* because these are peristent objects within the operation objects
+#    # and so there's no need to regenerate them.
+#    rhorep = calc.sos.get_prep(rholabel)._rep
+#    ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
+#    operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() }
+#    operationreps = { k:op._rep for k,op in operations.items() }
+#    c_rho = convert_rhorep(rhorep)
+#    c_ereps = convert_ereps(ereps)
+#    c_gatereps = convert_gatereps(operationreps)
+#    # --check - does from_vector regen *all* of these?
+#
+#    #tStart = pytime.time(); #REMOVE
+#    #t_pr = 0; t_reps = 0; t_conv=0; t_copy=0; t_fromvec=0; t_gather=0;   #REMOVE
+#    #time_dict = {'expon':0.0, 'composed': 0.0, 'dense':0.0, 'lind': 0.0} #REMOVE
+#    orig_vec = calc.to_vector().copy()
+#    for i in range(calc.Np):
+#        #print("dprobs cache %d of %d" % (i,calc.Np))
+#        if i in iParamToFinal:
+#            iFinal = iParamToFinal[i]
+#            #t1 = pytime.time() # REMOVE
+#            vec = orig_vec.copy(); vec[i] += eps
+#            #t_copy += pytime.time()-t1; t1 = pytime.time() # REMOVE
+#            calc.from_vector(vec, close=True, nodirty=True)
+#            #t_fromvec += pytime.time()-t1; t1 = pytime.time() # REMOVE
+#
+#            #OLD REMOVE
+#            #rebuild reps (not evaltree or operation_lookup)
+#            # rhorep = calc.sos.get_prep(rholabel)._rep
+#            # ereps = [ calc.sos.get_effect(el)._rep for el in elabels]
+#            # operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # NEEDED! (at least for multiQ GST)
+#            # operationreps = { k:op._rep for k,op in operations.items() } 
+#            
+#            #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
+#            #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+#            #t_reps += pytime.time()-t1; t1 = pytime.time() #REMOVE
+#            # c_rho = convert_rhorep(rhorep)
+#            # c_ereps = convert_ereps(ereps)
+#            # c_gatereps = convert_gatereps(operationreps)
+#            #t_conv += pytime.time()-t1; t1 = pytime.time() #REMOVE
+#
+#            dm_compute_pr_cache(pCache_delta, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
+#            dpr_cache[:,:,iFinal] = (pCache_delta - pCache)/eps
+#            #t_pr += pytime.time()-t1 #REMOVE
+#
+#    calc.from_vector(orig_vec, close=True)
+#    free_rhocache(rho_cache)
+#    
+#    #Now each processor has filled the relavant parts of dpr_cache,
+#    # so gather together:
+#    #t3 = pytime.time() #REMOVE
+#    _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
+#    #t_gather = pytime.time()-t3 #REMOVE
+#    
+#    # DEBUG LINE USED FOR MONITORING N-QUBIT GST TESTS
+#    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
+#    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), pytime.time()-tStart)) #DEBUG
+#
+#    # DEBUG FOR PROFILING THIS FUNCTION
+#    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs" % (pytime.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather))
+##, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs"
+##, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
+#
+#    return dpr_cache
+
+
 cdef double TDchi2_obj_fn(double p, double f, double Ni, double N, double omitted_p, double minProbClipForWeighting, double extra):
     cdef double cp, v, omitted_cp
     cp = p if p > minProbClipForWeighting else minProbClipForWeighting

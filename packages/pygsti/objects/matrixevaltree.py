@@ -11,6 +11,7 @@ from ..tools import slicetools as _slct
 from .evaltree import EvalTree
 
 import numpy as _np
+import collections as _collections
 import time as _time  # DEBUG TIMERS
 
 
@@ -31,13 +32,14 @@ class MatrixEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MatrixEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_elabels, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
 
           Parameters
           ----------
+          TODO: docstring - fix this!
           circuit_list : list of (tuples or Circuits)
               A list of tuples of operation labels or Circuit
               objects, specifying the operation sequences that
@@ -55,11 +57,24 @@ class MatrixEvalTree(EvalTree):
         """
         #tStart = _time.time() #DEBUG TIMER
 
+        #Extra processing step - matrix eval tree deals with simple circuits *without* their preps
+        # since it's trivial to compute probabilities for different state preps when you have the
+        # process matrix.  The values of the simplified_circuit_list then become lists of *spamtuples*
+        # rather than just lists of effect labels.
+        simplified_circuit_list = _collections.OrderedDict()
+        for simple_circuit_with_prep, elabels in simplified_circuit_elabels.items():
+            if elabels == [None]:  # special case when there is no prep
+                simplified_circuit_list[simple_circuit_with_prep] = elabels
+            else:
+                rhoLbl = simple_circuit_with_prep[0]  # assume first circuit layer is a prep
+                simple_circuit_no_prep = simple_circuit_with_prep[1:]
+                simplified_circuit_list[simple_circuit_no_prep] = [(rhoLbl, eLbl) for eLbl in elabels]
+        
         # opLabels : A list of all the length-0 & 1 operation labels to be stored
         #  at the beginning of the tree.  This list must include all the gate
         #  labels contained in the elements of simplified_circuit_list
         #  (including a special empty-string sentinel at the beginning).
-        self.opLabels = [""] + self._get_opLabels(simplified_circuit_list)
+        self.opLabels = [""] + self._get_opLabels(simplified_circuit_elabels)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 

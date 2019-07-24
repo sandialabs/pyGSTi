@@ -2890,13 +2890,12 @@ def split_lindblad_paramtype(typ):
     return bTyp, evotype
 
 
-def spamTupleToOutcome(spamTuple):
+def eLabelToOutcome(povm_and_effect_lbl):
     """TODO: Docstring """
-    # Helper fn: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-    if spamTuple is None:
-        return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
+    # Helper fn: POVM_ELbl -> Elbl mapping
+    if povm_and_effect_lbl is None:
+        return "NONE"  # Dummy label for placeholding
     else:
-        prep_lbl, povm_and_effect_lbl = spamTuple
         last_underscore = povm_and_effect_lbl.rindex('_')
         effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
-        return (effect_lbl,)  # effect label *is* the outcome
+        return effect_lbl  # effect label alone *is* the outcome

@@ -115,8 +115,11 @@ class EvalTree(list):
         `simplified_circuit_list` - a dictionary w/keys = "raw" operation sequences OR a list of them.
         """
         opLabels = set()
-        for raw_gstr in simplified_circuit_list:  # will work for dict keys too
-            opLabels.update(raw_gstr)
+        for simple_circuit_with_prep, elabels in simplified_circuit_list.items():
+            if elabels == [None]:  # special case when circuit contains no prep
+                opLabels.update(simple_circuit_with_prep)
+            else:
+                opLabels.update(simple_circuit_with_prep[1:])  # don't include prep
         return sorted(opLabels)
 
     def _copyBase(self, newTree):

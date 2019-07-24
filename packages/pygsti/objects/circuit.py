@@ -716,7 +716,7 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
         #Note: this means self._labels contains nested lists of simple labels
-
+        
         #Convert layers to a list/tuple of layer indices
         all_layers = bool(layers is None)  # whether we're assigning to *all* layers
         int_layers = isinstance(layers, int)
@@ -1395,6 +1395,12 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        if self.line_labels is None or self.line_labels == ():
+            #Allow insertion of a layer into an empty circuit to update the circuit's line_labels
+            layer_lbl = toLabel(circuit_layer)
+            self.line_labels = layer_lbl.sslbls if (layer_lbl.sslbls is not None) else ('*',)
+            
         self.insert_labels_into_layers([circuit_layer], j)
 
     def insert_circuit(self, circuit, j):

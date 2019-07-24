@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import collections as _collections
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
@@ -64,18 +65,21 @@ class MapEvalTree(EvalTree):
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
         circuit_list = [tuple(simple_circuit) for simple_circuit in simplified_circuit_list.keys()]
-        self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
+        self.simplified_circuit_elabels = list(simplified_circuit_list.values())
         self.element_offsets_for_circuit = _np.cumsum(
-            [0] + [len(spamtupList) for spamtupList in self.simplified_circuit_spamTuples])[:-1]
-        self.rhoLabels = set()  # the unique rho labels found in this tree
-        for spamTuples in self.simplified_circuit_spamTuples:
-            for rhoLbl, _ in spamTuples:
-                self.rhoLabels.add(rhoLbl)
-        self.rhoLabels = sorted(list(self.rhoLabels))
+            [0] + [len(elabelList) for elabelList in self.simplified_circuit_elabels])[:-1]
+        self.elabels, self.eLbl_indices_per_circuit, self.final_indices_per_circuit = \
+            self._build_elabels_lookups()
+
+        self.rholabels = set()
+        for c,elabels in simplified_circuit_list.items():
+            if elabels != [None]:  # so we know c[0] is a prep label
+                self.rholabels.add(c[0])
+        self.rholabels = sorted(list(self.rholabels))
         
-        self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
+        self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
+        #UNNEEDED? self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
@@ -200,6 +204,35 @@ class MapEvalTree(EvalTree):
                 iStart -= 1  # shift left all cache indices after one removed
             self[i] = (iStart, remainingStr, iCache)
         self.cachesize -= 1
+
+    def _build_elabels_lookups(self):
+        all_elabels = set()
+        for elabels in self.simplified_circuit_elabels:
+            all_elabels.update(elabels)
+
+        #Convert set of unique effect labels to a list so ordering is fixed
+        all_elabels = sorted(list(all_elabels))
+
+        # Create lookup so elabel_lookup[eLbl] gives index of eLbl
+        # within all_elabels (for faster lookup, Cython routines in ptic)
+        elabel_lookup = { elbl:i for i,elbl in enumerate(all_elabels) }
+
+        #Create arrays that tell us, for a given rholabel, what the elabel indices
+        # are for each simplified circuit.  This is obviously convenient for computing
+        # outcome probabilities.
+        eLbl_indices_per_circuit = {}
+        final_indices_per_circuit = {}
+        for i, elabels in enumerate(self.simplified_circuit_elabels):
+            element_offset = self.element_offsets_for_circuit[i]  # offset to i-th simple circuits elements
+            for j, eLbl in enumerate(elabels):
+                if i in eLbl_indices_per_circuit:
+                    eLbl_indices_per_circuit[i].append( elabel_lookup[eLbl] )
+                    final_indices_per_circuit[i].append( element_offset + j )
+                else:
+                    eLbl_indices_per_circuit[i] = [ elabel_lookup[eLbl] ]
+                    final_indices_per_circuit[i] = [ element_offset + j ]
+
+        return all_elabels, eLbl_indices_per_circuit, final_indices_per_circuit
 
     def squeeze(self, maxCacheSize):
         """
@@ -647,15 +680,12 @@ class MapEvalTree(EvalTree):
             #t1 = _time.time()  #REMOVE
             subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
-            subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[k]
+            subTree.simplified_circuit_elabels = [self.simplified_circuit_elabels[k]
                                                      for k in _slct.indices(subTree.myFinalToParentFinalMap)]
-            subTree.element_offsets_for_circuit = _np.cumsum([0] + [len(spamtupList) for spamtupList in subTree.simplified_circuit_spamTuples])[:-1]
-            subTree.rhoLabels = set()  # the unique rho labels found in this tree
-            for spamTuples in subTree.simplified_circuit_spamTuples:
-                for rhoLbl, _ in spamTuples:
-                    subTree.rhoLabels.add(rhoLbl)
-            subTree.rhoLabels = sorted(list(subTree.rhoLabels))
-
+            subTree.element_offsets_for_circuit = _np.cumsum([0] + [len(elabelList) for elabelList in subTree.simplified_circuit_elabels])[:-1]
+            subTree.elabels, subTree.eLbl_indices_per_circuit, subTree.final_indices_per_circuit = \
+                subTree._build_elabels_lookups()
+            subTree.rholabels = self.rholabels  # don't bother trying to thin this out for now - just take the parent's list
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             #t2 = _time.time() #REMOVE
@@ -676,7 +706,7 @@ class MapEvalTree(EvalTree):
             #t4 = _time.time() #REMOVE
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
             #t5 = _time.time() #REMOVE
-            subTree.recompute_spamtuple_indices(bLocal=False)
+            #UNNEEDED? subTree.recompute_spamtuple_indices(bLocal=False) # REMOVE
             #t6 = _time.time() #REMOVE
 
             subTree.trim_nonfinal_els()
