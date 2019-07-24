@@ -2638,6 +2638,7 @@ class Circuit(object):
         f.close()
 
     def convert_to_quil(self,
+                        num_qubits=None,
                         gatename_conversion=None,
                         qubit_conversion=None,
                         readout_conversion=None,
@@ -2698,6 +2699,9 @@ class Circuit(object):
             if not standardtype:
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
+
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
 
         # Init the quil string.
         quil = ''
