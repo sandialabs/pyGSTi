@@ -2778,7 +2778,7 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None,gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -2822,7 +2822,8 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
-        num_qubits = len(self.line_labels)
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
