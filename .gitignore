@@ -45,6 +45,7 @@ test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 build/*
 dist/*
 packages/pygsti.egg-info
+packages/pyGSTi.egg-info
 packages/pygsti/baseobjs/parsetab_string.py
 packages/pygsti/objects/fastgatecalc.cpp
 packages/pygsti/objects/fastreplib.cpp
