@@ -137,26 +137,10 @@ class ForwardSimulator(object):
         raw_dict, outcomeLbls = simplified_circuit
         iOut = 0  # outcome index
 
-        for raw_circuit, spamTuples in raw_dict.items():
-            rholabel = None  # current prep label
-            elabels = []  # a list of effect labels to evaluate cur_rholabel with
-            for spamTuple in spamTuples:
-                if spamTuple[0] == rholabel: elabels.append(spamTuple[1])
-                else:
-                    if len(elabels) > 0:
-                        # evaluate spamTuples w/same rholabel together
-                        for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False, time):
-                            probs[outcomeLbls[iOut]] = pval; iOut += 1
-                    rholabel = spamTuple[0]  # make "current"
-                    elabels = [spamTuple[1]]
-            if len(elabels) > 0:
-                for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False, time):
-                    probs[outcomeLbls[iOut]] = pval; iOut += 1
-            #OLD
-            #for spamTuple in spamTuples:
-            #    probs[outcomeLbls[iOut]] = self.pr(
-            #        spamTuple, raw_circuit, clipTo, False)
-            #    iOut += 1
+        for raw_circuit, elabels in raw_dict.items():
+            # evaluate spamTuples w/same rholabel together
+            for pval in self.prs(raw_circuit[0], elabels, raw_circuit[1:], clipTo, False, time):
+                probs[outcomeLbls[iOut]] = pval; iOut += 1
         return probs
 
     def dprobs(self, simplified_circuit, returnPr=False, clipTo=None):
@@ -189,10 +173,10 @@ class ForwardSimulator(object):
         dprobs = {}
         raw_dict, outcomeLbls = simplified_circuit
         iOut = 0  # outcome index
-        for raw_circuit, spamTuples in raw_dict.items():
-            for spamTuple in spamTuples:
+        for raw_circuit, elabels in raw_dict.items():
+            for elabel in elabels:
                 dprobs[outcomeLbls[iOut]] = self.dpr(
-                    spamTuple, raw_circuit, returnPr, clipTo)
+                    (raw_circuit[0], elabel), raw_circuit[1:], returnPr, clipTo)
                 iOut += 1
         return dprobs
 
@@ -230,10 +214,10 @@ class ForwardSimulator(object):
         hprobs = {}
         raw_dict, outcomeLbls = simplified_circuit
         iOut = 0  # outcome index
-        for raw_circuit, spamTuples in raw_dict.items():
-            for spamTuple in spamTuples:
+        for raw_circuit, elabels in raw_dict.items():
+            for elabel in elabels:
                 hprobs[outcomeLbls[iOut]] = self.hpr(
-                    spamTuple, raw_circuit, returnPr, returnDeriv, clipTo)
+                    (raw_circuit[0], elabel), raw_circuit[1:], returnPr, returnDeriv, clipTo)
                 iOut += 1
         return hprobs
 

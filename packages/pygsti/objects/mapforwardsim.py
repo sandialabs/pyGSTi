@@ -1583,14 +1583,14 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dchi2(mxToFill, dest_indices, dest_param_indices, num_tot_outcomes, evalSubTree,
+        def dchi2(destMx, dest_indices, dest_param_indices, num_tot_outcomes, evalSubTree,
                   dataset_rows, wrtSlice, fillComm):
-            replib.DM_mapfill_TDdchi2_terms(self, mxToFill, dest_indices, dest_param_indices, num_tot_outcomes,
+            replib.DM_mapfill_TDdchi2_terms(self, destMx, dest_indices, dest_param_indices, num_tot_outcomes,
                                             evalSubTree, dataset_rows, minProbClipForWeighting,
                                             probClipInterval, wrtSlice, fillComm)
 
-        def chi2(mxToFill, dest_indices, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
-            return replib.DM_mapfill_TDchi2_terms(self, mxToFill, dest_indices, num_tot_outcomes, evalSubTree,
+        def chi2(destMx, dest_indices, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_mapfill_TDchi2_terms(self, destMx, dest_indices, num_tot_outcomes, evalSubTree,
                                                   dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
 
         return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
@@ -1869,7 +1869,7 @@ class MapForwardSimulator(ForwardSimulator):
 
             if blkSize is None:  # wrtFilter gives entire computed parameter block
                 #Fill derivative cache info
-                deriv_fill_fn(mxToFill, felInds, None, num_outcomes, evalSubTree,
+                deriv_fill_fn(derivMxToFill, felInds, None, num_outcomes, evalSubTree,
                               dataset_rows, wrtSlice, mySubComm)
                 #profiler.mem_check("bulk_fill_dprobs: post fill")
 
@@ -1889,7 +1889,7 @@ class MapForwardSimulator(ForwardSimulator):
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    deriv_fill_fn(mxToFill, felInds, paramSlice, num_outcomes, evalSubTree,
+                    deriv_fill_fn(derivMxToFill, felInds, paramSlice, num_outcomes, evalSubTree,
                                   dataset_rows, paramSlice, mySubComm)
                     #profiler.mem_check("bulk_fill_dprobs: post fill blk")
 

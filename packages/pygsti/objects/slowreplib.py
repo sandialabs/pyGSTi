@@ -1655,7 +1655,7 @@ def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTr
     cacheSize = evalTree.cache_size()
 
     EVecs = calc._Es_from_labels(evalTree.elabels)
-    elabels_as_outcomes = [_gt.eLabelToOutcome(e) for e in evalTree.elabels]
+    elabels_as_outcomes = [ (_gt.eLabelToOutcome(e),) for e in evalTree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
