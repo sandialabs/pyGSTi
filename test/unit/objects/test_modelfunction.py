@@ -13,7 +13,7 @@ class ModelFunctionBase(object):
 
 class ModelFunctionUtilTester(ModelFunctionBase, BaseCase):
     def test_vecsfn_factory(self):
-        # XXX is this a good test case?
+        # XXX is this a good test case?  EGN: seems good to me.
         def vec_dummy(vecA, vecB, mxBasis):
             return np.linalg.norm(vecA - vecB)
 

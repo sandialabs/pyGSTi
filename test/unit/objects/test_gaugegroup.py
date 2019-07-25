@@ -11,7 +11,7 @@ class GaugeGroupBase(object):
         self.assertEqual(len(params), self.n_params)
         self.assertEqual(self.gg.num_params(), self.n_params)
         element = self.gg.get_element(params)
-        # XXX is this necessary?
+        # XXX is this necessary?  EGN: maybe not, but it asserts correctness and should be fast
         self.assertIsInstance(element, self.element_type)
 
     def test_element_construction(self):
@@ -51,7 +51,7 @@ class GaugeGroupBase(object):
 
 class GaugeGroupTester(GaugeGroupBase, BaseCase):
     # XXX do we need coverage of an abstract base class?
-    # XXX should this class even be instantiatable?
+    # XXX should this class even be instantiatable?  EGN: no, it's just a base class.
     n_params = 0
     element_type = ggrp.GaugeGroupElement
 

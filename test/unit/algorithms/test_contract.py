@@ -37,6 +37,10 @@ class ContractBigKickModelBase(ContractLGSTModelBase):
         # big kick that should land it outside XP, TP, etc, so contraction
         # routines are more tested
         # XXX Are these useful test cases and if so, are the LGST model cases also useful?
+        # By applying a kick, we ensure the model *needs* to be contracted, and provides
+        # a more realistic & strenous test of the contraction routine.  The LGST cases are
+        # alternatives, which often need contraction as well - we can probably just keep one
+        # or the other (more important to assert correctness)
         super(ContractBigKickModelBase, self).setUp()
         self.model.kick(absmag=1.0)
 

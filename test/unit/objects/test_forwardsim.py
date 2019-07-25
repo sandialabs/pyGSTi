@@ -43,7 +43,7 @@ class AbstractForwardSimTester(BaseCase):
 class ForwardSimBase(object):
     @classmethod
     def setUpClass(cls):
-        # XXX can this be constructed directly instead of taking it from a model instance?
+        # XXX can this be constructed directly instead of taking it from a model instance?  EGN: yet, but maybe painful - see model's ._fwdsim()
         ExplicitOpModel._strict = False
         cls.model = pc.build_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
@@ -143,7 +143,7 @@ class MatrixForwardSimTester(ForwardSimBase, BaseCase):
         # TODO assert correctness
 
     def test_rhoE_from_spamTuple(self):
-        # XXX does this need to be tested?
+        # XXX does this need to be tested?  EGN: No
         custom_spamTuple = (np.zeros((4, 1), 'd'), np.zeros((4, 1), 'd'))
         self.fwdsim._rhoE_from_spamTuple(custom_spamTuple)
         # TODO assert correctness

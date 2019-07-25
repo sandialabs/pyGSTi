@@ -51,7 +51,7 @@ class GermSelectionTester(GermSelectionData, BaseCase):
         # TODO assert correctness
 
     def test_num_non_spam_gauge_params(self):
-        # XXX hey why is this under germselection?
+        # XXX hey why is this under germselection? EGN: probabaly b/c it was/is used exclusively here - could move it to a tools module?
         N = germsel.num_non_spam_gauge_params(self.mdl_target_noisy)
         # TODO assert correctness
 
@@ -78,7 +78,7 @@ class GermSelectionTester(GermSelectionData, BaseCase):
         # TODO assert correctness
 
     def test_randomize_model_list(self):
-        # XXX does this need coverage?
+        # XXX does this need coverage?  EGN: does it take a long time?
         neighborhood = germsel.randomize_model_list(
             [fixtures.model], numCopies=3, randomizationStrength=1e-3,
             seed=_SEED
@@ -215,7 +215,7 @@ class SlackGermSetOptimizationTester(GermSelectionData, BaseCase):
             )
 
     def test_optimize_integer_germs_slack_raises_on_missing_param(self):
-        # XXX is this a useful test?
+        # XXX is this a useful test?  EGN: Probably not.
         with self.assertRaises(ValueError):
             germsel.optimize_integer_germs_slack(self.mdl_target_noisy, self.germ_set)
 

@@ -36,7 +36,7 @@ class DataComparatorTester(BaseCase):
     def test_getters(self):
         comparator = dc.DataComparator([self.DS_0, self.DS_1])
         comparator.implement(significance=0.05)
-        # XXX do these need unit tests?
+        # XXX do these need unit tests?  EGN: maybe not - could ask Kenny
         mdl = self.DS_0.keys()[10]
         comparator.get_JSD(mdl)
         comparator.get_JSD_pseudothreshold()

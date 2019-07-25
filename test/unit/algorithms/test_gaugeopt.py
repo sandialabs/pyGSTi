@@ -110,7 +110,7 @@ class LGSTGaugeOptAutoMethodTester(GaugeOptMetricMethods, LGSTGaugeOptInstance, 
         )
 
     def test_gaugeopt_return_all(self):
-        # XXX does this need to be tested independently of everything else?
+        # XXX does this need to be tested independently of everything else? EGN: probably not - better pattern for this?
         soln, trivialEl, mdl = go.gaugeopt_to_target(self.model, self.target, returnAll=True, **self.options)
         # TODO assert correctness
 

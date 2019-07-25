@@ -257,7 +257,6 @@ class CompileStabilizerBase(object):
             self.fixture.clifford_phase,
             **self.options
         )
-        # XXX what is this actually asserting
         sym_compiled, phase_compiled = symplectic.symplectic_rep_of_clifford_circuit(
             compiled, pspec=self.options.get('pspec', None)
         )
@@ -268,6 +267,9 @@ class CompileStabilizerBase(object):
         sym_out, phase_out = symplectic.apply_clifford_to_stabilizer_state(
             sym_compiled, phase_compiled, sym_state, phase_state
         )
+
+        # This asserts that a particular stabilizer propagation yields the expected result -
+        #  the all-0 state.  This test preparation, acting-on, and measurment of stabilizer states.
         for i in range(self.fixture.n):
             self.assertAlmostEqual(
                 symplectic.pauli_z_measurement(sym_out, phase_out, i)[1],

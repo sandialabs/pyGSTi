@@ -719,7 +719,7 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        # XXX can this be constructed directly?
+        # XXX can this be constructed directly?  EGN: what do you mean?
         Gmz_plus = np.array([[0.5, 0, 0, 0.5],
                              [0, 0, 0, 0],
                              [0, 0, 0, 0],
@@ -738,7 +738,7 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
     def test_deriv_wrt_params(self):
         super(TPInstrumentOpTester, self).test_deriv_wrt_params()
 
-        # XXX does this check anything meaningful?
+        # XXX does this check anything meaningful?  EGN: yes, this checks that when I give deriv_wrt_params a length-1 list it's return value has the right shape.
         deriv = self.gate.deriv_wrt_params([0])
         self.assertEqual(deriv.shape[1], 1)
 

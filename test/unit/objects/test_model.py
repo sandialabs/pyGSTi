@@ -49,7 +49,7 @@ class ModelBase(object):
         super(ModelBase, self).setUp()
 
     def test_construction(self):
-        # XXX what exactly does this cover and is it needed?
+        # XXX what exactly does this cover and is it needed?  EGN: not exactly sure what it covers, but this seems like a good sanity check
         self.assertIsInstance(self.model, m.Model)
         self.assertEqual(len(self.model.preps), 1)
         self.assertEqual(len(self.model.povms['Mdefault']), 2)
@@ -118,7 +118,7 @@ class GeneralMethodBase(object):
         )
 
     def test_element_accessors(self):
-        # XXX what does this test cover and is it useful?
+        # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
         v = np.array([[1.0 / np.sqrt(2)], [0], [0], [1.0 / np.sqrt(2)]], 'd')
         self.model['rho1'] = v
         w = self.model['rho1']
@@ -184,7 +184,7 @@ class GeneralMethodBase(object):
         self.assertAlmostEqual(self.model.frobeniusdist(cp), 0)
 
     def test_pickle(self):
-        # XXX what exactly does this cover and is it needed?
+        # XXX what exactly does this cover and is it needed?  EGN: this tests that the individual pieces (~dicts) within a model can be pickled; it's useful for debuggin b/c often just one of these will break.
         p = pickle.dumps(self.model.preps)
         preps = pickle.loads(p)
         self.assertEqual(list(preps.keys()), list(self.model.preps.keys()))
@@ -304,7 +304,7 @@ class ThresholdMethodBase(object):
 
 class SimMethodBase(object):
     """Tests for model methods which can use different forward sims"""
-    # XXX is there any reason this shouldn't be refactored into test_forwardsim?
+    # XXX is there any reason this shouldn't be refactored into test_forwardsim?  EGN: no, I think moving it would be fine - most model functions just defer to the fwdsim functions.
 
     @classmethod
     def setUpClass(cls):
@@ -347,7 +347,7 @@ class SimMethodBase(object):
     def test_hprobs(self):
         # TODO optimize
         hprobs = self.model.hprobs(self.gatestring1)
-        # XXX is this necessary?
+        # XXX is this necessary?  EGN: maybe testing so many cases is overkill?
         # Cover combinations of arguments
         variants = [
             self.model.hprobs(self.gatestring1, returnPr=True),
@@ -388,7 +388,7 @@ class SimMethodBase(object):
         self.assertAlmostEqual(1 - expected_2, actual_2[1])
 
     def test_bulk_fill_probs_with_split_tree(self):
-        # XXX is this correct?
+        # XXX is this correct?  EGN: looks right to me.
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
         probs_to_fill = np.empty(nElements, 'd')
@@ -600,7 +600,7 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         # TODO assert correctness
 
     def test_check_paramvec_raises_on_error(self):
-        # XXX is this test needed?
+        # XXX is this test needed?  EGN: seems to be a unit test for _check_paramvec, which is good I think.
         self.model._paramvec[:] = 0.0  # mess with paramvec to get error below
         with self.assertRaises(ValueError):
             self.model._check_paramvec(debug=True)  # param vec is now out of sync!
@@ -675,7 +675,7 @@ class FullBadDimensionModelTester(FullModelBase, BaseCase):
         super(FullBadDimensionModelTester, self).setUp()
         self.model = self.model.increase_dimension(11)
 
-    # XXX these aren't tested under normal conditions...
+    # XXX these aren't tested under normal conditions...  EGN: we should probably test them under normal conditions then.
     def test_rotate_raises(self):
         with self.assertRaises(AssertionError):
             self.model.rotate((0.1, 0.1, 0.1))

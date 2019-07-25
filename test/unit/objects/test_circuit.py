@@ -43,7 +43,7 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.size(), 2)
 
     def test_construction_label_conversion(self):
-        # XXX what is tested here that is not covered by other tests?
+        # XXX what is tested here that is not covered by other tests?  EGN: this is more of a use case for when this input is a *nested* tuple.
         # Check that parallel operation labels get converted to circuits properly
         opstr = circuit.Circuit(((('Gx', 0), ('Gy', 1)), ('Gcnot', 0, 1)))
         c = circuit.Circuit(layer_labels=opstr, num_lines=2)

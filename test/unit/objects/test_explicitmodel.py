@@ -36,7 +36,7 @@ class ExplicitOpModelStrictAccessTester(BaseCase):
 class ExplicitOpModelToolTester(BaseCase):
     def setUp(self):
         mdl.ExplicitOpModel._strict = False
-        # XXX can these be constructed directly?
+        # XXX can these be constructed directly?  EGN: yes, some model-construction tests should do it.
         self.model = build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 

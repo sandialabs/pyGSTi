@@ -54,8 +54,8 @@ class ResultsTester(ResultsBase, BaseCase):
             self.res.init_circuits(self.gss)  # usually don't want to re-init
 
     def test_init_circuits_raises_on_bad_arg(self):
-        # XXX Don't test this unless init_circuits can actually take a string
-        # (and if it can, document it)
+        # XXX Don't test this unless init_circuits can actually take a string  EGN: we can remove this test.
+        # (and if it can, document it)  
         with self.assertRaises(ValueError):
             self.res.init_circuits("foobar")
 

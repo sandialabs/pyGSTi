@@ -131,7 +131,7 @@ class RawSeriesDataSetInstance(object):
 class DataSetMethodBase(object):
     def setUp(self):
         super(DataSetMethodBase, self).setUp()
-        for opstr in self.ds:  # XXX is there a direct way of indexing the first row?
+        for opstr in self.ds:  # XXX is there a direct way of indexing the first row?  EGN: I don't know of one.
             self.dsRow = self.ds[opstr]
             break
 

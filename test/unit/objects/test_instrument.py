@@ -49,7 +49,7 @@ class InstrumentMethodBase(object):
 class InstrumentInstanceBase(object):
     def setUp(self):
         # Initialize standard target model for instruments
-        # XXX can instruments be tested independently of a model?
+        # XXX can instruments be tested independently of a model?  EGN: yes, I was just lazy; but they should also be tested within a model.
         self.n_elements = 32
 
         self.model = std.target_model()

@@ -5,7 +5,7 @@ import pygsti.objects.circuitstructure as cs
 
 
 class AbstractCircuitStructureTester(BaseCase):
-    # XXX is testing an abstract base class really useful?
+    # XXX is testing an abstract base class really useful?  EGN: I guess it tests the interface.
     def setUp(self):
         self.gss = cs.CircuitStructure()
 

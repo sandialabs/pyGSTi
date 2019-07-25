@@ -18,6 +18,6 @@ class TextBlockTester(BaseCase):
 
     def test_render_raises_on_unknown_form(self):
         with self.assertRaises(ValueError):
-            # XXX shouldn't this be validated on initialization?
+            # XXX shouldn't this be validated on initialization?  EGN: yeah, that would make sense to me.
             text = ReportText("Hello", 'foobar')
             text.render('html')

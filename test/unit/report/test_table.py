@@ -56,7 +56,7 @@ class TableInstanceTester(BaseCase):
             self.table.render('foobar')
 
     def test_raise_on_invalid_accessor(self):
-        # XXX are these neccessary?
+        # XXX are these neccessary?  EGN: maybe not - checks invalid inputs, which maybe shouldn't need testing?
         with self.assertRaises(KeyError):
             self.table['foobar']
         with self.assertRaises(KeyError):

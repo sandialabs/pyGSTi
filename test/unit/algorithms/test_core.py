@@ -22,7 +22,7 @@ class CoreFuncTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_gram_rank_and_evals_raises_on_no_target(self):
-        # XXX is this neccessary?
+        # XXX is this neccessary?  EGN: probably not
         with self.assertRaises(ValueError):
             core.gram_rank_and_evals(self.ds, self.fiducials, self.fiducials, None)
 
@@ -44,7 +44,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         )
         # TODO assert correctness
 
-        # XXX is this neccessary?
+        # XXX is this neccessary? EGN: tests higher verbosity printing.
         mdl_lgst_2 = core.do_lgst(
             self.ds, self.fiducials, self.fiducials, self.model,
             svdTruncateTo=4, verbosity=10
@@ -111,7 +111,7 @@ class CoreELGSTTester(CoreStdData, BaseCase):
         model._check_paramvec()
         # TODO assert correctness
 
-        # XXX is this neccesary?
+        # XXX is this neccesary? (verbosity increase)
         err_vec_2, model_2 = core.do_exlgst(
             self.ds, self.mdl_clgst, self.elgstStrings[0], self.fiducials,
             self.fiducials, self.model, regularizeFactor=1e-3, svdTruncateTo=4,
@@ -234,7 +234,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         )
         # TODO assert correctness
 
-        # XXX are these useful?
+        # XXX are these useful? (verbosity test)
         mdl_lsgst_2 = core.do_iterative_mc2gst(
             self.ds, self.mdl_clgst, self.lsgstStrings, verbosity=10,
             minProbClipForWeighting=1e-6, probClipInterval=(-1e6, 1e6)
