@@ -17,7 +17,7 @@ class SPAMVecTestCase(BaseTestCase):
 
     def setUp(self):
         super(SPAMVecTestCase, self).setUp()
-        self.spamvec = DenseSPAMVec(np.array([1,0]),"densitymx")
+        self.spamvec = DenseSPAMVec(np.array([1,0]),"densitymx", "prep")
 
     def test_slice(self):
         self.spamvec[:]
