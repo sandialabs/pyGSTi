@@ -48,17 +48,6 @@ except ImportError:  # if Cython isn't available (e.g. in readthedocs) just skip
     ext_modules = []
 
 
-classifiers = """\
-Development Status :: 4 - Beta
-Intended Audience :: Science/Research
-License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
-Programming Language :: Python
-Topic :: Scientific/Engineering :: Physics
-Operating System :: Microsoft :: Windows
-Operating System :: MacOS :: MacOS X
-Operating System :: Unix
-"""
-
 descriptionTxt = """\
 Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
 (e.g. a qubit).  GST estimates a set of quantum logic gates and (simultaneously) the associated state preparation and
@@ -194,6 +183,15 @@ setup(name='pyGSTi',
           'quantum',
           'qubit'
       ],
-      classifiers=list(filter(None, classifiers.split("\n"))),
+      classifiers=[
+          "Development Status :: 4 - Beta",
+          "Intended Audience :: Science/Research",
+          "License :: OSI Approved :: Apache Software License",
+          "Programming Language :: Python",
+          "Topic :: Scientific/Engineering :: Physics",
+          "Operating System :: Microsoft :: Windows",
+          "Operating System :: MacOS :: MacOS X",
+          "Operating System :: Unix"
+      ],
       ext_modules=ext_modules,
 )

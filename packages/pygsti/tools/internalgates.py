@@ -1,10 +1,13 @@
 """The standard unitaries and gate names, used internal compilers and short-hand model init"""
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -281,6 +284,7 @@ def get_standard_gatenames_quil_conversions():
     std_gatenames_to_quil['Gypi'] = 'Y'
     std_gatenames_to_quil['Gp'] = 'RZ(pi/2)'  # todo : check that this is correct, and shouldn't instead be -pi/2
     std_gatenames_to_quil['Gpdag'] = 'RZ(-pi/2)'  # todo : check that this is correct, and shouldn't instead be +pi/2
+    std_gatenames_to_quil['Gh'] = 'H'
     std_gatenames_to_quil['Gt'] = 'RZ(pi/4)'  # todo : check that this is correct, and shouldn't instead be -pi/4
     std_gatenames_to_quil['Gtdag'] = 'RZ(-pi/4)'  # todo : check that this is correct, and shouldn't instead be +pi/4
     std_gatenames_to_quil['Gcphase'] = 'CZ'
