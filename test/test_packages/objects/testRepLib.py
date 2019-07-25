@@ -14,27 +14,9 @@ try:
 except ImportError:
     from pygsti.objects import replib
 
+
 # This class is for unifying some models that get used in this file and in testGateSets2.py
 class RepLibTestCase(BaseTestCase):
-
-    def setUp(self):
-        super(RepLibTestCase, self).setUp()
-
-    def testRepLib_basic(self):
-        #just some simple tests of replib functions for now
-        x = np.zeros(4,'d')
-        staterep = replib.DMStateRep(x) # state rep
-
-        x = np.zeros(4,'d')
-        erep = replib.DMEffectRep_Dense(x)
-        self.assertAlmostEqual(erep.probability(staterep), 0.0)
-
-        g = np.zeros((4,4),'d')
-        grep = replib.DMOpRep_Dense(g)
-
-        staterep2 = grep.acton(staterep)
-        self.assertEqual(type(staterep2), replib.DMStateRep)
-
     def testRepLib_map(self):
         #Just test a Model with a "map" simtype to exercise the replib
         mdl = std.target_model()
@@ -43,15 +25,15 @@ class RepLibTestCase(BaseTestCase):
 
         probs = mdl.probs(('Gx','Gx'))
         self.assertAlmostEqual(probs['0'], 0.0)
-        self.assertAlmostEqual(probs['1'], 1.0)        
+        self.assertAlmostEqual(probs['1'], 1.0)
 
         probs2 = mdl.bulk_probs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
         self.assertAlmostEqual(probs2[('Gx',)]['0'], 0.5)
-        self.assertAlmostEqual(probs2[('Gx',)]['1'], 0.5)        
+        self.assertAlmostEqual(probs2[('Gx',)]['1'], 0.5)
         self.assertAlmostEqual(probs2[('Gx','Gx')]['0'], 0.0)
-        self.assertAlmostEqual(probs2[('Gx','Gx')]['1'], 1.0)        
+        self.assertAlmostEqual(probs2[('Gx','Gx')]['1'], 1.0)
         self.assertAlmostEqual(probs2[('Gx','Gx','Gy')]['0'], 0.5)
-        self.assertAlmostEqual(probs2[('Gx','Gx','Gy')]['1'], 0.5)        
+        self.assertAlmostEqual(probs2[('Gx','Gx','Gy')]['1'], 0.5)
 
         #LATER: save & check outputs of dprobs
         dprobs = mdl.bulk_dprobs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])

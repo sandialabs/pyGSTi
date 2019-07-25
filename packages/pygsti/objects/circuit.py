@@ -2644,6 +2644,7 @@ class Circuit(object):
         f.close()
 
     def convert_to_quil(self,
+                        num_qubits=None,
                         gatename_conversion=None,
                         qubit_conversion=None,
                         readout_conversion=None,
@@ -2705,11 +2706,15 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
+
         # Init the quil string.
         quil = ''
         depth = self.num_layers()
 
-        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(num_qubits))
 
         quil += 'RESET\n'
 
@@ -2787,7 +2792,7 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None,gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -2831,15 +2836,16 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
-        num_qubits = len(self.line_labels)
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
         if 'Iz' in self.str:
-            using_IMs = True
+            # using_IMs = True
             num_IMs = self.str.count('Iz')
         else:
-            using_IMs = False
+            # using_IMs = False
             num_IMs = 0
         num_IMs_used = 0
 
@@ -2847,8 +2853,8 @@ class Circuit(object):
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
-#        openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
-        openqasm += 'creg cr[{0}];\n'.format(str(num_qubits+num_IMs))
+        # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
+        openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
         openqasm += '\n'
 
         depth = self.num_layers()
@@ -2884,7 +2890,7 @@ class Circuit(object):
                 else:
                     assert len(gate.qubits) == 1
                     q = gate.qubits[0]
-                    classical_bit = num_IMs_used
+                    # classical_bit = num_IMs_used
                     openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
                     num_IMs_used += 1
 
@@ -2896,7 +2902,7 @@ class Circuit(object):
                 # circuit layer.
                 assert(not set(gate_qubits).issubset(set(qubits_used)))
                 qubits_used.extend(gate_qubits)
-                    
+
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
             for q in self.line_labels:
                 if q not in qubits_used:
@@ -2913,12 +2919,13 @@ class Circuit(object):
                 for q in self.line_labels[:-1]:
                     openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
                 openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
-    #            openqasm += ';'
+                # openqasm += ';'
 
         # Add in a measurement at the end.
         for q in self.line_labels:
-#            openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
-            openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(num_IMs_used+qubit_conversion[q]))
+            # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
+            openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
+                                                              str(num_IMs_used + qubit_conversion[q]))
 
         return openqasm
 
