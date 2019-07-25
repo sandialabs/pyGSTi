@@ -72,8 +72,8 @@ The primary goals of the pyGSTi project are to:
 # Extra requirements
 extras = {
     'diamond norm computation': [
-        'cvxpy',
-        'cvxopt'
+        'cvxopt',
+        'cvxpy'
     ],
     'nose testing': ['nose'],
     'accurate memory profiling': ['psutil'],
@@ -92,23 +92,29 @@ extras = {
         'flake8'
     ],
     'testing': [
+        'backports.tempfile;python_version<"3.2"',
+        'coverage',
+        'cvxopt',
+        'cvxpy',
+        'cython',
+        'matplotlib',
+        'mock;python_version<"3.3"',
+        'mpi4py',
+        'msgpack',
         'nose',
         'nose-timer',
-        'cython',
-        'cvxpy',
-        'cvxopt',
-        'psutil',
-        'mpi4py',
         'pandas',
-        'msgpack',
-        'coverage',
-        'zmq',
-        'rednose'
+        'pathlib2;python_version<"3.4"',
+        'psutil',
+        'rednose',
+        'unittest2;python_version<"3.2"',
+        'zmq'
     ]
 }
 
 # Add `complete' target, which will install all extras listed above
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
+
 
 
 # Configure setuptools_scm to build the post-release version number
