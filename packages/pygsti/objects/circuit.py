@@ -2707,7 +2707,8 @@ class Circuit(object):
         quil = ''
         depth = self.num_layers()
 
-        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(num_qubits))
 
         quil += 'RESET\n'
 
