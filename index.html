@@ -56,7 +56,7 @@
 
 <h2>
 <a id="intro" class="anchor" href="#intro" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>What is pyGSTi?</h2>
-<p><strong>pyGSTi</strong> is an open-source software for <em>modeling and characterizing noisy quantum information processors</em> (QIPs), i.e., systems of one or more qubits.  It is licensed under the GNU General Public License (GPL). Copyright and license information can be found in <code>license.txt</code>, and the GPL itself in <code>COPYING</code>.</p>
+<p><strong>pyGSTi</strong> is an open-source software for <em>modeling and characterizing noisy quantum information processors</em> (QIPs), i.e., systems of one or more qubits.  It is licensed under the Apache License, Version 2.0. Copyright information can be found in <code>NOTICE</code>, and the license itself in <code>LICENSE</code>.</p>
 <p>There are three main objects in pyGSTi:</p>
 <ul>
 <li><code>Circuit</code>: a quantum circuit (can have many qubits).</li>
@@ -79,7 +79,7 @@
 </ul>
 <p>PyGSTi is designed with a modular structure so as to be highly customizable and easily integrated to new or existing python software.  It runs using python2.7 or python3.  To faclilitate integration with software for running cloud-QIP experiments, pyGSTi <code>Circuit</code> objects can be converted to IBM&#39;s <strong>OpenQASM</strong> and Rigetti Quantum Computing&#39;s <strong>Quil</strong> circuit description languages.</p>
 
-<h2>	  
+<h2>
   <a id="installation" class="anchor" href="#installation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Installation</h2>
 <p>Apart from several optional Cython modules, pyGSTi is written entirely in Python. To install pyGSTi and only its required dependencies run:</p>
 <p><code>pip install pygsti</code></p>
@@ -94,7 +94,7 @@ pip install -e .[complete]
 <p><code>python setup.py build_ext --inplace</code></p>
 <p>Finally, <a href="http://jupyter.org/">Jupyter notebook</a> is highly recommended as it is generally convenient and the format of the included tutorials and examples.  It is installed automatically when <code>[complete]</code> is used, otherwise it can be installed separately.</p>
 
-<h2>	  
+<h2>
   <a id="getting-started" class="anchor" href="#getting-started" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Getting Started</h2>
 <p>Here&#39;s a couple of simple examples to get you started.</p>
 <h4 id="circuit-simulation">Circuit simulation</h4>
@@ -163,7 +163,7 @@ pygsti.report.create_standard_report(results, filename=&quot;myReport&quot;, tit
 <h2>
 <a id="documentation" class="anchor" href="#documentation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Documentation</h2>
 
-<p>Detailed documentation of the pyGSTi code (automatically generated from 
+<p>Detailed documentation of the pyGSTi code (automatically generated from
 the source code's docstrings) can be found <a href="http://pygsti.readthedocs.io">here</a>.  These pages provide a searchable reference for just about everything pyGSTi can do.  Please let us know if you find any errors.</p>
 
 <!-- <h2>
@@ -175,10 +175,9 @@ the source code's docstrings) can be found <a href="http://pygsti.readthedocs.io
 <h2>
 <a id="license" class="anchor" href="#license" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>License</h2>
 
-<p>pyGSTi is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.  To cite this work, please use the DOI:
+<p>pyGSTi is free and open-source software: you can redistribute it and/or
+modify it under the terms of the Apache License Version 2.0. To cite this work,
+please use the DOI:
 <a href="https://zenodo.org/badge/latestdoi/20481/pyGSTio/pyGSTi"><img src="https://zenodo.org/badge/20481/pyGSTio/pyGSTi.svg" alt="10.5281/zenodo.46200"></a>
 </p>
 
