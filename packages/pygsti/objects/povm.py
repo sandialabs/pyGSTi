@@ -347,7 +347,9 @@ class _BasePOVM(POVM):
         for k, v in items:
             if k == self.complement_label: continue
             effect = v if isinstance(v, _sv.SPAMVec) else \
-                _sv.FullSPAMVec(v)
+                _sv.FullSPAMVec(v, typ="effect")
+            if effect._prep_or_effect == "unknown": effect._prep_or_effect = "effect"  # backward compatibility
+            assert(effect._prep_or_effect == "effect"), "Elements of POVMs must be *effect* SPAM vecs!"
 
             if evotype is None: evotype = effect._evotype
             else: assert(evotype == effect._evotype), \

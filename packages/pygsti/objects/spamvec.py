@@ -767,13 +767,6 @@ class SPAMVec(_modelmember.ModelMember):
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
 
-    #Pickle plumbing
-
-    def __setstate__(self, state):
-        if "dirty" in state:  # backward compat: .dirty was replaced with ._dirty in ModelMember
-            state['_dirty'] = state['dirty']; del state['dirty']
-        self.__dict__.update(state)
-
     #Note: no __str__ fn
 
     @staticmethod
@@ -913,7 +906,10 @@ class DenseSPAMVec(SPAMVec):
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        ret = getattr(self.base, attr)
+        if 'base1D' in self.__dict__:
+            ret = getattr(self.base, attr)
+        else: 
+            raise AttributeError("No attribute:", attr)
         self.dirty = True
         return ret
 
@@ -1722,14 +1718,14 @@ class TensorProdSPAMVec(SPAMVec):
                 #sometimes: return replib.SVEffectRep_Dense(self.todense()) ???
             else:  # "effect"
                 rep = replib.SVEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
-                                                    len(self.factors), self._fast_kron_array.shape[1], self.dim)
+                                                    len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "densitymx":
             if typ == "prep":
                 rep = replib.DMStateRep(_np.ascontiguousarray(_np.zeros(dim, 'd')))
                 #sometimes: return replib.DMEffectRep_Dense(self.todense()) ???
             else:  # "effect"
                 rep = replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
-                                                    len(self.factors), self._fast_kron_array.shape[1], self.dim)
+                                                    len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "stabilizer":
             if typ == "prep":
                 #Rep is stabilizer-rep tuple, just like StabilizerSPAMVec

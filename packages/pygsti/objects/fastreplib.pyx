@@ -416,8 +416,12 @@ cdef class DMEffectRep:
 
     def __cinit__(self):
         pass # no init; could set self.c_effect = NULL? could assert(False)?
+
     def __dealloc__(self):
         del self.c_effect # check for NULL?
+
+    def __reduce__(self):
+        return (DMEffectRep, ())    
         
     @property
     def dim(self):
@@ -503,6 +507,9 @@ cdef class DMOpRep:
 
     def __cinit__(self):
         pass # self.c_gate = NULL ?
+
+    def __reduce__(self):
+        return (DMOpRep, ())
 
     def __dealloc__(self):
         del self.c_gate
@@ -788,8 +795,12 @@ cdef class SVEffectRep:
 
     def __cinit__(self):
         pass # no init; could set self.c_effect = NULL? could assert(False)?
+
     def __dealloc__(self):
         del self.c_effect # check for NULL?
+
+    def __reduce__(self):
+        return (SVEffectRep, ())
 
     def probability(self, SVStateRep state not None):
         #unnecessary (just put in signature): cdef SVStateRep st = <SVStateRep?>state
@@ -859,6 +870,9 @@ cdef class SVOpRep:
 
     def __cinit__(self):
         pass # self.c_gate = NULL ?
+
+    def __reduce__(self):
+        return (SVOpRep, ())
 
     def __dealloc__(self):
         del self.c_gate
@@ -1112,6 +1126,9 @@ cdef class SBOpRep:
 
     def __cinit__(self):
         pass # self.c_gate = NULL ?
+
+    def __reduce__(self):
+        return (SBOpRep, ())
 
     def __dealloc__(self):
         del self.c_gate
@@ -1691,7 +1708,7 @@ def DM_mapfill_dprobs_block(calc,
     if param_indices is None:
         param_indices = list(range(calc.Np))
     if dest_param_indices is None:
-        dest_param_indices = list(range(_slct.len(param_indices)))
+        dest_param_indices = list(range(_slct.length(param_indices)))
 
     param_indices = _slct.as_array(param_indices)
     dest_param_indices = _slct.as_array(dest_param_indices)

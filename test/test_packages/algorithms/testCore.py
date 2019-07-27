@@ -123,7 +123,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_exlgst_reg.set_all_parameterizations("full") # b/c ex-LGST sets spam to StaticSPAMVec objects (b/c they're not optimized)
         mdl_exlgst_go = pygsti.gaugeopt_to_target(mdl_exlgst,mdl_exlgst_compare, {'spam':1.0 }, checkJac=True)
         mdl_exlgst_reg_go = pygsti.gaugeopt_to_target(mdl_exlgst_reg,mdl_exlgst_reg_compare, {'spam':1.0 }, checkJac=True)
-7
+
 
     def test_MC2GST(self):
 

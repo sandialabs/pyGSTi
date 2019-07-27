@@ -400,15 +400,15 @@ Gx^4  0:100
         gstrs = list(ds.keys())
         raw_dict, elIndices, outcome_lookup, ntotal = std1Q_XYI.target_model().simplify_circuits(gstrs, ds)
 
-        print("Raw mdl -> spamtuple dict:\n","\n".join(["%s: %s" % (str(k),str(v)) for k,v in raw_dict.items()]))
+        print("Raw circuit -> elabels dict:\n","\n".join(["%s: %s" % (str(k),str(v)) for k,v in raw_dict.items()]))
         print("\nElement indices lookup (orig opstr index -> element indices):\n",elIndices)
         print("\nOutcome lookup (orig opstr index -> list of outcome for each element):\n",outcome_lookup)
         print("\ntotal elements = ", ntotal)
 
-        self.assertEqual(raw_dict[()], [(L('rho0'), L('Mdefault_1'))])
-        self.assertEqual(raw_dict[('Gx',)], [(L('rho0'), L('Mdefault_0')),(L('rho0'), L('Mdefault_1'))])
-        self.assertEqual(raw_dict[('Gx','Gy')], [(L('rho0'), L('Mdefault_0')),(L('rho0'), L('Mdefault_1'))])
-        self.assertEqual(raw_dict[('Gx',)*4], [(L('rho0'), L('Mdefault_0'))])
+        self.assertEqual(raw_dict[('rho0',)], [L('Mdefault_1')])
+        self.assertEqual(raw_dict[('rho0','Gx',)], [L('Mdefault_0'), L('Mdefault_1')])
+        self.assertEqual(raw_dict[('rho0','Gx','Gy')], [L('Mdefault_0'), L('Mdefault_1')])
+        self.assertEqual(raw_dict[('rho0',) + ('Gx',)*4], [L('Mdefault_0')])
 
         self.assertEqual(elIndices, collections.OrderedDict(
             [(0, slice(0, 1, None)), (1, slice(1, 3, None)), (2, slice(3, 5, None)), (3, slice(5, 6, None))]) )

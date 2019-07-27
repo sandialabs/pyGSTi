@@ -221,7 +221,7 @@ Gx^4 20 80 0.2 100
         mds5 = pygsti.objects.MultiDataSet()
 
         #Create a multidataset with time dependence and no rep counts
-        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
+
         ds1_time = np.array(np.arange(0,6),'d')
 
         ds2_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
@@ -275,6 +275,7 @@ Gx^4 20 80 0.2 100
         oliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
         timeData = [ np.array([1.0,2.0,3.0]), np.array([4.0,5.0,6.0]) ]
         repData = [ np.array([1,1,1]), np.array([2,2,2]) ]
+        oli = collections.OrderedDict( [(('0',),0), (('1',),1)] )
         ds = pygsti.objects.DataSet(oliData, timeData, repData, circuits, None,
                                       ['0','1'], None,  bStatic=False)
         ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
@@ -296,6 +297,7 @@ Gx^4 20 80 0.2 100
         oliData = np.array([0,1,0,1,1,0])
         timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0])
         repData = np.array([1,1,1,2,2,2])
+        oli = collections.OrderedDict( [(('0',),0), (('1',),1)] )
         ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
                                       ['0','1'], None,  bStatic=True)
         ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,

@@ -10,6 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import numpy as _np
+import copy as _copy
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
@@ -43,6 +44,12 @@ class TermEvalTree(EvalTree):
 
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
+        # list of the operation labels
+        self.opLabels = []
+
+        # Trivially init other members - to be filled in by initialize() or by subtree creation
+        self.simplified_circuit_elabels = None
+
         super(TermEvalTree, self).__init__(items)
 
     def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
@@ -79,6 +86,7 @@ class TermEvalTree(EvalTree):
 
         circuit_list = [tuple(opstr) for opstr in simplified_circuit_list.keys()]
         self.simplified_circuit_elabels = list(simplified_circuit_list.values())
+        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
         #UNNEEDED? self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
@@ -374,6 +382,7 @@ class TermEvalTree(EvalTree):
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
             subTree.simplified_circuit_elabels = [self.simplified_circuit_elabels[kk]
                                                      for kk in _slct.indices(subTree.myFinalToParentFinalMap)]
+            subTree.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             final_el_startstops = []; i = 0
@@ -389,12 +398,18 @@ class TermEvalTree(EvalTree):
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_elabels])
             #NEEDED? subTree.recompute_spamtuple_indices(bLocal=False)
 
-            subTree.opLabels = self._get_opLabels(subTree.generate_circuit_list(permute=False))
+            circuits = subTree.generate_circuit_list(permute=False)
+            subTree.opLabels = self._get_opLabels({c: elbls for c,elbls in zip(circuits,subTree.simplified_circuit_elabels)})
 
             return subTree
 
-        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
-                                               permute_parent_element, create_subtree)
+        old_indices_in_new_order = self._finish_split(elIndicesDict, subTreeSetList,
+                                                      permute_parent_element, create_subtree)
+
+        self.simplified_circuit_elabels, updated_elIndices = \
+            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels, elIndicesDict, old_indices_in_new_order)
+        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
+
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
         return updated_elIndices
@@ -409,6 +424,8 @@ class TermEvalTree(EvalTree):
     def copy(self):
         """ Create a copy of this evaluation tree. """
         cpy = self._copyBase(TermEvalTree(self[:]))
+        cpy.opLabels = self.opLabels[:]
+        cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
     def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,

@@ -626,7 +626,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
         mdl.preps[prepLabel] = _objs.StaticSPAMVec(rhoVec)
     for povmLabel, povm in mdl.povms.items():
         mdl.povms[povmLabel] = _objs.UnconstrainedPOVM(
-            [(lbl, _objs.StaticSPAMVec(E))
+            [(lbl, _objs.StaticSPAMVec(E, typ="effect"))
              for lbl, E in povm.items()])
 
     printer.log("--- eLGST (least squares) ---", 1)
@@ -1214,6 +1214,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         # number of independent parameters in dataset (max. model # of params)
         nDataParams = dataset.get_degrees_of_freedom(
             dsCircuitsToUse, aggregate_times=not time_dependent)
+    else:
+        nDataParams = 0  # because it's never used
     profiler.add_time("do_mc2gst: num data params", tm)
 
     #Step 3: solve least squares minimization problem
@@ -2235,6 +2237,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         # number of independent parameters in dataset (max. model # of params)
         nDataParams = dataset.get_degrees_of_freedom(
             dsCircuitsToUse, aggregate_times=not time_dependent)
+    else:
+        nDataParams = 0  # because it's never used
+
     profiler.add_time("do_mc2gst: num data params", tm)
 
     #Run optimization (use leastsq)

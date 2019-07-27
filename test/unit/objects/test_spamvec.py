@@ -22,7 +22,7 @@ class SpamvecUtilTester(BaseCase):
             sv.SPAMVec.convert_to_vector(0.0)  # something with no len()
 
     def test_base_spamvec(self):
-        raw = sv.SPAMVec(4, "densitymx")
+        raw = sv.SPAMVec(4, "densitymx", "prep")
 
         T = FullGaugeGroupElement(
             np.array([[0, 1, 0, 0],
@@ -262,8 +262,8 @@ class ComplementSpamvecTester(POVMSpamvecBase, BaseCase):
         v = np.ones((4, 1), 'd')
         v_id = np.zeros((4, 1), 'd')
         v_id[0] = 1.0 / np.sqrt(2)
-        tppovm = TPPOVM([('0', sv.FullSPAMVec(v)),
-                         ('1', sv.FullSPAMVec(v_id - v))])
+        tppovm = TPPOVM([('0', sv.FullSPAMVec(v, typ="effect")),
+                         ('1', sv.FullSPAMVec(v_id - v, typ="effect"))])
         return tppovm['1']  # complement POVM
 
     def test_vector_conversion(self):
@@ -308,5 +308,5 @@ class TensorProdEffectSpamvecTester(TensorProdSpamvecBase, POVMSpamvecBase, Base
     @staticmethod
     def build_vec():
         v = np.ones((4, 1), 'd')
-        povm = UnconstrainedPOVM([('0', sv.FullSPAMVec(v))])
+        povm = UnconstrainedPOVM([('0', sv.FullSPAMVec(v,typ="effect"))])
         return sv.TensorProdSPAMVec("effect", [povm], ['0'])

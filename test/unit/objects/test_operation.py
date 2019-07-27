@@ -38,7 +38,7 @@ class OpBase(object):
     def test_torep(self):
         state = np.zeros((4, 1), 'd')
         state[0] = state[3] = 1.0
-        self.gate.torep().acton(FullSPAMVec(state).torep("prep"))
+        self.gate._rep.acton(FullSPAMVec(state, typ="prep")._rep)
         # TODO assert correctness
 
     def test_to_string(self):
@@ -565,7 +565,7 @@ class LindbladDenseOpBase(LindbladOpBase, MutableDenseOpBase):
 class LindbladSparseOpBase(LindbladOpBase, OpBase):
     def assertArraysEqual(self, a, b):
         # Sparse LindbladOp does not support equality natively, so compare errorgen matrices
-        self.assertEqual((a.errorgen.err_gen_mx != b.errorgen.err_gen_mx).nnz, 0)
+        self.assertEqual((a.errorgen.tosparse() != b.errorgen.tosparse()).nnz, 0)
 
 
 class CPTPLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):

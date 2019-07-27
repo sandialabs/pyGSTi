@@ -298,7 +298,7 @@ class EmbeddedOpFactory(OpFactory):
         """
         return self.embedded_factory.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this OpFactory using a vector of its parameters.
 
@@ -312,8 +312,8 @@ class EmbeddedOpFactory(OpFactory):
         -------
         None
         """
-        self.embedded_factory.from_vector(v)
-        self.dirty = True
+        self.embedded_factory.from_vector(v, close, nodirty)
+        if not nodirty: self.dirty = True
 
 
 class EmbeddingOpFactory(OpFactory):
@@ -438,7 +438,7 @@ class EmbeddingOpFactory(OpFactory):
         """
         return self.embedded_factory_or_op.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this OpFactory using a vector of its parameters.
 
@@ -452,8 +452,8 @@ class EmbeddingOpFactory(OpFactory):
         -------
         None
         """
-        self.embedded_factory_or_op.from_vector(v)
-        self.dirty = True
+        self.embedded_factory_or_op.from_vector(v, close, nodirty)
+        if not nodirty: self.dirty = True
 
 
 class ComposedOpFactory(OpFactory):
@@ -577,7 +577,7 @@ class ComposedOpFactory(OpFactory):
             v[factor_local_inds] = gate.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this factory using a vector of parameters.
 
@@ -595,8 +595,8 @@ class ComposedOpFactory(OpFactory):
         for gate in self.factors:
             factor_local_inds = _gm._decompose_gpindices(
                 self.gpindices, gate.gpindices)
-            gate.from_vector(v[factor_local_inds])
-        self.dirty = True
+            gate.from_vector(v[factor_local_inds], close, nodirty)
+        if not nodirty: self.dirty = True
 
 
 #Note: to pickle these Factories we'll probably need to some work

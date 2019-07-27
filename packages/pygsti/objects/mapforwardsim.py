@@ -404,7 +404,7 @@ class MapForwardSimulator(ForwardSimulator):
         if dest_param_indices1 is None:
             dest_param_indices1 = list(range(_slct.length(param_indices1)))
         if dest_param_indices2 is None:
-            dest_param_indices1 = list(range(_slct.length(param_indices2)))
+            dest_param_indices2 = list(range(_slct.length(param_indices2)))
 
         param_indices1 = _slct.as_array(param_indices1)
         dest_param_indices1 = _slct.as_array(dest_param_indices1)
@@ -424,7 +424,7 @@ class MapForwardSimulator(ForwardSimulator):
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs = _np.empty((nEls, nP2), 'd')
         dprobs2 = _np.empty((nEls, nP2), 'd')
-        calc._fill_dprobs_block(dprobs, slice(0, nEls), None, evalTree, param_indices2, comm)
+        replib.DM_mapfill_dprobs_block(calc, dprobs, slice(0, nEls), None, evalTree, param_indices2, comm)
 
         orig_vec = calc.to_vector().copy()
         for i in range(calc.Np):
@@ -432,7 +432,7 @@ class MapForwardSimulator(ForwardSimulator):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 calc.from_vector(vec, close=True)
-                calc._fill_dprobs_block(dprobs2, slice(0, nEls), None, evalTree, param_indices2, subComm)
+                replib.DM_mapfill_dprobs_block(calc, dprobs2, slice(0, nEls), None, evalTree, param_indices2, subComm)
                 _fas(mxToFill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
         calc.from_vector(orig_vec)
 
