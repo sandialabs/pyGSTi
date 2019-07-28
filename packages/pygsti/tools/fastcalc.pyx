@@ -3,6 +3,15 @@
 # cython: linetrace=False
 # filename: fastcalc.pyx
 
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 import numpy as np
 from libc.stdlib cimport malloc, free
 cimport numpy as np
@@ -59,7 +68,7 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
         slc2 = embedded_gate_acton_fn( slc1 )
         for k in range(nActionIndices):
             output_state[ vec_index_noop+baseinds[k] ] += slc2[k] #state[ inds[k] ]
-        
+
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nParts-1,-1,-1):
             if b[i]+1 < numBasisEls_noop_blankaction[i]:
@@ -75,7 +84,7 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
 # i = 0 1 2 3
 # -----------
 # N = 2 3 1 2
-#     0 0 0 0 
+#     0 0 0 0
 #     0 0 0 1 + m[3]
 #     0 1 0 0 + m[1] - 1*m[3]
 #     0 1 0 1 + m[3]
@@ -128,7 +137,7 @@ def embedded_fast_acton_sparse_spc1(
     cdef double *slc1 = <double *>malloc(nActionIndices * sizeof(double))
     cdef double *slc2 = <double *>malloc(nActionIndices * sizeof(double))
     cdef double *scratch = <double *>malloc(nActionIndices * sizeof(double))
-    
+
     if not slc1 or not slc2 or not scratch: # or not inds:
         raise MemoryError()
 
@@ -145,21 +154,21 @@ def embedded_fast_acton_sparse_spc1(
             #Act with embedded gate on appropriate sub-space of state
             for k in range(nActionIndices):
                 slc1[k] = state[ vec_index_noop+baseinds[k] ]# inds[k] ]
-        
+
             #SPECIAL ACTON for output_state[ inds ] += acton( state[inds] )
             # replaces:  slc2 = embedded_gate_acton_fn( slc1 )
             custom_expm_multiply_simple_core_c(&Adata[0], <INT*>&Aindptr[0],
                                                <INT*>&Aindices[0], &slc1[0], nActionIndices,
                                                mu, m_star, s, tol, eta,
                                                &slc2[0], &scratch[0])
-            
+
             for k in range(nActionIndices):
                 output_state[ vec_index_noop+baseinds[k] ] += slc2[k] #state[ inds[k] ]
 
         else: #act as identity
             for k in range(nActionIndices):
                 output_state[vec_index_noop+baseinds[k]] += state[vec_index_noop+baseinds[k]]
-        
+
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nParts-1,-1,-1):
             if b[i]+1 < numBasisEls_noop_blankaction[i]:
@@ -213,7 +222,7 @@ def embedded_fast_acton_sparse_spc2(np.ndarray[double, ndim=2, mode="c"] densemx
         #Act with embedded gate on appropriate sub-space of state
         #for k in range(nActionIndices):
         #    slc1[k] = state[ vec_index_noop+baseinds[k] ]
-        
+
         #SPECIAL ACTON for output_state[ inds ] += acton( state[inds] )
         # replaces:  slc2 = embedded_gate_acton_fn( slc1 )
         # Dense matrix multiplication: w_i = sum_j M_ij * v_j
@@ -222,10 +231,10 @@ def embedded_fast_acton_sparse_spc2(np.ndarray[double, ndim=2, mode="c"] densemx
             for j in range(1,nActionIndices):
                 cum += densemx[i,j] * state[ vec_index_noop+baseinds[j] ]
             output_state[ vec_index_noop+baseinds[i] ] += cum
-                    
+
         #for k in range(nActionIndices):
         #    output_state[ vec_index_noop+baseinds[k] ] += slc2[k] #state[ inds[k] ]
-        
+
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nParts-1,-1,-1):
             if b[i]+1 < numBasisEls_noop_blankaction[i]:
@@ -284,7 +293,7 @@ def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
         for k in range(nActionIndices):
             output_state[ vec_index_noop+baseinds[k] ] = output_state[ vec_index_noop+baseinds[k] ] + slc2[k] #state[ inds[k] ]
               # Note: in-place addition doesn't compile correctly with complex type
-        
+
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nParts-1,-1,-1):
             if b[i]+1 < numBasisEls_noop_blankaction[i]:
@@ -300,7 +309,7 @@ def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
 # i = 0 1 2 3
 # -----------
 # N = 2 3 1 2
-#     0 0 0 0 
+#     0 0 0 0
 #     0 0 0 1 + m[3]
 #     0 1 0 0 + m[1] - 1*m[3]
 #     0 1 0 1 + m[3]
@@ -353,7 +362,7 @@ def embedded_fast_acton_sparse_spc1_complex(
     cdef double complex *slc1 = <double complex *>malloc(nActionIndices * sizeof(double complex))
     cdef double complex *slc2 = <double complex *>malloc(nActionIndices * sizeof(double complex))
     cdef double complex *scratch = <double complex *>malloc(nActionIndices * sizeof(double complex))
-    
+
     if not slc1 or not slc2 or not scratch: # or not inds:
         raise MemoryError()
 
@@ -370,7 +379,7 @@ def embedded_fast_acton_sparse_spc1_complex(
             #Act with embedded gate on appropriate sub-space of state
             for k in range(nActionIndices):
                 slc1[k] = state[ vec_index_noop+baseinds[k] ]# inds[k] ]
-        
+
             #SPECIAL ACTON for output_state[ inds ] += acton( state[inds] )
             # replaces:  slc2 = embedded_gate_acton_fn( slc1 )
             custom_expm_multiply_simple_core_c_complex(
@@ -378,7 +387,7 @@ def embedded_fast_acton_sparse_spc1_complex(
                 <INT*>&Aindices[0], &slc1[0], nActionIndices,
                 mu, m_star, s, tol, eta,
                 &slc2[0], &scratch[0])
-            
+
             for k in range(nActionIndices):
                 output_state[ vec_index_noop+baseinds[k] ] = output_state[ vec_index_noop+baseinds[k] ] + slc2[k] #state[ inds[k] ]
                   # Note: in-place addition doesn't compile correctly with complex type
@@ -387,7 +396,7 @@ def embedded_fast_acton_sparse_spc1_complex(
             for k in range(nActionIndices):
                 output_state[vec_index_noop+baseinds[k]] = output_state[vec_index_noop+baseinds[k]] + state[vec_index_noop+baseinds[k]]
                   # Note: in-place addition doesn't compile correctly with complex type
-        
+
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nParts-1,-1,-1):
             if b[i]+1 < numBasisEls_noop_blankaction[i]:
@@ -435,7 +444,7 @@ def embedded_fast_acton_sparse_spc2_complex(np.ndarray[np.complex128_t, ndim=2, 
         #Act with embedded gate on appropriate sub-space of state
         #for k in range(nActionIndices):
         #    slc1[k] = state[ vec_index_noop+baseinds[k] ]
-        
+
         #SPECIAL ACTON for output_state[ inds ] += acton( state[inds] )
         # replaces:  slc2 = embedded_gate_acton_fn( slc1 )
         # Dense matrix multiplication: w_i = sum_j M_ij * v_j
@@ -445,10 +454,10 @@ def embedded_fast_acton_sparse_spc2_complex(np.ndarray[np.complex128_t, ndim=2, 
                 cum += densemx[i,j] * state[ vec_index_noop+baseinds[j] ]
             output_state[ vec_index_noop+baseinds[i] ] = output_state[ vec_index_noop+baseinds[i] ] + cum
               # Note: in-place addition doesn't compile correctly with complex type
-                    
+
         #for k in range(nActionIndices):
         #    output_state[ vec_index_noop+baseinds[k] ] += slc2[k] #state[ inds[k] ]
-        
+
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nParts-1,-1,-1):
             if b[i]+1 < numBasisEls_noop_blankaction[i]:
@@ -470,7 +479,7 @@ def embedded_fast_acton_sparse_spc2_complex(np.ndarray[np.complex128_t, ndim=2, 
 def medium_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
               np.ndarray[double, ndim=2, mode="c"] fastArray not None,
               np.ndarray[np.int64_t, ndim=1, mode="c"] fastArraySizes not None):
-    
+
     cdef INT mi[100] # multi-index holding
     cdef INT multipliers[100]
     cdef double preprods[101] # +1 from other static dims
@@ -478,13 +487,13 @@ def medium_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
     cdef INT i
     cdef INT k
     cdef INT p
-    
+
     if nFactors > 100:
         assert(False) # need to increase static dimensions above
 
     #set indices to zero
     k=0
-    for i in range(nFactors): mi[i] = 0 
+    for i in range(nFactors): mi[i] = 0
 
     # preprods[i] = prod_{k<i}( fastArray[k,m[k]] ) i.e. the product of the first i-1 factors
     # this means that preprods[nFactors] == prod, the final product to assign to outvec
@@ -496,7 +505,7 @@ def medium_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
     # when computing the total index 'k'
     multipliers[nFactors-1] = 1
     for i in range(nFactors-2,-1,-1):
-        multipliers[i] = multipliers[i+1]*fastArraySizes[i+1] 
+        multipliers[i] = multipliers[i+1]*fastArraySizes[i+1]
 
     #loop over indices (incrementing mi & updating k and preprods as we go)
     while True:
@@ -521,7 +530,7 @@ def medium_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
 def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
               np.ndarray[double, ndim=2, mode="c"] fastArray not None,
               np.ndarray[np.int64_t, ndim=1, mode="c"] fastArraySizes not None):
-    
+
     cdef INT nFactors = fastArray.shape[0]
     cdef INT N = outvec.shape[0]
     cdef INT i
@@ -531,7 +540,7 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
     cdef INT off
     cdef INT endoff
     cdef double mult
-    
+
     #Put last factor at end of outvec
     k = nFactors-1  #last factor
     off = N-fastArraySizes[k] #offset into outvec
@@ -560,7 +569,7 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
         for i in range(sz):
             outvec[endoff+i] *= mult
         sz *= fastArraySizes[k]
-        
+
     #assert(sz == N)
 
 
@@ -569,7 +578,7 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
 def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,
                       np.ndarray[np.complex128_t, ndim=2, mode="c"] fastArray not None,
                       np.ndarray[np.int64_t, ndim=1, mode="c"] fastArraySizes not None):
-    
+
     cdef INT nFactors = fastArray.shape[0]
     cdef INT N = outvec.shape[0]
     cdef INT i
@@ -579,7 +588,7 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
     cdef INT off
     cdef INT endoff
     cdef double complex mult
-    
+
     #Put last factor at end of outvec
     k = nFactors-1  #last factor
     off = N-fastArraySizes[k] #offset into outvec
@@ -609,7 +618,7 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
             outvec[endoff+i] = outvec[endoff+i] * mult
               # Note: in-place multiplication doesn't compile correctly with complex type
         sz *= fastArraySizes[k]
-        
+
     #assert(sz == N)
 
 
@@ -625,9 +634,9 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
 #        a = abs(v[i])
 #        if a > mx: mx = a
 #    return mx
-    
 
-            
+
+
 @cython.cdivision(True) # turn off divide-by-zero checking
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -672,7 +681,7 @@ cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
 
     #F = B
     for i in range(N): F[i] = B[i]
-    
+
     for i in range(s):
         if m_star > 0: #added by EGN
             #c1 = vec_inf_norm(B) #_exact_inf_norm(B)
@@ -680,10 +689,10 @@ cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
             for k in range(N):
                 a = abs(B[k])
                 if a > c1: c1 = a
-            
+
         for j in range(m_star):
             coeff = 1.0 / (s*(j+1)) # t == 1.0
-            
+
             #B = coeff * A.dot(B)
             # inline csr_matvec: implements result = coeff * A * B
             for r in range(N):
@@ -696,9 +705,9 @@ cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
             c2 = 0.0
             normF = 0.0
             for k in range(N):
-                B[k] = coeff * scratch[k] #finishes B = coeff * A.dot(B) 
+                B[k] = coeff * scratch[k] #finishes B = coeff * A.dot(B)
                 F[k] += B[k] #F += B
-        
+
                 a = abs(B[k])
                 if a > c2: c2 = a #c2 = vec_inf_norm(B) #_exact_inf_norm(B)
                 a = abs(F[k])
@@ -739,7 +748,7 @@ cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, INT* Aind
 
     #F = B
     for i in range(N): F[i] = B[i]
-    
+
     for i in range(s):
         if m_star > 0: #added by EGN
             #c1 = vec_inf_norm(B) #_exact_inf_norm(B)
@@ -747,10 +756,10 @@ cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, INT* Aind
             for k in range(N):
                 a = abs(B[k])
                 if a > c1: c1 = a
-            
+
         for j in range(m_star):
             coeff = 1.0 / (s*(j+1)) # t == 1.0
-            
+
             #B = coeff * A.dot(B)
             # inline csr_matvec: implements result = coeff * A * B
             for r in range(N):
@@ -763,9 +772,9 @@ cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, INT* Aind
             c2 = 0.0
             normF = 0.0
             for k in range(N):
-                B[k] = coeff * scratch[k] #finishes B = coeff * A.dot(B) 
+                B[k] = coeff * scratch[k] #finishes B = coeff * A.dot(B)
                 F[k] += B[k] #F += B
-        
+
                 a = abs(B[k])
                 if a > c2: c2 = a #c2 = vec_inf_norm(B) #_exact_inf_norm(B)
                 a = abs(F[k])
@@ -786,7 +795,7 @@ cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, INT* Aind
     #return F # updates passed-in memory, so don't need this
 
 
-    
+
 # Implements B = A - lmb*I; returns used length of Bindices/Bdata
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -803,7 +812,7 @@ def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
     cdef INT i = 0
     cdef INT bFound = 0
     Bindptr[0] = 0
-    
+
     for iRow in range(n):
         bFound = 0
         for i in range(Aindptr[iRow],Aindptr[iRow+1]):
@@ -819,7 +828,7 @@ def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
             Bdata[nxt] = lmb
             nxt += 1
         Bindptr[iRow+1] = nxt
-        
+
     return nxt
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -827,7 +836,6 @@ def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
 def fast_fas_helper_1d(np.ndarray[double, ndim=1] a,
                        np.ndarray[double, ndim=1] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0):
-    
     cdef INT nDims = 1
     cdef INT b[1]
     cdef INT a_strides[1]
@@ -835,7 +843,7 @@ def fast_fas_helper_1d(np.ndarray[double, ndim=1] a,
     cdef INT rhs_dims[1]
     cdef INT rhs_indx = 0
     cdef INT a_indx = 0
-    
+
     for i in range(nDims):
         b[i] = 0
         a_strides[i] = a.strides[i] // a.itemsize
@@ -890,7 +898,7 @@ def fast_fas_helper_2d(np.ndarray[double, ndim=2] a,
                        np.ndarray[double, ndim=2] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds1):
-    
+
     cdef INT nDims = 2
     cdef INT b[2]
     cdef INT a_strides[2]
@@ -898,7 +906,7 @@ def fast_fas_helper_2d(np.ndarray[double, ndim=2] a,
     cdef INT rhs_dims[2]
     cdef INT rhs_indx = 0
     cdef INT a_indx = 0
-    
+
     for i in range(nDims):
         b[i] = 0
         a_strides[i] = a.strides[i] // a.itemsize
@@ -915,7 +923,7 @@ def fast_fas_helper_2d(np.ndarray[double, ndim=2] a,
         while(True):
             a_ptr[a_indx] = rhs_ptr[rhs_indx]
             rhs_indx += 1 # always increments by 1
-    
+
             #increment b ~ itertools.product
             if b[1]+1 < rhs_dims[1]: # "i = 1" loop
                 a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
@@ -928,11 +936,11 @@ def fast_fas_helper_2d(np.ndarray[double, ndim=2] a,
                     b[0] += 1
                 else:
                     break # can't increment anything - break while(True) loop
-                
+
     else: # rhs is *not* c-contiguous, so need to use its strides
         while(True):
             a_ptr[a_indx] = rhs_ptr[rhs_indx]
-    
+
             #increment b ~ itertools.product
             if b[1]+1 < rhs_dims[1]: # "i = 1" loop
                 a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
@@ -948,7 +956,7 @@ def fast_fas_helper_2d(np.ndarray[double, ndim=2] a,
                     b[0] += 1
                 else:
                     break # can't increment anything - break while(True) loop
-        
+
 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -958,7 +966,7 @@ def fast_fas_helper_3d(np.ndarray[double, ndim=3] a,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds1,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds2):
-    
+
     cdef INT nDims = 3
     cdef INT b[3]
     cdef INT a_strides[3]
@@ -966,13 +974,13 @@ def fast_fas_helper_3d(np.ndarray[double, ndim=3] a,
     cdef INT rhs_dims[3]
     cdef INT rhs_indx = 0
     cdef INT a_indx = 0
-    
+
     for i in range(nDims):
         b[i] = 0
         a_strides[i] = a.strides[i] // a.itemsize
         rhs_strides[i] = rhs.strides[i] // rhs.itemsize
         rhs_dims[i] = rhs.shape[i]
-    
+
     #for i in range(nDims):
     #    a_indx += indsPerDim[i][0] * a_strides[i]
     a_indx += inds0[0] * a_strides[0]
@@ -986,7 +994,7 @@ def fast_fas_helper_3d(np.ndarray[double, ndim=3] a,
         while(True):
             a_ptr[a_indx] = rhs_ptr[rhs_indx]
             rhs_indx += 1 # always increments by 1
-    
+
             #increment b ~ itertools.product
             if b[2]+1 < rhs_dims[2]: # "i = 2" loop
                 a_indx += (inds2[b[2]+1]-inds2[b[2]]) * a_strides[2]
@@ -1009,7 +1017,7 @@ def fast_fas_helper_3d(np.ndarray[double, ndim=3] a,
     else: # rhs is *not* c-contiguous, so need to use its strides
         while(True):
             a_ptr[a_indx] = rhs_ptr[rhs_indx]
-    
+
             #increment b ~ itertools.product
             if b[2]+1 < rhs_dims[2]: # "i = 2" loop
                 a_indx += (inds2[b[2]+1]-inds2[b[2]]) * a_strides[2]

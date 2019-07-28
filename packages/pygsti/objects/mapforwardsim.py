@@ -1,10 +1,13 @@
 """ Defines the MapForwardSimulator calculator class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import warnings as _warnings
 import numpy as _np
@@ -74,6 +77,12 @@ class MapForwardSimulator(ForwardSimulator):
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
         return MapForwardSimulator(self.dim, self.sos, self.paramvec)
+
+    def _rho_from_label(self, rholabel):
+        return self.sos.get_prep(rholabel)
+
+    def _Es_from_labels(self, elabels):
+        return [self.sos.get_effect(elabel) for elabel in elabels]
 
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
@@ -261,64 +270,6 @@ class MapForwardSimulator(ForwardSimulator):
             if returnPr: return hp, p
             else: return hp
 
-    def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
-        return replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm)
-
-    def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
-        return replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
-
-    def _compute_hpr_cache(self, rholabel, elabels, evalTree, wrtSlice1, wrtSlice2, comm):
-        #Compute finite difference hessians, one parameter at a time.
-
-        param_indices1 = range(self.Np) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
-        param_indices2 = range(self.Np) if (wrtSlice2 is None) else _slct.indices(wrtSlice2)
-        nDerivCols1 = len(param_indices1)  # *all*, not just locally computed ones
-        nDerivCols2 = len(param_indices2)  # *all*, not just locally computed ones
-
-        dim = self.dim
-        cacheSize = evalTree.cache_size()
-        hpr_cache = _np.zeros((len(evalTree), len(elabels), nDerivCols1, nDerivCols2), 'd')
-
-        # Allocate scratch space for compute_dpr_cache
-        if self.evotype in ("statevec", "densitymx"):
-            typ = complex if self.evotype == "statevec" else 'd'
-            dpr_scratch = _np.zeros((cacheSize, dim), typ)
-        else:  # evotype == "stabilizer" case
-            dpr_scratch = [None] * cacheSize  # so we can store (s,p) tuples in cache
-
-        eps = 1e-4  # hardcoded?
-        dpCache = self._compute_dpr_cache(rholabel, elabels, evalTree, wrtSlice2, comm,
-                                          dpr_scratch).copy()
-        #need copy here b/c scratch space is used by sub-calls to
-        # _compute_dpr_cache below in finite difference computation.
-
-        all_slices, my_slice, owners, subComm = \
-            _mpit.distribute_slice(slice(0, len(param_indices1)), comm)
-
-        my_param_indices = param_indices1[my_slice]
-        st = my_slice.start  # beginning of where my_param_indices results
-        # get placed into dpr_cache
-
-        #Get a map from global parameter indices to the desired
-        # final index within dpr_cache
-        iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
-
-        orig_vec = self.to_vector().copy()
-        for i in range(self.Np):
-            if i in iParamToFinal:
-                iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec, close=True)
-                hpr_cache[:, :, iFinal, :] = (self._compute_dpr_cache(
-                    rholabel, elabels, evalTree, wrtSlice2, subComm, dpr_scratch) - dpCache) / eps
-        self.from_vector(orig_vec, close=True)
-
-        #Now each processor has filled the relavant parts of dpr_cache,
-        # so gather together:
-        _mpit.gather_slices(all_slices, owners, hpr_cache, [], axes=2, comm=comm)
-
-        return hpr_cache
-
     def default_distribute_method(self):
         """
         Return the preferred MPI distribution mode for this calculator.
@@ -440,6 +391,54 @@ class MapForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
+    #Not used enough to warrant pushing to replibs yet... just keep a slow version
+    def DM_mapfill_hprobs_block(calc, mxToFill, dest_indices, dest_param_indices1, dest_param_indices2,
+                                evalTree, param_indices1, param_indices2, comm):
+
+        eps = 1e-4  # hardcoded?
+
+        if param_indices1 is None:
+            param_indices1 = list(range(calc.Np))
+        if param_indices2 is None:
+            param_indices2 = list(range(calc.Np))
+        if dest_param_indices1 is None:
+            dest_param_indices1 = list(range(_slct.length(param_indices1)))
+        if dest_param_indices2 is None:
+            dest_param_indices2 = list(range(_slct.length(param_indices2)))
+
+        param_indices1 = _slct.as_array(param_indices1)
+        dest_param_indices1 = _slct.as_array(dest_param_indices1)
+        #dest_param_indices2 = _slct.as_array(dest_param_indices2)  # OK if a slice
+
+        all_slices, my_slice, owners, subComm = \
+            _mpit.distribute_slice(slice(0, len(param_indices1)), comm)
+
+        my_param_indices = param_indices1[my_slice]
+        st = my_slice.start
+
+        #Get a map from global parameter indices to the desired
+        # final index within mxToFill (fpoffset = final parameter offset)
+        iParamToFinal = {i: dest_param_indices1[st + ii] for ii, i in enumerate(my_param_indices)}
+
+        nEls = evalTree.num_final_elements()
+        nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
+        dprobs = _np.empty((nEls, nP2), 'd')
+        dprobs2 = _np.empty((nEls, nP2), 'd')
+        replib.DM_mapfill_dprobs_block(calc, dprobs, slice(0, nEls), None, evalTree, param_indices2, comm)
+
+        orig_vec = calc.to_vector().copy()
+        for i in range(calc.Np):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                calc.from_vector(vec, close=True)
+                replib.DM_mapfill_dprobs_block(calc, dprobs2, slice(0, nEls), None, evalTree, param_indices2, subComm)
+                _fas(mxToFill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
+        calc.from_vector(orig_vec)
+
+        #Now each processor has filled the relavant parts of mxToFill, so gather together:
+        _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
+
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
         """
@@ -491,21 +490,14 @@ class MapForwardSimulator(ForwardSimulator):
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
         #eval on each local subtree
+
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
 
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #Fill cache info
-                prCache = self._compute_pr_cache(rholabel, elabels, evalSubTree, mySubComm)
-
-                #use cached data to final values
-                ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits, len(elabels))
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds], ps[gInds, i], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
+            # mxToFill is an array corresponding to the evalSubTree's parent's elements,
+            # not evalSubTree's so pass felInds to _fill_probs_block
+            replib.DM_mapfill_probs_block(self, mxToFill, felInds, evalSubTree, mySubComm)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -515,10 +507,6 @@ class MapForwardSimulator(ForwardSimulator):
 
         if clipTo is not None:
             _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
-
-#Will this work?? TODO
-#        if check:
-#            self._check(evalTree, spam_label_rows, mxToFill, clipTo=clipTo)
 
     def bulk_fill_dprobs(self, mxToFill, evalTree,
                          prMxToFill=None, clipTo=None, check=False,
@@ -609,44 +597,15 @@ class MapForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
 
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice = slice(None)
-            fillComm = mySubComm  # comm used by calc_and_fill
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                tm = _time.time()
-
-                if prMxToFill is not None:
-                    prCache = self._compute_pr_cache(rholabel, elabels, evalSubTree, fillComm)
-                    ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits, len(elabels))
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(prMxToFill, [fInds], ps[gInds, i], add=sumInto)
-
-                #Fill cache info
-                dprCache = self._compute_dpr_cache(rholabel, elabels, evalSubTree, paramSlice, fillComm)
-                dps = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds, pslc1], dps[gInds, i], add=sumInto)
-                profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
+            if prMxToFill is not None:
+                replib.DM_mapfill_probs_block(self, prMxToFill, felInds, evalSubTree, mySubComm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-            else:
-                blkSize = None  # wrtFilter dictates block
+            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, mySubComm)
 
-            if blkSize is None:
-                #Fill derivative cache info
-                paramSlice = wrtSlice  # specifies which deriv cols calc_and_fill computes
-
+            if blkSize is None:  # wrtFilter gives entire computed parameter block
                 #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho((prMxToFill, mxToFill), evalSubTree,
-                                                   slice(None), slice(None), calc_and_fill)
+                replib.DM_mapfill_dprobs_block(self, mxToFill, felInds, None, evalSubTree, wrtSlice, mySubComm)
                 profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
@@ -662,13 +621,10 @@ class MapForwardSimulator(ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than derivative columns(%d)!" % self.Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-                fillComm = blkComm  # comm used by calc_and_fill
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_result_tuple_collectrho(
-                        (mxToFill,), evalSubTree,
-                        blocks[iBlk], slice(None), calc_and_fill)
+                    replib.DM_mapfill_dprobs_block(self, mxToFill, felInds, paramSlice, evalSubTree, paramSlice, blkComm)
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
@@ -798,65 +754,26 @@ class MapForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            fillComm = mySubComm
 
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice1 = slice(None)
-            paramSlice2 = slice(None)
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-
-                if prMxToFill is not None:
-                    prCache = self._compute_pr_cache(rholabel, elabels, evalSubTree, fillComm)
-                    ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits, len(elabels))
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(prMxToFill, [fInds], ps[gInds, i], add=sumInto)
-
-                if deriv1MxToFill is not None:
-                    dprCache = self._compute_dpr_cache(rholabel, elabels, evalSubTree, paramSlice1, fillComm)
-                    dps1 = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(deriv1MxToFill, [fInds, pslc1], dps1[gInds, i], add=sumInto)
-
-                if deriv2MxToFill is not None:
-                    if deriv1MxToFill is not None and paramSlice1 == paramSlice2:
-                        dps2 = dps1
-                    else:
-                        dprCache = self._compute_dpr_cache(rholabel, elabels, evalSubTree, paramSlice2, fillComm)
-                        dps2 = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(deriv2MxToFill, [fInds, pslc2], dps2[gInds, i], add=sumInto)
-
-                #Fill cache info
-                hprCache = self._compute_hpr_cache(rholabel, elabels, evalSubTree, paramSlice1, paramSlice2, fillComm)
-                hps = evalSubTree.final_view(hprCache, axis=0)  # ( nCircuits, len(elabels), nDerivCols1, nDerivCols2)
-
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds, pslc1, pslc2], hps[gInds, i], add=sumInto)
+            if prMxToFill is not None:
+                replib.DM_mapfill_probs_block(self, prMxToFill, felInds, evalSubTree, mySubComm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter1 is None and wrtFilter2 is None:
-                blkSize1 = wrtBlockSize1  # could be None
-                blkSize2 = wrtBlockSize2  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize1 = comm_blkSize if (blkSize1 is None) \
-                        else min(comm_blkSize, blkSize1)  # override with smaller comm_blkSize
-                    blkSize2 = comm_blkSize if (blkSize2 is None) \
-                        else min(comm_blkSize, blkSize2)  # override with smaller comm_blkSize
-            else:
-                blkSize1 = blkSize2 = None  # wrtFilter1 & wrtFilter2 dictates block
+            blkSize1 = self._setParamBlockSize(wrtFilter1, wrtBlockSize1, mySubComm)
+            blkSize2 = self._setParamBlockSize(wrtFilter2, wrtBlockSize2, mySubComm)
 
-            if blkSize1 is None and blkSize2 is None:
-                #Fill hessian cache info
-                paramSlice1 = wrtSlice1  # specifies which deriv cols calc_and_fill computes
-                paramSlice2 = wrtSlice2  # specifies which deriv cols calc_and_fill computes
-
+            if blkSize1 is None and blkSize2 is None:  # wrtFilter1 & wrtFilter2 dictate block
                 #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho(
-                    (prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
-                    evalSubTree, slice(None), slice(None), calc_and_fill)
+                if deriv1MxToFill is not None:
+                    replib.DM_mapfill_dprobs_block(self, deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1, mySubComm)
+                if deriv2MxToFill is not None:
+                    if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
+                        deriv2MxToFill[felInds, :] = deriv1MxToFill[felInds, :]
+                    else:
+                        replib.DM_mapfill_dprobs_block(self, deriv2MxToFill, felInds, None, evalSubTree, wrtSlice2, mySubComm)
+                        
+                self.DM_mapfill_hprobs_block(mxToFill, felInds, None, None, evalSubTree,
+                                             wrtSlice1, wrtSlice2, mySubComm)
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrtFilter1 is None and wrtFilter2 is None)  # cannot specify both wrtFilter and blkSize
@@ -877,16 +794,21 @@ class MapForwardSimulator(ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than hessian elements(%d)!" % (self.Np**2)
                                    + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
-                fillComm = blk2Comm  # comm used by calc_and_fill
+
+                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                # will always be the same whenever they're desired (they'll both cover the entire range of params)
+                derivMxToFill = deriv1MxToFill if (deriv1MxToFill is not None) else deriv2MxToFill  # first non-None
 
                 for iBlk1 in myBlk1Indices:
                     paramSlice1 = blocks1[iBlk1]
-
+                    if derivMxToFill is not None:
+                        replib.DM_mapfill_dprobs_block(self, derivMxToFill, felInds, paramSlice1, evalSubTree,
+                                                       paramSlice1, blk1Comm)
+                    
                     for iBlk2 in myBlk2Indices:
-                        paramSlice2 = blocks2[iBlk2]
-                        self._fill_result_tuple_collectrho
-                        ((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
-                         evalSubTree, blocks1[iBlk1], blocks2[iBlk2], calc_and_fill)
+                        paramSlice2 = blocks2[iBlk2]                        
+                        self.DM_mapfill_hprobs_block(mxToFill, felInds, paramSlice1, paramSlice2, evalSubTree,
+                                                     paramSlice1, paramSlice2, blk2Comm)
 
                     #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
                     _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds, blocks1[iBlk1]],
@@ -895,15 +817,14 @@ class MapForwardSimulator(ForwardSimulator):
                 #gather row results; gather axis 1 of mxToFill[felInds], dim=(ks,M,M)
                 _mpit.gather_slices(blocks1, blk1Owners, mxToFill, [felInds],
                                     1, mySubComm, gatherMemLimit)
-                if deriv1MxToFill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill, [felInds],
+                if derivMxToFill is not None:
+                    _mpit.gather_slices(blocks1, blk1Owners, derivMxToFill, [felInds],
                                         1, mySubComm, gatherMemLimit)
-                if deriv2MxToFill is not None:
-                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill, [felInds],
-                                        1, blk1Comm, gatherMemLimit)
-                    #Note: deriv2MxToFill gets computed on every inner loop completion
-                    # (to save mem) but isn't gathered until now (but using blk1Comm).
-                    # (just as prMxToFill is computed fully on each inner loop *iteration*!)
+
+                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                # will always be the same whenever they're desired (they'll both cover the entire range of params)
+                if deriv1MxToFill is not None: deriv1MxToFill[felInds, :] = derivMxToFill[felInds, :]
+                if deriv2MxToFill is not None: deriv2MxToFill[felInds, :] = derivMxToFill[felInds, :]
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -1083,24 +1004,14 @@ class MapForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
             num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #Fill cache info
-                chi2Cache = replib.DM_compute_TDchi2_cache(self, rholabel, elabels, num_outcomes,
-                                                           evalSubTree, dataset_rows, minProbClipForWeighting,
-                                                           probClipInterval, mySubComm)
-
-                #use cached data to final values
-                ps = evalSubTree.final_view(chi2Cache, axis=0)  # ( nCircuits, len(elabels))
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds], ps[gInds, i], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
-
+            replib.DM_mapfill_TDchi2_terms(self, mxToFill, felInds, num_outcomes,
+                                           evalSubTree, dataset_rows, minProbClipForWeighting,
+                                           probClipInterval, mySubComm)
+            
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
@@ -1164,13 +1075,15 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dchi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
-            return replib.DM_compute_TDdchi2_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
-                                                   minProbClipForWeighting, probClipInterval, wrtSlice, fillComm)
+        def dchi2(destMx, dest_indices, dest_param_indices, num_tot_outcomes, evalSubTree,
+                  dataset_rows, wrtSlice, fillComm):
+            replib.DM_mapfill_TDdchi2_terms(self, destMx, dest_indices, dest_param_indices, num_tot_outcomes,
+                                            evalSubTree, dataset_rows, minProbClipForWeighting,
+                                            probClipInterval, wrtSlice, fillComm)
 
-        def chi2(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
-            return replib.DM_compute_TDchi2_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows,
-                                                  minProbClipForWeighting, probClipInterval, fillComm)
+        def chi2(destMx, dest_indices, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_mapfill_TDchi2_terms(self, destMx, dest_indices, num_tot_outcomes, evalSubTree,
+                                                  dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
 
         return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
                                             mxToFill, dchi2, chi2MxToFill, chi2,
@@ -1239,23 +1152,13 @@ class MapForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
             num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #Fill cache info
-                loglCache = replib.DM_compute_TDloglpp_cache(self, rholabel, elabels, num_outcomes,
-                                                             evalSubTree, dataset_rows, minProbClip,
-                                                             radius, probClipInterval, mySubComm)
-
-                #use cached data to final values
-                logl = evalSubTree.final_view(loglCache, axis=0)  # ( nCircuits, len(elabels))
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(mxToFill, [fInds], logl[gInds, i], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
+            replib.DM_mapfill_TDloglpp_terms(self, mxToFill, felInds, num_outcomes,
+                                             evalSubTree, dataset_rows, minProbClip,
+                                             radius, probClipInterval, mySubComm)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -1320,13 +1223,14 @@ class MapForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        def dloglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, wrtSlice, fillComm):
-            return replib.DM_compute_TDdloglpp_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree,
-                                                     dataset_rows, minProbClip, radius, probClipInterval,
-                                                     wrtSlice, fillComm)
+        def dloglpp(mxToFill, dest_indices, dest_param_indices, num_tot_outcomes, evalSubTree,
+                    dataset_rows, wrtSlice, fillComm):
+            return replib.DM_mapfill_TDdloglpp_terms(self, mxToFill, dest_indices, dest_param_indices,
+                                                     num_tot_outcomes, evalSubTree, dataset_rows, minProbClip,
+                                                     radius, probClipInterval, wrtSlice, fillComm)
 
-        def loglpp(rholabel, elabels, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
-            return replib.DM_compute_TDloglpp_cache(self, rholabel, elabels, num_tot_outcomes, evalSubTree,
+        def loglpp(mxToFill, dest_indices, num_tot_outcomes, evalSubTree, dataset_rows, fillComm):
+            return replib.DM_mapfill_TDloglpp_terms(self, mxToFill, dest_indices, num_tot_outcomes, evalSubTree,
                                                     dataset_rows, minProbClip, radius, probClipInterval, fillComm)
 
         return self.bulk_fill_timedep_deriv(evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
@@ -1335,7 +1239,7 @@ class MapForwardSimulator(ForwardSimulator):
 
     #A generic function - move to base class?
     def bulk_fill_timedep_deriv(self, evalTree, dataset, dsCircuitsToUse, num_total_outcomes,
-                                derivMxToFill, deriv_fn, mxToFill=None, fn=None,
+                                derivMxToFill, deriv_fill_fn, mxToFill=None, fill_fn=None,
                                 comm=None, wrtFilter=None, wrtBlockSize=None,
                                 profiler=None, gatherMemLimit=None):
         """
@@ -1449,45 +1353,16 @@ class MapForwardSimulator(ForwardSimulator):
             dataset_rows = [dataset[dsCircuitsToUse[i]] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
             num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(evalTree))]
 
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice = slice(None)
-            fillComm = mySubComm  # comm used by calc_and_fill
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                #tm = _time.time()
-
-                if mxToFill is not None:
-                    cache = fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows, fillComm)
-                    cache = evalSubTree.final_view(cache, axis=0)  # ( nCircuits, len(elabels))
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        _fas(mxToFill, [fInds], cache[gInds, i], add=sumInto)
-
-                #Fill cache info
-                dcache = deriv_fn(rholabel, elabels, num_outcomes, evalSubTree,
-                                  dataset_rows, paramSlice, fillComm)
-                dcache = evalSubTree.final_view(dcache, axis=0)  # ( nCircuits, len(elabels), nDerivCols)
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    _fas(derivMxToFill, [fInds, pslc1], dcache[gInds, i], add=sumInto)
-                #profiler.add_time("bulk_fill_timedep_dchi2: calc_and_fill", tm)
+            if mxToFill is not None:
+                fill_fn(mxToFill, felInds, num_outcomes, evalSubTree, dataset_rows, mySubComm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-            else:
-                blkSize = None  # wrtFilter dictates block
+            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, mySubComm)
 
-            if blkSize is None:
+            if blkSize is None:  # wrtFilter gives entire computed parameter block
                 #Fill derivative cache info
-                paramSlice = wrtSlice  # specifies which deriv cols calc_and_fill computes
-
-                #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho((mxToFill, derivMxToFill), evalSubTree,
-                                                   slice(None), slice(None), calc_and_fill)
+                deriv_fill_fn(derivMxToFill, felInds, None, num_outcomes, evalSubTree,
+                              dataset_rows, wrtSlice, mySubComm)
                 #profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
@@ -1503,13 +1378,11 @@ class MapForwardSimulator(ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than derivative columns(%d)!" % self.Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-                fillComm = blkComm  # comm used by calc_and_fill
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_result_tuple_collectrho(
-                        (derivMxToFill,), evalSubTree,
-                        blocks[iBlk], slice(None), calc_and_fill)
+                    deriv_fill_fn(derivMxToFill, felInds, paramSlice, num_outcomes, evalSubTree,
+                                  dataset_rows, paramSlice, mySubComm)
                     #profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results

@@ -1,12 +1,17 @@
 """ Defines the MapEvalTree class which implements an evaluation tree. """
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
+import collections as _collections
+import copy as _copy
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
@@ -30,6 +35,17 @@ class MapEvalTree(EvalTree):
 
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
+        # list of the operation labels
+        self.opLabels = []
+
+        # Trivially init other members - to be filled in by initialize() or by subtree creation
+        self.simplified_circuit_elabels = None
+        self.element_offsets_for_circuit = None
+        self.eLbl_indices_per_circuit = None
+        self.final_indices_per_circuit = None
+        self.rholabels = None
+        self.cachesize = None
+
         super(MapEvalTree, self).__init__(items)
 
     def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
@@ -39,6 +55,7 @@ class MapEvalTree(EvalTree):
 
           Parameters
           ----------
+          TODO: docstring update needed
           circuit_list : list of (tuples or Circuits)
               A list of tuples of operation labels or Circuit
               objects, specifying the operation sequences that
@@ -63,11 +80,23 @@ class MapEvalTree(EvalTree):
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        circuit_list = [tuple(mdl) for mdl in simplified_circuit_list.keys()]
-        self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
-        self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
+        circuit_list = [tuple(simple_circuit) for simple_circuit in simplified_circuit_list.keys()]
+        self.simplified_circuit_elabels = list(simplified_circuit_list.values())
+        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
+        self.element_offsets_for_circuit = _np.cumsum(
+            [0] + [nEls for nEls in self.simplified_circuit_nEls])[:-1]
+        self.elabels, self.eLbl_indices_per_circuit, self.final_indices_per_circuit = \
+            self._build_elabels_lookups()
+
+        self.rholabels = set()
+        for c,elabels in simplified_circuit_list.items():
+            if elabels != [None]:  # so we know c[0] is a prep label
+                self.rholabels.add(c[0])
+        self.rholabels = sorted(list(self.rholabels))
+        
+        self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
+        #UNNEEDED? self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
@@ -192,6 +221,35 @@ class MapEvalTree(EvalTree):
                 iStart -= 1  # shift left all cache indices after one removed
             self[i] = (iStart, remainingStr, iCache)
         self.cachesize -= 1
+
+    def _build_elabels_lookups(self):
+        all_elabels = set()
+        for elabels in self.simplified_circuit_elabels:
+            all_elabels.update(elabels)
+
+        #Convert set of unique effect labels to a list so ordering is fixed
+        all_elabels = sorted(list(all_elabels))
+
+        # Create lookup so elabel_lookup[eLbl] gives index of eLbl
+        # within all_elabels (for faster lookup, Cython routines in ptic)
+        elabel_lookup = { elbl:i for i,elbl in enumerate(all_elabels) }
+
+        #Create arrays that tell us, for a given rholabel, what the elabel indices
+        # are for each simplified circuit.  This is obviously convenient for computing
+        # outcome probabilities.
+        eLbl_indices_per_circuit = {}
+        final_indices_per_circuit = {}
+        for i, elabels in enumerate(self.simplified_circuit_elabels):
+            element_offset = self.element_offsets_for_circuit[i]  # offset to i-th simple circuits elements
+            for j, eLbl in enumerate(elabels):
+                if i in eLbl_indices_per_circuit:
+                    eLbl_indices_per_circuit[i].append( elabel_lookup[eLbl] )
+                    final_indices_per_circuit[i].append( element_offset + j )
+                else:
+                    eLbl_indices_per_circuit[i] = [ elabel_lookup[eLbl] ]
+                    final_indices_per_circuit[i] = [ element_offset + j ]
+
+        return all_elabels, eLbl_indices_per_circuit, final_indices_per_circuit
 
     def squeeze(self, maxCacheSize):
         """
@@ -639,15 +697,20 @@ class MapEvalTree(EvalTree):
             #t1 = _time.time()  #REMOVE
             subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
-            subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[k]
+            subTree.simplified_circuit_elabels = [self.simplified_circuit_elabels[k]
                                                      for k in _slct.indices(subTree.myFinalToParentFinalMap)]
+            subTree.simplified_circuit_nEls = list(map(len, subTree.simplified_circuit_elabels))
+            subTree.element_offsets_for_circuit = _np.cumsum([0] + [len(elabelList) for elabelList in subTree.simplified_circuit_elabels])[:-1]
+            subTree.elabels, subTree.eLbl_indices_per_circuit, subTree.final_indices_per_circuit = \
+                subTree._build_elabels_lookups()
+            subTree.rholabels = self.rholabels  # don't bother trying to thin this out for now - just take the parent's list
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             #t2 = _time.time() #REMOVE
             final_el_startstops = []; i = 0
-            for spamTuples in parentTree.simplified_circuit_spamTuples:
-                final_el_startstops.append((i, i + len(spamTuples)))
-                i += len(spamTuples)
+            for nEls in parentTree.simplified_circuit_nEls:
+                final_el_startstops.append((i, i + nEls))
+                i += nEls
             #t3 = _time.time() #REMOVE
             if len(_slct.indices(subTree.myFinalToParentFinalMap)) > 0:
                 subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
@@ -659,14 +722,16 @@ class MapEvalTree(EvalTree):
                 subTree.myFinalElsToParentFinalElsMap = _np.arange(0, 0)  # empty array
 
             #t4 = _time.time() #REMOVE
-            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
+            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_elabels])
             #t5 = _time.time() #REMOVE
-            subTree.recompute_spamtuple_indices(bLocal=False)
+            #UNNEEDED? subTree.recompute_spamtuple_indices(bLocal=False) # REMOVE
             #t6 = _time.time() #REMOVE
 
             subTree.trim_nonfinal_els()
             #t7 = _time.time() #REMOVE
-            subTree.opLabels = self._get_opLabels(subTree.generate_circuit_list(permute=False))
+            circuits = subTree.generate_circuit_list(permute=False)
+            subTree.opLabels = self._get_opLabels({c: elbls for c,elbls in zip(circuits,subTree.simplified_circuit_elabels)})
+
             #t8 = _time.time() #REMOVE
             # print("DB: create_subtree timing: "
             #       "t1=%.3fs, t2=%.3fs, t3=%.3fs, t4=%.3fs, t5=%.3fs, t6=%.3fs, t7=%.3fs, t8=%.3fs"
@@ -677,11 +742,19 @@ class MapEvalTree(EvalTree):
         #printer.log("EvalTree.split PT2 %.1fs" %
         #            (_time.time()-tm)); tm = _time.time()  #REMOVE
 
-        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
-                                               permute_parent_element, create_subtree,
-                                               all_final=bool(self.cache_size() == 0))
-        #printer.log("EvalTree.split PT3 %.1fs" %
-        #            (_time.time()-tm)); tm = _time.time() #REMOVE
+        old_indices_in_new_order = self._finish_split(elIndicesDict, subTreeSetList,
+                                                      permute_parent_element, create_subtree,
+                                                      all_final=bool(self.cache_size() == 0))
+
+        self.simplified_circuit_elabels, updated_elIndices = \
+            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels, elIndicesDict, old_indices_in_new_order)
+        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
+
+        # Update element_offsets_for_circuit, etc
+        self.element_offsets_for_circuit = _np.cumsum(
+            [0] + [len(elabelList) for elabelList in self.simplified_circuit_elabels])[:-1]
+        self.elabels, self.eLbl_indices_per_circuit, self.final_indices_per_circuit = \
+            self._build_elabels_lookups()
 
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
@@ -691,4 +764,11 @@ class MapEvalTree(EvalTree):
         """ Create a copy of this evaluation tree. """
         cpy = self._copyBase(MapEvalTree(self[:]))
         cpy.cachesize = self.cachesize  # member specific to MapEvalTree
+        cpy.opLabels = self.opLabels[:]
+        cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
+        cpy.element_offsets_for_circuit = self.element_offsets_for_circuit.copy()
+        cpy.elabels = self.elabels[:]
+        cpy.eLbl_indices_per_circuit = _copy.deepcopy(self.eLbl_indices_per_circuit)
+        cpy.final_indices_per_circuit = _copy.deepcopy(self.final_indices_per_circuit)
+        cpy.rholabels = self.rholabels[:]
         return cpy

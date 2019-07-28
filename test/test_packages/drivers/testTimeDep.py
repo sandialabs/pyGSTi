@@ -18,9 +18,10 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
     def __init__(self, initial_depol_rate):
         #initialize with no noise
         self.need_time = True # maybe torep() won't work unless this is False?
+        super(MyTimeDependentIdle,self).__init__(np.identity(4,'d'), "densitymx") # this is *super*-operator, so "densitymx"
         self.from_vector([initial_depol_rate]) 
         self.set_time(0.0)
-        super(MyTimeDependentIdle,self).__init__(self.base, "densitymx") # this is *super*-operator, so "densitymx"
+        
         
     def num_params(self): 
         return 1 # we have two parameters
@@ -28,7 +29,7 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
     def to_vector(self):
         return np.array([self.depol_rate],'d') #our parameter vector
         
-    def from_vector(self,v):
+    def from_vector(self, v, close=False, nodirty=False):
         #initialize from parameter vector v
         self.depol_rate = v[0]
         self.need_time = True
@@ -39,10 +40,10 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
         
         # .base is a member of DenseOperator and is a numpy array that is 
         # the dense Pauli transfer matrix of this operator
-        self.base = np.array([[1,   0,   0,   0],
-                              [0,   a,   0,   0],
-                              [0,   0,   a,   0],
-                              [0,   0,   0,   a]],'d')
+        self.base[:,:] = np.array([[1,   0,   0,   0],
+                                   [0,   a,   0,   0],
+                                   [0,   0,   a,   0],
+                                   [0,   0,   0,   a]],'d')
         
     def transform(self, S):
         # Update self with inverse(S) * self * S (used in gauge optimization)

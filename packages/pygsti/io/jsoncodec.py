@@ -1,10 +1,13 @@
 """ Defines JSON-format encoding and decoding functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import sys as _sys
 import types as _types
@@ -85,6 +88,15 @@ def encode_obj(py_obj, binary):
             state = py_obj.__getstate__()
         elif hasattr(py_obj, '__dict__'):
             state = py_obj.__dict__  # take __dict__ as state
+        elif class_hasattr(py_obj, '__reduce__'):
+            red = py_obj.__reduce__()  # returns class, construtor_args, state
+            if red[0] is not py_obj.__class__:
+                state = None  # weird reducing can happen, for instance, for namedtuples - just punt
+            else:
+                init_args = red[1] if len(red) > 1 else []
+                state = red[2] if len(red) > 2 else {}
+                if state is None: state = {}
+                state.update({'__init_args__': init_args})
         else:
             state = None
 

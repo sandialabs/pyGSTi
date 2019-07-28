@@ -1,10 +1,13 @@
 """ Defines the Model class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
 import scipy as _scipy
@@ -880,6 +883,7 @@ class OpModel(Model):
 
         Returns
         -------
+        TODO: docstring - update to raw_elabels_dict
         raw_spamTuples_dict : collections.OrderedDict
             A dictionary whose keys are raw operation sequences (containing just
             "simplified" gates, i.e. not instruments), and whose values are
@@ -916,7 +920,7 @@ class OpModel(Model):
                     for opstr in circuits]  # cast to Circuits
 
         #Indexed by raw operation sequence
-        raw_spamTuples_dict = _collections.OrderedDict()  # final
+        raw_elabels_dict = _collections.OrderedDict()  # final
         raw_opOutcomes_dict = _collections.OrderedDict()
         raw_offsets = _collections.OrderedDict()
 
@@ -925,13 +929,14 @@ class OpModel(Model):
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
-        def resolveSPAM(circuit):
+        def resolve_elabels(circuit):
             """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
             prep_lbl, circuit, povm_lbl = \
                 self.split_circuit(circuit)
             if prep_lbl is None or povm_lbl is None:
-                spamtups = [None]  # put a single "dummy" spam-tuple placeholder
+                assert(prep_lbl is None and povm_lbl is None)
+                elabels = [None]  # put a single "dummy" elabel placeholder
                 # so that there's a single "element" for each simplified string,
                 # which means that the usual "lookup" or "elIndices" will map
                 # original circuit-list indices to simplified-string, i.e.,
@@ -946,16 +951,23 @@ class OpModel(Model):
                     # were observed.
                     observed_povm_outcomes = sorted(set(
                         [full_out_tup[-1] for full_out_tup in dataset[circuit].outcomes]))
-                    spamtups = [(prep_lbl, povm_lbl + "_" + oout)
-                                for oout in observed_povm_outcomes]
+                    elabels = [povm_lbl + "_" + elbl
+                                for elbl in observed_povm_outcomes]
                     # elbl = oout[-1] -- the last element corresponds
                     # to the POVM (earlier ones = instruments)
                 else:
-                    spamtups = [(prep_lbl, povm_lbl + "_" + elbl)
-                                for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
-            return circuit, spamtups
+                    elabels = [povm_lbl + "_" + elbl
+                               for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
 
-        def process(s, spamtuples, observed_outcomes, elIndsToOutcomes,
+            #Include prep-label as part of circuit
+            if prep_lbl is not None:
+                circuit = circuit.copy(editable=True)
+                circuit.insert_layer(prep_lbl, 0)
+                circuit.done_editing()
+
+            return circuit, elabels
+
+        def process(s, elabels, observed_outcomes, elIndsToOutcomes,
                     op_outcomes=(), start=0):
             """
             Implements recursive processing of a string. Separately
@@ -1002,70 +1014,71 @@ class OpModel(Model):
                         simplified_el_lbl = _Label(sublabels)
                         simplified_el_outcomes = tuple(outcomes)
                         process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i + 1:],
-                                spamtuples, observed_outcomes, elIndsToOutcomes,
+                                elabels, observed_outcomes, elIndsToOutcomes,
                                 op_outcomes + simplified_el_outcomes, i + 1)
                     break
 
             else:  # no instruments -- add "raw" operation sequence s
-                if s in raw_spamTuples_dict:
+                if s in raw_elabels_dict:
                     assert(op_outcomes == raw_opOutcomes_dict[s])  # DEBUG
                     #if action == "add":
-                    od = raw_spamTuples_dict[s]  # ordered dict
-                    for spamtup in spamtuples:
-                        outcome_tup = op_outcomes + _gt.spamTupleToOutcome(spamtup)
+                    od = raw_elabels_dict[s]  # ordered dict
+                    for elabel in elabels:
+                        outcome_tup = op_outcomes + (_gt.eLabelToOutcome(elabel),)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
 
-                        spamtup_indx = od.get(spamtup, None)
-                        if spamtup is None:
+                        elabel_indx = od.get(elabel, None)
+                        if elabel is None:
                             # although we've seen this raw string, we haven't
-                            # seen spamtup yet - add it at end
-                            spamtup_indx = len(od)
-                            od[spamtup] = spamtup_indx
+                            # seen elabel yet - add it at end
+                            elabel_indx = len(od)
+                            od[elabel] = elabel_indx
 
                         #Link the current iParent to this index (even if it was already going to be computed)
-                        elIndsToOutcomes[(s, spamtup_indx)] = outcome_tup
+                        elIndsToOutcomes[(s, elabel_indx)] = outcome_tup
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + _gt.spamTupleToOutcome(x) for x in spamtuples]
+                    outcome_tuples = [op_outcomes + (_gt.eLabelToOutcome(x),) for x in elabels]
 
                     if observed_outcomes is not None:
-                        # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
-                        spamtup_dict = _collections.OrderedDict(); ist = 0
-                        for spamtup, outcome_tup in zip(spamtuples, outcome_tuples):
+                        # only add els of `elabels` corresponding to observed data (w/indexes starting at 0)
+                        elabel_dict = _collections.OrderedDict(); ist = 0
+                        for elabel, outcome_tup in zip(elabels, outcome_tuples):
                             if outcome_tup in observed_outcomes:
-                                spamtup_dict[spamtup] = ist
+                                elabel_dict[elabel] = ist
                                 elIndsToOutcomes[(s, ist)] = outcome_tup
                                 ist += 1
                     else:
                         # add all els of `spamtuples` (w/indexes starting at 0)
-                        spamtup_dict = _collections.OrderedDict([
-                            (spamtup, i) for i, spamtup in enumerate(spamtuples)])
+                        elabel_dict = _collections.OrderedDict([
+                            (elabel, i) for i, elabel in enumerate(elabels)])
 
                         for ist, out_tup in enumerate(outcome_tuples):  # ist = spamtuple index
                             # element index is given by (parent_circuit, spamtuple_index) tuple
                             elIndsToOutcomes[(s, ist)] = out_tup
                             # Note: works even if `i` already exists - doesn't reorder keys then
 
-                    raw_spamTuples_dict[s] = spamtup_dict
+                    raw_elabels_dict[s] = elabel_dict
                     raw_opOutcomes_dict[s] = op_outcomes  # DEBUG
 
         #Begin actual processing work:
 
-        # Step1: recursively populate raw_spamTuples_dict,
+        # Step1: recursively populate raw_elabels_dict,
         #        raw_opOutcomes_dict, and elIndsToOutcomesByParent
-        resolved_circuits = list(map(resolveSPAM, circuits))
-        for iParent, (opstr, spamtuples) in enumerate(resolved_circuits):
+        resolved_circuits = list(map(resolve_elabels, circuits))
+        for iParent, ((opstr, elabels), orig_circuit) in enumerate(zip(resolved_circuits, circuits)):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
-            oouts = None if (dataset is None) else set(dataset[opstr].outcomes)
-            process(opstr, spamtuples, oouts, elIndsToOutcomesByParent[iParent])
+            oouts = None if (dataset is None) else set(dataset[orig_circuit].outcomes)
+            process(opstr, elabels, oouts, elIndsToOutcomesByParent[iParent])
+            
 
         # Step2: fill raw_offsets dictionary
         off = 0
-        for raw_str, spamtuples in raw_spamTuples_dict.items():
-            raw_offsets[raw_str] = off; off += len(spamtuples)
+        for raw_str, elabels in raw_elabels_dict.items():
+            raw_offsets[raw_str] = off; off += len(elabels)
         nTotElements = off
 
         # Step3: split elIndsToOutcomesByParent into
@@ -1073,15 +1086,15 @@ class OpModel(Model):
         for iParent, elIndsToOutcomes in elIndsToOutcomesByParent.items():
             elIndicesByParent[iParent] = []
             outcomesByParent[iParent] = []
-            for (raw_str, rel_spamtup_indx), outcomes in elIndsToOutcomes.items():
-                elIndicesByParent[iParent].append(raw_offsets[raw_str] + rel_spamtup_indx)
+            for (raw_str, rel_elabel_indx), outcomes in elIndsToOutcomes.items():
+                elIndicesByParent[iParent].append(raw_offsets[raw_str] + rel_elabel_indx)
                 outcomesByParent[iParent].append(outcomes)
             elIndicesByParent[iParent] = _slct.list_to_slice(elIndicesByParent[iParent], array_ok=True)
 
-        #Step3b: convert elements of raw_spamTuples_dict from OrderedDicts
+        #Step3b: convert elements of raw_elabels_dict from OrderedDicts
         # to lists not that we don't need to use them for lookups anymore.
-        for s in list(raw_spamTuples_dict.keys()):
-            raw_spamTuples_dict[s] = list(raw_spamTuples_dict[s].keys())
+        for s in list(raw_elabels_dict.keys()):
+            raw_elabels_dict[s] = list(raw_elabels_dict[s].keys())
 
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
@@ -1104,7 +1117,7 @@ class OpModel(Model):
         #print("outcomes = ", outcomesByParent)
         #print("total els = ",nTotElements)
 
-        return (raw_spamTuples_dict, elIndicesByParent,
+        return (raw_elabels_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
 
     def simplify_circuit(self, circuit, dataset=None):
@@ -1116,8 +1129,14 @@ class OpModel(Model):
         circuit : Circuit
             The operation sequence to simplify
 
+        dataset : DataSet, optional
+            If not None, restrict what is simplified to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
         Returns
         -------
+        TODO: docstring - update to raw_elabels_dict
         raw_spamTuples_dict : collections.OrderedDict
             A dictionary whose keys are raw operation sequences (containing just
             "simplified" gates, i.e. not instruments), and whose values are
@@ -1133,11 +1152,6 @@ class OpModel(Model):
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
-
-        dataset : DataSet, optional
-            If not None, restrict what is simplified to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
         """
         raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit], dataset)
         assert(len(outcomes[0]) == nEls)

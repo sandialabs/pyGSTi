@@ -1,10 +1,13 @@
 """ Core GST algorithms """
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 
 import numpy as _np
@@ -623,7 +626,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
         mdl.preps[prepLabel] = _objs.StaticSPAMVec(rhoVec)
     for povmLabel, povm in mdl.povms.items():
         mdl.povms[povmLabel] = _objs.UnconstrainedPOVM(
-            [(lbl, _objs.StaticSPAMVec(E))
+            [(lbl, _objs.StaticSPAMVec(E, typ="effect"))
              for lbl, E in povm.items()])
 
     printer.log("--- eLGST (least squares) ---", 1)
@@ -1211,6 +1214,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         # number of independent parameters in dataset (max. model # of params)
         nDataParams = dataset.get_degrees_of_freedom(
             dsCircuitsToUse, aggregate_times=not time_dependent)
+    else:
+        nDataParams = 0  # because it's never used
     profiler.add_time("do_mc2gst: num data params", tm)
 
     #Step 3: solve least squares minimization problem
@@ -2232,6 +2237,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         # number of independent parameters in dataset (max. model # of params)
         nDataParams = dataset.get_degrees_of_freedom(
             dsCircuitsToUse, aggregate_times=not time_dependent)
+    else:
+        nDataParams = 0  # because it's never used
+
     profiler.add_time("do_mc2gst: num data params", tm)
 
     #Run optimization (use leastsq)

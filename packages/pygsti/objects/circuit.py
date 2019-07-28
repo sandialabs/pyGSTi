@@ -1,10 +1,13 @@
 """ Defines the Circuit class """
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numbers as _numbers
 import numpy as _np
@@ -716,7 +719,7 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
         #Note: this means self._labels contains nested lists of simple labels
-
+        
         #Convert layers to a list/tuple of layer indices
         all_layers = bool(layers is None)  # whether we're assigning to *all* layers
         int_layers = isinstance(layers, int)
@@ -1395,6 +1398,12 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        if self.line_labels is None or self.line_labels == ():
+            #Allow insertion of a layer into an empty circuit to update the circuit's line_labels
+            layer_lbl = toLabel(circuit_layer)
+            self.line_labels = layer_lbl.sslbls if (layer_lbl.sslbls is not None) else ('*',)
+            
         self.insert_labels_into_layers([circuit_layer], j)
 
     def insert_circuit(self, circuit, j):
@@ -2635,6 +2644,7 @@ class Circuit(object):
         f.close()
 
     def convert_to_quil(self,
+                        num_qubits=None,
                         gatename_conversion=None,
                         qubit_conversion=None,
                         readout_conversion=None,
@@ -2696,11 +2706,15 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
+
         # Init the quil string.
         quil = ''
         depth = self.num_layers()
 
-        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(num_qubits))
 
         quil += 'RESET\n'
 
@@ -2778,7 +2792,7 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None,gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -2822,13 +2836,25 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
-        num_qubits = len(self.line_labels)
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
+
+        #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
+        #Todo:  Expand to all intermediate measurements.
+        if 'Iz' in self.str:
+            # using_IMs = True
+            num_IMs = self.str.count('Iz')
+        else:
+            # using_IMs = False
+            num_IMs = 0
+        num_IMs_used = 0
 
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
-        openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
+        # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
+        openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
         openqasm += '\n'
 
         depth = self.num_layers()
@@ -2847,21 +2873,29 @@ class Circuit(object):
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
-                openqasm_for_gate = gatename_conversion[gate.name]
+                if gate.name.__str__() != 'Iz':
+                    openqasm_for_gate = gatename_conversion[gate.name]
 
-                #If gate.qubits is None, gate is assumed to be single-qubit gate
-                #acting in parallel on all qubits.
-                if gate.qubits is None:
-                    for q in gate_qubits:
-                        openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
+                    #If gate.qubits is None, gate is assumed to be single-qubit gate
+                    #acting in parallel on all qubits.
+                    if gate.qubits is None:
+                        for q in gate_qubits:
+                            openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
+                    else:
+                        for q in gate_qubits:
+                            openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
+                            if q != gate_qubits[-1]:
+                                openqasm_for_gate += ', '
+                        openqasm_for_gate += ';\n'
                 else:
-                    for q in gate_qubits:
-                        openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
-                        if q != gate_qubits[-1]:
-                            openqasm_for_gate += ', '
-                    openqasm_for_gate += ';\n'
+                    assert len(gate.qubits) == 1
+                    q = gate.qubits[0]
+                    # classical_bit = num_IMs_used
+                    openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                    num_IMs_used += 1
+
                 # Add the openqasm for the gate to the openqasm string.
-                    openqasm += openqasm_for_gate
+                openqasm += openqasm_for_gate
 
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
                 # although that should already be checked in the .get_layer_label(), which checks for its a valid
@@ -2885,11 +2919,13 @@ class Circuit(object):
                 for q in self.line_labels[:-1]:
                     openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
                 openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
-    #            openqasm += ';'
+                # openqasm += ';'
 
         # Add in a measurement at the end.
         for q in self.line_labels:
-            openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
+            # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
+            openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
+                                                              str(num_IMs_used + qubit_conversion[q]))
 
         return openqasm
 

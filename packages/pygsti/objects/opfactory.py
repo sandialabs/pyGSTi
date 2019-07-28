@@ -1,10 +1,13 @@
 """Defines the Factory class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 import collections as _collections
 import numpy as _np
 import warnings as _warnings
@@ -295,7 +298,7 @@ class EmbeddedOpFactory(OpFactory):
         """
         return self.embedded_factory.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this OpFactory using a vector of its parameters.
 
@@ -309,8 +312,8 @@ class EmbeddedOpFactory(OpFactory):
         -------
         None
         """
-        self.embedded_factory.from_vector(v)
-        self.dirty = True
+        self.embedded_factory.from_vector(v, close, nodirty)
+        if not nodirty: self.dirty = True
 
 
 class EmbeddingOpFactory(OpFactory):
@@ -435,7 +438,7 @@ class EmbeddingOpFactory(OpFactory):
         """
         return self.embedded_factory_or_op.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this OpFactory using a vector of its parameters.
 
@@ -449,8 +452,8 @@ class EmbeddingOpFactory(OpFactory):
         -------
         None
         """
-        self.embedded_factory_or_op.from_vector(v)
-        self.dirty = True
+        self.embedded_factory_or_op.from_vector(v, close, nodirty)
+        if not nodirty: self.dirty = True
 
 
 class ComposedOpFactory(OpFactory):
@@ -574,7 +577,7 @@ class ComposedOpFactory(OpFactory):
             v[factor_local_inds] = gate.to_vector()
         return v
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Initialize this factory using a vector of parameters.
 
@@ -592,8 +595,8 @@ class ComposedOpFactory(OpFactory):
         for gate in self.factors:
             factor_local_inds = _gm._decompose_gpindices(
                 self.gpindices, gate.gpindices)
-            gate.from_vector(v[factor_local_inds])
-        self.dirty = True
+            gate.from_vector(v[factor_local_inds], close, nodirty)
+        if not nodirty: self.dirty = True
 
 
 #Note: to pickle these Factories we'll probably need to some work

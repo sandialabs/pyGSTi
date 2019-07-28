@@ -48,17 +48,6 @@ except ImportError:  # if Cython isn't available (e.g. in readthedocs) just skip
     ext_modules = []
 
 
-classifiers = """\
-Development Status :: 4 - Beta
-Intended Audience :: Science/Research
-License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
-Programming Language :: Python
-Topic :: Scientific/Engineering :: Physics
-Operating System :: Microsoft :: Windows
-Operating System :: MacOS :: MacOS X
-Operating System :: Unix
-"""
-
 descriptionTxt = """\
 Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
 (e.g. a qubit).  GST estimates a set of quantum logic gates and (simultaneously) the associated state preparation and
@@ -83,8 +72,8 @@ The primary goals of the pyGSTi project are to:
 # Extra requirements
 extras = {
     'diamond norm computation': [
-        'cvxpy',
-        'cvxopt'
+        'cvxopt',
+        'cvxpy'
     ],
     'nose testing': ['nose'],
     'accurate memory profiling': ['psutil'],
@@ -103,23 +92,29 @@ extras = {
         'flake8'
     ],
     'testing': [
+        'backports.tempfile;python_version<"3.2"',
+        'coverage',
+        'cvxopt',
+        'cvxpy',
+        'cython',
+        'matplotlib',
+        'mock;python_version<"3.3"',
+        'mpi4py',
+        'msgpack',
         'nose',
         'nose-timer',
-        'cython',
-        'cvxpy',
-        'cvxopt',
-        'psutil',
-        'mpi4py',
         'pandas',
-        'msgpack',
-        'coverage',
-        'zmq',
-        'rednose'
+        'pathlib2;python_version<"3.4"',
+        'psutil',
+        'rednose',
+        'unittest2;python_version<"3.2"',
+        'zmq'
     ]
 }
 
 # Add `complete' target, which will install all extras listed above
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
+
 
 
 # Configure setuptools_scm to build the post-release version number
@@ -194,6 +189,15 @@ setup(name='pyGSTi',
           'quantum',
           'qubit'
       ],
-      classifiers=list(filter(None, classifiers.split("\n"))),
+      classifiers=[
+          "Development Status :: 4 - Beta",
+          "Intended Audience :: Science/Research",
+          "License :: OSI Approved :: Apache Software License",
+          "Programming Language :: Python",
+          "Topic :: Scientific/Engineering :: Physics",
+          "Operating System :: Microsoft :: Windows",
+          "Operating System :: MacOS :: MacOS X",
+          "Operating System :: Unix"
+      ],
       ext_modules=ext_modules,
 )

@@ -1,10 +1,13 @@
 """ Utility functions operating on operation matrices """
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -2890,13 +2893,12 @@ def split_lindblad_paramtype(typ):
     return bTyp, evotype
 
 
-def spamTupleToOutcome(spamTuple):
+def eLabelToOutcome(povm_and_effect_lbl):
     """TODO: Docstring """
-    # Helper fn: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-    if spamTuple is None:
-        return ("NONE",)  # Dummy label for placeholding (see resolveSPAM below)
+    # Helper fn: POVM_ELbl -> Elbl mapping
+    if povm_and_effect_lbl is None:
+        return "NONE"  # Dummy label for placeholding
     else:
-        prep_lbl, povm_and_effect_lbl = spamTuple
         last_underscore = povm_and_effect_lbl.rindex('_')
         effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
-        return (effect_lbl,)  # effect label *is* the outcome
+        return effect_lbl  # effect label alone *is* the outcome

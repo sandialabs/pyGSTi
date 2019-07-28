@@ -1,10 +1,13 @@
 """ Text-parsing classes and functions to read input files."""
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import re as _re
 import os as _os
@@ -933,7 +936,7 @@ def read_model(filename):
         #Preps
         if cur_typ == "PREP":
             mdl.preps[cur_label] = _objs.FullSPAMVec(
-                get_liouville_mx(obj))
+                get_liouville_mx(obj), typ="prep")
         elif cur_typ == "TP-PREP":
             mdl.preps[cur_label] = _objs.TPSPAMVec(
                 get_liouville_mx(obj))
@@ -946,10 +949,10 @@ def read_model(filename):
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                 qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis)  # unitary postfactor = Id
-            pureVec = _objs.StaticSPAMVec(_np.transpose(_evalRowList(props["PureVec"], bComplex=False)))
+            pureVec = _objs.StaticSPAMVec(_np.transpose(_evalRowList(props["PureVec"], bComplex=False)), typ="prep")
             mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec, errorMap, "prep")
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj))
+            mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj), typ="prep")
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -957,11 +960,9 @@ def read_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj))
-                elif sub_typ == "TP-EFFECT":
-                    Evec = _objs.TPSPAMVec(get_liouville_mx(sub_obj))
+                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj), typ="effect")
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj))
+                    Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj), typ="effect")
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))

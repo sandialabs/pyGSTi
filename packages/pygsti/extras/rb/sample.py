@@ -1,10 +1,13 @@
 """ RB circuit sampling functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 from ...algorithms import compilers as _cmpl
 from ...objects import circuit as _cir
@@ -115,7 +118,7 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
     if n % 2 != 0:
         q = qubits[_np.random.randint(0, n)]
         name = oneQgatenames[_np.random.randint(0, num_oneQgatenames)]
-        del qubits[q]
+        del qubits[q]  # XXX is this correct?
         sampled_layer.append(_lbl.Label(name, q))
 
     # Go through n//2 times until all qubits have been paired up and gates on them sampled

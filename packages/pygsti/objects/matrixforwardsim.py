@@ -1,10 +1,13 @@
 """ Defines the MatrixForwardSimulator calculator class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
-#*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import warnings as _warnings
 import numpy as _np
@@ -2727,3 +2730,32 @@ class MatrixForwardSimulator(ForwardSimulator):
                 yield wrtSlice1, wrtSlice2, hprobs
 
         dProdCache1 = dGs1 = None  # free mem
+
+    def _fill_result_tuple(self, result_tup, evalTree,
+                           param_slice1, param_slice2, calc_and_fill_fn):
+        """
+        This function takes a "calc-and-fill" function, which computes
+        and *fills* (i.e. doesn't return to save copying) some arrays. The
+        arrays that are filled internally to `calc_and_fill_fn` must be the
+        same as the elements of `result_tup`.  The fill function computes
+        values for only a single spam label (specified to it by the first
+        two arguments), and in general only a specified slice of the values
+        for this spam label (given by the subsequent arguments, except for
+        the last).  The final argument is a boolean specifying whether
+        the filling should overwrite or add to the existing array values,
+        which is a functionality needed to correctly handle the remainder
+        spam label.
+        """
+
+        pslc1 = param_slice1
+        pslc2 = param_slice2
+        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
+            # fInds = "final indices" = the "element" indices in the final
+            #          filled quantity combining both spam and gate-sequence indices
+            # gInds  = "gate sequence indices" = indices into the (tree-) list of
+            #          all of the raw operation sequences which need to be computed
+            #          for the current spamTuple (this list has the SAME length as fInds).
+            calc_and_fill_fn(spamTuple, fInds, gInds, pslc1, pslc2, False)  # TODO: remove SumInto == True cases
+
+        return
+
