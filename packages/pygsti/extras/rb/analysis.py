@@ -11,7 +11,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
-from . import results as _results
 from ...tools import compattools as _compat
 
 
@@ -92,46 +91,60 @@ def r_to_p(r, d, rtype='EI'):
     return p
 
 
-def marginalize(results, keepqubits, allqubits):
-    # Future -- docstring, once this function is used.
-    mresults = []
-    mask = _np.zeros(len(allqubits), bool)
-
-    for q in keepqubits: mask[allqubits.index(q)] = True
-
-    for i in range(len(results)): mresults.append(tuple(_np.array(results[i])[mask]))
-
-    return mresults
-
-
-def magesan_first_order_fit_function(m, A, B, C, p):
+def adjusted_success_probability(hamming_distance_pdf):
     """
-    The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
-    "Scalable and Robust Randomized Benchmarking of Quantum Processes" ,
-    Magesan et al. PRL 106 180504 (2011). This is a simplified verion of
-    the 'first order' in that paper (see Eq. 3), as the model therein has
-    one too many parameters for fitting. The conversion is
+    todo
 
-    A = B_1
-    B = A_1 - C_1(q/p^(-2) - 1)
-    C = C_1(q/p^(-2) - 1)
-
-    where the LHS (RHS) quantites in this equation are those of our (Magesan
-    et al.'s) fitting function.
-
-    Parameters
-    ----------
-    m : integer
-        The RB length of the random RB sequence.
-
-    A,B,C,p : float
-
-    Returns
-    -------
-    float
-        A + (B + m * C) * p^m.
     """
-    return A + (B + C * m) * p**m
+    #adjSP = _np.sum([(-1 / 2)**n * hamming_distance_counts[n] for n in range(numqubits + 1)]) / total_counts
+    adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
+
+    return adjSP
+
+
+def marginalized_success_counts(dsrow, circ, target, qubits):
+    """
+    todo
+
+    """
+    indices = [circ.line_labels.index(q) for q in qubits]
+    margtarget = ''.join([target[i] for i in indices])
+
+    if qubits == circ.line_labels:
+        return dsrow.get(target, 0)
+
+    else:
+        success_counts = 0
+
+        for (outbitstring,), counts in dsrow.counts.items():
+            if ''.join([outbitstring[i] for i in indices]) == margtarget:
+                success_counts += counts
+
+        return success_counts
+
+
+def hamming_distance(bs1, bs2):
+    """
+    todo
+
+    """
+    return _np.sum([b1 != b2 for b1, b2 in zip(bs1, bs2)])
+
+
+def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
+    """
+    todo
+
+    """
+    indices = [circ.line_labels.index(q) for q in qubits]
+    margtarget = ''.join([target[i] for i in indices])
+
+    hamming_distance_counts = _np.zeros(len(qubits) + 1, float)
+
+    for (outbitstring,), counts in dsrow.counts.items():
+        hamming_distance_counts[hamming_distance(''.join([outbitstring[i] for i in indices]), margtarget)] += counts
+
+    return list(hamming_distance_counts)
 
 
 def rescaling_factor(lengths, quantity, offset=2):
@@ -166,7 +179,8 @@ def rescaling_factor(lengths, quantity, offset=2):
     return rescaling_factor
 
 
-def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, asymptote='std', rtype='EI'):
+def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, asymptote='std', rtype='EI',
+                          datatype='auto'):
     """
     Implements a "standard practice" analysis of RB data. Fits the average success probabilities to the exponential
     decay A + Bp^m, using least-squares fitting, with (1) A fixed (as standard, to 1/2^n where n is the number of
@@ -198,100 +212,94 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
     -------
     RBResults
         An object encapsulating the RB results (and data).
+
     """
+    assert(datatype == 'raw' or datatype == 'adjusted' or datatype == 'auto'), "Unknown data type!"
+
+    if datatype == 'auto':
+        if RBSdataset.datatype == 'hamming_distance_counts':
+            datatype = 'adjusted'
+        else:
+            datatype = 'raw'
+
     lengths = RBSdataset.lengths
-    ASPs = RBSdataset.ASPs
     n = RBSdataset.number_of_qubits
 
     if _compat.isstr(asymptote):
         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"
-        asymptote = 1 / 2**n
+        if datatype == 'raw':
+            asymptote = 1 / 2**n
+        elif datatype == 'adjusted':
+            asymptote = 1 / 4**n
+
+    if datatype == 'adjusted':
+        ASPs = RBSdataset.adjusted_ASPs
+    if datatype == 'raw':
+        ASPs = RBSdataset.ASPs
 
     FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote,
                                                              ftype='full+FA', rtype=rtype)
 
+    parameters = ['A', 'B', 'p', 'r']
+    bootstraps_FF = {}
+    bootstraps_FAF = {}
+
     if bootstrap_samples > 0:
 
-        A_bootstraps_FF = []
-        B_bootstraps_FF = []
-        p_bootstraps_FF = []
-        r_bootstraps_FF = []
+        bootstraps_FF = {p: [] for p in parameters}
+        bootstraps_FAF = {p: [] for p in parameters}
+        failcount_FF = 0
+        failcount_FAF = 0
 
-        A_bootstraps_FAF = []
-        B_bootstraps_FAF = []
-        p_bootstraps_FAF = []
-        r_bootstraps_FAF = []
-
-        bs_failcount_FF = 0
-        bs_failcount_FAF = 0
-
+        # Add bootstrapped datasets, if neccessary.
         RBSdataset.add_bootstrapped_datasets(samples=bootstrap_samples)
+
         for i in range(bootstrap_samples):
 
-            BS_ASPs = RBSdataset.bootstraps[i].ASPs
+            if datatype == 'adjusted':
+                BS_ASPs = RBSdataset.bootstraps[i].adjusted_ASPs
+            if datatype == 'raw':
+                BS_ASPs = RBSdataset.bootstraps[i].ASPs
+
             BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed,
                                                                            asymptote=asymptote, ftype='full+FA',
                                                                            rtype=rtype)
 
             if BS_FF_results['success']:
-                A_bootstraps_FF.append(BS_FF_results['estimates']['A'])
-                B_bootstraps_FF.append(BS_FF_results['estimates']['B'])
-                p_bootstraps_FF.append(BS_FF_results['estimates']['p'])
-                r_bootstraps_FF.append(BS_FF_results['estimates']['r'])
+                for p in parameters:
+                    bootstraps_FF[p].append(BS_FF_results['estimates'][p])
             else:
-                bs_failcount_FF += 1
+                failcount_FF += 1
             if BS_FAF_results['success']:
-                A_bootstraps_FAF.append(BS_FAF_results['estimates']['A'])
-                B_bootstraps_FAF.append(BS_FAF_results['estimates']['B'])
-                p_bootstraps_FAF.append(BS_FAF_results['estimates']['p'])
-                r_bootstraps_FAF.append(BS_FAF_results['estimates']['r'])
+                for p in parameters:
+                    bootstraps_FAF[p].append(BS_FAF_results['estimates'][p])
             else:
-                bs_failcount_FAF += 1
+                failcount_FAF += 1
 
-        bootstraps_FF = {}
-        bootstraps_FF['A'] = A_bootstraps_FF
-        bootstraps_FF['B'] = B_bootstraps_FF
-        bootstraps_FF['p'] = p_bootstraps_FF
-        bootstraps_FF['r'] = r_bootstraps_FF
-        bootstraps_failrate_FF = bs_failcount_FF / bootstrap_samples
+        failrate_FF = failcount_FF / bootstrap_samples
+        failrate_FAF = failcount_FAF / bootstrap_samples
 
-        std_FF = {}
-        std_FF['A'] = _np.std(_np.array(A_bootstraps_FF))
-        std_FF['B'] = _np.std(_np.array(B_bootstraps_FF))
-        std_FF['p'] = _np.std(_np.array(p_bootstraps_FF))
-        std_FF['r'] = _np.std(_np.array(r_bootstraps_FF))
-
-        bootstraps_FAF = {}
-        bootstraps_FAF['A'] = A_bootstraps_FAF
-        bootstraps_FAF['B'] = B_bootstraps_FAF
-        bootstraps_FAF['p'] = p_bootstraps_FAF
-        bootstraps_FAF['r'] = r_bootstraps_FAF
-        bootstraps_failrate_FAF = bs_failcount_FAF / bootstrap_samples
-
-        std_FAF = {}
-        std_FAF['A'] = _np.std(_np.array(A_bootstraps_FAF))
-        std_FAF['B'] = _np.std(_np.array(B_bootstraps_FAF))
-        std_FAF['p'] = _np.std(_np.array(p_bootstraps_FAF))
-        std_FAF['r'] = _np.std(_np.array(r_bootstraps_FAF))
+        std_FF = {p: _np.std(_np.array(bootstraps_FF[p])) for p in parameters}
+        std_FAF = {p: _np.std(_np.array(bootstraps_FAF[p])) for p in parameters}
 
     else:
         bootstraps_FF = None
         std_FF = None
-        bootstraps_failrate_FF = None
+        failrate_FF = None
         bootstraps_FAF = None
         std_FAF = None
-        bootstraps_failrate_FAF = None
+        failrate_FAF = None
 
     fits = {}
-    fits['full'] = _results.FitResults('LS', FF_results['seed'], rtype, FF_results['success'], FF_results['estimates'],
-                                       FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,
-                                       bootstraps_failrate=bootstraps_failrate_FF)
+    fits['full'] = FitResults('LS', FF_results['seed'], rtype, FF_results['success'], FF_results['estimates'],
+                              FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,
+                              bootstraps_failrate=failrate_FF)
 
-    fits['A-fixed'] = _results.FitResults('LS', FAF_results['seed'], rtype, FAF_results['success'],
-                                          FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
-                                          bootstraps=bootstraps_FAF, bootstraps_failrate=bootstraps_failrate_FAF)
+    fits['A-fixed'] = FitResults('LS', FAF_results['seed'], rtype, FAF_results['success'],
+                                 FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
+                                 bootstraps=bootstraps_FAF, bootstraps_failrate=failrate_FAF)
 
-    results = _results.RBResults(RBSdataset, rtype, fits)
+    results = SimpleRBResults(RBSdataset, rtype, fits)
 
     return results
 
@@ -497,3 +505,167 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
     results['success'] = success
 
     return results
+
+
+class FitResults(object):
+    """
+    An object to contain the results from fitting RB data. Currently just a
+    container for the results, and does not include any methods.
+    """
+
+    def __init__(self, fittype, seed, rtype, success, estimates, variable, stds=None,
+                 bootstraps=None, bootstraps_failrate=None):
+        """
+        Initialize a FitResults object.
+
+        Parameters
+        ----------
+        fittype : str
+            A string to identity the type of fit.
+
+        seed : list
+            The seed used in the fitting.
+
+        rtype : {'IE','AGI'}
+            The type of RB error rate that the 'r' in these fit results corresponds to.
+
+        success : bool
+            Whether the fit was successful.
+
+        estimates : dict
+            A dictionary containing the estimates of all parameters
+
+        variable : dict
+            A dictionary that specifies which of the parameters in "estimates" where variables
+            to estimate (set to True for estimated parameters, False for fixed constants). This
+            is useful when fitting to A + B*p^m and fixing one or more of these parameters: because
+            then the "estimates" dict can still be queried for all three parameters.
+
+        stds : dict, optional
+            Estimated standard deviations for the parameters.
+
+        bootstraps : dict, optional
+            Bootstrapped values for the estimated parameters, from which the standard deviations
+            were calculated.
+
+        bootstraps_failrate : float, optional
+            The proporition of the estimates of the parameters from bootstrapped dataset failed.
+        """
+        self.fittype = fittype
+        self.seed = seed
+        self.rtype = rtype
+        self.success = success
+
+        self.estimates = estimates
+        self.variable = variable
+        self.stds = stds
+
+        self.bootstraps = bootstraps
+        self.bootstraps_failrate = bootstraps_failrate
+
+
+class SimpleRBResults(object):
+    """
+    An object to contain the results of an RB analysis.
+
+    """
+    def __init__(self, data, rtype, fits):
+        """
+        Initialize an RBResults object.
+
+        Parameters
+        ----------
+        data : RBSummaryDataset
+            The RB summary data that the analysis was performed for.
+
+        rtype : {'IE','AGI'}
+            The type of RB error rate, corresponding to different dimension-dependent
+            re-scalings of (1-p), where p is the RB decay constant in A + B*p^m.
+
+        fits : dict
+            A dictionary containing FitResults objects, obtained from one or more
+            fits of the data (e.g., a fit with all A, B and p as free parameters and
+            a fit with A fixed to 1/2^n).
+        """
+        self.data = data
+        self.rtype = rtype
+        self.fits = fits
+
+    def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
+             legend=True, title=None, figpath=None):
+        """
+        Plots RB data and, optionally, a fitted exponential decay.
+
+        Parameters
+        ----------
+        fitkey : dict key, optional
+            The key of the self.fits dictionary to plot the fit for. If None, will
+            look for a 'full' key (the key for a full fit to A + Bp^m if the standard
+            analysis functions are used) and plot this if possible. It otherwise checks
+            that there is only one key in the dict and defaults to this. If there are
+            multiple keys and none of them are 'full', `fitkey` must be specified when
+            `decay` is True.
+
+        decay : bool, optional
+            Whether to plot a fit, or just the data.
+
+        success_probabilities : bool, optional
+            Whether to plot the success probabilities distribution, as a violin plot. (as well
+            as the *average* success probabilities at each length).
+
+        size : tuple, optional
+            The figure size
+
+        ylim, xlim : tuple, optional
+            The x and y limits for the figure.
+
+        legend : bool, optional
+            Whether to show a legend.
+
+        title : str, optional
+            A title to put on the figure.
+
+        figpath : str, optional
+            If specified, the figure is saved with this filename.
+        """
+
+        # Future : change to a plotly plot.
+        try: import matplotlib.pyplot as _plt
+        except ImportError: raise ValueError("This function requires you to install matplotlib!")
+
+        if decay and fitkey is None:
+            allfitkeys = list(self.fits.keys())
+            if 'full' in allfitkeys: fitkey = 'full'
+            else:
+                assert(len(allfitkeys) == 1), \
+                    "There are multiple fits and none have the key 'full'. Please specify the fit to plot!"
+                fitkey = allfitkeys[0]
+
+        _plt.figure(figsize=size)
+        _plt.plot(self.data.lengths, self.data.ASPs, 'o', label='Average success probabilities')
+
+        if decay:
+            lengths = _np.linspace(0, max(self.data.lengths), 200)
+            A = self.fits[fitkey].estimates['A']
+            B = self.fits[fitkey].estimates['B']
+            p = self.fits[fitkey].estimates['p']
+            _plt.plot(lengths, A + B * p**lengths,
+                      label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
+                                                              self.fits[fitkey].stds['r']))
+
+        if success_probabilities:
+            _plt.violinplot(list(self.data.success_probabilities), self.data.lengths, points=10, widths=1.,
+                            showmeans=False, showextrema=False, showmedians=False)  # , label='Success probabilities')
+
+        if title is not None: _plt.title(title)
+        _plt.ylabel("Success probability")
+        _plt.xlabel("RB sequence length $(m)$")
+        _plt.ylim(ylim)
+        _plt.xlim(xlim)
+
+        if legend: _plt.legend()
+
+        if figpath is not None: _plt.savefig(figpath, dpi=1000)
+        else: _plt.show()
+
+        return

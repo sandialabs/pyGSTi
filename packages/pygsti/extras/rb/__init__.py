@@ -1,4 +1,4 @@
-""" Randomized Benhmarking Sub-package """
+""" Randomized Benchmarking Sub-package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -13,5 +13,8 @@ from . import group
 from . import theory
 from . import sample
 from . import io
-from . import simulate
+from . import dataset
+from .rbanalyzer import RBAnalyzer
+# todo : put back in.
+#from . import simulate
 from . import analysis

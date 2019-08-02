@@ -25,6 +25,136 @@ import copy as _copy
 import itertools as _itertools
 
 
+class RBSpec(object):
+    """
+    Intended to encapsulate the specification of an RB experiment, so that, alongside a ProcessorSpec,
+    the RB circuit sampling (and perhaps the exact circuits sampled) is entirely specified.
+    """
+    def __init__(self, rbtype, structure, sampler, samplerargs, circuits=None, lengths=None, numcircuits=None,
+                 subtype={}):
+        """
+        todo
+
+        """
+        self._rbtype = rbtype
+        self._subtype = subtype
+        # The `structure` should always be stored as a tuple of tuples. If it isn't we convert to that.
+        if isinstance(structure[0], str):
+            self._structure = (structure, )
+        else:
+            self._structure = structure
+
+        self._sampler = sampler
+        self._samplerargs = _copy.deepcopy(samplerargs)
+
+        self._lengths = _copy.copy(lengths)
+        self._numcircuits = _copy.copy(numcircuits)
+
+        if circuits is not None:
+            self.add_circuits(circuits)
+
+        else:
+            self._circuits = None
+
+    def add_circuits(self, circuits):
+
+        self._circuits = circuits
+        lengths = list(self._circuits.keys())
+        lengths.sort()
+        if self._lengths is not None:
+            assert(lengths == self._lengths), "There are already a set of lengths specified, and the circuits do not match them!"
+        else:
+            self._lengths = lengths
+
+        numcircuits = [self._circuits[l] for l in self._lengths]
+        if self._numcircuits is not None:
+            assert(self._numcircuits == numcircuits)
+        else:
+            self._numcircuits == numcircuits
+
+    def discard_circuits(self):
+
+        self._circuits = None
+
+    def get_rbtype(self):
+        """
+        The type of RB that this spec refers to, e.g., "direct", "Clifford", "mirror".
+        """
+        return self._rbtype
+
+    def get_structure(self):
+        """
+        todo
+        """
+        return self._structure
+
+    def is_simultaneous_rb(self):
+        """
+        todo
+        """
+        return len(self._structure) > 1
+
+    def get_twoQgate_rate(self, pdf=True):
+        """
+        todo:
+        pdf: bool
+            If True then this is the rate that two-qubit gates appear in ...
+        """
+        return 1
+
+    def get_sampler(self):
+        """
+        todo
+        """
+        return self._sampler
+
+    def get_circuits(self):
+        """
+        todo
+        """
+        assert(self._circuits is not None), "The circuits are not specified!"
+        return self._circuits
+
+    def get_sampler_argument(self, argument):
+        """
+        todo
+        """
+        if argument == 'co2Qgates':
+            assert(self._sampler == 'co2Qgates')
+            return self.samplerargs['co2Qgates']
+
+        else:
+            raise ValueError("{} is not currently a requestable sampler argument, altough it may be \
+                a valid sampler argument!".format(argument))
+
+    def __str__(self):
+        # todo: make this more informative.
+        s = 'An RB specification for a {} RB experiment'.format(self._rbtype)
+        return s
+
+
+def find_all_sets_of_compatible_twoQgates(edgelist, n, gatename='Gcnot'):
+    """
+    todo.
+
+    n : int . the number of two-qubit gates to have in the set.
+
+    """
+    co2Qgates = []
+
+    # Go for all combinations of n two-qubit gates from the edgelist.
+    for npairs in _itertools.combinations(edgelist, n):
+
+        # Make a list of the qubits involved in the gates
+        flat_list = [item for sublist in npairs for item in sublist]
+
+        # If no qubit is involved in more than one gate we accept the combination
+        if len(flat_list) == len(set(flat_list)):
+            co2Qgates.append([_lbl.Label(gatename, pair) for pair in npairs])
+
+    return co2Qgates
+
+
 def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgatenames='all',
                                     twoQgatenames='all', modelname='clifford'):
     """
