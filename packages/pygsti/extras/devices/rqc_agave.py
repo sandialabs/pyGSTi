@@ -12,11 +12,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ...objects import processorspec as _pspec
 
+def qubits():
+
+    return ['Q'+str(x) for x in range(8)]
+
 def make_processor_spec(one_q_gate_names, construct_clifford_compilations = {'paulieq' : ('1Qcliffords',), 
                         'absolute': ('paulis','1Qcliffords')}, verbosity=0):
     total_qubits = 8
     gate_names = ['Gcphase'] + one_q_gate_names
-    qubit_labels = ['Q'+str(x) for x in range(total_qubits)]
+    qubit_labels = qubits()
     cphase_edge_list = get_twoQgate_edgelist()
     availability = {'Gcphase':cphase_edge_list}
     pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,

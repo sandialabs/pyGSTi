@@ -25,12 +25,18 @@ class RBAnalyzer(object):
         todo
 
         """
-        self.ds = ds.copy()
+        if ds is not None:
+            self.ds = ds.copy()
+        else:
+            self.ds = None
+
         self._specs = tuple(specs)
+
         if summary_data is None:
             self._summary_data = {}
         else:
             self._summary_data = _copy.deepcopy(summary_data)
+
         self._rbresults = {}
         self._rbresults['raw'] = {}
         self._rbresults['adjusted'] = {}
@@ -42,9 +48,16 @@ class RBAnalyzer(object):
         """
         self.ds = None
 
-    def discard_dataset_and_circuits(self):
+    def add_dataset(self, ds):
+        """
+        todo
 
-        self.ds = None
+        """
+        self.ds = ds.copy()
+
+    # def discard_dataset_and_circuits(self):
+
+    #     self.ds = None
 
 
     def create_summary_data(self, specindices=None, datatype='adjusted', verbosity=2):
@@ -77,6 +90,7 @@ class RBAnalyzer(object):
         """
         todo
 
+        todo: this partly ignores specindices
         """
         self.create_summary_data(specindices=specindices, datatype=analysis, verbosity=verbosity)
 
@@ -86,13 +100,54 @@ class RBAnalyzer(object):
             #else:
             #self._rbresults[i] = {}
             #for key in rbdata.items():
+            if verbosity > 0:
+                print('- Running analysis for {} of {}'.format(i, len(self._summary_data)))
             self._rbresults['adjusted'][i] = {}
             self._rbresults['raw'][i] = {}
-            for key, rbdata in rbdatadict.items():
+            for j, (key, rbdata) in enumerate(rbdatadict.items()):
+                if verbosity > 1:
+                    print('   - Running analysis for qubits {} ({} of {})'.format(key, j, len(rbdatadict)))
                 if analysis == 'all' or analysis == 'raw':
                     self._rbresults['raw'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='raw')
-                if (analysis == 'all' and rbdata.datatype == 'hamming') or analysis == 'adjusted':
+                if (analysis == 'all' and rbdata.datatype == 'hamming_distance_counts') or analysis == 'adjusted':
                     self._rbresults['adjusted'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
+
+    def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, twoQgateprob=None):
+        """
+        todo
+
+        """
+
+        kept = {}
+        for i, spec in enumerate(self._specs):
+            structures = spec.get_structure()
+            for qubits in structures:
+
+                keep = True
+
+                if numqubits is not None:
+                    if len(qubits) != numqubits:
+                        keep = False
+
+                if containqubits is not None:
+                    if not set(containqubits).issubset(qubits):
+                        keep = False
+
+                if onqubits is not None:
+                    if set(qubits) != set(onqubits):
+                        keep = False
+
+                if twoQgateprob is not None:
+                    if not _np.allclose(twoQgateprob, spec.get_twoQgate_rate()):
+                        keep = False
+
+                # Once all filters are applied, check whether we're keeping this (i,qubits) pair
+                if keep:
+                    if i not in kept.keys():
+                        kept[i] = []
+                    kept[i].append(qubits)
+
+        return kept
 
         # for i, rbdata in self._adjusted_summary_data.items():
         #     #if not isinstance(rbdata, dict):

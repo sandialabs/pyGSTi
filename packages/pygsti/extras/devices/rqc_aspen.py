@@ -9,19 +9,28 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+def qubits(version):
+
+    if version == 6:
+        return ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]
+    elif version == 4:
+        return ['Q'+str(x) for x in [0,1,2,3,4,5,6,7]] + ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]
+    else:
+        raise ValueError("Unknown version!")
+
 def make_processor_spec(one_q_gate_names, version, construct_clifford_compilations = {'paulieq' : ('1Qcliffords',), 
                         'absolute': ('paulis','1Qcliffords')}, verbosity=0):
 
     gate_names = ['Gcphase'] + one_q_gate_names
     if version == 4:
         total_qubits = 16
-        qubit_labels = ['Q'+str(x) for x in [0,1,2,3,4,5,6,7]] + ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]
     elif version == 6:
         total_qubits = 8
-        qubit_labels = ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]      
     else:
         raise ValueError("Unknown version!")
-                        
+
+    qubit_labels = qubits(version)
+                  
     cphase_edge_list = get_twoQgate_edgelist(version)
     availability = {'Gcphase':cphase_edge_list}
     pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,

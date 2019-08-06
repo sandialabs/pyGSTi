@@ -22,7 +22,7 @@ from . import rbanalyzer as _rbanalyzer
 from ... import io as _io
 
 
-def import_dataset_and_export_summary_data(filename, outfolder='summarydata', verbosity=1):
+def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', verbosity=1):
 
     try:
         _os.mkdir(outfolder)
@@ -32,7 +32,7 @@ def import_dataset_and_export_summary_data(filename, outfolder='summarydata', ve
         if verbosity > 0:
             print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
 
-    rbanalyzer = import_data(filename, verbosity=verbosity)
+    rbanalyzer = import_data(ds_or_filename, verbosity=verbosity)
     rbanalyzer.create_summary_data()
 
     with open(outfolder + '/readme.txt', 'w') as f:
@@ -50,24 +50,25 @@ def import_dataset_and_export_summary_data(filename, outfolder='summarydata', ve
     return
 
 
-def import_data(ds_filename=None, summarydatasets_filenames=None, verbosity=1):
+def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydatasets_folder=None, verbosity=1):
     """
     todo
 
     """
-    if ds_filename is not None:
+    if ds_or_filename is not None:
 
-        if isinstance(ds_filename, str):
+        # If it is a filename, then we import the dataset from file.
+        if isinstance(ds_or_filename, str):
 
-            if ds_filename[-4:] == '.txt':
+            if ds_or_filename[-4:] == '.txt':
 
-                ds = _io.load_dataset(ds_filename, collisionAction='aggregate', recordZeroCnts=False, verbosity=verbosity)
+                ds = _io.load_dataset(ds_or_filename, collisionAction='aggregate', recordZeroCnts=False, verbosity=verbosity)
 
-            elif ds_filename[-4:] == '.pkl':
+            elif ds_or_filename[-4:] == '.pkl':
 
                 if verbosity > 0:
                     print(" - Loading DataSet from pickle file...", end='')
-                with open(ds_filename, 'rb') as f:
+                with open(ds_or_filename, 'rb') as f:
                     ds = _pickle.load(f)
                 if verbosity > 0:
                     print("complete.")
@@ -75,54 +76,73 @@ def import_data(ds_filename=None, summarydatasets_filenames=None, verbosity=1):
             else:
                 raise ValueError("File must end in .pkl or .txt!")
 
+        # If it isn't a string, we assume that `ds_or_filename` is a DataSet.
         else:
 
-            ds = ds_filename
+            ds = ds_or_filename
 
-        if verbosity > 0:
-            print(" - Extracting RB metadata from the imported DataSet...", end='')
+        if verbosity > 0: print(" - Extracting RB metadata from the DataSet...", end='')
 
-        specfiles = []
-        speccircuits = {}
+        # To store the aux information about the RB experiments.
+        all_spec_filenames = []
+        circuits_for_specfile = {}
+
+        # We go through the dataset and extract all the necessary auxillary information.
         for circ in ds.keys():
 
-            speclist = ds.auxInfo[circ]['spec']
+            # The spec filename or names for this circuits
+            specfns_forcirc = ds.auxInfo[circ]['spec']
+            # The RB length for this circuit
             l = ds.auxInfo[circ]['length']
+            # The target bitstring for this circuit.
             target = ds.auxInfo[circ]['target']
 
-            if isinstance(speclist, str):
-                speclist = [speclist, ]
+            # This can be a string (a single spec filename) or a list, so make always a list.
+            if isinstance(specfns_forcirc, str):
+                specfns_forcirc = [specfns_forcirc, ]
 
-            #print(speclist)
+            for sfn_forcirc in specfns_forcirc:
+                # If this is the first instance of seeing this filename then...
+                if sfn_forcirc not in all_spec_filenames:
+                    # ... we store it in the list of all spec filenames to import later.
+                    all_spec_filenames.append(sfn_forcirc)
+                    # And it won't yet be a key in the circuits_for_specfile dict, so we add it.
+                    circuits_for_specfile[sfn_forcirc] = {}
 
-            for spec in speclist:
-                if spec not in specfiles:
-                    specfiles.append(spec)
-                    speccircuits[spec] = {}
+                # If we've not yet had this length for that spec filename, we add that as a key.
+                if l not in circuits_for_specfile[sfn_forcirc].keys():
+                    circuits_for_specfile[sfn_forcirc][l] = []
 
-                if l not in speccircuits[spec].keys():
-                    speccircuits[spec][l] = []
-
-                speccircuits[spec][l].append((circ, target))
+                # We add the circuit and target output to the dict for the corresponding spec files.
+                circuits_for_specfile[sfn_forcirc][l].append((circ, target))
 
         if verbosity > 0:
             print("complete.")
             print(" - Reading in the metadata from the extracted filenames...", end='')
 
+        # We put RB specs that we create via file import (and the circuits above) into this list.
         rbspeclist = []
-        directory = ds_filename.split('/')
+
+        # We look for spec files in the same directory as the datafile, so we find what that is.
+        directory = ds_or_filename.split('/')
         directory = '/'.join(directory[: -1])
+        if len(directory) > 0:
+            directory += '/'
 
-        for specfilename in specfiles:
+        for specfilename in all_spec_filenames:
 
-            rbspec = import_rb_spec(directory + '/' + specfilename)
-            rbspec.add_circuits(speccircuits[spec])
+            # Import the RB spec file.
+            rbspec = import_rb_spec(directory + specfilename)
+            # Add in the circuits that correspond to each spec, extracted from the dataset.
+            rbspec.add_circuits(circuits_for_specfile[specfilename])
+            # Record the spec in a list, to be given to an RBAnalyzer object.
             rbspeclist.append(rbspec)
 
         if verbosity > 0:
             print("complete.")
             print(" - Recording all of the data in an RBAnalyzer...", end='')
 
+        # Put everything into an RBAnalyzer object, which is a container for RB data, and return this.
         rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=ds, summary_data=None)
 
         if verbosity > 0:
@@ -130,38 +150,59 @@ def import_data(ds_filename=None, summarydatasets_filenames=None, verbosity=1):
 
         return rbanalyzer
 
-    elif summarydatasets_filenames is not None:
+    elif (summarydatasets_filenames is not None) or (summarydatasets_folder is not None):
 
         rbspeclist = []
-        specfiles = list(summarydatasets_filenames.keys())
-        summary_data = {}
+
+        # If a dict, its just the keys of the dict that are the rbspec file names.
+        if summarydatasets_filenames is not None:
+
+            specfiles = list(summarydatasets_filenames.keys())
+
+        # If a folder, we look for files in that folder with the standard name format.
+        elif summarydatasets_folder is not None:
+            specfiles = []
+            specfilefound = True
+            i = 0
+            while specfilefound:
+                try:
+                    filename = summarydatasets_folder + "/rbspec{}.txt".format(i)
+                    with open(filename, 'r') as f:
+                        if verbosity > 0:
+                            print(filename + " found")
+                    specfiles.append(filename)
+                    i += 1
+                except:
+                    specfilefound = False
+                    if verbosity > 0:
+                        print(filename + " not found so terminating spec file search.")
 
         for specfilename in specfiles:
 
             rbspec = import_rb_spec(specfilename)
             rbspeclist.append(rbspec)
 
-        for i, specfilename, rbspec in enumerate(zip(specfiles, rbspeclist)):
-
-            summary_data[i] = {}
-            sds_filenames = summarydatasets_filenames[specfilename]
+        summary_data = {}
+        for i, (specfilename, rbspec) in enumerate(zip(specfiles, rbspeclist)):
 
             structure = rbspec.get_structure()
-            if len(structure) == 1:
-                if isinstance(sds_filenames, str):
-                    sds_filenames = [sds_filenames, ]
-            assert(len(sds_filenames) == len(structure))
+            summary_data[i] = {}
+
+            if summarydatasets_filenames is not None:
+                sds_filenames = summarydatasets_filenames[specfilename]
+            elif summarydatasets_folder is not None:
+                sds_filenames = [summarydatasets_folder + '/rbsummarydata{}-{}.txt'.format(i, j) for j in range(len(structure))]
 
             for sdsfn, qubits in zip(sds_filenames, structure):
-                summary_data[i][qubits] = import_rb_summary_data(sdsfn)
+                summary_data[i][qubits] = import_rb_summary_data(sdsfn, len(qubits), verbosity=verbosity)
 
-            rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=None, summary_data=summary_data)
+        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=None, summary_data=summary_data)
 
-        else:
-            raise ValueError("Either a filename for a DataSet or filenames for a set of RBSpecs "
-                             + "and RBSummaryDatasets must be provided!")
+        return rbanalyzer
 
-        return None
+    else:
+        raise ValueError("Either a filename for a DataSet or filenames for a set of RBSpecs "
+                         + "and RBSummaryDatasets must be provided!")
 
 
 def import_rb_spec(filename):
@@ -203,7 +244,7 @@ def import_rb_spec(filename):
     samplerargs = d.get('samplerargs', None)
     lengths = d.get('lengths', None)
     numcircuits = d.get('numcircuits', None)
-    subtype = d.get('subtype', None)
+    rbsubtype = d.get('rbsubtype', None)
 
     if samplerargs is not None:
         assert(isinstance(samplerargs, dict)), "The samplerargs must be a dict!"
@@ -215,7 +256,7 @@ def import_rb_spec(filename):
         assert(isinstance(numcircuits, list) or isinstance(numcircuits, tuple)), "numcircuits must be a list of tuple!"
 
     spec = _sample.RBSpec(rbtype, structure, sampler, samplerargs, circuits=None, lengths=lengths,
-                          numcircuits=numcircuits, subtype=subtype)
+                          numcircuits=numcircuits, rbsubtype=rbsubtype)
 
     return spec
 
@@ -236,8 +277,8 @@ def write_rb_spec_to_file(rbspec, filename, warning=1):
         f.write('sampler ' + rbspec._sampler + '\n')
         f.write('lengths ' + str(rbspec._lengths) + '\n')
         f.write('numcircuits ' + str(rbspec._numcircuits) + '\n')
-        f.write('rbsubtype ' + str(rbspec._subtype) + '\n')
-        f.write('samperargs ' + str(rbspec._samplerargs) + '\n')
+        f.write('rbsubtype ' + str(rbspec._rbsubtype) + '\n')
+        f.write('samplerargs ' + str(rbspec._samplerargs) + '\n')
 
     return
 
@@ -312,6 +353,8 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                     assert(line[auxind] == '#')
                     if len(line) > auxind + 1:
                         auxlabels = line[auxind + 1:]
+                else:
+                    auxlabels = []
 
                 break
 

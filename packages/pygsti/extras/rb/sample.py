@@ -31,13 +31,13 @@ class RBSpec(object):
     the RB circuit sampling (and perhaps the exact circuits sampled) is entirely specified.
     """
     def __init__(self, rbtype, structure, sampler, samplerargs, circuits=None, lengths=None, numcircuits=None,
-                 subtype={}):
+                 rbsubtype={}):
         """
         todo
 
         """
         self._rbtype = rbtype
-        self._subtype = subtype
+        self._rbsubtype = rbsubtype
         # The `structure` should always be stored as a tuple of tuples. If it isn't we convert to that.
         if isinstance(structure[0], str):
             self._structure = (structure, )
@@ -94,13 +94,48 @@ class RBSpec(object):
         """
         return len(self._structure) > 1
 
-    def get_twoQgate_rate(self, pdf=True):
+    def get_twoQgate_rate(self):
         """
         todo:
-        pdf: bool
+        sampler: bool
             If True then this is the rate that two-qubit gates appear in ...
+
         """
-        return 1
+        #if sampler:
+
+        if self._sampler == 'co2Qgates':
+
+            mean_num2Qgates_in_layers = []
+            for co2Qgatesublist in self._samplerargs['co2Qgates']:
+
+                # We can have a empty list as a co2Qgates list, so we check that's not the case
+                if len(co2Qgatesublist) > 0:
+                    # It's only a list if we have nested co2Qgate lists. So make it always list.
+                    if not isinstance(co2Qgatesublist[0], list):
+                        co2Qgatesublist = [co2Qgatesublist, ]
+
+                    mean_num2Qgates_in_layers.append(_np.mean([len(co2Qgatechoice) for co2Qgatechoice in co2Qgatesublist]))
+
+                # If it's an empty list, then there's 0 2-qubit gates in it.
+                else:
+                    mean_num2Qgates_in_layers.append(0)
+            #print(mean_num2Qgates_in_layers)
+            mean_num2Qgates_in_layers = self._samplerargs['twoQprob'] * _np.array(mean_num2Qgates_in_layers)
+            #print("-", mean_num2Qgates_in_layers)
+
+            if isinstance(self._samplerargs['co2Qgatesprob'], str):
+                assert(self._samplerargs['co2Qgatesprob'] == 'uniform')
+                num_twoQgates_perlayer = _np.mean(mean_num2Qgates_in_layers)
+            else:
+                num_twoQgates_perlayer = _np.sum(_np.array(self._samplerargs['co2Qgatesprob']) * mean_num2Qgates_in_layers)
+
+            return num_twoQgates_perlayer
+
+        else:
+            raise NotImplementedError("This has only been implemented for the co2Qgates sampler!")
+
+        #else:
+        #    raise NotImplementedError
 
     def get_sampler(self):
         """
@@ -133,7 +168,7 @@ class RBSpec(object):
         return s
 
 
-def find_all_sets_of_compatible_twoQgates(edgelist, n, gatename='Gcnot'):
+def find_all_sets_of_compatible_twoQgates(edgelist, n, gatename='Gcnot', aslabel=False):
     """
     todo.
 
@@ -150,7 +185,10 @@ def find_all_sets_of_compatible_twoQgates(edgelist, n, gatename='Gcnot'):
 
         # If no qubit is involved in more than one gate we accept the combination
         if len(flat_list) == len(set(flat_list)):
-            co2Qgates.append([_lbl.Label(gatename, pair) for pair in npairs])
+            if aslabel:
+                co2Qgates.append([_lbl.Label(gatename, pair) for pair in npairs])
+            else:
+                co2Qgates.append([gatename + ':' + pair[0] + ':' + pair[1] for pair in npairs])
 
     return co2Qgates
 
