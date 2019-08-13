@@ -87,6 +87,9 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
         all_spec_filenames = []
         circuits_for_specfile = {}
 
+        # We make a copy, as we need to edit the dataset
+        editable_ds = ds.copy_nonstatic()
+
         # We go through the dataset and extract all the necessary auxillary information.
         for circ in ds.keys():
 
@@ -116,6 +119,14 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
                 # We add the circuit and target output to the dict for the corresponding spec files.
                 circuits_for_specfile[sfn_forcirc][l].append((circ, target))
 
+            circ_specindices = []
+            for sfn_forcirc in specfns_forcirc:
+                circ_specindices.append(all_spec_filenames.index(sfn_forcirc))
+
+            editable_ds.auxInfo[circ]['specindices'] = circ_specindices
+
+        editable_ds.done_adding_data()
+
         if verbosity > 0:
             print("complete.")
             print(" - Reading in the metadata from the extracted filenames...", end='')
@@ -143,10 +154,9 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
             print(" - Recording all of the data in an RBAnalyzer...", end='')
 
         # Put everything into an RBAnalyzer object, which is a container for RB data, and return this.
-        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=ds, summary_data=None)
+        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=editable_ds, summary_data=None)
 
-        if verbosity > 0:
-            print("complete.")
+        if verbosity > 0: print("complete.")
 
         return rbanalyzer
 

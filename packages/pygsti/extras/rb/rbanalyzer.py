@@ -60,31 +60,95 @@ class RBAnalyzer(object):
     #     self.ds = None
 
 
-    def create_summary_data(self, specindices=None, datatype='adjusted', verbosity=2):
+    def create_summary_data(self, specindices=None, datatype='adjusted', method='fast', verbosity=2):
         """
         analysis : 'all', 'hamming', 'raw'.
 
         """
-        if specindices is None:
-            specindices = range(len(self._specs))
+        if method == 'simple':
+            if specindices is None:
+                specindices = range(len(self._specs))
 
-        for specind in specindices:
-            spec = self._specs[specind]
+            for specind in specindices:
+                spec = self._specs[specind]
 
-            if specind not in self._summary_data.keys():
+                if specind not in self._summary_data.keys():
+
+                    if verbosity > 0:
+                        print(" - Creating summary data {} of {} ...".format(specind + 1, len(specindices)), end='')
+                    if verbosity > 1: print("")
+
+                    self._summary_data[specind] = _dataset.create_summary_datasets(self.ds, spec, datatype=datatype,
+                                                                                   verbosity=verbosity)
+
+                    if verbosity == 1: print("complete.")
+
+                else:
+                    if verbosity > 0:
+                        print(" - Summary data already extant for {} of {}".format(specind + 1, len(specindices)))
+
+        elif method == 'fast':
+            assert(specindices is None), "The 'fast' method cannot format a subset of the data!"
+
+            summarydata = {}
+            numcircuits = len(self.ds.keys())
+            percent = 0
+            for i, circ in enumerate(self.ds.keys()):
 
                 if verbosity > 0:
-                    print(" - Creating summary data {} of {} ...".format(specind + 1, len(specindices)), end='')
-                if verbosity > 1: print("")
+                    if _np.floor(100 * i/numcircuits) >= percent:
+                        percent += 1
+                        print("{} percent complete".format(percent))
 
-                self._summary_data[specind] = _dataset.create_summary_datasets(self.ds, spec, datatype=datatype,
-                                                                               verbosity=verbosity)
+                specindices = self.ds.auxInfo[circ]['specindices']
+                length = self.ds.auxInfo[circ]['length']
+                target = self.ds.auxInfo[circ]['target']
 
-                if verbosity == 1: print("complete.")
+                for specind in specindices:
+                    spec = self._specs[specind]
+                    structure = spec.get_structure()
+                    if specind not in summarydata.keys():
 
-            else:
-                if verbosity > 0:
-                    print(" - Summary data already extant for {} of {}".format(specind + 1, len(specindices)))
+                        summarydata[specind] = {}
+                        for qubits in structure:
+                            summarydata[specind][qubits] = {}
+                            summarydata[specind][qubits]['success_counts'] = {}
+                            summarydata[specind][qubits]['total_counts'] = {}
+                            summarydata[specind][qubits]['hamming_distance_counts'] = {}
+
+                    for qubits in structure:
+                        if length not in summarydata[specind][qubits]['success_counts'].keys():
+                            summarydata[specind][qubits]['success_counts'][length] = []
+                            summarydata[specind][qubits]['total_counts'][length] = []
+                            summarydata[specind][qubits]['hamming_distance_counts'][length] = []
+
+                    dsrow = self.ds[circ]
+                    for qubits in structure:
+                        if datatype == 'raw':
+                            summarydata[specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
+                            summarydata[specind][qubits]['total_counts'][length].append(dsrow.total)
+                        elif datatype == 'adjusted':
+                            summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
+
+
+            for specind in summarydata.keys():
+                spec = self._specs[specind]
+                structure = spec.get_structure()
+                self._summary_data[specind] = {}
+                for qubits in structure:
+                    if datatype == 'raw':
+                        summarydata[specind][qubits]['hamming_distance_counts'] = None
+                    elif datatype == 'adjusted':
+                        summarydata[specind][qubits]['success_counts'] = None
+                        summarydata[specind][qubits]['total_counts'] = None
+                    
+                    self._summary_data[specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=summarydata[specind][qubits]['success_counts'],
+                                                total_counts=summarydata[specind][qubits]['total_counts'],
+                                                hamming_distance_counts=summarydata[specind][qubits]['hamming_distance_counts'])
+       
+
+        else:
+            raise ValueError("Input `method` must be 'fast' or 'simple'!")
 
     def analyze(self, specindices=None, analysis='adjusted', bootstraps=200, verbosity=1):
         """
@@ -92,7 +156,7 @@ class RBAnalyzer(object):
 
         todo: this partly ignores specindices
         """
-        self.create_summary_data(specindices=specindices, datatype=analysis, verbosity=verbosity)
+        #self.create_summary_data(specindices=specindices, datatype=analysis, verbosity=verbosity)
 
         for i, rbdatadict in self._summary_data.items():
             #if not isinstance(rbdata, dict):
@@ -112,7 +176,8 @@ class RBAnalyzer(object):
                 if (analysis == 'all' and rbdata.datatype == 'hamming_distance_counts') or analysis == 'adjusted':
                     self._rbresults['adjusted'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
 
-    def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, twoQgateprob=None):
+    def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, twoQgateprob=None,
+                           prefilter=None):
         """
         todo
 
@@ -146,6 +211,20 @@ class RBAnalyzer(object):
                     if i not in kept.keys():
                         kept[i] = []
                     kept[i].append(qubits)
+
+        if prefilter is not None:
+            for key in kept.keys():
+                if key not in prefilter.keys():
+                    del kept[key]
+                else:
+                    newlist = []
+                    for qubits in kept[key]:
+                        if qubits in prefilter[key]:
+                            newlist.append(qubits)
+                    if len(newlist) == 0:
+                        del kept[key]
+                    else:
+                        kept[key] = newlist
 
         return kept
 

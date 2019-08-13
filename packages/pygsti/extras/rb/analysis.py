@@ -107,7 +107,9 @@ def marginalized_success_counts(dsrow, circ, target, qubits):
     todo
 
     """
+    # The rows of the circuit that we are interested in
     indices = [circ.line_labels.index(q) for q in qubits]
+    # The ordering of this must be the same as what we compare it to. 
     margtarget = ''.join([target[i] for i in indices])
 
     if qubits == circ.line_labels:
@@ -136,7 +138,9 @@ def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
     todo
 
     """
+    # The rows of the circuit that we are interested in
     indices = [circ.line_labels.index(q) for q in qubits]
+    # The ordering of this must be the same as what we compare it to.
     margtarget = ''.join([target[i] for i in indices])
 
     hamming_distance_counts = _np.zeros(len(qubits) + 1, float)

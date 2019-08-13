@@ -24,7 +24,7 @@ import numpy as _np
 import copy as _copy
 import itertools as _itertools
 
-
+# todo : update this to be derived from a dictionary.
 class RBSpec(object):
     """
     Intended to encapsulate the specification of an RB experiment, so that, alongside a ProcessorSpec,
@@ -56,6 +56,20 @@ class RBSpec(object):
         else:
             self._circuits = None
 
+    def to_dict(self):
+
+        asdict = {}
+        asdict['rbtype'] = self._rbtype
+        asdict['rbsubtype'] = self._rbsubtype
+        asdict['structure'] = self._structure
+        asdict['sampler'] = self._sampler
+        asdict['samplerargs'] = self._samplerargs
+        asdict['lengths'] = self._lengths
+        asdict['numcircuits'] = self._numcircuits
+        asdict['circuits'] = self._circuits
+
+        return asdict
+ 
     def add_circuits(self, circuits):
 
         self._circuits = circuits

@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import ibmqx5
-#from . import ibmqx_melbourne
+from . import ibmq_melbourne
+from . import ibmq_rueschlikon
 from . import rqc_aspen
 from . import rqc_agave
