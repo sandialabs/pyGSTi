@@ -213,18 +213,22 @@ class RBAnalyzer(object):
                     kept[i].append(qubits)
 
         if prefilter is not None:
+            dellist = []
             for key in kept.keys():
                 if key not in prefilter.keys():
-                    del kept[key]
+                    dellist.append(key)
                 else:
                     newlist = []
                     for qubits in kept[key]:
                         if qubits in prefilter[key]:
                             newlist.append(qubits)
                     if len(newlist) == 0:
-                        del kept[key]
+                        dellist.append(key)
                     else:
                         kept[key] = newlist
+
+            for key in dellist:
+                del kept[key]
 
         return kept
 
