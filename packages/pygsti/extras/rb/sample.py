@@ -69,7 +69,7 @@ class RBSpec(object):
         asdict['circuits'] = self._circuits
 
         return asdict
- 
+
     def add_circuits(self, circuits):
 
         self._circuits = circuits
@@ -328,6 +328,57 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
 
     return sampled_layer
 
+
+def circuit_layer_by_edgegrab(pspec, subsetQs=None, meantwoQgates=1, modelname='clifford'):
+    """
+    todo
+
+    """
+    assert(modelname == 'clifford'), "This function currently assumes sampling from a Clifford model!"
+    if subsetQs is None:
+        qubits = list(pspec.qubit_labels[:])  # copy this list
+    else:
+        assert(isinstance(subsetQs, (list, tuple))), "SubsetQs must be a list or a tuple!"
+        qubits = list(subsetQs[:])  # copy this list
+
+    # Prep the sampling variables.
+    sampled_layer = []
+    edgelist = pspec.qubitgraph.edges()
+    edgelist = [e for e in edgelist if all([q in qubits for q in e])]
+    selectededges = []
+
+    # Go through until all qubits have been assigned a gate.
+    while len(edgelist) > 0:
+
+        edge = edgelist[_np.random.randint(0, len(edgelist))]
+        selectededges.append(edge)
+        # Delete all edges containing these qubits.
+        edgelist = [e for e in edgelist if not any([q in e for q in edge])]
+
+    num2Qgates = len(selectededges)
+    assert(num2Qgates >= meantwoQgates), "Device has insufficient connectivity!"
+
+    if meantwoQgates > 0:
+        twoQprob = meantwoQgates / num2Qgates
+    else:
+        twoQprob = 0
+
+    unusedqubits = _copy.copy(qubits)
+    for edge in selectededges:
+        if bool(_np.random.binomial(1, twoQprob)):
+
+            possibleops = pspec.clifford_ops_on_qubits[edge]
+            assert(len(possibleops) == 1), "Sampler assumes a single 2-qubit gate!"
+            sampled_layer.append(possibleops[0])
+            for q in edge:
+                del unusedqubits[unusedqubits.index(q)]
+
+    for q in unusedqubits:
+        possibleops = pspec.clifford_ops_on_qubits[(q,)]
+        gate = possibleops[_np.random.randint(0, len(possibleops))]
+        sampled_layer.append(gate)
+
+    return sampled_layer
 
 def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates='all',
                                   twoQgates='all', modelname='clifford'):
@@ -833,6 +884,10 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
             assert(len(samplerargs) >= 1), \
                 ("The samplerargs must at least a 1-element list with the first element "
                  "the 'co2Qgates' argument of the co2Qgates sampler.")
+        elif sampler == 'edgegrab':
+            sampler = circuit_layer_by_edgegrab
+            assert(len(samplerargs) >= 1), \
+                ("The samplerargs must at least a 1-element list")
         elif sampler == 'local': sampler = circuit_layer_of_oneQgates
         else: raise ValueError("Sampler type not understood!")
 

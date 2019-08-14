@@ -56,7 +56,7 @@ def get_twoQgate_edgelist(version, subset=None):
                      ('Q4','Q5'),
                      ('Q5','Q6'),
                      ('Q6','Q7'),
-                     ('Q7','Q0'),
+                     ('Q0','Q7'),
                      # Ring 2
                      ('Q10','Q11'),
                      ('Q11','Q12'),
@@ -65,7 +65,7 @@ def get_twoQgate_edgelist(version, subset=None):
                      ('Q14','Q15'),
                      ('Q15','Q16'),
                      ('Q16','Q17'),
-                     ('Q17','Q10'),
+                     ('Q10','Q17'),
                      # Connection
                      ('Q1','Q16'),
                      ('Q2','Q15'),
@@ -79,7 +79,7 @@ def get_twoQgate_edgelist(version, subset=None):
                      ('Q14','Q15'),
                      ('Q15','Q16'),
                      ('Q16','Q17'),
-                     ('Q17','Q10'),
+                     ('Q10','Q17'),
                      ]
     
     else:
@@ -130,16 +130,26 @@ def get_splitting(version, n):
 
 def get_all_connected_sets(version, n):
     """
+
     """ 
-    if version == 4:
-        assert(n == 2), "Only implemented for n = 2"
-        if n == 2: 
-            qubit_sets = get_twoQgate_edgelist(version)
 
-    elif version == 6:
-        if n < 8: qubit_sets = [tuple(['Q1'+str((q + i) % 8) for i in range(n)]) for q in range(8)]                  
-        if n == 8: qubit_sets = [tuple(['Q1'+str(i) for i in range(8)])] 
-    else:
-        raise ValueError("Unknown version!")
+    pspec = make_processor_spec(['Gxpi2', 'Gxmpi2', 'Gxpi','Gzpi2', 'Gzmpi2', 'Gzpi', 'Gypi'], version,
+                                 construct_clifford_compilations = {})
+    import itertools as _iter
+    connectedqubits = []
+    for combo in _iter.combinations(pspec.qubit_labels, n):
+        if pspec.qubitgraph.subgraph(list(combo)).are_glob_connected(combo):
+            connectedqubits.append(combo)
 
-    return qubit_sets   
+    # if version == 4:
+    #     assert(n == 2), "Only implemented for n = 2"
+    #     if n == 2: 
+    #         qubit_sets = get_twoQgate_edgelist(version)
+
+    # elif version == 6:
+    #     if n < 8: qubit_sets = [tuple(['Q1'+str((q + i) % 8) for i in range(n)]) for q in range(8)]                  
+    #     if n == 8: qubit_sets = [tuple(['Q1'+str(i) for i in range(8)])] 
+    # else:
+    #     raise ValueError("Unknown version!")
+
+    return connectedqubits  
