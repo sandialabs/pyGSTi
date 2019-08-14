@@ -1,4 +1,4 @@
-""" Functions for interfacing pyGSTi with ibmqx5 """
+""" Functions for interfacing pyGSTi with IBM Q Melbourne """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -65,5 +65,20 @@ def get_twoQgate_edgelist(subset=None):
         for cnot_edge in cnot_edge_list:
             if cnot_edge[0] in subset and cnot_edge[1] in subset:
                 subset_cnot_edge_list.append(cnot_edge)
-        
+
         return subset_cnot_edge_list
+
+
+def get_all_connected_sets(n):
+    """
+
+    """
+
+    pspec = make_processor_spec(['Gc' + str(i) for i in range(24)], construct_clifford_compilations={})
+    import itertools as _iter
+    connectedqubits = []
+    for combo in _iter.combinations(pspec.qubit_labels, n):
+        if pspec.qubitgraph.subgraph(list(combo)).are_glob_connected(combo):
+            connectedqubits.append(combo)
+
+    return connectedqubits  
