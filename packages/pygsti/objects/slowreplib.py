@@ -1877,7 +1877,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     Ei = Einds[final_factor_indx]  # final "factor" index == E-vector index
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei] += res  # could add_inplace?
-                    #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
+                    #print("DB PYTHON: prps[%d] = " % Ei, prps[Ei])
 
             else:  # non-fast mode
                 last_index = len(factor_lists) - 1
@@ -1890,10 +1890,10 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     res.scale((pLeft * pRight))
                     final_factor_indx = fi[-1]
                     Ei = Einds[final_factor_indx]  # final "factor" index == E-vector index
-                    #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+                    #print("DB: pr_as_poly    ", fi, " coeffs=",[f.coeff for f in factors]," pLeft=",pLeft," pRight=",pRight, "res=",res)
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei] += res  # add_inplace?
-                    #print("DB running prps[",Ei,"] =",prps[Ei])
+                    #print("DB pr_as_poly   running prps[",Ei,"] =",prps[Ei])
 
             # #DEBUG!!!
             # db_nfactors = [len(l) for l in factor_lists]
@@ -1930,6 +1930,75 @@ def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
                            pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None):
     return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
                                 pathmagnitude_gap, min_term_mag, max_paths, current_threshold)
+
+def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+    """ TODO: docstring """
+    mpv = calc.Np  # max_poly_vars
+    distinct_gateLabels = sorted(set(circuit))
+
+    op_term_reps = {}
+    op_foat_indices = {}
+    for glbl in distinct_gateLabels:
+        if glbl not in repcache:
+            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order)
+            repcache[glbl] = ([t.torep(mpv) for t in hmterms], foat_indices)
+        op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
+
+    if rholabel not in repcache:
+        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+            min_term_mag, max_taylor_order=calc.max_order)
+        repcache[rholabel] = ([t.torep(mpv) for t in hmterms], foat_indices)
+    rho_term_reps, rho_foat_indices = repcache[rholabel]
+
+    elabels = tuple(elabels)  # so hashable
+    if elabels not in repcache:
+        E_term_indices_and_reps = []
+        for i, elbl in enumerate(elabels):
+            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order)
+            E_term_indices_and_reps.extend(
+                [(i, t.torep(mpv), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+
+        #Sort all terms by magnitude
+        E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
+        E_term_reps = [x[1] for x in E_term_indices_and_reps]
+        E_indices = [x[0] for x in E_term_indices_and_reps]
+        E_foat_indices = [j for j, x in enumerate(E_term_indices_and_reps) if x[3] is True]
+        repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
+
+    E_term_reps, E_indices, E_foat_indices = repcache[elabels]
+
+    prps = [None] * len(elabels)
+
+    factor_lists = [rho_term_reps] + \
+        [op_term_reps[glbl] for glbl in circuit] + \
+        [E_term_reps]
+    last_index = len(factor_lists) - 1
+
+    foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
+
+    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.array(
+        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+
+    mag = _np.zeros(len(elabels), 'd')
+    nPaths = _np.zeros(len(elabels), int)
+
+    def count_path(b, mg, incd):
+        mag[E_indices[b[-1]]] += mg
+        nPaths[E_indices[b[-1]]] += 1
+
+    traverse_paths_upto_threshold(factor_lists, threshold, len(elabels),
+                                  foat_indices_per_op, count_path)  # sets mag and nPaths
+    return max_sum_of_pathmags - mag
+
+    #threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
+    #    factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
+    #    initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 1000.0, max_npaths=max_paths)
+
+
 
 global_cnt = 0
 
@@ -2063,12 +2132,14 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
         [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
-    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
+    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
+    #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap 
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
         initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 1000.0, max_npaths=max_paths)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
+    #print("Threshold = ", threshold, " Paths=", npaths)
     #REMOVE (and global_cnt definition above)
     #global global_cnt
     #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
@@ -2547,11 +2618,16 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
         nIters += 1
 
     #Run path traversal once more to count final number of paths
+
+    def count_path_nomax(b, mg, incd):  # never returns True - we want to check *threshold* alone selects correct # of paths
+        mag[E_indices[b[-1]]] += mg
+        nPaths[E_indices[b[-1]]] += 1
+
     mag = _np.zeros(num_elabels, 'd')
     # integrals = _np.zeros(num_elabels, 'd') REMOVE
     nPaths = _np.zeros(num_elabels, int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
-                                  foat_indices_per_op, count_path)  # sets mag and nPaths
+                                  foat_indices_per_op, count_path_nomax)  # sets mag and nPaths
 
     #TODO REMOVE - idea of truncating based on convergence of sum seems flawed - can't detect long tails
     # last_threshold = 1e10  # something huge

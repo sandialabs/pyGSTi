@@ -1563,7 +1563,7 @@ class OpModel(Model):
                 #all procs should have *same* paramBlkSize2
 
         #Prepare any computationally intensive preparation
-        calc.bulk_prep_probs(evt, comm)
+        calc.bulk_prep_probs(evt, comm, memLimit)
         
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 
@@ -1654,7 +1654,7 @@ class OpModel(Model):
         assert(evalTree.num_final_elements() == nEls)
         return evalTree, elIndices, outcomes
 
-    def bulk_prep_probs(self, evalTree, comm=None):
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -1671,8 +1671,10 @@ class OpModel(Model):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
            subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
         """
-        self._fwdsim().bulk_prep_probs(evalTree, comm)
+        return self._fwdsim().bulk_prep_probs(evalTree, comm)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):

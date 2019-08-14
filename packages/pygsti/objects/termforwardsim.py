@@ -353,6 +353,14 @@ class TermForwardSimulator(ForwardSimulator):
 
         return prps, npaths, threshold, target_sopm, achieved_sopm
 
+    def circuit_pathmagnitude_gap(self, rholabel, elabels, circuit, repcache,
+                                  opcache, threshold):
+        if self.evotype == "svterm":
+            return replib.SV_circuit_pathmagnitude_gap(
+                self, rholabel, elabels, circuit, repcache, opcache, threshold, self.min_term_mag)
+        else:
+            raise NotImplementedError("TODO")
+
     # LATER? , resetWts=True, repcache=None):
     def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
         """
@@ -791,15 +799,20 @@ class TermForwardSimulator(ForwardSimulator):
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
         #eval on each local subtree
+        nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
 
             if self.mode == "pruned":
-                evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
+                nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
                                                  self.min_term_mag, self.max_paths_per_outcome,
                                                  recalc_threshold=not self.opt_mode)
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
+                nFailed = 0
+                
+            nTotFailed += nFailed
+        return nTotFailed
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
@@ -860,9 +873,11 @@ class TermForwardSimulator(ForwardSimulator):
         #    print("%s coeffs = \n" % lbl,"\n".join(["%s: %.5f" % (k,v) for k,v in top_coeffs]))
 
         #eval on each local subtree
+        nFailures = 0  # failures of current polys to achieve desired sum-of-path-magnitudes
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
+            nFailures += evalSubTree.num_circuit_sopm_failures(self, self.pathmagnitude_gap*100)  # allow 100x extra gap (TEST DEBUG)
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
         #collect/gather results
@@ -870,6 +885,14 @@ class TermForwardSimulator(ForwardSimulator):
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
                              mxToFill, [], 0, comm)
         #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
+
+        if comm is not None:
+            nFailures = sum(comm.allgather(nFailures))
+        if nFailures > 0:
+            #print("*** FAILURES EXIST! ***")
+            raise ValueError("NO MANS LAND")
+        #else:
+        #    print("*** NO FAILURES! ***")
 
         if clipTo is not None:
             _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip

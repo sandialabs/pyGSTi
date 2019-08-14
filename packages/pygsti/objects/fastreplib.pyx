@@ -2610,7 +2610,8 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
         op = calc.sos.get_operation(glbl) #opcache.get(glbl, calc.sos.get_operation(glbl)) #DEBUG
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() - pathmagnitude_gap
+        target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
+        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap 
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))
@@ -2741,8 +2742,9 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     cdef SVStateCRep *prop2 = new SVStateCRep(dim)
     addpath_fn(&prps, b, 0, factor_lists, &prop1, &prop2, &E_indices, &leftSaved, &rightSaved, &coeffSaved)
     ## -------------------------------
-    add_paths(addpath_fn, b, factor_lists, foat_indices_per_op, numEs, nops, E_indices, 0, log_thres, current_mag, current_logmag, 0,
-              &prps, &prop1, &prop2, &leftSaved, &rightSaved, &coeffSaved)
+
+    add_paths(addpath_fn, b, factor_lists, foat_indices_per_op, numEs, nops, E_indices, 0, log_thres,
+              current_mag, current_logmag, 0, &prps, &prop1, &prop2, &leftSaved, &rightSaved, &coeffSaved)
 
     del prop1
     del prop2
@@ -2967,7 +2969,7 @@ cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_S
     cdef INT n = b.size()
     cdef INT sub_order
     cdef double mag, mag2
-
+    
     for i in range(n-1, incd-1, -1):
         if b[i]+1 == nops[i]: continue
         b[i] += 1
@@ -2992,9 +2994,10 @@ cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_S
             addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &E_indices, pleftSaved, prightSaved, pcoeffSaved)
             ## --------------------------
 
+            #add any allowed paths beneath this one
             add_paths(addpath_fn, b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices,
-                      i, log_thres, mag, logmag, sub_order, prps, pprop1, pprop2, pleftSaved, prightSaved, pcoeffSaved)
-                #add any allowed paths beneath this one
+                      i, log_thres, mag, logmag, sub_order, prps, pprop1, pprop2,
+                      pleftSaved, prightSaved, pcoeffSaved)
 
         elif sub_order <= 1:
             #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -3151,7 +3154,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
     #target_mag = target_sum_of_pathmags
     cdef double threshold_upper_bound = 1.0
     cdef double threshold_lower_bound = -1.0
-    cdef INT i
+    cdef INT i, j
     cdef INT try_larger_threshold
 
     while nIters < 100: # TODO: allow setting max_nIters as an arg?
@@ -3168,7 +3171,13 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
             if(mags[i] < target_sum_of_pathmags[i]):
                 try_larger_threshold = 0 # False
-                break
+
+                #Check that max_npaths has not been reached - if so, *still* try a larger threshold
+                for j in range(nEffects):
+                    if nPaths[j] >= max_npaths:
+                        try_larger_threshold = 1 # True
+                        break
+                break                
 
         if try_larger_threshold:
             threshold_lower_bound = threshold
@@ -3197,7 +3206,10 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
     for i in range(nEffects):
         mags[i] = 0.0; nPaths[i] = 0
     count_paths_upto_threshold(oprep_lists, threshold_lower_bound, nEffects, 
-                               foat_indices_per_op, E_indices, max_npaths, mags, nPaths) # sets mags and nPaths
+                               foat_indices_per_op, E_indices, 1000000000, mags, nPaths) # sets mags and nPaths
+    # 1000000000 == NO_LIMIT; we want to test that the threshold above limits the number of
+    # paths to (approximately) max_npaths -- it's ok if the count is slightly higher since additional paths
+    # may be needed to ensure all equal-weight paths are considered together (needed for the resulting prob to be *real*).
 
     return threshold_lower_bound
 

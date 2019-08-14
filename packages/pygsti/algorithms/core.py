@@ -1220,13 +1220,13 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
     #Step 3: solve least squares minimization problem
 
-    # if mdl.simtype in ("termgap", "termorder"):
-    #    for something:
-    #        mdl.bulk_prep_probs(... - recompute threshold)
-    #        run_leastsq
-
-    minErrVec, soln_gs = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
-                                    printer, profiler, nDataParams, memLimit)
+    if mdl.simtype in ("termgap", "termorder"):
+        minErrVec, soln_gs = _do_term_runopt(evTree, mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
+                                             printer, profiler, nDataParams, memLimit)
+    else:
+        #Normal case of just a single "sub-iteration"
+        minErrVec, soln_gs = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
+                                        printer, profiler, nDataParams, memLimit)
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -1318,6 +1318,61 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
         return (logL_upperbound - deltaLogL), soln_mdl
     else:
         return minErrVec, soln_mdl
+
+    
+def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
+                    printer, profiler, nDataParams, memLimit, logL_upperbound=None):
+    """ TODO: docstring """
+
+    minSubIters = 1
+    maxSubIters = 5
+    last_mdlvec = None
+    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+    assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
+    for sub_iter in range(maxSubIters):                    
+        printer.log("STAGE %d" % (sub_iter+1))
+        last_mdlvec = mdl.to_vector().copy()
+        minErrVec, soln_gs = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
+                                        printer, profiler, nDataParams, memLimit, logL_upperbound)
+        new_mdlvec = mdl.to_vector().copy()
+
+        #Adjust resulting model so that it has no failures
+        nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+        if nFailures == 0 and sub_iter >= minSubIters:
+            printer.log("STAGES CONVERGED!")
+            break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
+        
+        if nFailures > 0:
+            low, high = 0.0, 1.0
+            while high-low > 0.01: # TOL?
+                alpha = (high+low)/2
+                print("TRYING ALPHA = ", alpha)
+                mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
+                nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+                if nFailures > 0: # alpha too high
+                    high = alpha
+                else: # alpha too low
+                    low = alpha
+                    
+            alpha = low
+            print("FINAL ALPHA = ", alpha)
+            mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
+            nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+            assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
+            if alpha == 0.0:
+                printer.log("STAGES CONVERGED b/c ALPHA == 0!")
+                break
+
+            #alpha = 1.0
+            #while nFailures > 0:
+            #    alpha /= 2.0
+            #    print("TRYING ALPHA = ", alpha)
+            #    mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
+            #    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+
+    #COMPUTE MINERRVEC??
+    return minErrVec, mdl
+
 
 
 def do_mc2gst_with_model_selection(
@@ -2240,11 +2295,17 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     else:
         nDataParams = 0  # because it's never used
 
-    profiler.add_time("do_mc2gst: num data params", tm)
+    profiler.add_time("do_mlgst: num data params", tm)
 
-    #Run optimization (use leastsq)
-    delta_logl, soln_mdl = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
-                                      printer, profiler, nDataParams, memLimit, logL_upperbound)
+    if mdl.simtype in ("termgap", "termorder"):
+        delta_logl, soln_mdl = _do_term_runopt(evTree, mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
+                                               printer, profiler, nDataParams, memLimit, logL_upperbound)
+    else:
+        #Normal case of just a single "sub-iteration"
+        #Run optimization (use leastsq)
+        delta_logl, soln_mdl = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
+                                          printer, profiler, nDataParams, memLimit, logL_upperbound)
+
     printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 
     profiler.add_time("do_mlgst: post-opt", tm)

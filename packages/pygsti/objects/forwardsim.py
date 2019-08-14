@@ -520,7 +520,7 @@ class ForwardSimulator(object):
             blkSize = None  # wrtFilter dictates block
         return blkSize
 
-    def bulk_prep_probs(self, evalTree, comm=None):
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -537,6 +537,8 @@ class ForwardSimulator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
            subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
         """
         pass  # default is to have no pre-computed quantities (but not an error to call this fn)
 

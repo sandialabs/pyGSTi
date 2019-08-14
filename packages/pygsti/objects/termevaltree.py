@@ -428,6 +428,30 @@ class TermEvalTree(EvalTree):
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
+    def num_circuit_sopm_failures(self, calc, pathmagnitude_gap):
+        """ TODO: docstring """
+        num_failed = 0  # number of circuits which fail to achieve the target sopm
+        db_tested = 0
+        opcache = {}  # ??
+        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+            circuit = self[i]
+            if circuit not in self.percircuit_p_polys:
+                continue  # if circuit not cached *already*, can't count any failures
+            current_threshold, _ = self.percircuit_p_polys[circuit]
+            db_tested += 1
+
+            rholabel = circuit[0]
+            opstr = circuit[1:]
+            elabels = self.simplified_circuit_elabels[i]
+
+            gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.repcache,
+                                                  opcache, current_threshold)
+            num_failed += _np.count_nonzero(gaps > pathmagnitude_gap)
+
+        print("DB: tested %d circuits: %d failures" % (db_tested, num_failed))
+        return num_failed
+
+    
     def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
                              min_term_mag, max_paths, recalc_threshold=True):
 
@@ -442,11 +466,14 @@ class TermEvalTree(EvalTree):
         #    op = calc.sos.get_operation(glbl)
         #    tot = op.get_total_term_magnitude()
         #    print(glbl, "op=", str(type(op)), " mag=", tot)
+        recalc_threshold = True
         
         #opcache = {}
         all_compact_polys = []  # holds one compact polynomial per final *element*
+        num_failed = 0  # number of circuits which fail to achieve the target sopm
         for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
+            #print("Computing pruned poly %d" % i)
 
             if circuit in self.percircuit_p_polys:
                 current_threshold, compact_polys = self.percircuit_p_polys[circuit]
@@ -470,6 +497,8 @@ class TermEvalTree(EvalTree):
                                                 min_term_mag,
                                                 max_paths,
                                                 current_threshold)
+                if achieved_sopm < target_sopm:
+                    num_failed += 1
             else:
                 #Could just recompute sopm and npaths?
                 raw_polyreps = None
@@ -479,7 +508,7 @@ class TermEvalTree(EvalTree):
 
             if raw_polyreps is not None:  # otherwise use existing compact_polys
                 compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
-                self.percircuit_p_polys[opstr] = (threshold, compact_polys)
+                self.percircuit_p_polys[circuit] = (threshold, compact_polys)
                 
             all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
             tot_npaths += npaths
@@ -494,12 +523,14 @@ class TermEvalTree(EvalTree):
             #if comm is None or comm.Get_rank() == 0:
             rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
             nC = self.num_final_strings()
-            print("%sPruned path-integral: kept %d paths w/magnitude %.4g (target=%.4g, #circuits=%d)" %
-                  (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC))
+            print("%sPruned path-integral: kept %d paths w/magnitude %.4g (target=%.4g, #circuits=%d, #failed=%d)" %
+                  (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
             print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
                   (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
         self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
+        return num_failed
+        
 
     def cache_p_polys(self, calc, comm):
         """

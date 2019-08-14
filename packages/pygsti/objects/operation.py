@@ -6609,8 +6609,8 @@ class LindbladErrorgen(LinearOperator):
 
         # as we expect `basis` will contain *dense* basis
         # matrices (maybe change in FUTURE?)
-        numHamParams = len(hamBasisIndices) - 1  # compensate for first basis el
-        numOtherBasisEls = len(otherBasisIndices) - 1  # being the identity.
+        numHamParams = max(len(hamBasisIndices) - 1,0)  # compensate for first basis el, 
+        numOtherBasisEls = max(len(otherBasisIndices) - 1,0)  # being the identity. (if there are any els at all)
 
         # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
         # coeffs (w/ *local* variable indices) that get converted to per-order
