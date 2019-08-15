@@ -2682,8 +2682,8 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     cdef vector[PolyCRep_ptr] empty_prps = vector[PolyCRep_ptr](0)
 
     threshold = pathmagnitude_threshold(factor_lists, E_indices, numEs, target_sum_of_pathmags, foat_indices_per_op,
-                                        current_threshold, pathmagnitude_gap/1000.0, max_paths,
-                                        achieved_sum_of_pathmags, npaths)
+                                        current_threshold, pathmagnitude_gap / (3.0*max_paths), max_paths,
+                                        achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
     #DEBUG
     #print("FOAT: ")
     #for i in range(nFactorLists):

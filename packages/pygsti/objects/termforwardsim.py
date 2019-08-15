@@ -73,7 +73,8 @@ class TermForwardSimulator(ForwardSimulator):
     """
 
     def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None,
-                 min_term_mag=None, max_paths_per_outcome=500, opt_mode=False, cache=None):
+                 min_term_mag=None, max_paths_per_outcome=500, gap_inflation_factor=1000.0,
+                 opt_mode=False, cache=None):
         """
         Construct a new TermForwardSimulator object.
         TODO: fix this docstring (and maybe other fwdsim __init__ functions?
@@ -100,9 +101,19 @@ class TermForwardSimulator(ForwardSimulator):
             The maximum order of error-rate terms to include in probability
             computations.
 
+        pathmag_gap : float
+            TODO: docstring
+
         max_paths_per_outcome : int, optional
             The maximum number of paths that are allowed to be traversed when
             computing any single circuit outcome probability.
+
+        gap_inflation_factor : float, optional
+            A multiplicative factor typically > 1 that multiplies `pathmag_gap` 
+            to creat a new "inflated gap".  If an achieved sum-of-path-magnitudes
+            is more than this inflated-gap below the maximum for a circuit,
+            computation of the circuit outcome's probability will result in an
+            error being raised.
 
         cache : dict, optional
             A dictionary of pre-computed compact polynomial objects.  Keys are
@@ -121,6 +132,7 @@ class TermForwardSimulator(ForwardSimulator):
         self.mode = mode
         self.max_order = max_order  # only used in "taylor-order" mode
         self.pathmagnitude_gap = pathmag_gap  # only used in "pruned" mode
+        self.pathmagnitude_gap_inflation = gap_inflation_factor # how much to inflate gap when constraining computation of probabilities
         self.min_term_mag = min_term_mag  # only used in "pruned" mode
         self.max_paths_per_outcome = max_paths_per_outcome
         self.opt_mode = opt_mode
@@ -805,8 +817,8 @@ class TermForwardSimulator(ForwardSimulator):
 
             if self.mode == "pruned":
                 nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
-                                                 self.min_term_mag, self.max_paths_per_outcome,
-                                                 recalc_threshold=not self.opt_mode)
+                                                           self.min_term_mag, self.max_paths_per_outcome,
+                                                           recalc_threshold=not self.opt_mode, stop_on_failure=True)
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 nFailed = 0
@@ -877,7 +889,8 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            nFailures += evalSubTree.num_circuit_sopm_failures(self, self.pathmagnitude_gap*100)  # allow 100x extra gap (TEST DEBUG)
+            if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
+                nFailures += evalSubTree.num_circuit_sopm_failures(self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation)
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
         #collect/gather results
@@ -889,10 +902,8 @@ class TermForwardSimulator(ForwardSimulator):
         if comm is not None:
             nFailures = sum(comm.allgather(nFailures))
         if nFailures > 0:
-            #print("*** FAILURES EXIST! ***")
+            print("%d FAILURES" % nFailures)
             raise ValueError("NO MANS LAND")
-        #else:
-        #    print("*** NO FAILURES! ***")
 
         if clipTo is not None:
             _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip

@@ -2136,7 +2136,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap 
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
-        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 1000.0, max_npaths=max_paths)
+        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / (3.0*max_paths), max_npaths=max_paths)  # 3.0 is just heuristic
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
     #print("Threshold = ", threshold, " Paths=", npaths)

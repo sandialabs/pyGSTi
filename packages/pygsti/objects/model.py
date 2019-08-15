@@ -439,6 +439,7 @@ class OpModel(Model):
         self._calcClass = c
         self._sim_type = sim_type
         self._sim_args = list(simtype_and_args[1:])
+        self._termgap_inflation_factor = None  #used only for term-based calcs -- maybe absorb into _sim_args?
 
         if sim_type.startswith("term"):
             #cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
@@ -803,6 +804,7 @@ class OpModel(Model):
             kwargs['min_term_mag'] = float(self._sim_args[2])
             kwargs['max_paths_per_outcome'] = int(self._sim_args[3]) if len(self._sim_args) > 3 else 500
             kwargs['opt_mode'] = bool(self._sim_args[4]) if len(self._sim_args) > 4 else True
+            kwargs['gap_inflation_factor'] = self._termgap_inflation_factor
             # indicates fwdsim is being used within an optimization loop (only recomp paths on deriv evals)
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type == "map":

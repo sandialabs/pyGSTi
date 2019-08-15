@@ -1242,13 +1242,16 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
 
 def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
-               printer, profiler, nDataParams, memLimit, logL_upperbound=None):
+               printer, profiler, nDataParams, memLimit, logL_upperbound=None, term_inflate_factor=None):
 
     tm = _time.time()
         
     objective_func = objective.fn
     jacobian = objective.jfn
 
+    if term_inflate_factor is not None:
+        mdl._termgap_inflation_factor = term_inflate_factor
+    
     x0 = mdl.to_vector()
     if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
     if CUSTOMLM:
@@ -1324,44 +1327,69 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
                     printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
 
-    minSubIters = 1
+    minSubIters = 0
     maxSubIters = 5
+    final_iter = False
     last_mdlvec = None
     nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+    inflate_factor = 100.0
     assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
     for sub_iter in range(maxSubIters):                    
-        printer.log("STAGE %d" % (sub_iter+1))
+        printer.log("STAGE %d: inflate-factor = %g" % (sub_iter+1, inflate_factor))
+
+        #further check2
+        calc = mdl._fwdsim()
+        nFailuresChk = evTree.num_circuit_sopm_failures(calc, calc.pathmagnitude_gap)
+        print("CHECK2 %d: %d failures" % (sub_iter+1, nFailuresChk))
+
         last_mdlvec = mdl.to_vector().copy()
         minErrVec, soln_gs = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
-                                        printer, profiler, nDataParams, memLimit, logL_upperbound)
+                                        printer, profiler, nDataParams, memLimit, logL_upperbound,
+                                        1.0 if final_iter else inflate_factor)
         new_mdlvec = mdl.to_vector().copy()
-
+        if final_iter: #this was final iteration
+            printer.log("THIS WAS FINAL STAGE")
+            return minErrVec, soln_gs
+        
         #Adjust resulting model so that it has no failures
-        nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+        #TODO: make this into a legit method of Model if we're going to use this (HACK!)
+        calc = mdl._fwdsim()
+        nFailures = evTree.num_circuit_sopm_failures(calc, calc.pathmagnitude_gap)
+        print("STAGE %d final model has %d failures" % (sub_iter+1, nFailures))
         if nFailures == 0 and sub_iter >= minSubIters:
             printer.log("STAGES CONVERGED!")
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
-        
+
+        #Re-prep probabilities, adding more paths to accurately capture errors if needed
         if nFailures > 0:
-            low, high = 0.0, 1.0
-            while high-low > 0.01: # TOL?
-                alpha = (high+low)/2
-                print("TRYING ALPHA = ", alpha)
-                mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
-                nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
-                if nFailures > 0: # alpha too high
-                    high = alpha
-                else: # alpha too low
-                    low = alpha
+            nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit) #REPLACE w/path summing only
+            if nFailures > 0:
+                low, high = 0.0, 1.0
+                while high-low > 0.01: # TOL?
+                    alpha = (high+low)/2
+                    print("TRYING ALPHA = ", alpha)
+                    mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
+                    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)  #REPLACE w/path summing only
+                    if nFailures > 0: # alpha too high
+                        high = alpha
+                    else: # alpha too low
+                        low = alpha
                     
-            alpha = low
-            print("FINAL ALPHA = ", alpha)
-            mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
+                alpha = low
+                print("FINAL ALPHA = ", alpha)
+                mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
+
+                if alpha <= 0.1: # 0.0:  #HERE - or less than some threshold (like 0.1?)
+                    printer.log("NEXT STAGE IS FINAL b/c ALPHA < 0.1")
+                final_iter = True
+                
             nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
             assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
-            if alpha == 0.0:
-                printer.log("STAGES CONVERGED b/c ALPHA == 0!")
-                break
+
+            #further check1
+            calc = mdl._fwdsim()
+            nFailuresChk = evTree.num_circuit_sopm_failures(calc, calc.pathmagnitude_gap)
+            print("CHECK1 %d: %d failures" % (sub_iter+1, nFailuresChk))
 
             #alpha = 1.0
             #while nFailures > 0:
