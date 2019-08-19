@@ -232,6 +232,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 except _scipy.linalg.LinAlgError:
                     success = False
 
+                reject_msg = ""
+                
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
                     new_x = x + dx
@@ -257,7 +259,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         new_f = obj_fn(new_x)
                         new_x_is_allowed = True
                     except ValueError:
-                        printer.log("NO MANS LAND!!")
                         new_x_is_allowed = False
                         
                     # DB: from ..tools import matrixtools as _mt
@@ -302,8 +303,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
     
                             break  # exit inner loop normally
+                    else:
+                        reject_msg = " (No man's land)"
+                        #printer.log("    NO MANS LAND!!", 2)
+                            
                 else:
-                    printer.log("LinSolve Failure!!", 2)
+                    reject_msg = " (LinSolve Failure)"
+                    #printer.log("LinSolve Failure!!", 2)
 
                 # if this point is reached, either the linear solve failed
                 # or the error did not reduce.  In either case, reject increment.
@@ -314,8 +320,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if nu > half_max_nu:  # watch for nu getting too large (&overflow)
                     msg = "Stopping after nu overflow!"; break
                 nu = 2 * nu
-                printer.log("      Rejected!  mu => mu*nu = %g, nu => 2*nu = %g"
-                            % (mu, nu), 2)
+                printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
+                            % (reject_msg,mu, nu), 2)
 
                 JTJ[idiag] = undampled_JTJ_diag  # restore diagonal
             #end of inner loop

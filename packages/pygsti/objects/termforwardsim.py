@@ -265,7 +265,8 @@ class TermForwardSimulator(ForwardSimulator):
                                pathmagnitude_gap=0.0,
                                min_term_mag=0.01,
                                max_paths=500,
-                               current_threshold=None):
+                               current_threshold=None,
+                               compute_polyreps=True):
         """
         Computes polynomial-representations of the probabilities for multiple
         spam-tuples of `circuit`, sharing the same state preparation (so with
@@ -350,13 +351,13 @@ class TermForwardSimulator(ForwardSimulator):
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
                                               fastmode, pathmagnitude_gap, min_term_mag, max_paths,
-                                              current_threshold)
+                                              current_threshold, compute_polyreps)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
                                               fastmode, pathmagnitude_gap, min_term_mag, max_paths,
-                                              current_threshold)
+                                              current_threshold, compute_polyreps)
 
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
@@ -787,7 +788,7 @@ class TermForwardSimulator(ForwardSimulator):
             hprobs = _bulk_eval_compact_polys(hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
         _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None, just_get_nfailures=False):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -818,7 +819,7 @@ class TermForwardSimulator(ForwardSimulator):
             if self.mode == "pruned":
                 nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
                                                            self.min_term_mag, self.max_paths_per_outcome,
-                                                           recalc_threshold=not self.opt_mode, stop_on_failure=True)
+                                                           recalc_threshold=not self.opt_mode, just_get_nfailures=just_get_nfailures)
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 nFailed = 0
@@ -902,7 +903,7 @@ class TermForwardSimulator(ForwardSimulator):
         if comm is not None:
             nFailures = sum(comm.allgather(nFailures))
         if nFailures > 0:
-            print("%d FAILURES" % nFailures)
+            #print("%d FAILURES" % nFailures)
             raise ValueError("NO MANS LAND")
 
         if clipTo is not None:

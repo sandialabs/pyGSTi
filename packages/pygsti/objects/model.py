@@ -1676,7 +1676,41 @@ class OpModel(Model):
 
         memLimit : TODO: docstring
         """
-        return self._fwdsim().bulk_prep_probs(evalTree, comm)
+        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit)
+
+    def bulk_probs_num_term_failures(self, evalTree, comm=None, memLimit=None, adaptive=True):
+        """
+        Only applicable for models with a term-based (path-integral) forward simulator.
+        Counts the number of circuits for which the achieved sum-of-path-magnitudes is less
+        than the corresponding target, as set by the pathmagnitude-gap.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
+        adaptive : TODO docstring -- see comments below
+        """
+        fwdsim = self._fwdsim()
+        assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
+            "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
+        
+        if adaptive:
+            # Consider adaptively adding more paths to the polynomials currently cached in `evalTree`.
+            # This means that the return value is the number of failures that would exist *after*
+            # calling bulk_prep_probs(...).  If `adaptive` is False, then only the currently cached
+            # path integral are used, and the return values indicates how many failures exist *now*
+            # for this model.
+            return fwdsim.bulk_prep_probs(evalTree, comm, memLimit, just_get_nfailures=True)
+        else:
+            return evalTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):

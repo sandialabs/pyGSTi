@@ -1322,83 +1322,88 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
     else:
         return minErrVec, soln_mdl
 
+
+def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
+                                         evTree, comm, memLimit, printer):
+    ALPHA_TOL = 0.01
+    mdl.from_vector(desired_param_vec)  # alpha == 1.0
+    nFailures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+    if nFailures > 0:
+        low, high = 0.0, 1.0
+        while high-low > ALPHA_TOL:
+            alpha = (high+low)/2
+            printer.log("trying alpha = %g" % alpha)
+            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+            nFailures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+            if nFailures > 0: # alpha too high
+                high = alpha
+            else: # alpha too low
+                low = alpha
+            
+        alpha = low
+        printer.log("final alpha = %g" % alpha)
+        mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+    else:
+        alpha = 1.0
+    return alpha
+
+        
+
     
 def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
                     printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
-
-    minSubIters = 0
+    
     maxSubIters = 5
     final_iter = False
-    last_mdlvec = None
-    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
-    inflate_factor = 100.0
-    assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
-    for sub_iter in range(maxSubIters):                    
-        printer.log("STAGE %d: inflate-factor = %g" % (sub_iter+1, inflate_factor))
 
-        #further check2
-        calc = mdl._fwdsim()
-        nFailuresChk = evTree.num_circuit_sopm_failures(calc, calc.pathmagnitude_gap)
-        print("CHECK2 %d: %d failures" % (sub_iter+1, nFailuresChk))
+    #Prepare for first iteration
+    _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
+                                         mdl.to_vector().copy(), evTree, comm, memLimit, printer - 1)
+    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
+    assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
+    
+    for sub_iter in range(maxSubIters):
+        inflate_factor = 1.0 if final_iter else 100.0
+        final_prefix = "*Final* " if final_iter else ""
+        printer.log("%sTerm-state %d:  inflate_factor = %g" % (final_prefix, sub_iter+1, inflate_factor))
+
+        # Sanity check
+        assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False) == 0), \
+            "Starting term-stage with > 0 failures! (this shouldn't ever happen)"
 
         last_mdlvec = mdl.to_vector().copy()
         minErrVec, soln_gs = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
-                                        printer, profiler, nDataParams, memLimit, logL_upperbound,
-                                        1.0 if final_iter else inflate_factor)
+                                        printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor)
         new_mdlvec = mdl.to_vector().copy()
-        if final_iter: #this was final iteration
-            printer.log("THIS WAS FINAL STAGE")
-            return minErrVec, soln_gs
         
-        #Adjust resulting model so that it has no failures
-        #TODO: make this into a legit method of Model if we're going to use this (HACK!)
-        calc = mdl._fwdsim()
-        nFailures = evTree.num_circuit_sopm_failures(calc, calc.pathmagnitude_gap)
-        print("STAGE %d final model has %d failures" % (sub_iter+1, nFailures))
-        if nFailures == 0 and sub_iter >= minSubIters:
-            printer.log("STAGES CONVERGED!")
+        #if final_iter:  # this was final iteration
+        #    return minErrVec, soln_gs
+        
+        #Check how many failures the final model has (using the *same* path integrals)
+        nFailures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)
+        printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
+        
+        if nFailures == 0:
+            printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
+        else:
+            #Adjust resulting model so that it has no post-reprep failures, then
+            #re-prep probabilities, adding more paths to accurately capture errors if needed
+            alpha = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec,
+                                                         evTree, comm, memLimit, printer - 1)
 
-        #Re-prep probabilities, adding more paths to accurately capture errors if needed
-        if nFailures > 0:
-            nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit) #REPLACE w/path summing only
-            if nFailures > 0:
-                low, high = 0.0, 1.0
-                while high-low > 0.01: # TOL?
-                    alpha = (high+low)/2
-                    print("TRYING ALPHA = ", alpha)
-                    mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
-                    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)  #REPLACE w/path summing only
-                    if nFailures > 0: # alpha too high
-                        high = alpha
-                    else: # alpha too low
-                        low = alpha
-                    
-                alpha = low
-                print("FINAL ALPHA = ", alpha)
-                mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
-
-                if alpha <= 0.1: # 0.0:  #HERE - or less than some threshold (like 0.1?)
-                    printer.log("NEXT STAGE IS FINAL b/c ALPHA < 0.1")
+            if alpha <= 0.1:
+                printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
                 final_iter = True
                 
             nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
             assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
 
-            #further check1
-            calc = mdl._fwdsim()
-            nFailuresChk = evTree.num_circuit_sopm_failures(calc, calc.pathmagnitude_gap)
-            print("CHECK1 %d: %d failures" % (sub_iter+1, nFailuresChk))
+            # Sanity check
+            assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False) == 0), \
+                "Ending term-stage with > 0 failures! (this shouldn't ever happen)"
 
-            #alpha = 1.0
-            #while nFailures > 0:
-            #    alpha /= 2.0
-            #    print("TRYING ALPHA = ", alpha)
-            #    mdl.from_vector((1-alpha)*last_mdlvec + alpha*new_mdlvec)
-            #    nFailures = mdl.bulk_prep_probs(evTree, comm, memLimit)
-
-    #COMPUTE MINERRVEC??
     return minErrVec, mdl
 
 

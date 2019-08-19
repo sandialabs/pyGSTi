@@ -1921,15 +1921,15 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
 
 
 def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None):
+                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
     return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
-                                pathmagnitude_gap, min_term_mag, max_paths, current_threshold)
+                                pathmagnitude_gap, min_term_mag, max_paths, current_threshold, compute_polyreps)
 
 
 def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None):
+                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
     return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
-                                pathmagnitude_gap, min_term_mag, max_paths, current_threshold)
+                                pathmagnitude_gap, min_term_mag, max_paths, current_threshold, compute_polyreps)
 
 def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
     """ TODO: docstring """
@@ -2004,7 +2004,7 @@ global_cnt = 0
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
-                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None):
+                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -2061,6 +2061,8 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
             result in *more* paths being computed) then this function will not
             compute any paths and exit early, returning `None` in place of the
             usual list of polynomial representations.
+
+    compute_polyreps: TODO, docstring - whether to just compute sopm or actually compute corresponding polyreps
 
     Returns
     -------
@@ -2145,7 +2147,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
     #global_cnt += 1
 
-    if current_threshold >= 0 and threshold >= current_threshold:  # then just keep existing (cached) polys
+    if not compute_polyreps or (current_threshold >= 0 and threshold >= current_threshold):  # no polyreps needed, e.g. just keep existing (cached) polys
         return [], sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
