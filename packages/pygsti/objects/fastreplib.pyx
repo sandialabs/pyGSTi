@@ -2472,7 +2472,8 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
                            pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
 
-    opcache = {} # DEBUG - test if this is responsible for warnings
+    #check_opcache = opcache #REMOVE
+    #opcache = {} # DEBUG - test if this is responsible for warnings
     
     #t0 = pytime.time()
     #if debug is not None:
@@ -2525,6 +2526,15 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
             hmterms, foat_indices = op.get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
 
+            #TODO REMOVE
+            #if glbl in check_opcache:
+            #    if np.linalg.norm( check_opcache[glbl].to_vector() - op.to_vector() ) > 1e-6:
+            #        print("HERE!!!")
+            #        raise ValueError("HERE!!!")
+            #else:
+            #    check_opcache[glbl] = op    
+                
+
             #DEBUG CHECK TERM MAGNITUDES make sense
             #chk_tot_mag = sum([t.magnitude for t in hmterms])
             #chk_tot_mag2 = op.get_total_term_magnitude()
@@ -2554,7 +2564,10 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
         rho_foat_indices = repcel.foat_indices
     else:
         repcel = RepCacheEl()
-        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+        if rholabel not in opcache:
+            opcache[rholabel] = calc.sos.get_prep(rholabel)
+        rhoOp = opcache[rholabel]
+        hmterms, foat_indices = rhoOp.get_highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order)
 
         for t in hmterms:
@@ -2585,7 +2598,9 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
         repcel = RepCacheEl()
         E_term_indices_and_reps = []
         for i,elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+            if elbl not in opcache:
+                opcache[elbl] = calc.sos.get_effect(elbl)
+            hmterms, foat_indices = opcache[elbl].get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
             E_term_indices_and_reps.extend(
                 [ (i,t,t.magnitude,1 if (j in foat_indices) else 0) for j,t in enumerate(hmterms) ] )
@@ -2604,13 +2619,13 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
         E_foat_indices = repcel.foat_indices
         repcache[elabels] = repcel
 
-    cdef double max_partial_sopm = calc.sos.get_prep(rholabel).get_total_term_magnitude()
+    cdef double max_partial_sopm = opcache.get(rholabel, calc.sos.get_prep(rholabel)).get_total_term_magnitude()
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = calc.sos.get_operation(glbl) #opcache.get(glbl, calc.sos.get_operation(glbl)) #DEBUG
+        op = opcache.get(glbl, calc.sos.get_operation(glbl))
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
+        target_sum_of_pathmags[i] = max_partial_sopm * opcache.get(elbl, calc.sos.get_effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
         #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap 
 
     #Note: term calculator "dim" is the full density matrix dim
@@ -3219,7 +3234,7 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
 
     #Same beginning as SV_prs_as_pruned_polys -- should consolidate this setup code elsewhere
     
-    opcache = {} # DEBUG - test if this is responsible for warnings
+    #opcache = {} # DEBUG - test if this is responsible for warnings
     
     #t0 = pytime.time()
     #if debug is not None:
@@ -3301,7 +3316,10 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
         rho_foat_indices = repcel.foat_indices
     else:
         repcel = RepCacheEl()
-        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+        if rholabel not in opcache:
+            opcache[rholabel] = calc.sos.get_prep(rholabel)
+        rhoOp = opcache[rholabel]
+        hmterms, foat_indices = rhoOp.get_highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order)
 
         for t in hmterms:
@@ -3332,7 +3350,9 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
         repcel = RepCacheEl()
         E_term_indices_and_reps = []
         for i,elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+            if elbl not in opcache:
+                opcache[elbl] = calc.sos.get_effect(elbl)    
+            hmterms, foat_indices = opcache[elbl].get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
             E_term_indices_and_reps.extend(
                 [ (i,t,t.magnitude,1 if (j in foat_indices) else 0) for j,t in enumerate(hmterms) ] )
@@ -3351,13 +3371,13 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
         E_foat_indices = repcel.foat_indices
         repcache[elabels] = repcel
 
-    cdef double max_partial_sopm = calc.sos.get_prep(rholabel).get_total_term_magnitude()
+    cdef double max_partial_sopm = opcache.get(rholabel, calc.sos.get_prep(rholabel)).get_total_term_magnitude()
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = calc.sos.get_operation(glbl) #opcache.get(glbl, calc.sos.get_operation(glbl)) #DEBUG
+        op = opcache.get(glbl, calc.sos.get_operation(glbl))
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude()
+        max_sum_of_pathmags[i] = max_partial_sopm * opcache.get(elbl, calc.sos.get_effect(elbl)).get_total_term_magnitude()
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))

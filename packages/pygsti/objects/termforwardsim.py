@@ -815,6 +815,7 @@ class TermForwardSimulator(ForwardSimulator):
         nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
 
             if self.mode == "pruned":
                 nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
@@ -889,6 +890,8 @@ class TermForwardSimulator(ForwardSimulator):
         nFailures = 0  # failures of current polys to achieve desired sum-of-path-magnitudes
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
+            
             felInds = evalSubTree.final_element_indices(evalTree)
             if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
                 nFailures += evalSubTree.num_circuit_sopm_failures(self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation)
@@ -1003,6 +1006,8 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             nEls = evalSubTree.num_final_elements()
+
+            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
@@ -1168,6 +1173,8 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
+
+            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)

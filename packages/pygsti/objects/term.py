@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import math as _math
 import numpy as _np
 import itertools as _itertools
 import numbers as _numbers
@@ -294,7 +295,7 @@ class RankOneTerm(object):
         None
         """
         self.magnitude = mag
-        self.logmagnitude = _np.log10(mag) if mag > 0 else -LARGE
+        self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
 
 #TODO REMOVE
 #     def set_evaluated_coeff(self, evaluated_coeff):

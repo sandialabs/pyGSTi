@@ -1565,7 +1565,7 @@ class OpModel(Model):
                 #all procs should have *same* paramBlkSize2
 
         #Prepare any computationally intensive preparation
-        calc.bulk_prep_probs(evt, comm, memLimit)
+        # only used in term-calcs, and they do this on their own: calc.bulk_prep_probs(evt, comm, memLimit)
         
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 

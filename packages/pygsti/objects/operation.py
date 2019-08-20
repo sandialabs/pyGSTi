@@ -52,11 +52,17 @@ try:
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return _fastopcalc.fast_bulk_eval_compact_polys_complex(
             vtape, ctape, paramvec, dest_shape)
+    def _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_size):
+        return _fastopcalc.fast_abs_sum_bulk_eval_compact_polys_complex(
+            vtape, ctape, paramvec, dest_size)
+            
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
 
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+    def _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_size):
+        return _np.sum(_np.abs(_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, (dest_size,))))
 
 
 TOL = 1e-12
@@ -3122,6 +3128,15 @@ class LindbladOp(LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
+        if order not in self.terms:
+            self._compute_taylor_order_terms(order)
+            
+        if return_coeff_polys:
+            return self.terms[order], self.local_term_poly_coeffs[order]
+        else:
+            return self.terms[order]
+
+    def _compute_taylor_order_terms(self, order):  # separated for profiling
 
         def _compose_poly_indices(terms):
             for term in terms:
@@ -3129,38 +3144,33 @@ class LindbladOp(LinearOperator):
                     self.gpindices, _np.array(x, _np.int64))))
             return terms
 
-        if order not in self.terms:
-            assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
-            assert(not _sps.issparse(self.unitary_postfactor)
-                   ), "Unitary post-factor needs to be dense for term-based evotypes"
-            # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
-                                         self.unitary_postfactor, "gate", self._evotype)
-            #Note: for now, *all* of an error generator's terms are considered 0-th order,
-            # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
-            # we might want to allow a distinction among the error generator terms, in which
-            # case this term-exponentiation step will need to become more complicated...
-            loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
-            #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
+        assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
+        assert(not _sps.issparse(self.unitary_postfactor)
+               ), "Unitary post-factor needs to be dense for term-based evotypes"
+        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+        postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
+                                     self.unitary_postfactor, "gate", self._evotype)
+        #Note: for now, *all* of an error generator's terms are considered 0-th order,
+        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
+        # we might want to allow a distinction among the error generator terms, in which
+        # case this term-exponentiation step will need to become more complicated...
+        loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
+        #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
 
-            poly_coeffs = [t.coeff for t in loc_terms]
-            tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
-            if len(tapes) > 0:
-                vtape = _np.concatenate([t[0] for t in tapes])
-                ctape = _np.concatenate([t[1] for t in tapes])
-            else:
-                vtape = _np.empty(0, _np.int64)
-                ctape = _np.empty(0, complex)
-            coeffs_as_compact_polys = (vtape, ctape)
-            self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
-
-            # only cache terms with *global* indices to avoid confusion...
-            self.terms[order] = _compose_poly_indices(loc_terms)
-
-        if return_coeff_polys:
-            return self.terms[order], self.local_term_poly_coeffs[order]
+        poly_coeffs = [t.coeff for t in loc_terms]
+        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
         else:
-            return self.terms[order]
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+        self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
+        # only cache terms with *global* indices to avoid confusion...
+        self.terms[order] = _compose_poly_indices(loc_terms)
+
 
     def get_total_term_magnitude(self):
         """
@@ -4105,36 +4115,8 @@ class ComposedOp(LinearOperator):
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
-            terms = []
-
-            #DEBUG TODO REMOVE
-            #print("Composed op getting order",order,"terms:")
-            #for i,fop in enumerate(self.factorops):
-            #    print(" ",i,fop.__class__.__name__,"totalmag = ",fop.get_total_term_magnitude())
-            #    hmdebug,_ = fop.get_highmagnitude_terms(0.00001, True, order)
-            #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
-
-            for p in _lt.partition_into(order, len(self.factorops)):
-                factor_lists = [self.factorops[i].get_taylor_order_terms(pi) for i, pi in enumerate(p)]
-                for factors in _itertools.product(*factor_lists):
-                    terms.append(_term.compose_terms(factors))
-            self.terms[order] = terms
-
-            def _decompose_indices(x):
-                return tuple(_modelmember._decompose_gpindices(
-                    self.gpindices, _np.array(x, _np.int64)))
-
-            poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
-            tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
-            if len(tapes) > 0:
-                vtape = _np.concatenate([t[0] for t in tapes])
-                ctape = _np.concatenate([t[1] for t in tapes])
-            else:
-                vtape = _np.empty(0, _np.int64)
-                ctape = _np.empty(0, complex)
-            coeffs_as_compact_polys = (vtape, ctape)
-            self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
-
+            self._compute_taylor_order_terms(order)
+            
         if return_coeff_polys:
             #Return coefficient polys in terms of *local* parameters (get_taylor_terms
             #  and above composition gives polys in terms of *global*, model params)
@@ -4142,6 +4124,38 @@ class ComposedOp(LinearOperator):
         else:
             return self.terms[order]
 
+    def _compute_taylor_order_terms(self, order):  #separated for profiling
+        terms = []
+
+        #DEBUG TODO REMOVE
+        #print("Composed op getting order",order,"terms:")
+        #for i,fop in enumerate(self.factorops):
+        #    print(" ",i,fop.__class__.__name__,"totalmag = ",fop.get_total_term_magnitude())
+        #    hmdebug,_ = fop.get_highmagnitude_terms(0.00001, True, order)
+        #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
+
+        for p in _lt.partition_into(order, len(self.factorops)):
+            factor_lists = [self.factorops[i].get_taylor_order_terms(pi) for i, pi in enumerate(p)]
+            for factors in _itertools.product(*factor_lists):
+                terms.append(_term.compose_terms(factors))
+        self.terms[order] = terms
+
+        def _decompose_indices(x):
+            return tuple(_modelmember._decompose_gpindices(
+                self.gpindices, _np.array(x, _np.int64)))
+
+        poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
+        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+        else:
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+        self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
+        
     def get_total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -6984,19 +6998,22 @@ class LindbladErrorgen(LinearOperator):
         """
         # return (sum of absvals of term coeffs)
         vtape, ctape = self.Lterm_coeffs
-        coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        return _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), len(self.Lterms))
 
-        #DEBUG TODO REMOVE
-        #coeffs_chk = _np.array([ x.evaluate_coeff(self.to_vector()).coeff for x in self.Lterms])
-        #assert(_np.allclose(coeffs, coeffs_chk))
-        #ret = _np.sum(_np.abs(coeffs))
-        #egterms = self.get_taylor_order_terms(0)
-        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
-        #print("LindbladErrorgen CHECK = ",sum(mags), " vs ", ret)
-        #assert(sum(mags) <= ret+1e-4)
-        #print("  DB: LindbladErrorgen coeffs = ",coeffs)
-
-        return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
+        #OLD SLOW
+        # coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        # 
+        # #DEBUG TODO REMOVE
+        # #coeffs_chk = _np.array([ x.evaluate_coeff(self.to_vector()).coeff for x in self.Lterms])
+        # #assert(_np.allclose(coeffs, coeffs_chk))
+        # #ret = _np.sum(_np.abs(coeffs))
+        # #egterms = self.get_taylor_order_terms(0)
+        # #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
+        # #print("LindbladErrorgen CHECK = ",sum(mags), " vs ", ret)
+        # #assert(sum(mags) <= ret+1e-4)
+        # #print("  DB: LindbladErrorgen coeffs = ",coeffs)
+        # 
+        # return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
 
     def num_params(self):
         """

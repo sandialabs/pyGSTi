@@ -481,7 +481,7 @@ class TermEvalTree(EvalTree):
 
         #It seems like we want to reset these caches now too (this is the safe option) - could look into this more later.
         self.repcache = {}
-        self.opcache = {}
+        #self.opcache = {}
 
                 
         #opcache = {}

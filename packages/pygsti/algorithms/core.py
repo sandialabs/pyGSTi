@@ -1249,8 +1249,8 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
     objective_func = objective.fn
     jacobian = objective.jfn
 
-    if term_inflate_factor is not None:
-        mdl._termgap_inflation_factor = term_inflate_factor
+    #if term_inflate_factor is not None: - do this even if it is None (for no checking)
+    mdl._termgap_inflation_factor = term_inflate_factor
     
     x0 = mdl.to_vector()
     if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
@@ -1364,9 +1364,9 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
     
     for sub_iter in range(maxSubIters):
-        inflate_factor = 1.0 if final_iter else 100.0
+        inflate_factor = 1.0 if final_iter else None #100.0
         final_prefix = "*Final* " if final_iter else ""
-        printer.log("%sTerm-state %d:  inflate_factor = %g" % (final_prefix, sub_iter+1, inflate_factor))
+        printer.log("%sTerm-state %d:  inflate_factor = %s" % (final_prefix, sub_iter+1, str(inflate_factor)))
 
         # Sanity check
         assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False) == 0), \
