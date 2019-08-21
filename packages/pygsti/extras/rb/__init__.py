@@ -16,5 +16,5 @@ from . import io
 from . import dataset
 from .rbanalyzer import RBAnalyzer
 # todo : put back in.
-#from . import simulate
+from . import simulate
 from . import analysis

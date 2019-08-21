@@ -95,8 +95,9 @@ class RBAnalyzer(object):
             percent = 0
             for i, circ in enumerate(self.ds.keys()):
 
+                print(i,end=',')
                 if verbosity > 0:
-                    if _np.floor(100 * i/numcircuits) >= percent:
+                    if _np.floor(100 * i / numcircuits) >= percent:
                         percent += 1
                         print("{} percent complete".format(percent))
 
@@ -176,8 +177,8 @@ class RBAnalyzer(object):
                 if (analysis == 'all' and rbdata.datatype == 'hamming_distance_counts') or analysis == 'adjusted':
                     self._rbresults['adjusted'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
 
-    def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, twoQgateprob=None,
-                           prefilter=None):
+    def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, sampler=None,
+                           twoQgateprob=None, prefilter=None):
         """
         todo
 
@@ -190,23 +191,31 @@ class RBAnalyzer(object):
 
                 keep = True
 
-                if numqubits is not None:
-                    if len(qubits) != numqubits:
-                        keep = False
+                if keep:
+                    if numqubits is not None:
+                        if len(qubits) != numqubits:
+                            keep = False
 
-                if containqubits is not None:
-                    if not set(containqubits).issubset(qubits):
-                        keep = False
+                if keep:
+                    if containqubits is not None:
+                        if not set(containqubits).issubset(qubits):
+                            keep = False
 
-                if onqubits is not None:
-                    if set(qubits) != set(onqubits):
-                        keep = False
+                if keep:
+                    if onqubits is not None:
+                        if set(qubits) != set(onqubits):
+                            keep = False
 
-                if twoQgateprob is not None:
-                    if not _np.allclose(twoQgateprob, spec.get_twoQgate_rate()):
-                        keep = False
+                if keep:
+                    if sampler is not None:
+                        if not spec._sampler == sampler:
+                            keep = False
 
-                # Once all filters are applied, check whether we're keeping this (i,qubits) pair
+                if keep:
+                    if twoQgateprob is not None:
+                        if not _np.allclose(twoQgateprob, spec.get_twoQgate_rate()):
+                            keep = False
+
                 if keep:
                     if i not in kept.keys():
                         kept[i] = []
