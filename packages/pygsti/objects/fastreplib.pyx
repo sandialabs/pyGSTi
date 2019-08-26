@@ -1291,7 +1291,7 @@ cdef class PolyRep:
             coeffs[indx] = <double complex>c
         self.c_poly = new PolyCRep(coeffs, max_num_vars, vindices_per_int)
 
-    def map_indices_inplace(self, np.ndarray[np.int64_t, ndim=1, mode='c'] mapfn_as_vector):
+    def mapvec_indices_inplace(self, np.ndarray[np.int64_t, ndim=1, mode='c'] mapfn_as_vector):
         cdef INT* mapfv = <INT*> mapfn_as_vector.data
         cdef INT indx, nxt, i, m, k, new_i, new_indx;
         cdef INT divisor = self.c_poly._max_num_vars + 1
@@ -1361,32 +1361,32 @@ cdef class PolyRep:
             inc(it)
         return ret
 
-    @property
-    def coeffs(self):
-        return self.int_coeffs
-        #cdef INT indx, nxt, i;
-        #cdef INT divisor = self.c_poly._max_num_vars + 1
-        #ret = {}
-        #cdef vector[INT].iterator vit
-        #cdef unordered_map[PolyVarsIndex, complex].iterator it = self.c_poly._coeffs.begin()
-        #while(it != self.c_poly._coeffs.end()):
-        #    i_tup = []
-        #    i_vec = deref(it).first._parts
-        #
-        #    # inline: int_to_vinds(indx)
-        #    vit = i_vec.begin()
-        #    while(vit != i_vec.end()):
-        #        indx = deref(vit)
-        #        while indx != 0:
-        #            nxt = indx / divisor
-        #            i = indx - nxt * divisor
-        #            i_tup.append(i-1)
-        #            indx = nxt
-        #            
-        #    ret[tuple(i_tup)] = deref(it).second
-        #    inc(it)
-        #    
-        #return ret
+    #Get coeffs with tuples of variable indices, not just "ints" - not currently needed
+    #@property
+    #def coeffs(self):
+    #    cdef INT indx, nxt, i;
+    #    cdef INT divisor = self.c_poly._max_num_vars + 1
+    #    ret = {}
+    #    cdef vector[INT].iterator vit
+    #    cdef unordered_map[PolyVarsIndex, complex].iterator it = self.c_poly._coeffs.begin()
+    #    while(it != self.c_poly._coeffs.end()):
+    #        i_tup = []
+    #        i_vec = deref(it).first._parts
+    #    
+    #        # inline: int_to_vinds(indx)
+    #        vit = i_vec.begin()
+    #        while(vit != i_vec.end()):
+    #            indx = deref(vit)
+    #            while indx != 0:
+    #                nxt = indx / divisor
+    #                i = indx - nxt * divisor
+    #                i_tup.append(i-1)
+    #                indx = nxt
+    #                
+    #        ret[tuple(i_tup)] = deref(it).second
+    #        inc(it)
+    #        
+    #    return ret
 
     def compact_complex(self):
         cdef INT i,l, iTerm, nVarIndices=0;

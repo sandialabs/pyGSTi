@@ -250,20 +250,6 @@ class FASTPolynomial(object):
         """
         return FASTPolynomial({mapfn(k): v for k, v in self.coeffs.items()}, self.max_num_vars)
 
-    def mapvec_indices(self, mapvec):
-        """TODO: docstring - map indices using a vector instead of a function (vector maps
-        *individual* variable indices old->new instead of tuples of them
-        """
-        ret = self.copy()
-        ret._rep.map_indices_inplace(mapvec)
-        return ret
-
-    def mapvec_indices_inplace(self, mapvec):
-        """TODO: docstring - map indices using a vector instead of a function (vector maps
-        *individual* variable indices old->new instead of tuples of them
-        """
-        self._rep.map_indices_inplace(mapvec)
-
     def map_indices_inplace(self, mapfn):
         """
         Performs an in-place find & replace on this polynomial's variable indices.
@@ -287,6 +273,21 @@ class FASTPolynomial(object):
         new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
                           for k, v in new_coeffs.items()}
         self._rep.reinit(new_int_coeffs)
+
+    def mapvec_indices(self, mapvec):
+        """TODO: docstring - map indices using a vector instead of a function (vector maps
+        *individual* variable indices old->new instead of tuples of them
+        """
+        ret = self.copy()
+        ret._rep.mapvec_indices_inplace(mapvec)
+        return ret
+
+    def mapvec_indices_inplace(self, mapvec):
+        """TODO: docstring - map indices using a vector instead of a function (vector maps
+        *individual* variable indices old->new instead of tuples of them
+        """
+        self._rep.mapvec_indices_inplace(mapvec)
+
         
     def mult(self, x):
         """

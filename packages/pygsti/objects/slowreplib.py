@@ -1056,13 +1056,13 @@ class PolyRep(dict):
     variables.
     """
 
-    def __init__(self, int_coeffs, max_num_vars, vindices_per_int):
+    def __init__(self, int_coeff_dict, max_num_vars, vindices_per_int):
         """
         Create a new PolyRep object.
 
         Parameters
         ----------
-        int_coeffs : dict
+        int_coeff_dict : dict
             A dictionary of coefficients whose keys are already-encoded
             integers corresponding to variable-index-tuples (i.e poly
             terms).
@@ -1077,33 +1077,78 @@ class PolyRep(dict):
         self.vindices_per_int = vindices_per_int
 
         super(PolyRep, self).__init__()
-        if int_coeffs is not None:
-            self.update(int_coeffs)
+        if int_coeff_dict is not None:
+            self.update(int_coeff_dict)
 
-    @property
-    def coeffs(self):  # so we can convert back to python Polys
-        """ The coefficient dictionary (with encoded integer keys) """
-        return dict(self)  # for compatibility w/C case which can't derive from dict...
+    def reinit(self, int_coeff_dict):
+        """ TODO: docstring """
+        self.clear()
+        self.update(int_coeff_dict)
 
-    def set_maximums(self, max_num_vars=None):
+    def mapvec_indices_inplace(self, mapfn_as_vector):
+        new_items = {}
+        for k, v in self.items():
+            new_vinds = tuple((mapfn_as_vector[j] for j in self._int_to_vinds(k)))
+            new_items[self._vinds_to_int(new_vinds)] = v
+        self.clear()
+        self.update(new_items)
+
+    def copy(self):
         """
-        Alter the maximum order and number of variables (and hence the
-        tuple-to-int mapping) for this polynomial representation.
-
-        Parameters
-        ----------
-        max_num_vars : int
-            The maximum number of variables allowed.
+        Make a copy of this polynomial representation.
 
         Returns
         -------
-        None
+        PolyRep
         """
-        coeffs = {self._int_to_vinds(k): v for k, v in self.items()}
-        if max_num_vars is not None: self.max_num_vars = max_num_vars
-        int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
-        self.clear()
-        self.update(int_coeffs)
+        return PolyRep(self, self.max_num_vars, self.vindices_per_int) #construct expects "int" keys
+
+    @property
+    def int_coeffs(self):  # so we can convert back to python Polys
+        """ The coefficient dictionary (with encoded integer keys) """
+        return dict(self)  # for compatibility w/C case which can't derive from dict...
+
+    #UNUSED TODO REMOVE
+        #def map_indices_inplace(self, mapfn):
+    #    """
+    #    Map the variable indices in this `PolyRep`.
+    #    This allows one to change the "labels" of the variables.
+    #
+    #    Parameters
+    #    ----------
+    #    mapfn : function
+    #        A single-argument function that maps old variable-index tuples
+    #        to new ones.  E.g. `mapfn` might map `(0,1)` to `(10,11)` if
+    #        we were increasing each variable index by 10.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    new_items = {self._vinds_to_int(mapfn(self._int_to_vinds(k))): v
+    #                 for k, v in self.items()}
+    #    self.clear()
+    #    self.update(new_items)
+    #
+    #def set_maximums(self, max_num_vars=None):
+    #    """
+    #    Alter the maximum order and number of variables (and hence the
+    #    tuple-to-int mapping) for this polynomial representation.
+    #
+    #    Parameters
+    #    ----------
+    #    max_num_vars : int
+    #        The maximum number of variables allowed.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    coeffs = {self._int_to_vinds(k): v for k, v in self.items()}
+    #    if max_num_vars is not None: self.max_num_vars = max_num_vars
+    #    int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
+    #    self.clear()
+    #    self.update(int_coeffs)
 
     def _vinds_to_int(self, vinds):
         """ Maps tuple of variable indices to encoded int """
@@ -1135,53 +1180,54 @@ class PolyRep(dict):
                 #DB: if cnt > 50: print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
         return tuple(sorted(ret))
 
-    def deriv(self, wrtParam):
-        """
-        Take the derivative of this polynomial representation with respect to
-        the single variable `wrtParam`.
+    #UNUSED TODO REMOVE
+    #def deriv(self, wrtParam):
+    #    """
+    #    Take the derivative of this polynomial representation with respect to
+    #    the single variable `wrtParam`.
+    #
+    #    Parameters
+    #    ----------
+    #    wrtParam : int
+    #        The variable index to differentiate with respect to (can be
+    #        0 to the `max_num_vars-1` supplied to `__init__`.
+    #
+    #    Returns
+    #    -------
+    #    PolyRep
+    #    """
+    #    dcoeffs = {}
+    #    for i, coeff in self.items():
+    #        ivar = self._int_to_vinds(i)
+    #        cnt = float(ivar.count(wrtParam))
+    #        if cnt > 0:
+    #            l = list(ivar)
+    #            del l[ivar.index(wrtParam)]
+    #            dcoeffs[tuple(l)] = cnt * coeff
+    #    int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
+    #    return PolyRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
 
-        Parameters
-        ----------
-        wrtParam : int
-            The variable index to differentiate with respect to (can be
-            0 to the `max_num_vars-1` supplied to `__init__`.
-
-        Returns
-        -------
-        PolyRep
-        """
-        dcoeffs = {}
-        for i, coeff in self.items():
-            ivar = self._int_to_vinds(i)
-            cnt = float(ivar.count(wrtParam))
-            if cnt > 0:
-                l = list(ivar)
-                del l[ivar.index(wrtParam)]
-                dcoeffs[tuple(l)] = cnt * coeff
-        int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
-        return PolyRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
-
-    def evaluate(self, variable_values):
-        """
-        Evaluate this polynomial at the given variable values.
-
-        Parameters
-        ----------
-        variable_values : iterable
-            The values each variable will be evaluated at.  Must have
-            length at least equal to the number of variables present
-            in this `PolyRep`.
-
-        Returns
-        -------
-        float or complex
-        """
-        #FUTURE and make this function smarter (Russian peasant)?
-        ret = 0
-        for i, coeff in self.items():
-            ivar = self._int_to_vinds(i)
-            ret += coeff * _np.product([variable_values[i] for i in ivar])
-        return ret
+    #def evaluate(self, variable_values):
+    #    """
+    #    Evaluate this polynomial at the given variable values.
+    #
+    #    Parameters
+    #    ----------
+    #    variable_values : iterable
+    #        The values each variable will be evaluated at.  Must have
+    #        length at least equal to the number of variables present
+    #        in this `PolyRep`.
+    #
+    #    Returns
+    #    -------
+    #    float or complex
+    #    """
+    #    #FUTURE and make this function smarter (Russian peasant)?
+    #    ret = 0
+    #    for i, coeff in self.items():
+    #        ivar = self._int_to_vinds(i)
+    #        ret += coeff * _np.product([variable_values[i] for i in ivar])
+    #    return ret
 
     def compact_complex(self):
         """
@@ -1198,8 +1244,7 @@ class PolyRep(dict):
         vtape : numpy.ndarray
             A 1D array of integers (variable indices).
         ctape : numpy.ndarray
-            A 1D array of coefficients; can have either real
-            or complex data type.
+            A 1D array of *complex* coefficients.
         """
         nTerms = len(self)
         vinds = {i: self._int_to_vinds(i) for i in self.keys()}
@@ -1218,38 +1263,39 @@ class PolyRep(dict):
         assert(i == len(vtape)), "Logic Error!"
         return vtape, ctape
 
-    def copy(self):
+    def compact_real(self):
         """
-        Make a copy of this polynomial representation.
+        Returns a real representation of this polynomial as a
+        `(variable_tape, coefficient_tape)` 2-tuple of 1D nupy arrays.
+        The coefficient tape is *always* a complex array, even if
+        none of the polynomial's coefficients are complex.
+
+        Such compact representations are useful for storage and later
+        evaluation, but not suited to polynomial manipulation.
 
         Returns
         -------
-        PolyRep
+        vtape : numpy.ndarray
+            A 1D array of integers (variable indices).
+        ctape : numpy.ndarray
+            A 1D array of *real* coefficients.
         """
-        cpy = PolyRep(None, self.max_num_vars, self.vindices_per_int)
-        cpy.update(self)  # constructor expects dict w/var-index keys, not ints like self has
-        return cpy
+        nTerms = len(self)
+        vinds = {i: self._int_to_vinds(i) for i in self.keys()}
+        nVarIndices = sum(map(len, vinds.values()))
+        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64)  # "variable" tape
+        ctape = _np.empty(nTerms, complex)  # "coefficient tape"
 
-    def map_indices_inplace(self, mapfn):
-        """
-        Map the variable indices in this `PolyRep`.
-        This allows one to change the "labels" of the variables.
-
-        Parameters
-        ----------
-        mapfn : function
-            A single-argument function that maps old variable-index tuples
-            to new ones.  E.g. `mapfn` might map `(0,1)` to `(10,11)` if
-            we were increasing each variable index by 10.
-
-        Returns
-        -------
-        None
-        """
-        new_items = {self._vinds_to_int(mapfn(self._int_to_vinds(k))): v
-                     for k, v in self.items()}
-        self.clear()
-        self.update(new_items)
+        i = 0
+        vtape[i] = nTerms; i += 1
+        for iTerm, k in enumerate(sorted(self.keys())):
+            v = vinds[k]  # so don't need to compute self._int_to_vinds(k)
+            l = len(v)
+            ctape[iTerm] = self[k]
+            vtape[i] = l; i += 1
+            vtape[i:i + l] = v; i += l
+        assert(i == len(vtape)), "Logic Error!"
+        return vtape, ctape
 
     def mult(self, x):
         """
@@ -1290,9 +1336,28 @@ class PolyRep(dict):
         for k in self:
             self[k] *= x
 
-    def scalar_mult(self, x):
+    def add_inplace(self, other):
         """
-        Returns `self * x` where `x` is a scalar.
+        Adds `other` into this PolyRep.
+
+        Parameters
+        ----------
+        other : PolyRep
+
+        Returns
+        -------
+        PolyRep
+        """
+        for k, v in x.items():
+            try:
+                self[k] += v
+            except KeyError:
+                self[k] = v
+        return self
+
+    def add_scalar_to_all_coeffs_inplace(self, x):
+        """
+        Adds `x` to all of the coefficients in this PolyRep.
 
         Parameters
         ----------
@@ -1302,10 +1367,27 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        # assume a scalar that can multiply values
-        newpoly = self.copy()
-        newpoly.scale(x)
-        return newpoly
+        for k in self:
+            self[k] += x
+        return self
+
+    #UNUSED TODO REMOVE
+    #def scalar_mult(self, x):
+    #    """
+    #    Returns `self * x` where `x` is a scalar.
+    #
+    #    Parameters
+    #    ----------
+    #    x : float or complex
+    #
+    #    Returns
+    #    -------
+    #    PolyRep
+    #    """
+    #    # assume a scalar that can multiply values
+    #    newpoly = self.copy()
+    #    newpoly.scale(x)
+    #    return newpoly
 
     def __str__(self):
         def fmt(x):
@@ -1336,47 +1418,48 @@ class PolyRep(dict):
     def __repr__(self):
         return "PolyRep[ " + str(self) + " ]"
 
-    def __add__(self, x):
-        newpoly = self.copy()
-        if isinstance(x, PolyRep):
-            assert(self.max_num_vars == x.max_num_vars)
-            for k, v in x.items():
-                if k in newpoly: newpoly[k] += v
-                else: newpoly[k] = v
-        else:  # assume a scalar that can be added to values
-            for k in newpoly:
-                newpoly[k] += x
-        return newpoly
-
-    def __mul__(self, x):
-        if isinstance(x, PolyRep):
-            return self.mult_poly(x)
-        else:  # assume a scalar that can multiply values
-            return self.mult_scalar(x)
-
-    def __rmul__(self, x):
-        return self.__mul__(x)
-
-    def __pow__(self, n):
-        ret = PolyRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
-        cur = self
-        for i in range(int(_np.floor(_np.log2(n))) + 1):
-            rem = n % 2  # gets least significant bit (i-th) of n
-            if rem == 1: ret *= cur  # add current power of x (2^i) if needed
-            cur = cur * cur  # current power *= 2
-            n //= 2  # shift bits of n right
-        return ret
-
-    def __copy__(self):
-        return self.copy()
-
-    def debug_report(self):
-        actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
-        return "PolyRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
-            (self.max_num_vars, len(self), actual_max_order)
-
-    def degree(self):
-        return max([len(self._int_to_vinds(k)) for k in self.keys()])
+    #UNUSED TODO REMOVE
+    #def __add__(self, x):
+    #    newpoly = self.copy()
+    #    if isinstance(x, PolyRep):
+    #        assert(self.max_num_vars == x.max_num_vars)
+    #        for k, v in x.items():
+    #            if k in newpoly: newpoly[k] += v
+    #            else: newpoly[k] = v
+    #    else:  # assume a scalar that can be added to values
+    #        for k in newpoly:
+    #            newpoly[k] += x
+    #    return newpoly
+    #
+    #def __mul__(self, x):
+    #    if isinstance(x, PolyRep):
+    #        return self.mult_poly(x)
+    #    else:  # assume a scalar that can multiply values
+    #        return self.mult_scalar(x)
+    #
+    #def __rmul__(self, x):
+    #    return self.__mul__(x)
+    #
+    #def __pow__(self, n):
+    #    ret = PolyRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
+    #    cur = self
+    #    for i in range(int(_np.floor(_np.log2(n))) + 1):
+    #        rem = n % 2  # gets least significant bit (i-th) of n
+    #        if rem == 1: ret *= cur  # add current power of x (2^i) if needed
+    #        cur = cur * cur  # current power *= 2
+    #        n //= 2  # shift bits of n right
+    #    return ret
+    #
+    #def __copy__(self):
+    #    return self.copy()
+    #
+    #def debug_report(self):
+    #    actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
+    #    return "PolyRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
+    #        (self.max_num_vars, len(self), actual_max_order)
+    #
+    #def degree(self):
+    #    return max([len(self._int_to_vinds(k)) for k in self.keys()])
 
 
 class SVTermRep(object):
@@ -1760,12 +1843,12 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = {glbl:
                     [
-                        [t.torep(mpv) for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
+                        [t.torep() for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order, mpv)]
                         for order in range(calc.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.torep(mpv) for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
+    rho_term_reps = [[t.torep() for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order, mpv)]
                      for order in range(calc.max_order + 1)]
 
     E_term_reps = []
@@ -1774,7 +1857,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.torep(mpv) for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order)]
+            term_reps = [t.torep() for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -1941,14 +2024,14 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
             hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order)
-            repcache[glbl] = ([t.torep(mpv) for t in hmterms], foat_indices)
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
-            min_term_mag, max_taylor_order=calc.max_order)
-        repcache[rholabel] = ([t.torep(mpv) for t in hmterms], foat_indices)
+            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -1956,9 +2039,9 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
             hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order)
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(mpv), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -2093,14 +2176,14 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
             hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order)
-            repcache[glbl] = ([t.torep(mpv) for t in hmterms], foat_indices)
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
-            min_term_mag, max_taylor_order=calc.max_order)
-        repcache[rholabel] = ([t.torep(mpv) for t in hmterms], foat_indices)
+            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -2108,9 +2191,9 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
             hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order)
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(mpv), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
