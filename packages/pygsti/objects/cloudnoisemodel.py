@@ -949,7 +949,9 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
     printer.log("*** Creating global idle ***")
 
     termops = []  # gates or error generators to compose
-    ssAllQ = [tuple(['Q%d' % i for i in range(qubitGraph.nqubits)])]
+    qubit_labels = qubitGraph.get_node_names()
+    qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
+    ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
     nQubits = qubitGraph.nqubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -981,7 +983,7 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis)
 
             err_qubit_global_inds = err_qubit_inds
-            fullTermErr = Embedded(ssAllQ, [('Q%d' % i) for i in err_qubit_global_inds], termErr)
+            fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
@@ -1080,7 +1082,9 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
     #  one for each specified error term
 
     loc_noise_termops = []  # list of gates to compose
-    ssAllQ = [tuple(['Q%d' % i for i in range(qubitGraph.nqubits)])]
+    qubit_labels = qubitGraph.get_node_names()
+    qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
+    ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
     for wt, maxHops in weight_maxhops_tuples:
 
@@ -1118,7 +1122,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
             errbasis = _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse)
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
 
-            fullTermErr = Embedded(ssAllQ, ['Q%d' % i for i in err_qubit_global_inds], termErr)
+            fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
