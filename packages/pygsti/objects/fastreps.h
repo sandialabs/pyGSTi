@@ -411,6 +411,7 @@ namespace CReps {
     dcomplex extract_amplitude(std::vector<INT>& zvals);
     double measurement_probability(std::vector<INT>& zvals); //, qubit_filter);
     void copy_from(SBStateCRep* other);
+    void print(const char* label);
 
     private:
     INT udot1(INT i, INT j);
@@ -518,6 +519,7 @@ namespace CReps {
     ~PolyCRep();
     PolyCRep mult(const PolyCRep& other);
     void add_inplace(const PolyCRep& other);
+    void add_scalar_to_all_coeffs_inplace(dcomplex offset);
     void scale(dcomplex scale);
     PolyVarsIndex vinds_to_int(std::vector<INT> vinds);
     std::vector<INT> int_to_vinds(PolyVarsIndex indx);

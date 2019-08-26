@@ -526,7 +526,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -566,7 +566,7 @@ class LinearOperator(_modelmember.ModelMember):
         raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" %
                                   self.__class__.__name__)
 
-    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
+    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_poly_vars=100):
         """
         Get the terms (from a Taylor expansion of this operator) that have
         magnitude above `min_term_mag` (the magnitude of a term is taken to
@@ -609,21 +609,28 @@ class LinearOperator(_modelmember.ModelMember):
         #print("DB: OP get_high_magnitude_terms")
         v = self.to_vector()
         taylor_order = 0
-        terms = []; last_len = -1
+        terms = []; last_len = -1; first_order_magmax = 1.0
         while len(terms) > last_len:  # while we keep adding something
-            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, True)
+            if taylor_order > 1 and first_order_magmax**taylor_order < min_term_mag:
+                break  # there's no way any terms at this order reach min_term_mag - exit now!
+            
+            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
             coeffs = _bulk_eval_complex_compact_polys(
                 cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
             for coeff, t in zip(coeffs, terms_at_order):
                 t.set_magnitude(abs(coeff))
                 #t.set_evaluated_coeff(coeff) #REMOVE
 
+            if taylor_order == 1:
+                first_order_magmax = max([t.magnitude for t in terms_at_order])
+
             last_len = len(terms)
             for t in terms_at_order:
                 if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
                     terms.append((taylor_order, t))
             #print("order ", taylor_order, " : ", len(terms_at_order), " maxmag=",
-            #      max([t.magnitude for t in terms_at_order]), len(terms), " running terms")
+            #      max([t.magnitude for t in terms_at_order]), len(terms), " running terms ",
+            #      len(terms)-last_len, "added at this order")
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -2179,7 +2186,7 @@ class StochasticNoiseOp(LinearOperator):
     #        raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
     #                         (self._evotype, self.__class__.__name__))
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -2225,20 +2232,21 @@ class StochasticNoiseOp(LinearOperator):
             return terms
 
         IDENT = None  # sentinel for the do-nothing identity op
+        mpv = max_poly_vars
         if order == 0:
             polydict = {(): 1.0}
             for pd in self._get_rate_poly_dicts():
                 polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
-            loc_terms = [_term.RankOneTerm(_Polynomial(polydict), IDENT, IDENT, "gate", self._evotype)]
+            loc_terms = [_term.RankOneTerm(_Polynomial(polydict, mpv), IDENT, IDENT, "gate", self._evotype)]
 
         elif order == 1:
-            loc_terms = [_term.RankOneTerm(_Polynomial(pd), bel, bel, "gate", self._evotype)
+            loc_terms = [_term.RankOneTerm(_Polynomial(pd, mpv), bel, bel, "gate", self._evotype)
                          for i, (pd, bel) in enumerate(zip(self._get_rate_poly_dicts(), self.basis.elements[1:]))]
         else:
             loc_terms = []  # only first order "taylor terms"
 
         poly_coeffs = [t.coeff for t in loc_terms]
-        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         if len(tapes) > 0:
             vtape = _np.concatenate([t[0] for t in tapes])
             ctape = _np.concatenate([t[1] for t in tapes])
@@ -3090,7 +3098,7 @@ class LindbladOp(LinearOperator):
                 return _np.take(_np.take(self.base_hessian, wrtFilter1, axis=1),
                                 wrtFilter2, axis=2)
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -3129,36 +3137,42 @@ class LindbladOp(LinearOperator):
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
-            self._compute_taylor_order_terms(order)
+            self._compute_taylor_order_terms(order, max_poly_vars)
             
         if return_coeff_polys:
             return self.terms[order], self.local_term_poly_coeffs[order]
         else:
             return self.terms[order]
 
-    def _compute_taylor_order_terms(self, order):  # separated for profiling
+    def _compute_taylor_order_terms(self, order, max_poly_vars):  # separated for profiling
+
+        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
+        for ii,i in enumerate(self.gpindices_as_array()):
+            mapvec[ii] = i
 
         def _compose_poly_indices(terms):
             for term in terms:
-                term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
-                    self.gpindices, _np.array(x, _np.int64))))
+                #term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
+                #    self.gpindices, _np.array(x, _np.int64))))
+                term.mapvec_indices_inplace(mapvec)
             return terms
 
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
         assert(not _sps.issparse(self.unitary_postfactor)
                ), "Unitary post-factor needs to be dense for term-based evotypes"
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-        postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
+        mpv = max_poly_vars
+        postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
                                      self.unitary_postfactor, "gate", self._evotype)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
-        loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0), [order], postTerm)[order]
+        loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0, max_poly_vars), [order], postTerm)[order]
         #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
 
         poly_coeffs = [t.coeff for t in loc_terms]
-        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         if len(tapes) > 0:
             vtape = _np.concatenate([t[0] for t in tapes])
             ctape = _np.concatenate([t[1] for t in tapes])
@@ -4077,7 +4091,7 @@ class ComposedOp(LinearOperator):
     #
     #    assert(False), "Invalid internal _evotype: %s" % self._evotype
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -4115,7 +4129,7 @@ class ComposedOp(LinearOperator):
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
-            self._compute_taylor_order_terms(order)
+            self._compute_taylor_order_terms(order, max_poly_vars)
             
         if return_coeff_polys:
             #Return coefficient polys in terms of *local* parameters (get_taylor_terms
@@ -4124,7 +4138,7 @@ class ComposedOp(LinearOperator):
         else:
             return self.terms[order]
 
-    def _compute_taylor_order_terms(self, order):  #separated for profiling
+    def _compute_taylor_order_terms(self, order, max_poly_vars):  #separated for profiling
         terms = []
 
         #DEBUG TODO REMOVE
@@ -4135,7 +4149,7 @@ class ComposedOp(LinearOperator):
         #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
 
         for p in _lt.partition_into(order, len(self.factorops)):
-            factor_lists = [self.factorops[i].get_taylor_order_terms(pi) for i, pi in enumerate(p)]
+            factor_lists = [self.factorops[i].get_taylor_order_terms(pi, max_poly_vars) for i, pi in enumerate(p)]
             for factors in _itertools.product(*factor_lists):
                 terms.append(_term.compose_terms(factors))
         self.terms[order] = terms
@@ -4143,9 +4157,14 @@ class ComposedOp(LinearOperator):
         def _decompose_indices(x):
             return tuple(_modelmember._decompose_gpindices(
                 self.gpindices, _np.array(x, _np.int64)))
-
-        poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
-        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        
+        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
+        for ii,i in enumerate(self.gpindices_as_array()):
+            mapvec[i] = ii
+        
+        #poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
+        poly_coeffs = [t.coeff.mapvec_indices(mapvec) for t in terms]  # with *local* indices
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         if len(tapes) > 0:
             vtape = _np.concatenate([t[0] for t in tapes])
             ctape = _np.concatenate([t[1] for t in tapes])
@@ -4827,7 +4846,7 @@ class EmbeddedOp(LinearOperator):
             finalOp[i, j] = embedded_dense[gi, gj]
         return finalOp
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -4868,12 +4887,12 @@ class EmbeddedOp(LinearOperator):
         sslbls = self.state_space_labels.copy()
         sslbls.reduce_dims_densitymx_to_state()
         if return_coeff_polys:
-            terms, coeffs = self.embedded_op.get_taylor_order_terms(order, True)
+            terms, coeffs = self.embedded_op.get_taylor_order_terms(order, max_poly_vars, True)
             embedded_terms = [_term.embed_term(t, sslbls, self.targetLabels) for t in terms]
             return embedded_terms, coeffs
-        else:
+        else:            
             return [_term.embed_term(t, sslbls, self.targetLabels)
-                    for t in self.embedded_op.get_taylor_order_terms(order, False)]
+                    for t in self.embedded_op.get_taylor_order_terms(order, max_poly_vars, False)]
 
     def get_total_term_magnitude(self):
         """
@@ -5704,7 +5723,7 @@ class ComposedErrorgen(LinearOperator):
     #        return replib.SBOpRep_Sum(factor_reps, nQubits)
     #    assert(False), "Invalid internal _evotype: %s" % self._evotype
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this error generator..
 
@@ -5748,13 +5767,16 @@ class ComposedErrorgen(LinearOperator):
         #Need to adjust indices b/c in error generators we (currently) expect terms to have local indices
         ret = []
         for eg in self.factors:
-            eg_terms = [t.copy() for t in eg.get_taylor_order_terms(order, return_coeff_polys)]
+            eg_terms = [t.copy() for t in eg.get_taylor_order_terms(order, max_poly_vars, return_coeff_polys)]
+            mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
+                    self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params()))))
             for t in eg_terms:
-                t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
-                    self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.array(x, _np.int64)))))
+                #t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
+                #    self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.array(x, _np.int64))))) #map global to *local* indices
+                t.mapvec_indices_inplace(mapvec)
             ret.extend(eg_terms)
         return ret
-        #return list(_itertools.chain(*[eg.get_taylor_order_terms(order, return_coeff_polys) for eg in self.factors]))
+        #return list(_itertools.chain(*[eg.get_taylor_order_terms(order, max_poly_vars, return_coeff_polys) for eg in self.factors]))
 
     def get_total_term_magnitude(self):
         """
@@ -6496,8 +6518,10 @@ class LindbladErrorgen(LinearOperator):
 
             assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
             #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
-            
-            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, evotype, dim)
+
+            self.LtermdictAndBasis = (Ltermdict, basis) #HACK
+            self.Lterms, self.Lterm_coeffs = None, None
+            # OLD: do this lazily now that we need max_poly_vars... self._init_terms(Ltermdict, basis, evotype, dim, max_poly_vars)
             rep = dim  # rep = None for term-based evotypes
 
         LinearOperator.__init__(self, rep, evotype)  # sets self.dim
@@ -6610,9 +6634,10 @@ class LindbladErrorgen(LinearOperator):
         assert(bsO == self.other_basis_size)
         return hamGens, otherGens
 
-    def _init_terms(self, Ltermdict, basis, evotype, dim):
+    def _init_terms(self, Ltermdict, basis, evotype, dim, max_poly_vars):
 
         d2 = dim
+        mpv = max_poly_vars
 
         # Lookup dictionaries for getting the *parameter* index associated
         # with a particlar basis label.  The -1 to compensates for the fact
@@ -6635,8 +6660,8 @@ class LindbladErrorgen(LinearOperator):
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
                 k = hamBasisIndices[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}), basis[termLbl[1]], IDENT, "gate", evotype))
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}),
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}, mpv), basis[termLbl[1]], IDENT, "gate", evotype))
+                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}, mpv),
                                                 IDENT, basis[termLbl[1]].conjugate().T, "gate", evotype))
 
             elif termType == "S":  # Stochastic
@@ -6652,10 +6677,10 @@ class LindbladErrorgen(LinearOperator):
                     Lm_dag = Lm.conjugate().T
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}), Ln, Lm_dag, "gate", evotype))
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), IDENT, _np.dot(Ln_dag, Lm),
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}, mpv), Ln, Lm_dag, "gate", evotype))
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}, mpv), IDENT, _np.dot(Ln_dag, Lm),
                                                     "gate", evotype))
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}), _np.dot(Lm_dag, Ln), IDENT,
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}, mpv), _np.dot(Lm_dag, Ln), IDENT,
                                                     "gate", evotype))
 
                 else:
@@ -6688,7 +6713,7 @@ class LindbladErrorgen(LinearOperator):
                         jiIndx = numHamParams + (j * numOtherBasisEls + i)
                         polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
 
-                    base_poly = _Polynomial(polyTerms)
+                    base_poly = _Polynomial(polyTerms, mpv)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
                     Lterms.append(_term.RankOneTerm(1.0 * base_poly, Ln, Lm, "gate", evotype))
                     # adjoint(_np.dot(Lm_dag,Ln))
@@ -6713,7 +6738,7 @@ class LindbladErrorgen(LinearOperator):
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,): 1.0}), _np.dot(L, B), B,
+                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,): 1.0}, mpv), _np.dot(L, B), B,
                                                     "gate", evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
@@ -6730,7 +6755,7 @@ class LindbladErrorgen(LinearOperator):
         #Make compact polys that are ready to (repeatedly) evaluate (useful
         # for term-based calcs which call get_total_term_magnitude() a lot)
         poly_coeffs = [t.coeff for t in Lterms]
-        tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         if len(tapes) > 0:
             vtape = _np.concatenate([t[0] for t in tapes])
             ctape = _np.concatenate([t[1] for t in tapes])
@@ -6936,7 +6961,7 @@ class LindbladErrorgen(LinearOperator):
     #        raise NotImplementedError("torep(%s) not implemented for %s objects!" %
     #                                  (self._evotype, self.__class__.__name__))
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -6976,6 +7001,9 @@ class LindbladErrorgen(LinearOperator):
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys is False)
+        if self.Lterms is None:
+            Ltermdict, basis = self.LtermdictAndBasis
+            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, self._evotype, self.dim, max_poly_vars)
         return self.Lterms  # terms with local-index polynomial coefficients
 
     #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
@@ -6997,6 +7025,7 @@ class LindbladErrorgen(LinearOperator):
         float
         """
         # return (sum of absvals of term coeffs)
+        assert(self.Lterms is not None), "Must call `get_taylor_order_terms` before calling get_total_term_magnitude!"
         vtape, ctape = self.Lterm_coeffs
         return _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), len(self.Lterms))
 

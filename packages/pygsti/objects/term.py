@@ -43,12 +43,33 @@ def compose_terms(terms):
     -------
     RankOneTerm
     """
+    #TODO: this should be a classmethod of RankOneTerm, as it builds a new RankOneTerm from scratch
     if len(terms) == 0:
         return RankOneTerm(1.0, None, None)
-    ret = terms[0].copy()
-    for t in terms[1:]:
-        ret.compose(t)
-    return ret
+    else:
+        #Note: will need to check instance/type and do np.product if coeffs are floats!
+        first = terms[0]
+        ret = RankOneTerm.__new__(RankOneTerm)
+        ret.termtype = first.termtype
+        ret._evotype = first._evotype
+        ret.coeff = _Polynomial.product([t.coeff for t in terms])
+        ret.pre_ops = list(_itertools.chain(*[t.pre_ops for t in terms]))
+        ret.post_ops = list(_itertools.chain(*[t.post_ops for t in terms]))
+        ret.magnitude = 1.0
+        ret.logmagnitude = 0.0
+        return ret
+                           
+                           
+    #OLD
+    #ret = terms[0].copy()
+    #for t in terms[1:]:
+    #    ret.compose(t)
+    #
+    #            self.coeff *= term.coeff
+    #    self.pre_ops.extend(term.pre_ops)
+    #    self.post_ops.extend(term.post_ops)
+    #
+    #return ret
 
 
 def exp_terms(terms, orders, postterm=None, order_base=None):
@@ -417,7 +438,28 @@ class RankOneTerm(object):
             "Coefficient (type %s) must implements `map_indices_inplace`" % str(type(self.coeff))
         self.coeff.map_indices_inplace(mapfn)
 
-    def torep(self, max_poly_vars):
+    def mapvec_indices_inplace(self, mapvec):
+        """
+        TODO: docstring: similar to map_indices_inplace, but uses vector (see polynomial.py)
+        Performs a bulk find & replace on the coefficient polynomial's variable
+        indices.  This function should only be called when this term's
+        coefficient is a :class:`Polynomial`.
+
+        Parameters
+        ----------
+        mapfn : function
+            A function that takes as input an "old" variable-index-tuple
+            (a key of this Polynomial) and returns the updated "new"
+            variable-index-tuple.
+
+        Returns
+        -------
+        None
+        """
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+
+    def torep(self): 
         """
         Construct a representation of this term.
 
@@ -446,7 +488,7 @@ class RankOneTerm(object):
             RepTermType = replib.SVTermDirectRep if (self._evotype == "svterm") \
                 else replib.SBTermDirectRep
         else:
-            coeffrep = self.coeff.torep(max_poly_vars)
+            coeffrep = self.coeff.torep()
             RepTermType = replib.SVTermRep if (self._evotype == "svterm") \
                 else replib.SBTermRep
 

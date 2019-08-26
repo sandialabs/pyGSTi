@@ -429,7 +429,7 @@ class SPAMVec(_modelmember.ModelMember):
 #        else:
 #            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
-    def get_taylor_order_terms(self, order, return_poly_coeffs=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_poly_coeffs=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -471,7 +471,7 @@ class SPAMVec(_modelmember.ModelMember):
         raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" %
                                   self.__class__.__name__)
 
-    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
+    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_poly_vars=100):
         """
         Get the terms (from a Taylor expansion of this SPAM vector) that have
         magnitude above `min_term_mag` (the magnitude of a term is taken to
@@ -518,7 +518,7 @@ class SPAMVec(_modelmember.ModelMember):
         terms = []; last_len = -1
         while len(terms) > last_len:  # while we keep adding something
             #print("order ",taylor_order," : ",len(terms), "terms")
-            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, True)
+            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
             coeffs = _bulk_eval_complex_compact_polys(
                 cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
             for coeff, t in zip(coeffs, terms_at_order):
@@ -1919,7 +1919,7 @@ class TensorProdSPAMVec(SPAMVec):
     #    else:  # self._evotype in ("svterm","cterm")
     #        raise NotImplementedError("torep() not implemented for %s evolution type" % self._evotype)
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -1966,10 +1966,10 @@ class TensorProdSPAMVec(SPAMVec):
 
         for p in _lt.partition_into(order, len(self.factors)):
             if self._prep_or_effect == "prep":
-                factor_lists = [self.factors[i].get_taylor_order_terms(pi) for i, pi in enumerate(p)]
+                factor_lists = [self.factors[i].get_taylor_order_terms(pi, max_poly_vars) for i, pi in enumerate(p)]
             else:
                 factorPOVMs = self.factors
-                factor_lists = [factorPOVMs[i][Elbl].get_taylor_order_terms(pi)
+                factor_lists = [factorPOVMs[i][Elbl].get_taylor_order_terms(pi, max_poly_vars)
                                 for i, (pi, Elbl) in enumerate(zip(p, self.effectLbls))]
 
             # When possible, create COLLAPSED factor_lists so each factor has just a single
@@ -2012,7 +2012,7 @@ class TensorProdSPAMVec(SPAMVec):
                     self.gpindices, _np.array(x, _np.int64)))
 
             poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
-            tapes = [poly.compact(force_complex=True) for poly in poly_coeffs]
+            tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
             if len(tapes) > 0:
                 vtape = _np.concatenate([t[0] for t in tapes])
                 ctape = _np.concatenate([t[1] for t in tapes])
@@ -2239,7 +2239,7 @@ class PureStateSPAMVec(SPAMVec):
         dmVec_std = _gt.state_to_dmvec(self.pure_state_vec.todense())
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -2285,11 +2285,11 @@ class PureStateSPAMVec(SPAMVec):
 
         if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
             purevec = self.pure_state_vec
-            coeff = _Polynomial({(): 1.0})
+            coeff = _Polynomial({(): 1.0}, max_poly_vars)
             terms = [_term.RankOneTerm(coeff, purevec, purevec, self._prep_or_effect, self._evotype)]
 
             if return_coeff_polys:
-                coeffs_as_compact_polys = coeff.compact(force_complex=True)
+                coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
                 return terms, coeffs_as_compact_polys
             else:
                 return terms
@@ -2895,7 +2895,7 @@ class LindbladSPAMVec(SPAMVec):
     #        raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
     #                         (self._evotype, self.__class__.__name__))
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -2939,9 +2939,9 @@ class LindbladSPAMVec(SPAMVec):
                 raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None), "LindbladSPAMVec must be added to a Model before use!"
 
-            state_terms = self.state_vec.get_taylor_order_terms(0); assert(len(state_terms) == 1)
+            state_terms = self.state_vec.get_taylor_order_terms(0, max_poly_vars); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
-            err_terms, cpolys = self.error_map.get_taylor_order_terms(order, True)
+            err_terms, cpolys = self.error_map.get_taylor_order_terms(order, max_poly_vars, True)
             if self._prep_or_effect == "prep":
                 terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
             else:  # "effect"
@@ -3445,7 +3445,7 @@ class ComputationalSPAMVec(SPAMVec):
     #    else:
     #        raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
-    def get_taylor_order_terms(self, order, return_coeff_polys=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -3491,11 +3491,11 @@ class ComputationalSPAMVec(SPAMVec):
                 purevec = ComputationalSPAMVec(self._zvals, "stabilizer", self._prep_or_effect)
             else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
-            coeff = _Polynomial({(): 1.0})
+            coeff = _Polynomial({(): 1.0}, max_poly_vars)
             terms = [_term.RankOneTerm(coeff, purevec, purevec, self._prep_or_effect, self._evotype)]
 
             if return_coeff_polys:
-                coeffs_as_compact_polys = coeff.compact(force_complex=True)
+                coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
                 return terms, coeffs_as_compact_polys
             else:
                 return terms  # Cache terms in FUTURE?

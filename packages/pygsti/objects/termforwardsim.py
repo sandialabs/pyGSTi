@@ -486,7 +486,7 @@ class TermForwardSimulator(ForwardSimulator):
             return [self.cache[ck] for ck in cache_keys]
 
         raw_prps = self.prs_as_polys(rholabel, elabels, circuit, comm, memLimit)
-        prps = [poly.compact(force_complex=True) for poly in raw_prps]
+        prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
         # create compact polys w/*complex* coeffs always since we're likely
         # going to concatenate a bunch of them.
 

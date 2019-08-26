@@ -309,7 +309,7 @@ namespace CReps {
   
   DMStateCRep* DMOpCRep_Embedded::acton(DMStateCRep* state, DMStateCRep* out_state) {
 
-    DEBUG(std::cout << "Emedded acton called!" << std::endl);
+    DEBUG(std::cout << "DB Embedded acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
     //_fastcalc.embedded_fast_acton_sparse(self.embedded_op.acton,
     //                                         output_state, state,
@@ -340,10 +340,10 @@ namespace CReps {
       // out_state[ inds ] += embedded_gate_acton( state[inds] ) (fancy index notn)
       // out_state[inds] += state[inds]
       for(k=0; k<nActionIndices; k++)
-	subState1._dataptr[k] = state_data[ vec_index_noop+_baseinds[k] ];
+        subState1._dataptr[k] = state_data[ vec_index_noop+_baseinds[k] ];
       _embedded_gate_crep->acton(&subState1, &subState2);
       for(k=0; k<nActionIndices; k++)
-	outstate_data[ vec_index_noop+_baseinds[k] ] += subState2._dataptr[k];
+        outstate_data[ vec_index_noop+_baseinds[k] ] += subState2._dataptr[k];
         
       // increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
       for(i=nParts-1; i >= 0; i--) {
@@ -378,7 +378,7 @@ namespace CReps {
   DMStateCRep* DMOpCRep_Embedded::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
 
     //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
-    DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
+    DEBUG(std::cout << "DM Embedded adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
     INT i, j, k, vec_index_noop = 0;
     INT nParts = _nComponents;
@@ -696,7 +696,7 @@ namespace CReps {
   {
     INT i, j;
     DMStateCRep* init_state = new DMStateCRep(_dim);
-    DEBUG(std::cout << "Lindblad acton called!" << _U_nnz << ", " << _A_nnz << std::endl);
+    DEBUG(std::cout << "Lindblad acton called!" << _U_nnz << std::endl);
     DEBUG(state->print("INPUT"));
 
     if(_U_nnz > 0) {
@@ -1045,7 +1045,7 @@ namespace CReps {
   
   SVStateCRep* SVOpCRep_Embedded::acton(SVStateCRep* state, SVStateCRep* out_state) {
 
-    DEBUG(std::cout << "Emedded acton called!" << std::endl);
+    DEBUG(std::cout << "SV Embedded acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
     //_fastcalc.embedded_fast_acton_sparse(self.embedded_op.acton,
     //                                         output_state, state,
@@ -1076,10 +1076,10 @@ namespace CReps {
       // out_state[ inds ] += embedded_gate_acton( state[inds] ) (fancy index notn)
       // out_state[inds] += state[inds]
       for(k=0; k<nActionIndices; k++)
-	subState1._dataptr[k] = state_data[ vec_index_noop+_baseinds[k] ];
+          subState1._dataptr[k] = state_data[ vec_index_noop+_baseinds[k] ];
       _embedded_gate_crep->acton(&subState1, &subState2);
       for(k=0; k<nActionIndices; k++)
-	outstate_data[ vec_index_noop+_baseinds[k] ] += subState2._dataptr[k];
+          outstate_data[ vec_index_noop+_baseinds[k] ] += subState2._dataptr[k];
         
       // increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
       for(i=nParts-1; i >= 0; i--) {
@@ -1114,7 +1114,7 @@ namespace CReps {
   SVStateCRep* SVOpCRep_Embedded::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
 
     //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
-    DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
+    DEBUG(std::cout << "SV Embedded adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
     INT i, j, k, vec_index_noop = 0;
     INT nParts = _nComponents;
@@ -2144,6 +2144,11 @@ namespace CReps {
     delete [] tmp2;
     delete [] vec;
   }
+
+  void SBStateCRep::print(const char* label) {
+    std::cout << "<" << label << " (SBStateCRep - TODO print)>" << std::endl;
+  }
+
   
 
   /****************************************************************************\
@@ -2688,6 +2693,14 @@ namespace CReps {
       it->second = it->second * scale; // note: *= doesn't work here (complex Cython?)
     }
   }
+
+  void PolyCRep::add_scalar_to_all_coeffs_inplace(dcomplex offset) {
+    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it;
+    for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
+      it->second = it->second + offset; // note: += doesn't work here (complex Cython?)
+    }
+  }
+
 
   PolyVarsIndex PolyCRep::vinds_to_int(std::vector<INT> vinds) {
     INT ret, end, m;
