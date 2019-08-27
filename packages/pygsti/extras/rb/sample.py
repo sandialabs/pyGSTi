@@ -367,9 +367,10 @@ def circuit_layer_by_edgegrab(pspec, subsetQs=None, meantwoQgates=1, modelname='
     for edge in selectededges:
         if bool(_np.random.binomial(1, twoQprob)):
 
+            # The two-qubit gates on that edge.
             possibleops = pspec.clifford_ops_on_qubits[edge]
-            assert(len(possibleops) == 1), "Sampler assumes a single 2-qubit gate!"
-            sampled_layer.append(possibleops[0])
+            #assert(len(possibleops) == 1), "Sampler assumes a single 2-qubit gate!"
+            sampled_layer.append(possibleops[_np.random.randint(0, len(possibleops))])
             for q in edge:
                 del unusedqubits[unusedqubits.index(q)]
 
