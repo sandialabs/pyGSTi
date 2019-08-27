@@ -24,7 +24,6 @@ from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 
-
 #Internally:
 # when static: a tuple of Label objects labelling each top-level circuit layer
 # when editable: a list of lists, one per top-level layer, holding just
@@ -44,6 +43,54 @@ from ..tools import slicetools as _slct
 # c.insert(2, (Label('Gx','Q0'), Label('Gy','Q1')) ) # inserts a layer
 # c[:,'Q0'] = ('Gx','Gy','','Gx') # assigns the Q0 line
 # c[1:3,'Q0'] = ('Gx','Gy') # assigns to a part of the Q0 line
+
+def _np_to_quil_def_str(name, input_array):
+    """
+    Write a DEFGATE block for RQC quil for an arbitrary one- or two-qubit unitary gate.
+    (quil/pyquil currently does not offer support for arbitrary n-qubit gates for
+    n>2.)
+    
+    Parameters
+    ----------
+    name : str
+        The name of the gate (e.g., 'Gc0' for the 0th Clifford gate)
+    
+    input_array : array_like
+        The representation of the gate as a unitary map.  
+        E.g., for name = 'Gc0',input_array = np.array([[1,0],[0,1]])
+    
+    Returns
+    -------
+    output : str
+        A block of quil code (as a string) that should be included before circuit
+        declaration in any quil circuit that uses the specified gate.
+    """
+    output = 'DEFGATE {}:\n'.format(name)
+    for line in input_array:
+        output += '    '
+        output += ', '.join(map(_num_to_rqc_str,line))
+        output += '\n'
+    return output
+    
+def _num_to_rqc_str(num):
+    """Convert float to string to be included in RQC quil DEFGATE block
+    (as written by _np_to_quil_def_str)."""
+    num = _np.complex(_np.real_if_close(num))
+    if _np.imag(num) == 0:
+        output = str(_np.real(num))
+        return output
+    else:
+        real_part = _np.real(num)
+        imag_part = _np.imag(num)
+        if imag_part < 0:
+            sgn = '-'
+            imag_part = imag_part*-1
+        elif imag_part > 0:
+            sgn = '+'
+        else:
+            assert False
+        return '{}{}{}i'.format(real_part,sgn,imag_part)
+
 
 def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_return_list=True):
     """ Convert lbl into nested lists of *simple* labels """
@@ -2643,7 +2690,8 @@ class Circuit(object):
                         qubit_conversion=None,
                         readout_conversion=None,
                         block_between_layers=True,
-                        block_idles=True):  # TODO
+                        block_idles=True,
+                        gate_declarations=None):  # TODO
         """
         Converts this circuit to a quil string.
 
@@ -2675,6 +2723,10 @@ class Circuit(object):
             circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
             (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
             that qubit has Rigetti label 2.)
+        
+        gate_declarations : dict, optional
+            If not None, a dictionary that provides unitary maps for particular gates that
+            are not already in the quil syntax.
 
         Returns
         -------
@@ -2705,6 +2757,11 @@ class Circuit(object):
 
         # Init the quil string.
         quil = ''
+
+        if gate_declarations is not None:
+            for gate_lbl in gate_declarations.keys():
+                quil += _np_to_quil_def_str(gate_lbl,gate_declarations[gate_lbl])
+
         depth = self.num_layers()
 
 #        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
