@@ -613,21 +613,25 @@ class LinearOperator(_modelmember.ModelMember):
         while len(terms) > last_len:  # while we keep adding something
             if taylor_order > 1 and first_order_magmax**taylor_order < min_term_mag:
                 break  # there's no way any terms at this order reach min_term_mag - exit now!
-            
-            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
-            coeffs = _bulk_eval_complex_compact_polys(
-                cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-            for coeff, t in zip(coeffs, terms_at_order):
-                t.set_magnitude(abs(coeff))
-                #t.set_evaluated_coeff(coeff) #REMOVE
 
-            if taylor_order == 1:
-                first_order_magmax = max([t.magnitude for t in terms_at_order])
-
-            last_len = len(terms)
-            for t in terms_at_order:
-                if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                    terms.append((taylor_order, t))
+            if taylor_order <= 2:
+                terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
+                coeffs = _bulk_eval_complex_compact_polys(
+                    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+                for coeff, t in zip(coeffs, terms_at_order):
+                    t.set_magnitude(abs(coeff))
+                    #t.set_evaluated_coeff(coeff) #REMOVE
+    
+                if taylor_order == 1:
+                    first_order_magmax = max([t.magnitude for t in terms_at_order])
+    
+                last_len = len(terms)
+                for t in terms_at_order:
+                    if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
+                        terms.append((taylor_order, t))
+            else:
+                terms.extend( [(taylor_order, t) for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)] )
+                        
             #print("order ", taylor_order, " : ", len(terms_at_order), " maxmag=",
             #      max([t.magnitude for t in terms_at_order]), len(terms), " running terms ",
             #      len(terms)-last_len, "added at this order")
@@ -658,6 +662,16 @@ class LinearOperator(_modelmember.ModelMember):
         #assert(chk1 <= chk2)
 
         return [t[1] for t in sorted_terms], first_order_indices
+
+    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+        """ TODO: docstring """
+        v = self.to_vector()
+        terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
+        coeffs = _bulk_eval_complex_compact_polys(
+            cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+        for coeff, t in zip(coeffs, terms_at_order):
+            t.set_magnitude(abs(coeff))
+        return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
         """
@@ -2791,6 +2805,7 @@ class LindbladOp(LinearOperator):
 
         #Cache values
         self.terms = {}
+        self.exp_terms_cache = {} # used for repeated calls to the exp_terms function
         self.local_term_poly_coeffs = {}
         self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
         self.base_deriv = None
@@ -2883,6 +2898,7 @@ class LindbladOp(LinearOperator):
         None
         """
         self.terms = {}  # clear terms cache since param indices have changed now
+        self.exp_terms_cache = {}
         self.local_term_poly_coeffs = {}
         #TODO REMOVE self.direct_terms = {}
         #TODO REMOVE self.direct_term_poly_coeffs = {}
@@ -3168,7 +3184,8 @@ class LindbladOp(LinearOperator):
         # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
-        loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0, max_poly_vars), [order], postTerm)[order]
+        loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0, max_poly_vars),
+                                    order, postTerm, self.exp_terms_cache)
         #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
 
         poly_coeffs = [t.coeff for t in loc_terms]
@@ -3185,6 +3202,92 @@ class LindbladOp(LinearOperator):
         # only cache terms with *global* indices to avoid confusion...
         self.terms[order] = _compose_poly_indices(loc_terms)
 
+    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+
+        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
+        for ii,i in enumerate(self.gpindices_as_array()):
+            mapvec[ii] = i
+
+        assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
+        assert(not _sps.issparse(self.unitary_postfactor)
+               ), "Unitary post-factor needs to be dense for term-based evotypes"
+        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+        mpv = max_poly_vars
+        postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+                                     self.unitary_postfactor, "gate", self._evotype)
+        #Note: for now, *all* of an error generator's terms are considered 0-th order,
+        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
+        # we might want to allow a distinction among the error generator terms, in which
+        # case this term-exponentiation step will need to become more complicated...
+        errgen_terms = self.errorgen.get_taylor_order_terms(0, max_poly_vars)
+
+        #DEBUG: CHECK MAGS OF ERRGEN COEFFS
+        #poly_coeffs = [t.coeff for t in errgen_terms]
+        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        #if len(tapes) > 0:
+        #    vtape = _np.concatenate([t[0] for t in tapes])
+        #    ctape = _np.concatenate([t[1] for t in tapes])
+        #else:
+        #    vtape = _np.empty(0, _np.int64)
+        #    ctape = _np.empty(0, complex)
+        #v = self.to_vector()
+        #errgen_coeffs = _bulk_eval_complex_compact_polys(
+        #    vtape, ctape, v, (len(errgen_terms),))  # an array of coeffs
+        #for coeff, t in zip(errgen_coeffs, errgen_terms):
+        #    coeff2 = t.coeff.evaluate(v)
+        #    if not _np.isclose(coeff,coeff2):
+        #        assert(False), "STOP"
+        #    t.set_magnitude(abs(coeff))
+
+        #evaluate errgen_terms' coefficients using their local vector of parameters
+        # (which happends to be the same as our paramvec in this case)
+        egvec = self.errorgen.to_vector()
+        for egt in errgen_terms:
+            egt.set_magnitude(abs(egt.coeff.evaluate(egvec)))
+
+        #DEBUG!!!
+        #import bpdb; bpdb.set_trace()
+        #loc_terms = _term.exp_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
+        #loc_terms_chk = _term.exp_terms(errgen_terms, order, postTerm)
+        #assert(len(loc_terms) == len(loc_terms2))
+        #poly_coeffs = [t.coeff for t in loc_terms_chk]
+        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        #if len(tapes) > 0:
+        #    vtape = _np.concatenate([t[0] for t in tapes])
+        #    ctape = _np.concatenate([t[1] for t in tapes])
+        #else:
+        #    vtape = _np.empty(0, _np.int64)
+        #    ctape = _np.empty(0, complex)
+        #v = self.to_vector()
+        #coeffs = _bulk_eval_complex_compact_polys(
+        #    vtape, ctape, v, (len(loc_terms_chk),))  # an array of coeffs
+        #for coeff, t, t2 in zip(coeffs, loc_terms, loc_terms_chk):
+        #    coeff2 = t.coeff.evaluate(v)
+        #    if not _np.isclose(coeff,coeff2):
+        #        assert(False), "STOP"
+        #    t.set_magnitude(abs(coeff))
+
+        #for ii,t in enumerate(loc_terms):
+        #    coeff1 = t.coeff.evaluate(egvec)
+        #    if not _np.isclose(abs(coeff1), t.magnitude):
+        #        assert(False),"STOP"
+        #    #t.set_magnitude(abs(t.coeff.evaluate(egvec)))
+        
+
+        #FUTURE:  maybe use bulk eval of compact polys? Something like this:
+        #coeffs = _bulk_eval_complex_compact_polys(
+        #    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+        #for coeff, t in zip(coeffs, terms_at_order):
+        #    t.set_magnitude(abs(coeff))
+        
+        terms = []
+        for term in _term.exp_terms_above_mag(errgen_terms, order,
+                                    postTerm, min_term_mag=min_term_mag):
+            #poly_coeff = term.coeff
+            #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
+            term.mapvec_indices_inplace(mapvec) # local -> global indices
+            terms.append(term)
+        return terms
 
     def get_total_term_magnitude(self):
         """
@@ -4174,6 +4277,38 @@ class ComposedOp(LinearOperator):
         coeffs_as_compact_polys = (vtape, ctape)
         self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
+    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+        terms = []
+        factor_lists_cache = [ [ops.get_taylor_order_terms_above_mag(i, max_poly_vars, min_term_mag) for i in range(order+1)]
+                               for ops in self.factorops]
+        for p in _lt.partition_into(order, len(self.factorops)):
+            #factor_lists = [self.factorops[i].get_taylor_order_terms_above_mag(pi, max_poly_vars, min_term_mag) for i, pi in enumerate(p)]
+            factor_lists = [ factor_lists_cache[i][pi] for i, pi in enumerate(p)]
+            for factors in _itertools.product(*factor_lists):
+                mag = _np.product([factor.magnitude for factor in factors])
+                if mag >= min_term_mag:
+                    terms.append(_term.compose_terms(factors, magnitude=mag))
+        return terms
+        #def _decompose_indices(x):
+        #    return tuple(_modelmember._decompose_gpindices(
+        #        self.gpindices, _np.array(x, _np.int64)))
+        #
+        #mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
+        #for ii,i in enumerate(self.gpindices_as_array()):
+        #    mapvec[i] = ii
+        #
+        ##poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
+        #poly_coeffs = [t.coeff.mapvec_indices(mapvec) for t in terms]  # with *local* indices
+        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        #if len(tapes) > 0:
+        #    vtape = _np.concatenate([t[0] for t in tapes])
+        #    ctape = _np.concatenate([t[1] for t in tapes])
+        #else:
+        #    vtape = _np.empty(0, _np.int64)
+        #    ctape = _np.empty(0, complex)
+        #coeffs_as_compact_polys = (vtape, ctape)
+        #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
         
     def get_total_term_magnitude(self):
         """
@@ -4893,6 +5028,15 @@ class EmbeddedOp(LinearOperator):
         else:            
             return [_term.embed_term(t, sslbls, self.targetLabels)
                     for t in self.embedded_op.get_taylor_order_terms(order, max_poly_vars, False)]
+
+    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+        """TODO: docstring """
+        sslbls = self.state_space_labels.copy()
+        sslbls.reduce_dims_densitymx_to_state()
+        return [_term.embed_term(t, sslbls, self.targetLabels)
+                for t in self.embedded_op.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag)]
+
+        
 
     def get_total_term_magnitude(self):
         """

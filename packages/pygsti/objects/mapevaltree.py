@@ -48,7 +48,7 @@ class MapEvalTree(EvalTree):
 
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, simplified_circuit_list, opcache=None, numSubTreeComms=1, maxCacheSize=None):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.

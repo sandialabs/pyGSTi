@@ -367,6 +367,7 @@ class OpModel(Model):
         #sets self._calcClass, self._sim_type, self._sim_args
 
         self._shlp = simplifier_helper
+        self._opcache = {}
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
 
@@ -787,6 +788,7 @@ class OpModel(Model):
         """ Create & return a forward-simulator ("calculator") for this model """
         self._clean_paramvec()
         layer_lizard = self._layer_lizard()
+        layer_lizard.set_opcache(self._opcache, self.to_vector())
 
         kwargs = {}
         if self._sim_type == "termorder":
@@ -1630,7 +1632,7 @@ class OpModel(Model):
         simplified_circuits, elIndices, outcomes, nEls = \
             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, numSubtreeComms)
+        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, self._opcache, numSubtreeComms) # 
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list), _time.time() - tm)); tm = _time.time()
@@ -2154,6 +2156,7 @@ class OpModel(Model):
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copyInto._shlp = None  # must be set by a derived-class _init_copy() method
         copyInto._need_to_rebuild = True  # copy will have all gpindices = None, etc.
+        copyInto._opcache = {}  # don't copy opcache
         super(OpModel, self)._init_copy(copyInto)
 
     def copy(self):

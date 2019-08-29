@@ -2768,13 +2768,13 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, 
         E_foat_indices = repcel.foat_indices
         repcache[elabels] = repcel
 
-    cdef double max_partial_sopm = opcache.get(rholabel, calc.sos.get_prep(rholabel)).get_total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel)).get_total_term_magnitude()
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = opcache.get(glbl, calc.sos.get_operation(glbl))
+        op = opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl)
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * opcache.get(elbl, calc.sos.get_effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
+        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.get_effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
         #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap 
 
     #Note: term calculator "dim" is the full density matrix dim
@@ -3520,13 +3520,13 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
         E_foat_indices = repcel.foat_indices
         repcache[elabels] = repcel
 
-    cdef double max_partial_sopm = opcache.get(rholabel, calc.sos.get_prep(rholabel)).get_total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel)).get_total_term_magnitude()
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = opcache.get(glbl, calc.sos.get_operation(glbl))
+        op = opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl)
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * opcache.get(elbl, calc.sos.get_effect(elbl)).get_total_term_magnitude()
+        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.get_effect(elbl)).get_total_term_magnitude()
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))

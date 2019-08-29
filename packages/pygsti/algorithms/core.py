@@ -1078,7 +1078,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-    mdl = startModel.copy()
+    mdl = startModel #.copy()  # to allow caches in startModel to be retained
     if maxfev is None: maxfev = maxiter
 
     #printer.log('', 2)
@@ -1221,12 +1221,12 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     #Step 3: solve least squares minimization problem
 
     if mdl.simtype in ("termgap", "termorder"):
-        minErrVec, soln_gs = _do_term_runopt(evTree, mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
-                                             printer, profiler, nDataParams, memLimit)
+        minErrVec = _do_term_runopt(evTree, mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
+                                    printer, profiler, nDataParams, memLimit)
     else:
         #Normal case of just a single "sub-iteration"
-        minErrVec, soln_gs = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
-                                        printer, profiler, nDataParams, memLimit)
+        minErrVec = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, comm,
+                               printer, profiler, nDataParams, memLimit)
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -1238,7 +1238,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
     # but maybe best to just remove minErrVec from return value since this isn't very useful
     # anyway?
-    return minErrVec, soln_gs
+    return minErrVec, mdl
 
 
 def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
@@ -1273,7 +1273,6 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
     minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
     sum_minErrVec = sum(minErrVec**2)  # total chi2 or (upperBoundLogL - logl), depending on objective_name
     
-    soln_mdl = mdl  # .copy()  # copy needed?
     profiler.add_time("do_mc2gst: leastsq", tm)
 
     tm = _time.time()
@@ -1318,9 +1317,9 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
 
     if objective_name == "logl":
         deltaLogL = sum_minErrVec
-        return (logL_upperbound - deltaLogL), soln_mdl
+        return (logL_upperbound - deltaLogL)
     else:
-        return minErrVec, soln_mdl
+        return minErrVec
 
 
 def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
@@ -1332,9 +1331,10 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
         low, high = 0.0, 1.0
         while high-low > ALPHA_TOL:
             alpha = (high+low)/2
-            printer.log("trying alpha = %g" % alpha)
+            printer.log("trying alpha = %g " % alpha, end='')
             mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
             nFailures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+            printer.log(" -> %d failures" % nFailures)
             if nFailures > 0: # alpha too high
                 high = alpha
             else: # alpha too low
@@ -1373,13 +1373,10 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             "Starting term-stage with > 0 failures! (this shouldn't ever happen)"
 
         last_mdlvec = mdl.to_vector().copy()
-        minErrVec, soln_gs = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
-                                        printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor)
+        minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
+                               printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor)
         new_mdlvec = mdl.to_vector().copy()
-        
-        #if final_iter:  # this was final iteration
-        #    return minErrVec, soln_gs
-        
+                
         #Check how many failures the final model has (using the *same* path integrals)
         nFailures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)
         printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
@@ -1404,7 +1401,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False) == 0), \
                 "Ending term-stage with > 0 failures! (this shouldn't ever happen)"
 
-    return minErrVec, mdl
+    return minErrVec
 
 
 
@@ -2331,19 +2328,19 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     profiler.add_time("do_mlgst: num data params", tm)
 
     if mdl.simtype in ("termgap", "termorder"):
-        delta_logl, soln_mdl = _do_term_runopt(evTree, mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
-                                               printer, profiler, nDataParams, memLimit, logL_upperbound)
+        delta_logl = _do_term_runopt(evTree, mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
+                                     printer, profiler, nDataParams, memLimit, logL_upperbound)  #updates mdl
     else:
         #Normal case of just a single "sub-iteration"
         #Run optimization (use leastsq)
-        delta_logl, soln_mdl = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
-                                          printer, profiler, nDataParams, memLimit, logL_upperbound)
+        delta_logl = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, comm,
+                                printer, profiler, nDataParams, memLimit, logL_upperbound)  #updates mdl
 
     printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 
     profiler.add_time("do_mlgst: post-opt", tm)
     profiler.add_time("do_mlgst: total time", tStart)
-    return delta_logl, soln_mdl
+    return delta_logl, mdl
 
 
 def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
@@ -2527,6 +2524,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
             printer.show_progress(i, nIters, verboseMessages=extraMessages,
                                   prefix="--- Iterative MLGST:",
                                   suffix=" %d operation sequences ---" % len(stringsToEstimate))
+            #print("DB: OPCACHE len = ",len(mleModel._opcache))
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 

@@ -287,7 +287,7 @@ class MapForwardSimulator(ForwardSimulator):
         """
         return int(0.7 * nCircuits)
 
-    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
+    def construct_evaltree(self, simplified_circuits, opcache, numSubtreeComms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -299,6 +299,8 @@ class MapForwardSimulator(ForwardSimulator):
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
+        
+        TODO: docstring opcache
 
         numSubtreeComms : int
             The number of processor groups that will be assigned to
@@ -311,7 +313,7 @@ class MapForwardSimulator(ForwardSimulator):
         MapEvalTree
         """
         evTree = _MapEvalTree()
-        evTree.initialize(simplified_circuits, numSubtreeComms, self.max_cache_size)
+        evTree.initialize(simplified_circuits, opcache, numSubtreeComms, self.max_cache_size)
         return evTree
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,

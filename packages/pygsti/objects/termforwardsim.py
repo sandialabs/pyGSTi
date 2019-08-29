@@ -651,7 +651,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         return "circuits"
 
-    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
+    def construct_evaltree(self, simplified_circuits, opcache, numSubtreeComms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -664,6 +664,8 @@ class TermForwardSimulator(ForwardSimulator):
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
 
+        TODO: docstring opcache
+
         numSubtreeComms : int
             The number of processor groups that will be assigned to
             subtrees of the created tree.  This aids in the tree construction
@@ -675,7 +677,7 @@ class TermForwardSimulator(ForwardSimulator):
         TermEvalTree
         """
         evTree = _TermEvalTree()
-        evTree.initialize(simplified_circuits, numSubtreeComms)
+        evTree.initialize(simplified_circuits, opcache, numSubtreeComms)
         return evTree
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,

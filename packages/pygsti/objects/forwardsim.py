@@ -484,7 +484,7 @@ class ForwardSimulator(object):
 
         return ret
 
-    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
+    def construct_evaltree(self, simplified_circuits, opcache, numSubtreeComms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -496,6 +496,8 @@ class ForwardSimulator(object):
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
+
+        TODO: docstring opcache
 
         numSubtreeComms : int
             The number of processor groups that will be assigned to

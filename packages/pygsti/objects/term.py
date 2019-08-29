@@ -21,7 +21,7 @@ LARGE = 1000000000  # a large number such that LARGE is
 # path get included in the selected set of paths.
 
 
-def compose_terms(terms):
+def compose_terms(terms, magnitude=None):
     """
     Compose a sequence of terms.
 
@@ -39,6 +39,10 @@ def compose_terms(terms):
     terms : list
         A list of terms to compose.
 
+    magnitude : float, optional
+        The magnitude of the composed term (fine to leave as None
+        if you don't care about keeping track of magnitudes).
+
     Returns
     -------
     RankOneTerm
@@ -53,10 +57,20 @@ def compose_terms(terms):
         ret.termtype = first.termtype
         ret._evotype = first._evotype
         ret.coeff = _Polynomial.product([t.coeff for t in terms])
-        ret.pre_ops = list(_itertools.chain(*[t.pre_ops for t in terms]))
-        ret.post_ops = list(_itertools.chain(*[t.post_ops for t in terms]))
-        ret.magnitude = 1.0
-        ret.logmagnitude = 0.0
+        #ret.pre_ops = list(_itertools.chain(*[t.pre_ops for t in terms]))
+        #ret.post_ops = list(_itertools.chain(*[t.post_ops for t in terms]))
+
+        ret.pre_ops = []
+        ret.post_ops = []
+        for t in terms:
+            ret.pre_ops.extend(t.pre_ops)
+            ret.post_ops.extend(t.post_ops)
+            
+        if magnitude is not None:
+            ret.set_magnitude(magnitude)
+        else:  # just use default
+            ret.magnitude = 1.0
+            ret.logmagnitude = 0.0
         return ret
                            
                            
@@ -72,7 +86,7 @@ def compose_terms(terms):
     #return ret
 
 
-def exp_terms(terms, orders, postterm=None, order_base=None):
+def exp_terms(terms, order, postterm, cache=None, order_base=None):
     """
     Exponentiate a list of terms, collecting those terms of the orders given
     in `orders`. Optionally post-multiplies the single term `postterm` (so this
@@ -84,54 +98,131 @@ def exp_terms(terms, orders, postterm=None, order_base=None):
         The list of terms to exponentiate.  All these terms are
         considered "first order" terms.
 
-    orders : list
-        A list of integers specifying all the orders to collect.  These are
-        the keys of the returned dictionary.
+    order : int
+        An integers specifying the order of the terms to collect.
 
-    postterm : RankOneTerm, optional
+    postterm : RankOneTerm
         A term that is composed *first* (so "post" in the sense of matrix
-        multiplication, not composition).
+        multiplication, not composition).  May be the identity (no-op) term.
 
-    order_base : float
+    cache : dict, optional
+        A dictionary used to cache results for speeding up repeated calls
+        to this function.  Usually an empty dictionary is supplied to the
+        first call.
+    
+    order_base : float, optional
         What constitutes 1 order of magnitude.  If None, then
         polynomial coefficients are used.
 
     Returns
     -------
-    dict
-        Keys are the integer order values in `orders`.  Values are lists of
-        :class:`RankOneTerm` objects giving the terms at that order.
+    list
+        A list of :class:`RankOneTerm` objects giving the terms at `order`.
     """
 
     #FUTURE: add "term_order" argument to specify what order a term in `terms`
     # is considered to be (not all necessarily = 1)
+    persistent_cache = cache is not None
+    if not persistent_cache: cache = {}
 
     #create terms for each order from terms and base action
-    final_terms = {}
-    if postterm is not None:
-        Uterm_tup = (postterm,)
-    else: Uterm_tup = ()
 
-    for order in orders:  # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
-        if order == 0:
-            final_terms[order] = [Uterm_tup[0]]; continue
-        one_over_factorial = 1 / _np.math.factorial(order)
+    # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
+    # expand 1/n! L^n into a list of rank-1 terms -> cache[n]
+    cache[0] = [postterm]
+    #one_over_factorial = 1 / _np.math.factorial(order)
 
-        # expand 1/n! L^n into a list of rank-1 terms
-        #termLists = [terms]*order
-        final_terms[order] = []
+    def build_terms(order_to_build):
+        if order_to_build in cache:  # Note: 0th order is *always* in cache
+            return cache[order_to_build]
+        previous_order_terms = build_terms(order_to_build-1)
+        a = 1.0 / order_to_build  # builds up 1/factorial prefactor
+        premultiplied_terms = [ a * factor for factor in terms ]
+        cache[order_to_build] = [ compose_terms((previous_order_term, a_factor))
+                                  for previous_order_term in previous_order_terms
+                                  for a_factor in premultiplied_terms ]
+        return cache[order_to_build]
+    
+    if persistent_cache:
+        return [t.copy() for t in build_terms(order)]  # copy the terms if we need to store them in cache
+    else:
+        return build_terms(order)
 
-        #Alternate method
-        def add_terms(term_list_index, composed_factors_so_far):
-            if term_list_index == order:
-                final_terms[order].append(composed_factors_so_far)
-                return
-            for factor in terms:  # termLists[term_list_index]:
-                add_terms(term_list_index + 1, compose_terms((composed_factors_so_far, factor)))
 
-        add_terms(0, one_over_factorial * Uterm_tup[0])
-
+#OLD VERSION TODO REMOVE
+def OLDexp_terms(terms, order, postterm, cache=None, order_base=None):
+    #create terms for each order from terms and base action
+    
+    # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
+    if order == 0:
+        return [postterm]
+    one_over_factorial = 1 / _np.math.factorial(order)
+    
+    # expand 1/n! L^n into a list of rank-1 terms
+    #termLists = [terms]*order
+    final_terms = []
+    
+    #Alternate method
+    def add_terms(term_list_index, composed_factors_so_far):
+        if term_list_index == order:
+            final_terms.append(composed_factors_so_far)
+            return
+        for factor in terms:  # termLists[term_list_index]:
+            add_terms(term_list_index + 1, compose_terms((composed_factors_so_far, factor)))
+    
+    add_terms(0, one_over_factorial * postterm)    
     return final_terms
+
+
+def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
+    """
+    Exponentiate a list of terms, collecting those terms of the orders given
+    in `orders`. Optionally post-multiplies the single term `postterm` (so this
+    term actually acts *before* the exponential-derived terms).
+
+    Parameters
+    ----------
+    terms : list
+        The list of terms to exponentiate.  All these terms are
+        considered "first order" terms.
+
+    order : int
+        Integer specifying the order to compute.
+
+    postterm : RankOneTerm
+        A term that is composed *first* (so "post" in the sense of matrix
+        multiplication, not composition).
+
+    TODO: docstring min_term_mag & return val
+
+    Returns
+    -------
+    list
+    """
+    cache = {}  # DON'T allow the user to pass in a previous cache
+                # since this may have used a different min_term_mag
+
+    #create terms for each order from terms and base action
+
+    # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
+    # expand 1/n! L^n into a list of rank-1 terms -> cache[n]
+    cache[0] = [postterm]
+    
+    def build_terms(order_to_build):
+        if order_to_build in cache:  # Note: 0th order is *always* in cache
+            return cache[order_to_build]
+        previous_order_terms = build_terms(order_to_build-1)
+        a = 1.0 / order_to_build  # builds up 1/factorial prefactor
+        premultiplied_terms = [ a * factor for factor in terms ]  # terms are expected to have their magnitudes set.
+        for t in premultiplied_terms: t.set_magnitude(t.magnitude * a)  # because a * factor doesn't update magnitude by efficiency
+        cache[order_to_build] = [ t for t in (compose_terms((previous_order_term, a_factor),
+                                                            magnitude=previous_order_term.magnitude * a_factor.magnitude)
+                                              for previous_order_term in previous_order_terms
+                                              for a_factor in premultiplied_terms) if t.magnitude >= min_term_mag ]
+        # **Assume** individual term magnitudes are <= 1.0 so that we
+        # don't include any order terms that have magnitude < min_term_mag.
+        return cache[order_to_build]
+    return build_terms(order)
 
 
 def embed_term(term, stateSpaceLabels, targetLabels):
@@ -301,6 +392,31 @@ class RankOneTerm(object):
     def __rmul__(self, x):
         return self.__mul__(x)
 
+    #UNUSED TODO REMOVE
+    #def scalar_mult(self, x):
+    #    """
+    #    Multiplies this term by a scalar `x`.
+    #
+    #    This simply returns a new `RankOneTerm` that
+    #    is the same as this term except its coefficient
+    #    has been multiplied by `x`.
+    #
+    #    Parameters
+    #    ----------
+    #    x : float or complex
+    #        The value to multiply by.
+    #
+    #    Returns
+    #    -------
+    #    RankOneTerm
+    #    """
+    #    ret = self.copy()
+    #    if isinstance(self.coeff, _numbers.Number):
+    #        ret.coeff *= x
+    #    else:
+    #        ret.coeff = ret.coeff.scalar_mult(x)
+    #    return ret
+
     def set_magnitude(self, mag):
         """
         Sets the "magnitude" of this term used in path-pruning.  Sets
@@ -315,6 +431,7 @@ class RankOneTerm(object):
         -------
         None
         """
+        assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         self.magnitude = mag
         self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
 
@@ -415,6 +532,8 @@ class RankOneTerm(object):
         copy_of_me = RankOneTerm(coeff, None, None, self.termtype, self._evotype)
         copy_of_me.pre_ops = self.pre_ops[:]
         copy_of_me.post_ops = self.post_ops[:]
+        copy_of_me.magnitude = self.magnitude
+        copy_of_me.logmagnitude = self.logmagnitude
         return copy_of_me
 
     def map_indices_inplace(self, mapfn):

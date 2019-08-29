@@ -52,7 +52,7 @@ class TermEvalTree(EvalTree):
 
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, simplified_circuit_list, opcache, numSubTreeComms=1, maxCacheSize=None):
         """
         Initialize an evaluation tree using a set of complied operation sequences.
         This function must be called before using this EvalTree.
@@ -123,7 +123,7 @@ class TermEvalTree(EvalTree):
         self.percircuit_p_polys = {}
         self.merged_compact_polys = None
         self.repcache = {}
-        self.opcache = {}
+        self.opcache = opcache
 
         self.myFinalToParentFinalMap = None  # this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None  # i.e. has not been created by a 'split'
@@ -559,7 +559,8 @@ class TermEvalTree(EvalTree):
             #if len(failed_circuits) < 10:
             #    for fc in failed_circuits:
             #        print(" -> ", fc)
-    
+
+        print("DB: TermEvalTree OPCACHE len = ", len(self.opcache), ":", self.opcache.keys())
         return num_failed
         
 
