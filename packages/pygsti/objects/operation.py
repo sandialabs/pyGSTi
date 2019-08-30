@@ -614,7 +614,8 @@ class LinearOperator(_modelmember.ModelMember):
             if taylor_order > 1 and first_order_magmax**taylor_order < min_term_mag:
                 break  # there's no way any terms at this order reach min_term_mag - exit now!
 
-            if taylor_order <= 2:
+            MAX_CACHED_TERM_ORDER = 1
+            if taylor_order <= MAX_CACHED_TERM_ORDER:
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs

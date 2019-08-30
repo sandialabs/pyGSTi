@@ -515,19 +515,29 @@ class SPAMVec(_modelmember.ModelMember):
         #print("DB: SPAM get_high_magnitude_terms")
         v = self.to_vector()
         taylor_order = 0
-        terms = []; last_len = -1
+        terms = []; last_len = -1; first_order_magmax = 1.0
         while len(terms) > last_len:  # while we keep adding something
-            #print("order ",taylor_order," : ",len(terms), "terms")
-            terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
-            coeffs = _bulk_eval_complex_compact_polys(
-                cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-            for coeff, t in zip(coeffs, terms_at_order):
-                t.set_magnitude(abs(coeff))
+            if taylor_order > 1 and first_order_magmax**taylor_order < min_term_mag:
+                break  # there's no way any terms at this order reach min_term_mag - exit now!
 
-            last_len = len(terms)
-            for t in terms_at_order:
-                if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                    terms.append((taylor_order, t))
+            MAX_CACHED_TERM_ORDER = 1
+            if taylor_order <= MAX_CACHED_TERM_ORDER:
+                #print("order ",taylor_order," : ",len(terms), "terms")
+                terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
+                coeffs = _bulk_eval_complex_compact_polys(
+                    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+                for coeff, t in zip(coeffs, terms_at_order):
+                    t.set_magnitude(abs(coeff))
+
+                if taylor_order == 1:
+                    first_order_magmax = max([t.magnitude for t in terms_at_order])
+    
+                last_len = len(terms)
+                for t in terms_at_order:
+                    if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
+                        terms.append((taylor_order, t))
+            else:
+                terms.extend( [(taylor_order, t) for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)] )
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -536,6 +546,17 @@ class SPAMVec(_modelmember.ModelMember):
         sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
         first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
         return [t[1] for t in sorted_terms], first_order_indices
+
+    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+        """ TODO: docstring """
+        v = self.to_vector()
+        terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
+        coeffs = _bulk_eval_complex_compact_polys(
+            cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+        for coeff, t in zip(coeffs, terms_at_order):
+            t.set_magnitude(abs(coeff))
+        return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
+
 
     def frobeniusdist2(self, otherSpamVec, typ, transform=None,
                        inv_transform=None):
@@ -2962,6 +2983,25 @@ class LindbladSPAMVec(SPAMVec):
             return self.terms[order], self.local_term_poly_coeffs[order]
         else:
             return self.terms[order]
+
+    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+        state_terms = self.state_vec.get_taylor_order_terms(0, max_poly_vars); assert(len(state_terms) == 1)
+        stateTerm = state_terms[0]
+        #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
+        
+        err_terms = self.error_map.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag / stateTerm.magnitude)
+
+        #This gives the appropriate logic, but *both* prep or effect results in *same* expression, so just run it:
+        #if self._prep_or_effect == "prep":
+        #    terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
+        #else:  # "effect"
+        #    # Effect terms are special in that all their pre/post ops act in order on the *state* before the final
+        #    # effect is used to compute a probability.  Thus, constructing the same "terms" as above works here
+        #    # too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+        #    terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
+        terms = [_term.compose_terms((stateTerm, t), magnitude=stateTerm.magnitude * t.magnitude)
+                 for t in err_terms]  # t ops occur *after* stateTerm's
+        return terms
 
     def get_total_term_magnitude(self):
         """

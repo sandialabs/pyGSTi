@@ -1680,7 +1680,7 @@ class OpModel(Model):
         """
         return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit)
 
-    def bulk_probs_num_term_failures(self, evalTree, comm=None, memLimit=None, adaptive=True):
+    def bulk_probs_num_term_failures(self, evalTree, comm=None, memLimit=None, adaptive=True, restrict_to=None):
         """
         Only applicable for models with a term-based (path-integral) forward simulator.
         Counts the number of circuits for which the achieved sum-of-path-magnitudes is less
@@ -1699,6 +1699,7 @@ class OpModel(Model):
 
         memLimit : TODO: docstring
         adaptive : TODO docstring -- see comments below
+        restrict_to : 
         """
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
@@ -1710,9 +1711,9 @@ class OpModel(Model):
             # calling bulk_prep_probs(...).  If `adaptive` is False, then only the currently cached
             # path integral are used, and the return values indicates how many failures exist *now*
             # for this model.
-            return fwdsim.bulk_prep_probs(evalTree, comm, memLimit, just_get_nfailures=True)
+            return fwdsim.bulk_prep_probs(evalTree, comm, memLimit, just_get_nfailures=True, restrict_to=restrict_to)
         else:
-            return evalTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap)
+            return evalTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap, restrict_to)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):
