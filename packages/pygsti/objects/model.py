@@ -789,6 +789,7 @@ class OpModel(Model):
         self._clean_paramvec()
         layer_lizard = self._layer_lizard()
         layer_lizard.set_opcache(self._opcache, self.to_vector())
+        print("FWDSIM OPCACHE LEN = ",len(self._opcache))
 
         kwargs = {}
         if self._sim_type == "termorder":
@@ -1701,6 +1702,7 @@ class OpModel(Model):
         adaptive : TODO docstring -- see comments below
         restrict_to : 
         """
+        print("BULK PROBS NUM TERM FAILURES: ", len(restrict_to) if (restrict_to is not None) else 'all')
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"

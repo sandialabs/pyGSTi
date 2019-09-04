@@ -429,15 +429,16 @@ class TermEvalTree(EvalTree):
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
-    def num_circuit_sopm_failures(self, calc, pathmagnitude_gap, restrict_to):
+    def num_circuit_sopm_failures(self, calc, pathmagnitude_gap, restrict_to, return_gaps=False):
         """ TODO: docstring """
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         failed_circuits = []
+        per_circuit_gaps = []
         #db_tested = 0;  #DEBUG, REMOVE
         
         for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
-            if restrict_to is not None and circuit not in restrict_to:
+            if restrict_to is not None and (i,circuit) not in restrict_to:
                 continue
             if circuit not in self.percircuit_p_polys:
                 continue  # if circuit not cached *already*, can't count any failures
@@ -451,6 +452,7 @@ class TermEvalTree(EvalTree):
             gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.repcache,
                                                   self.opcache, current_threshold)
             num_failed += _np.count_nonzero(gaps > pathmagnitude_gap)
+            per_circuit_gaps.append( max(gaps) )
             #REMOVE
             if _np.count_nonzero(gaps > pathmagnitude_gap) > 0:
                 failed_circuits.append(circuit)
@@ -460,7 +462,10 @@ class TermEvalTree(EvalTree):
         #if len(failed_circuits) < 10:
         #    for fc in failed_circuits:
         #        print(" -> ", fc)
-        return num_failed, failed_circuits
+        if return_gaps:
+            return num_failed, failed_circuits, per_circuit_gaps
+        else:
+            return num_failed, failed_circuits
 
     
     def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
@@ -480,7 +485,8 @@ class TermEvalTree(EvalTree):
 
         # Reset caches -- calling this function now *always* regenerates polys
         recalc_threshold = True
-        self.percircuit_p_polys = {}
+        if not just_get_nfailures:
+            self.percircuit_p_polys = {}
 
         #It seems like we want to reset these caches now too (this is the safe option) - could look into this more later.
         self.repcache = {}
@@ -491,15 +497,19 @@ class TermEvalTree(EvalTree):
         all_compact_polys = []  # holds one compact polynomial per final *element*
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         # DEBUG!!! REMOVE - and other instances of failed_circuits
-        failed_circuits = [] 
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
-            circuit = self[i]
+        failed_circuits = []
+
+        if restrict_to is not None:
+            circuits = restrict_to
+        else:
+            circuits = [ (i,self[i]) for i in self.get_evaluation_order() ]
+        
+        #for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        #    circuit = self[i]
+        for i,circuit in circuits:
             #print("Computing pruned poly %d" % i)
 
-            if restrict_to is not None and circuit not in restrict_to:
-                continue
-            
-            if circuit in self.percircuit_p_polys:
+            if not just_get_nfailures and circuit in self.percircuit_p_polys:
                 current_threshold, compact_polys = self.percircuit_p_polys[circuit]
             else:
                 current_threshold, compact_polys = None, None
@@ -524,7 +534,7 @@ class TermEvalTree(EvalTree):
                                                 compute_polyreps = not just_get_nfailures)
                 if achieved_sopm < target_sopm:
                     num_failed += 1
-                    failed_circuits.append(circuit)  #(circuit,npaths, threshold, target_sopm, achieved_sopm))
+                    failed_circuits.append( (i,circuit) )  #(circuit,npaths, threshold, target_sopm, achieved_sopm))
                     if just_get_nfailures:
                         return 1, failed_circuits
 
@@ -536,15 +546,17 @@ class TermEvalTree(EvalTree):
                 target_sopm = 0
                 achieved_sopm = 0
 
-            if raw_polyreps is not None:  # otherwise use existing compact_polys
-                compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
-                self.percircuit_p_polys[circuit] = (threshold, compact_polys)
-            else:
-                if circuit in self.percircuit_p_polys:
-                    del self.percircuit_p_polys[circuit]
-
+            #Note: raw_polyreps is only non-None when just_get_nfailures == False
             if not just_get_nfailures:
+                if raw_polyreps is not None:  # otherwise use existing compact_polys
+                    compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
+                    self.percircuit_p_polys[circuit] = (threshold, compact_polys)
+                else:
+                    if circuit in self.percircuit_p_polys:
+                        del self.percircuit_p_polys[circuit]
+
                 all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
+                
             tot_npaths += npaths
             tot_target_sopm += target_sopm
             tot_achieved_sopm += achieved_sopm
@@ -568,7 +580,7 @@ class TermEvalTree(EvalTree):
             #    for fc in failed_circuits:
             #        print(" -> ", fc)
 
-        print("DB: TermEvalTree OPCACHE len = ", len(self.opcache), ":", self.opcache.keys())
+        print("DB: TermEvalTree OPCACHE len = ", len(self.opcache)) #, ":", self.opcache.keys())
         return num_failed, failed_circuits
         
 

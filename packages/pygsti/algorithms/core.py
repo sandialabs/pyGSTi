@@ -1324,40 +1324,145 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
 
 def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
                                          evTree, comm, memLimit, printer):
-    ALPHA_TOL = 0.01
-    alpha = 1.0
-    mdl.from_vector(desired_param_vec)  # alpha == 1.0
-    if True: #while True: #TEST
-        #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
-        nFailures, last_failures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True, restrict_to=None)
-        last_failures = None #TEST
-        printer.log("INITIAL num failures = %d (%d circuits)" % (nFailures, -1)) #len(last_failures) #TEST
-        if nFailures > 0:
-            # "Spiral" loop where we only test the failures from the last evaluation
-            low, high = 0.0, 1.0
-            while high-low > ALPHA_TOL:
-                alpha = (high+low)/2
-                printer.log("trying alpha = %g (restricted to %d circuits) " % (alpha, -1), end='') # len(last_failures) TEST
-                mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
-                nFailures,new_failures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True, restrict_to=last_failures)
-                printer.log(" -> %d failures (%d failed circuits)" % (nFailures,len(new_failures)))
-                if nFailures > 0: # alpha too high
-                    high = alpha
-                    #last_failures = new_failures #TEST
-                else: # alpha too low
-                    low = alpha
-                
-            alpha = low
-            printer.log("final alpha = %g" % alpha)
-            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
-        else:
-            #alpha = 1.0
-            #break #TEST
-            pass
-    return alpha
-    
 
+    ALPHA_TOL = 0.01
+
+    
+    fwdsim = mdl._fwdsim()
+    nFailures, failed_circuits, per_circuit_gaps = evTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap, restrict_to=None, return_gaps=True)
+    if len(per_circuit_gaps) == 0:  # then current model is still good!
+        alpha = 1.0  # unable to compute gaps... try starting with alpha = 1.0
+        mdl.from_vector(desired_param_vec)  # alpha == 1.0
+    else:
+        max_gap_ratio = max(per_circuit_gaps) / fwdsim.pathmagnitude_gap
+        # The worst (largest) gap that was obtained, in units of the desired gap
         
+        print("INTERPOLATE: max-gap-ratio=", max_gap_ratio)
+
+        if max_gap_ratio < 2.0:  # HARCODED...        
+            alpha = 1.0
+            mdl.from_vector(desired_param_vec)  # alpha == 1.0
+        else:
+            alpha = 1.0 / max_gap_ratio if (max_gap_ratio < 100.0) else 0.01
+            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+    
+    #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
+    nFailures, _ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+    printer.log("INITIAL alpha = %.3g, num failures = %d" % (alpha, nFailures))
+    if nFailures > 0 or alpha < 1.0:
+
+        low, high = 0.0, 1.0
+        if nFailures > 0:
+            high = alpha
+        else:
+            low = alpha
+            
+        while high-low > ALPHA_TOL:
+            alpha = (high+low)/2
+            printer.log("trying alpha = %g" % (alpha), end='')
+            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+            nFailures,_ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+            printer.log(" -> %d failures" % (nFailures))
+            if nFailures > 0: # alpha too high
+                high = alpha
+            else: # alpha too low
+                low = alpha
+            
+        alpha = low
+        printer.log("final alpha = %g" % alpha)
+        mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+        
+    return alpha
+
+
+#def ALT_interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
+#                                         evTree, comm, memLimit, printer):
+#    ALPHA_TOL = 0.01
+#    alpha = 1.0
+#    mdl.from_vector(desired_param_vec)  # alpha == 1.0
+#    #while True:
+#    if True:
+#        #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
+#        nFailures, last_failures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True, restrict_to=None)
+#        #last_failures = None #TEST
+#        printer.log("INITIAL num failures = %d (%d circuits)" % (nFailures, len(last_failures))) #len(last_failures) #TEST
+#        if nFailures > 0:
+#            # "Spiral" loop where we only test the failures from the last evaluation
+#            low, high = 0.0, alpha # 1.0
+#            while high-low > ALPHA_TOL:
+#                alpha = (high+low)/2
+#                restrict_str = len(last_failures) if last_failures is not None else "all"
+#                printer.log("trying alpha = %g (restricted to %s circuits) " % (alpha, restrict_str), end='') # len(last_failures) TEST
+#                mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+#                nFailures,new_failures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True, restrict_to=last_failures)
+#                printer.log(" -> %d failures (%d failed circuits)" % (nFailures,len(new_failures)))
+#                if nFailures > 0: # alpha too high
+#                    high = alpha
+#                    last_failures = new_failures #TEST
+#                else: # alpha too low
+#                    if last_failures is None:
+#                        low = alpha
+#                    else:
+#                        last_failures = None
+#                
+#            alpha = low
+#            printer.log("final alpha = %g" % alpha)
+#            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+#        else:
+#            #alpha = 1.0
+#            #break #TEST
+#            pass
+#    return alpha
+#
+#def ALT2_interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
+#                                             evTree, comm, memLimit, printer):
+#
+#    #Get failure order - process circuits which have the worst gap first
+#    fwdsim = mdl._fwdsim()
+#    nFailures, failed_circuits, per_circuit_gaps = evTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap, restrict_to=None, return_gaps=True)
+#    sorted_indices = sorted(list(enumerate(per_circuit_gaps)), key=lambda x: x[1], reverse=True)  # sort from largest -> smallest gap
+#    all_circuits = [ (i,evTree[i]) for i in evTree.get_evaluation_order() ]
+#    sorted_circuits = [ all_circuits[i_and_gap[0]] for i_and_gap in sorted_indices ]
+#    
+#    # -------------------------
+#
+#    ALPHA_TOL = 0.01
+#    alpha = 1.0
+#    mdl.from_vector(desired_param_vec)  # alpha == 1.0
+#    #while True:
+#    if 1:
+#        #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
+#        nFailures, last_failures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True, restrict_to=sorted_circuits)
+#        #last_failures = None #TEST
+#        printer.log("INITIAL num failures = %d (%d circuits)" % (nFailures, len(last_failures))) #len(last_failures) #TEST
+#        if nFailures > 0:
+#            # "Spiral" loop where we only test the failures from the last evaluation
+#            low, high = 0.0, alpha # 1.0
+#            while high-low > ALPHA_TOL:
+#                alpha = (high+low)/2
+#                restrict_str = len(last_failures) if last_failures is not None else "all"
+#                printer.log("trying alpha = %g (restricted to %s circuits) " % (alpha, restrict_str), end='') # len(last_failures) TEST
+#                mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+#                nFailures,new_failures = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True, restrict_to=last_failures)
+#                printer.log(" -> %d failures (%d failed circuits)" % (nFailures,len(new_failures)))
+#                if nFailures > 0: # alpha too high
+#                    high = alpha
+#                    last_failures = new_failures #TEST
+#                else: # alpha too low
+#                    if len(last_failures) == len(sorted_circuits):
+#                        low = alpha
+#                    else:
+#                        last_failures = sorted_circuits
+#                
+#            alpha = low
+#            printer.log("final alpha = %g" % alpha)
+#            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+#        else:
+#            #alpha = 1.0
+#            #break #TEST
+#            pass
+#    printer.log("REAL final alpha = %g" % alpha)
+#    return alpha
 
     
 def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
@@ -1368,11 +1473,13 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     final_iter = False
 
     #Prepare for first iteration
-    _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
-                                         mdl.to_vector().copy(), evTree, comm, memLimit, printer - 1)
+    alpha = _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
+                                                 mdl.to_vector().copy(), evTree, comm, memLimit, printer - 1)
     nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)
+    db_lastPrep = mdl.to_vector().copy()
     assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
-    
+
+    minErrVec = None
     for sub_iter in range(maxSubIters):
         inflate_factor = 1.0 if final_iter else None #100.0
         final_prefix = "*Final* " if final_iter else ""
@@ -1383,6 +1490,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             "Starting term-stage with > 0 failures! (this shouldn't ever happen)"
 
         last_mdlvec = mdl.to_vector().copy()
+        last_minErrVec = minErrVec
         minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
                                printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor)
         new_mdlvec = mdl.to_vector().copy()
@@ -1399,13 +1507,19 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             #re-prep probabilities, adding more paths to accurately capture errors if needed
             alpha = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec,
                                                          evTree, comm, memLimit, printer - 1)
-
+    
             if alpha <= 0.1:
                 printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
                 final_iter = True
-                
-            nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)
-            assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
+
+            if alpha > 0.0:  # alpha == 0 means no update in model from last time bulk_prep_probs was called
+                nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)
+                db_lastPrep = mdl.to_vector().copy()
+                assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
+            else:
+                #HACK - need to set evTree's opcache so from_vector is called on all opcache
+                fwdsim = mdl._fwdsim()
+                fwdsim.sos.set_opcache(evTree.opcache, fwdsim.to_vector())                
 
             # Sanity check
             assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)[0] == 0), \
@@ -2191,7 +2305,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-    mdl = startModel.copy()
+    mdl = startModel #.copy()  # to allow caches in startModel to be retained
 
     if maxfev is None: maxfev = maxiter
 
