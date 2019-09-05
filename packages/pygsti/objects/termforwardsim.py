@@ -818,7 +818,8 @@ class TermForwardSimulator(ForwardSimulator):
         all_failed_circuits = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
+            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
+            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if self.mode == "pruned":
                 nFailed, failed_circuits = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
@@ -896,7 +897,8 @@ class TermForwardSimulator(ForwardSimulator):
         nFailures = 0  # failures of current polys to achieve desired sum-of-path-magnitudes
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
+            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
+            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
             
             felInds = evalSubTree.final_element_indices(evalTree)
             if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
@@ -1013,7 +1015,8 @@ class TermForwardSimulator(ForwardSimulator):
             felInds = evalSubTree.final_element_indices(evalTree)
             nEls = evalSubTree.num_final_elements()
 
-            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
+            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
+            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
@@ -1180,7 +1183,8 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
 
-            self.sos.set_opcache(evalSubTree.opcache, self.to_vector())
+            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
+            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)

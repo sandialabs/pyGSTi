@@ -1472,31 +1472,36 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     maxSubIters = 5
     final_iter = False
 
-    #Prepare for first iteration
+    #Prepare for first iteration - this updates `mdl` (to correspond to an interpolation
+    # between the two given parameter vectors).  It *doesn't* update what the "locked in"
+    # set of paths are within evTree - it just ends with a `mdl` at a point for which
+    # calling `bulk_prep_probs` (which *does* lock in a set of paths) will result in 0
+    # failures.
     alpha = _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
                                                  mdl.to_vector().copy(), evTree, comm, memLimit, printer - 1)
-    nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)
+    nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
     db_lastPrep = mdl.to_vector().copy()
     assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
 
     minErrVec = None
     for sub_iter in range(maxSubIters):
+
         inflate_factor = 1.0 if final_iter else None #100.0
         final_prefix = "*Final* " if final_iter else ""
         printer.log("%sTerm-state %d:  inflate_factor = %s" % (final_prefix, sub_iter+1, str(inflate_factor)))
-
+        
         # Sanity check
         assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)[0] == 0), \
-            "Starting term-stage with > 0 failures! (this shouldn't ever happen)"
+            "Starting term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths since adaptive=False
 
         last_mdlvec = mdl.to_vector().copy()
         last_minErrVec = minErrVec
         minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
-                               printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor)
+                               printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) # uses "locked in" paths if needed (if inflate_factor is not None)
         new_mdlvec = mdl.to_vector().copy()
-                
+
         #Check how many failures the final model has (using the *same* path integrals)
-        nFailures, _ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)
+        nFailures, _ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False) # uses "locked in" paths since adaptive=False
         printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
         
         if nFailures == 0:
@@ -1506,24 +1511,26 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             #Adjust resulting model so that it has no post-reprep failures, then
             #re-prep probabilities, adding more paths to accurately capture errors if needed
             alpha = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec,
-                                                         evTree, comm, memLimit, printer - 1)
+                                                         evTree, comm, memLimit, printer - 1) # updates `mdl` (see above comment)
     
             if alpha <= 0.1:
                 printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
                 final_iter = True
 
-            if alpha > 0.0:  # alpha == 0 means no update in model from last time bulk_prep_probs was called
+            if alpha > 0.0:  # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in" new paths.
                 nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)
                 db_lastPrep = mdl.to_vector().copy()
                 assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
             else:
                 #HACK - need to set evTree's opcache so from_vector is called on all opcache
-                fwdsim = mdl._fwdsim()
-                fwdsim.sos.set_opcache(evTree.opcache, fwdsim.to_vector())                
+                #fwdsim = mdl._fwdsim()
+                #fwdsim.sos.set_opcache(evTree.opcache, fwdsim.to_vector())
+                print("HERE alpha == 0!")
+                pass
 
             # Sanity check
             assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)[0] == 0), \
-                "Ending term-stage with > 0 failures! (this shouldn't ever happen)"
+                "Ending term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths since adaptive=False
 
     return minErrVec
 

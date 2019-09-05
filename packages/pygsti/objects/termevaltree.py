@@ -52,7 +52,7 @@ class TermEvalTree(EvalTree):
 
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, opcache, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, simplified_circuit_list, opcache, numSubTreeComms=1, maxCacheSize=None):  # TODO: REMOVE opcache args?
         """
         Initialize an evaluation tree using a set of complied operation sequences.
         This function must be called before using this EvalTree.
@@ -115,15 +115,21 @@ class TermEvalTree(EvalTree):
         #Storage for polynomial expressions for probabilities and
         # their derivatives
 
+        # TODO REMOVE unused caches
         #self.raw_polys = {}
         #self.all_p_polys = {}
         #self.p_polys = {}
         #self.dp_polys = {}
         #self.hp_polys = {}
-        self.percircuit_p_polys = {}
+        #self.opcache = opcache
+
+        # cache of the high-magnitude terms (actually their represenations), which
+        # together with the per-circuit threshold given in `percircuit_p_polys`,
+        # defines a set of paths to use in probability computations.
+        self.highmag_termrep_cache = {}  
+        self.percircuit_p_polys = {}  # keys = circuits, values = (threshold, compact_polys)
+        
         self.merged_compact_polys = None
-        self.repcache = {}
-        self.opcache = opcache
 
         self.myFinalToParentFinalMap = None  # this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None  # i.e. has not been created by a 'split'
@@ -369,9 +375,9 @@ class TermEvalTree(EvalTree):
             # REMOVE subTree.p_polys = {}
             # REMOVE subTree.dp_polys = {}
             # REMOVE subTree.hp_polys = {}
+            subTree.highmag_termrep_cache = {}  
             subTree.percircuit_p_polys = {}
             subTree.merged_compact_polys = None
-            subTree.repcache = {}
 
             for ik in fullEvalOrder:  # includes any initial indices
                 k = parentIndices[ik]  # original tree index
@@ -429,7 +435,7 @@ class TermEvalTree(EvalTree):
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
-    def num_circuit_sopm_failures(self, calc, pathmagnitude_gap, restrict_to, return_gaps=False):
+    def num_circuit_sopm_failures(self, calc, pathmagnitude_gap, restrict_to, return_gaps=False):  # TODO REMOVE restrict_to args?
         """ TODO: docstring """
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         failed_circuits = []
@@ -449,8 +455,8 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
 
-            gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.repcache,
-                                                  self.opcache, current_threshold)
+            gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
+                                                  calc.sos.opcache, current_threshold)
             num_failed += _np.count_nonzero(gaps > pathmagnitude_gap)
             per_circuit_gaps.append( max(gaps) )
             #REMOVE
@@ -486,14 +492,22 @@ class TermEvalTree(EvalTree):
         # Reset caches -- calling this function now *always* regenerates polys
         recalc_threshold = True
         if not just_get_nfailures:
+            # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
+            # means we're going to re-compute the high-magnitude terms for each operation (in
+            # self.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
+            # for each circuit (using the computed high-magnitude terms).  This all occurs for
+            # the particular current value of the parameter vector (found via calc.to_vector());
+            # these values determine what is a "high-magnitude" term and the path magnitudes that are
+            # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
             self.percircuit_p_polys = {}
+            self.highmag_termrep_cache = {}
+            repcache = self.highmag_termrep_cache
+        else:
+            #If we're only testing how many failures there are, don't update the "locked in" persistent
+            # set of paths given by self.percircuit_p_polys and self.highmag_termrep_cache - just use a
+            # temporary repcache.
+            repcache = {}
 
-        #It seems like we want to reset these caches now too (this is the safe option) - could look into this more later.
-        self.repcache = {}
-        #self.opcache = {}
-
-                
-        #opcache = {}
         all_compact_polys = []  # holds one compact polynomial per final *element*
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         # DEBUG!!! REMOVE - and other instances of failed_circuits
@@ -523,8 +537,8 @@ class TermEvalTree(EvalTree):
                     calc.prs_as_pruned_polyreps(rholabel,
                                                 elabels,
                                                 opstr,
-                                                self.repcache,  # self.repcache,
-                                                self.opcache,  # opcache,
+                                                repcache,
+                                                calc.sos.opcache,
                                                 comm,
                                                 memLimit,
                                                 pathmagnitude_gap,
@@ -580,7 +594,7 @@ class TermEvalTree(EvalTree):
             #    for fc in failed_circuits:
             #        print(" -> ", fc)
 
-        print("DB: TermEvalTree OPCACHE len = ", len(self.opcache)) #, ":", self.opcache.keys())
+        #print("DB: TermEvalTree OPCACHE len = ", len(calc.sos.opcache)) #, ":", self.opcache.keys()) REMOVE
         return num_failed, failed_circuits
         
 
