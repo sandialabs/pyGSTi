@@ -1679,9 +1679,14 @@ class OpModel(Model):
 
         memLimit : TODO: docstring
         """
-        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit)
+        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit, adapt_paths=True)
 
-    def bulk_probs_num_term_failures(self, evalTree, comm=None, memLimit=None, adaptive=True, restrict_to=None):
+    #TODO REMOVE UNNECESSARY?
+    #def bulk_probs_get_termgaps(self, evalTree, comm=None, memLimit=None):
+    #    """ TODO: docstring """
+    #    return self._fwdsim().bulk_get_current_gaps(evalTree, comm, memLimit)
+    
+    def bulk_probs_num_termgap_failures(self, evalTree, comm=None, memLimit=None, after_adapting_paths=False):
         """
         Only applicable for models with a term-based (path-integral) forward simulator.
         Counts the number of circuits for which the achieved sum-of-path-magnitudes is less
@@ -1699,23 +1704,15 @@ class OpModel(Model):
            subtrees of `evalTree` (if it is split).
 
         memLimit : TODO: docstring
-        adaptive : TODO docstring -- see comments below
+        after_adapting_paths : TODO docstring -- see comments below -- if True then other paths are considered up to limits in fwdsim params
+            if False then the number of failures using the current set of "locked in" paths of `evalTree` are used.
         restrict_to : 
         """
-        print("BULK PROBS NUM TERM FAILURES: ", len(restrict_to) if (restrict_to is not None) else 'all')
+        print("BULK PROBS NUM TERMGAP FAILURES")
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
-        
-        if adaptive:
-            # Consider adaptively adding more paths to the polynomials currently cached in `evalTree`.
-            # This means that the return value is the number of failures that would exist *after*
-            # calling bulk_prep_probs(...).  If `adaptive` is False, then only the currently cached
-            # path integral are used, and the return values indicates how many failures exist *now*
-            # for this model.
-            return fwdsim.bulk_prep_probs(evalTree, comm, memLimit, just_get_nfailures=True, restrict_to=restrict_to)
-        else:
-            return evalTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap, restrict_to)
+        return fwdsim.bulk_get_num_failures(evalTree, comm, memLimit, after_adapting_paths)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):

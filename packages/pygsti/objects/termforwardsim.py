@@ -790,7 +790,56 @@ class TermForwardSimulator(ForwardSimulator):
             hprobs = _bulk_eval_compact_polys(hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
         _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None, just_get_nfailures=False, restrict_to=None):
+    def bulk_get_num_failures(self, evalTree, comm=None, memLimit=None, after_adapting_paths=False):
+        """TODO: docstring  
+           returns nFailures, failed_circuits """
+        if self.mode != "pruned":
+            return 0, [] # no "failures" for non-pruned-path mode
+        
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+    
+        #eval on each local subtree
+        nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
+        all_failed_circuits = []
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+
+            if after_adapting_paths:
+                # Consider adaptively adding more paths to the polynomials currently cached in `evalTree`.
+                # This means that the return value is the number of failures that would exist *after*
+                # calling bulk_prep_probs(...).  If `adaptive` is False, then only the currently cached
+                # path integral are used, and the return values indicates how many failures exist *now*
+                # for this model.
+                nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_after_adapting_paths(
+                    self, mySubComm, memLimit, self.pathmagnitude_gap,
+                    self.min_term_mag, self.max_paths_per_outcome)
+            else:
+                nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_using_current_paths(
+                    self, self.pathmagnitude_gap)
+                
+            nTotFailed += nFailed
+            all_failed_circuits.extend(failed_circuits)
+        return nTotFailed, all_failed_circuits
+
+    def bulk_get_current_gaps(self, evalTree, comm=None, memLimit=None):
+        """TODO: docstring - uses current "locked-in" paths, no adaption.  
+           returns per_circuit_gaps """
+        if self.mode != "pruned": return [] # no "gaps" for non-pruned-path mode
+        
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        all_gaps = []
+    
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            _, _, gaps = evalSubTree.num_circuit_sopm_failures_using_current_paths(
+                self, self.pathmagnitude_gap, return_gaps=True)
+            all_gaps.extend(gaps)
+        return all_gaps
+
+        
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None, adapt_paths=False):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -815,25 +864,21 @@ class TermForwardSimulator(ForwardSimulator):
 
         #eval on each local subtree
         nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
-        all_failed_circuits = []
+        #all_failed_circuits = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
             #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if self.mode == "pruned":
-                nFailed, failed_circuits = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
-                                                           self.min_term_mag, self.max_paths_per_outcome,
-                                                           recalc_threshold=not self.opt_mode, just_get_nfailures=just_get_nfailures,
-                                                           restrict_to=restrict_to)
+                nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
+                                                           self.min_term_mag, self.max_paths_per_outcome, adapt_paths)
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 nFailed = 0
-                failed_circuits = []
                 
             nTotFailed += nFailed
-            all_failed_circuits.extend(failed_circuits)
-        return nTotFailed, all_failed_circuits
+        assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
@@ -902,7 +947,8 @@ class TermForwardSimulator(ForwardSimulator):
             
             felInds = evalSubTree.final_element_indices(evalTree)
             if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
-                nFailures += evalSubTree.num_circuit_sopm_failures(self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation, restrict_to=None)[0]
+                nFailures += evalSubTree.num_circuit_sopm_failures_using_current_paths(
+                    self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation)[0]
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
         #collect/gather results

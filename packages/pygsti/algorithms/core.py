@@ -1326,13 +1326,11 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
                                          evTree, comm, memLimit, printer):
 
     ALPHA_TOL = 0.01
-
     
     fwdsim = mdl._fwdsim()
-    nFailures, failed_circuits, per_circuit_gaps = evTree.num_circuit_sopm_failures(fwdsim, fwdsim.pathmagnitude_gap, restrict_to=None, return_gaps=True)
-    if len(per_circuit_gaps) == 0:  # then current model is still good!
-        alpha = 1.0  # unable to compute gaps... try starting with alpha = 1.0
-        mdl.from_vector(desired_param_vec)  # alpha == 1.0
+    per_circuit_gaps = fwdsim.bulk_get_current_gaps(evTree, comm, memLimit)
+    if len(per_circuit_gaps) == 0:  # then unable to compute gaps... 
+        alpha = 1.0  # try starting with alpha = 1.0
     else:
         max_gap_ratio = max(per_circuit_gaps) / fwdsim.pathmagnitude_gap
         # The worst (largest) gap that was obtained, in units of the desired gap
@@ -1341,13 +1339,12 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
 
         if max_gap_ratio < 2.0:  # HARCODED...        
             alpha = 1.0
-            mdl.from_vector(desired_param_vec)  # alpha == 1.0
         else:
             alpha = 1.0 / max_gap_ratio if (max_gap_ratio < 100.0) else 0.01
-            mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+    mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
     
     #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
-    nFailures, _ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+    nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=True)
     printer.log("INITIAL alpha = %.3g, num failures = %d" % (alpha, nFailures))
     if nFailures > 0 or alpha < 1.0:
 
@@ -1361,7 +1358,7 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
             alpha = (high+low)/2
             printer.log("trying alpha = %g" % (alpha), end='')
             mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
-            nFailures,_ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=True)
+            nFailures,_ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=True)
             printer.log(" -> %d failures" % (nFailures))
             if nFailures > 0: # alpha too high
                 high = alpha
@@ -1479,9 +1476,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     # failures.
     alpha = _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
                                                  mdl.to_vector().copy(), evTree, comm, memLimit, printer - 1)
-    nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
-    db_lastPrep = mdl.to_vector().copy()
-    assert(nFailures == 0), "Could not begin %s loop because failures exist at initial point!" % mdl.simtype
+    mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
 
     minErrVec = None
     for sub_iter in range(maxSubIters):
@@ -1491,17 +1486,19 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         printer.log("%sTerm-state %d:  inflate_factor = %s" % (final_prefix, sub_iter+1, str(inflate_factor)))
         
         # Sanity check
-        assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)[0] == 0), \
-            "Starting term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths since adaptive=False
+        assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=False)[0] == 0), \
+            "Starting term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths
 
         last_mdlvec = mdl.to_vector().copy()
         last_minErrVec = minErrVec
+        #Note: _do_runopt uses "locked in" paths (for sopm too if needed - if inflate_factor is not None,
+        # because TermForwardSimulator.bulk_fill_probs calls TermEvalTree.num_circuit_sopm_failures_using_current_paths)
         minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
-                               printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) # uses "locked in" paths if needed (if inflate_factor is not None)
+                               printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
 
         #Check how many failures the final model has (using the *same* path integrals)
-        nFailures, _ = mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False) # uses "locked in" paths since adaptive=False
+        nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=False) # uses "locked in" paths
         printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
         
         if nFailures == 0:
@@ -1517,19 +1514,15 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
                 printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
                 final_iter = True
 
-            if alpha > 0.0:  # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in" new paths.
-                nFailures, _ = mdl.bulk_prep_probs(evTree, comm, memLimit)
-                db_lastPrep = mdl.to_vector().copy()
-                assert(nFailures == 0), "Failures exist even after ALPHA-backtracking!"
+            if alpha > 0.0:  
+                mdl.bulk_prep_probs(evTree, comm, memLimit)
             else:
-                #HACK - need to set evTree's opcache so from_vector is called on all opcache
-                #fwdsim = mdl._fwdsim()
-                #fwdsim.sos.set_opcache(evTree.opcache, fwdsim.to_vector())
-                print("HERE alpha == 0!")
+                # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in"
+                # new paths by calling bulk_prep_probs.
                 pass
 
             # Sanity check
-            assert(mdl.bulk_probs_num_term_failures(evTree, comm, memLimit, adaptive=False)[0] == 0), \
+            assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=False)[0] == 0), \
                 "Ending term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths since adaptive=False
 
     return minErrVec
