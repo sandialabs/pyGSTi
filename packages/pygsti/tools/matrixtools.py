@@ -402,8 +402,8 @@ def unitary_superoperator_matrix_log(M, mxBasis):
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
     U = _gt.process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
-    logM_std = _lt.hamiltonian_to_lindbladian(H)  # rho --> -i[H, rho]
-    logM = change_basis(logM_std, "std", mxBasis)
+    logM_std = _lt.hamiltonian_to_lindbladian(H)  # rho --> -i[H, rho] * sqrt(d)/2
+    logM = change_basis(logM_std * (2.0 / _np.sqrt(H.shape[0])), "std", mxBasis)
     assert(_np.linalg.norm(_spl.expm(logM) - M) < 1e-8)  # expensive b/c of expm - could comment for performance
     return logM
 
