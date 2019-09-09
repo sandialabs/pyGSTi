@@ -1686,7 +1686,7 @@ class OpModel(Model):
     #    """ TODO: docstring """
     #    return self._fwdsim().bulk_get_current_gaps(evalTree, comm, memLimit)
     
-    def bulk_probs_num_termgap_failures(self, evalTree, comm=None, memLimit=None, after_adapting_paths=False):
+    def bulk_probs_num_termgap_failures(self, evalTree, comm=None, memLimit=None):
         """
         Only applicable for models with a term-based (path-integral) forward simulator.
         Counts the number of circuits for which the achieved sum-of-path-magnitudes is less
@@ -1705,14 +1705,15 @@ class OpModel(Model):
 
         memLimit : TODO: docstring
         after_adapting_paths : TODO docstring -- see comments below -- if True then other paths are considered up to limits in fwdsim params
-            if False then the number of failures using the current set of "locked in" paths of `evalTree` are used.
+            if False then the number of failures using the current set of "locked in" paths of `evalTree` are used.  -- NOW no option for this
+            -- just get the number of failures using the current "locked-in" paths.
         restrict_to : 
         """
         print("BULK PROBS NUM TERMGAP FAILURES")
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
-        return fwdsim.bulk_get_num_failures(evalTree, comm, memLimit, after_adapting_paths)
+        return fwdsim.bulk_get_num_failures(evalTree, comm, memLimit)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):

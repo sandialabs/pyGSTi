@@ -254,89 +254,134 @@ class TermForwardSimulator(ForwardSimulator):
         self.from_vector(orig_vec, close=True)
         return dprobs
 
+    #TODO REMOVE - UNNEEDED NOW
+    # def OLD_prs_as_pruned_polyreps(self,
+    #                            rholabel,
+    #                            elabels,
+    #                            circuit,
+    #                            repcache,
+    #                            opcache,
+    #                            circuitsetup_cache,
+    #                            comm=None,
+    #                            memLimit=None,
+    #                            pathmagnitude_gap=0.0,
+    #                            min_term_mag=0.01,
+    #                            max_paths=500,
+    #                            current_threshold=None,
+    #                            compute_polyreps=True):
+    #     """
+    #     Computes polynomial-representations of the probabilities for multiple
+    #     spam-tuples of `circuit`, sharing the same state preparation (so with
+    #     different POVM effects).  Employs a truncated or pruned path-integral
+    #     approach, as opposed to just including everything up to some Taylor
+    #     order as in :method:`prs_as_polys`.
+    # 
+    #     Parameters
+    #     ----------
+    #     rho_label : Label
+    #         The state preparation label.
+    # 
+    #     elabels : list
+    #         A list of :class:`Label` objects giving the *simplified* effect labels.
+    # 
+    #     circuit : Circuit or tuple
+    #         A tuple-like object of *simplified* gates (e.g. may include
+    #         instrument elements like 'Imyinst_0')
+    # 
+    #     repcache, opcache : dict, optional
+    #         Dictionaries used to cache operator representations and
+    #         operators themselves (respectively) to speed up future calls
+    #         to this function that would use the same set of operations.
+    # 
+    #     comm : mpi4py.MPI.Comm, optional
+    #         When not None, an MPI communicator for distributing the computation
+    #         across multiple processors.
+    # 
+    #     memLimit : int, optional
+    #         A memory limit in bytes to impose on the computation.
+    # 
+    #     pathmagnitude_gap : float, optional
+    #         The amount less than the perfect sum-of-path-magnitudes that
+    #         is desired.  This sets the target sum-of-path-magnitudes for each
+    #         circuit -- the threshold that determines how many paths are added.
+    # 
+    #     min_term_mag : float, optional
+    #         A technical parameter to the path pruning algorithm; this value
+    #         sets a threshold for how small a term magnitude (one factor in
+    #         a path magnitude) must be before it is removed from consideration
+    #         entirely (to limit the number of even *potential* paths).  Terms
+    #         with a magnitude lower than this values are neglected.
+    # 
+    #     current_threshold : float, optional
+    #         A more sophisticated aspect of the term-based calculation is that
+    #         path polynomials should not be re-computed when we've already
+    #         computed them up to a more stringent threshold than we currently
+    #         need them.  This can happen, for instance, if in iteration 5 we
+    #         compute all paths with magnitudes < 0.1 and now, in iteration 6,
+    #         we need all paths w/mags < 0.08.  Since we've already computed more
+    #         paths than what we need previously, we shouldn't recompute them now.
+    #         This argument tells this function that, before any paths are computed,
+    #         if it is determined that the threshold is less than this value, the
+    #         function should exit immediately and return an empty list of
+    #         polynomial reps.
+    # 
+    #     Returns
+    #     -------
+    #     polyreps : list
+    #         A list of PolynomialRep objects.
+    #     npaths : int
+    #         The number of paths computed.
+    #     threshold : float
+    #         The path-magnitude threshold used.
+    #     target_sopm : float
+    #         The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+    #         less than the perfect "all-paths" sum.
+    #     achieved_sopm : float
+    #         The achieved sum-of-path-magnitudes.  Ideally this would equal
+    #         `target_sopm`.
+    #     """
+    #     #Cache hold *compact* polys now: see prs_as_compact_polys
+    #     #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+    #     #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+    #     #    return [ self.cache[ck] for ck in cache_keys ]
+    # 
+    #     fastmode = True
+    #     if repcache is None: repcache = {}
+    #     if current_threshold is None: current_threshold = -1.0  # use negatives to signify "None" in C
+    #     circuitsetup_cache = {}
+    # 
+    #     if self.evotype == "svterm":
+    #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+    #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+    #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+    #                                           current_threshold, compute_polyreps)
+    #         # sopm = "sum of path magnitudes"
+    #     else:  # "cterm" (stabilizer-based term evolution)
+    #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+    #             replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
+    #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+    #                                           current_threshold, compute_polyreps)
+    # 
+    #     if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
+    #         prps = None
+    #     else:
+    #         prps = poly_reps
+    # 
+    #     return prps, npaths, threshold, target_sopm, achieved_sopm
+
+
     def prs_as_pruned_polyreps(self,
+                               threshold,
                                rholabel,
                                elabels,
                                circuit,
                                repcache,
                                opcache,
+                               circuitsetup_cache,
                                comm=None,
-                               memLimit=None,
-                               pathmagnitude_gap=0.0,
-                               min_term_mag=0.01,
-                               max_paths=500,
-                               current_threshold=None,
-                               compute_polyreps=True):
+                               memLimit=None):
         """
-        Computes polynomial-representations of the probabilities for multiple
-        spam-tuples of `circuit`, sharing the same state preparation (so with
-        different POVM effects).  Employs a truncated or pruned path-integral
-        approach, as opposed to just including everything up to some Taylor
-        order as in :method:`prs_as_polys`.
-
-        Parameters
-        ----------
-        rho_label : Label
-            The state preparation label.
-
-        elabels : list
-            A list of :class:`Label` objects giving the *simplified* effect labels.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        repcache, opcache : dict, optional
-            Dictionaries used to cache operator representations and
-            operators themselves (respectively) to speed up future calls
-            to this function that would use the same set of operations.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        memLimit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        pathmagnitude_gap : float, optional
-            The amount less than the perfect sum-of-path-magnitudes that
-            is desired.  This sets the target sum-of-path-magnitudes for each
-            circuit -- the threshold that determines how many paths are added.
-
-        min_term_mag : float, optional
-            A technical parameter to the path pruning algorithm; this value
-            sets a threshold for how small a term magnitude (one factor in
-            a path magnitude) must be before it is removed from consideration
-            entirely (to limit the number of even *potential* paths).  Terms
-            with a magnitude lower than this values are neglected.
-
-        current_threshold : float, optional
-            A more sophisticated aspect of the term-based calculation is that
-            path polynomials should not be re-computed when we've already
-            computed them up to a more stringent threshold than we currently
-            need them.  This can happen, for instance, if in iteration 5 we
-            compute all paths with magnitudes < 0.1 and now, in iteration 6,
-            we need all paths w/mags < 0.08.  Since we've already computed more
-            paths than what we need previously, we shouldn't recompute them now.
-            This argument tells this function that, before any paths are computed,
-            if it is determined that the threshold is less than this value, the
-            function should exit immediately and return an empty list of
-            polynomial reps.
-
-        Returns
-        -------
-        polyreps : list
-            A list of PolynomialRep objects.
-        npaths : int
-            The number of paths computed.
-        threshold : float
-            The path-magnitude threshold used.
-        target_sopm : float
-            The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
-            less than the perfect "all-paths" sum.
-        achieved_sopm : float
-            The achieved sum-of-path-magnitudes.  Ideally this would equal
-            `target_sopm`.
+        TODO: docstring - see OLD version
         """
         #Cache hold *compact* polys now: see prs_as_compact_polys
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
@@ -345,34 +390,64 @@ class TermForwardSimulator(ForwardSimulator):
 
         fastmode = True
         if repcache is None: repcache = {}
-        if current_threshold is None: current_threshold = -1.0  # use negatives to signify "None" in C
+        circuitsetup_cache = {}
 
         if self.evotype == "svterm":
-            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag, max_paths,
-                                              current_threshold, compute_polyreps)
+            poly_reps = replib.SV_compute_pruned_path_polys(threshold, self, rholabel, elabels, circuit, repcache,
+                                                            opcache, circuitsetup_cache, comm, memLimit, fastmode)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag, max_paths,
-                                              current_threshold, compute_polyreps)
+            raise NotImplementedError("Just need to mimic SV version")
 
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
         else:
             prps = poly_reps
 
-        return prps, npaths, threshold, target_sopm, achieved_sopm
+        return prps
 
+
+    def compute_pruned_pathmag_threshold(self,
+                                         rholabel,
+                                         elabels,
+                                         circuit,
+                                         repcache,
+                                         opcache,
+                                         circuitsetup_cache,
+                                         comm=None,
+                                         memLimit=None,
+                                         threshold_guess=None):
+        """
+        TODO: docstring - see OLD version
+        """
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
+
+        if repcache is None: repcache = {}
+        if threshold_guess is None: threshold_guess = -1.0  # use negatives to signify "None" in C
+        circuitsetup_cache = {}
+
+        if self.evotype == "svterm":
+            npaths, threshold, target_sopm, achieved_sopm = \
+                replib.SV_find_best_pathmagnitude_threshold(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                                                            comm, memLimit, self.pathmagnitude_gap, self.min_term_mag,
+                                                            self.max_paths_per_outcome, threshold_guess)
+            # sopm = "sum of path magnitudes"
+        else:  # "cterm" (stabilizer-based term evolution)
+            raise NotImplementedError("Just need to mimic SV version")
+            
+        return npaths, threshold, target_sopm, achieved_sopm
+
+    
     def circuit_pathmagnitude_gap(self, rholabel, elabels, circuit, repcache,
                                   opcache, threshold):
         if self.evotype == "svterm":
             return replib.SV_circuit_pathmagnitude_gap(
                 self, rholabel, elabels, circuit, repcache, opcache, threshold, self.min_term_mag)
         else:
-            raise NotImplementedError("TODO")
+            raise NotImplementedError("TODO mimic SV case")
 
     # LATER? , resetWts=True, repcache=None):
     def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
@@ -790,7 +865,7 @@ class TermForwardSimulator(ForwardSimulator):
             hprobs = _bulk_eval_compact_polys(hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
         _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
-    def bulk_get_num_failures(self, evalTree, comm=None, memLimit=None, after_adapting_paths=False):
+    def bulk_get_num_failures(self, evalTree, comm=None, memLimit=None):
         """TODO: docstring  
            returns nFailures, failed_circuits """
         if self.mode != "pruned":
@@ -805,18 +880,18 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
 
-            if after_adapting_paths:
-                # Consider adaptively adding more paths to the polynomials currently cached in `evalTree`.
-                # This means that the return value is the number of failures that would exist *after*
-                # calling bulk_prep_probs(...).  If `adaptive` is False, then only the currently cached
-                # path integral are used, and the return values indicates how many failures exist *now*
-                # for this model.
-                nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_after_adapting_paths(
-                    self, mySubComm, memLimit, self.pathmagnitude_gap,
-                    self.min_term_mag, self.max_paths_per_outcome)
-            else:
-                nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_using_current_paths(
-                    self, self.pathmagnitude_gap)
+            # if after_adapting_paths:
+            #     # Consider adaptively adding more paths to the polynomials currently cached in `evalTree`.
+            #     # This means that the return value is the number of failures that would exist *after*
+            #     # calling bulk_prep_probs(...).  If `adaptive` is False, then only the currently cached
+            #     # path integral are used, and the return values indicates how many failures exist *now*
+            #     # for this model.
+            #     nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_after_adapting_paths(
+            #         self, mySubComm, memLimit, self.pathmagnitude_gap,
+            #         self.min_term_mag, self.max_paths_per_outcome)
+            # else:
+            nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_using_current_paths(
+                self, self.pathmagnitude_gap)
                 
             nTotFailed += nFailed
             all_failed_circuits.extend(failed_circuits)
@@ -838,8 +913,56 @@ class TermForwardSimulator(ForwardSimulator):
             all_gaps.extend(gaps)
         return all_gaps
 
+    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+        """
+        TODO: docstring
+        """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
+        thresholds_per_subtree = []
+        repcache_per_subtree = []
+        cscache_per_subtree = []
         
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None, adapt_paths=False):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+
+            if self.mode == "pruned":
+                thresholds, highmag_termrep_cache, circuitsetup_cache, nFailed = \
+                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit) # pruning_thresholds_and_highmag_terms
+            else:
+                thresholds = highmag_termrep_cache = circuitsetup_cache = None
+                nFailed = 0
+                
+            nTotFailed += nFailed
+            thresholds_per_subtree.append(thresholds)
+            repcache_per_subtree.append(highmag_termrep_cache)
+            cscache_per_subtree.append(circuitsetup_cache)
+
+        pathSet = (thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree)
+        return pathSet, nTotFailed
+
+    def select_paths_set(self, evalTree, pathSet, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+        """
+        TODO: docstring
+        """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
+
+        for iSubTree, thresholds, highmag_termrep_cache, circuitsetup_cache in \
+            zip(mySubTreeIndices, thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree):
+            evalSubTree = subtrees[iSubTree]
+
+            if self.mode == "pruned":
+                evalSubTree.select_paths_set(self, thresholds, highmag_termrep_cache, circuitsetup_cache, mySubComm, memLimit)
+                #This computes (&caches) polys for this path set as well
+            else:
+                evalSubTree.cache_p_polys(self, mySubComm)
+                
+
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -871,8 +994,11 @@ class TermForwardSimulator(ForwardSimulator):
             #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if self.mode == "pruned":
-                nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
-                                                           self.min_term_mag, self.max_paths_per_outcome, adapt_paths)
+                #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
+                #                                           self.min_term_mag, self.max_paths_per_outcome)
+                thresholds, highmag_termrep_cache, circuitsetup_cache, nFailed = \
+                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit) # pruning_thresholds_and_highmag_terms
+                evalSubTree.select_path_set(self, thresholds, highmag_termrep_cache, circuitsetup_cache) # this sets these as internal cached qtys
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 nFailed = 0

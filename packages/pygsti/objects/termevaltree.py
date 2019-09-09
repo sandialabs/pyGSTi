@@ -126,7 +126,8 @@ class TermEvalTree(EvalTree):
         # cache of the high-magnitude terms (actually their represenations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,
         # defines a set of paths to use in probability computations.
-        self.highmag_termrep_cache = {}  
+        self.highmag_termrep_cache = {}
+        self.circuitsetup_cache = {}
         self.percircuit_p_polys = {}  # keys = circuits, values = (threshold, compact_polys)
         
         self.merged_compact_polys = None
@@ -376,6 +377,7 @@ class TermEvalTree(EvalTree):
             # REMOVE subTree.dp_polys = {}
             # REMOVE subTree.hp_polys = {}
             subTree.highmag_termrep_cache = {}
+            subTree.circuitsetup_cache = {}
             subTree.percircuit_p_polys = {}
             subTree.merged_compact_polys = None
 
@@ -466,17 +468,22 @@ class TermEvalTree(EvalTree):
             return num_failed, failed_circuits
 
 
-    def num_circuit_sopm_failures_after_adapting_paths(self, calc, comm, memLimit, pathmagnitude_gap,
-                                                       min_term_mag, max_paths, exit_after_first_failure=True):
+    #def num_circuit_sopm_failures_after_adapting_paths(self, calc, comm, memLimit, pathmagnitude_gap,
+    #                                                   min_term_mag, max_paths, exit_after_first_failure=True):
+    
+    def find_minimal_paths_set(self, calc, comm, memLimit, exit_after_first_failure=True):
+        """TODO: docstring: returns caches but only when there are no failures if exit_after_first_failure==True """
 
-        #tot_npaths = 0
-        #tot_target_sopm = 0
-        #tot_achieved_sopm = 0
+        tot_npaths = 0
+        tot_target_sopm = 0
+        tot_achieved_sopm = 0
         
         #We're only testing how many failures there are, don't update the "locked in" persistent
         # set of paths given by self.percircuit_p_polys and self.highmag_termrep_cache - just use a
         # temporary repcache.
         repcache = {}
+        circuitsetup_cache = {}
+        thresholds = {}
 
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         failed_circuits = []
@@ -486,110 +493,29 @@ class TermEvalTree(EvalTree):
             rholabel = circuit[0]
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
+
+            npaths, threshold, target_sopm, achieved_sopm = \
+                calc.compute_pruned_pathmag_threshold(rholabel,
+                                                      elabels,
+                                                      opstr,
+                                                      repcache,
+                                                      calc.sos.opcache,
+                                                      circuitsetup_cache,
+                                                      comm,
+                                                      memLimit,
+                                                      None) # guess?
+            thresholds[circuit] = threshold
             
-            raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
-                calc.prs_as_pruned_polyreps(rholabel,
-                                            elabels,
-                                            opstr,
-                                            repcache,
-                                            calc.sos.opcache,
-                                            comm,
-                                            memLimit,
-                                            pathmagnitude_gap,
-                                            min_term_mag,
-                                            max_paths,
-                                            None,
-                                            compute_polyreps = False)
             if achieved_sopm < target_sopm:
                 num_failed += 1
                 failed_circuits.append( (i,circuit) )  #(circuit,npaths, threshold, target_sopm, achieved_sopm))
                 if exit_after_first_failure:
-                    return 1, failed_circuits
-                
-            #tot_npaths += npaths
-            #tot_target_sopm += target_sopm
-            #tot_achieved_sopm += achieved_sopm
-
-        return num_failed, failed_circuits
-
-        
-    def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
-                             min_term_mag, max_paths, adapt_paths):
-
-        tot_npaths = 0
-        tot_target_sopm = 0; tot_achieved_sopm = 0  # "sum of path magnitudes"
-
-        #DEBUG TODO REMOVE
-        #print("DEBUG TOTAL OP MAGNITUDES: ")
-        #print("Paramvec norm:", _np.linalg.norm(calc.paramvec))
-        #for glbl in ('Gx','Gy','Gi'):
-        #    op = calc.sos.get_operation(glbl)
-        #    tot = op.get_total_term_magnitude()
-        #    print(glbl, "op=", str(type(op)), " mag=", tot)
-
-        # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
-        # means we're going to re-compute the high-magnitude terms for each operation (in
-        # self.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
-        # for each circuit (using the computed high-magnitude terms).  This all occurs for
-        # the particular current value of the parameter vector (found via calc.to_vector());
-        # these values determine what is a "high-magnitude" term and the path magnitudes that are
-        # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
-        self.percircuit_p_polys = {}
-        self.highmag_termrep_cache = {}
-        repcache = self.highmag_termrep_cache
-
-        all_compact_polys = []  # holds one compact polynomial per final *element*
-        num_failed = 0  # number of circuits which fail to achieve the target sopm
-
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
-            circuit = self[i]
-            #print("Computing pruned poly %d" % i)
-
-            if circuit in self.percircuit_p_polys:
-                current_threshold, compact_polys = self.percircuit_p_polys[circuit]
-            else:
-                current_threshold, compact_polys = None, None
-
-            rholabel = circuit[0]
-            opstr = circuit[1:]
-            elabels = self.simplified_circuit_elabels[i]
-
-            assert(adapt_paths == True) # FUTURE - could compute polys based on already "locked-in" paths?
-            raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
-                calc.prs_as_pruned_polyreps(rholabel,
-                                            elabels,
-                                            opstr,
-                                            repcache,
-                                            calc.sos.opcache,
-                                            comm,
-                                            memLimit,
-                                            pathmagnitude_gap,
-                                            min_term_mag,
-                                            max_paths,
-                                            current_threshold,
-                                            compute_polyreps = True)
-            if achieved_sopm < target_sopm:
-                num_failed += 1
-
-            #Note: raw_polyreps is only non-None when just_get_nfailures == False
-            if raw_polyreps is not None:  # otherwise use existing compact_polys
-                compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
-                self.percircuit_p_polys[circuit] = (threshold, compact_polys)
-            else:
-                if circuit in self.percircuit_p_polys:
-                    del self.percircuit_p_polys[circuit]
-
-            all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
+                    return None, None, None, 1 #, failed_circuits
                 
             tot_npaths += npaths
             tot_target_sopm += target_sopm
             tot_achieved_sopm += achieved_sopm
 
-        tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
-        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
-        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
-        self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
-    
         #if comm is None or comm.Get_rank() == 0:
         rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
         nC = self.num_final_strings()
@@ -598,8 +524,67 @@ class TermEvalTree(EvalTree):
         print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
               (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
-        #print("DB: TermEvalTree OPCACHE len = ", len(calc.sos.opcache)) #, ":", self.opcache.keys()) REMOVE
-        return num_failed
+        return thresholds, repcache, circuitsetup_cache, num_failed #, failed_circuits
+
+    #def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
+    #                         min_term_mag, max_paths, adapt_paths):
+
+    def select_paths_set(self, calc, thresholds, highmag_termrep_cache, circuitsetup_cache, comm, memLimit):
+        """ TODO: docstring  - selects *and* computes polys for the given "path set" defined by the arguments."""
+
+        #TODO: update this outdated docstring
+        # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
+        # means we're going to re-compute the high-magnitude terms for each operation (in
+        # self.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
+        # for each circuit (using the computed high-magnitude terms).  This all occurs for
+        # the particular current value of the parameter vector (found via calc.to_vector());
+        # these values determine what is a "high-magnitude" term and the path magnitudes that are
+        # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
+
+        self.percircuit_p_polys = {}
+        self.highmag_termrep_cache = highmag_termrep_cache
+        self.circuitsetup_cache = circuitsetup_cache
+        repcache = self.highmag_termrep_cache
+        circuitsetup_cache = self.circuitsetup_cache
+
+        all_compact_polys = []  # holds one compact polynomial per final *element*
+        num_failed = 0  # number of circuits which fail to achieve the target sopm
+
+        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+            circuit = self[i]
+            #print("Computing pruned poly %d" % i)
+
+            #TODO REMOVE
+            # if circuit in self.percircuit_p_polys:
+            #     current_threshold, compact_polys = self.percircuit_p_polys[circuit]
+            # else:
+            #     current_threshold, compact_polys = None, None
+
+
+            threshold = thresholds[circuit]
+            rholabel = circuit[0]
+            opstr = circuit[1:]
+            elabels = self.simplified_circuit_elabels[i]
+
+            raw_polyreps = calc.prs_as_pruned_polyreps(threshold,
+                                                       rholabel,
+                                                       elabels,
+                                                       opstr,
+                                                       repcache,
+                                                       calc.sos.opcache,
+                                                       circuitsetup_cache,
+                                                       comm,
+                                                       memLimit)
+
+            compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
+            self.percircuit_p_polys[circuit] = (threshold, compact_polys)
+            all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
+                
+        tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
+        self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
+        return
         
 
     def cache_p_polys(self, calc, comm):
