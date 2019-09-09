@@ -2639,64 +2639,6 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 
 
 # State-vector pruned-poly-term calcs -------------------------
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
-
-    #check_opcache = opcache #REMOVE
-    #opcache = {} # DEBUG - test if this is responsible for warnings
-    
-    #t0 = pytime.time()
-    #if debug is not None:
-    #    debug['tstartup'] += pytime.time()-t0
-    #    t0 = pytime.time()
-
-    cdef INT i
-    cdef INT numEs = len(elabels)
-    cdef INT mpv = calc.Np # max_poly_vars
-    cdef INT vpi = calc.poly_vindices_per_int
-    cdef CircuitSetupCacheEl cscel;
-    #t0 = pytime.time()
-    
-    bHit = (circuit in circuitsetup_cache)
-    if circuit in circuitsetup_cache:
-        cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
-    else:
-        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
-        circuitsetup_cache[circuit] = cscel
-        
-    #t1 = pytime.time()
-    
-    #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel)).get_total_term_magnitude()
-    cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
-    for glbl in circuit:
-        op = opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl)
-        max_partial_sopm *= op.get_total_term_magnitude()
-    for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.get_effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
-        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
-
-    #Note: term calculator "dim" is the full density matrix dim
-    cdef INT stateDim = int(round(np.sqrt(calc.dim)))
-
-    #t2 = pytime.time()
-
-    #Call C-only function (which operates with C-representations only)
-    cdef vector[float] returnvec = vector[float](4)
-    cdef vector[PolyCRep*] polys = sv_prs_pruned(
-        cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
-        cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.E_indices,
-        numEs, calc.max_order, stateDim, <bool>fastmode, pathmagnitude_gap, min_term_mag,
-        max_paths, current_threshold, <bool>compute_polyreps, target_sum_of_pathmags, mpv, vpi, returnvec)
-
-    #t3 = pytime.time()
-    #print "TIMES: ",t1-t0,t2-t1,t3-t2, bHit
-
-    if returnvec[2]+numEs*pathmagnitude_gap+1e-5 < returnvec[3]: # index 2 = Target, index 3 = Achieved
-        print "Warning: Achieved sum(path mags) exceeds max by ", returnvec[3]-(returnvec[2]+numEs*pathmagnitude_gap),"!!!"
-
-    return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ], int(returnvec[0]), returnvec[1], returnvec[2], returnvec[3]
-
 def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
 
     cdef INT i, j
@@ -2840,129 +2782,6 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
     return cscel
 
 
-cdef vector[PolyCRep*] sv_prs_pruned(
-    vector[INT]& circuit,
-    vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
-    vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] E_indices,
-    INT numEs, INT max_order, INT dim, bool fastmode, double pathmagnitude_gap, double min_term_mag, INT max_paths, double current_threshold,
-    bool compute_polyreps, vector[double]& target_sum_of_pathmags, INT max_poly_vars, INT vindices_per_int, vector[float]& returnvec):
-
-    #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
-    # lookups and avoid weird string conversion stuff with Cython
-
-    cdef INT N = circuit.size()
-    cdef INT nFactorLists = N+2
-    #cdef INT n = N+2 # number of factor lists
-    #cdef INT* p = <INT*>malloc((N+2) * sizeof(INT))
-    cdef INT i #,j,k #,order,nTerms
-    #cdef INT gn
-
-    cdef INT t0 = time.clock()
-    #cdef INT t, nPaths; #for below
-
-    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists = vector[vector_SVTermCRep_ptr_ptr](nFactorLists)
-    cdef vector[vector_INT_ptr] foat_indices_per_op = vector[vector_INT_ptr](nFactorLists)
-    cdef vector[INT] nops = vector[INT](nFactorLists)
-    cdef vector[INT] b = vector[INT](nFactorLists)
-
-    factor_lists[0] = &rho_term_reps
-    foat_indices_per_op[0] = &rho_foat_indices
-    for i in range(N):
-        factor_lists[i+1] = &op_term_reps[circuit[i]]
-        foat_indices_per_op[i+1] = &op_foat_indices[circuit[i]]
-    factor_lists[N+1] = &E_term_reps
-    foat_indices_per_op[N+1] = &E_foat_indices
-
-    #print "CHECK: ",N+2, " op lists"
-    #running=1.0
-    #for i in range(N+1):
-    #    nTerms = deref(factor_lists[i]).size()
-    #    mags = [ deref(factor_lists[i])[j]._magnitude for j in range(nTerms) ]
-    #    running *= sum(mags)
-    #    print i,": ",nTerms,"terms: "," sum=",sum(mags)," running=",running
-    #nETerms = deref(factor_lists[N+1]).size()
-    #mags0 = [ deref(factor_lists[N+1])[j]._magnitude for j in range(nETerms) if E_indices[j] == 0]
-    #mags1 = [ deref(factor_lists[N+1])[j]._magnitude for j in range(nETerms) if E_indices[j] == 1]
-    #print "Final check E0: * ",sum(mags0)," = ",running*sum(mags0)
-    #print "Final check E1: * ",sum(mags1)," = ",running*sum(mags1)
-
-
-    cdef vector[double] achieved_sum_of_pathmags = vector[double](numEs)
-    cdef vector[INT] npaths = vector[INT](numEs)
-    cdef vector[PolyCRep_ptr] empty_prps = vector[PolyCRep_ptr](0)
-
-    threshold = pathmagnitude_threshold(factor_lists, E_indices, numEs, target_sum_of_pathmags, foat_indices_per_op,
-                                        current_threshold, pathmagnitude_gap / (3.0*max_paths), max_paths,
-                                        achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
-    #DEBUG
-    #print("FOAT: ")
-    #for i in range(nFactorLists):
-    #    print(deref(foat_indices_per_op[i]))
-    #print("Threshold = ", threshold, " Paths=", npaths)
-
-    #Construct all our return values (HACK - return these as a vector of floats)
-    returnvec[0] = 0.0
-    returnvec[1] = threshold
-    returnvec[2] = 0.0
-    returnvec[3] = 0.0
-    for i in range(numEs):
-        returnvec[0] += npaths[i]
-        returnvec[2] += target_sum_of_pathmags[i]
-        returnvec[3] += achieved_sum_of_pathmags[i]
-
-    #print("Threshold = ",threshold, "(current = ",current_threshold,")")
-    if (not compute_polyreps) or (current_threshold >= 0 and threshold >= current_threshold):  # no polyreps needed, e.g. just keep existing (cached) polys
-        return empty_prps #(empty)
-    print("sv_polys computing polyreps!")
-
-    #Traverse paths up to threshold, running "innerloop" as we go (~add_path)
-    cdef vector[PolyCRep_ptr] prps = vector[PolyCRep_ptr](numEs)
-    for i in range(numEs):
-        prps[i] = new PolyCRep(unordered_map[PolyVarsIndex,complex](), max_poly_vars, vindices_per_int)
-        # create empty polys - maybe overload constructor for this?
-        # these PolyCReps are alloc'd here and returned - it is the job of the caller to
-        #  free them (or assign them to new PolyRep wrapper objs)
-
-    cdef double log_thres = log10(threshold)
-    cdef double current_mag = 1.0
-    cdef double current_logmag = 0.0
-    for i in range(nFactorLists):
-        nops[i] = factor_lists[i].size()
-        b[i] = 0
-
-    ## fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
-    cdef sv_addpathfn_ptr addpath_fn;
-    cdef vector[SVStateCRep*] leftSaved = vector[SVStateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
-    cdef vector[SVStateCRep*] rightSaved = vector[SVStateCRep_ptr](nFactorLists-1) # factor has been applied
-    cdef vector[PolyCRep] coeffSaved = vector[PolyCRep](nFactorLists-1)
-
-    #Fill saved arrays with allocated states
-    if fastmode:
-        #fast mode
-        addpath_fn = add_path_savepartials
-        for i in range(nFactorLists-1):
-            leftSaved[i] = new SVStateCRep(dim)
-            rightSaved[i] = new SVStateCRep(dim)
-    else:
-        addpath_fn = add_path
-        for i in range(nFactorLists-1):
-            leftSaved[i] = NULL
-            rightSaved[i] = NULL
-
-    cdef SVStateCRep *prop1 = new SVStateCRep(dim)
-    cdef SVStateCRep *prop2 = new SVStateCRep(dim)
-    addpath_fn(&prps, b, 0, factor_lists, &prop1, &prop2, &E_indices, &leftSaved, &rightSaved, &coeffSaved)
-    ## -------------------------------
-
-    add_paths(addpath_fn, b, factor_lists, foat_indices_per_op, numEs, nops, E_indices, 0, log_thres,
-              current_mag, current_logmag, 0, &prps, &prop1, &prop2, &leftSaved, &rightSaved, &coeffSaved)
-
-    del prop1
-    del prop2
-
-    return prps
-
-
 def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
                                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
 
@@ -3046,8 +2865,9 @@ cdef double sv_find_best_pathmagnitude_threshold(
                                    achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
 
 
-def SV_compute_pruned_path_polys(threshold, calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                                 comm=None, memLimit=None, fastmode=True):
+def SV_compute_pruned_path_polys_given_threshold(
+        threshold, calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+        comm=None, memLimit=None, fastmode=True):
 
     cdef INT i
     cdef INT numEs = len(elabels)

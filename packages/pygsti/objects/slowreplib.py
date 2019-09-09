@@ -1348,7 +1348,7 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        for k, v in x.items():
+        for k, v in other.items():
             try:
                 self[k] += v
             except KeyError:
@@ -1418,6 +1418,11 @@ class PolyRep(dict):
     def __repr__(self):
         return "PolyRep[ " + str(self) + " ]"
 
+    def degree(self):
+        """ Used for debugging in slowreplib routines only"""
+        return max([len(self._int_to_vinds(k)) for k in self.keys()])
+
+
     #UNUSED TODO REMOVE
     #def __add__(self, x):
     #    newpoly = self.copy()
@@ -1458,9 +1463,6 @@ class PolyRep(dict):
     #    return "PolyRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
     #        (self.max_num_vars, len(self), actual_max_order)
     #
-    #def degree(self):
-    #    return max([len(self._int_to_vinds(k)) for k in self.keys()])
-
 
 class SVTermRep(object):
     # just a container for other reps (polys, states, effects, and gates)
@@ -2003,16 +2005,25 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
     raise NotImplementedError("No direct mode yet")
 
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
-                                pathmagnitude_gap, min_term_mag, max_paths, current_threshold, compute_polyreps)
+def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
+                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
+    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+                                         pathmagnitude_gap, min_term_mag, max_paths, threshold_guess)
 
+def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
+                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
+    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+                                         pathmagnitude_gap, min_term_mag, max_paths, threshold_guess)
 
-def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm, memLimit, fastmode,
-                                pathmagnitude_gap, min_term_mag, max_paths, current_threshold, compute_polyreps)
+def SV_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                 circuitsetup_cache, comm=None, memLimit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                      circuitsetup_cache, comm, memLimit, fastmode)
+
+def SB_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                 circuitsetup_cache, comm=None, memLimit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                      circuitsetup_cache, comm, memLimit, fastmode)
 
 def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
     """ TODO: docstring """
@@ -2081,9 +2092,355 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
     #    factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
     #    initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 1000.0, max_npaths=max_paths)
 
-
-
 global_cnt = 0
+
+#Base case which works for both SV and SB evolution types thanks to Python's duck typing
+def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+                                       pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
+    """
+    Computes probabilities for multiple spam-tuples of `circuit`
+
+    Parameters
+    ----------
+    calc : TermForwardSimulator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability
+        polynomials.
+
+    circuit : Circuit
+        The gate sequence to sandwich between the prep and effect labels.
+
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
+    opcache : dict, optional
+        Dictionary used to cache operator objects to speed up future
+        calls to this function that would use the same set of operations.
+
+    circuitsetup_cache : dict, optional
+        Dictionary used to cache preparation specific to this function, to 
+        speed up repeated calls using the same circuit and set of parameters,
+        including the same repcache and opcache.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    pathmagnitude_gap : float, optional
+        The amount less than the perfect sum-of-path-magnitudes that
+        is desired.  This sets the target sum-of-path-magnitudes for each
+        circuit -- the threshold that determines how many paths are added.
+
+    min_term_mag : float, optional
+        A technical parameter to the path pruning algorithm; this value
+        sets a threshold for how small a term magnitude (one factor in
+        a path magnitude) must be before it is removed from consideration
+        entirely (to limit the number of even *potential* paths).  Terms
+        with a magnitude lower than this values are neglected.
+
+    max_paths : int, optional
+        The maximum number of paths allowed per circuit outcome.
+
+    threshold_guess : float, optional
+        In the search for a good pathmagnitude threshold, this value is
+        used as the starting point.  If 0.0 is given, a default value is used.
+    
+    Returns
+    -------
+    npaths : int
+        the number of paths that were included.
+    threshold : float
+        the path-magnitude threshold used.
+    target_sopm : float
+        The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+        less than the perfect "all-paths" sum.  This sums together the
+        contributions of different effects.
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.  Ideally this would equal
+        `target_sopm`. (This also sums together the contributions of
+        different effects.)
+    """
+    if circuitsetup_cache is None: circuitsetup_cache = {}
+    
+    if circuit not in circuitsetup_cache:
+        circuitsetup_cache[circuit] = create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, calc.Np)
+    rho_term_reps, op_term_reps, E_term_reps, rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
+
+    factor_lists = [rho_term_reps] + \
+        [op_term_reps[glbl] for glbl in circuit] + \
+        [E_term_reps]
+    foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
+
+    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.array(
+        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
+    #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap 
+    threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
+        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
+        initial_threshold=threshold_guess, min_threshold=pathmagnitude_gap / (3.0*max_paths), max_npaths=max_paths)  # 3.0 is just heuristic
+    # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
+
+    # TODO REMOVE
+    #print("Threshold = ", threshold, " Paths=", npaths)
+    #REMOVE (and global_cnt definition above)
+    #global global_cnt
+    #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
+    #global_cnt += 1
+
+    # #DEBUG TODO REMOVE
+    # print("---------------------------")
+    # print("Path threshold = ",threshold, " max=",max_sum_of_pathmags,
+    #       " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
+    # print("nPaths = ",npaths)
+    # print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" \
+    #       % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
+    # print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
+    # print("---------------------------")
+
+    target_miss = sum(achieved_sum_of_pathmags) - sum(target_sum_of_pathmags + pathmagnitude_gap)
+    if target_miss > 1e-5:
+        print("Warning: Achieved sum(path mags) exceeds max by ", target_miss, "!!!")
+
+    return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
+
+
+def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                               circuitsetup_cache, comm, memLimit, fastmode):
+    """
+    Computes probabilities for multiple spam-tuples of `circuit`
+
+    Parameters
+    ----------
+    calc : TermForwardSimulator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability
+        polynomials.
+
+    circuit : Circuit
+        The gate sequence to sandwich between the prep and effect labels.
+
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
+    opcache : dict, optional
+        Dictionary used to cache operator objects to speed up future
+        calls to this function that would use the same set of operations.
+
+    circuitsetup_cache : dict, optional
+        Dictionary used to cache preparation specific to this function, to 
+        speed up repeated calls using the same circuit and set of parameters,
+        including the same repcache and opcache.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    fastmode : bool, optional
+        A switch between a faster, slighty more memory hungry mode of
+        computation (`fastmode=True`)and a simpler slower one (`=False`).
+
+    Returns
+    -------
+    prps : list of PolynomialRep objects
+        the polynomials for the requested circuit probabilities, computed by
+        selectively summing up high-magnitude paths.
+    """
+    if circuitsetup_cache is None: circuitsetup_cache = {}
+    
+    if circuit not in circuitsetup_cache:
+        circuitsetup_cache[circuit] = create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, calc.min_term_mag, calc.Np)
+    rho_term_reps, op_term_reps, E_term_reps, rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
+
+    factor_lists = [rho_term_reps] + \
+        [op_term_reps[glbl] for glbl in circuit] + \
+        [E_term_reps]
+    foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
+    
+    prps = [None] * len(elabels)
+    last_index = len(factor_lists) - 1
+
+    #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
+
+    #fastmode = False  # REMOVE - was used for DEBUG b/c "_ex" path traversal won't always work w/fast mode
+    if fastmode:
+        leftSaved = [None] * (len(factor_lists) - 1)  # saved[i] is state after i-th
+        rightSaved = [None] * (len(factor_lists) - 1)  # factor has been applied
+        coeffSaved = [None] * (len(factor_lists) - 1)
+
+        def add_path(b, mag, incd):
+            """ Relies on the fact that paths are iterated over in lexographic order, and `incd`
+                tells us which index was just incremented (all indices less than this one are
+                the *same* as the last call). """
+            # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no
+            # ability to cache?)
+            factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
+
+            if incd == 0:  # need to re-evaluate rho vector
+                rhoVecL = factors[0].pre_state  # Note: `factor` is a rep & so are it's ops
+                for f in factors[0].pre_ops:
+                    rhoVecL = f.acton(rhoVecL)
+                leftSaved[0] = rhoVecL
+
+                rhoVecR = factors[0].post_state
+                for f in factors[0].post_ops:
+                    rhoVecR = f.acton(rhoVecR)
+                rightSaved[0] = rhoVecR
+
+                coeff = factors[0].coeff
+                coeffSaved[0] = coeff
+                incd += 1
+            else:
+                rhoVecL = leftSaved[incd - 1]
+                rhoVecR = rightSaved[incd - 1]
+                coeff = coeffSaved[incd - 1]
+
+            # propagate left and right states, saving as we go
+            for i in range(incd, last_index):
+                for f in factors[i].pre_ops:
+                    rhoVecL = f.acton(rhoVecL)
+                leftSaved[i] = rhoVecL
+
+                for f in factors[i].post_ops:
+                    rhoVecR = f.acton(rhoVecR)
+                rightSaved[i] = rhoVecR
+
+                coeff = coeff.mult(factors[i].coeff)
+                coeffSaved[i] = coeff
+
+            # for the last index, no need to save, and need to construct
+            # and apply effect vector
+            for f in factors[-1].post_ops:
+                rhoVecL = f.acton(rhoVecL)
+            E = factors[-1].post_effect  # effect representation
+            pLeft = E.amplitude(rhoVecL)
+
+            #Same for pre_ops and rhoVecR
+            for f in factors[-1].pre_ops:
+                rhoVecR = f.acton(rhoVecR)
+            E = factors[-1].pre_effect
+            pRight = _np.conjugate(E.amplitude(rhoVecR))
+
+            res = coeff.mult(factors[-1].coeff)
+            res.scale((pLeft * pRight))
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+
+            if prps[Ei] is None: prps[Ei] = res
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
+
+    else:
+        def add_path(b, mag, incd):
+            factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
+            res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
+            pLeft = _unitary_sim_pre(factors, comm, memLimit)
+            pRight = _unitary_sim_post(factors, comm, memLimit)
+            res.scale((pLeft * pRight))
+
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+            #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+            if prps[Ei] is None: prps[Ei] = res
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
+
+            #print("DB running prps[",Ei,"] =",prps[Ei])
+
+    traverse_paths_upto_threshold(factor_lists, threshold, len(
+        elabels), foat_indices_per_op, add_path)  # sets mag and nPaths    
+
+    #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
+
+    #max_degrees = []
+    #for i,factors in enumerate(factor_lists):
+    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #print("Max degrees = ",max_degrees)
+    #for Ei,prp in enumerate(prps):
+    #    print(Ei,":", prp.debug_report())
+    #if db_paramvec is not None:
+    #    for Ei,prp in enumerate(prps):
+    #        print(Ei," => ", prp.evaluate(db_paramvec))
+
+    #TODO: REMOVE - most of this is solved, but keep it around for another few commits in case we want to refer back to
+    #it.  - need to fill in some more details, namely how/where we hold weights and log-weights: in reps? in Term objs?
+    #maybe consider Cython version?  need to consider how to perform "fastmode" in this... maybe need to traverse tree
+    #in some standard order?  what about having multiple thresholds for the different elabels... it seems good to try to
+    #run these calcs in parallel.
+    # Note: may only need recusive tree traversal to consider incrementing positions *greater* than or equal to the one
+    #  that was just incremented?  (this may enforce some iteration ordering amenable to a fastmode calc)
+    # Note2: when all effects have *same* op-part of terms, just different effect vector, then maybe we could split the
+    #  effect into an op + effect to better use fastmode calc?  Or maybe if ordering is right this isn't necessary?
+    #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update
+    #coefficients when needed instead?
+
+    #... and we're done!
+
+    #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
+    # in fastreplib.pyx but forgot it here.
+    return prps
+
+
+def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
+    # Construct dict of gate term reps
+    mpv = calc.Np  # max_poly_vars
+    distinct_gateLabels = sorted(set(circuit))
+
+    op_term_reps = {}
+    op_foat_indices = {}
+    for glbl in distinct_gateLabels:
+        if glbl not in repcache:
+            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
+        op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
+
+    if rholabel not in repcache:
+        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
+    rho_term_reps, rho_foat_indices = repcache[rholabel]
+
+    elabels = tuple(elabels)  # so hashable
+    if elabels not in repcache:
+        E_term_indices_and_reps = []
+        for i, elbl in enumerate(elabels):
+            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            E_term_indices_and_reps.extend(
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+
+        #Sort all terms by magnitude
+        E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
+        E_term_reps = [x[1] for x in E_term_indices_and_reps]
+        E_indices = [x[0] for x in E_term_indices_and_reps]
+        E_foat_indices = [j for j, x in enumerate(E_term_indices_and_reps) if x[3] is True]
+        repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
+    E_term_reps, E_indices, E_foat_indices = repcache[elabels]
+
+    return (rho_term_reps, op_term_reps, E_term_reps,
+            rho_foat_indices, op_foat_indices, E_foat_indices,
+            E_indices)
+    
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
@@ -2166,7 +2523,6 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
         different effects.)
     """
     #t0 = _time.time()
-
     # Construct dict of gate term reps
     mpv = calc.Np  # max_poly_vars
     distinct_gateLabels = sorted(set(circuit))
@@ -2203,6 +2559,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
         repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
 
     E_term_reps, E_indices, E_foat_indices = repcache[elabels]
+
 
     prps = [None] * len(elabels)
 
@@ -2300,7 +2657,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
             Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
 
             if prps[Ei] is None: prps[Ei] = res
-            else: prps[Ei] += res  # could add_inplace?
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
 
     else:
         def add_path(b, mag, incd):
@@ -2314,7 +2671,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
             Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
             #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
             if prps[Ei] is None: prps[Ei] = res
-            else: prps[Ei] += res  # add_inplace?
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
             #print("DB running prps[",Ei,"] =",prps[Ei])
 
     traverse_paths_upto_threshold(factor_lists, threshold, len(

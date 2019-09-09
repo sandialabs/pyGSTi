@@ -393,8 +393,9 @@ class TermForwardSimulator(ForwardSimulator):
         circuitsetup_cache = {}
 
         if self.evotype == "svterm":
-            poly_reps = replib.SV_compute_pruned_path_polys(threshold, self, rholabel, elabels, circuit, repcache,
-                                                            opcache, circuitsetup_cache, comm, memLimit, fastmode)
+            poly_reps = replib.SV_compute_pruned_path_polys_given_threshold(
+                threshold, self, rholabel, elabels, circuit, repcache,
+                opcache, circuitsetup_cache, comm, memLimit, fastmode)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             raise NotImplementedError("Just need to mimic SV version")
