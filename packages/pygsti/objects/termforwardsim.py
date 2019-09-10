@@ -896,6 +896,9 @@ class TermForwardSimulator(ForwardSimulator):
                 
             nTotFailed += nFailed
             all_failed_circuits.extend(failed_circuits)
+
+        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
+        #NOte: leave all failed circuits LOCAL to this proc for now, since this is just for debugging...    
         return nTotFailed, all_failed_circuits
 
     def bulk_get_current_gaps(self, evalTree, comm=None, memLimit=None):
@@ -912,12 +915,18 @@ class TermForwardSimulator(ForwardSimulator):
             _, _, gaps = evalSubTree.num_circuit_sopm_failures_using_current_paths(
                 self, self.pathmagnitude_gap, return_gaps=True)
             all_gaps.extend(gaps)
+
+        if comm is not None:
+            all_gap_lists = comm.allgather(all_gaps)
+            all_gaps = list(_itertools.chain(*all_gap_lists)) # Note: ordering of gaps doesn't matter - we just want *all* of them.
+            
         return all_gaps
 
     def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         TODO: docstring
         """
+        t0 = _time.time()
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
@@ -941,6 +950,10 @@ class TermForwardSimulator(ForwardSimulator):
             repcache_per_subtree.append(highmag_termrep_cache)
             cscache_per_subtree.append(circuitsetup_cache)
 
+        #It's ok that thresholds and caches are per-*local*-subtree, but we need nTotFailed to be a global number of failures
+        print("Rank%d: find_minimal_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))
+        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
+
         pathSet = (thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree)
         return pathSet, nTotFailed
 
@@ -948,6 +961,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         TODO: docstring
         """
+        t0 = _time.time()
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
         thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
@@ -961,6 +975,7 @@ class TermForwardSimulator(ForwardSimulator):
                 #This computes (&caches) polys for this path set as well
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
+        print("Rank%d: select_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))
                 
 
     def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
@@ -1005,6 +1020,8 @@ class TermForwardSimulator(ForwardSimulator):
                 nFailed = 0
                 
             nTotFailed += nFailed
+
+        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
         assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
