@@ -619,9 +619,7 @@ class LinearOperator(_modelmember.ModelMember):
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-                for coeff, t in zip(coeffs, terms_at_order):
-                    t.set_magnitude(abs(coeff))
-                    #t.set_evaluated_coeff(coeff) #REMOVE
+                terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
     
                 if taylor_order == 1:
                     first_order_magmax = max([t.magnitude for t in terms_at_order])
@@ -670,8 +668,7 @@ class LinearOperator(_modelmember.ModelMember):
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
         coeffs = _bulk_eval_complex_compact_polys(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-        for coeff, t in zip(coeffs, terms_at_order):
-            t.set_magnitude(abs(coeff))
+        terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
         return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
@@ -2252,10 +2249,10 @@ class StochasticNoiseOp(LinearOperator):
             polydict = {(): 1.0}
             for pd in self._get_rate_poly_dicts():
                 polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
-            loc_terms = [_term.RankOneTerm(_Polynomial(polydict, mpv), IDENT, IDENT, "gate", self._evotype)]
+            loc_terms = [_term.RankOnePolyOpTerm.simple_init(_Polynomial(polydict, mpv), IDENT, IDENT, self._evotype)]
 
         elif order == 1:
-            loc_terms = [_term.RankOneTerm(_Polynomial(pd, mpv), bel, bel, "gate", self._evotype)
+            loc_terms = [_term.RankOnePolyOpTerm.simple_init(_Polynomial(pd, mpv), bel, bel, self._evotype)
                          for i, (pd, bel) in enumerate(zip(self._get_rate_poly_dicts(), self.basis.elements[1:]))]
         else:
             loc_terms = []  # only first order "taylor terms"
@@ -3179,8 +3176,8 @@ class LindbladOp(LinearOperator):
                ), "Unitary post-factor needs to be dense for term-based evotypes"
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_poly_vars
-        postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                     self.unitary_postfactor, "gate", self._evotype)
+        postTerm = _term.RankOnePolyOpTerm.simple_init(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+                                     self.unitary_postfactor, self._evotype)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
@@ -3214,8 +3211,9 @@ class LindbladOp(LinearOperator):
                ), "Unitary post-factor needs to be dense for term-based evotypes"
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_poly_vars
-        postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                     self.unitary_postfactor, "gate", self._evotype)
+        postTerm = _term.RankOnePolyOpTerm.simple_init(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+                                     self.unitary_postfactor, self._evotype)
+        postTerm = postTerm.copy_with_magnitude(1.0)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
@@ -3243,8 +3241,7 @@ class LindbladOp(LinearOperator):
         #evaluate errgen_terms' coefficients using their local vector of parameters
         # (which happends to be the same as our paramvec in this case)
         egvec = self.errorgen.to_vector()
-        for egt in errgen_terms:
-            egt.set_magnitude(abs(egt.coeff.evaluate(egvec)))
+        errgen_terms = [ egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms ]
 
         #DEBUG!!!
         #import bpdb; bpdb.set_trace()
@@ -4288,7 +4285,7 @@ class ComposedOp(LinearOperator):
             for factors in _itertools.product(*factor_lists):
                 mag = _np.product([factor.magnitude for factor in factors])
                 if mag >= min_term_mag:
-                    terms.append(_term.compose_terms(factors, magnitude=mag))
+                    terms.append(_term.compose_terms_with_mag(factors, mag))
         return terms
         #def _decompose_indices(x):
         #    return tuple(_modelmember._decompose_gpindices(
@@ -5024,17 +5021,17 @@ class EmbeddedOp(LinearOperator):
         sslbls.reduce_dims_densitymx_to_state()
         if return_coeff_polys:
             terms, coeffs = self.embedded_op.get_taylor_order_terms(order, max_poly_vars, True)
-            embedded_terms = [_term.embed_term(t, sslbls, self.targetLabels) for t in terms]
+            embedded_terms = [ t.embed(sslbls, self.targetLabels) for t in terms]
             return embedded_terms, coeffs
         else:            
-            return [_term.embed_term(t, sslbls, self.targetLabels)
+            return [ t.embed(sslbls, self.targetLabels)
                     for t in self.embedded_op.get_taylor_order_terms(order, max_poly_vars, False)]
 
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         """TODO: docstring """
         sslbls = self.state_space_labels.copy()
         sslbls.reduce_dims_densitymx_to_state()
-        return [_term.embed_term(t, sslbls, self.targetLabels)
+        return [ t.embed(sslbls, self.targetLabels)
                 for t in self.embedded_op.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag)]
 
         
@@ -6805,9 +6802,9 @@ class LindbladErrorgen(LinearOperator):
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
                 k = hamBasisIndices[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): -1j}, mpv), basis[termLbl[1]], IDENT, "gate", evotype))
-                Lterms.append(_term.RankOneTerm(_Polynomial({(k,): +1j}, mpv),
-                                                IDENT, basis[termLbl[1]].conjugate().T, "gate", evotype))
+                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): -1j}, mpv), basis[termLbl[1]], IDENT, evotype))
+                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j}, mpv),
+                                                IDENT, basis[termLbl[1]].conjugate().T, evotype))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
@@ -6822,11 +6819,11 @@ class LindbladErrorgen(LinearOperator):
                     Lm_dag = Lm.conjugate().T
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: 1.0}, mpv), Ln, Lm_dag, "gate", evotype))
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}, mpv), IDENT, _np.dot(Ln_dag, Lm),
-                                                    "gate", evotype))
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,) * pw: -0.5}, mpv), _np.dot(Lm_dag, Ln), IDENT,
-                                                    "gate", evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: 1.0}, mpv), Ln, Lm_dag, evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5}, mpv), IDENT, _np.dot(Ln_dag, Lm),
+                                                    evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5}, mpv), _np.dot(Lm_dag, Ln), IDENT,
+                                                    evotype))
 
                 else:
                     i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
@@ -6860,12 +6857,12 @@ class LindbladErrorgen(LinearOperator):
 
                     base_poly = _Polynomial(polyTerms, mpv)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOneTerm(1.0 * base_poly, Ln, Lm, "gate", evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(1.0 * base_poly, Ln, Lm, evotype))
                     # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm),
-                                                    "gate", evotype))
-                    Lterms.append(_term.RankOneTerm(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT,
-                                                    "gate", evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm),
+                                                    evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT,
+                                                    evotype))
 
             elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
@@ -6883,8 +6880,8 @@ class LindbladErrorgen(LinearOperator):
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append(_term.RankOneTerm(_Polynomial({(k,): 1.0}, mpv), _np.dot(L, B), B,
-                                                    "gate", evotype))  # /(d2-1.)
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): 1.0}, mpv), _np.dot(L, B), B,
+                                                    evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 

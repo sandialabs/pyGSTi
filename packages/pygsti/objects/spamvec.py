@@ -526,8 +526,7 @@ class SPAMVec(_modelmember.ModelMember):
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-                for coeff, t in zip(coeffs, terms_at_order):
-                    t.set_magnitude(abs(coeff))
+                terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
 
                 if taylor_order == 1:
                     first_order_magmax = max([t.magnitude for t in terms_at_order])
@@ -553,8 +552,7 @@ class SPAMVec(_modelmember.ModelMember):
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
         coeffs = _bulk_eval_complex_compact_polys(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-        for coeff, t in zip(coeffs, terms_at_order):
-            t.set_magnitude(abs(coeff))
+        terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
         return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
 
 
@@ -2013,7 +2011,7 @@ class TensorProdSPAMVec(SPAMVec):
                                                     if (f.pre_ops[0] is not None)])
                 post_op = TensorProdSPAMVec("prep", [f.post_ops[0] for f in factors
                                                      if (f.post_ops[0] is not None)])
-                term = _term.RankOneTerm(coeff, pre_op, post_op, "prep", self._evotype)
+                term = _term.RankOnePolyPrepTerm.simple_init(coeff, pre_op, post_op, self._evotype)
 
                 if not collapsible:  # then may need to add more ops.  Assume factor ops are clifford gates
                     # Embed each factors ops according to their target qubit(s) and just daisy chain them
@@ -2307,7 +2305,10 @@ class PureStateSPAMVec(SPAMVec):
         if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
             purevec = self.pure_state_vec
             coeff = _Polynomial({(): 1.0}, max_poly_vars)
-            terms = [_term.RankOneTerm(coeff, purevec, purevec, self._prep_or_effect, self._evotype)]
+            if self._prep_or_effect == "prep":
+                terms = [_term.RankOnePolyPrepTerm.simple_init(coeff, purevec, purevec, self._evotype)]
+            else:
+                terms = [_term.RankOnePolyEffectTerm.simple_init(coeff, purevec, purevec, self._evotype)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
@@ -2987,6 +2988,7 @@ class LindbladSPAMVec(SPAMVec):
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         state_terms = self.state_vec.get_taylor_order_terms(0, max_poly_vars); assert(len(state_terms) == 1)
         stateTerm = state_terms[0]
+        stateTerm = stateTerm.copy_with_magnitude(1.0)
         #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
         
         err_terms = self.error_map.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag / stateTerm.magnitude)
@@ -2999,7 +3001,7 @@ class LindbladSPAMVec(SPAMVec):
         #    # effect is used to compute a probability.  Thus, constructing the same "terms" as above works here
         #    # too - the difference comes when this SPAMVec is used as an effect rather than a prep.
         #    terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
-        terms = [_term.compose_terms((stateTerm, t), magnitude=stateTerm.magnitude * t.magnitude)
+        terms = [_term.compose_terms_with_mag((stateTerm, t), stateTerm.magnitude * t.magnitude)
                  for t in err_terms]  # t ops occur *after* stateTerm's
         return terms
 
@@ -3532,7 +3534,10 @@ class ComputationalSPAMVec(SPAMVec):
             else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
             coeff = _Polynomial({(): 1.0}, max_poly_vars)
-            terms = [_term.RankOneTerm(coeff, purevec, purevec, self._prep_or_effect, self._evotype)]
+            if self._prep_or_effect == "prep":
+                terms = [_term.RankOnePolyPrepTerm.simple_init(coeff, purevec, purevec, self._evotype)]
+            else:
+                terms = [_term.RankOnePolyEffectTerm.simple_init(coeff, purevec, purevec, self._evotype)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)

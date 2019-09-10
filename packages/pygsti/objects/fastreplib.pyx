@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=True
+# cython: profile=False
 # cython: linetrace=False
 
 #***************************************************************************************************
@@ -1468,6 +1468,104 @@ cdef class PolyRep:
         self.c_poly.add_scalar_to_all_coeffs_inplace(x)
 
 
+LARGE = 1000000000  # a large number such that LARGE is
+#cdef class XXXRankOnePolyTermWithMagnitude:
+#    cdef public object term_ptr
+#    cdef public double magnitude
+#    cdef public double logmagnitude
+#    
+#    @classmethod
+#    def composed(cls, terms, double magnitude):
+#        """
+#        Compose a sequence of terms.
+#    
+#        Composition is done with *time* ordered left-to-right. Thus composition
+#        order is NOT the same as usual matrix order.
+#        E.g. if there are three terms:
+#        `terms[0]` = T0: rho -> A*rho*A
+#        `terms[1]` = T1: rho -> B*rho*B
+#        `terms[2]` = T2: rho -> C*rho*C
+#        Then the resulting term T = T0*T1*T2 : rho -> CBA*rho*ABC, so
+#        that term[0] is applied *first* not last to a state.
+#    
+#        Parameters
+#        ----------
+#        terms : list
+#            A list of terms to compose.
+#    
+#        magnitude : float, optional
+#            The magnitude of the composed term (fine to leave as None
+#            if you don't care about keeping track of magnitudes).
+#    
+#        Returns
+#        -------
+#        RankOneTerm
+#        """
+#        return cls(terms[0].term_ptr.compose([t.term_ptr for t in terms[1:]]), magnitude)
+#    
+#    def __cinit__(self, rankOneTerm, double magnitude):
+#        """
+#        TODO: docstring
+#        """
+#        self.term_ptr = rankOneTerm
+#        self.magnitude = magnitude
+#        self.logmagnitude = log10(magnitude) if magnitude > 0 else -LARGE
+#
+#    def copy(self):
+#        """
+#        Copy this term.
+#
+#        Returns
+#        -------
+#        RankOneTerm
+#        """
+#        return RankOnePolyTermWithMagnitude(self.term_ptr.copy(), self.magnitude)
+#
+#    def embed(self, stateSpaceLabels, targetLabels):
+#        return RankOnePolyTermWithMagnitude(self.term_ptr.embed(stateSpaceLabels, targetLabels), self.magnitude)
+#
+#    def scalar_mult(self, x):
+#        return RankOnePolyTermWithMagnitude(self.term_ptr * x, self.magnitude * x)
+#    
+#    def __mul__(self, x):
+#        """ Multiply by scalar """
+#        return RankOnePolyTermWithMagnitude(self.term_ptr * x, self.magnitude * x)
+#
+#    def __rmul__(self, x):
+#        return self.__mul__(x)
+#
+#    def torep(self):
+#        """
+#        Construct a representation of this term.
+#
+#        "Representations" are lightweight versions of objects used to improve
+#        the efficiency of intensely computational tasks, used primarily
+#        internally within pyGSTi.
+#
+#        Parameters
+#        ----------
+#        max_num_vars : int
+#            The maximum number of variables for the coefficient polynomial's
+#            represenatation.
+#
+#        typ : { "prep", "effect", "gate" }
+#            What type of representation is needed (these correspond to
+#            different types of representation objects).  Given the type of
+#            operations stored within a term, only one of "gate" and
+#            "prep"/"effect" is appropriate.
+#
+#        Returns
+#        -------
+#        SVTermRep or SBTermRep
+#        """        
+#        #assert(magnitude <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
+#        return self.term_ptr.torep(self.magnitude, self.logmagnitude)
+#
+#    def mapvec_indices_inplace(self, mapvec):
+#        self.term_ptr.mapvec_indices_inplace(mapvec)
+
+        
+
 cdef bool compare_pair(const pair[PolyVarsIndex, vector[INT]]& a, const pair[PolyVarsIndex, vector[INT]]& b):
     return a.first < b.first
 
@@ -1475,20 +1573,20 @@ cdef class SVTermRep:
     cdef SVTermCRep* c_term
 
     #Hold references to other reps so we don't GC them
-    cdef PolyRep coeff_ref
-    cdef SVStateRep state_ref1
-    cdef SVStateRep state_ref2
-    cdef SVEffectRep effect_ref1
-    cdef SVEffectRep effect_ref2
-    cdef object list_of_preops_ref
-    cdef object list_of_postops_ref
+    cdef public PolyRep coeff
+    cdef public SVStateRep pre_state
+    cdef public SVStateRep post_state
+    cdef public SVEffectRep pre_effect
+    cdef public SVEffectRep post_effect
+    cdef public object pre_ops
+    cdef public object post_ops
 
     def __cinit__(self, PolyRep coeff, double mag, double logmag,
                   SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
-        self.coeff_ref = coeff
-        self.list_of_preops_ref = pre_ops
-        self.list_of_postops_ref = post_ops
+        self.coeff = coeff
+        self.pre_ops = pre_ops
+        self.post_ops = post_ops
 
         cdef INT i
         cdef INT npre = len(pre_ops)
@@ -1502,21 +1600,49 @@ cdef class SVTermRep:
 
         if pre_state is not None or post_state is not None:
             assert(pre_state is not None and post_state is not None)
-            self.state_ref1 = pre_state
-            self.state_ref2 = post_state
+            self.pre_state = pre_state
+            self.post_state = post_state
+            self.pre_effect = self.post_effect = None
             self.c_term = new SVTermCRep(coeff.c_poly, mag, logmag, pre_state.c_state, post_state.c_state,
                                          c_pre_ops, c_post_ops);
         elif pre_effect is not None or post_effect is not None:
             assert(pre_effect is not None and post_effect is not None)
-            self.effect_ref1 = pre_effect
-            self.effect_ref2 = post_effect
+            self.pre_effect = pre_effect
+            self.post_effect = post_effect
+            self.pre_state = self.post_state = None
             self.c_term = new SVTermCRep(coeff.c_poly, mag, logmag, pre_effect.c_effect, post_effect.c_effect,
                                          c_pre_ops, c_post_ops);
         else:
+            self.pre_state = self.post_state = None
+            self.pre_effect = self.post_effect = None
             self.c_term = new SVTermCRep(coeff.c_poly, mag, logmag, c_pre_ops, c_post_ops);
 
     def __dealloc__(self):
         del self.c_term
+
+    def set_magnitude(self, double mag, double logmag):
+        self.c_term._magnitude = mag
+        self.c_term._logmagnitude = logmag
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+    @property
+    def magnitude(self):
+        return self.c_term._magnitude
+
+    @property
+    def logmagnitude(self):
+        return self.c_term._logmagnitude
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return SVTermRep(coeff, self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)
+
+
 
 
 cdef class SVTermDirectRep:
@@ -1561,31 +1687,44 @@ cdef class SVTermDirectRep:
         else:
             self.c_term = new SVTermDirectCRep(coeff, mag, logmag, c_pre_ops, c_post_ops);
 
+    def __dealloc__(self):
+        del self.c_term
+
     def set_coeff(self, coeff):
         self.c_term._coeff = coeff
 
-    def __dealloc__(self):
-        del self.c_term
+    def set_magnitude(self, double mag, double logmag):
+        self.c_term._magnitude = mag
+        self.c_term._logmagnitude = logmag
+
+    @property
+    def magnitude(self):
+        return self.c_term._magnitude
+
+    @property
+    def logmagnitude(self):
+        return self.c_term._logmagnitude
+
 
 
 cdef class SBTermRep:
     cdef SBTermCRep* c_term
 
     #Hold references to other reps so we don't GC them
-    cdef PolyRep coeff_ref
-    cdef SBStateRep state_ref1
-    cdef SBStateRep state_ref2
-    cdef SBEffectRep effect_ref1
-    cdef SBEffectRep effect_ref2
-    cdef object list_of_preops_ref
-    cdef object list_of_postops_ref
+    cdef PolyRep coeff
+    cdef SBStateRep pre_state
+    cdef SBStateRep post_state
+    cdef SBEffectRep pre_effect
+    cdef SBEffectRep post_effect
+    cdef object pre_ops
+    cdef object post_ops
 
     def __cinit__(self, PolyRep coeff, double mag, double logmag,
                   SBStateRep pre_state, SBStateRep post_state,
                   SBEffectRep pre_effect, SBEffectRep post_effect, pre_ops, post_ops):
-        self.coeff_ref = coeff
-        self.list_of_preops_ref = pre_ops
-        self.list_of_postops_ref = post_ops
+        self.coeff = coeff
+        self.pre_ops = pre_ops
+        self.post_ops = post_ops
 
         cdef INT i
         cdef INT npre = len(pre_ops)
@@ -1599,23 +1738,40 @@ cdef class SBTermRep:
 
         if pre_state is not None or post_state is not None:
             assert(pre_state is not None and post_state is not None)
-            self.state_ref1 = pre_state
-            self.state_ref2 = post_state
+            self.pre_state = pre_state
+            self.post_state = post_state
+            self.pre_effect = self.post_effect = None
             self.c_term = new SBTermCRep(coeff.c_poly, mag, logmag,
                                          pre_state.c_state, post_state.c_state,
                                          c_pre_ops, c_post_ops);
         elif pre_effect is not None or post_effect is not None:
             assert(pre_effect is not None and post_effect is not None)
-            self.effect_ref1 = pre_effect
-            self.effect_ref2 = post_effect
+            self.pre_effect = pre_effect
+            self.post_effect = post_effect
+            self.pre_state = self.post_state = None
             self.c_term = new SBTermCRep(coeff.c_poly, mag, logmag,
                                          pre_effect.c_effect, post_effect.c_effect,
                                          c_pre_ops, c_post_ops);
         else:
+            self.pre_state = self.post_state = None
+            self.pre_effect = self.post_effect = None
             self.c_term = new SBTermCRep(coeff.c_poly, mag, logmag, c_pre_ops, c_post_ops);
 
     def __dealloc__(self):
         del self.c_term
+
+    def set_magnitude(self, double mag, double logmag):
+        self.c_term._magnitude = mag
+        self.c_term._logmagnitude = logmag
+
+    @property
+    def magnitude(self):
+        return self.c_term._magnitude
+
+    @property
+    def logmagnitude(self):
+        return self.c_term._logmagnitude
+
 
 
 cdef class RepCacheEl:
