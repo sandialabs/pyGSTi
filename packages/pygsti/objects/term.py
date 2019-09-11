@@ -23,14 +23,10 @@ from . import modelmember as _mm
 from . import operation as _op
 from . import spamvec as _spamvec
 
-LARGE = 1000000000  # a large number such that LARGE is
-# a very high term weight which won't help (at all) a
-# path get included in the selected set of paths.
-
 def compose_terms_with_mag(terms, magnitude):
     """ TODO: docstring """
     assert(len(terms) > 0)
-    return terms[0].compose(terms[1:], magnitude)
+    return terms[0].compose(terms, magnitude)
 
 def compose_terms(terms):
     """
@@ -58,46 +54,8 @@ def compose_terms(terms):
     -------
     RankOneTerm
     """
-    assert(len(terms) > 0)
+    assert(len(terms) > 0)  # otherwise return something like RankOneTerm(1.0, None, None)?
     return terms[0].compose(terms)
-    
-    #TODO: this should be a classmethod of RankOneTerm, as it builds a new RankOneTerm from scratch
-    if len(terms) == 0:
-        return RankOneTerm(1.0, None, None)
-    else:
-        #Note: will need to check instance/type and do np.product if coeffs are floats!
-        first = terms[0]
-        ret = RankOneTerm.__new__(RankOneTerm)
-        ret.termtype = first.termtype
-        ret._evotype = first._evotype
-        ret.coeff = _Polynomial.product([t.coeff for t in terms])
-        #ret.pre_ops = list(_itertools.chain(*[t.pre_ops for t in terms]))
-        #ret.post_ops = list(_itertools.chain(*[t.post_ops for t in terms]))
-
-        ret.pre_ops = []
-        ret.post_ops = []
-        for t in terms:
-            ret.pre_ops.extend(t.pre_ops)
-            ret.post_ops.extend(t.post_ops)
-            
-        if magnitude is not None:
-            ret.set_magnitude(magnitude)
-        else:  # just use default
-            ret.magnitude = 1.0
-            ret.logmagnitude = 0.0
-        return ret
-                           
-                           
-    #OLD
-    #ret = terms[0].copy()
-    #for t in terms[1:]:
-    #    ret.compose(t)
-    #
-    #            self.coeff *= term.coeff
-    #    self.pre_ops.extend(term.pre_ops)
-    #    self.post_ops.extend(term.post_ops)
-    #
-    #return ret
 
 
 def exp_terms(terms, order, postterm, cache=None, order_base=None):
@@ -162,6 +120,7 @@ def exp_terms(terms, order, postterm, cache=None, order_base=None):
     else:
         return build_terms(order)
 
+    
 def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     """
     Exponentiate a list of terms, collecting those terms of the orders given
@@ -189,29 +148,110 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     """
     cache = {}  # DON'T allow the user to pass in a previous cache
                 # since this may have used a different min_term_mag
+    #Note: for performance, `cache` stores only term-*reps* not the full
+    # term objects themselves.  Term objects are build (wrapped around
+    # reps) at the end based on the type of postterm.
 
     #create terms for each order from terms and base action
 
     # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
     # expand 1/n! L^n into a list of rank-1 terms -> cache[n]
-    cache[0] = [postterm]
+    cache[0] = [postterm._rep]
+    termType = postterm.__class__
+    composeFn = postterm._rep.__class__.composed
+    termreps = [t._rep for t in terms]
     
     def build_terms(order_to_build):
         if order_to_build in cache:  # Note: 0th order is *always* in cache
             return cache[order_to_build]
         previous_order_terms = build_terms(order_to_build-1)
         a = 1.0 / order_to_build  # builds up 1/factorial prefactor
-        premultiplied_terms = [ a * factor for factor in terms ]  # terms are expected to have their magnitudes set.
-        #REMOVE for t in premultiplied_terms: t.set_magnitude(t.magnitude * a)  # because a * factor doesn't update magnitude by efficiency
-        cache[order_to_build] = [ t for t in (compose_terms_with_mag((previous_order_term, a_factor),
-                                                                     previous_order_term.magnitude * a_factor.magnitude)
-                                              for previous_order_term in previous_order_terms
-                                              for a_factor in premultiplied_terms) if t.magnitude >= min_term_mag ]
+
+        #OLD - when we used full objects
+        #premultiplied_terms = [ a * factor for factor in terms ]  # terms are expected to have their magnitudes set.
+        #cache[order_to_build] = [ t for t in (compose_terms_with_mag((previous_order_term, a_factor),
+        #                                                             previous_order_term.magnitude * a_factor.magnitude)
+        #                                      for previous_order_term in previous_order_terms
+        #                                      for a_factor in premultiplied_terms) if t.magnitude >= min_term_mag ]
+
+        premultiplied_terms = [ factor.scalar_mult(a) for factor in termreps ]  # terms are expected to have their magnitudes set.
+        tuples_to_iter = [(previous_order_term, a_factor)
+                          for previous_order_term in previous_order_terms
+                          for a_factor in premultiplied_terms
+                          if previous_order_term.magnitude * a_factor.magnitude >= min_term_mag ]
+        cache[order_to_build] = [ composeFn((previous_order_term, a_factor),
+                                            previous_order_term.magnitude * a_factor.magnitude) 
+                                  for (previous_order_term,a_factor) in tuples_to_iter ]
+        
         # **Assume** individual term magnitudes are <= 1.0 so that we
         # don't include any order terms that have magnitude < min_term_mag.
         return cache[order_to_build]
-    return build_terms(order)
+    
+    #return build_terms(order)  #OLD - when cache held full objects
+    return [termType(rep) for rep in build_terms(order)]
 
+
+def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
+    """Variant of EmbeddedOp.__init__ used to create embeddedop reps without a corresponding embedded op - for use w/terms where there are just reps """
+
+    opDim = state_space_labels.dim
+
+    #Create representation
+    if evotype == "stabilizer":
+        # assert that all state space labels == qubits, since we only know
+        # how to embed cliffords on qubits...
+        assert(len(state_space_labels.labels) == 1
+               and all([ld == 2 for ld in state_space_labels.labeldims.values()])), \
+            "All state space labels must correspond to *qubits*"
+
+        #Cache info to speedup representation's acton(...) methods:
+        # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
+        qubitLabels = state_space_labels.labels[0]
+        qubit_indices = _np.array([qubitLabels.index(targetLbl)
+                                   for targetLbl in targetLabels], _np.int64)
+
+        nQubits = int(round(_np.log2(opDim)))
+        rep = replib.SBOpRep_Embedded(rep_to_embed,
+                                      nQubits, qubit_indices)
+
+    elif evotype in ("statevec", "densitymx"):
+
+        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in targetLabels]
+        # index of tensor product block (of state space) a bit label is part of
+        if len(set(iTensorProdBlks)) != 1:
+            raise ValueError("All qubit labels of a multi-qubit gate must correspond to the"
+                             " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
+
+        iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
+        tensorProdBlkLabels = state_space_labels.labels[iTensorProdBlk]
+        # count possible *density-matrix-space* indices of each component of the tensor product block
+        numBasisEls = _np.array([state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
+
+        # Separate the components of the tensor product that are not operated on, i.e. that our
+        # final map just acts as identity w.r.t.
+        labelIndices = [tensorProdBlkLabels.index(label) for label in targetLabels]
+        actionInds = _np.array(labelIndices, _np.int64)
+        assert(_np.product([numBasisEls[i] for i in actionInds]) == rep_to_embed.dim), \
+            "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (
+                rep_to_embed.dim, str(targetLabels))
+
+        nBlocks = state_space_labels.num_tensor_prod_blocks()
+        iActiveBlock = iTensorProdBlk
+        nComponents = len(state_space_labels.labels[iActiveBlock])
+        embeddedDim = rep_to_embed.dim
+        blocksizes = _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
+                                for k in range(nBlocks)], _np.int64)
+        if evotype == "statevec":
+            rep = replib.SVOpRep_Embedded(rep_to_embed,
+                                          numBasisEls, actionInds, blocksizes, embeddedDim,
+                                          nComponents, iActiveBlock, nBlocks, opDim)
+        else:  # "densitymx"
+            rep = replib.DMOpRep_Embedded(rep_to_embed,
+                                          numBasisEls, actionInds, blocksizes, embeddedDim,
+                                          nComponents, iActiveBlock, nBlocks, opDim)
+    else:
+        raise ValueError("Invalid evotype `%s`" % evotype)
+    return rep
 
 #def embed_term(term, stateSpaceLabels, targetLabels):
 #    """
@@ -275,18 +315,41 @@ class RankOneTerm(object):
     representing the prefactor for this term as a part of a larger density
     matrix evolution.
     """
+    def __init__(self, rep):
+        self._rep = rep
+
+    def torep(self):
+        return self._rep
+
+    def copy(self):
+        return self.__class__(self._rep.copy())        
+
+    def __mul__(self, x):
+        """ Multiply by scalar """
+        return self.__class__(self._rep.scalar_mult(x))
 
     def __rmul__(self, x):
         return self.__mul__(x)
 
-    def __mul__(self, x):
-        """ Multiply by scalar """
-        ret = self.copy()
-        ret.coeff = ret.coeff * x
-        return ret
+class HasMagnitude(object):
+    @property
+    def magnitude(self):
+        return self._rep.magnitude
+    
+    @property
+    def logmagnitude(self):
+        return self._rep.logmagnitude
+    
+    def compose(self, all_terms, magnitude):
+        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude))
+
+    
+class NoMagnitude(object):    
+    def compose(self, all_terms):
+        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0))
 
 
-class RankOnePrepTerm(RankOneTerm):
+class RankOnePrepTerm(RankOneTerm, NoMagnitude):
     
     @classmethod
     def simple_init(cls, coeff, pre_state, post_state, evotype):
@@ -303,55 +366,23 @@ class RankOnePrepTerm(RankOneTerm):
                 pre_state = _spamvec.StaticSPAMVec(post_state, "statevec", "prep")
             else:
                 raise ValueError("No default term vector for evotype=%s" % evotype)
-        
-        return cls(coeff, pre_state, post_state, [], [], evotype)
-    
-    def __init__(self, coeff, pre_state, post_state,
-                 pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.coeff = coeff
-        self.pre_state = pre_state
-        self.post_state = post_state
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
 
-    def compose(self, all_terms):
-        """
-        TODO: docstring
-        """
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-        coeff = self._coeff_product([t.coeff for t in all_terms])   
-        return self.__class__(coeff,
-                               self.pre_state, self.post_state, pre_ops, post_ops, self.evotype)
-
+        reptype = replib.SVTermRep if (evotype == "svterm") else replib.SBTermRep
+        rep = reptype(cls._coeff_rep(coeff), 1.0, 0.0,
+                      pre_state._rep, post_state._rep, None, None, [], [])
+        return cls(rep)
+            
     def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, self.pre_state, self.post_state, pre_ops, post_ops, self.evotype)
-
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
-            else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]
-        return reptype(self._coeff_rep(), 1.0, 0.0,
-                                self.pre_state._rep, self.post_state._rep, None, None,
-                                pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.pre_state, self.post_state, 
-                               self.pre_ops[:], self.post_ops[:], self.evotype)
-
-
+        evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
+        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                   for oprep in self._rep.pre_ops]
+        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                    for oprep in self._rep.post_ops]
+        return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, self._rep.pre_state, self._rep.post_state,
+                                                  None, None, pre_ops, post_ops))
 
         
-class RankOneEffectTerm(RankOneTerm):
+class RankOneEffectTerm(RankOneTerm, NoMagnitude):
     @classmethod
     def simple_init(cls, coeff, pre_effect, post_effect, evotype):    
         if evotype not in ('svterm', 'cterm'):
@@ -367,55 +398,25 @@ class RankOneEffectTerm(RankOneTerm):
                 pre_effect = _spamvec.StaticSPAMVec(post_effect, "statevec", "effect")
             else:
                 raise ValueError("No default term vector for evotype=%s" % evotype)
-            
-        return cls(coeff, pre_effect, post_effect, [], [], evotype)
 
-            
-    def __init__(self, coeff, pre_effect, post_effect,
-                 pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.coeff = coeff
-        self.pre_effect = pre_effect
-        self.post_effect = post_effect
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-    def compose(self, all_terms):
-        """
-        TODO: docstring
-        """
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-        coeff = self._coeff_product([t.coeff for t in all_terms])   
-        return self.__class__(coeff,
-                                 self.pre_effect, self.post_effect, pre_ops, post_ops, self.evotype)
-
-    def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, self.pre_effect, self.post_effect, pre_ops, post_ops, self.evotype)
-
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
+        reptype = replib.SVTermRep if (evotype == "svterm") \
             else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]        
-        return reptype(self._coeff_rep(), 1.0, 0.0,
-                            None, None, self.pre_effect._rep, self.post_effect._rep,
-                            pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.pre_effect, self.post_effect, 
-                               self.pre_ops[:], self.post_ops[:], self.evotype)
-
+        rep = reptype(cls._coeff_rep(coeff), 1.0, 0.0,
+                      None, None, pre_effect._rep, post_effect._rep,
+                      [], [])
+        return cls(rep)
+            
+    def embed(self, stateSpaceLabels, targetLabels):
+        evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
+        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                   for oprep in self._rep.pre_ops]
+        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                    for oprep in self._rep.post_ops]
+        return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
+                                                  self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
 
     
-class RankOneOpTerm(RankOneTerm):
+class RankOneOpTerm(RankOneTerm, NoMagnitude):
     @classmethod
     def simple_init(cls, coeff, pre_op, post_op, evotype):
         if evotype not in ('svterm', 'cterm'):
@@ -443,278 +444,95 @@ class RankOneOpTerm(RankOneTerm):
                 else:
                     raise ValueError("Invalid `evotype` argument: %s" % evotype)
             post_ops.append(post_op)
-            
-        return cls(coeff, pre_ops, post_ops, evotype)
 
-    def __init__(self, coeff, pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.coeff = coeff
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-    def compose(self, all_terms):
-        """
-        TODO: docstring
-        """
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-        coeff = self._coeff_product([t.coeff for t in all_terms])   
-        return self.__class__(coeff,
-                             pre_ops, post_ops, self.evotype)
-
-    def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, pre_ops, post_ops, self.evotype)
-
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
+        reptype = replib.SVTermRep if (evotype == "svterm") \
             else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]
-        return reptype(self._coeff_rep(), 1.0, 0.0,
+        pre_op_reps = [op._rep for op in pre_ops]
+        post_op_reps = [op._rep for op in post_ops]
+        rep = reptype(cls._coeff_rep(coeff), 1.0, 0.0,
                             None, None, None, None,
                             pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.pre_ops[:], self.post_ops[:], self.evotype)
-
-
-
-class RankOnePrepTermWithMagnitude(RankOneTerm):
-    
-    def __init__(self, coeff, magnitude, pre_state, post_state,
-                 pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.magnitude = magnitude
-        self.logmagnitude = _math.log10(magnitude) if magnitude > 0 else -LARGE
-        self.coeff = coeff
-        self.pre_state = pre_state
-        self.post_state = post_state
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-    def compose(self, all_terms, magnitude):
-        """
-        TODO: docstring
-        """
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops +=  t.pre_ops
-            post_ops += t.post_ops
-        coeff = self._coeff_product([t.coeff for t in all_terms])   
-        return self.__class__(coeff, magnitude,
-                              self.pre_state, self.post_state, pre_ops, post_ops, self.evotype)
+        return cls(rep)
 
     def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, self.magnitude, self.pre_state, self.post_state, pre_ops, post_ops, self.evotype)
+        evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
+        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                   for oprep in self._rep.pre_ops]
+        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                    for oprep in self._rep.post_ops]
+        return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
+                                                  None, None, pre_ops, post_ops))
+        
 
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
-            else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]
-        return reptype(self._coeff_rep(), self.magnitude, self.logmagnitude,
-                                self.pre_state._rep, self.post_state._rep, None, None,
-                                pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.magnitude, self.pre_state, self.post_state, 
-                               self.pre_ops[:], self.post_ops[:], self.evotype)
-
+class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
+    def embed(self, stateSpaceLabels, targetLabels):
+        evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
+        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                   for oprep in self._rep.pre_ops]
+        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                    for oprep in self._rep.post_ops]
+        return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
+                                                  self._rep.pre_state, self._rep.post_state, None, None, pre_ops, post_ops))
 
         
-class RankOneEffectTermWithMagnitude(RankOneTerm):
-    def __init__(self, coeff, magnitude, pre_effect, post_effect,
-                 pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.magnitude = magnitude
-        self.logmagnitude = _math.log10(magnitude) if magnitude > 0 else -LARGE
-        self.coeff = coeff
-        self.pre_effect = pre_effect
-        self.post_effect = post_effect
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-    def compose(self, all_terms, magnitude):
-        """
-        TODO: docstring
-        """
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-        coeff = self._coeff_product([t.coeff for t in all_terms])   
-        return self.__class__(coeff, magnitude,
-                                 self.pre_effect, self.post_effect, pre_ops, post_ops, self.evotype)
-
+class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
     def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, self.magnitude, self.pre_effect, self.post_effect, pre_ops, post_ops, self.evotype)
-
-
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
-            else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]
-        return reptype(self._coeff_rep(), self.magnitude, self.logmagnitude,
-                            None, None, self.pre_effect._rep, self.post_effect._rep,
-                            pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.magnitude, self.pre_effect, self.post_effect, 
-                               self.pre_ops[:], self.post_ops[:], self.evotype)
-
+        evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
+        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                   for oprep in self._rep.pre_ops]
+        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                    for oprep in self._rep.post_ops]
+        return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
+                                                  None, None, self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
 
     
-class RankOneOpTermWithMagnitude(RankOneTerm):
-    def __init__(self, coeff, magnitude, pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.magnitude = magnitude
-        self.logmagnitude = _math.log10(magnitude) if magnitude > 0 else -LARGE
-        self.coeff = coeff
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-    def compose(self, all_terms, magnitude):
-        """
-        TODO: docstring
-        """
-        #SLOWER
-        #pre_ops = _functools.reduce(_add, [t.pre_ops for t in all_terms])
-        #post_ops = _functools.reduce(_add, [t.post_ops for t in all_terms])
-
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-        coeff = self._coeff_product([t.coeff for t in all_terms])
-        return self.__class__(coeff, magnitude,
-                              pre_ops, post_ops, self.evotype)
-
-        # --- INLINE of __init__ speeds things up a little; doesn't seem so worth it ---
-        #ret = self.__class__.__new__(self.__class__)
-        #ret.evotype = self.evotype
-        #ret.magnitude = magnitude
-        #ret.logmagnitude = _math.log10(magnitude) if magnitude > 0 else -LARGE
-        #ret.coeff = self._coeff_product([t.coeff for t in all_terms])
-        #ret.pre_ops = []
-        #ret.post_ops = []
-        #for t in all_terms:
-        #    ret.pre_ops += t.pre_ops
-        #    ret.post_ops += t.post_ops
-        #return ret
-
+class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
     def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, self.magnitude, pre_ops, post_ops, self.evotype)
+        evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
+        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                   for oprep in self._rep.pre_ops]
+        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+                    for oprep in self._rep.post_ops]
+        return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
+                                                  None, None, None, None, pre_ops, post_ops))
 
-
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
-            else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]
-        return reptype(self._coeff_rep(), self.magnitude, self.logmagnitude,
-                            None, None, None, None,
-                            pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.magnitude,
-                               self.pre_ops[:], self.post_ops[:], self.evotype)
-
-
-class OLDRankOneOpTermWithMagnitude(RankOneTerm):
-    def __init__(self, coeff, magnitude, pre_ops, post_ops, evotype):
-        self.evotype = evotype
-        self.magnitude = magnitude
-        self.logmagnitude = _math.log10(magnitude) if magnitude > 0 else -LARGE
-        self.coeff = coeff
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-    def compose(self, all_terms, magnitude):
-        """
-        TODO: docstring
-        """
-        #pre_ops = _functools.reduce(_add, [t.pre_ops for t in all_terms])
-        #post_ops = _functools.reduce(_add, [t.post_ops for t in all_terms])
-
-        pre_ops = []
-        post_ops = []
-        for t in all_terms:
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-            
-        coeff = _Polynomial.product([t.coeff for t in all_terms])
-        #coeff = self._coeff_product([t.coeff for t in all_terms])
-            
-        return self.__class__(coeff, magnitude,
-                             pre_ops, post_ops, self.evotype)
-
-    def embed(self, stateSpaceLabels, targetLabels):
-        pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                   for op in self.pre_ops]
-        post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
-                    for op in self.post_ops]
-        return self.__class__(self.coeff, self.magnitude, pre_ops, post_ops, self.evotype)
-
-
-    def torep(self):
-        reptype = replib.SVTermRep if (self.evotype == "svterm") \
-            else replib.SBTermRep
-        pre_op_reps = [op._rep for op in self.pre_ops]
-        post_op_reps = [op._rep for op in self.post_ops]
-        return reptype(self._coeff_rep(), self.magnitude, self.logmagnitude,
-                            None, None, None, None,
-                            pre_op_reps, post_op_reps)
-
-    def copy(self):
-        return self.__class__(self._coeff_copy(), self.magnitude,
-                               self.pre_ops[:], self.post_ops[:], self.evotype)
-
-
-
+    
 class HasNumericalCoefficient(object):
     _coeff_product = _np.product
     #def _coeff_product(self, coeffs):
     #    return _np.product(coeffs)
 
-    def _coeff_rep(self):
-        return self.coeff
+    @classmethod
+    def _coeff_rep(cls, coeff):
+        return coeff
 
-    def _coeff_copy(self):
-        return self.coeff
+    #def _coeff_copy(self):
+    #    return self.coeff
+
+    @property
+    def coeff(self):
+        return coeff
+
         
 class HasPolyCoefficient(object):
-    _coeff_product = _Polynomial.product
-    #def _coeff_product(self, coeffs):
-    #    return _Polynomial.product(coeffs)
+    #_coeff_product = _Polynomial.product
+    def _coeff_product(self, coeff_reps):
+        #return _Polynomial.product(coeffs)
+        coeffrep = coeff_reps[0]
+        for crep in coeff_reps[1:]:
+            coeffrep = coeffrep.mult(crep)
+        return coeffrep
     
-    def _coeff_rep(self):
-        return self.coeff.torep()
+    @classmethod
+    def _coeff_rep(cls,coeff):
+        return coeff.torep()
 
-    def _coeff_copy(self):
-        return self.coeff.copy()
+    @property
+    def coeff(self):
+        return _Polynomial.fromrep(self._rep.coeff)
+
+    #def _coeff_copy(self):
+    #    return self.coeff.copy()
 
     def map_indices_inplace(self, mapfn):
         """
@@ -733,9 +551,10 @@ class HasPolyCoefficient(object):
         -------
         None
         """
-        assert(hasattr(self.coeff, 'map_indices_inplace')), \
+        assert(hasattr(self._rep.coeff, 'map_indices_inplace')), \
             "Coefficient (type %s) must implements `map_indices_inplace`" % str(type(self.coeff))
-        self.coeff.map_indices_inplace(mapfn)
+        #self.coeff.map_indices_inplace(mapfn)
+        self._rep.coeff.map_indices_inplace(mapfn)
 
     def mapvec_indices_inplace(self, mapvec):
         """
@@ -755,28 +574,35 @@ class HasPolyCoefficient(object):
         -------
         None
         """
-        self.coeff.mapvec_indices_inplace(mapvec)
-        
+        #self.coeff.mapvec_indices_inplace(mapvec)
+        self._rep.coeff.mapvec_indices_inplace(mapvec)
+    
                  
 class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
-        return RankOnePolyPrepTermWithMagnitude(self.coeff, mag, self.pre_state, self.post_state, self.pre_ops, self.post_ops, self.evotype)
+        rep = self._rep.copy()
+        rep.set_magnitude(mag)
+        return RankOnePolyPrepTermWithMagnitude(rep)
 
 class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
-        return RankOnePolyEffectTermWithMagnitude(self.coeff, mag, self.pre_effect, self.post_effect, self.pre_ops, self.post_ops, self.evotype)
+        rep = self._rep.copy()
+        rep.set_magnitude(mag)
+        return RankOnePolyEffectTermWithMagnitude(rep)
 
 class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
-        return RankOnePolyOpTermWithMagnitude(self.coeff, mag, self.pre_ops, self.post_ops, self.evotype)
+        rep = self._rep.copy()
+        rep.set_magnitude(mag)
+        return RankOnePolyOpTermWithMagnitude(rep)
 
 class RankOnePolyPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, HasPolyCoefficient): pass
 class RankOnePolyEffectTermWithMagnitude(RankOneEffectTermWithMagnitude, HasPolyCoefficient): pass
 class RankOnePolyOpTermWithMagnitude(RankOneOpTermWithMagnitude, HasPolyCoefficient): pass
-    
+
 class RankOneDirectPrepTerm(RankOnePrepTerm, HasNumericalCoefficient): pass
 class RankOneDirectEffectTerm(RankOneEffectTerm, HasNumericalCoefficient): pass
 class RankOneDirectOpTerm(RankOneOpTerm, HasNumericalCoefficient): pass

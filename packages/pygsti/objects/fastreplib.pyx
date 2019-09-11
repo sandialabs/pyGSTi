@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=False
+# cython: profile=True
 # cython: linetrace=False
 
 #***************************************************************************************************
@@ -33,6 +33,11 @@ from ..tools import slicetools as _slct
 from ..tools import optools as _gt
 from ..tools.matrixtools import _fas
 from scipy.sparse.linalg import LinearOperator
+
+cdef double LARGE = 1000000000
+# a large number such that LARGE is
+# a very high term weight which won't help (at all) a
+# path get included in the selected set of paths.
 
 
 #Use 64-bit integers
@@ -1467,8 +1472,6 @@ cdef class PolyRep:
     def add_scalar_to_all_coeffs_inplace(self, x):
         self.c_poly.add_scalar_to_all_coeffs_inplace(x)
 
-
-LARGE = 1000000000  # a large number such that LARGE is
 #cdef class XXXRankOnePolyTermWithMagnitude:
 #    cdef public object term_ptr
 #    cdef public double magnitude
@@ -1581,6 +1584,20 @@ cdef class SVTermRep:
     cdef public object pre_ops
     cdef public object post_ops
 
+    @classmethod
+    def composed(cls, terms_to_compose, double magnitude):
+        cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
+        cdef SVTermRep first = terms_to_compose[0]
+        cdef PolyRep coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return SVTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+
     def __cinit__(self, PolyRep coeff, double mag, double logmag,
                   SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
@@ -1620,9 +1637,9 @@ cdef class SVTermRep:
     def __dealloc__(self):
         del self.c_term
 
-    def set_magnitude(self, double mag, double logmag):
+    def set_magnitude(self, double mag):
         self.c_term._magnitude = mag
-        self.c_term._logmagnitude = logmag
+        self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE
 
     def mapvec_indices_inplace(self, mapvec):
         self.coeff.mapvec_indices_inplace(mapvec)
@@ -1642,9 +1659,15 @@ cdef class SVTermRep:
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                          self.pre_ops, self.post_ops)
 
+    def copy(self):
+        return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)        
 
 
 
+#Note: to use direct term reps (numerical coeffs) we'll need to update
+# what the members are called and add methods as was done for SVTermRep.
 cdef class SVTermDirectRep:
     cdef SVTermDirectCRep* c_term
 
@@ -1719,6 +1742,20 @@ cdef class SBTermRep:
     cdef object pre_ops
     cdef object post_ops
 
+    @classmethod
+    def composed(cls, terms_to_compose, double magnitude):
+        cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
+        cdef SBTermRep first = terms_to_compose[0]
+        cdef PolyRep coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return SBTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+
     def __cinit__(self, PolyRep coeff, double mag, double logmag,
                   SBStateRep pre_state, SBStateRep post_state,
                   SBEffectRep pre_effect, SBEffectRep post_effect, pre_ops, post_ops):
@@ -1760,9 +1797,12 @@ cdef class SBTermRep:
     def __dealloc__(self):
         del self.c_term
 
-    def set_magnitude(self, double mag, double logmag):
+    def set_magnitude(self, double mag):
         self.c_term._magnitude = mag
-        self.c_term._logmagnitude = logmag
+        self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
 
     @property
     def magnitude(self):
@@ -1771,6 +1811,19 @@ cdef class SBTermRep:
     @property
     def logmagnitude(self):
         return self.c_term._logmagnitude
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return SBTermRep(coeff, self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)
+
+    def copy(self):
+        return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)        
+
 
 
 

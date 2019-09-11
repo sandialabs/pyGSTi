@@ -11,6 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import sys
 import time as _time
+import math as _math
 import numpy as _np
 import scipy.sparse as _sps
 import itertools as _itertools
@@ -24,6 +25,12 @@ from ..tools import optools as _gt
 from ..tools.matrixtools import _fas
 
 from scipy.sparse.linalg import LinearOperator
+
+LARGE = 1000000000
+# a large number such that LARGE is
+# a very high term weight which won't help (at all) a
+# path get included in the selected set of paths.
+
 
 # DEBUG!!!
 DEBUG_FCOUNT = 0
@@ -1466,6 +1473,21 @@ class PolyRep(dict):
 
 class SVTermRep(object):
     # just a container for other reps (polys, states, effects, and gates)
+
+    @classmethod
+    def composed(cls, terms_to_compose, magnitude):
+        logmag = _math.log10(magnitude) if magnitude > 0 else -LARGE
+        first = terms_to_compose[0]
+        coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return SVTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+    
     def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
         self.coeff = coeff
@@ -1477,11 +1499,45 @@ class SVTermRep(object):
         self.post_effect = post_effect
         self.pre_ops = pre_ops
         self.post_ops = post_ops
+
+    def set_magnitude(self, mag):
+        self.magnitude = mag
+        self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return SVTermRep(coeff, self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)
+
+    def copy(self):
+        return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)        
 
 
 class SBTermRep(object):
     # exactly the same as SVTermRep
     # just a container for other reps (polys, states, effects, and gates)
+
+    @classmethod
+    def composed(cls, terms_to_compose, magnitude):
+        logmag = _math.log10(magnitude) if magnitude > 0 else -LARGE
+        first = terms_to_compose[0]
+        coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return SBTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+    
     def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
         self.coeff = coeff
@@ -1493,6 +1549,28 @@ class SBTermRep(object):
         self.post_effect = post_effect
         self.pre_ops = pre_ops
         self.post_ops = post_ops
+
+    def set_magnitude(self, mag):
+        self.magnitude = mag
+        self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return SBTermRep(coeff, self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)
+
+    def copy(self):
+        return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)        
+
+
+
 
 
 # No need to create separate classes for floating-pt (vs. polynomial) coeff in Python (no types!)
@@ -2778,7 +2856,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     n = len(oprep_lists)
     nops = [len(oprep_list) for oprep_list in oprep_lists]
     b = [0] * n  # root
-    log_thres = _np.log10(pathmag_threshold)
+    log_thres = _math.log10(pathmag_threshold)
 
     ##TODO REMOVE
     #if debug:
