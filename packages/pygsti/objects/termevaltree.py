@@ -52,7 +52,7 @@ class TermEvalTree(EvalTree):
 
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, opcache, numSubTreeComms=1, maxCacheSize=None):  # TODO: REMOVE opcache args?
+    def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
         """
         Initialize an evaluation tree using a set of complied operation sequences.
         This function must be called before using this EvalTree.
@@ -121,7 +121,6 @@ class TermEvalTree(EvalTree):
         #self.p_polys = {}
         #self.dp_polys = {}
         #self.hp_polys = {}
-        #self.opcache = opcache
 
         # cache of the high-magnitude terms (actually their represenations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,

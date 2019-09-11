@@ -78,7 +78,7 @@ class EvalTree(list):
 
         super(EvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, opcache=None, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
@@ -89,8 +89,6 @@ class EvalTree(list):
               A list of tuples of operation labels or Circuit
               objects, specifying the operation sequences that
               should be present in the evaluation tree.
-
-          TODO: docstring opcache
 
           numSubTreeComms : int, optional
               The number of processor groups (communicators)

@@ -253,7 +253,7 @@ class TermForwardSimulator(ForwardSimulator):
         self.from_vector(orig_vec, close=True)
         return dprobs
 
-    #TODO REMOVE - UNNEEDED NOW
+    #TODO REMOVE - UNNEEDED NOW - except maybe for helping w/docstrings
     # def OLD_prs_as_pruned_polyreps(self,
     #                            rholabel,
     #                            elabels,
@@ -726,7 +726,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         return "circuits"
 
-    def construct_evaltree(self, simplified_circuits, opcache, numSubtreeComms):
+    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -752,7 +752,7 @@ class TermForwardSimulator(ForwardSimulator):
         TermEvalTree
         """
         evTree = _TermEvalTree()
-        evTree.initialize(simplified_circuits, opcache, numSubtreeComms)
+        evTree.initialize(simplified_circuits, numSubtreeComms)
         return evTree
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,

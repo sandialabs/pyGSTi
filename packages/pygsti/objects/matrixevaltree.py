@@ -51,7 +51,7 @@ class MatrixEvalTree(EvalTree):
 
         super(MatrixEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_elabels, opcache=None, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_elabels, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.

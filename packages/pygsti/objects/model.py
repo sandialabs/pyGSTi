@@ -1631,7 +1631,7 @@ class OpModel(Model):
         simplified_circuits, elIndices, outcomes, nEls = \
             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, self._opcache, numSubtreeComms)
+        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list), _time.time() - tm)); tm = _time.time()
