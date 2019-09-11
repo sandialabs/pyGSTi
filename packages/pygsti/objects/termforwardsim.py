@@ -926,7 +926,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         TODO: docstring
         """
-        t0 = _time.time()
+        #t0 = _time.time() #REMOVE
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
@@ -951,7 +951,7 @@ class TermForwardSimulator(ForwardSimulator):
             cscache_per_subtree.append(circuitsetup_cache)
 
         #It's ok that thresholds and caches are per-*local*-subtree, but we need nTotFailed to be a global number of failures
-        print("Rank%d: find_minimal_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))
+        #print("Rank%d: find_minimal_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))  # REMOVE
         nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
 
         pathSet = (thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree)
@@ -961,7 +961,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         TODO: docstring
         """
-        t0 = _time.time()
+        #t0 = _time.time() #REMOVE
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
         thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
@@ -975,7 +975,7 @@ class TermForwardSimulator(ForwardSimulator):
                 #This computes (&caches) polys for this path set as well
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
-        print("Rank%d: select_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))
+        #print("Rank%d: select_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0)) #REMOVE
                 
 
     def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good

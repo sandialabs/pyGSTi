@@ -789,7 +789,7 @@ class OpModel(Model):
         self._clean_paramvec()
         layer_lizard = self._layer_lizard()
         layer_lizard.set_opcache(self._opcache, self.to_vector())
-        print("FWDSIM OPCACHE LEN = ",len(self._opcache))
+        #print("FWDSIM OPCACHE LEN = ",len(self._opcache))  # TODO REMOVE
 
         kwargs = {}
         if self._sim_type == "termorder":
@@ -1709,7 +1709,7 @@ class OpModel(Model):
             -- just get the number of failures using the current "locked-in" paths.
         restrict_to : 
         """
-        print("BULK PROBS NUM TERMGAP FAILURES")
+        #print("BULK PROBS NUM TERMGAP FAILURES") #TODO REMOVE
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
