@@ -798,17 +798,15 @@ class OpModel(Model):
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type in ("termgap", "termdirect"):
-            assert(len(self._sim_args) >= 3 + 1), \
-                "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" \
+            assert(len(self._sim_args) >= 1 + 1), \
+                "%s must have <gap>,[<maxpaths>,<maxorder>,<min_term_mag>] args, e.g. '%s:500:0.1:3'" \
                 % (self._sim_type, self._sim_type)
             kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
-            kwargs['max_order'] = int(self._sim_args[0])
-            kwargs['pathmag_gap'] = float(self._sim_args[1])
-            kwargs['min_term_mag'] = float(self._sim_args[2])
-            kwargs['max_paths_per_outcome'] = int(self._sim_args[3]) if len(self._sim_args) > 3 else 500
-            kwargs['opt_mode'] = bool(self._sim_args[4]) if len(self._sim_args) > 4 else True
+            kwargs['pathmag_gap'] = float(self._sim_args[0])
+            kwargs['max_paths_per_outcome'] = int(self._sim_args[1]) if len(self._sim_args) > 2 else 500
+            kwargs['max_order'] = int(self._sim_args[2]) if len(self._sim_args) > 3 else 3
+            kwargs['min_term_mag'] = float(self._sim_args[3]) if len(self._sim_args) > 4 else kwargs['pathmag_gap'] / (10*kwargs['max_paths_per_outcome'])
             kwargs['gap_inflation_factor'] = self._termgap_inflation_factor
-            # indicates fwdsim is being used within an optimization loop (only recomp paths on deriv evals)
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type == "map":
             kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None  # backward compat

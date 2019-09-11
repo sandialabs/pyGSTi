@@ -73,8 +73,8 @@ class TermForwardSimulator(ForwardSimulator):
     """
 
     def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None,
-                 min_term_mag=None, max_paths_per_outcome=500, gap_inflation_factor=1000.0,
-                 opt_mode=False, cache=None):
+                 min_term_mag="auto", max_paths_per_outcome=500, gap_inflation_factor=1000.0,
+                 cache=None):
         """
         Construct a new TermForwardSimulator object.
         TODO: fix this docstring (and maybe other fwdsim __init__ functions?
@@ -135,7 +135,6 @@ class TermForwardSimulator(ForwardSimulator):
         self.pathmagnitude_gap_inflation = gap_inflation_factor # how much to inflate gap when constraining computation of probabilities
         self.min_term_mag = min_term_mag  # only used in "pruned" mode
         self.max_paths_per_outcome = max_paths_per_outcome
-        self.opt_mode = opt_mode
         self.cache = cache
         self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
