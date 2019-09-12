@@ -1090,7 +1090,17 @@ class LindbladPOVM(POVM):
             self, self.error_map.gpindices, parent)
         return num_new_params
 
-    def relink_parent(self, parent):
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return [self.error_map]
+
+    def relink_parent(self, parent):  # Unnecessary?
         """
         Sets the parent of this object *without* altering its gpindices.
 
@@ -1127,7 +1137,7 @@ class LindbladPOVM(POVM):
         assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
         self.error_map.set_gpindices(gpindices, parent, memo)
         self.terms = {}  # clear terms cache since param indices have changed now
-        _gm.ModelMember.set_gpindices(self, gpindices, parent)
+        _gm.ModelMember._set_only_my_gpindices(self, gpindices, parent)
 
     def simplify_effects(self, prefix=""):
         """
