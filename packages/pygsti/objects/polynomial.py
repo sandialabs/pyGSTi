@@ -888,7 +888,7 @@ class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
             if rem == 1: ret *= cur  # add current power of x (2^i) if needed
             cur = cur * cur  # current power *= 2
             n //= 2  # shift bits of n right
-        ret.fastpoly = sef.fastpoly ** n
+        ret.fastpoly = self.fastpoly ** n
         ret.check_fastpoly()
         self.check_fastpoly()
         return ret

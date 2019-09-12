@@ -1629,7 +1629,7 @@ def DM_mapfill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, ev
     if param_indices is None:
         param_indices = list(range(calc.Np))
     if dest_param_indices is None:
-        dest_param_indices = list(range(_slct.len(param_indices)))
+        dest_param_indices = list(range(_slct.length(param_indices)))
 
     param_indices = _slct.as_array(param_indices)
     dest_param_indices = _slct.as_array(dest_param_indices)

@@ -498,31 +498,16 @@ class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
 
     
 class HasNumericalCoefficient(object):
-    _coeff_product = _np.product
-    #def _coeff_product(self, coeffs):
-    #    return _np.product(coeffs)
-
     @classmethod
     def _coeff_rep(cls, coeff):
         return coeff
 
-    #def _coeff_copy(self):
-    #    return self.coeff
-
     @property
     def coeff(self):
-        return coeff
+        return self._rep.coeff
 
         
 class HasPolyCoefficient(object):
-    #_coeff_product = _Polynomial.product
-    def _coeff_product(self, coeff_reps):
-        #return _Polynomial.product(coeffs)
-        coeffrep = coeff_reps[0]
-        for crep in coeff_reps[1:]:
-            coeffrep = coeffrep.mult(crep)
-        return coeffrep
-    
     @classmethod
     def _coeff_rep(cls,coeff):
         return coeff.torep()
@@ -587,7 +572,7 @@ class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
 
 class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
-        assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
+        #assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
         return RankOnePolyEffectTermWithMagnitude(rep)

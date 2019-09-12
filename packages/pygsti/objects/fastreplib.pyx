@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=True
+# cython: profile=False
 # cython: linetrace=False
 
 #***************************************************************************************************
@@ -2878,7 +2878,7 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
     for glbl in distinct_gateLabels:
         if glbl in repcache:
-            repcel = <RepCacheEl?>repcache[glbl]
+            repcel = <RepCacheEl>repcache[glbl]
             op_term_reps[ glmap[glbl] ] = repcel.reps
             op_foat_indices[ glmap[glbl] ] = repcel.foat_indices
         else:
@@ -2912,12 +2912,12 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
             #    print "Highmag terms recomputed (OK) - made op = ", db_made_op
 
             for t in hmterms:
-                rep = (<SVTermRep?>t.torep())
+                rep = (<SVTermRep>t.torep())
                 repcel.pyterm_references.append(rep)
                 repcel.reps.push_back( rep.c_term )
 
             for i in foat_indices:
-                repcel.foat_indices.push_back(<INT?>i)
+                repcel.foat_indices.push_back(<INT>i)
 
             op_term_reps[ glmap[glbl] ] = repcel.reps
             op_foat_indices[ glmap[glbl] ] = repcel.foat_indices
@@ -2938,12 +2938,12 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
             max_poly_vars=mpv)
 
         for t in hmterms:
-            rep = (<SVTermRep?>t.torep())
+            rep = (<SVTermRep>t.torep())
             repcel.pyterm_references.append(rep)
             repcel.reps.push_back( rep.c_term )
 
         for i in foat_indices:
-            repcel.foat_indices.push_back(<INT?>i)
+            repcel.foat_indices.push_back(<INT>i)
 
         rho_term_reps = repcel.reps
         rho_foat_indices = repcel.foat_indices
@@ -2951,7 +2951,7 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
     
     elabels = tuple(elabels) # so hashable
     if elabels in repcache:
-        repcel = <RepCacheEl?>repcache[elabels]
+        repcel = <RepCacheEl>repcache[elabels]
         E_term_reps = repcel.reps
         E_indices = repcel.E_indices
         E_foat_indices = repcel.foat_indices
@@ -2969,10 +2969,10 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
         for j,(i,t,_,is_foat) in enumerate(E_term_indices_and_reps):
-            rep = (<SVTermRep?>t.torep())
+            rep = (<SVTermRep>t.torep())
             repcel.pyterm_references.append(rep)
             repcel.reps.push_back( rep.c_term )
-            repcel.E_indices.push_back(<INT?>i)
+            repcel.E_indices.push_back(<INT>i)
             if(is_foat): repcel.foat_indices.push_back(<INT>j)
 
         E_term_reps = repcel.reps

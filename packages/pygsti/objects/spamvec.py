@@ -526,15 +526,29 @@ class SPAMVec(_modelmember.ModelMember):
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-                terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
-
+                mags = _np.abs(coeffs)
+                last_len = len(terms)                
+                #OLD: terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
+                
                 if taylor_order == 1:
-                    first_order_magmax = max([t.magnitude for t in terms_at_order])
-    
-                last_len = len(terms)
-                for t in terms_at_order:
-                    if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                        terms.append((taylor_order, t))
+                    #OLD: first_order_magmax = max([t.magnitude for t in terms_at_order])
+                    first_order_magmax = max(mags)
+
+                    if force_firstorder:
+                        terms.extend([(taylor_order, t.copy_with_magnitude(mag)) for coeff, mag, t in zip(coeffs, mags, terms_at_order)])
+                    else:
+                        for mag, t in zip(mags, terms_at_order):
+                            if mag >= min_term_mag:
+                                terms.append( (taylor_order, t.copy_with_magnitude(mag)) )
+                else:
+                    for mag, t in zip(mags, terms_at_order):
+                        if mag >= min_term_mag:
+                            terms.append( (taylor_order, t.copy_with_magnitude(mag)) )
+
+                #OLD:
+                #for t in terms_at_order:
+                #    if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
+                #        terms.append((taylor_order, t))
             else:
                 terms.extend( [(taylor_order, t) for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)] )
 
