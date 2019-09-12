@@ -65,6 +65,16 @@ except ImportError:
 _dummy_profiler = _DummyProfiler()
 
 
+#TEST
+def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+    for repcel in repcache.values():
+        #repcel = <RepCacheEl?>repcel
+        for termrep in repcel.pyterm_references:
+            v,c = termrep.coeff.compact_complex()
+            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(v,c,paramvec,(1,))
+            termrep.set_magnitude(abs(coeff_array[0]))
+
+
 class TermForwardSimulator(ForwardSimulator):
     """
     Encapsulates a calculation tool used by model objects that evaluates
@@ -975,7 +985,15 @@ class TermForwardSimulator(ForwardSimulator):
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
         #print("Rank%d: select_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0)) #REMOVE
-                
+
+    def refresh_magnitudes_in_repcache(self, pathSet):
+        thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
+        paramvec = self.to_vector()
+        for repcache in repcache_per_subtree:
+            if self.evotype == "svterm":
+                SV_refresh_magnitudes_in_repcache(repcache, paramvec)
+            else:
+                raise NotImplementedError("cterm case not implemented yet!")                
 
     def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """

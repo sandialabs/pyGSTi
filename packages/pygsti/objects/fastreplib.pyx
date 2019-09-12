@@ -32,6 +32,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import optools as _gt
 from ..tools.matrixtools import _fas
+from . import fastopcalc as _fastopcalc
 from scipy.sparse.linalg import LinearOperator
 
 cdef double LARGE = 1000000000
@@ -1734,13 +1735,13 @@ cdef class SBTermRep:
     cdef SBTermCRep* c_term
 
     #Hold references to other reps so we don't GC them
-    cdef PolyRep coeff
-    cdef SBStateRep pre_state
-    cdef SBStateRep post_state
-    cdef SBEffectRep pre_effect
-    cdef SBEffectRep post_effect
-    cdef object pre_ops
-    cdef object post_ops
+    cdef public PolyRep coeff
+    cdef public SBStateRep pre_state
+    cdef public SBStateRep post_state
+    cdef public SBEffectRep pre_effect
+    cdef public SBEffectRep post_effect
+    cdef public object pre_ops
+    cdef public object post_ops
 
     @classmethod
     def composed(cls, terms_to_compose, double magnitude):
@@ -1831,7 +1832,7 @@ cdef class RepCacheEl:
     cdef vector[SVTermCRep_ptr] reps
     cdef vector[INT] foat_indices
     cdef vector[INT] E_indices
-    cdef object pyterm_references
+    cdef public object pyterm_references
 
     def __cinit__(self):
         self.reps = vector[SVTermCRep_ptr](0)
@@ -2848,7 +2849,7 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 
 
 # State-vector pruned-poly-term calcs -------------------------
-def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
+def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
 
     cdef INT i, j
     cdef vector[INT] cgatestring
@@ -3004,7 +3005,7 @@ def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repca
     if circuit in circuitsetup_cache:
         cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
     else:
-        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
+        cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
         
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
@@ -3090,7 +3091,7 @@ def SV_compute_pruned_path_polys_given_threshold(
     if circuit in circuitsetup_cache:
         cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
     else:
-        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
+        cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
     cdef vector[PolyCRep*] polys = sv_compute_pruned_polys_given_threshold(
@@ -3654,7 +3655,7 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
     if circuit in circuitsetup_cache:
         cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
     else:
-        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
+        cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)

@@ -566,21 +566,21 @@ class HasPolyCoefficient(object):
 class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
-        rep = self._rep.copy()
+        rep = self._rep #.copy()
         rep.set_magnitude(mag)
         return RankOnePolyPrepTermWithMagnitude(rep)
 
 class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
-        #assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
-        rep = self._rep.copy()
+        assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
+        rep = self._rep #.copy()
         rep.set_magnitude(mag)
         return RankOnePolyEffectTermWithMagnitude(rep)
 
 class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
-        rep = self._rep.copy()
+        rep = self._rep #.copy()
         rep.set_magnitude(mag)
         return RankOnePolyOpTermWithMagnitude(rep)
 

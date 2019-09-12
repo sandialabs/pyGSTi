@@ -1486,6 +1486,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
                                              mdl.to_vector().copy(), None, evTree, comm, memLimit, printer - 1)
     #mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
+    mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
     mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
 
     minErrVec = None
@@ -1519,6 +1520,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             #re-prep probabilities, adding more paths to accurately capture errors if needed
             alpha, pathSet = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec, pathSet,
                                                                   evTree, comm, memLimit, printer - 1) # updates `mdl` (see above comment)
+            mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
     
             if alpha <= 0.1:
                 printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
@@ -1526,6 +1528,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
 
             if alpha > 0.0:  
                 #mdl.bulk_prep_probs(evTree, comm, memLimit)
+                #pathSet, _ = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
                 mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
             else:
                 # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in"
