@@ -244,7 +244,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         cache = {}
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
-        target_model.set_simtype('termgap:3:0.05:0.001:True', cache)
+        target_model.set_simtype('termgap:3:0.05:0.001:1000:True', cache)
         try:
             results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                                   std.germs, self.maxLengths, verbosity=3)
@@ -263,9 +263,9 @@ class CalcMethods1QTestCase(BaseTestCase):
                 raise ve
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
-        #if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
-        #    pygsti.io.json.dump(results.estimates['default'].models['go0'],
-        #                        open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            pygsti.io.json.dump(results.estimates['default'].models['go0'],
+                                open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 7, delta=1.0)
@@ -423,7 +423,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         cache = {}
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                      sim_type="termgap:3:0.05:0.001:True", parameterization="H+S terms", errcomp_type='errorgens')
+                                      sim_type="termgap:3:0.05:0.001:1000:True", parameterization="H+S terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -533,8 +533,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         mdl.operations['Gy'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmay))
         mdl.preps['rho0'] = pygsti.obj.StaticSPAMVec( [1,0], 'statevec')
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM(
-            {'0': pygsti.obj.StaticSPAMVec( [1,0], 'statevec'),
-             '1': pygsti.obj.StaticSPAMVec( [0,1], 'statevec')})
+            {'0': pygsti.obj.StaticSPAMVec( [1,0], 'statevec', 'effect'),
+             '1': pygsti.obj.StaticSPAMVec( [0,1], 'statevec', 'effect')})
              
         probs1 = mdl.probs(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line

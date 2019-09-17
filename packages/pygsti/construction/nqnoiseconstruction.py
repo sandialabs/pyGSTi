@@ -496,7 +496,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
     sparse : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `nQubits`-qubit gates are sparse or not.
+        `nQubits`-qubit gates have sparse representations or not.
 
     errcomp_type : {"gates","errorgens"}
         How errors are composed when creating layer operations in the returned
@@ -748,7 +748,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
-            return _op.LindbladOp(None, errgen, sparse_expm=sparse)
+            return _op.LindbladOp(None, errgen, dense_rep=not sparse)
         else:
             return errgen
 
@@ -2367,10 +2367,11 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # create a model with maxIdleWeight qubits that includes all
     # the errors of the actual n-qubit model...
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
-    # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graphO
+    # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
+    # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when maxIdleWeight < nQubits!
     printer.log("Creating \"idle error\" model on %d qubits" % maxIdleWeight)
     idle_model = _CloudNoiseModel.build_from_hops_and_weights(
-        maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, qubitGraph,
+        maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line', #qubitGraph
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
         sim_type="termorder:1", parameterization=ptermstype)

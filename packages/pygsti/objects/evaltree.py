@@ -35,16 +35,14 @@ class EvalTree(list):
 
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
-        # list of the operation labels
-        self.opLabels = []
-
-        # indices for initial computation that is viewed separately
-        # from the "main evaluation" given by eval_order
-        self.init_indices = []
 
         # list of indices specifying what order they should be evaluated in,
         # *after* evaluating all of the initial indices (init_indices)
         self.eval_order = []
+
+        # list giving the number of elements (~effect labels) associated 
+        # with each simplified circuit.
+        self.simplified_circuit_nEls = None
 
         # Number of "final" or "requested" strings, which may be less
         # then len(self) since some un-requested results may be stored
@@ -60,14 +58,6 @@ class EvalTree(list):
 
         # a dict to hold various MPI distribution info
         self.distribution = {}
-
-        # a list of spamTuple-lists, one for each final operation sequence
-        self.simplified_circuit_spamTuples = None
-        #self.finalStringToElsMap = None
-
-        # a dictionary of final-gate-string index lists keyed by
-        # each distinct spamTuple
-        self.spamtuple_indices = None
 
         # ********* Only non-None for sub-trees ******************
 
@@ -118,14 +108,17 @@ class EvalTree(list):
         `simplified_circuit_list` - a dictionary w/keys = "raw" operation sequences OR a list of them.
         """
         opLabels = set()
-        for raw_gstr in simplified_circuit_list:  # will work for dict keys too
-            opLabels.update(raw_gstr)
+
+        for simple_circuit_with_prep, elabels in simplified_circuit_list.items():
+            if elabels == [None]:  # special case when circuit contains no prep
+                opLabels.update(simple_circuit_with_prep)
+            else:
+                opLabels.update(simple_circuit_with_prep[1:])  # don't include prep
+
         return sorted(opLabels)
 
     def _copyBase(self, newTree):
         """ copy EvalTree members to a new tree (used by derived classes "copy" fns) """
-        newTree.opLabels = self.opLabels[:]
-        newTree.init_indices = self.init_indices[:]
         newTree.eval_order = self.eval_order[:]
         newTree.num_final_strs = self.num_final_strs
         newTree.num_final_els = self.num_final_els
@@ -137,9 +130,7 @@ class EvalTree(list):
         newTree.subTrees = [st.copy() for st in self.subTrees]
         newTree.original_index_lookup = self.original_index_lookup[:] \
             if (self.original_index_lookup is not None) else None
-        newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
-        #newTree.finalStringToElsMap = self.finalStringToElsMap[:]
-        newTree.spamtuple_indices = self.spamtuple_indices.copy()
+        newTree.simplified_circuit_nEls = self.simplified_circuit_nEls[:]
         return newTree
 
     def get_init_labels(self):
@@ -267,7 +258,7 @@ class EvalTree(list):
     def num_final_elements(self):
         """
         Returns the integer number of "final" elements, equal
-          to the number of (circuit, spamTuple) pairs contained in
+          to the number of (circuit, elabels) pairs contained in
           the `simplified_circuit_list` passed to :method:`initialize`.
         """
         return self.num_final_els
@@ -491,26 +482,6 @@ class EvalTree(list):
         """
         raise NotImplementedError("split(...) not implemented!")
 
-    def recompute_spamtuple_indices(self, bLocal=False):
-        """
-        Recompute this tree's `.spamtuple_indices` array.
-
-        Parameters
-        ----------
-        bLocal : bool, optional
-            If True, then the indices computed will index
-            this tree's final array (even if it's a subtree).
-            If False (the default), then a subtree's indices
-            will index the *parent* tree's final array.
-
-        Returns
-        -------
-        None
-        """
-        self.spamtuple_indices = _compute_spamtuple_indices(
-            self.simplified_circuit_spamTuples,
-            None if bLocal else self.myFinalElsToParentFinalElsMap)
-
     def _finish_split(self, elIndicesDict, subTreeSetList, permute_parent_element, create_subtree, all_final=False):
         # Create subtrees from index sets
         import time as _time
@@ -579,6 +550,7 @@ class EvalTree(list):
             #if bDebug: print("FINAL SUBTREE: %s (nFinal=%d)" % (str(subTreeIndices),subTreeNumFinal))
 
         #print("PT1 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
+
         #Permute parent tree indices according to parentIndexPerm
         # parentIndexRevPerm maps: newIndex -> currentIndex, so looking at it as a list
         #  gives the new (permuted) elements
@@ -600,41 +572,11 @@ class EvalTree(list):
         #print("DEBUG: PERM MAP = ", parentIndexPerm)
 
         #Permute parent indices
-        self.init_indices = [parentIndexPerm[iCur] for iCur in self.init_indices]
-        self.eval_order = [parentIndexPerm[iCur] for iCur in self.eval_order]
+        self._update_eval_order_helpers(parentIndexPerm)  #HACK to allow .init_indices to be updated in Matrix tree case
+        self.eval_order = [parentIndexPerm[iCur] for iCur in self.eval_order]        
         self[:] = [permute_parent_element(parentIndexPerm, self[iCur])
                    for iCur in parentIndexRevPerm]
         #print("PT3 = %.3fs" % (_time.time()-t0)); t0 = _time.time()  # REMOVE
-
-        # Setting simplified_circuit_spamTuples, (re)sets the element ordering,
-        # so before doint this compute the old_to_new mapping and update
-        # elIndicesDict.
-        old_finalStringToElsMap = []; i = 0
-        for k, spamTuples in enumerate(self.simplified_circuit_spamTuples):
-            old_finalStringToElsMap.append(list(range(i, i + len(spamTuples))))
-            i += len(spamTuples)
-
-        permute_newToOld = []
-        for iOldStr in parentIndexRevPerm[0:self.num_final_strings()]:
-            permute_newToOld.extend(old_finalStringToElsMap[iOldStr])
-        permute_oldToNew = {iOld: iNew for iNew, iOld in enumerate(permute_newToOld)}
-
-        #print("DEBUG: old_finalStrToEls = ",old_finalStringToElsMap)
-        #print("DEBUG: permute_newToOld = ",permute_newToOld)
-        #print("DEBUG: permute_oldToNew = ",permute_oldToNew)
-        #print("PT4 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
-
-        updated_elIndices = _collections.OrderedDict()
-        for ky, indices in elIndicesDict.items():
-            updated_elIndices[ky] = _slct.list_to_slice(
-                [permute_oldToNew[x] for x in
-                 (_slct.indices(indices) if isinstance(indices, slice) else indices)])
-
-        # Now update simplified_circuit_spamTuples
-        self.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[iCur]
-                                              for iCur in parentIndexRevPerm[0:self.num_final_strings()]]
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here - just for clarity
-        #print("PT5 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
 
         #Assert this tree (self) is *not* split
         assert(self.myFinalToParentFinalMap is None)
@@ -655,7 +597,7 @@ class EvalTree(list):
         #print("PT6 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
         #Now (finally) create the actual subtrees, which requires
         # taking parent-indices and mapping them the subtree-indices
-        fullEvalOrder_lookup = {k: i for i, k in enumerate(self.init_indices + self.eval_order)}  # list concatenation
+        fullEvalOrder_lookup = {k: i for i, k in enumerate(self._get_full_eval_order())}  # list concatenation
         for iSubTree, (subTreeIndices, subTreeNumFinal, slc) \
                 in enumerate(zip(subTreeIndicesList, numFinalList, finalSlices)):
 
@@ -672,9 +614,68 @@ class EvalTree(list):
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
         #assert(dbList == dbList2)
-        #print("DEBUG: updated elIndices = ",updated_elIndices)
+        return parentIndexRevPerm
 
-        return updated_elIndices
+    def _get_full_eval_order(self):
+        """Includes init_indices in matrix-based evaltree case... HACK """
+        return self.eval_order
+
+    def _update_eval_order_helpers(self, indexPermutation):
+        """Update anything pertaining to the "full" evaluation order
+           - e.g. init_inidces in matrix-based case (HACK)"""
+        pass
+
+    def _permute_simplified_circuit_Xs(self, simplified_circuit_Xs, element_indices, old_indices_in_new_order):
+        """
+        Updates simplified_circuit_Xs by the old->new circuit mapping specified by
+        `old_indices_in_new_order`.  Because the order of simplified_circuit_Xs implied
+        an element ordering, this routine also returns an updated_elIndices mapping
+        that provides an updated element-index array (i.e. elIndices[circuitIndex] = slice of element indices)
+
+        Parameters
+        ----------
+        simplified_circuit_Xs : list
+            list of nCircuits (#final circuits) lists, each
+            of whose length gives the number of elements for that circuit (the values are
+            immaterial - it could be an elabel or spamtuple, etc).
+
+        old_indices_in_new_order : list
+            giving the new ordering of the old indices.        
+
+        Returns
+        -------
+        updated_simplified_circuit_Xs : list
+        updated_element_indices : OrderedDict
+        """
+
+        # circuit_elements_to_permute is a list of nCircuits (#final circuits) lists,
+        # each of which gives the *element* indices for the corresponding circuit.
+
+        # Setting simplified_circuit_spamTuples, (re)sets the element ordering,
+        # so before doing this compute the old_to_new mapping and update
+        # elIndicesDict.
+        old_finalStringToElsMap = []; i = 0
+        for k, spamTuples in enumerate(simplified_circuit_Xs):
+            old_finalStringToElsMap.append(list(range(i, i + len(spamTuples))))
+            i += len(spamTuples)
+
+        permute_newToOld = []
+        for iOldStr in old_indices_in_new_order[0:self.num_final_strings()]:
+            permute_newToOld.extend(old_finalStringToElsMap[iOldStr])
+        permute_oldToNew = {iOld: iNew for iNew, iOld in enumerate(permute_newToOld)}
+
+        updated_elIndices = _collections.OrderedDict()
+        for ky, indices in element_indices.items():
+            updated_elIndices[ky] = _slct.list_to_slice(
+                [permute_oldToNew[x] for x in
+                 (_slct.indices(indices) if isinstance(indices, slice) else indices)])
+
+        # Now update simplified_circuit_spamTuples
+        updated_simplified_circuit_Xs = [simplified_circuit_Xs[iCur]
+                                         for iCur in old_indices_in_new_order[0:self.num_final_strings()]]
+        return updated_simplified_circuit_Xs, updated_elIndices
+
+
 
     def is_split(self):
         """ Returns boolean indicating whether tree is split into sub-trees or not. """
@@ -746,48 +747,3 @@ class EvalTree(list):
             #for i,t in enumerate(self.subTrees):
             #    print(">> sub-tree %d: " % i)
             #    t.print_analysis()
-
-
-def _compute_spamtuple_indices(simplified_circuit_spamTuples,
-                               subtreeFinalElsToParentFinalElsMap=None):
-    """
-    Returns a dictionary whose keys are the distinct spamTuples
-    found in `simplified_circuit_spamTuples` and whose values are
-    (finalIndices, finalTreeSlice) tuples where:
-
-    finalIndices = the "element" indices in any final filled quantities
-                   which combines both spam and gate-sequence indices.
-                   If this tree is a subtree, then these final indices
-                   refer to the *parent's* final elements if
-                   `subtreeFinalElsToParentFinalElsMap` is given, otherwise
-                   they refer to the subtree's final indices (usually desired).
-    treeIndices = indices into the tree's final circuit list giving
-                  all of the (raw) operation sequences which need to be computed
-                  for the current spamTuple (this list has the SAME length
-                  as finalIndices).
-    """
-    spamtuple_indices = _collections.OrderedDict(); el_off = 0
-    for i, spamTuples in enumerate(  # i == final operation sequence index
-            simplified_circuit_spamTuples):
-        for j, spamTuple in enumerate(spamTuples, start=el_off):  # j == final element index
-            if spamTuple not in spamtuple_indices:
-                spamtuple_indices[spamTuple] = ([], [])
-            f = subtreeFinalElsToParentFinalElsMap[j] \
-                if (subtreeFinalElsToParentFinalElsMap is not None) else j  # parent's final
-            spamtuple_indices[spamTuple][0].append(f)
-            spamtuple_indices[spamTuple][1].append(i)
-        el_off += len(spamTuples)
-
-    def to_slice(x, maxLen=None):
-        s = _slct.list_to_slice(x, array_ok=True, require_contiguous=False)
-        if maxLen is not None and isinstance(s, slice) and (s.start, s.stop, s.step) == (0, maxLen, None):
-            return slice(None, None)  # check for entire range
-        else:
-            return s
-
-    nRawSequences = len(simplified_circuit_spamTuples)
-    nElements = el_off if (subtreeFinalElsToParentFinalElsMap is None) \
-        else None  # (we don't know how many els the parent has!)
-    return _collections.OrderedDict(
-        [(spamTuple, (to_slice(fInds, nElements), to_slice(gInds, nRawSequences)))
-         for spamTuple, (fInds, gInds) in spamtuple_indices.items()])

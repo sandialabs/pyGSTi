@@ -16,6 +16,7 @@ class ResultsEstimateTestCase(BaseTestCase):
     def setUp(self):
         super(ResultsEstimateTestCase, self).setUp()
 
+    @unittest.skip("need to update legacyio.py")
     def test_load_old_results(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()

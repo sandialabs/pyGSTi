@@ -61,7 +61,7 @@ def mdl_lsgst(self):
     return pygsti.do_iterative_mc2gst(
         self.dataset, self.mdl_clgst, self.lsgstStrings, verbosity=0,
         minProbClipForWeighting=1e-6, probClipInterval=(-1e6, 1e6),
-        memLimit=self.CM + 1024**3
+        memLimit=self.CM + 10*1024**3
     )
 
 

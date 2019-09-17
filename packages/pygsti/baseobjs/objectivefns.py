@@ -144,6 +144,7 @@ class Chi2Function(ObjectiveFunction):
         dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, self.N[self.firsts],
                                           2 * self.N[self.firsts] * omitted_probs / clipped_oprobs)
         fullv = _np.sqrt(v[self.firsts]**2 + self.N[self.firsts] * omitted_probs**2 / clipped_oprobs)
+        fullv[ v[self.firsts] == 0.0 ] = 1.0  # avoid NaNs when both fullv and v[firsts] are zero - result should be *zero* in this case
         dprobs[self.firsts, :] = (0.5 / fullv[:, None]) * (
             2 * v[self.firsts, None] * dprobs[self.firsts, :]
             - dprobs_factor_omitted[:, None] * self.dprobs_omitted_rowsum)

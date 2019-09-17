@@ -87,7 +87,7 @@ class ForwardSimulator(object):
         """
         return self.paramvec
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         The inverse of to_vector.  Initializes the Model-like members of this
         calculator based on `v`. Used for computing finite-difference derivatives.
@@ -97,8 +97,9 @@ class ForwardSimulator(object):
         # by the calculator class.  ORDER is important, as elements of
         # POVMs and Instruments rely on a fixed from_vector ordering
         # of their simplified effects/gates.
-        self.paramvec = v.copy()
-        self.sos.from_vector(v)
+        self.paramvec = v.copy()  # now self.paramvec is *not* the same as the Model's paramvec
+        self.sos.from_vector(v, close, nodirty)  # so don't always want ", nodirty=True)" - we
+        # need to set dirty flags so *parent* will re-init it's paramvec...
 
         #Re-init reps for computation
         #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
@@ -106,6 +107,9 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
+    def propagate(self, state, simplified_circuit, time=None):
+        raise NotImplementedError() # TODO - create an interface for running circuits
+        
     def probs(self, simplified_circuit, clipTo=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
@@ -136,26 +140,10 @@ class ForwardSimulator(object):
         raw_dict, outcomeLbls = simplified_circuit
         iOut = 0  # outcome index
 
-        for raw_circuit, spamTuples in raw_dict.items():
-            rholabel = None  # current prep label
-            elabels = []  # a list of effect labels to evaluate cur_rholabel with
-            for spamTuple in spamTuples:
-                if spamTuple[0] == rholabel: elabels.append(spamTuple[1])
-                else:
-                    if len(elabels) > 0:
-                        # evaluate spamTuples w/same rholabel together
-                        for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False, time):
-                            probs[outcomeLbls[iOut]] = pval; iOut += 1
-                    rholabel = spamTuple[0]  # make "current"
-                    elabels = [spamTuple[1]]
-            if len(elabels) > 0:
-                for pval in self.prs(rholabel, elabels, raw_circuit, clipTo, False, time):
-                    probs[outcomeLbls[iOut]] = pval; iOut += 1
-            #OLD
-            #for spamTuple in spamTuples:
-            #    probs[outcomeLbls[iOut]] = self.pr(
-            #        spamTuple, raw_circuit, clipTo, False)
-            #    iOut += 1
+        for raw_circuit, elabels in raw_dict.items():
+            # evaluate spamTuples w/same rholabel together
+            for pval in self.prs(raw_circuit[0], elabels, raw_circuit[1:], clipTo, False, time):
+                probs[outcomeLbls[iOut]] = pval; iOut += 1
         return probs
 
     def dprobs(self, simplified_circuit, returnPr=False, clipTo=None):
@@ -188,10 +176,10 @@ class ForwardSimulator(object):
         dprobs = {}
         raw_dict, outcomeLbls = simplified_circuit
         iOut = 0  # outcome index
-        for raw_circuit, spamTuples in raw_dict.items():
-            for spamTuple in spamTuples:
+        for raw_circuit, elabels in raw_dict.items():
+            for elabel in elabels:
                 dprobs[outcomeLbls[iOut]] = self.dpr(
-                    spamTuple, raw_circuit, returnPr, clipTo)
+                    (raw_circuit[0], elabel), raw_circuit[1:], returnPr, clipTo)
                 iOut += 1
         return dprobs
 
@@ -229,10 +217,10 @@ class ForwardSimulator(object):
         hprobs = {}
         raw_dict, outcomeLbls = simplified_circuit
         iOut = 0  # outcome index
-        for raw_circuit, spamTuples in raw_dict.items():
-            for spamTuple in spamTuples:
+        for raw_circuit, elabels in raw_dict.items():
+            for elabel in elabels:
                 hprobs[outcomeLbls[iOut]] = self.hpr(
-                    spamTuple, raw_circuit, returnPr, returnDeriv, clipTo)
+                    (raw_circuit[0], elabel), raw_circuit[1:], returnPr, returnDeriv, clipTo)
                 iOut += 1
         return hprobs
 
@@ -521,63 +509,38 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("construct_evaltree(...) is not implemented!")
 
-    def _fill_result_tuple(self, result_tup, evalTree,
-                           param_slice1, param_slice2, calc_and_fill_fn):
+    def _setParamBlockSize(self, wrtFilter, wrtBlockSize, comm):
+        if wrtFilter is None:
+            blkSize = wrtBlockSize  # could be None
+            if (comm is not None) and (comm.Get_size() > 1):
+                comm_blkSize = self.Np / comm.Get_size()
+                blkSize = comm_blkSize if (blkSize is None) \
+                    else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
+        else:
+            blkSize = None  # wrtFilter dictates block
+        return blkSize
+
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
         """
-        This function takes a "calc-and-fill" function, which computes
-        and *fills* (i.e. doesn't return to save copying) some arrays. The
-        arrays that are filled internally to `calc_and_fill_fn` must be the
-        same as the elements of `result_tup`.  The fill function computes
-        values for only a single spam label (specified to it by the first
-        two arguments), and in general only a specified slice of the values
-        for this spam label (given by the subsequent arguments, except for
-        the last).  The final argument is a boolean specifying whether
-        the filling should overwrite or add to the existing array values,
-        which is a functionality needed to correctly handle the remainder
-        spam label.
+        Performs initial computation, such as computing probability polynomials,
+        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        the creation of an evaluation tree, but is separated from it because this
+        "preparation" may use `comm` to distribute a computationally intensive task.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
         """
-
-        pslc1 = param_slice1
-        pslc2 = param_slice2
-        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
-            # fInds = "final indices" = the "element" indices in the final
-            #          filled quantity combining both spam and gate-sequence indices
-            # gInds  = "gate sequence indices" = indices into the (tree-) list of
-            #          all of the raw operation sequences which need to be computed
-            #          for the current spamTuple (this list has the SAME length as fInds).
-            calc_and_fill_fn(spamTuple, fInds, gInds, pslc1, pslc2, False)  # TODO: remove SumInto == True cases
-
-        return
-
-    def _fill_result_tuple_collectrho(self, result_tup, evalTree,
-                                      param_slice1, param_slice2, calc_and_fill_fn):
-        """
-        Similar to :method:`_fill_result_tuple`, but collects common-rho
-        spamtuples together for speeding up map-based evaluation.  Thus, where
-        `_fill_result_tuple` makes a separate call to `calc_and_fill_fn` for
-        each `(rhoLabel,Elabel)` spamtuple, this function calls
-        `calc_and_fill_fn(rhoLabel, Elabels, ...)`.
-        """
-
-        pslc1 = param_slice1
-        pslc2 = param_slice2
-        collected = _collections.OrderedDict()  # keys are rho labels
-        for spamTuple, (fInds, gInds) in evalTree.spamtuple_indices.items():
-            # fInds = "final indices" = the "element" indices in the final
-            #          filled quantity combining both spam and gate-sequence indices
-            # gInds  = "gate sequence indices" = indices into the (tree-) list of
-            #          all of the raw operation sequences which need to be computed
-            #          for the current spamTuple (this list has the SAME length as fInds).
-            rholabel, elabel = spamTuple  # this should always be the case... (no "custom" / "raw" labels)
-            if rholabel not in collected: collected[rholabel] = [list(), list(), list()]
-            collected[rholabel][0].append(elabel)
-            collected[rholabel][1].append(fInds)
-            collected[rholabel][2].append(gInds)
-
-        for rholabel, (elabels, fIndsList, gIndsList) in collected.items():
-            calc_and_fill_fn(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, False)
-
-        return
+        pass  # default is to have no pre-computed quantities (but not an error to call this fn)
 
     def bulk_fill_probs(self, mxToFill, evalTree,
                         clipTo=None, check=False, comm=None):

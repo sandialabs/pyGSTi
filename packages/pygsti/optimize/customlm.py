@@ -170,7 +170,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                                                      Jac.nbytes / (1024.0**3)))
 
             Jnorm = _np.linalg.norm(Jac)
-            printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |J|=%g" % (k, norm_f, mu, Jnorm))
+            xnorm = _np.linalg.norm(x)
+            printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |x|=%g, |J|=%g" % (k, norm_f, mu, xnorm, Jnorm))
 
             #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
             #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
@@ -231,6 +232,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 except _scipy.linalg.LinAlgError:
                     success = False
 
+                reject_msg = ""
+                
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
                     new_x = x + dx
@@ -243,6 +246,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
+                    #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
                         msg = "Relative change in |x| is at most %g" % rel_xtol
@@ -251,50 +255,62 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
 
-                    new_f = obj_fn(new_x)
+                    try:
+                        #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                        new_f = obj_fn(new_x)
+                        new_x_is_allowed = True
+                    except ValueError:
+                        new_x_is_allowed = False
+                        
                     # DB: from ..tools import matrixtools as _mt
                     # DB: print("DB XNEW (%s)=" % str(new_x.shape)); print(new_x)
                     # DB: print("DB FNEW (%s)=" % str(new_f.shape)); print(new_f); assert(False)
 
-                    if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
-                    norm_new_f = _np.dot(new_f, new_f)  # _np.linalg.norm(new_f)**2
-                    if not _np.isfinite(norm_new_f):  # avoid infinite loop...
-                        msg = "Infinite norm of objective function!"; break
-
-                    dL = _np.dot(dx, mu * dx - JTf)  # expected decrease in ||F||^2 from linear model
-                    dF = norm_f - norm_new_f      # actual decrease in ||F||^2
-
-                    printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
-                                (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
-
-                    if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
-                        msg = "Both actual and predicted relative reductions in the" + \
-                            " sum of squares are at most %g" % rel_ftol
-                        converged = True; break
-
-                    if profiler: profiler.mem_check("custom_leastsq: before success")
-
-                    if dL > 0 and dF > 0:
-                        # reduction in error: increment accepted!
-                        t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
-                        mu *= max(t, 1.0 / 3.0)
-                        nu = 2
-                        x, f, norm_f = new_x, new_f, norm_new_f
-                        printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
-                                    % (dF / dL, max(t, 1.0 / 3.0), mu), 2)
-
-                        #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                        #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
-
-                        ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
-                        #new_Jac = jac_fn(new_x)
-                        #new_JTf = _np.dot(new_Jac.T,new_f)
-                        #print(" CHECK: %g < %g ?" % (_np.linalg.norm(new_JTf,
-                        #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
-
-                        break  # exit inner loop normally
+                    if new_x_is_allowed:
+                        if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
+                        norm_new_f = _np.dot(new_f, new_f)  # _np.linalg.norm(new_f)**2
+                        if not _np.isfinite(norm_new_f):  # avoid infinite loop...
+                            msg = "Infinite norm of objective function!"; break
+    
+                        dL = _np.dot(dx, mu * dx - JTf)  # expected decrease in ||F||^2 from linear model
+                        dF = norm_f - norm_new_f      # actual decrease in ||F||^2
+    
+                        printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
+                                    (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
+    
+                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
+                            msg = "Both actual and predicted relative reductions in the" + \
+                                " sum of squares are at most %g" % rel_ftol
+                            converged = True; break
+    
+                        if profiler: profiler.mem_check("custom_leastsq: before success")
+    
+                        if dL > 0 and dF > 0:
+                            # reduction in error: increment accepted!
+                            t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
+                            mu *= max(t, 1.0 / 3.0)
+                            nu = 2
+                            x, f, norm_f = new_x, new_f, norm_new_f
+                            printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
+                                        % (dF / dL, max(t, 1.0 / 3.0), mu), 2)
+    
+                            #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
+                            #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
+    
+                            ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
+                            #new_Jac = jac_fn(new_x)
+                            #new_JTf = _np.dot(new_Jac.T,new_f)
+                            #print(" CHECK: %g < %g ?" % (_np.linalg.norm(new_JTf,
+                            #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
+    
+                            break  # exit inner loop normally
+                    else:
+                        reject_msg = " (No man's land)"
+                        #printer.log("    NO MANS LAND!!", 2)
+                            
                 else:
-                    printer.log("LinSolve Failure!!", 2)
+                    reject_msg = " (LinSolve Failure)"
+                    #printer.log("LinSolve Failure!!", 2)
 
                 # if this point is reached, either the linear solve failed
                 # or the error did not reduce.  In either case, reject increment.
@@ -305,8 +321,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if nu > half_max_nu:  # watch for nu getting too large (&overflow)
                     msg = "Stopping after nu overflow!"; break
                 nu = 2 * nu
-                printer.log("      Rejected!  mu => mu*nu = %g, nu => 2*nu = %g"
-                            % (mu, nu), 2)
+                printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
+                            % (reject_msg,mu, nu), 2)
 
                 JTJ[idiag] = undampled_JTJ_diag  # restore diagonal
             #end of inner loop

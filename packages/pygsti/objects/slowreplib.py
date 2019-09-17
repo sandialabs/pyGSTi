@@ -11,6 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import sys
 import time as _time
+import math as _math
 import numpy as _np
 import scipy.sparse as _sps
 import itertools as _itertools
@@ -21,8 +22,15 @@ from ..tools import slicetools as _slct
 from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
 from ..tools import optools as _gt
+from ..tools.matrixtools import _fas
 
 from scipy.sparse.linalg import LinearOperator
+
+LARGE = 1000000000
+# a large number such that LARGE is
+# a very high term weight which won't help (at all) a
+# path get included in the selected set of paths.
+
 
 # DEBUG!!!
 DEBUG_FCOUNT = 0
@@ -30,20 +38,24 @@ DEBUG_FCOUNT = 0
 
 class DMStateRep(object):
     def __init__(self, data):
-        self.data = _np.asarray(data, 'd')
+        assert(data.dtype == _np.dtype('d'))
+        self.base = data
+
+    def __reduce__(self):
+        return (DMStateRep, (self.base,))
 
     def copy_from(self, other):
-        self.data = other.data.copy()
+        self.base = other.base.copy()
 
     def todense(self):
-        return self.data
+        return self.base
 
     @property
     def dim(self):
-        return len(self.data)
+        return len(self.base)
 
     def __str__(self):
-        return str(self.data)
+        return str(self.base)
 
 
 class DMEffectRep(object):
@@ -56,12 +68,16 @@ class DMEffectRep(object):
 
 class DMEffectRep_Dense(DMEffectRep):
     def __init__(self, data):
-        self.data = _np.array(data, 'd')
-        super(DMEffectRep_Dense, self).__init__(len(self.data))
+        assert(data.dtype == _np.dtype('d'))
+        self.base = data
+        super(DMEffectRep_Dense, self).__init__(len(self.base))
+
+    def __reduce__(self):
+        return (DMEffectRep_Dense, (self.base,))    
 
     def probability(self, state):
         # can assume state is a DMStateRep
-        return _np.dot(self.data, state.data)  # not vdot b/c *real* data
+        return _np.dot(self.base, state.base)  # not vdot b/c *real* data
 
 
 class DMEffectRep_TensorProd(DMEffectRep):
@@ -73,6 +89,10 @@ class DMEffectRep_TensorProd(DMEffectRep):
         self.nfactors = nfactors
         self.max_factor_dim = max_factor_dim  # Unused
         super(DMEffectRep_TensorProd, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMEffectRep_TensorProd,
+                (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
 
     def todense(self, outvec):
         N = self.dim
@@ -110,7 +130,7 @@ class DMEffectRep_TensorProd(DMEffectRep):
     def probability(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, 'd')
         Edense = self.todense(scratch)
-        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
+        return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
 class DMEffectRep_Computational(DMEffectRep):
@@ -127,10 +147,14 @@ class DMEffectRep_Computational(DMEffectRep):
             self.zvals_int += base * v
             base *= 2  # or left shift?
 
+        self.zvals = zvals
         self.nfactors = len(zvals)  # (or nQubits)
         self.abs_elval = 1 / (_np.sqrt(2)**self.nfactors)
 
         super(DMEffectRep_Computational, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMEffectRep_Computational, (self.zvals, self.dim))
 
     def parity(self, x):
         """recursively divide the (64-bit) integer into two equal
@@ -185,7 +209,7 @@ class DMEffectRep_Computational(DMEffectRep):
     def probability(self, state):
         scratch = _np.empty(self.dim, 'd')
         Edense = self.todense(scratch)
-        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
+        return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
 class DMEffectRep_Errgen(DMEffectRep):  # TODO!! Need to make SV version
@@ -195,6 +219,9 @@ class DMEffectRep_Errgen(DMEffectRep):  # TODO!! Need to make SV version
         self.effect_rep = effect_rep
         self.errgen_id = errgen_id
         super(DMEffectRep_Errgen, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMEffectRep_Errgen, (self.errgen_rep, self.effect_rep, self.errgen_id))
 
     def probability(self, state):
         state = self.errgen_rep.acton(state)  # *not* acton_adjoint
@@ -226,17 +253,20 @@ class DMOpRep(object):
 
 class DMOpRep_Dense(DMOpRep):
     def __init__(self, data):
-        self.data = data
-        super(DMOpRep_Dense, self).__init__(self.data.shape[0])
+        self.base = data
+        super(DMOpRep_Dense, self).__init__(self.base.shape[0])
+
+    def __reduce__(self):
+        return (DMOpRep_Dense, (self.base,))
 
     def acton(self, state):
-        return DMStateRep(_np.dot(self.data, state.data))
+        return DMStateRep(_np.dot(self.base, state.base))
 
     def adjoint_acton(self, state):
-        return DMStateRep(_np.dot(self.data.T, state.data))  # no conjugate b/c *real* data
+        return DMStateRep(_np.dot(self.base.T, state.base))  # no conjugate b/c *real* data
 
     def __str__(self):
-        return "DMOpRep_Dense:\n" + str(self.data)
+        return "DMOpRep_Dense:\n" + str(self.base)
 
 
 class DMOpRep_Embedded(DMOpRep):
@@ -244,7 +274,7 @@ class DMOpRep_Embedded(DMOpRep):
                  blocksizes, embedded_dim, nComponentsInActiveBlock,
                  iActiveBlock, nBlocks, dim):
 
-        self.embedded_op = embedded_op
+        self.embedded = embedded_op
         self.numBasisEls = numBasisEls
         self.actionInds = actionInds
         self.blocksizes = blocksizes
@@ -260,20 +290,28 @@ class DMOpRep_Embedded(DMOpRep):
         self.basisInds_action = [list(range(numBasisEls[i])) for i in actionInds]
 
         self.embeddedDim = embedded_dim
+        self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
         self.offset = sum(blocksizes[0:iActiveBlock])
         super(DMOpRep_Embedded, self).__init__(dim)
 
+    def __reduce__(self):
+        return (DMOpRep_Embedded, (self.embedded,
+                                   self.numBasisEls, self.actionInds,
+                                   self.blocksizes, self.embeddedDim,
+                                   self.nComponents, self.iActiveBlock,
+                                   self.nBlocks, self.dim))
+
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
             if iBlk != self.iActiveBlock:
-                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
+                output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
@@ -288,9 +326,9 @@ class DMOpRep_Embedded(DMOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = DMStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            embedded_instate = DMStateRep(state.base[inds])
+            embedded_outstate = self.embedded.acton(embedded_instate)
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -299,7 +337,7 @@ class DMOpRep_Embedded(DMOpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -311,9 +349,9 @@ class DMOpRep_Embedded(DMOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = DMStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.adjoint_acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            embedded_instate = DMStateRep(state.base[inds])
+            embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -323,40 +361,49 @@ class DMOpRep_Embedded(DMOpRep):
 class DMOpRep_Composed(DMOpRep):
     def __init__(self, factor_op_reps, dim):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorops = factor_op_reps
+        self.factor_reps = factor_op_reps
         super(DMOpRep_Composed, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Composed, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorops:
+        for gate in self.factor_reps:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factorops):
+        for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
         return state
+
+    def reinit_factor_op_reps(self, new_factor_op_reps):
+        self.factor_reps = new_factor_op_reps
 
 
 class DMOpRep_Sum(DMOpRep):
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Summed gates must contain at least one factor gate!"
-        self.factors = factor_reps
+        self.factor_reps = factor_reps
         super(DMOpRep_Sum, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Sum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
-        for f in self.factors:
-            output_state.data += f.acton(state).data
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
+        for f in self.factor_reps:
+            output_state.base += f.acton(state).base
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = DMStateRep(_np.zeros(state.data.shape, 'd'))
-        for f in self.factors:
-            output_state.data += f.adjoint_acton(state).data
+        output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
+        for f in self.factor_reps:
+            output_state.base += f.adjoint_acton(state).base
         return output_state
 
 
@@ -365,6 +412,9 @@ class DMOpRep_Exponentiated(DMOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         super(DMOpRep_Exponentiated, self).__init__(dim)
+
+    def __reduce__(self):
+        return (DMOpRep_Exponentiated, (self.exponentiated_op, self.power, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -398,12 +448,30 @@ class DMOpRep_Lindblad(DMOpRep):
         self.s = s
         super(DMOpRep_Lindblad, self).__init__(dim)
 
+    def set_exp_params(self, mu, eta, m_star, s):
+        self.mu = mu
+        self.eta = eta
+        self.m_star = m_star
+        self.s = s
+
+    def get_exp_params(self):
+        return (self.mu, self.eta, self.m_star, self.s)
+
+    def __reduce__(self):
+        if self.unitary_postfactor is None:
+            return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                       _np.empty(0,'d'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
+        else:
+            return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                       self.unitary_postfactor.data, self.unitary_postfactor.indices,
+                                       self.unitary_postfactor.indptr))
+
     def acton(self, state):
         """ Act this gate map on an input state """
         if self.unitary_postfactor is not None:
-            statedata = self.unitary_postfactor.dot(state.data)
+            statedata = self.unitary_postfactor.dot(state.base)
         else:
-            statedata = state.data
+            statedata = state.base
 
         tol = 1e-16  # 2^-53 (=Scipy default) -- TODO: make into an arg?
         A = self.errgen_rep.aslinearoperator()  # ~= a sparse matrix for call below
@@ -422,30 +490,52 @@ class DMOpRep_Sparse(DMOpRep):
         self.A = _sps.csr_matrix((A_data, A_indices, A_indptr), shape=(dim, dim))
         super(DMOpRep_Sparse, self).__init__(dim)
 
+    def __reduce__(self):
+        return (DMOpRep_Sparse, (self.A.data, self.A.indices, self.A.indptr))
+
+    @property
+    def data(self):
+        return self.A.data
+
+    @property
+    def indices(self):
+        return self.A.indices
+
+    @property
+    def indptr(self):
+        return self.A.indptr
+
     def acton(self, state):
         """ Act this gate map on an input state """
-        return DMStateRep(self.A.dot(state.data))
+        return DMStateRep(self.A.dot(state.base))
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         Aadj = self.A.conjugate(copy=True).transpose()
-        return DMStateRep(Aadj.dot(state.data))
+        return DMStateRep(Aadj.dot(state.base))
 
 
 # State vector (SV) propagation wrapper classes
 class SVStateRep(object):
     def __init__(self, data):
-        self.data = _np.asarray(data, complex)
+        assert(data.dtype == _np.dtype(complex))
+        self.base = data
+
+    def __reduce__(self):
+        return (SVStateRep, (self.base,))
 
     def copy_from(self, other):
-        self.data = other.data.copy()
+        self.base = other.base.copy()
 
     @property
     def dim(self):
-        return len(self.data)
+        return len(self.base)
+
+    def todense(self):
+        return self.base
 
     def __str__(self):
-        return str(self.data)
+        return str(self.base)
 
 
 class SVEffectRep(object):
@@ -461,12 +551,16 @@ class SVEffectRep(object):
 
 class SVEffectRep_Dense(SVEffectRep):
     def __init__(self, data):
-        self.data = _np.array(data, complex)
-        super(SVEffectRep_Dense, self).__init__(len(self.data))
+        assert(data.dtype == _np.dtype(complex))
+        self.base = data
+        super(SVEffectRep_Dense, self).__init__(len(self.base))
+
+    def __reduce__(self):
+        return (SVEffectRep_Dense, (self.base,))
 
     def amplitude(self, state):
         # can assume state is a SVStateRep
-        return _np.vdot(self.data, state.data)  # (or just 'dot')
+        return _np.vdot(self.base, state.base)  # (or just 'dot')
 
 
 class SVEffectRep_TensorProd(SVEffectRep):
@@ -478,6 +572,10 @@ class SVEffectRep_TensorProd(SVEffectRep):
         self.nfactors = nfactors
         self.max_factor_dim = max_factor_dim  # Unused
         super(SVEffectRep_TensorProd, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVEffectRep_TensorProd, (self.kron_array, self.factor_dims,
+                                         self.nfactors, self.max_factor_dim, self.dim))
 
     def todense(self, outvec):
         N = self.dim
@@ -515,7 +613,7 @@ class SVEffectRep_TensorProd(SVEffectRep):
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.todense(scratch)
-        return _np.vdot(Edense, state.data)
+        return _np.vdot(Edense, state.base)
 
 
 class SVEffectRep_Computational(SVEffectRep):
@@ -535,12 +633,16 @@ class SVEffectRep_Computational(SVEffectRep):
 
         base = 2**(len(zvals) - 1)
         self.nonzero_index = 0
+        self.zvals = zvals
         for k, v in enumerate(zvals):
             assert(v in (0, 1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base * v
             base //= 2  # or right shift?
         super(SVEffectRep_Computational, self).__init__(dim)
 
+    def __reduce__(self):
+        return (SVEffectRep_Computational, (self.zvals, self.dim))
+        
     def todense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
@@ -553,7 +655,7 @@ class SVEffectRep_Computational(SVEffectRep):
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.todense(scratch)
-        return _np.vdot(Edense, state.data)
+        return _np.vdot(Edense, state.base)
 
 
 class SVOpRep(object):
@@ -569,17 +671,20 @@ class SVOpRep(object):
 
 class SVOpRep_Dense(SVOpRep):
     def __init__(self, data):
-        self.data = data
-        super(SVOpRep_Dense, self).__init__(self.data.shape[0])
+        self.base = data
+        super(SVOpRep_Dense, self).__init__(self.base.shape[0])
+
+    def __reduce__(self):
+        return (SVOpRep_Dense, (self.base,))
 
     def acton(self, state):
-        return SVStateRep(_np.dot(self.data, state.data))
+        return SVStateRep(_np.dot(self.base, state.base))
 
     def adjoint_acton(self, state):
-        return SVStateRep(_np.dot(_np.conjugate(self.data.T), state.data))
+        return SVStateRep(_np.dot(_np.conjugate(self.base.T), state.base))
 
     def __str__(self):
-        return "SVOpRep_Dense:\n" + str(self.data)
+        return "SVOpRep_Dense:\n" + str(self.base)
 
 
 class SVOpRep_Embedded(SVOpRep):
@@ -588,7 +693,7 @@ class SVOpRep_Embedded(SVOpRep):
                  blocksizes, embedded_dim, nComponentsInActiveBlock,
                  iActiveBlock, nBlocks, dim):
 
-        self.embedded_op = embedded_op
+        self.embedded = embedded_op
         self.numBasisEls = numBasisEls
         self.actionInds = actionInds
         self.blocksizes = blocksizes
@@ -610,15 +715,22 @@ class SVOpRep_Embedded(SVOpRep):
         self.offset = sum(blocksizes[0:iActiveBlock])
         super(SVOpRep_Embedded, self).__init__(dim)
 
+    def __reduce__(self):
+        return (DMOpRep_Embedded, (self.embedded,
+                                   self.numBasisEls, self.actionInds,
+                                   self.blocksizes, self.embeddedDim,
+                                   self.nComponents, self.iActiveBlock,
+                                   self.nBlocks, self.dim))
+
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
             if iBlk != self.iActiveBlock:
-                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
+                output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -630,9 +742,9 @@ class SVOpRep_Embedded(SVOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = SVStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            embedded_instate = SVStateRep(state.base[inds])
+            embedded_outstate = self.embedded.acton(embedded_instate)
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -641,7 +753,7 @@ class SVOpRep_Embedded(SVOpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
         offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -653,9 +765,9 @@ class SVOpRep_Embedded(SVOpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = SVStateRep(state.data[inds])
-            embedded_outstate = self.embedded_op.adjoint_acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+            embedded_instate = SVStateRep(state.base[inds])
+            embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
+            output_state.base[inds] += embedded_outstate.base
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -666,41 +778,50 @@ class SVOpRep_Composed(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_op_reps, dim):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorsgates = factor_op_reps
+        self.factors_reps = factor_op_reps
         super(SVOpRep_Composed, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Composed, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorops:
+        for gate in self.factor_reps:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factorops):
+        for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
         return state
+
+    def reinit_factor_op_reps(self, new_factor_op_reps):
+        self.factors_reps = new_factor_op_reps
 
 
 class SVOpRep_Sum(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factors = factor_reps
+        self.factor_reps = factor_reps
         super(SVOpRep_Sum, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Sum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
-        for f in self.factors:
-            output_state.data += f.acton(state).data
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
+        for f in self.factor_reps:
+            output_state.base += f.acton(state).base
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = SVStateRep(_np.zeros(state.data.shape, complex))
-        for f in self.factors:
-            output_state.data += f.adjoint_acton(state).data
+        output_state = SVStateRep(_np.zeros(state.base.shape, complex))
+        for f in self.factor_reps:
+            output_state.base += f.adjoint_acton(state).base
         return output_state
 
 
@@ -709,6 +830,9 @@ class SVOpRep_Exponentiated(SVOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         super(SVOpRep_Exponentiated, self).__init__(dim)
+
+    def __reduce__(self):
+        return (SVOpRep_Exponentiated, (self.exponentiated_op, self.power, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -730,14 +854,33 @@ class SBStateRep(object):
         self.sframe = _StabilizerFrame(smatrix, pvectors, amps)
         # just rely on StabilizerFrame class to do all the heavy lifting...
 
-    def copy(self):
-        cpy = SBStateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
-        cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
-        return cpy
+    def __reduce__(self):
+        return (SBStateRep, (self.sframe.s, self.sframe.ps, self.sframe.a))
+
+    @property
+    def smatrix(self):
+        return self.sframe.s
+    
+    @property
+    def pvectors(self):
+        return self.sframe.ps
+    
+    @property
+    def amps(self):
+        return self.sframe.a
 
     @property
     def nqubits(self):
         return self.sframe.n
+
+    @property
+    def dim(self):
+        return 2**self.nqubits # assume "unitary evolution"-type mode
+
+    def copy(self):
+        cpy = SBStateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
+        cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
+        return cpy
 
     def __str__(self):
         return "SBStateRep:\n" + str(self.sframe)
@@ -747,9 +890,16 @@ class SBEffectRep(object):
     def __init__(self, zvals):
         self.zvals = zvals
 
+    def __reduce__(self):
+        return (SBEffectRep, (self.zvals,))
+
     @property
     def nqubits(self):
         return len(self.zvals)
+
+    @property
+    def dim(self):
+        return 2**self.nqubits  # assume "unitary evolution"-type mode
 
     def probability(self, state):
         return state.sframe.measurement_probability(self.zvals, check=True)  # use check for now?
@@ -772,25 +922,32 @@ class SBOpRep(object):
     def nqubits(self):
         return self.n
 
+    @property
+    def dim(self):
+        return 2**(self.n)  # assume "unitary evolution"-type mode
+
 
 class SBOpRep_Embedded(SBOpRep):
     def __init__(self, embedded_op, n, qubits):
-        self.embedded_op = embedded_op
-        self.qubit_indices = qubits
+        self.embedded = embedded_op
+        self.qubits = qubits  #qubit *indices*
         super(SBOpRep_Embedded, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Embedded, (self.embedded, self.n, self.qubits))
 
     def acton(self, state):
         state = state.copy()  # needed?
-        state.sframe.push_view(self.qubit_indices)
-        outstate = self.embedded_op.acton(state)  # works b/c sfame has "view filters"
+        state.sframe.push_view(self.qubits)
+        outstate = self.embedded.acton(state)  # works b/c sfame has "view filters"
         state.sframe.pop_view()  # return input state to original view
         outstate.sframe.pop_view()
         return outstate
 
     def adjoint_acton(self, state):
         state = state.copy()  # needed?
-        state.sframe.push_view(self.qubit_indices)
-        outstate = self.embedded_op.adjoint_acton(state)  # works b/c sfame has "view filters"
+        state.sframe.push_view(self.qubits)
+        outstate = self.embedded.adjoint_acton(state)  # works b/c sfame has "view filters"
         state.sframe.pop_view()  # return input state to original view
         outstate.sframe.pop_view()
         return outstate
@@ -800,18 +957,21 @@ class SBOpRep_Composed(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_op_reps, n):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorops = factor_op_reps
+        self.factor_reps = factor_op_reps
         super(SBOpRep_Composed, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Composed, (self.factor_reps, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorops:
+        for gate in self.factor_reps:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factorops):
+        for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
         return state
 
@@ -820,8 +980,11 @@ class SBOpRep_Sum(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_reps, n):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factors = factor_reps
+        self.factor_reps = factor_reps
         super(SBOpRep_Sum, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Sum, (self.factor_reps, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -839,6 +1002,9 @@ class SBOpRep_Exponentiated(SBOpRep):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
         super(SBOpRep_Exponentiated, self).__init__(n)
+
+    def __reduce__(self):
+        return (SBOpRep_Exponentiated, (self.exponentiated_op, self.power, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -861,6 +1027,13 @@ class SBOpRep_Clifford(SBOpRep):
         self.svector_inv = svector_inv
         self.unitary = unitary
         super(SBOpRep_Clifford, self).__init__(smatrix.shape[0] // 2)
+
+    def __reduce__(self):
+        return (SBOpRep_Clifford, (self.smatrix, self.svector, self.smatrix_inv, self.svector_inv, self.unitary)) 
+
+    @property
+    def unitary_dagger(self):
+        return _np.conjugate(self.unitary.T)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -890,20 +1063,16 @@ class PolyRep(dict):
     variables.
     """
 
-    def __init__(self, int_coeffs, max_order, max_num_vars, vindices_per_int):
+    def __init__(self, int_coeff_dict, max_num_vars, vindices_per_int):
         """
         Create a new PolyRep object.
 
         Parameters
         ----------
-        int_coeffs : dict
+        int_coeff_dict : dict
             A dictionary of coefficients whose keys are already-encoded
             integers corresponding to variable-index-tuples (i.e poly
             terms).
-
-        max_order : int
-            The maximum order (exponent) allowed for any single variable
-            in each monomial term.
 
         max_num_vars : int
             The maximum number of variables allowed.  For example, if
@@ -911,43 +1080,82 @@ class PolyRep(dict):
             in terms.
         """
 
-        self.max_order = max_order
         self.max_num_vars = max_num_vars
         self.vindices_per_int = vindices_per_int
 
         super(PolyRep, self).__init__()
-        if int_coeffs is not None:
-            self.update(int_coeffs)
+        if int_coeff_dict is not None:
+            self.update(int_coeff_dict)
 
-    @property
-    def coeffs(self):  # so we can convert back to python Polys
-        """ The coefficient dictionary (with encoded integer keys) """
-        return dict(self)  # for compatibility w/C case which can't derive from dict...
+    def reinit(self, int_coeff_dict):
+        """ TODO: docstring """
+        self.clear()
+        self.update(int_coeff_dict)
 
-    def set_maximums(self, max_num_vars=None, max_order=None):
+    def mapvec_indices_inplace(self, mapfn_as_vector):
+        new_items = {}
+        for k, v in self.items():
+            new_vinds = tuple((mapfn_as_vector[j] for j in self._int_to_vinds(k)))
+            new_items[self._vinds_to_int(new_vinds)] = v
+        self.clear()
+        self.update(new_items)
+
+    def copy(self):
         """
-        Alter the maximum order and number of variables (and hence the
-        tuple-to-int mapping) for this polynomial representation.
-
-        Parameters
-        ----------
-        max_num_vars : int
-            The maximum number of variables allowed.
-
-        max_order : int
-            The maximum order (exponent) allowed for any single variable
-            in each monomial term.
+        Make a copy of this polynomial representation.
 
         Returns
         -------
-        None
+        PolyRep
         """
-        coeffs = {self._int_to_vinds(k): v for k, v in self.items()}
-        if max_num_vars is not None: self.max_num_vars = max_num_vars
-        if max_order is not None: self.max_order = max_order
-        int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
-        self.clear()
-        self.update(int_coeffs)
+        return PolyRep(self, self.max_num_vars, self.vindices_per_int) #construct expects "int" keys
+
+    @property
+    def int_coeffs(self):  # so we can convert back to python Polys
+        """ The coefficient dictionary (with encoded integer keys) """
+        return dict(self)  # for compatibility w/C case which can't derive from dict...
+
+    #UNUSED TODO REMOVE
+        #def map_indices_inplace(self, mapfn):
+    #    """
+    #    Map the variable indices in this `PolyRep`.
+    #    This allows one to change the "labels" of the variables.
+    #
+    #    Parameters
+    #    ----------
+    #    mapfn : function
+    #        A single-argument function that maps old variable-index tuples
+    #        to new ones.  E.g. `mapfn` might map `(0,1)` to `(10,11)` if
+    #        we were increasing each variable index by 10.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    new_items = {self._vinds_to_int(mapfn(self._int_to_vinds(k))): v
+    #                 for k, v in self.items()}
+    #    self.clear()
+    #    self.update(new_items)
+    #
+    #def set_maximums(self, max_num_vars=None):
+    #    """
+    #    Alter the maximum order and number of variables (and hence the
+    #    tuple-to-int mapping) for this polynomial representation.
+    #
+    #    Parameters
+    #    ----------
+    #    max_num_vars : int
+    #        The maximum number of variables allowed.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    coeffs = {self._int_to_vinds(k): v for k, v in self.items()}
+    #    if max_num_vars is not None: self.max_num_vars = max_num_vars
+    #    int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
+    #    self.clear()
+    #    self.update(int_coeffs)
 
     def _vinds_to_int(self, vinds):
         """ Maps tuple of variable indices to encoded int """
@@ -979,53 +1187,54 @@ class PolyRep(dict):
                 #DB: if cnt > 50: print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
         return tuple(sorted(ret))
 
-    def deriv(self, wrtParam):
-        """
-        Take the derivative of this polynomial representation with respect to
-        the single variable `wrtParam`.
+    #UNUSED TODO REMOVE
+    #def deriv(self, wrtParam):
+    #    """
+    #    Take the derivative of this polynomial representation with respect to
+    #    the single variable `wrtParam`.
+    #
+    #    Parameters
+    #    ----------
+    #    wrtParam : int
+    #        The variable index to differentiate with respect to (can be
+    #        0 to the `max_num_vars-1` supplied to `__init__`.
+    #
+    #    Returns
+    #    -------
+    #    PolyRep
+    #    """
+    #    dcoeffs = {}
+    #    for i, coeff in self.items():
+    #        ivar = self._int_to_vinds(i)
+    #        cnt = float(ivar.count(wrtParam))
+    #        if cnt > 0:
+    #            l = list(ivar)
+    #            del l[ivar.index(wrtParam)]
+    #            dcoeffs[tuple(l)] = cnt * coeff
+    #    int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
+    #    return PolyRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
 
-        Parameters
-        ----------
-        wrtParam : int
-            The variable index to differentiate with respect to (can be
-            0 to the `max_num_vars-1` supplied to `__init__`.
-
-        Returns
-        -------
-        PolyRep
-        """
-        dcoeffs = {}
-        for i, coeff in self.items():
-            ivar = self._int_to_vinds(i)
-            cnt = float(ivar.count(wrtParam))
-            if cnt > 0:
-                l = list(ivar)
-                del l[ivar.index(wrtParam)]
-                dcoeffs[tuple(l)] = cnt * coeff
-        int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
-        return PolyRep(int_dcoeffs, self.max_order, self.max_num_vars, self.vindices_per_int)
-
-    def evaluate(self, variable_values):
-        """
-        Evaluate this polynomial at the given variable values.
-
-        Parameters
-        ----------
-        variable_values : iterable
-            The values each variable will be evaluated at.  Must have
-            length at least equal to the number of variables present
-            in this `PolyRep`.
-
-        Returns
-        -------
-        float or complex
-        """
-        #FUTURE and make this function smarter (Russian peasant)?
-        ret = 0
-        for i, coeff in self.items():
-            ivar = self._int_to_vinds(i)
-            ret += coeff * _np.product([variable_values[i] for i in ivar])
-        return ret
+    #def evaluate(self, variable_values):
+    #    """
+    #    Evaluate this polynomial at the given variable values.
+    #
+    #    Parameters
+    #    ----------
+    #    variable_values : iterable
+    #        The values each variable will be evaluated at.  Must have
+    #        length at least equal to the number of variables present
+    #        in this `PolyRep`.
+    #
+    #    Returns
+    #    -------
+    #    float or complex
+    #    """
+    #    #FUTURE and make this function smarter (Russian peasant)?
+    #    ret = 0
+    #    for i, coeff in self.items():
+    #        ivar = self._int_to_vinds(i)
+    #        ret += coeff * _np.product([variable_values[i] for i in ivar])
+    #    return ret
 
     def compact_complex(self):
         """
@@ -1042,8 +1251,7 @@ class PolyRep(dict):
         vtape : numpy.ndarray
             A 1D array of integers (variable indices).
         ctape : numpy.ndarray
-            A 1D array of coefficients; can have either real
-            or complex data type.
+            A 1D array of *complex* coefficients.
         """
         nTerms = len(self)
         vinds = {i: self._int_to_vinds(i) for i in self.keys()}
@@ -1062,38 +1270,39 @@ class PolyRep(dict):
         assert(i == len(vtape)), "Logic Error!"
         return vtape, ctape
 
-    def copy(self):
+    def compact_real(self):
         """
-        Make a copy of this polynomial representation.
+        Returns a real representation of this polynomial as a
+        `(variable_tape, coefficient_tape)` 2-tuple of 1D nupy arrays.
+        The coefficient tape is *always* a complex array, even if
+        none of the polynomial's coefficients are complex.
+
+        Such compact representations are useful for storage and later
+        evaluation, but not suited to polynomial manipulation.
 
         Returns
         -------
-        PolyRep
+        vtape : numpy.ndarray
+            A 1D array of integers (variable indices).
+        ctape : numpy.ndarray
+            A 1D array of *real* coefficients.
         """
-        cpy = PolyRep(None, self.max_order, self.max_num_vars, self.vindices_per_int)
-        cpy.update(self)  # constructor expects dict w/var-index keys, not ints like self has
-        return cpy
+        nTerms = len(self)
+        vinds = {i: self._int_to_vinds(i) for i in self.keys()}
+        nVarIndices = sum(map(len, vinds.values()))
+        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64)  # "variable" tape
+        ctape = _np.empty(nTerms, complex)  # "coefficient tape"
 
-    def map_indices_inplace(self, mapfn):
-        """
-        Map the variable indices in this `PolyRep`.
-        This allows one to change the "labels" of the variables.
-
-        Parameters
-        ----------
-        mapfn : function
-            A single-argument function that maps old variable-index tuples
-            to new ones.  E.g. `mapfn` might map `(0,1)` to `(10,11)` if
-            we were increasing each variable index by 10.
-
-        Returns
-        -------
-        None
-        """
-        new_items = {self._vinds_to_int(mapfn(self._int_to_vinds(k))): v
-                     for k, v in self.items()}
-        self.clear()
-        self.update(new_items)
+        i = 0
+        vtape[i] = nTerms; i += 1
+        for iTerm, k in enumerate(sorted(self.keys())):
+            v = vinds[k]  # so don't need to compute self._int_to_vinds(k)
+            l = len(v)
+            ctape[iTerm] = self[k]
+            vtape[i] = l; i += 1
+            vtape[i:i + l] = v; i += l
+        assert(i == len(vtape)), "Logic Error!"
+        return vtape, ctape
 
     def mult(self, x):
         """
@@ -1107,9 +1316,8 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        assert(self.max_order == x.max_order and self.max_num_vars == x.max_num_vars)
-        # assume same *fixed* max_order, even during mult
-        newpoly = PolyRep(None, self.max_order, self.max_num_vars, self.vindices_per_int)
+        assert(self.max_num_vars == x.max_num_vars)
+        newpoly = PolyRep(None, self.max_num_vars, self.vindices_per_int)
         for k1, v1 in self.items():
             for k2, v2 in x.items():
                 inds = sorted(self._int_to_vinds(k1) + x._int_to_vinds(k2))
@@ -1135,9 +1343,28 @@ class PolyRep(dict):
         for k in self:
             self[k] *= x
 
-    def scalar_mult(self, x):
+    def add_inplace(self, other):
         """
-        Returns `self * x` where `x` is a scalar.
+        Adds `other` into this PolyRep.
+
+        Parameters
+        ----------
+        other : PolyRep
+
+        Returns
+        -------
+        PolyRep
+        """
+        for k, v in other.items():
+            try:
+                self[k] += v
+            except KeyError:
+                self[k] = v
+        return self
+
+    def add_scalar_to_all_coeffs_inplace(self, x):
+        """
+        Adds `x` to all of the coefficients in this PolyRep.
 
         Parameters
         ----------
@@ -1147,10 +1374,27 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        # assume a scalar that can multiply values
-        newpoly = self.copy()
-        newpoly.scale(x)
-        return newpoly
+        for k in self:
+            self[k] += x
+        return self
+
+    #UNUSED TODO REMOVE
+    #def scalar_mult(self, x):
+    #    """
+    #    Returns `self * x` where `x` is a scalar.
+    #
+    #    Parameters
+    #    ----------
+    #    x : float or complex
+    #
+    #    Returns
+    #    -------
+    #    PolyRep
+    #    """
+    #    # assume a scalar that can multiply values
+    #    newpoly = self.copy()
+    #    newpoly.scale(x)
+    #    return newpoly
 
     def __str__(self):
         def fmt(x):
@@ -1181,51 +1425,69 @@ class PolyRep(dict):
     def __repr__(self):
         return "PolyRep[ " + str(self) + " ]"
 
-    def __add__(self, x):
-        newpoly = self.copy()
-        if isinstance(x, PolyRep):
-            assert(self.max_order == x.max_order and self.max_num_vars == x.max_num_vars)
-            for k, v in x.items():
-                if k in newpoly: newpoly[k] += v
-                else: newpoly[k] = v
-        else:  # assume a scalar that can be added to values
-            for k in newpoly:
-                newpoly[k] += x
-        return newpoly
-
-    def __mul__(self, x):
-        if isinstance(x, PolyRep):
-            return self.mult_poly(x)
-        else:  # assume a scalar that can multiply values
-            return self.mult_scalar(x)
-
-    def __rmul__(self, x):
-        return self.__mul__(x)
-
-    def __pow__(self, n):
-        ret = PolyRep({0: 1.0}, self.max_order, self.max_num_vars, self.vindices_per_int)
-        cur = self
-        for i in range(int(_np.floor(_np.log2(n))) + 1):
-            rem = n % 2  # gets least significant bit (i-th) of n
-            if rem == 1: ret *= cur  # add current power of x (2^i) if needed
-            cur = cur * cur  # current power *= 2
-            n //= 2  # shift bits of n right
-        return ret
-
-    def __copy__(self):
-        return self.copy()
-
-    def debug_report(self):
-        actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
-        return "PolyRep w/max_vars=%d and max_order=%d: nterms=%d, actual max-order=%d" % \
-            (self.max_num_vars, self.max_order, len(self), actual_max_order)
-
     def degree(self):
+        """ Used for debugging in slowreplib routines only"""
         return max([len(self._int_to_vinds(k)) for k in self.keys()])
 
 
+    #UNUSED TODO REMOVE
+    #def __add__(self, x):
+    #    newpoly = self.copy()
+    #    if isinstance(x, PolyRep):
+    #        assert(self.max_num_vars == x.max_num_vars)
+    #        for k, v in x.items():
+    #            if k in newpoly: newpoly[k] += v
+    #            else: newpoly[k] = v
+    #    else:  # assume a scalar that can be added to values
+    #        for k in newpoly:
+    #            newpoly[k] += x
+    #    return newpoly
+    #
+    #def __mul__(self, x):
+    #    if isinstance(x, PolyRep):
+    #        return self.mult_poly(x)
+    #    else:  # assume a scalar that can multiply values
+    #        return self.mult_scalar(x)
+    #
+    #def __rmul__(self, x):
+    #    return self.__mul__(x)
+    #
+    #def __pow__(self, n):
+    #    ret = PolyRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
+    #    cur = self
+    #    for i in range(int(_np.floor(_np.log2(n))) + 1):
+    #        rem = n % 2  # gets least significant bit (i-th) of n
+    #        if rem == 1: ret *= cur  # add current power of x (2^i) if needed
+    #        cur = cur * cur  # current power *= 2
+    #        n //= 2  # shift bits of n right
+    #    return ret
+    #
+    #def __copy__(self):
+    #    return self.copy()
+    #
+    #def debug_report(self):
+    #    actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
+    #    return "PolyRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
+    #        (self.max_num_vars, len(self), actual_max_order)
+    #
+
 class SVTermRep(object):
     # just a container for other reps (polys, states, effects, and gates)
+
+    @classmethod
+    def composed(cls, terms_to_compose, magnitude):
+        logmag = _math.log10(magnitude) if magnitude > 0 else -LARGE
+        first = terms_to_compose[0]
+        coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return SVTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+    
     def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
         self.coeff = coeff
@@ -1237,11 +1499,45 @@ class SVTermRep(object):
         self.post_effect = post_effect
         self.pre_ops = pre_ops
         self.post_ops = post_ops
+
+    def set_magnitude(self, mag):
+        self.magnitude = mag
+        self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return SVTermRep(coeff, self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)
+
+    def copy(self):
+        return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)        
 
 
 class SBTermRep(object):
     # exactly the same as SVTermRep
     # just a container for other reps (polys, states, effects, and gates)
+
+    @classmethod
+    def composed(cls, terms_to_compose, magnitude):
+        logmag = _math.log10(magnitude) if magnitude > 0 else -LARGE
+        first = terms_to_compose[0]
+        coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return SBTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+    
     def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
         self.coeff = coeff
@@ -1253,6 +1549,28 @@ class SBTermRep(object):
         self.post_effect = post_effect
         self.pre_ops = pre_ops
         self.post_ops = post_ops
+
+    def set_magnitude(self, mag):
+        self.magnitude = mag
+        self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return SBTermRep(coeff, self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)
+
+    def copy(self):
+        return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                         self.pre_ops, self.post_ops)        
+
+
+
 
 
 # No need to create separate classes for floating-pt (vs. polynomial) coeff in Python (no types!)
@@ -1269,66 +1587,52 @@ def propagate_staterep(staterep, operationreps):
     return ret
 
 
-def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None):  # TODO remove scratch
-
+def DM_mapfill_probs_block(calc, mxToFill, dest_indices, evalTree, comm):
+    
+    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = evalTree.cache_size()
-    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    ret = _np.empty((len(evalTree), len(elabels)), 'd')
 
-    #Get rho & rhoCache
-    rho = rhoVec.torep('prep')
+    #Create rhoCache
     rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
 
-    #Get operationreps and ereps now so we don't make unnecessary .torep() calls
-    operationreps = {gl: calc.sos.get_operation(gl).torep() for gl in evalTree.opLabels}
-    ereps = [E.torep('effect') for E in EVecs]
-
-    #REMOVE?? - want some way to speed tensorprod effect actions...
-    #if self.evotype in ("statevec", "densitymx"):
-    #    Escratch = _np.empty(self.dim,typ) # memory for E.todense() if it wants it
+    #Get operationreps and ereps now so we don't make unnecessary ._rep references
+    rhoreps = {rholbl: calc._rho_from_label(rholbl)._rep for rholbl in evalTree.rholabels}
+    operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in evalTree.opLabels}
+    effectreps = {i: E._rep for i, E in enumerate(calc._Es_from_labels(evalTree.elabels))}  # cache these in future
 
     #comm is currently ignored
     #TODO: if evalTree is split, distribute among processors
     for i in evalTree.get_evaluation_order():
         iStart, remainder, iCache = evalTree[i]
-        if iStart is None: init_state = rho
-        else: init_state = rho_cache[iStart]  # [:,None]
+        if iStart is None:  # then first element of remainder is a state prep label
+            rholabel = remainder[0]
+            init_state = rhoreps[rholabel]
+            remainder = remainder[1:]
+        else:
+            init_state = rho_cache[iStart]  # [:,None]
 
         #OLD final_state = self.propagate_state(init_state, remainder)
         final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
 
-        #HERE - current_errgen_name check?
-        for j, erep in enumerate(ereps):
-            ret[i, j] = erep.probability(final_state)  # outcome probability
+        ereps = [effectreps[j] for j in evalTree.eLbl_indices_per_circuit[i]]
+        final_indices = [dest_indices[j] for j in evalTree.final_indices_per_circuit[i]]
 
-    #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-
-    return ret
+        for j, erep in zip(final_indices, ereps):
+            mxToFill[j] = erep.probability(final_state)  # outcome probability
 
 
-def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
+def DM_mapfill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, evalTree, param_indices, comm):
 
     eps = 1e-7  # hardcoded?
 
-    #Compute finite difference derivatives, one parameter at a time.
-    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-    nDerivCols = len(param_indices)  # *all*, not just locally computed ones
+    if param_indices is None:
+        param_indices = list(range(calc.Np))
+    if dest_param_indices is None:
+        dest_param_indices = list(range(_slct.length(param_indices)))
 
-    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    pCache = _np.empty((len(evalTree), len(elabels)), 'd')
-    dpr_cache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
-
-    cacheSize = evalTree.cache_size()
-
-    # create rho_cache (or use scratch)
-    if scratch is None:
-        rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
-    else:
-        assert(len(scratch) == cacheSize)
-        rho_cache = scratch
-
-    pCache = DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, rho_cache)  # here scratch is used...
+    param_indices = _slct.as_array(param_indices)
+    dest_param_indices = _slct.as_array(dest_param_indices)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1338,8 +1642,13 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     # get placed into dpr_cache
 
     #Get a map from global parameter indices to the desired
-    # final index within dpr_cache
-    iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
+    # final index within mxToFill (fpoffset = final parameter offset)
+    iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
+
+    nEls = evalTree.num_final_elements()
+    probs = _np.empty(nEls, 'd')
+    probs2 = _np.empty(nEls, 'd')
+    DM_mapfill_probs_block(calc, probs, slice(0, nEls), evalTree, comm)
 
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
@@ -1347,23 +1656,16 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            calc.from_vector(vec)
-            dpr_cache[:, :, iFinal] = (DM_compute_pr_cache(
-                calc, rholabel, elabels, evalTree, subComm, rho_cache) - pCache) / eps
-    calc.from_vector(orig_vec)
+            calc.from_vector(vec, close=True)
+            DM_mapfill_probs_block(calc, probs2, slice(0, nEls), evalTree, subComm)
+            _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
+    calc.from_vector(orig_vec, close=True)
 
-    #Now each processor has filled the relavant parts of dpr_cache,
-    # so gather together:
-    _mpit.gather_slices(all_slices, owners, dpr_cache, [], axes=2, comm=comm)
+    #Now each processor has filled the relavant parts of mxToFill, so gather together:
+    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
 
-    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
-    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-
-    return dpr_cache
-
-
-def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+    
+def DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows,
                             minProbClipForWeighting, probClipInterval, comm):
 
     def obj_fn(p, f, Ni, N, omitted_p):
@@ -1376,10 +1678,10 @@ def DM_compute_TDchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dat
             v = _np.sqrt(v**2 + N * omitted_p**2 / omitted_cp)
         return v  # sqrt(the objective function term)  (the qty stored in cache)
 
-    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+    return DM_mapfill_TDterms(calc, obj_fn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm)
 
 
-def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+def DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows,
                               minProbClip, radius, probClipInterval, comm):
 
     min_p = minProbClip; a = radius
@@ -1416,32 +1718,37 @@ def DM_compute_TDloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, d
 
         return v  # objective function term (the qty stored in cache)
 
-    return DM_compute_TDcache(calc, obj_fn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+    return DM_mapfill_TDterms(calc, obj_fn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm)
 
 
-def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm):
+def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm):
 
+    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = evalTree.cache_size()
-    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    ret = _np.zeros((len(evalTree), len(elabels)), 'd')  # zeros so we can just add contributions below
 
-    elabels_as_outcomes = [_gt.spamTupleToOutcome((rholabel, e)) for e in elabels]
+    EVecs = calc._Es_from_labels(evalTree.elabels)
+    elabels_as_outcomes = [(_gt.eLabelToOutcome(e),) for e in evalTree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
-    assert(cacheSize == 0)  # so all elements have None as start and all as remainder
+    assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
     #if clipTo is not None:
     #    _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
 
+    mxToFill[dest_indices] = 0.0  # reset destination (we sum into it)
+    
     #comm is currently ignored
     #TODO: if evalTree is split, distribute among processors
     for i in evalTree.get_evaluation_order():
         iStart, remainder, iCache = evalTree[i]
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
+        rholabel = remainder[0]; remainder = remainder[1:]
+        rhoVec = calc._rho_from_label(rholabel)
         datarow = dataset_rows[i]
         nTotOutcomes = num_outcomes[i]
 
         totalCnts = {}  # TODO defaultdict?
         lastInds = {}; outcome_cnts = {}
+        
         # consolidate multiple outcomes that occur at same time? or sort?
         for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):
             if t0 in totalCnts:
@@ -1450,22 +1757,26 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
                 totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
             lastInds[t0] = k
 
+        elbl_indices = evalTree.eLbl_indices_per_circuit[i]
+        final_indices = [dest_indices[j] for j in evalTree.final_indices_per_circuit[i]]
+        elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
+
         cur_probtotal = 0; last_t = 0
         # consolidate multiple outcomes that occur at same time? or sort?
         for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):
             t = t0
             rhoVec.set_time(t)
-            rho = rhoVec.torep('prep')
+            rho = rhoVec._rep
             t += rholabel.time
 
             for gl in remainder:
                 op = calc.sos.get_operation(gl)
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
-                rho = op.torep().acton(rho)
+                rho = op._rep.acton(rho)
 
             j = outcome_to_elabel_index[outcome]
             E = EVecs[j]; E.set_time(t)
-            p = E.torep('effect').probability(rho)  # outcome probability
+            p = E._rep.probability(rho)  # outcome probability
             N = totalCnts[t0]
             f = Nreps / N
 
@@ -1478,50 +1789,45 @@ def DM_compute_TDcache(calc, objfn, rholabel, elabels, num_outcomes, evalTree, d
             omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
             # and cur_probtotal < 1.0?
 
-            ret[i, j] += objfn(p, f, Nreps, N, omitted_p)
-
-    return ret
+            mxToFill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
 
 
-def DM_compute_TDdchi2_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
+def DM_mapfill_TDdchi2_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree, dataset_rows,
                              minProbClipForWeighting, probClipInterval, wrtSlice, comm):
 
-    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
-        return DM_compute_TDchi2_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
-                                       minProbClipForWeighting, probClipInterval, fillComm)
+    def fillfn(mxToFill, dest_indices, n_outcomes, evTree, dataset_rows, fillComm):
+        DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, n_outcomes,
+                                evTree, dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
 
-    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                                     cachefn, wrtSlice, comm)
-
-
-def DM_compute_TDdloglpp_cache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                               minProbClip, radius, probClipInterval, wrtSlice, comm):
-
-    def cachefn(rholabel, elabels, n_outcomes, evTree, dataset_rows, fillComm):
-        return DM_compute_TDloglpp_cache(calc, rholabel, elabels, n_outcomes, evTree, dataset_rows,
-                                         minProbClip, radius, probClipInterval, fillComm)
-
-    return DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                                     cachefn, wrtSlice, comm)
+    return DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices,
+                                     num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
 
 
-def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, dataset_rows,
-                              cachefn, wrtSlice, comm):
+def DM_mapfill_TDdloglpp_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes,
+                               evalTree, dataset_rows, minProbClip, radius, probClipInterval, wrtSlice, comm):
+
+    def fillfn(mxToFill, dest_indices, n_outcomes, evTree, dataset_rows, fillComm):
+        DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, n_outcomes,
+                                  evTree, dataset_rows, minProbClip, radius, probClipInterval, fillComm)
+
+    return DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices,
+                                     num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
+
+
+def DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree,
+                              dataset_rows, fillfn, wrtSlice, comm):
 
     eps = 1e-7  # hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
     param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-    nDerivCols = len(param_indices)  # *all*, not just locally computed ones
 
-    rhoVec, EVecs = calc._rhoEs_from_labels(rholabel, elabels)
-    cache = _np.empty((len(evalTree), len(elabels)), 'd')
-    dcache = _np.zeros((len(evalTree), len(elabels), nDerivCols), 'd')
+    nEls = evalTree.num_final_elements()
+    vals = _np.empty(nEls, 'd')
+    vals2 = _np.empty(nEls, 'd')
+    assert(evalTree.cache_size() == 0)  # so all elements have None as start and remainder[0] is a prep label
 
-    cacheSize = evalTree.cache_size()
-    assert(cacheSize == 0)
-
-    cache = cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, comm)
+    fillfn(vals, slice(0, nEls), num_outcomes, evalTree, dataset_rows, comm)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1540,21 +1846,19 @@ def DM_compute_timedep_dcache(calc, rholabel, elabels, num_outcomes, evalTree, d
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            calc.from_vector(vec)
-            dcache[:, :, iFinal] = (cachefn(rholabel, elabels, num_outcomes, evalTree, dataset_rows, subComm)
-                                    - cache) / eps
-    calc.from_vector(orig_vec)
+            calc.from_vector(vec, close=True)
+            fillfn(vals2, slice(0, nEls), num_outcomes, evalTree, dataset_rows, subComm)
+            _fas(mxToFill, [dest_indices, iFinal], (vals2 - vals) / eps)
+    calc.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
-    _mpit.gather_slices(all_slices, owners, dcache, [], axes=2, comm=comm)
+    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
 
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
     #      (calc.Np, calc.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-
-    return dcache
 
 
 def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
@@ -1606,7 +1910,6 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     #print("DB: prs_as_polys(",spamTuple,circuit,calc.max_order,")")
 
     #NOTE for FUTURE: to adapt this to work with numerical rather than polynomial coeffs:
-    # mpo = mpv = None # (these shouldn't matter)
     # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of get_taylor_order_terms??
     # below: replace prps with: prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
     #  use *= or * instead of .mult( and .scale(
@@ -1615,18 +1918,17 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
 
     mpv = calc.Np  # max_poly_vars
-    mpo = calc.max_order * 2  # max_poly_order
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = {glbl:
                     [
-                        [t.torep(mpo, mpv, "gate") for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
+                        [t.torep() for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order, mpv)]
                         for order in range(calc.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.torep(mpo, mpv, "prep") for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
+    rho_term_reps = [[t.torep() for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order, mpv)]
                      for order in range(calc.max_order + 1)]
 
     E_term_reps = []
@@ -1635,7 +1937,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo, mpv, "effect") for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order)]
+            term_reps = [t.torep() for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -1738,7 +2040,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     Ei = Einds[final_factor_indx]  # final "factor" index == E-vector index
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei] += res  # could add_inplace?
-                    #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
+                    #print("DB PYTHON: prps[%d] = " % Ei, prps[Ei])
 
             else:  # non-fast mode
                 last_index = len(factor_lists) - 1
@@ -1751,10 +2053,10 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     res.scale((pLeft * pRight))
                     final_factor_indx = fi[-1]
                     Ei = Einds[final_factor_indx]  # final "factor" index == E-vector index
-                    #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+                    #print("DB: pr_as_poly    ", fi, " coeffs=",[f.coeff for f in factors]," pLeft=",pLeft," pRight=",pRight, "res=",res)
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei] += res  # add_inplace?
-                    #print("DB running prps[",Ei,"] =",prps[Ei])
+                    #print("DB pr_as_poly   running prps[",Ei,"] =",prps[Ei])
 
             # #DEBUG!!!
             # db_nfactors = [len(l) for l in factor_lists]
@@ -1781,97 +2083,29 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
     raise NotImplementedError("No direct mode yet")
 
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01, current_threshold=None):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap,
-                                min_term_mag, current_threshold)
+def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
+                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
+    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+                                         pathmagnitude_gap, min_term_mag, max_paths, threshold_guess)
 
+def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
+                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
+    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+                                         pathmagnitude_gap, min_term_mag, max_paths, threshold_guess)
 
-def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True,
-                           pathmagnitude_gap=0.0, min_term_mag=0.01):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap,
-                                min_term_mag)
+def SV_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                 circuitsetup_cache, comm=None, memLimit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                      circuitsetup_cache, comm, memLimit, fastmode)
 
+def SB_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                 circuitsetup_cache, comm=None, memLimit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                                      circuitsetup_cache, comm, memLimit, fastmode)
 
-#Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True,
-                         pathmagnitude_gap=0.0, min_term_mag=0.01, current_threshold=None):
-    """
-    Computes probabilities for multiple spam-tuples of `circuit`
-
-    Parameters
-    ----------
-    calc : TermForwardSimulator
-        The calculator object holding vital information for the computation.
-
-    rholabel : Label
-        Prep label for *all* the probabilities to compute.
-
-    elabels : list
-        List of effect labels, one per probability to compute.  The ordering
-        of `elabels` determines the ordering of the returned probability
-        polynomials.
-
-    circuit : Circuit
-        The gate sequence to sandwich between the prep and effect labels.
-
-    repcache : dict, optional
-        Dictionary used to cache operator representations to speed up future
-        calls to this function that would use the same set of operations.
-
-    comm : mpi4py.MPI.Comm, optional
-        When not None, an MPI communicator for distributing the computation
-        across multiple processors.
-
-    memLimit : int, optional
-        A rough memory limit in bytes.
-
-    fastmode : bool, optional
-        A switch between a faster, slighty more memory hungry mode of
-        computation (`fastmode=True`)and a simpler slower one (`=False`).
-
-        pathmagnitude_gap : float, optional
-            The amount less than the perfect sum-of-path-magnitudes that
-            is desired.  This sets the target sum-of-path-magnitudes for each
-            circuit -- the threshold that determines how many paths are added.
-
-        min_term_mag : float, optional
-            A technical parameter to the path pruning algorithm; this value
-            sets a threshold for how small a term magnitude (one factor in
-            a path magnitude) must be before it is removed from consideration
-            entirely (to limit the number of even *potential* paths).  Terms
-            with a magnitude lower than this values are neglected.
-
-        current_threshold : float, optional
-            If the threshold needed to achieve the desired `pathmagnitude_gap`
-            is greater than this value (i.e. if using current_threshold would
-            result in *more* paths being computed) then this function will not
-            compute any paths and exit early, returning `None` in place of the
-            usual list of polynomial representations.
-
-    Returns
-    -------
-    prps : list of PolynomialRep objects
-        the polynomials for the requested circuit probabilities, computed by
-        selectively summing up high-magnitude paths.
-    npaths : int
-        the number of paths that were included.
-    threshold : float
-        the path-magnitude threshold used.
-    target_sopm : float
-        The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
-        less than the perfect "all-paths" sum.  This sums together the
-        contributions of different effects.
-    achieved_sopm : float
-        The achieved sum-of-path-magnitudes.  Ideally this would equal
-        `target_sopm`. (This also sums together the contributions of
-        different effects.)
-    """
-    #t0 = _time.time()
-
-    # Construct dict of gate term reps
+def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+    """ TODO: docstring """
     mpv = calc.Np  # max_poly_vars
-    mpo = 1000  # PLATFORM_BITS / _np.log2(mpv) #max_poly_order allowed for our integer storage
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -1879,14 +2113,14 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
             hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order)
-            repcache[glbl] = ([t.torep(mpo, mpv, "gate") for t in hmterms], foat_indices)
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
-            min_term_mag, max_taylor_order=calc.max_order)
-        repcache[rholabel] = ([t.torep(mpo, mpv, "prep") for t in hmterms], foat_indices)
+            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -1894,9 +2128,9 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
             hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order)
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(mpo, mpv, "effect"), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -1920,17 +2154,214 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
         [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
-    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
+
+    mag = _np.zeros(len(elabels), 'd')
+    nPaths = _np.zeros(len(elabels), int)
+
+    def count_path(b, mg, incd):
+        mag[E_indices[b[-1]]] += mg
+        nPaths[E_indices[b[-1]]] += 1
+
+    traverse_paths_upto_threshold(factor_lists, threshold, len(elabels),
+                                  foat_indices_per_op, count_path)  # sets mag and nPaths
+    return max_sum_of_pathmags - mag
+
+    #threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
+    #    factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
+    #    initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 1000.0, max_npaths=max_paths)
+
+global_cnt = 0
+
+#Base case which works for both SV and SB evolution types thanks to Python's duck typing
+def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+                                       pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
+    """
+    Computes probabilities for multiple spam-tuples of `circuit`
+
+    Parameters
+    ----------
+    calc : TermForwardSimulator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability
+        polynomials.
+
+    circuit : Circuit
+        The gate sequence to sandwich between the prep and effect labels.
+
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
+    opcache : dict, optional
+        Dictionary used to cache operator objects to speed up future
+        calls to this function that would use the same set of operations.
+
+    circuitsetup_cache : dict, optional
+        Dictionary used to cache preparation specific to this function, to 
+        speed up repeated calls using the same circuit and set of parameters,
+        including the same repcache and opcache.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    pathmagnitude_gap : float, optional
+        The amount less than the perfect sum-of-path-magnitudes that
+        is desired.  This sets the target sum-of-path-magnitudes for each
+        circuit -- the threshold that determines how many paths are added.
+
+    min_term_mag : float, optional
+        A technical parameter to the path pruning algorithm; this value
+        sets a threshold for how small a term magnitude (one factor in
+        a path magnitude) must be before it is removed from consideration
+        entirely (to limit the number of even *potential* paths).  Terms
+        with a magnitude lower than this values are neglected.
+
+    max_paths : int, optional
+        The maximum number of paths allowed per circuit outcome.
+
+    threshold_guess : float, optional
+        In the search for a good pathmagnitude threshold, this value is
+        used as the starting point.  If 0.0 is given, a default value is used.
+    
+    Returns
+    -------
+    npaths : int
+        the number of paths that were included.
+    threshold : float
+        the path-magnitude threshold used.
+    target_sopm : float
+        The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+        less than the perfect "all-paths" sum.  This sums together the
+        contributions of different effects.
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.  Ideally this would equal
+        `target_sopm`. (This also sums together the contributions of
+        different effects.)
+    """
+    if circuitsetup_cache is None: circuitsetup_cache = {}
+    
+    if circuit not in circuitsetup_cache:
+        circuitsetup_cache[circuit] = create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, calc.Np)
+    rho_term_reps, op_term_reps, E_term_reps, rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
+
+    factor_lists = [rho_term_reps] + \
+        [op_term_reps[glbl] for glbl in circuit] + \
+        [E_term_reps]
+    foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
+
+    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.array(
+        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
+    #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap 
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
-        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 100.0)
+        initial_threshold=threshold_guess, min_threshold=pathmagnitude_gap / (3.0*max_paths), max_npaths=max_paths)  # 3.0 is just heuristic
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
-    if current_threshold >= 0 and threshold >= current_threshold:  # then just keep existing (cached) polys
-        return None, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
+    # TODO REMOVE
+    #print("Threshold = ", threshold, " Paths=", npaths)
+    #REMOVE (and global_cnt definition above)
+    #global global_cnt
+    #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
+    #global_cnt += 1
+
+    # #DEBUG TODO REMOVE
+    # print("---------------------------")
+    # print("Path threshold = ",threshold, " max=",max_sum_of_pathmags,
+    #       " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
+    # print("nPaths = ",npaths)
+    # print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" \
+    #       % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
+    # print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
+    # print("---------------------------")
+
+    target_miss = sum(achieved_sum_of_pathmags) - sum(target_sum_of_pathmags + pathmagnitude_gap)
+    if target_miss > 1e-5:
+        print("Warning: Achieved sum(path mags) exceeds max by ", target_miss, "!!!")
+
+    return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
+
+
+def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+                                               circuitsetup_cache, comm, memLimit, fastmode):
+    """
+    Computes probabilities for multiple spam-tuples of `circuit`
+
+    Parameters
+    ----------
+    calc : TermForwardSimulator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability
+        polynomials.
+
+    circuit : Circuit
+        The gate sequence to sandwich between the prep and effect labels.
+
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
+    opcache : dict, optional
+        Dictionary used to cache operator objects to speed up future
+        calls to this function that would use the same set of operations.
+
+    circuitsetup_cache : dict, optional
+        Dictionary used to cache preparation specific to this function, to 
+        speed up repeated calls using the same circuit and set of parameters,
+        including the same repcache and opcache.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    fastmode : bool, optional
+        A switch between a faster, slighty more memory hungry mode of
+        computation (`fastmode=True`)and a simpler slower one (`=False`).
+
+    Returns
+    -------
+    prps : list of PolynomialRep objects
+        the polynomials for the requested circuit probabilities, computed by
+        selectively summing up high-magnitude paths.
+    """
+    if circuitsetup_cache is None: circuitsetup_cache = {}
+    
+    if circuit not in circuitsetup_cache:
+        circuitsetup_cache[circuit] = create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, calc.min_term_mag, calc.Np)
+    rho_term_reps, op_term_reps, E_term_reps, rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
+
+    factor_lists = [rho_term_reps] + \
+        [op_term_reps[glbl] for glbl in circuit] + \
+        [E_term_reps]
+    foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
+    
+    prps = [None] * len(elabels)
+    last_index = len(factor_lists) - 1
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
+    #fastmode = False  # REMOVE - was used for DEBUG b/c "_ex" path traversal won't always work w/fast mode
     if fastmode:
         leftSaved = [None] * (len(factor_lists) - 1)  # saved[i] is state after i-th
         rightSaved = [None] * (len(factor_lists) - 1)  # factor has been applied
@@ -1995,12 +2426,10 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
             Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
 
             if prps[Ei] is None: prps[Ei] = res
-            else: prps[Ei] += res  # could add_inplace?
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
 
     else:
         def add_path(b, mag, incd):
-            # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no
-            # ability to cache?)
             factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
             res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
             pLeft = _unitary_sim_pre(factors, comm, memLimit)
@@ -2011,11 +2440,321 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
             Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
             #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
             if prps[Ei] is None: prps[Ei] = res
-            else: prps[Ei] += res  # add_inplace?
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
+
             #print("DB running prps[",Ei,"] =",prps[Ei])
 
     traverse_paths_upto_threshold(factor_lists, threshold, len(
-        elabels), foat_indices_per_op, add_path)  # sets mag and nPaths
+        elabels), foat_indices_per_op, add_path)  # sets mag and nPaths    
+
+    #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
+
+    #max_degrees = []
+    #for i,factors in enumerate(factor_lists):
+    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #print("Max degrees = ",max_degrees)
+    #for Ei,prp in enumerate(prps):
+    #    print(Ei,":", prp.debug_report())
+    #if db_paramvec is not None:
+    #    for Ei,prp in enumerate(prps):
+    #        print(Ei," => ", prp.evaluate(db_paramvec))
+
+    #TODO: REMOVE - most of this is solved, but keep it around for another few commits in case we want to refer back to
+    #it.  - need to fill in some more details, namely how/where we hold weights and log-weights: in reps? in Term objs?
+    #maybe consider Cython version?  need to consider how to perform "fastmode" in this... maybe need to traverse tree
+    #in some standard order?  what about having multiple thresholds for the different elabels... it seems good to try to
+    #run these calcs in parallel.
+    # Note: may only need recusive tree traversal to consider incrementing positions *greater* than or equal to the one
+    #  that was just incremented?  (this may enforce some iteration ordering amenable to a fastmode calc)
+    # Note2: when all effects have *same* op-part of terms, just different effect vector, then maybe we could split the
+    #  effect into an op + effect to better use fastmode calc?  Or maybe if ordering is right this isn't necessary?
+    #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update
+    #coefficients when needed instead?
+
+    #... and we're done!
+
+    #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
+    # in fastreplib.pyx but forgot it here.
+    return prps
+
+
+def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
+    # Construct dict of gate term reps
+    mpv = calc.Np  # max_poly_vars
+    distinct_gateLabels = sorted(set(circuit))
+
+    op_term_reps = {}
+    op_foat_indices = {}
+    for glbl in distinct_gateLabels:
+        if glbl not in repcache:
+            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
+        op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
+
+    if rholabel not in repcache:
+        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
+    rho_term_reps, rho_foat_indices = repcache[rholabel]
+
+    elabels = tuple(elabels)  # so hashable
+    if elabels not in repcache:
+        E_term_indices_and_reps = []
+        for i, elbl in enumerate(elabels):
+            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            E_term_indices_and_reps.extend(
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+
+        #Sort all terms by magnitude
+        E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
+        E_term_reps = [x[1] for x in E_term_indices_and_reps]
+        E_indices = [x[0] for x in E_term_indices_and_reps]
+        E_foat_indices = [j for j, x in enumerate(E_term_indices_and_reps) if x[3] is True]
+        repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
+    E_term_reps, E_indices, E_foat_indices = repcache[elabels]
+
+    return (rho_term_reps, op_term_reps, E_term_reps,
+            rho_foat_indices, op_foat_indices, E_foat_indices,
+            E_indices)
+    
+
+#Base case which works for both SV and SB evolution types thanks to Python's duck typing
+def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
+                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
+    """
+    Computes probabilities for multiple spam-tuples of `circuit`
+
+    Parameters
+    ----------
+    calc : TermForwardSimulator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability
+        polynomials.
+
+    circuit : Circuit
+        The gate sequence to sandwich between the prep and effect labels.
+
+    repcache : dict, optional
+        Dictionary used to cache operator representations to speed up future
+        calls to this function that would use the same set of operations.
+
+    opcache : dict, optional
+        Dictionary used to cache operator objects to speed up future
+        calls to this function that would use the same set of operations.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    fastmode : bool, optional
+        A switch between a faster, slighty more memory hungry mode of
+        computation (`fastmode=True`)and a simpler slower one (`=False`).
+
+        pathmagnitude_gap : float, optional
+            The amount less than the perfect sum-of-path-magnitudes that
+            is desired.  This sets the target sum-of-path-magnitudes for each
+            circuit -- the threshold that determines how many paths are added.
+
+        min_term_mag : float, optional
+            A technical parameter to the path pruning algorithm; this value
+            sets a threshold for how small a term magnitude (one factor in
+            a path magnitude) must be before it is removed from consideration
+            entirely (to limit the number of even *potential* paths).  Terms
+            with a magnitude lower than this values are neglected.
+
+        current_threshold : float, optional
+            If the threshold needed to achieve the desired `pathmagnitude_gap`
+            is greater than this value (i.e. if using current_threshold would
+            result in *more* paths being computed) then this function will not
+            compute any paths and exit early, returning `None` in place of the
+            usual list of polynomial representations.
+
+    compute_polyreps: TODO, docstring - whether to just compute sopm or actually compute corresponding polyreps
+
+    Returns
+    -------
+    prps : list of PolynomialRep objects
+        the polynomials for the requested circuit probabilities, computed by
+        selectively summing up high-magnitude paths.
+    npaths : int
+        the number of paths that were included.
+    threshold : float
+        the path-magnitude threshold used.
+    target_sopm : float
+        The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+        less than the perfect "all-paths" sum.  This sums together the
+        contributions of different effects.
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.  Ideally this would equal
+        `target_sopm`. (This also sums together the contributions of
+        different effects.)
+    """
+    #t0 = _time.time()
+    # Construct dict of gate term reps
+    mpv = calc.Np  # max_poly_vars
+    distinct_gateLabels = sorted(set(circuit))
+
+    op_term_reps = {}
+    op_foat_indices = {}
+    for glbl in distinct_gateLabels:
+        if glbl not in repcache:
+            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
+        op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
+
+    if rholabel not in repcache:
+        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
+    rho_term_reps, rho_foat_indices = repcache[rholabel]
+
+    elabels = tuple(elabels)  # so hashable
+    if elabels not in repcache:
+        E_term_indices_and_reps = []
+        for i, elbl in enumerate(elabels):
+            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            E_term_indices_and_reps.extend(
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+
+        #Sort all terms by magnitude
+        E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
+        E_term_reps = [x[1] for x in E_term_indices_and_reps]
+        E_indices = [x[0] for x in E_term_indices_and_reps]
+        E_foat_indices = [j for j, x in enumerate(E_term_indices_and_reps) if x[3] is True]
+        repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
+
+    E_term_reps, E_indices, E_foat_indices = repcache[elabels]
+
+
+    prps = [None] * len(elabels)
+
+    factor_lists = [rho_term_reps] + \
+        [op_term_reps[glbl] for glbl in circuit] + \
+        [E_term_reps]
+    last_index = len(factor_lists) - 1
+
+    foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
+
+    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.array(
+        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
+    #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap 
+    threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
+        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
+        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / (3.0*max_paths), max_npaths=max_paths)  # 3.0 is just heuristic
+    # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
+
+    #print("Threshold = ", threshold, " Paths=", npaths)
+    #REMOVE (and global_cnt definition above)
+    #global global_cnt
+    #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
+    #global_cnt += 1
+
+    if not compute_polyreps or (current_threshold >= 0 and threshold >= current_threshold):  # no polyreps needed, e.g. just keep existing (cached) polys
+        return [], sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
+
+    #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
+
+    #fastmode = False  # REMOVE - was used for DEBUG b/c "_ex" path traversal won't always work w/fast mode
+    if fastmode:
+        leftSaved = [None] * (len(factor_lists) - 1)  # saved[i] is state after i-th
+        rightSaved = [None] * (len(factor_lists) - 1)  # factor has been applied
+        coeffSaved = [None] * (len(factor_lists) - 1)
+
+        def add_path(b, mag, incd):
+            """ Relies on the fact that paths are iterated over in lexographic order, and `incd`
+                tells us which index was just incremented (all indices less than this one are
+                the *same* as the last call). """
+            # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no
+            # ability to cache?)
+            factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
+
+            if incd == 0:  # need to re-evaluate rho vector
+                rhoVecL = factors[0].pre_state  # Note: `factor` is a rep & so are it's ops
+                for f in factors[0].pre_ops:
+                    rhoVecL = f.acton(rhoVecL)
+                leftSaved[0] = rhoVecL
+
+                rhoVecR = factors[0].post_state
+                for f in factors[0].post_ops:
+                    rhoVecR = f.acton(rhoVecR)
+                rightSaved[0] = rhoVecR
+
+                coeff = factors[0].coeff
+                coeffSaved[0] = coeff
+                incd += 1
+            else:
+                rhoVecL = leftSaved[incd - 1]
+                rhoVecR = rightSaved[incd - 1]
+                coeff = coeffSaved[incd - 1]
+
+            # propagate left and right states, saving as we go
+            for i in range(incd, last_index):
+                for f in factors[i].pre_ops:
+                    rhoVecL = f.acton(rhoVecL)
+                leftSaved[i] = rhoVecL
+
+                for f in factors[i].post_ops:
+                    rhoVecR = f.acton(rhoVecR)
+                rightSaved[i] = rhoVecR
+
+                coeff = coeff.mult(factors[i].coeff)
+                coeffSaved[i] = coeff
+
+            # for the last index, no need to save, and need to construct
+            # and apply effect vector
+            for f in factors[-1].post_ops:
+                rhoVecL = f.acton(rhoVecL)
+            E = factors[-1].post_effect  # effect representation
+            pLeft = E.amplitude(rhoVecL)
+
+            #Same for pre_ops and rhoVecR
+            for f in factors[-1].pre_ops:
+                rhoVecR = f.acton(rhoVecR)
+            E = factors[-1].pre_effect
+            pRight = _np.conjugate(E.amplitude(rhoVecR))
+
+            res = coeff.mult(factors[-1].coeff)
+            res.scale((pLeft * pRight))
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+
+            if prps[Ei] is None: prps[Ei] = res
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
+
+    else:
+        def add_path(b, mag, incd):
+            factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
+            res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
+            pLeft = _unitary_sim_pre(factors, comm, memLimit)
+            pRight = _unitary_sim_post(factors, comm, memLimit)
+            res.scale((pLeft * pRight))
+
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+            #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+            if prps[Ei] is None: prps[Ei] = res
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
+            #print("DB running prps[",Ei,"] =",prps[Ei])
+
+    traverse_paths_upto_threshold(factor_lists, threshold, len(
+        elabels), foat_indices_per_op, add_path)  # sets mag and nPaths    
+
     #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
     # #DEBUG
@@ -2052,14 +2791,18 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
 
     #... and we're done!
 
+    target_miss = sum(achieved_sum_of_pathmags) - sum(target_sum_of_pathmags + pathmagnitude_gap)
+    if target_miss > 1e-5:
+        print("Warning: Achieved sum(path mags) exceeds max by ", target_miss, "!!!")
+
     #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
     # in fastreplib.pyx but forgot it here.
     return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
 # foat = first-order always-traversed
-def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op, fn_visitpath,
-                                  debug=False):
+def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op,
+                                  fn_visitpath, debug=False):
     """
     Traverse all the paths up to some path-magnitude threshold, calling
     `fn_visitpath` for each one.
@@ -2098,6 +2841,11 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
         as they were in the last call to `fn_visitpath`, and this can be
         used for faster path evaluation.
 
+    max_npaths : int, optional
+        The maximum number of paths to traverse.  If this is 0, then there
+        is no limit.  Otherwise this function will return as soon as
+        `max_npaths` paths are traversed.
+
     debug : bool, optional
         Whether to print additional debug info.
 
@@ -2108,7 +2856,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     n = len(oprep_lists)
     nops = [len(oprep_list) for oprep_list in oprep_lists]
     b = [0] * n  # root
-    log_thres = _np.log10(pathmag_threshold)
+    log_thres = _math.log10(pathmag_threshold)
 
     ##TODO REMOVE
     #if debug:
@@ -2140,8 +2888,9 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 else:
                     mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i] - 1].magnitude)
 
-                fn_visitpath(b, mag, i)
-                traverse_tree(b, i, log_thres, mag, logmag, sub_order)  # add any allowed paths beneath this one
+                if fn_visitpath(b, mag, i): return True  # fn_visitpath can signal early return
+                if traverse_tree(b, i, log_thres, mag, logmag, sub_order):  # add any allowed paths beneath this one
+                    return True
             elif sub_order <= 1:
                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
                 # to accept b[i] or term indices higher than it is to include "foat" terms, so we now
@@ -2155,8 +2904,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                         mag = 0 if oprep_lists[i][orig_bi - 1].magnitude == 0 else \
                             current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][orig_bi - 1].magnitude)
 
-                        fn_visitpath(b, mag, i)
-
+                        if fn_visitpath(b, mag, i): return True
+                        
                         if i != n - 1:
                             # if we're not incrementing (from a zero-order term) the final index, then we
                             # need to to increment it until we hit num_elabels (*all* zero-th order paths)
@@ -2165,7 +2914,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                                 b[n - 1] = k
                                 mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude
                                               / oprep_lists[i][orig_bn].magnitude)
-                                fn_visitpath(b, mag2, n - 1)
+                                if fn_visitpath(b, mag2, n - 1): return True
 
                             b[n - 1] = orig_bn
 
@@ -2173,6 +2922,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 
             b[i] -= 1  # so we don't have to copy b
         #print("END: ",root)
+        return False  # return value == "do we need to terminate traversal immediately?"
 
     current_mag = 1.0; current_logmag = 0.0
     fn_visitpath(b, current_mag, 0)  # visit root (all 0s) path
@@ -2181,8 +2931,95 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     return
 
 
+# TODO REMOVE: method to traverse paths until the result converges, but I don't think this is well justified
+# def traverse_paths_upto_threshold_ex(oprep_lists, high_threshold, low_threshold, num_elabels, foat_indices_per_op,
+#                                      fn_visitpath, debug=False):
+#     """
+#     TODO: docstring
+#     """
+#     # zot = zero-order-terms
+#     n = len(oprep_lists)
+#     nops = [len(oprep_list) for oprep_list in oprep_lists]
+#     b = [0] * n  # root
+#     log_thres_high = _np.log10(high_threshold)  # a previous threshold: we've already visited everything above this
+#     log_thres_low = _np.log10(low_threshold)  # visit everything above this threshold
+# 
+#     ##TODO REMOVE
+#     #if debug:
+#     #    if debug > 1: print("BEGIN TRAVERSAL")
+#     #    accepted_bs_and_mags = {}
+# 
+#     def traverse_tree(root, incd, log_thres_high, log_thres_low, current_mag, current_logmag, order):
+#         """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
+#         b = root
+#         #print("BEGIN: ",root)
+#         for i in reversed(range(incd, n)):
+#             if b[i] + 1 == nops[i]: continue
+#             b[i] += 1
+# 
+#             if order == 0:  # then incd doesn't matter b/c can inc anything to become 1st order
+#                 sub_order = 1 if (i != n - 1 or b[i] >= num_elabels) else 0
+#             elif order == 1:
+#                 # we started with a first order term where incd was incremented, and now
+#                 # we're incrementing something else
+#                 sub_order = 1 if i == incd else 2  # signifies anything over 1st order where >1 column has be inc'd
+#             else:
+#                 sub_order = order
+# 
+#             logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i] - 1].logmagnitude)
+#             #print("Trying: ",b)
+#             if logmag >= log_thres_low:  # or sub_order == 0:
+#                 if oprep_lists[i][b[i] - 1].magnitude == 0:
+#                     mag = 0
+#                 else:
+#                     mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i] - 1].magnitude)
+# 
+#                 if logmag > log_thres_high:
+#                     if fn_visitpath(b, mag, i): return True  # fn_visitpath can signal early return
+#                 if traverse_tree(b, i, log_thres_high, log_thres_low, mag, logmag, sub_order):  # add any allowed paths beneath this one
+#                     return True
+#             elif sub_order <= 1 and high_threshold >= 1.0:
+#                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
+#                 # to accept b[i] or term indices higher than it is to include "foat" terms, so we now
+#                 # iterate through any remaining foat indices for this column (we've accepted all lower
+#                 # values of b[i], or we wouldn't be here).  Note that we just need to visit the path,
+#                 # we don't need to traverse down, since we know the path magnitude is already too low.
+#                 orig_bi = b[i]
+#                 for j in foat_indices_per_op[i]:
+#                     if j >= orig_bi:
+#                         b[i] = j
+#                         mag = 0 if oprep_lists[i][orig_bi - 1].magnitude == 0 else \
+#                             current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][orig_bi - 1].magnitude)
+# 
+#                         if fn_visitpath(b, mag, i): return True
+#                         
+#                         if i != n - 1:
+#                             # if we're not incrementing (from a zero-order term) the final index, then we
+#                             # need to to increment it until we hit num_elabels (*all* zero-th order paths)
+#                             orig_bn = b[n - 1]
+#                             for k in range(1, num_elabels):
+#                                 b[n - 1] = k
+#                                 mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude
+#                                               / oprep_lists[i][orig_bn].magnitude)
+#                                 if fn_visitpath(b, mag2, n - 1): return True
+# 
+#                             b[n - 1] = orig_bn
+# 
+#                 b[i] = orig_bi
+# 
+#             b[i] -= 1  # so we don't have to copy b
+#         #print("END: ",root)
+#         return False  # return value == "do we need to terminate traversal immediately?"
+# 
+#     current_mag = 1.0; current_logmag = 0.0
+#     fn_visitpath(b, current_mag, 0)  # visit root (all 0s) path
+#     return traverse_tree(b, 0, log_thres_high, log_thres_low, current_mag, current_logmag, 0)
+#     #returns whether fn_visitpath caused us to exit
+
+
 def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_pathmags,
-                            foat_indices_per_op=None, initial_threshold=0.1, min_threshold=1e-10):
+                            foat_indices_per_op=None, initial_threshold=0.1,
+                            min_threshold=1e-10, max_npaths=1000000):
     """
     Find the pathmagnitude-threshold needed to achieve some target sum-of-path-magnitudes:
     so that the sum of all the path-magnitudes greater than this threshold achieve the
@@ -2225,6 +3062,9 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
         The smallest threshold allowed.  If this amount is reached, it
         is just returned and searching stops.
 
+    max_npaths : int, optional
+        The maximum number of paths allowed per effect.
+
     Returns
     -------
     threshold : float
@@ -2248,14 +3088,35 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
     if foat_indices_per_op is None:
         foat_indices_per_op = [()] * len(oprep_lists)
 
+    # REMOVE comm = memLimit = None  # TODO: make these arguments later?
+
     def count_path(b, mg, incd):
-        mag[E_indices[b[-1]]] += mg; nPaths[E_indices[b[-1]]] += 1
+        mag[E_indices[b[-1]]] += mg
+        nPaths[E_indices[b[-1]]] += 1
+
+        # REMOVE?
+        # #Instead of magnitude, accumulate actual current path contribution that we can test for convergence
+        # factors = [oprep_lists[i][factorInd] for i, factorInd in enumerate(b)]
+        # res = _np.product([f.evaluated_coeff for f in factors])
+        # pLeft = _unitary_sim_pre(factors, comm, memLimit)
+        # pRight = _unitary_sim_post(factors, comm, memLimit)
+        # res *= (pLeft * pRight)
+        # 
+        # final_factor_indx = b[-1]
+        # Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+        # integrals[Ei] += res
+
+        return (nPaths[E_indices[b[-1]]] == max_npaths)  # trigger immediate return if hit max_npaths
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(num_elabels, 'd')
         nPaths = _np.zeros(num_elabels, int)
-
-        if _np.all(mag >= target_mag):  # try larger threshold
+     
+        traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels,
+                                      foat_indices_per_op, count_path)  # sets mag and nPaths
+        assert(max_npaths == 0 or _np.all(nPaths <= max_npaths)),"MAX PATHS EXCEEDED! (%s)" % nPaths
+     
+        if _np.all(mag >= target_mag) or _np.any(nPaths >= max_npaths):  # try larger threshold
             threshold_lower_bound = threshold
             if threshold_upper_bound is not None:
                 threshold = (threshold_upper_bound + threshold_lower_bound) / 2
@@ -2265,7 +3126,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
             if threshold_lower_bound is not None:
                 threshold = (threshold_upper_bound + threshold_lower_bound) / 2
             else: threshold /= 2
-
+     
         if threshold_upper_bound is not None and threshold_lower_bound is not None and \
            (threshold_upper_bound - threshold_lower_bound) / threshold_upper_bound < 1e-3:
             #print("Converged after %d iters!" % nIters)
@@ -2273,14 +3134,31 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
         if threshold_upper_bound < min_threshold:  # could also just set min_threshold to be the lower bound initially?
             threshold_upper_bound = threshold_lower_bound = min_threshold
             break
-
+     
         nIters += 1
 
     #Run path traversal once more to count final number of paths
+
+    def count_path_nomax(b, mg, incd):  # never returns True - we want to check *threshold* alone selects correct # of paths
+        mag[E_indices[b[-1]]] += mg
+        nPaths[E_indices[b[-1]]] += 1
+
     mag = _np.zeros(num_elabels, 'd')
+    # integrals = _np.zeros(num_elabels, 'd') REMOVE
     nPaths = _np.zeros(num_elabels, int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
-                                  foat_indices_per_op, count_path)  # sets mag and nPaths
+                                  foat_indices_per_op, count_path_nomax)  # sets mag and nPaths
+
+    #TODO REMOVE - idea of truncating based on convergence of sum seems flawed - can't detect long tails
+    # last_threshold = 1e10  # something huge
+    # threshold = initial_threshold  # needs to be < 1
+    # converged = False
+    # 
+    # while not converged:
+    #     converged = traverse_paths_upto_threshold_ex(oprep_lists, last_threshold, threshold,
+    #                                                  num_elabels, foat_indices_per_op, count_path)
+    #     last_threshold = threshold
+    #     threshold /= 2
 
     return threshold_lower_bound, nPaths, mag
 

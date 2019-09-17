@@ -48,8 +48,8 @@ class EvalTreeTestCase(BaseTestCase):
 
         self.assertEqual(mevt[:], [(0, ('Gy',), 1),
                                    (1, ('Gy',), None),
-                                   (None, ('Gx',), 0),
-                                   (None, ('Gy', 'Gy'), None)])
+                                   (None, ('rho0', 'Gx',), 0),
+                                   (None, ('rho0', 'Gy', 'Gy'), None)])
         self.assertEqual(mevt.cache_size(),2)
         self.assertEqual(mevt.get_evaluation_order(),[2, 0, 1, 3])
         self.assertEqual(mevt.num_final_strings(),4)
@@ -64,8 +64,8 @@ class EvalTreeTestCase(BaseTestCase):
 
         self.assertEqual(mevt_copy[:], [(0, ('Gy',), 1),
                                    (1, ('Gy',), None),
-                                   (None, ('Gx',), 0),
-                                   (None, ('Gy', 'Gy'), None)])
+                                   (None, ('rho0', 'Gx',), 0),
+                                   (None, ('rho0', 'Gy', 'Gy'), None)])
         self.assertEqual(mevt_copy.cache_size(),2)
         self.assertEqual(mevt_copy.get_evaluation_order(),[2, 0, 1, 3])
         self.assertEqual(mevt_copy.num_final_strings(),4)
@@ -80,10 +80,11 @@ class EvalTreeTestCase(BaseTestCase):
         print("Num final = ",mevt_squeeze.num_final_strings())
         print()
 
-        self.assertEqual(mevt_squeeze[:], [(None, ('Gx', 'Gy'), 0),
-                                           (0, ('Gy',), None),
-                                           (None, ('Gx',), None),
-                                           (None, ('Gy', 'Gy'), None)])
+        self.assertEqual(mevt_squeeze[:], [(0, ('Gy',), None),
+                                           (0, ('Gy','Gy'), None),
+                                           (None, ('rho0', 'Gx',), 0),
+                                           (None, ('rho0', 'Gy', 'Gy'), None)])
+
         self.assertEqual(mevt_squeeze.cache_size(),maxCacheSize)
         self.assertEqual(mevt_squeeze.get_evaluation_order(),[2, 0, 1, 3])
         self.assertEqual(mevt_squeeze.num_final_strings(),4)
@@ -95,10 +96,10 @@ class EvalTreeTestCase(BaseTestCase):
         print("new lookup = ",mlookup_splt)
         print()
 
-        self.assertEqual(mevt_split[:], [(None, ('Gx',), 0),
+        self.assertEqual(mevt_split[:], [(None, ('rho0', 'Gx',), 0),
                                          (0, ('Gy',), 1),
                                          (1, ('Gy',), None),
-                                         (None, ('Gy', 'Gy'), None)])
+                                         (None, ('rho0', 'Gy', 'Gy'), None)])
         self.assertEqual(mevt_split.cache_size(),2)
         self.assertEqual(mevt_split.get_evaluation_order(),[0, 1, 2, 3])
         self.assertEqual(mevt_split.num_final_strings(),4)

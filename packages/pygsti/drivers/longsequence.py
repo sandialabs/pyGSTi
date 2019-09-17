@@ -356,7 +356,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
-        - tolerance = float or dict w/'relx','relf','f','jac' keys
+        - tolerance = float or dict w/'relx','relf','f','jac','maxdx' keys
         - maxIterations = int
         - fdIterations = int
         - minProbClip = float

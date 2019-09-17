@@ -367,6 +367,7 @@ class OpModel(Model):
         #sets self._calcClass, self._sim_type, self._sim_args
 
         self._shlp = simplifier_helper
+        self._opcache = {}
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
 
@@ -439,6 +440,7 @@ class OpModel(Model):
         self._calcClass = c
         self._sim_type = sim_type
         self._sim_args = list(simtype_and_args[1:])
+        self._termgap_inflation_factor = None  #used only for term-based calcs -- maybe absorb into _sim_args?
 
         if sim_type.startswith("term"):
             #cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
@@ -559,6 +561,9 @@ class OpModel(Model):
             before their use."""
 
         #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
+        #import inspect, pprint
+        #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
+        
         if self._need_to_rebuild:
             self._rebuild_paramvec()
             self._need_to_rebuild = False
@@ -592,9 +597,11 @@ class OpModel(Model):
             #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
             for _, obj in self._iter_parameterized_objs():
-                obj.from_vector(self._paramvec[obj.gpindices])
+                obj.from_vector(self._paramvec[obj.gpindices], nodirty=True)
                 reset_dirty(obj)  # like "obj.dirty = False" but recursive
                 #object is known to be consistent with _paramvec
+                
+            self.dirty = False
 
         if OpModel._pcheck: self._check_paramvec()
 
@@ -781,6 +788,8 @@ class OpModel(Model):
         """ Create & return a forward-simulator ("calculator") for this model """
         self._clean_paramvec()
         layer_lizard = self._layer_lizard()
+        layer_lizard.set_opcache(self._opcache, self.to_vector())
+        #print("FWDSIM OPCACHE LEN = ",len(self._opcache))  # TODO REMOVE
 
         kwargs = {}
         if self._sim_type == "termorder":
@@ -789,15 +798,15 @@ class OpModel(Model):
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type in ("termgap", "termdirect"):
-            assert(len(self._sim_args) >= 3 + 1), \
-                "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" \
+            assert(len(self._sim_args) >= 1 + 1), \
+                "%s must have <gap>,[<maxpaths>,<maxorder>,<min_term_mag>] args, e.g. '%s:500:0.1:3'" \
                 % (self._sim_type, self._sim_type)
             kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
-            kwargs['max_order'] = int(self._sim_args[0])
-            kwargs['pathmag_gap'] = float(self._sim_args[1])
-            kwargs['min_term_mag'] = float(self._sim_args[2])
-            kwargs['opt_mode'] = bool(self._sim_args[3]) if len(self._sim_args) > 3 else False
-            # indicates fwdsim is being used within an optimization loop (only recomp paths on deriv evals)
+            kwargs['pathmag_gap'] = float(self._sim_args[0])
+            kwargs['max_paths_per_outcome'] = int(self._sim_args[1]) if len(self._sim_args) > 2 else 500
+            kwargs['max_order'] = int(self._sim_args[2]) if len(self._sim_args) > 3 else 3
+            kwargs['min_term_mag'] = float(self._sim_args[3]) if len(self._sim_args) > 4 else kwargs['pathmag_gap'] / (10*kwargs['max_paths_per_outcome'])
+            kwargs['gap_inflation_factor'] = self._termgap_inflation_factor
             kwargs['cache'] = self._sim_args[-1]  # always the last argument
         if self._sim_type == "map":
             kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None  # backward compat
@@ -877,6 +886,7 @@ class OpModel(Model):
 
         Returns
         -------
+        TODO: docstring - update to raw_elabels_dict
         raw_spamTuples_dict : collections.OrderedDict
             A dictionary whose keys are raw operation sequences (containing just
             "simplified" gates, i.e. not instruments), and whose values are
@@ -913,7 +923,7 @@ class OpModel(Model):
                     for opstr in circuits]  # cast to Circuits
 
         #Indexed by raw operation sequence
-        raw_spamTuples_dict = _collections.OrderedDict()  # final
+        raw_elabels_dict = _collections.OrderedDict()  # final
         raw_opOutcomes_dict = _collections.OrderedDict()
         raw_offsets = _collections.OrderedDict()
 
@@ -922,13 +932,14 @@ class OpModel(Model):
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
-        def resolveSPAM(circuit):
+        def resolve_elabels(circuit):
             """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
             prep_lbl, circuit, povm_lbl = \
                 self.split_circuit(circuit)
             if prep_lbl is None or povm_lbl is None:
-                spamtups = [None]  # put a single "dummy" spam-tuple placeholder
+                assert(prep_lbl is None and povm_lbl is None)
+                elabels = [None]  # put a single "dummy" elabel placeholder
                 # so that there's a single "element" for each simplified string,
                 # which means that the usual "lookup" or "elIndices" will map
                 # original circuit-list indices to simplified-string, i.e.,
@@ -943,16 +954,23 @@ class OpModel(Model):
                     # were observed.
                     observed_povm_outcomes = sorted(set(
                         [full_out_tup[-1] for full_out_tup in dataset[circuit].outcomes]))
-                    spamtups = [(prep_lbl, povm_lbl + "_" + oout)
-                                for oout in observed_povm_outcomes]
+                    elabels = [povm_lbl + "_" + elbl
+                                for elbl in observed_povm_outcomes]
                     # elbl = oout[-1] -- the last element corresponds
                     # to the POVM (earlier ones = instruments)
                 else:
-                    spamtups = [(prep_lbl, povm_lbl + "_" + elbl)
-                                for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
-            return circuit, spamtups
+                    elabels = [povm_lbl + "_" + elbl
+                               for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
 
-        def process(s, spamtuples, observed_outcomes, elIndsToOutcomes,
+            #Include prep-label as part of circuit
+            if prep_lbl is not None:
+                circuit = circuit.copy(editable=True)
+                circuit.insert_layer(prep_lbl, 0)
+                circuit.done_editing()
+
+            return circuit, elabels
+
+        def process(s, elabels, observed_outcomes, elIndsToOutcomes,
                     op_outcomes=(), start=0):
             """
             Implements recursive processing of a string. Separately
@@ -999,70 +1017,71 @@ class OpModel(Model):
                         simplified_el_lbl = _Label(sublabels)
                         simplified_el_outcomes = tuple(outcomes)
                         process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i + 1:],
-                                spamtuples, observed_outcomes, elIndsToOutcomes,
+                                elabels, observed_outcomes, elIndsToOutcomes,
                                 op_outcomes + simplified_el_outcomes, i + 1)
                     break
 
             else:  # no instruments -- add "raw" operation sequence s
-                if s in raw_spamTuples_dict:
+                if s in raw_elabels_dict:
                     assert(op_outcomes == raw_opOutcomes_dict[s])  # DEBUG
                     #if action == "add":
-                    od = raw_spamTuples_dict[s]  # ordered dict
-                    for spamtup in spamtuples:
-                        outcome_tup = op_outcomes + _gt.spamTupleToOutcome(spamtup)
+                    od = raw_elabels_dict[s]  # ordered dict
+                    for elabel in elabels:
+                        outcome_tup = op_outcomes + (_gt.eLabelToOutcome(elabel),)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
 
-                        spamtup_indx = od.get(spamtup, None)
-                        if spamtup is None:
+                        elabel_indx = od.get(elabel, None)
+                        if elabel is None:
                             # although we've seen this raw string, we haven't
-                            # seen spamtup yet - add it at end
-                            spamtup_indx = len(od)
-                            od[spamtup] = spamtup_indx
+                            # seen elabel yet - add it at end
+                            elabel_indx = len(od)
+                            od[elabel] = elabel_indx
 
                         #Link the current iParent to this index (even if it was already going to be computed)
-                        elIndsToOutcomes[(s, spamtup_indx)] = outcome_tup
+                        elIndsToOutcomes[(s, elabel_indx)] = outcome_tup
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + _gt.spamTupleToOutcome(x) for x in spamtuples]
+                    outcome_tuples = [op_outcomes + (_gt.eLabelToOutcome(x),) for x in elabels]
 
                     if observed_outcomes is not None:
-                        # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
-                        spamtup_dict = _collections.OrderedDict(); ist = 0
-                        for spamtup, outcome_tup in zip(spamtuples, outcome_tuples):
+                        # only add els of `elabels` corresponding to observed data (w/indexes starting at 0)
+                        elabel_dict = _collections.OrderedDict(); ist = 0
+                        for elabel, outcome_tup in zip(elabels, outcome_tuples):
                             if outcome_tup in observed_outcomes:
-                                spamtup_dict[spamtup] = ist
+                                elabel_dict[elabel] = ist
                                 elIndsToOutcomes[(s, ist)] = outcome_tup
                                 ist += 1
                     else:
                         # add all els of `spamtuples` (w/indexes starting at 0)
-                        spamtup_dict = _collections.OrderedDict([
-                            (spamtup, i) for i, spamtup in enumerate(spamtuples)])
+                        elabel_dict = _collections.OrderedDict([
+                            (elabel, i) for i, elabel in enumerate(elabels)])
 
                         for ist, out_tup in enumerate(outcome_tuples):  # ist = spamtuple index
                             # element index is given by (parent_circuit, spamtuple_index) tuple
                             elIndsToOutcomes[(s, ist)] = out_tup
                             # Note: works even if `i` already exists - doesn't reorder keys then
 
-                    raw_spamTuples_dict[s] = spamtup_dict
+                    raw_elabels_dict[s] = elabel_dict
                     raw_opOutcomes_dict[s] = op_outcomes  # DEBUG
 
         #Begin actual processing work:
 
-        # Step1: recursively populate raw_spamTuples_dict,
+        # Step1: recursively populate raw_elabels_dict,
         #        raw_opOutcomes_dict, and elIndsToOutcomesByParent
-        resolved_circuits = list(map(resolveSPAM, circuits))
-        for iParent, (opstr, spamtuples) in enumerate(resolved_circuits):
+        resolved_circuits = list(map(resolve_elabels, circuits))
+        for iParent, ((opstr, elabels), orig_circuit) in enumerate(zip(resolved_circuits, circuits)):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
-            oouts = None if (dataset is None) else set(dataset[opstr].outcomes)
-            process(opstr, spamtuples, oouts, elIndsToOutcomesByParent[iParent])
+            oouts = None if (dataset is None) else set(dataset[orig_circuit].outcomes)
+            process(opstr, elabels, oouts, elIndsToOutcomesByParent[iParent])
+            
 
         # Step2: fill raw_offsets dictionary
         off = 0
-        for raw_str, spamtuples in raw_spamTuples_dict.items():
-            raw_offsets[raw_str] = off; off += len(spamtuples)
+        for raw_str, elabels in raw_elabels_dict.items():
+            raw_offsets[raw_str] = off; off += len(elabels)
         nTotElements = off
 
         # Step3: split elIndsToOutcomesByParent into
@@ -1070,15 +1089,15 @@ class OpModel(Model):
         for iParent, elIndsToOutcomes in elIndsToOutcomesByParent.items():
             elIndicesByParent[iParent] = []
             outcomesByParent[iParent] = []
-            for (raw_str, rel_spamtup_indx), outcomes in elIndsToOutcomes.items():
-                elIndicesByParent[iParent].append(raw_offsets[raw_str] + rel_spamtup_indx)
+            for (raw_str, rel_elabel_indx), outcomes in elIndsToOutcomes.items():
+                elIndicesByParent[iParent].append(raw_offsets[raw_str] + rel_elabel_indx)
                 outcomesByParent[iParent].append(outcomes)
             elIndicesByParent[iParent] = _slct.list_to_slice(elIndicesByParent[iParent], array_ok=True)
 
-        #Step3b: convert elements of raw_spamTuples_dict from OrderedDicts
+        #Step3b: convert elements of raw_elabels_dict from OrderedDicts
         # to lists not that we don't need to use them for lookups anymore.
-        for s in list(raw_spamTuples_dict.keys()):
-            raw_spamTuples_dict[s] = list(raw_spamTuples_dict[s].keys())
+        for s in list(raw_elabels_dict.keys()):
+            raw_elabels_dict[s] = list(raw_elabels_dict[s].keys())
 
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
@@ -1101,7 +1120,7 @@ class OpModel(Model):
         #print("outcomes = ", outcomesByParent)
         #print("total els = ",nTotElements)
 
-        return (raw_spamTuples_dict, elIndicesByParent,
+        return (raw_elabels_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
 
     def simplify_circuit(self, circuit, dataset=None):
@@ -1113,8 +1132,14 @@ class OpModel(Model):
         circuit : Circuit
             The operation sequence to simplify
 
+        dataset : DataSet, optional
+            If not None, restrict what is simplified to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
         Returns
         -------
+        TODO: docstring - update to raw_elabels_dict
         raw_spamTuples_dict : collections.OrderedDict
             A dictionary whose keys are raw operation sequences (containing just
             "simplified" gates, i.e. not instruments), and whose values are
@@ -1130,11 +1155,6 @@ class OpModel(Model):
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
-
-        dataset : DataSet, optional
-            If not None, restrict what is simplified to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
         """
         raw_dict, _, outcomes, nEls = self.simplify_circuits([circuit], dataset)
         assert(len(outcomes[0]) == nEls)
@@ -1545,6 +1565,9 @@ class OpModel(Model):
                 assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
                 #all procs should have *same* paramBlkSize2
 
+        #Prepare any computationally intensive preparation
+        # only used in term-calcs, and they do this on their own: calc.bulk_prep_probs(evt, comm, memLimit)
+        
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 
     def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
@@ -1633,6 +1656,62 @@ class OpModel(Model):
 
         assert(evalTree.num_final_elements() == nEls)
         return evalTree, elIndices, outcomes
+
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
+        """
+        Performs initial computation, such as computing probability polynomials,
+        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        the creation of an evaluation tree, but is separated from it because this
+        "preparation" may use `comm` to distribute a computationally intensive task.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
+        """
+        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit, adapt_paths=True)
+
+    #TODO REMOVE UNNECESSARY?
+    #def bulk_probs_get_termgaps(self, evalTree, comm=None, memLimit=None):
+    #    """ TODO: docstring """
+    #    return self._fwdsim().bulk_get_current_gaps(evalTree, comm, memLimit)
+    
+    def bulk_probs_num_termgap_failures(self, evalTree, comm=None, memLimit=None):
+        """
+        Only applicable for models with a term-based (path-integral) forward simulator.
+        Counts the number of circuits for which the achieved sum-of-path-magnitudes is less
+        than the corresponding target, as set by the pathmagnitude-gap.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
+        after_adapting_paths : TODO docstring -- see comments below -- if True then other paths are considered up to limits in fwdsim params
+            if False then the number of failures using the current set of "locked in" paths of `evalTree` are used.  -- NOW no option for this
+            -- just get the number of failures using the current "locked-in" paths.
+        restrict_to : 
+        """
+        #print("BULK PROBS NUM TERMGAP FAILURES") #TODO REMOVE
+        fwdsim = self._fwdsim()
+        assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
+            "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
+        return fwdsim.bulk_get_num_failures(evalTree, comm, memLimit)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):
@@ -2076,6 +2155,7 @@ class OpModel(Model):
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copyInto._shlp = None  # must be set by a derived-class _init_copy() method
         copyInto._need_to_rebuild = True  # copy will have all gpindices = None, etc.
+        copyInto._opcache = {}  # don't copy opcache
         super(OpModel, self)._init_copy(copyInto)
 
     def copy(self):

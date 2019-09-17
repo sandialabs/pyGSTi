@@ -202,15 +202,15 @@ class SPAMVecTestCase(BaseTestCase):
 
         nqubits = 3
         iterover = [(0,1)]*nqubits
-        items = [ (''.join(map(str,outcomes)), pygsti.obj.ComputationalSPAMVec(outcomes,"densitymx"))
+        items = [ (''.join(map(str,outcomes)), pygsti.obj.ComputationalSPAMVec(outcomes,"densitymx",'effect'))
                   for outcomes in itertools.product(*iterover) ]
         povm = pygsti.obj.UnconstrainedPOVM(items)
         self.assertEqual(povm.num_params(),0)
 
         mdl = std1Q_XYI.target_model()
         mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
-        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx'),
-                                                             '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx')})
+        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx','effect'),
+                                                             '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx','effect')})
 
         ps0 = mdl.probs(())
         ps1 = mdl.probs(('Gx',))
