@@ -1341,12 +1341,43 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
             alpha = 1.0
         else:
             alpha = 1.0 / max_gap_ratio if (max_gap_ratio < 100.0) else 0.01
+            
     mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+    mdl._fwdsim().from_vector(mdl.to_vector())  # need to from_vector-ify opcache!
+    print("Initial |v|=", _np.linalg.norm(mdl.to_vector()))
     
     #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
     #nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=True)
     final_pathSet = known_no_error_pathSet
     pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+
+    #TODO REMOVE - this debugging was used to see why we were getting assertion failures where we shouldn't have been
+    #assert(nFailures == 0), "needed for this debugging"
+    ##mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
+    ##DEBUG - no failures
+    #thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
+    #calc = mdl._fwdsim()
+    #repcache = repcache_per_subtree[0]
+    #thresholds = thresholds_per_subtree[0]
+    #for i in evTree.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+    #    circuit = evTree[i]
+    #    rholabel = circuit[0]
+    #    opstr = circuit[1:]
+    #    elabels = evTree.simplified_circuit_elabels[i]
+    #
+    #    print("CHECK: ",circuit)
+    #    print(" - threshold = ",thresholds[circuit])
+    #    print(" - repcache = ",id(repcache))
+    #    print(" - opcache = ",id(calc.sos.opcache))
+    #    print(" - rholabel = ",rholabel)
+    #    print(" - elabels = ",elabels)
+    #    gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, repcache,
+    #                                          calc.sos.opcache, thresholds[circuit])
+    #    assert(_np.count_nonzero(gaps > calc.pathmagnitude_gap) == 0), "CHECKSTOP"
+    #
+    #mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+    #assert(False),"TEST"
+    
     printer.log("INITIAL alpha = %.3g, num failures = %d" % (alpha, nFailures))
     if nFailures > 0 or alpha < 1.0:
 
@@ -1361,6 +1392,7 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
             alpha = (high+low)/2
             printer.log("trying alpha = %g" % (alpha), end='')
             mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+            mdl._fwdsim().from_vector(mdl.to_vector())  # need to from_vector-ify opcache!
             #nFailures,_ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=True)
             pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
             printer.log(" -> %d failures" % (nFailures))
@@ -1373,8 +1405,23 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
         alpha = low
         printer.log("final alpha = %g" % alpha)
         mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
+        mdl._fwdsim().from_vector(mdl.to_vector())  # need to from_vector-ify opcache!
     else:
         final_pathSet = pathSet
+
+        #TODO REMOVE - this was used to debug why we were getting assertion failures in a very particular case
+        #mdl.from_vector(desired_param_vec)
+        #mdl._fwdsim().from_vector(desired_param_vec)  # need to from_vector-ify opcache!
+        #print("FROM VECTOR: |v|=",_np.linalg.norm(mdl.to_vector()))
+        #mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
+        #assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] == 0), "STOP"
+        #mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+        #thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
+        #evTree.percircuit_p_polys = {}
+        #evTree.highmag_termrep_cache = repcache_per_subtree[0]
+        #evTree.circuitsetup_cache = cscache_per_subtree[0]
+        #assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] == 0), "STOP2"
+
 
     assert(final_pathSet is not None)
     return alpha, final_pathSet
@@ -1474,9 +1521,35 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
                     printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
     
-    maxSubIters = 5
+    maxSubIters = 50
     final_iter = False
 
+    #def debug_paramvec():  # REMOVE
+    #    """A function for debugging pruned-poly calcs where calling script injects a 'debug_datagen_vec' for comparison"""
+    #    datagen_vec = mdl.debug_datagen_vec #HACK for debugging
+    #    current_vec = mdl.to_vector().copy()
+    #    print("current |x| = ", _np.linalg.norm(current_vec), " vs. datagen |x|=",_np.linalg.norm(datagen_vec))
+    #    print("magnitude ratio = ", _np.linalg.norm(current_vec) / _np.linalg.norm(datagen_vec))
+    #    angle = _np.arccos(_np.dot(current_vec, datagen_vec) / (_np.linalg.norm(current_vec) * _np.linalg.norm(datagen_vec)))
+    #    print("angle = ", angle, "(", angle * 360.0 / (2*_np.pi), " degrees)")
+    #
+    #    objective_func = objective.fn
+    #    try:
+    #        obj_datagen = objective_func(datagen_vec)
+    #        obj_datagen = _np.linalg.norm(obj_datagen)**2
+    #    except ValueError:
+    #        obj_datagen = "NO-MANS-LAND"
+    #        
+    #    try:
+    #        obj_current = objective_func(current_vec)
+    #        obj_current = _np.linalg.norm(obj_current)**2
+    #    except ValueError:
+    #        obj_current = "NO-MANS-LAND"
+    #
+    #    print("Objective = ",obj_current," at current, vs ",obj_datagen," at datagen")
+    #    mdl.from_vector(current_vec)
+
+        
     #Prepare for first iteration - this updates `mdl` (to correspond to an interpolation
     # between the two given parameter vectors).  It *doesn't* update what the "locked in"
     # set of paths are within evTree - it just ends with a `mdl` at a point for which
@@ -1488,18 +1561,22 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     #mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
     #mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
     mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+    currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
+    #debug_paramvec()  # REMOVE
 
     minErrVec = None
     for sub_iter in range(maxSubIters):
 
-        inflate_factor = 1.0 if final_iter else None  # 100.0
+        #inflate_factor = 1.0 if final_iter else 50.0
+        MAX_INFLATE = 2.5
+        inflate_factor = max(1.0, MAX_INFLATE*alpha)
         final_prefix = "*Final* " if final_iter else ""
         printer.log("%sTerm-state %d:  inflate_factor = %s" % (final_prefix, sub_iter+1, str(inflate_factor)))
         
         # Sanity check
         assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] == 0), \
             "Starting term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths
-
+        
         last_mdlvec = mdl.to_vector().copy()
         last_minErrVec = minErrVec
         #Note: _do_runopt uses "locked in" paths (for sopm too if needed - if inflate_factor is not None,
@@ -1507,6 +1584,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
                                printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
+        #debug_paramvec()  # REMOVE
 
         #Check how many failures the final model has (using the *same* path integrals)
         nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit) # uses "locked in" paths
@@ -1516,24 +1594,44 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
         else:
-            #Adjust resulting model so that it has no post-reprep failures, then
-            #re-prep probabilities, adding more paths to accurately capture errors if needed
-            alpha, pathSet = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec, pathSet,
-                                                                  evTree, comm, memLimit, printer - 1) # updates `mdl` (see above comment)
-            #mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
-    
-            if alpha <= 0.1:
-                printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
-                final_iter = True
+            ## OLD
+            ##Adjust resulting model so that it has no post-reprep failures, then
+            ##re-prep probabilities, adding more paths to accurately capture errors if needed
+            #alpha, pathSet = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec, pathSet,
+            #                                                      evTree, comm, memLimit, printer - 1) # updates `mdl` (see above comment)
+            ##mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
 
-            if alpha > 0.0:  
-                #mdl.bulk_prep_probs(evTree, comm, memLimit)
-                #pathSet, _ = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+            # See if we can get a new paths set that achieves our base (non-inflated) pathmag-gap for all circuits
+            # If not, then reduce the inflation factor and try again from the same point we started at last time - i.e.
+            #  don't interpolate, just do-over.  If we can get a new path set, then select it and proceed.
+            pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_first_failure=False)
+            printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
+            if nFailures == 0:
                 mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+                currently_selected_pathSet = pathSet
+                alpha = min(alpha * 2, 1.0)  # increase alpha => increase gap inflation factor
             else:
-                # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in"
-                # new paths by calling bulk_prep_probs.
-                pass
+                mdl.from_vector(last_mdlvec)  # "do-over"
+                mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
+                # we need to call "refresh_magnitudes_in_repcache" here because the act of calling _do_runopt can, and usually does,
+                # refresh the magnitudes (but *not* the log-magnitudes, which are used to define *which* paths are considered)
+                # in the "current" repcache, i.e. the one in `currently_selected_pathSet`.  Since we're not selecting
+                # a new path set here, we need to refresh the old one we are using so it's magnitudes reflect the model's
+                # current parameter vector (set in the preceding from_vector line line).
+                alpha = max(alpha / 2, 1.0/MAX_INFLATE)  # reduce alpha => reduce gap inflation factor
+
+            #OLD checks & optimization -- could REMOVE these in the future if they seem unuseful.
+            #if alpha <= 0.1:
+            #    printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
+            #    final_iter = True
+            #if alpha > 0.0:  
+            #    #mdl.bulk_prep_probs(evTree, comm, memLimit)
+            #    #pathSet, _ = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+            #    mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+            #else:
+            #    # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in"
+            #    # new paths by calling bulk_prep_probs.
+            #    pass
 
             # Sanity check
             assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] == 0), \

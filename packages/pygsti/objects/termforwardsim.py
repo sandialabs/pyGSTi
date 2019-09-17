@@ -72,7 +72,7 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
         for termrep in repcel.pyterm_references:
             v,c = termrep.coeff.compact_complex()
             coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(v,c,paramvec,(1,))
-            termrep.set_magnitude(abs(coeff_array[0]))
+            termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
 class TermForwardSimulator(ForwardSimulator):
@@ -900,6 +900,7 @@ class TermForwardSimulator(ForwardSimulator):
             #         self, mySubComm, memLimit, self.pathmagnitude_gap,
             #         self.min_term_mag, self.max_paths_per_outcome)
             # else:
+            SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             nFailed, failed_circuits = evalSubTree.num_circuit_sopm_failures_using_current_paths(
                 self, self.pathmagnitude_gap)
                 
@@ -931,7 +932,7 @@ class TermForwardSimulator(ForwardSimulator):
             
         return all_gaps
 
-    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_first_failure=True):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         TODO: docstring
         """
@@ -949,7 +950,7 @@ class TermForwardSimulator(ForwardSimulator):
 
             if self.mode == "pruned":
                 thresholds, highmag_termrep_cache, circuitsetup_cache, nFailed = \
-                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit) # pruning_thresholds_and_highmag_terms
+                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_first_failure) # pruning_thresholds_and_highmag_terms
             else:
                 thresholds = highmag_termrep_cache = circuitsetup_cache = None
                 nFailed = 0
@@ -991,6 +992,7 @@ class TermForwardSimulator(ForwardSimulator):
         paramvec = self.to_vector()
         for repcache in repcache_per_subtree:
             if self.evotype == "svterm":
+                print("DB: refresh_magnitudes_in_repcache: Refreshing mags w/ |v|=", _np.linalg.norm(paramvec))
                 SV_refresh_magnitudes_in_repcache(repcache, paramvec)
             else:
                 raise NotImplementedError("cterm case not implemented yet!")                
@@ -1108,8 +1110,10 @@ class TermForwardSimulator(ForwardSimulator):
             
             felInds = evalSubTree.final_element_indices(evalTree)
             if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
+                SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
                 nFailures += evalSubTree.num_circuit_sopm_failures_using_current_paths(
                     self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation)[0]
+                print("DB: bulk_fill_probs nFailures = ",nFailures)
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
         #collect/gather results

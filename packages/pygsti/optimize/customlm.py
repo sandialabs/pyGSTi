@@ -256,6 +256,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         msg = "(near-)singular linear system"; break
 
                     try:
+                        #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                         new_f = obj_fn(new_x)
                         new_x_is_allowed = True
                     except ValueError:

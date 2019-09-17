@@ -1642,6 +1642,9 @@ cdef class SVTermRep:
         self.c_term._magnitude = mag
         self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE
 
+    def set_magnitude_only(self, double mag):  # EXPERIMENTAL
+        self.c_term._magnitude = mag
+
     def mapvec_indices_inplace(self, mapvec):
         self.coeff.mapvec_indices_inplace(mapvec)
 
@@ -1656,7 +1659,7 @@ cdef class SVTermRep:
     def scalar_mult(self, x):
         coeff = self.coeff.copy()
         coeff.scale(x)
-        return SVTermRep(coeff, self.magnitude, self.logmagnitude,
+        return SVTermRep(coeff, self.magnitude * x, self.logmagnitude + log10(x),
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                          self.pre_ops, self.post_ops)
 
@@ -1816,7 +1819,7 @@ cdef class SBTermRep:
     def scalar_mult(self, x):
         coeff = self.coeff.copy()
         coeff.scale(x)
-        return SBTermRep(coeff, self.magnitude, self.logmagnitude,
+        return SBTermRep(coeff, self.magnitude * x, self.logmagnitude + log10(x),
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                          self.pre_ops, self.post_ops)
 
@@ -3070,9 +3073,32 @@ cdef double sv_find_best_pathmagnitude_threshold(
     factor_lists[N+1] = &E_term_reps
     foat_indices_per_op[N+1] = &E_foat_indices
 
-    return pathmagnitude_threshold(factor_lists, E_indices, numEs, target_sum_of_pathmags, foat_indices_per_op,
-                                   threshold_guess, pathmagnitude_gap / (3.0*max_paths), max_paths,
-                                   achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
+    cdef double threshold = pathmagnitude_threshold(factor_lists, E_indices, numEs, target_sum_of_pathmags, foat_indices_per_op,
+                                              threshold_guess, pathmagnitude_gap / (3.0*max_paths), max_paths,
+                                              achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
+
+    #DEBUG TODO REMOVE - CHECK that counting paths using this threshold gives the same results
+    cdef INT NO_LIMIT = 1000000000
+    cdef vector[double] check_mags = vector[double](numEs)
+    cdef vector[INT] check_npaths = vector[INT](numEs)    
+    for i in range(numEs):
+        check_mags[i] = 0.0; check_npaths[i] = 0
+    count_paths_upto_threshold(factor_lists, threshold, numEs, 
+                               foat_indices_per_op, E_indices, NO_LIMIT,
+                               check_mags, check_npaths)
+    for i in range(numEs):
+        assert(abs(achieved_sum_of_pathmags[i] - check_mags[i]) < 1e-8)
+        assert(npaths[i] == check_npaths[i])
+    #print("Threshold = ",threshold)
+    #print("Mags = ",achieved_sum_of_pathmags)
+    ##print("Check Mags = ",check_mags)
+    #print("npaths = ",npaths)
+    ##print("Check npaths = ",check_npaths)
+    ##print("Target sopm = ",target_sum_of_pathmags)  # max - gap
+
+    return threshold
+
+
 
 
 def SV_compute_pruned_path_polys_given_threshold(
@@ -3453,7 +3479,11 @@ cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_S
         b[i] -= 1 # so we don't have to copy b
 
 
-
+#HACK - need a way to add up magnitudes based on *current* coeffs (evaluated polys of terms at *current* paramvec) while
+# using the locked in magnitudes to determine how many paths to actually include.  Currently, this is done by only
+# "refreshing" the .magnitudes of the terms and leaving the .logmagnitudes (which are used to determing which paths to
+# include) at their "locked in" values.  Thus, it is not always true that log10(term.magnitude) == term.logmagnitude.  This
+# seems non-intuitive and could be problematic if it isn't at least clarified in the FUTURE.
 cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_lists,
                       vector[vector_INT_ptr]& foat_indices_per_op, INT num_elabels,
                       vector[INT]& nops, vector[INT]& E_indices, vector[double]& pathmags, vector[INT]& nPaths,
@@ -3697,6 +3727,13 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
                                foat_indices_per_op, cscel.E_indices, NO_LIMIT,
                                mags, npaths)
 
+    ##DEBUG TODO REMOVE
+    #print("Getting GAP for: ", circuit)
+    #print("Threshold = ",threshold)
+    #print("Mags = ",mags)
+    #print("npaths = ",npaths)
+    #print("MAX sopm = ",max_sum_of_pathmags)
+    
     ret = np.empty(numEs,'d')
     for i in range(numEs):
         ret[i] = max_sum_of_pathmags[i] - mags[i]

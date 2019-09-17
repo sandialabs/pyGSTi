@@ -454,6 +454,14 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
 
+            #DEBUG TODO REMOVE
+            #print("NUM CIRCUIT FAILURES for: ",circuit)
+            #print(" - threshold = ",current_threshold)
+            #print(" - repcache = ",id(self.highmag_termrep_cache))
+            #print(" - opcache = ",id(calc.sos.opcache))
+            #print(" - rholabel = ",rholabel)
+            #print(" - elabels = ",elabels)
+
             gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
                                                   calc.sos.opcache, current_threshold)
             num_failed += _np.count_nonzero(gaps > pathmagnitude_gap)
@@ -515,6 +523,7 @@ class TermEvalTree(EvalTree):
             tot_target_sopm += target_sopm
             tot_achieved_sopm += achieved_sopm
 
+
         #if comm is None or comm.Get_rank() == 0:
         rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
         nC = self.num_final_strings()
@@ -546,6 +555,15 @@ class TermEvalTree(EvalTree):
         repcache = self.highmag_termrep_cache
         circuitsetup_cache = self.circuitsetup_cache
 
+        ##DEBUG - TODO REMOVE -- for debugging a particular case where were getting unexpected
+        ## failures and wanted to rule out parts of select_path_set as the cause
+        #for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        #    circuit = self[i]
+        #    threshold = thresholds[circuit]
+        #    self.percircuit_p_polys[circuit] = (threshold, None)
+        #assert(self.num_circuit_sopm_failures_using_current_paths(calc, calc.pathmagnitude_gap)[0] == 0), "STOP1"
+        #self.percircuit_p_polys = {}
+
         all_compact_polys = []  # holds one compact polynomial per final *element*
         num_failed = 0  # number of circuits which fail to achieve the target sopm
 
@@ -558,7 +576,6 @@ class TermEvalTree(EvalTree):
             #     current_threshold, compact_polys = self.percircuit_p_polys[circuit]
             # else:
             #     current_threshold, compact_polys = None, None
-
 
             threshold = thresholds[circuit]
             rholabel = circuit[0]

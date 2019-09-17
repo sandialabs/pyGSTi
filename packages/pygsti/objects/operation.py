@@ -620,6 +620,14 @@ class LinearOperator(_modelmember.ModelMember):
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
+
+                #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
+                #for t in terms_at_order:
+                #    vt,ct = t._rep.coeff.compact_complex()
+                #    coeff_array = _bulk_eval_complex_compact_polys(vt,ct,self.parent.to_vector(),(1,))
+                #    if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
+                #        print(coeff_array[0], "vs.", t._rep.magnitude)
+                #        import bpdb; bpdb.set_trace()
     
                 if taylor_order == 1:
                     first_order_magmax = max([t.magnitude for t in terms_at_order])
@@ -669,6 +677,15 @@ class LinearOperator(_modelmember.ModelMember):
         coeffs = _bulk_eval_complex_compact_polys(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
+
+        #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
+        #for t in terms_at_order:
+        #    vt,ct = t._rep.coeff.compact_complex()
+        #    coeff_array = _bulk_eval_complex_compact_polys(vt,ct,self.parent.to_vector(),(1,))
+        #    if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
+        #        print(coeff_array[0], "vs.", t._rep.magnitude)
+        #        import bpdb; bpdb.set_trace()
+
         return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
@@ -3284,6 +3301,16 @@ class LindbladOp(LinearOperator):
             #poly_coeff = term.coeff
             #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
             term.mapvec_indices_inplace(mapvec) # local -> global indices
+
+            #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
+            #t = term
+            #vt,ct = t._rep.coeff.compact_complex()
+            #coeff_array = _bulk_eval_complex_compact_polys(vt,ct,self.parent.to_vector(),(1,))
+            #if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
+            #    print(coeff_array[0], "vs.", t._rep.magnitude)
+            #    import bpdb; bpdb.set_trace()
+            #    c1 = _Polynomial.fromrep(t._rep.coeff)
+            
             terms.append(term)
         return terms
 
