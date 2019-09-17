@@ -1083,7 +1083,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
         # denMx = sum( spamvec[i] * Bmx[i] )
 
-        #contract to get (note contract along both mx indices b/c treat like a mx basis):
+        #contract to get (note contrnact along both mx indices b/c treat like a mx basis):
         # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
         # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
         #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
@@ -1128,6 +1128,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
             spamPenaltyVecGradToFill[i, :] = 0.0
             spamPenaltyVecGradToFill[i, effectvec.gpindices] = v.real
+            i += 1
 
             sgnE = dVdp = v = None  # free mem
 

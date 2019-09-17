@@ -1080,8 +1080,15 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                 if isinstance(gg, _objs.TrivialGaugeGroup):
                     #just do a single-stage "trivial" gauge opts using default group
                     gaugeOptSuite_dict['single'] = {'verbosity': printer}
+
                     if "unreliable2Q" in gaugeOptSuites and target_model.dim == 16:
-                        gaugeOptSuite_dict['single-2QUR'] = {'verbosity': printer}
+                        if advancedOptions is not None:
+                            # 'unreliableOps' can only be specified in 'all' options
+                            advanced = advancedOptions.get('all', {})
+                        else: advanced = {}
+                        unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+                        if any([gl in target_model.operations.keys() for gl in unreliableOps]):
+                            gaugeOptSuite_dict['single-2QUR'] = {'verbosity': printer}
 
                 elif gg is not None:
 
@@ -1131,6 +1138,11 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
                             stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
                             gaugeOptSuite_dict['single-2QUR'] = stages_2QUR  # add additional gauge opt
+                        else:
+                            _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
+                                            " gate names in advancedOptions['all']['unreliableOps'], i.e., %s,"
+                                            " are present in the target model.  Omitting 'single-2QUR' gauge opt.")
+                                           % (", ".join(unreliableOps)))
 
             elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
 
