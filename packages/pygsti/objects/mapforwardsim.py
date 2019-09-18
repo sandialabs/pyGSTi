@@ -79,11 +79,27 @@ class MapForwardSimulator(ForwardSimulator):
         return MapForwardSimulator(self.dim, self.sos, self.paramvec)
 
     def _rho_from_label(self, rholabel):
-        return self.sos.get_prep(rholabel)
+        # Note: caching here is *essential* to the working of bulk_fill_dprobs,
+        # which assumes that the op returned will be affected by self.from_vector() calls.
+        if rholabel not in self.sos.opcache:
+            self.sos.opcache[rholabel] = self.sos.get_prep(rholabel)
+        return self.sos.opcache[rholabel]
 
     def _Es_from_labels(self, elabels):
-        return [self.sos.get_effect(elabel) for elabel in elabels]
+        # Note: caching here is *essential* to the working of bulk_fill_dprobs,
+        # which assumes that the ops returned will be affected by self.from_vector() calls.
+        for elabel in elabels:
+            if elabel not in self.sos.opcache:
+                self.sos.opcache[elabel] = self.sos.get_effect(elabel)
+        return [self.sos.opcache[elabel] for elabel in elabels]
 
+    def _op_from_label(self, oplabel):
+        # Note: caching here is *essential* to the working of bulk_fill_dprobs,
+        # which assumes that the op returned will be affected by self.from_vector() calls.
+        if oplabel not in self.sos.opcache:
+            self.sos.opcache[oplabel] = self.sos.get_operation(oplabel)
+        return self.sos.opcache[oplabel]
+    
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
         rho = self.sos.get_prep(rholabel)

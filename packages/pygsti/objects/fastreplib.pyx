@@ -2100,10 +2100,14 @@ def DM_mapfill_dprobs_block(calc,
     dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
+    # NOTE: these calc._X_from_label(lbl) functions cache the returned operation
+    # inside calc.sos's (the layer lizard's) opcache.  This speeds up future calls, but
+    # more importantly causes calc.from_vector to be aware of these operations and to
+    # re-initialize them with updated parameter vectors as is necessary for the finite difference loop.
     rho_lookup = { lbl:i for i,lbl in enumerate(evalTree.rholabels) } # rho labels -> ints for faster lookup
     rhoreps = { i: calc._rho_from_label(rholbl)._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc._op_from_label(lbl)._rep for lbl,i in operation_lookup.items() }
     ereps = [E._rep for E in calc._Es_from_labels(evalTree.elabels)]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
@@ -2134,7 +2138,7 @@ def DM_mapfill_dprobs_block(calc,
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
     dm_mapfill_probs(probs, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+                     elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, subComm)
         
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
@@ -2144,12 +2148,14 @@ def DM_mapfill_dprobs_block(calc,
             vec = orig_vec.copy(); vec[i] += eps
             calc.from_vector(vec, close=True)
             dm_mapfill_probs(probs2, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+                             elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, subComm)
             _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
     calc.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of mxToFill, so gather together:
     _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
+
+    free_rhocache(rho_cache)  #delete cache entries
 
     
 cdef double TDchi2_obj_fn(double p, double f, double Ni, double N, double omitted_p, double minProbClipForWeighting, double extra):
