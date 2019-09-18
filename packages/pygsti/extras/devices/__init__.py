@@ -11,5 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from . import ibmq_melbourne
 from . import ibmq_rueschlikon
+from . import ibmq_tenerife
+from . import ibmq_ourense
 from . import rqc_aspen
 from . import rqc_agave

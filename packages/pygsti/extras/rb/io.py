@@ -22,7 +22,8 @@ from . import rbanalyzer as _rbanalyzer
 from ... import io as _io
 
 
-def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', verbosity=1):
+def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', addaux=False,
+                                   verbosity=1):
 
     try:
         _os.mkdir(outfolder)
@@ -33,7 +34,7 @@ def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', verb
             print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
 
     rbanalyzer = import_data(ds_or_filename, verbosity=verbosity)
-    rbanalyzer.create_summary_data()
+    rbanalyzer.create_summary_data(addaux=addaux)
 
     with open(outfolder + '/readme.txt', 'w') as f:
         f.write('# This folder contains RB summary data\n')

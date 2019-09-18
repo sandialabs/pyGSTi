@@ -56,8 +56,8 @@ def random_pauli_in_chp(q):
 
 def stdgate_to_chp(gate, chpqubits):
     """
-    todo.
-    Converts a gate (Label) in string format to a chp string.
+    todo
+    Converts any of the standard Clifford gates to a chp string.
     """
     gatestr = str(gate).split(':')
     name = gatestr[0]
@@ -102,6 +102,164 @@ def stdgate_to_chp(gate, chpqubits):
 
     elif name == 'Gh':
         return ('h ' + str(qubits[0]) + '\n')
+
+    elif name == 'Gc0':
+        return ''
+
+    elif name == 'Gc1':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc2':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc3':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc4':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc5':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc6':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc7':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc8':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc9':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc10':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc11': 
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc12':
+        s = 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc13':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc14':
+        s = 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc15':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc16':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc17':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc18':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc19':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc20':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc21':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc22':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc23':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
 
     elif name == 'Gcnot':
         return 'c ' + str(qubits[0]) + ' ' + str(qubits[1]) + '\n'
@@ -191,6 +349,13 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
                     percentdone += 1
                     print("  - Simulation {} percent complete.".format(percentdone))
 
+        
+        # Todo : this is a temp hack to get around a bug in Circuit.
+        if circuit[-1].name[0] == '#':
+            circuit = circuit.copy(editable=True)
+            circuit.delete_layers(-1)
+            circuit.delete_lines('*')
+        
         n = circuit.number_of_lines()
         depth = circuit.depth()
 
@@ -231,7 +396,7 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
 
             # Add a measurement on all the qubits.
             chpstring += '\n'.join(['m ' + aschpq[q] for q in circuit.line_labels]) + '\n'
-
+            #print(chpstring)
             with open(outdir + "/circuit-{}-instance-{}.chp".format(cind, sample), 'w') as f:
                 f.write(chpstring)
 
@@ -253,6 +418,7 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
                         # by instead counting forward from the start of the line.
                         outasdict[circuit.line_labels[int(line[-2][:-1])]] = line[-1]
 
+                #print(outasdict)
                 bitstring = ''.join([outasdict[q] for q in circuit.line_labels])
 
             if perge_chp_files:

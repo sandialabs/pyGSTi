@@ -60,7 +60,8 @@ class RBAnalyzer(object):
     #     self.ds = None
 
 
-    def create_summary_data(self, specindices=None, datatype='adjusted', method='fast', verbosity=2):
+    def create_summary_data(self, specindices=None, datatype='adjusted', method='fast',
+                            addaux=False, verbosity=2):
         """
         analysis : 'all', 'hamming', 'raw'.
 
@@ -78,6 +79,10 @@ class RBAnalyzer(object):
                         print(" - Creating summary data {} of {} ...".format(specind + 1, len(specindices)), end='')
                     if verbosity > 1: print("")
 
+                    if not addaux:
+                        raise NotImplementedError("The slow version of this function does"
+                                                  + "not allow adding aux currently!")
+
                     self._summary_data[specind] = _dataset.create_summary_datasets(self.ds, spec, datatype=datatype,
                                                                                    verbosity=verbosity)
 
@@ -91,11 +96,12 @@ class RBAnalyzer(object):
             assert(specindices is None), "The 'fast' method cannot format a subset of the data!"
 
             summarydata = {}
+            aux = {}
             numcircuits = len(self.ds.keys())
             percent = 0
             for i, circ in enumerate(self.ds.keys()):
 
-                print(i,end=',')
+                print(i, end=',')
                 if verbosity > 0:
                     if _np.floor(100 * i / numcircuits) >= percent:
                         percent += 1
@@ -111,17 +117,27 @@ class RBAnalyzer(object):
                     if specind not in summarydata.keys():
 
                         summarydata[specind] = {}
+                        aux[specind] = {}
                         for qubits in structure:
                             summarydata[specind][qubits] = {}
                             summarydata[specind][qubits]['success_counts'] = {}
                             summarydata[specind][qubits]['total_counts'] = {}
                             summarydata[specind][qubits]['hamming_distance_counts'] = {}
+                            if addaux:
+                                aux[specind][qubits] = {}
+                                aux[specind][qubits]['twoQgate_count'] = {}
+                                aux[specind][qubits]['depth'] = {}
+                            else:
+                                aux[specind][qubits] = {}
 
                     for qubits in structure:
                         if length not in summarydata[specind][qubits]['success_counts'].keys():
                             summarydata[specind][qubits]['success_counts'][length] = []
                             summarydata[specind][qubits]['total_counts'][length] = []
                             summarydata[specind][qubits]['hamming_distance_counts'][length] = []
+                            if addaux:
+                                aux[specind][qubits]['twoQgate_count'][length] = []
+                                aux[specind][qubits]['depth'][length] = []
 
                     dsrow = self.ds[circ]
                     for qubits in structure:
@@ -131,6 +147,9 @@ class RBAnalyzer(object):
                         elif datatype == 'adjusted':
                             summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
 
+                        if addaux:
+                            aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
+                            aux[specind][qubits]['depth'][length].append(circ.depth())
 
             for specind in summarydata.keys():
                 spec = self._specs[specind]
@@ -145,7 +164,8 @@ class RBAnalyzer(object):
                     
                     self._summary_data[specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=summarydata[specind][qubits]['success_counts'],
                                                 total_counts=summarydata[specind][qubits]['total_counts'],
-                                                hamming_distance_counts=summarydata[specind][qubits]['hamming_distance_counts'])
+                                                hamming_distance_counts=summarydata[specind][qubits]['hamming_distance_counts'],
+                                                aux=aux[specind][qubits])
        
 
         else:
