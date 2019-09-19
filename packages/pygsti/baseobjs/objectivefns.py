@@ -97,7 +97,7 @@ class Chi2Function(ObjectiveFunction):
         if self.printer.verbosity < 4:  # Fast versions of functions
             if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:
                 # Fast un-regularized version
-                self.fn = self.simple_chi2
+                self.fn = self.termgap_chi2 #self.simple_chi2 #DEBUG!!!
                 self.jfn = self.simple_jac
             elif regularizeFactor != 0:
                 # Fast regularized version
@@ -159,6 +159,29 @@ class Chi2Function(ObjectiveFunction):
 
         if self.firsts is not None:
             self.update_v_for_omitted_probs(v)
+
+        self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+        assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
+        return v
+
+    def termgap_chi2(self, vectorGS):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+        v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+
+        if self.firsts is not None:
+            self.update_v_for_omitted_probs(v)
+
+        #update_v_for_termgap_penalty (TODO: make this into a function?)
+        TERMETA = 1.0  # some adjustable damping strength?
+        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #print("DB: TERMGAP penalty = ",_np.linalg.norm(termgap_penalty))
+        v[:] = _np.sqrt(v[:]**2 + TERMETA*termgap_penalty)
+        #NOTE: to compute derivative, need derivs of SV_circuit_pathmagnitude_gap in fastreplib.pyx/slowreplib.py
+        # which might mean 1) get_total_term_magnitude_deriv functions throughout object structure
+        #                  2) a way for count_paths_upto_threshold to sum the term magnitudes as *polys* rather than as floats
+        #                     (maybe complicated? since |poly| is sqrt((poly.real)^2 + (poly.im)^2)?
 
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
@@ -250,6 +273,25 @@ class Chi2Function(ObjectiveFunction):
                                   prMxToFill=self.probs, clipTo=self.probClipInterval,
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        #DEBUG TODO REMOVE - test dprobs to make sure they look right.
+        #EPS = 1e-7
+        #db_probs = _np.empty(self.probs.shape, 'd')
+        #db_probs2 = _np.empty(self.probs.shape, 'd')
+        #db_dprobs = _np.empty(dprobs.shape, 'd')
+        #self.mdl.bulk_fill_probs(db_probs, self.evTree, self.probClipInterval, self.check, self.comm)
+        #for i in range(self.vec_gs_len):
+        #    vectorGS_eps = vectorGS.copy()
+        #    vectorGS_eps[i] += EPS
+        #    self.mdl.from_vector(vectorGS_eps)
+        #    self.mdl.bulk_fill_probs(db_probs2, self.evTree, self.probClipInterval, self.check, self.comm)
+        #    db_dprobs[:,i] = (db_probs2 - db_probs) / EPS
+        #if _np.linalg.norm(dprobs - db_dprobs)/dprobs.size > 1e-6:
+        #    #assert(False), "STOP: %g" % (_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
+        #    print("DB: dprobs per el mismatch = ",_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
+        #self.mdl.from_vector(vectorGS)
+        #dprobs[:,:] = db_dprobs[:,:]
+        
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)

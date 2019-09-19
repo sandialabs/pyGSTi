@@ -1315,6 +1315,32 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
             else:
                 printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)  # pragma: no cover
 
+    #def debug_paramvec():  # REMOVE
+    #    """A function for debugging pruned-poly calcs where calling script injects a 'debug_datagen_vec' for comparison"""
+    #    datagen_vec = mdl.debug_datagen_vec #HACK for debugging
+    #    current_vec = mdl.to_vector().copy()
+    #    print("current |x| = ", _np.linalg.norm(current_vec), " vs. datagen |x|=",_np.linalg.norm(datagen_vec))
+    #    print("magnitude ratio = ", _np.linalg.norm(current_vec) / _np.linalg.norm(datagen_vec))
+    #    angle = _np.arccos(_np.dot(current_vec, datagen_vec) / (_np.linalg.norm(current_vec) * _np.linalg.norm(datagen_vec)))
+    #    print("angle = ", angle, "(", angle * 360.0 / (2*_np.pi), " degrees)")
+    #
+    #    objective_func = objective.fn
+    #    try:
+    #        obj_datagen = objective_func(datagen_vec)
+    #        obj_datagen = _np.linalg.norm(obj_datagen)**2
+    #    except ValueError:
+    #        obj_datagen = "NO-MANS-LAND"
+    #        
+    #    try:
+    #        obj_current = objective_func(current_vec)
+    #        obj_current = _np.linalg.norm(obj_current)**2
+    #    except ValueError:
+    #        obj_current = "NO-MANS-LAND"
+    #
+    #    print("Objective = ",obj_current," at current, vs ",obj_datagen," at datagen")
+    #    mdl.from_vector(current_vec)
+    #debug_paramvec()
+
     if objective_name == "logl":
         deltaLogL = sum_minErrVec
         return (logL_upperbound - deltaLogL)
@@ -1323,7 +1349,7 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, com
 
 
 def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
-                                         known_no_error_pathSet, evTree, comm, memLimit, printer):
+                                         known_no_error_pathSet, evTree, comm, memLimit, printer, max_num_failures):
 
     ALPHA_TOL = 0.01
     
@@ -1349,7 +1375,7 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
     #In the end, the line below, where it is *unrestricted* needs to succeed (have 0 failures)
     #nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=True)
     final_pathSet = known_no_error_pathSet
-    pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+    pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=max_num_failures+1)
 
     #TODO REMOVE - this debugging was used to see why we were getting assertion failures where we shouldn't have been
     #assert(nFailures == 0), "needed for this debugging"
@@ -1379,10 +1405,10 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
     #assert(False),"TEST"
     
     printer.log("INITIAL alpha = %.3g, num failures = %d" % (alpha, nFailures))
-    if nFailures > 0 or alpha < 1.0:
+    if nFailures > max_num_failures or alpha < 1.0:
 
         low, high = 0.0, 1.0
-        if nFailures > 0:
+        if nFailures > max_num_failures:
             high = alpha
         else:
             low = alpha
@@ -1394,9 +1420,9 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
             mdl.from_vector((1-alpha)*known_no_error_param_vec + alpha*desired_param_vec)
             mdl._fwdsim().from_vector(mdl.to_vector())  # need to from_vector-ify opcache!
             #nFailures,_ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit, after_adapting_paths=True)
-            pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+            pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=max_num_failures+1)
             printer.log(" -> %d failures" % (nFailures))
-            if nFailures > 0: # alpha too high
+            if nFailures > max_num_failures: # alpha too high
                 high = alpha
             else: # alpha too low
                 low = alpha
@@ -1520,35 +1546,50 @@ def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_
 def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
                     printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
-    
-    maxSubIters = 50
+
+    MAX_NUM_FAILURES = 5
+    maxSubIters = 5
     final_iter = False
 
-    #def debug_paramvec():  # REMOVE
-    #    """A function for debugging pruned-poly calcs where calling script injects a 'debug_datagen_vec' for comparison"""
-    #    datagen_vec = mdl.debug_datagen_vec #HACK for debugging
-    #    current_vec = mdl.to_vector().copy()
-    #    print("current |x| = ", _np.linalg.norm(current_vec), " vs. datagen |x|=",_np.linalg.norm(datagen_vec))
-    #    print("magnitude ratio = ", _np.linalg.norm(current_vec) / _np.linalg.norm(datagen_vec))
-    #    angle = _np.arccos(_np.dot(current_vec, datagen_vec) / (_np.linalg.norm(current_vec) * _np.linalg.norm(datagen_vec)))
-    #    print("angle = ", angle, "(", angle * 360.0 / (2*_np.pi), " degrees)")
-    #
-    #    objective_func = objective.fn
-    #    try:
-    #        obj_datagen = objective_func(datagen_vec)
-    #        obj_datagen = _np.linalg.norm(obj_datagen)**2
-    #    except ValueError:
-    #        obj_datagen = "NO-MANS-LAND"
-    #        
-    #    try:
-    #        obj_current = objective_func(current_vec)
-    #        obj_current = _np.linalg.norm(obj_current)**2
-    #    except ValueError:
-    #        obj_current = "NO-MANS-LAND"
-    #
-    #    print("Objective = ",obj_current," at current, vs ",obj_datagen," at datagen")
-    #    mdl.from_vector(current_vec)
+    def debug_paramvec():  # REMOVE
+        """A function for debugging pruned-poly calcs where calling script injects a 'debug_datagen_vec' for comparison"""
+        datagen_vec = mdl.debug_datagen_vec #HACK for debugging
+        current_vec = mdl.to_vector().copy()
+        print("current |x| = ", _np.linalg.norm(current_vec), " vs. datagen |x|=",_np.linalg.norm(datagen_vec))
+        print("magnitude ratio = ", _np.linalg.norm(current_vec) / _np.linalg.norm(datagen_vec))
+        angle = _np.arccos(_np.dot(current_vec, datagen_vec) / (_np.linalg.norm(current_vec) * _np.linalg.norm(datagen_vec)))
+        print("angle = ", angle, "(", angle * 360.0 / (2*_np.pi), " degrees)")
 
+        objective_func = objective.fn
+
+        try:
+            obj_datagen = objective_func(datagen_vec)
+            obj_datagen = _np.linalg.norm(obj_datagen)**2
+            obj_datagen_postfix = ""
+        except ValueError:
+            obj_datagen_postfix = " (NO-MANS-LAND)"
+            orig_inflate = objective.mdl._termgap_inflation_factor
+            objective.mdl._termgap_inflation_factor = None
+            obj_datagen = objective_func(datagen_vec)
+            obj_datagen = _np.linalg.norm(obj_datagen)**2
+            objective.mdl._termgap_inflation_factor = orig_inflate
+            
+        try:
+            obj_current = objective_func(current_vec)
+            obj_current = _np.linalg.norm(obj_current)**2
+        except ValueError:
+            obj_current = "NO-MANS-LAND"
+    
+        print("Objective = ",obj_current," at current, vs ",obj_datagen, obj_datagen_postfix, " at datagen")
+        print("Interpolation of objective values from current -> datagen paramvec:")
+        vals = []
+        for alpha in _np.linspace(0,1.0,30):
+            try:
+                vals.append( str(_np.linalg.norm(objective_func(alpha*datagen_vec + (1-alpha)*current_vec))**2)  )
+            except ValueError:
+                vals.append( "NML" )
+        print(" ".join(vals))
+        mdl.from_vector(current_vec)
         
     #Prepare for first iteration - this updates `mdl` (to correspond to an interpolation
     # between the two given parameter vectors).  It *doesn't* update what the "locked in"
@@ -1557,24 +1598,26 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     # failures.
     alpha, pathSet = \
         _interpolate_model_until_no_failures(mdl, _np.zeros(mdl.num_params(),'d'),
-                                             mdl.to_vector().copy(), None, evTree, comm, memLimit, printer - 1)
+                                             mdl.to_vector().copy(), None, evTree, comm, memLimit, printer - 1, MAX_NUM_FAILURES)
     #mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
     #mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
     mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
     currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
-    #debug_paramvec()  # REMOVE
+    debug_paramvec()  # REMOVE
 
+    alpha = 1.0 # no alpha controls inflation factor rather than interpolation - always start at 1.0
     minErrVec = None
     for sub_iter in range(maxSubIters):
-
+        
         #inflate_factor = 1.0 if final_iter else 50.0
         MAX_INFLATE = 2.5
-        inflate_factor = max(1.0, MAX_INFLATE*alpha)
+        inflate_factor = None
+        #inflate_factor = max(1.0, MAX_INFLATE*alpha)
         final_prefix = "*Final* " if final_iter else ""
         printer.log("%sTerm-state %d:  inflate_factor = %s" % (final_prefix, sub_iter+1, str(inflate_factor)))
         
         # Sanity check
-        assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] == 0), \
+        assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] <= MAX_NUM_FAILURES), \
             "Starting term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths
         
         last_mdlvec = mdl.to_vector().copy()
@@ -1584,58 +1627,65 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, comm,
                                printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
-        #debug_paramvec()  # REMOVE
+        debug_paramvec()  # REMOVE
 
         #Check how many failures the final model has (using the *same* path integrals)
         nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit) # uses "locked in" paths
         printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
+        #import sys; sys.exit()
         
-        if nFailures == 0:
+        if nFailures <= MAX_NUM_FAILURES:
             printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
         else:
-            ## OLD
-            ##Adjust resulting model so that it has no post-reprep failures, then
-            ##re-prep probabilities, adding more paths to accurately capture errors if needed
-            #alpha, pathSet = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec, pathSet,
-            #                                                      evTree, comm, memLimit, printer - 1) # updates `mdl` (see above comment)
-            ##mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
+            ## OPTION1
+            #Adjust resulting model so that it has no post-reprep failures, then
+            #re-prep probabilities, adding more paths to accurately capture errors if needed
+            alpha, pathSet = _interpolate_model_until_no_failures(mdl, last_mdlvec, new_mdlvec, pathSet,
+                                                                  evTree, comm, memLimit, printer - 1, MAX_NUM_FAILURES) # updates `mdl` (see above comment)
+            #mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
 
-            # See if we can get a new paths set that achieves our base (non-inflated) pathmag-gap for all circuits
-            # If not, then reduce the inflation factor and try again from the same point we started at last time - i.e.
-            #  don't interpolate, just do-over.  If we can get a new path set, then select it and proceed.
-            pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_first_failure=False)
-            printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
-            if nFailures == 0:
-                mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
-                currently_selected_pathSet = pathSet
-                alpha = min(alpha * 2, 1.0)  # increase alpha => increase gap inflation factor
-            else:
-                mdl.from_vector(last_mdlvec)  # "do-over"
-                mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
-                # we need to call "refresh_magnitudes_in_repcache" here because the act of calling _do_runopt can, and usually does,
-                # refresh the magnitudes (but *not* the log-magnitudes, which are used to define *which* paths are considered)
-                # in the "current" repcache, i.e. the one in `currently_selected_pathSet`.  Since we're not selecting
-                # a new path set here, we need to refresh the old one we are using so it's magnitudes reflect the model's
-                # current parameter vector (set in the preceding from_vector line line).
-                alpha = max(alpha / 2, 1.0/MAX_INFLATE)  # reduce alpha => reduce gap inflation factor
-
-            #OLD checks & optimization -- could REMOVE these in the future if they seem unuseful.
             #if alpha <= 0.1:
             #    printer.log("Next term-stage (%d) will be final b/c alpha < 0.1" % (sub_iter+2))
             #    final_iter = True
-            #if alpha > 0.0:  
-            #    #mdl.bulk_prep_probs(evTree, comm, memLimit)
-            #    #pathSet, _ = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+            if alpha > 0.0:  
+                #mdl.bulk_prep_probs(evTree, comm, memLimit)
+                #pathSet, _ = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+                mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+                currently_selected_pathSet = pathSet
+            else:
+                # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in"
+                # new paths by calling bulk_prep_probs.
+                mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
+                pass
+
+
+            ##OPTION2
+            ## See if we can get a new paths set that achieves our base (non-inflated) pathmag-gap for all circuits
+            ## If not, then reduce the inflation factor and try again from the same point we started at last time - i.e.
+            ##  don't interpolate, just do-over.  If we can get a new path set, then select it and proceed.
+            #pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+            #printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
+            #if nFailures <= MAX_NUM_FAILURES:
             #    mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+            #    currently_selected_pathSet = pathSet
+            #    #mdl.from_vector(last_mdlvec)  # "do-over", assuming we hit no-mans-land (DEBUG)
+            #    alpha = min(alpha * 2, 1.0)  # increase alpha => increase gap inflation factor
             #else:
-            #    # alpha == 0 means no update in model from last time bulk_prep_probs was called - no need to "lock in"
-            #    # new paths by calling bulk_prep_probs.
-            #    pass
+            #    mdl.from_vector(last_mdlvec)  # "do-over"
+            #    mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
+            #    # we need to call "refresh_magnitudes_in_repcache" here because the act of calling _do_runopt can, and usually does,
+            #    # refresh the magnitudes (but *not* the log-magnitudes, which are used to define *which* paths are considered)
+            #    # in the "current" repcache, i.e. the one in `currently_selected_pathSet`.  Since we're not selecting
+            #    # a new path set here, we need to refresh the old one we are using so it's magnitudes reflect the model's
+            #    # current parameter vector (set in the preceding from_vector line line).
+            #    alpha = max(alpha / 2, 1.0/MAX_INFLATE)  # reduce alpha => reduce gap inflation factor
+
+            #import sys; sys.exit()
 
             # Sanity check
-            assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] == 0), \
-                "Ending term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths since adaptive=False
+            assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] <= MAX_NUM_FAILURES), \
+                "Ending term-stage with > 0 failures! (this shouldn't ever happen)" # uses "locked in" paths
 
     return minErrVec
 

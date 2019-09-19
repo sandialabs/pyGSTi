@@ -124,7 +124,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-    # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
+    num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     try:
 
@@ -256,11 +256,39 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         msg = "(near-)singular linear system"; break
 
                     try:
-                        #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                        print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                         new_f = obj_fn(new_x)
                         new_x_is_allowed = True
                     except ValueError:
                         new_x_is_allowed = False
+                        #x = new_x; msg = "NO MANS LAND!"; converged=True; break  # TEST aborting at first out-of-bounds point
+                        
+                        ##Binary search to find best |dx|
+                        #high = 1.0; low = 0.0; dx_orig = dx
+                        #while high-low > 0.1: # TOL??
+                        #    s = (high + low)/2.0
+                        #    dx = dx_orig * s
+                        #    new_x = x + dx
+                        #
+                        #    try:
+                        #        print("DB: Searching |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x), " s=",s)
+                        #        new_f = obj_fn(new_x)
+                        #        low = s
+                        #    except ValueError:
+                        #        high = s
+                        #
+                        ##Select "low" as the scaling
+                        #new_x_is_allowed = True
+                        #s = low
+                        #dx *= s
+                        #new_x = x + dx
+                        #norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2                        
+                        #new_f = obj_fn(new_x)
+                        #
+                        ##Test again for small norm_dx
+                        #if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
+                        #    msg = "Relative change in |x| is at most %g" % rel_xtol
+                        #    converged = True; break
                         
                     # DB: from ..tools import matrixtools as _mt
                     # DB: print("DB XNEW (%s)=" % str(new_x.shape)); print(new_x)

@@ -911,6 +911,36 @@ class TermForwardSimulator(ForwardSimulator):
         #NOte: leave all failed circuits LOCAL to this proc for now, since this is just for debugging...    
         return nTotFailed, all_failed_circuits
 
+    def bulk_get_termgap_penalty(self, evalTree, comm=None, memLimit=None):
+        """TODO: docstring  
+           returns nFailures, failed_circuits """
+
+        assert(self.mode == "pruned")
+        termgap_penalty = _np.empty(evalTree.num_final_elements(),'d')
+        
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+    
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+            
+            SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
+            subtree_penalties = _np.clip(gaps - self.pathmagnitude_gap, 0, None)
+            
+            _fas(termgap_penalty, [felInds], subtree_penalties)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             termgap_penalty, [], 0, comm)
+
+
+        #NOte: leave all failed circuits LOCAL to this proc for now, since this is just for debugging...    
+        return termgap_penalty
+    
     def bulk_get_current_gaps(self, evalTree, comm=None, memLimit=None):
         """TODO: docstring - uses current "locked-in" paths, no adaption.  
            returns per_circuit_gaps """
@@ -932,7 +962,7 @@ class TermForwardSimulator(ForwardSimulator):
             
         return all_gaps
 
-    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_first_failure=True):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=1):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         TODO: docstring
         """
@@ -950,7 +980,7 @@ class TermForwardSimulator(ForwardSimulator):
 
             if self.mode == "pruned":
                 thresholds, highmag_termrep_cache, circuitsetup_cache, nFailed = \
-                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_first_failure) # pruning_thresholds_and_highmag_terms
+                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures) # pruning_thresholds_and_highmag_terms
             else:
                 thresholds = highmag_termrep_cache = circuitsetup_cache = None
                 nFailed = 0
@@ -1124,7 +1154,8 @@ class TermForwardSimulator(ForwardSimulator):
 
         if comm is not None:
             nFailures = sum(comm.allgather(nFailures))
-        if nFailures > 0:
+        MAX_NUM_FAILURES = 5 # TODO: need to connect this with the similarly named variable in core.py!!
+        if nFailures > MAX_NUM_FAILURES:
             #print("%d FAILURES" % nFailures)
             raise ValueError("NO MANS LAND")
 

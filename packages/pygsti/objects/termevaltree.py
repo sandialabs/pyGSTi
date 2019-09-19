@@ -464,7 +464,7 @@ class TermEvalTree(EvalTree):
 
             gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
                                                   calc.sos.opcache, current_threshold)
-            num_failed += _np.count_nonzero(gaps > pathmagnitude_gap)
+            num_failed += 1 if _np.count_nonzero(gaps > pathmagnitude_gap) > 0 else 0  #just count # failed *circuits*
             per_circuit_gaps.append( max(gaps) )
             if _np.count_nonzero(gaps > pathmagnitude_gap) > 0:
                 failed_circuits.append(circuit)
@@ -474,12 +474,29 @@ class TermEvalTree(EvalTree):
         else:
             return num_failed, failed_circuits
 
+    def get_sopm_gaps_using_current_paths(self, calc):  # TODO REMOVE restrict_to args? HERE
+        gaps = []
+        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+            circuit = self[i]
+            current_threshold, _ = self.percircuit_p_polys[circuit] # must have selected a set of paths for this to be populated!
+
+            rholabel = circuit[0]
+            opstr = circuit[1:]
+            elabels = self.simplified_circuit_elabels[i]
+
+            circuit_gaps = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
+                                                          calc.sos.opcache, current_threshold)
+            gaps.extend(list(circuit_gaps))
+
+        assert(len(gaps) == self.num_final_elements())
+        return _np.array(gaps, 'd')
+
 
     #def num_circuit_sopm_failures_after_adapting_paths(self, calc, comm, memLimit, pathmagnitude_gap,
     #                                                   min_term_mag, max_paths, exit_after_first_failure=True):
     
-    def find_minimal_paths_set(self, calc, comm, memLimit, exit_after_first_failure=True):
-        """TODO: docstring: returns caches but only when there are no failures if exit_after_first_failure==True """
+    def find_minimal_paths_set(self, calc, comm, memLimit, exit_after_this_many_failures=1):
+        """TODO: docstring: returns caches but only when the # failures <= exit_after_this_many_failures """
 
         tot_npaths = 0
         tot_target_sopm = 0
@@ -516,8 +533,8 @@ class TermEvalTree(EvalTree):
             if achieved_sopm < target_sopm:
                 num_failed += 1
                 failed_circuits.append( (i,circuit) )  #(circuit,npaths, threshold, target_sopm, achieved_sopm))
-                if exit_after_first_failure:
-                    return None, None, None, 1 #, failed_circuits
+                if exit_after_this_many_failures > 0 and num_failed == exit_after_this_many_failures:
+                    return None, None, None, num_failed #, failed_circuits
                 
             tot_npaths += npaths
             tot_target_sopm += target_sopm
