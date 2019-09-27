@@ -50,7 +50,7 @@ code {
   font-family: Courier, monospace;
   font-size: 0.88888889em;
   font-weight: 400;
-  white-space: nowrap;
+  display: inline-block;
 }
 q:before {
   content: "“";
@@ -526,7 +526,7 @@ div.sidenav div.linkgroup a.active {
     width: 100%; /* make width of pygsti-wsoutput-group (above) */
 }
 
-.sidenav .dataTable thead tr th,                                                                                                          
+.sidenav .dataTable thead tr th,
 .sidenav .dataTable tfoot tr td,
 .sidenav .dataTable tbody tr td {
     font-size: 11px;
@@ -562,18 +562,18 @@ div.sidenav div.linkgroup a.active {
     z-index: 1;
     top: 0;
     left: 0;
-    
+
     -webkit-box-shadow: 0 0.063em 0.25em rgba( 37, 50, 55, .25 ); /* 1 4 */
     box-shadow: 0 0.063em 0.25em rgba( 37, 50, 55, .25 ); /* 1 4 */
-    
-    
+
+
     -webkit-transition-duration: .5s;
     transition-duration: .5s;
-    
+
     -webkit-transition-timing-function: cubic-bezier( 0.215, 0.610, 0.355, 1.000 );
     transition-timing-function: cubic-bezier( 0.215, 0.610, 0.355, 1.000 );
-    
-    
+
+
     -webkit-transition-property: -webkit-transform;
     transition-property: transform;
 }
