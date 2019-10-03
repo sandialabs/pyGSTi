@@ -3079,6 +3079,272 @@ def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=F
     if random_pauli:
         return _objs.Circuit(random_string), bitflip
 
+
+def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
+    
+    #import numpy as _np
+    #from pygsti.objects import circuit as _cir
+    
+    if subsetQs is None:
+        qubits = list(pspec.qubit_labels[:])  # copy this list
+    else:
+        qubits = list(subsetQs[:])  # copy this list
+    
+    germcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
+    
+#     germlength = {}
+#     for q in qubits:
+#         glp = 0
+#         while _np.random.binomial(1, 0.2) == 1:
+#             glp += 1
+#         germlength[q] = 2 ** glp
+            
+#     circleng = max(list(germlength.values()))
+#     #print(circleng)
+#     subgerm = {}
+#     poweredsubgerm = {}
+
+    gcirclenpower = 0
+    while _np.random.binomial(1, 0.5) == 1:
+        gcirclenpower += 1
+    
+    germlength = {}
+    for q in qubits:
+        glp = 0
+        while _np.random.binomial(1, 0.5) == 1 and glp < gcirclenpower:
+            glp += 1 
+        germlength[q] = 2 ** glp  
+
+    #print(2**gcirclenpower)
+    #print(germlength)
+    circleng = max(list(germlength.values()))
+    #print(circleng)
+    subgerm = {}
+    poweredsubgerm = {}
+            
+            
+    for q in qubits:
+        subgerm[q] = []
+        possibleops = pspec.clifford_ops_on_qubits[(q,)]   
+        for l in range(germlength[q]):
+            subgerm[q].append(possibleops[_np.random.randint(0, len(possibleops))])
+        
+        poweredsubgerm[q] = []
+        while len(poweredsubgerm[q]) < circleng:
+            poweredsubgerm[q] += subgerm[q]
+    
+    for l in range(circleng):
+        layer = [poweredsubgerm[q][l] for q in qubits]
+        #print(layer)
+        germcircuit.insert_layer(layer, 0)
+    
+    tempgermcircuit = germcircuit.copy()
+    
+    if interactingQs_density > 0:
+    
+        while len(germcircuit) * len(qubits) * interactingQs_density < 1:
+
+            germcircuit.append_circuit(tempgermcircuit)
+
+        #print(len(qubits))
+        num2Qtoadd = int(_np.floor(len(germcircuit) * len(qubits) * interactingQs_density))
+        #print(num2Qtoadd)
+
+        edgelistdict = {}
+        for l in range(len(germcircuit)):
+
+            # Prep the sampling variables.
+            sampled_layer = []
+            edgelist = pspec.qubitgraph.edges()
+            edgelist = [e for e in edgelist if all([q in qubits for q in e])]
+            selectededges = []
+
+            # Go through until all qubits have been assigned a gate.
+            while len(edgelist) > 0:
+
+                edge = edgelist[_np.random.randint(0, len(edgelist))]
+                selectededges.append(edge)
+                # Delete all edges containing these qubits.
+                edgelist = [e for e in edgelist if not any([q in e for q in edge])]
+
+            edgelistdict[l] = selectededges
+
+        #print(edgelistdict)
+        for i in range(num2Qtoadd):
+            #print(i)
+            depthposition = list(edgelistdict.keys())[_np.random.randint(0, len(edgelistdict))]
+            edgeind = _np.random.randint(0, len(edgelistdict[depthposition]))
+            edge = edgelistdict[depthposition][edgeind]
+            del edgelistdict[depthposition][edgeind]
+            if len(edgelistdict[depthposition]) == 0:
+                #print('removing depth {}'.format(depthposition))
+                del edgelistdict[depthposition]
+
+            # The two-qubit gates on that edge.
+            possibleops = pspec.clifford_ops_on_qubits[edge]
+            op = possibleops[_np.random.randint(0, len(possibleops))]
+
+            newlayer = []
+            newlayer = [op] + [gate for gate in germcircuit[depthposition] if gate.qubits[0] not in edge]
+            #print(newlayer)
+            germcircuit.delete_layers(depthposition)
+            germcircuit.insert_layer(newlayer, depthposition)
+
+        germcircuit.done_editing()
+        #newgermcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
+        #for layer in germcircuit:
+        #    newgermcircuit.insert_layer(layer,0)
+        
+    circs = []
+    for length in lengths:
+        fullcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
+        while len(fullcircuit) < length:
+            fullcircuit.append_circuit(germcircuit)
+
+        while len(fullcircuit) > length:
+            fullcircuit.delete_layers(len(fullcircuit)-1)
+            
+        circs.append(fullcircuit)
+        
+    return circs
+
+def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localclifford=True, paulirandomize=True, 
+                                     interactingQs_density=1/16):
+    """
+    length : consistent with RB length.
+    """
+    from pygsti.tools import symplectic as _symp
+    
+    import numpy as _np
+    #assert(length % 2 == 0), "The mirror rb length `length` must be even!"
+    
+    if subsetQs is not None:
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "If not None, `subsetQs` must be a list!"
+        subsetQs = list(subsetQs)
+        n = len(subsetQs)
+    else:
+        n = pspec.number_of_qubits
+
+    # Check that the inverse of every gate is in the model:
+    for gname in pspec.root_gate_names:
+        assert(gname in list(pspec.gate_inverse.keys())), \
+            "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
+
+    circuits = random_germpower_circuits(pspec, lengths, interactingQs_density=interactingQs_density,
+                                        subsetQs=subsetQs)
+    
+    if paulirandomize:
+        pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
+        
+    if localclifford:
+        # Sample a compiled 1Q Cliffords layer
+        oneQclifford_circuit_out = oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+        # Generate the inverse in the same way as before (note that this will not be the same in some
+        # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
+        # matter much which we do).
+        oneQclifford_circuit_back = oneQclifford_circuit_out.copy(editable=True)
+        oneQclifford_circuit_back.reverse()
+        oneQclifford_circuit_back.map_names_inplace(pspec.gate_inverse)
+
+    circlist = []
+    outlist = []
+    
+    for circuit in circuits:
+        circuit = circuit.copy(editable=True)
+        circuit_inv = circuit.copy(editable=True)
+        circuit_inv.reverse()
+        circuit_inv.map_names_inplace(pspec.gate_inverse)
+
+        if paulirandomize:
+        #    pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
+            circuit.append_circuit(pauli_circuit)
+            circuit.append_circuit(circuit_inv)
+
+        # If we start with a random layer of 1-qubit Cliffords, we sample this here.
+        if localclifford:
+#             # Sample a compiled 1Q Cliffords layer
+#             oneQclifford_circuit_out = oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+#             # Generate the inverse in the same way as before (note that this will not be the same in some
+#             # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
+#             # matter much which we do).
+#             oneQclifford_circuit_back = oneQclifford_circuit_out.copy(editable=True)
+#             oneQclifford_circuit_back.reverse()
+#             oneQclifford_circuit_back.map_names_inplace(pspec.gate_inverse)
+
+            # Put one these 1Q clifford circuits at the start and one at then end.
+            circuit.append_circuit(oneQclifford_circuit_out)
+            circuit.prefix_circuit(oneQclifford_circuit_back)
+
+        circuit.done_editing()
+        circlist.append(circuit)
+
+        # The full circuit should be, up to a Pauli, the identity.
+        s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
+        assert(_np.array_equal(s_out, _np.identity(2 * n, int)))
+
+        # Find the error-free output.
+        s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
+        s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
+        idealout = []
+
+        for q in range(n):
+            measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
+            bit = measurement_out[1]
+            assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+            if not paulirandomize:
+                assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
+            idealout.append(int(measurement_out[1]))
+        idealout = tuple(idealout)
+        
+        outlist.append(idealout)
+
+    #return circuit, idealout
+    return circlist, outlist
+
+
+def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='edgegrab',
+                         samplerargs = [1/16],
+                         localclifford=True, paulirandomize=True,
+                         descriptor=''):
+
+    assert(sampler == 'edgegrab'), "The germ must be selected with edgegrab sampling!"
+    experiment_dict = {}
+    experiment_dict['spec'] = {}
+    experiment_dict['spec']['lengths'] = lengths
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
+    experiment_dict['spec']['subsetQs'] = subsetQs
+    experiment_dict['spec']['sampler'] = sampler
+    experiment_dict['spec']['samplerargs'] = samplerargs
+    experiment_dict['spec']['localclifford'] = localclifford
+    experiment_dict['spec']['paulirandomize'] = paulirandomize
+    experiment_dict['spec']['descriptor'] = descriptor
+    if subsetQs is not None: experiment_dict['qubitordering'] = tuple(subsetQs)
+    else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
+    experiment_dict['circuits'] = {}
+    experiment_dict['idealout'] = {}
+    
+    circlist = {}
+    outlist = {}
+    for j in range(circuits_per_length):
+        circlist[j], outlist[j] = random_germpower_mirror_circuits(pspec, lengths, subsetQs=subsetQs,
+                                        localclifford=localclifford, paulirandomize=paulirandomize,
+                                       interactingQs_density=samplerargs[0])
+
+        
+    #for l in lengths:
+    for lind in range(len(lengths)):
+        for j in range(circuits_per_length):
+            #c, iout = random_germpower_mirror_circuit(pspec, l, subsetQs=subsetQs,
+            #                            localclifford=localclifford, paulirandomize=paulirandomize,
+            #                           interactingQs_density=samplerargs[0])
+#             experiment_dict['circuits'][l, j] = c
+#             experiment_dict['idealout'][l, j] = iout
+            experiment_dict['circuits'][lengths[lind], j] = circlist[j][lind]
+            experiment_dict['idealout'][lengths[lind], j] = outlist[j][lind]
+
+    return experiment_dict
+
+
 # Future : possibly add this back in, but only if the other function it is a wrap-around
 # for has been tested.
 # def oneQ_generalized_rb_experiment(m_list, K_m, group_or_model, inverse=True,

@@ -13,5 +13,5 @@ from . import ibmq_melbourne
 from . import ibmq_rueschlikon
 from . import ibmq_tenerife
 from . import ibmq_ourense
-from . import rqc_aspen
-from . import rqc_agave
+from . import rigetti_aspen
+from . import rigetti_agave

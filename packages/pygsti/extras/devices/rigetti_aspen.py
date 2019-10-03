@@ -18,6 +18,9 @@ def qubits(version):
         return ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]
     elif version == 4:
         return ['Q'+str(x) for x in [0,1,2,3,4,5,6,7]] + ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]
+    elif version == 4.13:
+        return ['Q'+str(x) for x in [0,1,2,3,6,7]] + ['Q'+str(x) for x in [10,11,12,14,15,16,17]]
+
     else:
         raise ValueError("Unknown version!")
 
@@ -27,6 +30,8 @@ def make_processor_spec(one_q_gate_names, version, construct_clifford_compilatio
     gate_names = ['Gcphase'] + one_q_gate_names
     if version == 4:
         total_qubits = 16
+    elif version == 4.13:
+        total_qubits = 13
     elif version == 6:
         total_qubits = 8
     else:
@@ -68,6 +73,24 @@ def get_twoQgate_edgelist(version, subset=None):
                      ('Q10','Q17'),
                      # Connection
                      ('Q1','Q16'),
+                     ('Q2','Q15'),
+                     ]
+
+    if version == 4.13:
+        edge_list = [# broken ring 1
+                     ('Q0','Q1'),
+                     ('Q1','Q2'),
+                     ('Q2','Q3'),
+                     ('Q6','Q7'),
+                     ('Q0','Q7'),
+                     # broken ring 2
+                     ('Q10','Q11'),
+                     ('Q11','Q12'),
+                     ('Q14','Q15'),
+                     ('Q15','Q16'),
+                     ('Q16','Q17'),
+                     ('Q10','Q17'),
+                     # partial connection
                      ('Q2','Q15'),
                      ]
                         
