@@ -1,4 +1,4 @@
-""" Exteneral Device Specifications Sub-package """
+""" Functions for interfacing pyGSTi with IBM Q Tenerife (ibmqx4) """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,11 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import ibmq_melbourne
-from . import ibmq_rueschlikon
-from . import ibmq_tenerife
-from . import ibmq_yorktown
-from . import ibmq_ourense
-from . import ibmq_vigo
-from . import rigetti_aspen
-from . import rigetti_agave
+import numpy as _np
+from ...objects import processorspec as _pspec
+from .ibmq_ourense import *
