@@ -13,6 +13,7 @@ import ast as _ast
 import warnings as _warnings
 import pickle as _pickle
 import os as _os
+import ast as _ast
 
 # todo : update
 from . import analysis as _results
@@ -20,10 +21,10 @@ from . import sample as _sample
 from . import dataset as _dataset
 from . import rbanalyzer as _rbanalyzer
 from ... import io as _io
-
+from ...objects import circuit as _cir
 
 def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', addaux=False,
-                                   verbosity=1):
+                                   verbosity=1, storecircuits=False):
 
     try:
         _os.mkdir(outfolder)
@@ -34,7 +35,7 @@ def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', adda
             print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
 
     rbanalyzer = import_data(ds_or_filename, verbosity=verbosity)
-    rbanalyzer.create_summary_data(addaux=addaux)
+    rbanalyzer.create_summary_data(addaux=addaux, storecircuits=storecircuits)
 
     with open(outfolder + '/readme.txt', 'w') as f:
         f.write('# This folder contains RB summary data\n')
@@ -400,7 +401,13 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                     if len(aux) > 0:
                         assert(line[3] == '#'), "Auxillary data must be divided from the core data!"
                     for i, key in enumerate(auxlabels):
-                        aux[key][l].append(float(line[4 + i]))
+                        if key != 'target' and key != 'circuit':
+                            aux[key][l].append(_ast.literal_eval(line[numqubits + 3 + i]))
+                        else:
+                            if key == 'target':
+                                aux[key][l].append(line[numqubits + 3 + i])
+                            if key == 'circuit':
+                                aux[key][l].append(_cir.Circuit(line[numqubits + 3 + i]))
 
     elif datatype == 'success_probabilities':
 
@@ -427,7 +434,13 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                     if len(aux) > 0:
                         assert(line[2] == '#'), "Auxillary data must be divided from the core data!"
                     for i, key in enumerate(auxlabels):
-                        aux[key][l].append(float(line[3 + i]))
+                        if key != 'target' and key != 'circuit':
+                            aux[key][l].append(_ast.literal_eval(line[numqubits + 3 + i]))
+                        else:
+                            if key == 'target':
+                                aux[key][l].append(line[numqubits + 3 + i])
+                            if key == 'circuit':
+                                aux[key][l].append(_cir.Circuit(line[numqubits + 3 + i]))
 
     elif datatype == 'hamming_distance_counts' or datatype == 'hamming_distance_probabilities':
 
@@ -456,8 +469,14 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                     if len(aux) > 0:
                         assert(line[numqubits + 2] == '#'), "Auxillary data must be divided from the core data!"
                     for i, key in enumerate(auxlabels):
-                        aux[key][l].append(float(line[numqubits + 3 + i]))
-
+                        if key != 'target' and key != 'circuit':
+                            aux[key][l].append(_ast.literal_eval(line[numqubits + 3 + i]))
+                        else:
+                            if key == 'target':
+                                aux[key][l].append(line[numqubits + 3 + i])
+                            if key == 'circuit':
+                                aux[key][l].append(line[numqubits + 3 + i])
+                                #aux[key][l].append(_cir.Circuit(line[numqubits + 3 + i]))
     else:
         raise ValueError("The data format couldn't be extracted from the file!")
 

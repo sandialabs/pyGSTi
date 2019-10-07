@@ -61,7 +61,7 @@ class RBAnalyzer(object):
 
 
     def create_summary_data(self, specindices=None, datatype='adjusted', method='fast',
-                            addaux=False, verbosity=2):
+                            addaux=False, storecircuits=False, verbosity=2):
         """
         analysis : 'all', 'hamming', 'raw'.
 
@@ -79,9 +79,12 @@ class RBAnalyzer(object):
                         print(" - Creating summary data {} of {} ...".format(specind + 1, len(specindices)), end='')
                     if verbosity > 1: print("")
 
-                    if not addaux:
+                    if addaux:
                         raise NotImplementedError("The slow version of this function does"
                                                   + "not allow adding aux currently!")
+                    if storecircuits:
+                        raise NotImplementedError("The slow version of this function does"
+                                                  + "not allow storing the circuits!")
 
                     self._summary_data[specind] = _dataset.create_summary_datasets(self.ds, spec, datatype=datatype,
                                                                                    verbosity=verbosity)
@@ -123,12 +126,13 @@ class RBAnalyzer(object):
                             summarydata[specind][qubits]['success_counts'] = {}
                             summarydata[specind][qubits]['total_counts'] = {}
                             summarydata[specind][qubits]['hamming_distance_counts'] = {}
+                            aux[specind][qubits] = {}
                             if addaux:
-                                aux[specind][qubits] = {}
                                 aux[specind][qubits]['twoQgate_count'] = {}
                                 aux[specind][qubits]['depth'] = {}
-                            else:
-                                aux[specind][qubits] = {}
+                                aux[specind][qubits]['target'] = {}
+                            if storecircuits:
+                                aux[specind][qubits]['circuit'] = {}
 
                     for qubits in structure:
                         if length not in summarydata[specind][qubits]['success_counts'].keys():
@@ -138,6 +142,9 @@ class RBAnalyzer(object):
                             if addaux:
                                 aux[specind][qubits]['twoQgate_count'][length] = []
                                 aux[specind][qubits]['depth'][length] = []
+                                aux[specind][qubits]['target'][length] = []
+                            if storecircuits:
+                                aux[specind][qubits]['circuit'][length] = []
 
                     dsrow = self.ds[circ]
                     for qubits in structure:
@@ -150,6 +157,9 @@ class RBAnalyzer(object):
                         if addaux:
                             aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
                             aux[specind][qubits]['depth'][length].append(circ.depth())
+                            aux[specind][qubits]['target'][length].append(target)                            
+                        if storecircuits:
+                            aux[specind][qubits]['circuit'][length].append(circ.str)
 
             for specind in summarydata.keys():
                 spec = self._specs[specind]
@@ -198,7 +208,7 @@ class RBAnalyzer(object):
                     self._rbresults['adjusted'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
 
     def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, sampler=None,
-                           twoQgateprob=None, prefilter=None):
+                           twoQgateprob=None, prefilter=None, rbtype=None):
         """
         todo
 
@@ -210,6 +220,11 @@ class RBAnalyzer(object):
             for qubits in structures:
 
                 keep = True
+
+                if keep:
+                    if rbtype is not None:
+                        if spec._rbtype != rbtype:
+                            keep = False
 
                 if keep:
                     if numqubits is not None:
