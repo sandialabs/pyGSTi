@@ -1,0 +1,120 @@
+{% macro navlink(display, href, style='') %}
+<a href="{{ href }}"
+   class="tablink {{ style }} {% if self._TemplateReference__context.name == href %}active{% endif %}"
+   >{{ display }}</a>
+{% endmacro %}
+
+<!doctype html>
+<html>
+    <head>
+        <title>{{ title }}</title>
+        <meta charset="utf-8">
+
+        <link rel="icon" type="image/png" sizes="16x16" href="{{ static_ref('images/favicon-16x16.png') }}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ static_ref('images/favicon-32x32.png') }}">
+        <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
+
+        <script src="{{ static_lib('jquery-3.2.1.min.js') }}"></script>
+        <script src="{{ static_lib('jquery-ui.min.js') }}"></script>
+        <script src="{{ static_lib('plotly-latest.min.js') }}"></script>
+        <script src="{{ static_lib('katex.min.js') }}"></script>
+        <script src="{{ static_lib('auto-render.min.js') }}"></script>
+        <script src="{{ static_ref('pygsti_plotly_ex.js') }}"></script>
+        <script src="{{ static_ref('pygsti_dashboard.lite.js') }}"></script>
+
+        <link rel="stylesheet" href="{{ static_lib('smoothness-jquery-ui.css') }}">
+        <link rel="stylesheet" href="{{ static_lib('katex.css') }}">
+        <link rel="stylesheet" href="{{ static_ref('pygsti_dataviz.css') }}">
+        <link rel="stylesheet" href="{{ static_ref('pygsti_dashboard.lite.css') }}">
+        <link rel="stylesheet" href="{{ static_ref('pygsti_fonts.css') }}">
+    </head>
+
+    <body>
+        <div id="content-wrapper">
+            <div id="theSidenav" class="sidenav">
+                <!-- REMOVEME -->
+                <!-- <a href="javascript:void(0)" id="tackbtn" title="Toggle navigation bar auto-hide" onclick="tackNav()">&#8859;</a> -->
+                <div class="linkgroup">
+                    {{ navlink('Summary', 'index.html', style='linkgroupheading') }}
+                </div>
+
+                {% if config['BrevityLT4'] %}
+                <div class="linkgroup">
+                    <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Model Violation</p>
+                    {{ navlink('Overview', 'Goodness.html') }}
+
+                    {% if config['BrevityLT1'] %}
+                    {{ navlink('Per-sequence detail', 'Goodness_colorboxplot.html') }}
+
+                    {% if config['ShowScaling'] %}
+                    {{ navlink('Robust data scaling', 'Goodness_scaling.html') }}
+                    {% endif %}
+
+                    {% if config['ShowUnmodeledError'] %}
+                    {{ navlink('Unmodeled error', 'Goodness_unmodeled.html') }}
+                    {% endif %}
+
+                    {% endif %}
+                </div>
+
+                <div class="linkgroup">
+                    <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Gauge Invariant Error Metrics</p>
+                    {{ navlink('Overview', 'GaugeInvariants_gates.html') }}
+
+                    {% if config['BrevityLT3'] %}
+                    {{ navlink('Germs Detail', 'GaugeInvariants_germs.html') }}
+                    {% endif %}
+
+                    {% if config['CompareDatasets'] %}
+                    {{ navlink('Data Comparison', 'DataComparison.html') }}
+                    {% endif %}
+
+                    {% if config['IdleTomography'] %}
+                    {{ navlink('Idle Tomography', 'IdleTomography.html') }}
+                    {% endif %}
+                </div>
+
+                <div class="linkgroup">
+                    <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Gauge Dependent Error Metrics</p>
+                    {{ navlink('Overview', 'GaugeVariants.html') }}
+                    {{ navlink('Raw Estimates', 'GaugeVariants_raw.html') }}
+                    {{ navlink('Gate Decompositions', 'GaugeVariants_decomp.html') }}
+                    {{ navlink('Gate Error Generators', 'GaugeVariants_errgen.html') }}
+                </div>
+
+                {% if config['BrevityLT2'] %}
+                <div class="linkgroup">
+                    <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">For Reference</p>
+                    {{ navlink('Input Reference', 'Input.html') }}
+                    {{ navlink('System Reference', 'Meta.html') }}
+                </div>
+                {% endif %}
+
+                {% endif %}
+
+                <div class="linkgroup">
+                    {{ navlink('Help', 'Help.html', style='linkgroupheading') }}
+                </div>
+
+                <!-- TODO -->
+                {{ topSwitchboard|render }}
+
+                <!-- TODO -->
+                {{ bestGatesetGaugeOptParamsTable|render }}
+            </div>
+
+            <div id="main-wrapper">
+                <header class="header" role="banner">
+      	            <h1 class="title">{{ title }}</h1>
+	                <h2 class="author">generated by pyGSTi on {{ date }}</h2>
+                </header>
+                <div id="main">
+                    {% block content %}{% endblock %}
+                </div>
+                <div id="status">
+                    No message
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
