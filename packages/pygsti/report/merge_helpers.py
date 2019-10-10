@@ -18,6 +18,9 @@ import webbrowser as _webbrowser
 import re as _re
 import subprocess as _subprocess
 
+import jinja2
+from pathlib import Path
+
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -379,6 +382,34 @@ def fill_std_qtys(qtys, connected, renderMath, CSSnames):
             connected, None, cssFile)
             for cssFile in CSSnames])
 
+def _render_as_html(value, render_options, link_to):
+    """Render an object as HTML.
+
+    See
+    ---
+    :func:`render_as_html`
+    """
+    if isinstance(value, str):
+        html = value
+    else:
+        if hasattr(value, 'set_render_options'):
+            value.set_render_options(**render_options)
+
+            out = value.render('html')
+            if link_to:
+                value.set_render_options(leave_includes_src=('tex' in link_to),
+                                       render_includes=('pdf' in link_to))
+                if 'tex' in link_to or 'pdf' in link_to: value.render('latex')
+                if 'pkl' in link_to: value.render('python')
+
+        else:  # switchboards usually
+            out = value.render('html')
+
+        # Note: out is a dictionary of rendered portions
+        html = f"<script>%(js)s</script>%(html)s" % out
+
+    return html
+
 
 def render_as_html(qtys, render_options, link_to, verbosity):
     """
@@ -412,27 +443,10 @@ def render_as_html(qtys, render_options, link_to, verbosity):
     printer = _VerbosityPrinter.build_printer(verbosity)
 
     #render quantities as HTML
-    qtys_html = _collections.defaultdict(lambda x=0: "OMITTED")
+    qtys_html = _collections.defaultdict(lambda: "OMITTED")
     for key, val in qtys.items():
-        if _compat.isstr(val):
-            qtys_html[key] = val
-        else:
-            with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
-                if hasattr(val, 'set_render_options'):
-                    val.set_render_options(**render_options)
-
-                    out = val.render("html")
-                    if link_to:
-                        val.set_render_options(leave_includes_src=('tex' in link_to),
-                                               render_includes=('pdf' in link_to))
-                        if 'tex' in link_to or 'pdf' in link_to: val.render("latex")
-                        if 'pkl' in link_to: val.render("python")
-
-                else:  # switchboards usually
-                    out = val.render("html")
-
-                # Note: out is a dictionary of rendered portions
-                qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
+        with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
+            qtys[key] = _render_as_html(val, render_options, link_to)
 
     return qtys_html
 
@@ -663,6 +677,121 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
         url = 'file://' + _os.path.abspath(outputFilename)
         printer.log("Opening %s..." % outputFilename)
         _webbrowser.open(url)
+
+
+def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=None):
+    """Build a jinja2 environment for generating pyGSTi reports"""
+
+    if templateDir is not None:
+        loader = jinja2.FileSystemLoader(templateDir)
+    else:
+        # Use packaged templates by default
+        loader = jinja2.PackageLoader('pygsti', 'report/templates/jinja_templates')
+
+    # Construct jinja2 environment
+    env = jinja2.Environment(
+        loader=loader,
+        autoescape=jinja2.select_autoescape(['html', 'xml'])
+    )
+
+    # jinja environment globals
+    def jinja_global(fn):
+        """Helper decorator for defining functions with global jinja visibility"""
+        env.globals[fn.__name__] = fn
+        return fn
+
+    def jinja_filter(fn):
+        """Helper decorator for defining jinja filters"""
+        env.filters[fn.__name__] = fn
+        return fn
+
+    @jinja_global
+    def static_ref(path):
+        """Render an href to a static resource"""
+        return static_path / path
+
+    @jinja_global
+    def static_lib(library):
+        """Render an href to a static library"""
+        # XXX equivalent to static_ref right now, but external libraries should later be bundled separately
+        return static_ref(library)
+
+    @jinja_filter
+    @jinja2.evalcontextfilter
+    def render(eval_ctx, value):
+        html = _render_as_html(value, render_options or {}, link_to)
+        return jinja2.Markup(html) if eval_ctx.autoescape else html
+
+    return env
+
+
+def merge_jinja_template_dir(qtys, outputDir, templateDir=None, auto_open=False,
+                             precision=None, link_to=None, connected=False, toggles=None,
+                             renderMath=True, resizable=True, autosize='none', verbosity=0):
+    """
+    Renders `qtys` and merges them into the HTML files under `templateDir`,
+    saving the output under `outputDir`.  This functions parameters are the
+    same as those of :func:`merge_html_template_dir.
+
+    Returns
+    -------
+    None
+    """
+
+    # Create output directory if it does not already exist
+    out_path = Path(outputDir).absolute()
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    # Write static resources to output path
+    static_path = out_path / 'offline'
+    if not static_path.exists():
+        # TODO package resources
+        static_src = Path(__file__).absolute().parent / 'templates' / 'offline'
+        _shutil.copytree(static_src, static_path)
+
+    env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
+                          render_options=dict(switched_item_mode="inline",
+                                              global_requirejs=False,
+                                              resizable=resizable, autosize=autosize,
+                                              output_dir=None, link_to=link_to,
+                                              precision=precision),
+                          link_to=link_to
+    )
+
+    # Template rendering parameters are the given qtys plus a 'config' dict
+    render_params = {
+        **qtys,
+        'config': {
+            **(toggles or {})
+            # TODO whatever should be in config namespace
+        }
+    }
+
+    # Select templates to render
+    # TODO generalize this
+    templates = ['index.html', 'Help.html']
+    if toggles['BrevityLT4']:
+        templates.extend(['Goodness.html', 'GaugeInvariants_gates.html', 'GaugeVariants.html', 'GaugeVariants_raw.html', 'GaugeVariants_decomp.html', 'GaugeVariants_errgen.html'])
+        if toggles['BrevityLT3']:
+            templates.extend(['GaugeInvariants_germs.html'])
+        if toggles['BrevityLT2']:
+            templates.extend(['Input.html', 'Meta.html'])
+        if toggles['BrevityLT1']:
+            templates.extend(['Goodness_colorboxplot.html'])
+        if toggles['ShowScaling']:
+            templates.extend(['Goodness_scaling.html'])
+        if toggles['ShowUnmodeledError']:
+            templates.extend(['Goodness_unmodeled.html'])
+        if toggles['CompareDatasets']:
+            templates.extend(['DataComparison.html'])
+        if toggles['IdleTomography']:
+            templates.extend(['IdleTomography.html'])
+
+    # Render page templates to output path
+    for name in templates:
+        template = env.get_template(name)
+        with open(out_path / name, 'w') as outfile:
+            outfile.write(template.render(render_params))
 
 
 def process_call(call):

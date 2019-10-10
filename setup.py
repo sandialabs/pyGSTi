@@ -165,6 +165,7 @@ setup(name='pyGSTi',
       },
       setup_requires=['setuptools_scm'],
       install_requires=[
+          'jinja2',
           'numpy>=1.15.0',
           'scipy',
           'plotly==3.10.0',
