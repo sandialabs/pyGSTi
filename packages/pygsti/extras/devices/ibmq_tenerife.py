@@ -12,7 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # import numpy as _np
 # from ...objects import processorspec as _pspec
 
-qubits =  ['Q' + str(x) for x in range(5)]
+qubits = ['Q' + str(x) for x in range(5)]
 
 twoQgate = 'Gcnot'
 
@@ -24,7 +24,7 @@ edgelist = [('Q1', 'Q0'),
               ('Q4', 'Q2')]
 
 
-spec_format = 'ibmq_2019'
+spec_format = 'ibmq_v2019'
 
 # def qubits():
 
