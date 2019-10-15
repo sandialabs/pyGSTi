@@ -13,6 +13,7 @@ import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
+import itertools as _iter
 
 from .localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
@@ -477,9 +478,9 @@ class ProcessorSpec(object):
             u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
             if u.shape == (4, 4):
                 #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
-                if _np.allclose(u, Id):
-                    _warnings.warn("The identity should often *not* be included "
-                                   "in the root gate names of a ProcessorSpec.")
+                #if _np.allclose(u, Id):
+                #    _warnings.warn("The identity should often *not* be included "
+                #                   "in the root gate names of a ProcessorSpec.")
                 nontrivial_gname_pauligate_pairs.append((gname, u))
 
         for gname1, u1 in nontrivial_gname_pauligate_pairs:
@@ -526,6 +527,30 @@ class ProcessorSpec(object):
                         if _np.allclose(ucombined, _np.identity(_np.shape(u2)[0], float)):
                             self.gate_inverse[gname1] = gname2
                             self.gate_inverse[gname2] = gname1
+
+    def get_all_connected_sets(self, n):
+        """
+        Returns all connected sets of `n` qubits. Note that for a large device with
+        this will be often be an unreasonably large number of sets of qubits, and so
+        the run-time of this method will be unreasonable.
+
+        Parameters
+        ----------
+        n: int
+            The number of qubits within each set.
+
+        Returns
+        -------
+        list
+            All sets of `n` connected qubits.
+
+        """
+        connectedqubits = []
+        for combo in _iter.combinations(self.qubit_labels, n):
+            if self.qubitgraph.subgraph(list(combo)).are_glob_connected(combo):
+                connectedqubits.append(combo)
+
+        return connectedqubits
 
     # Future : replace this with a way to specify how "costly" using different qubits/gates is estimated to be, so that
     # Clifford compilers etc can take this into account by auto-generating a costfunction from this information.
