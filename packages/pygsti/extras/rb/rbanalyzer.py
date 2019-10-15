@@ -13,6 +13,8 @@ import numpy as _np
 import copy as _copy
 from . import analysis as _analysis
 from . import dataset as _dataset
+from . import errorratesmodel as _erm
+from ...objects import dataset as _stdds
 
 
 class RBAnalyzer(object):
@@ -20,7 +22,7 @@ class RBAnalyzer(object):
     todo
 
     """
-    def __init__(self, specs, ds=None, summary_data=None):
+    def __init__(self, specs, ds=None, summary_data=None, predicted_summary_data=None):
         """
         todo
 
@@ -37,9 +39,15 @@ class RBAnalyzer(object):
         else:
             self._summary_data = _copy.deepcopy(summary_data)
 
+        if predicted_summary_data is None:
+            self._predicted_summary_data = {}
+        else:
+            self._predicted_summary_data = _copy.deepcopy(predicted_summary_data)
+
         self._rbresults = {}
         self._rbresults['raw'] = {}
         self._rbresults['adjusted'] = {}
+
 
     def discard_dataset(self):
         """
@@ -59,9 +67,10 @@ class RBAnalyzer(object):
 
     #     self.ds = None
 
-
     def create_summary_data(self, specindices=None, datatype='adjusted', method='fast',
-                            addaux=False, storecircuits=False, verbosity=2):
+                            addaux=True, storecircuits=False,  # error_rates_model=None,
+                            predictions={},  # 'error_rates_model':, erm 'forwardsim_dataset':ds},
+                            verbosity=2):
         """
         analysis : 'all', 'hamming', 'raw'.
 
@@ -86,6 +95,10 @@ class RBAnalyzer(object):
                         raise NotImplementedError("The slow version of this function does"
                                                   + "not allow storing the circuits!")
 
+                    if len(predictions) > 0:
+                        raise NotImplementedError("The slow version of this function does"
+                                                  + "not allow error rate predictions!")
+
                     self._summary_data[specind] = _dataset.create_summary_datasets(self.ds, spec, datatype=datatype,
                                                                                    verbosity=verbosity)
 
@@ -98,85 +111,248 @@ class RBAnalyzer(object):
         elif method == 'fast':
             assert(specindices is None), "The 'fast' method cannot format a subset of the data!"
 
+            predsummarydata = {}
+            predds = None
+            preddskey = None
+            for pkey in predictions.keys():
+                predsummarydata[pkey] = {}
+                if isinstance(predictions[pkey], _stdds.DataSet):
+                    assert(predds is None), "Can't have two DataSet predictions!"
+                    predds = predictions[pkey]
+                    preddskey = pkey
+                else:
+                    assert(isinstance(predictions[pkey], _erm.ErrorRatesModel)), "If not a DataSet must be an ErrorRatesModel!"
+
             summarydata = {}
             aux = {}
             numcircuits = len(self.ds.keys())
             percent = 0
-            for i, circ in enumerate(self.ds.keys()):
 
-                print(i, end=',')
-                if verbosity > 0:
-                    if _np.floor(100 * i / numcircuits) >= percent:
-                        percent += 1
-                        print("{} percent complete".format(percent))
+            if preddskey is None:
+                for i, ((circ, dsrow), (auxcirc, auxdict)) in enumerate(zip(self.ds.items(), self.ds.auxInfo.items())):
 
-                specindices = self.ds.auxInfo[circ]['specindices']
-                length = self.ds.auxInfo[circ]['length']
-                target = self.ds.auxInfo[circ]['target']
+                    assert(circ == auxcirc)
+                    #print(i, end=',')
+                    if verbosity > 0:
+                        if _np.floor(100 * i / numcircuits) >= percent:
+                            percent += 1
+                            print("{} percent complete".format(percent))
 
-                for specind in specindices:
-                    spec = self._specs[specind]
-                    structure = spec.get_structure()
-                    if specind not in summarydata.keys():
+                    # specindices = self.ds.auxInfo[circ]['specindices']
+                    # length = self.ds.auxInfo[circ]['length']
+                    # target = self.ds.auxInfo[circ]['target']
+                    specindices = auxdict['specindices']
+                    length = auxdict['length']
+                    target = auxdict['target']
 
-                        summarydata[specind] = {}
-                        aux[specind] = {}
+                    for specind in specindices:
+                        spec = self._specs[specind]
+                        structure = spec.get_structure()
+
+                        if specind not in summarydata.keys():
+
+                            summarydata[specind] = {}
+                            aux[specind] = {}
+                            for pkey in predictions.keys():
+                                predsummarydata[pkey][specind] = {}
+
+                            for qubits in structure:
+                                summarydata[specind][qubits] = {}
+                                summarydata[specind][qubits]['success_counts'] = {}
+                                summarydata[specind][qubits]['total_counts'] = {}
+                                summarydata[specind][qubits]['hamming_distance_counts'] = {}
+                                aux[specind][qubits] = {}
+                                if addaux:
+                                    aux[specind][qubits]['twoQgate_count'] = {}
+                                    aux[specind][qubits]['depth'] = {}
+                                    aux[specind][qubits]['target'] = {}
+                                if storecircuits:
+                                    aux[specind][qubits]['circuit'] = {}
+                                for pkey in predictions.keys():
+                                    predsummarydata[pkey][specind][qubits] = {}
+                                    predsummarydata[pkey][specind][qubits]['success_probabilities'] = {}
+
                         for qubits in structure:
-                            summarydata[specind][qubits] = {}
-                            summarydata[specind][qubits]['success_counts'] = {}
-                            summarydata[specind][qubits]['total_counts'] = {}
-                            summarydata[specind][qubits]['hamming_distance_counts'] = {}
-                            aux[specind][qubits] = {}
+                            if length not in summarydata[specind][qubits]['success_counts'].keys():
+                                summarydata[specind][qubits]['success_counts'][length] = []
+                                summarydata[specind][qubits]['total_counts'][length] = []
+                                summarydata[specind][qubits]['hamming_distance_counts'][length] = []
+                                if addaux:
+                                    aux[specind][qubits]['twoQgate_count'][length] = []
+                                    aux[specind][qubits]['depth'][length] = []
+                                    aux[specind][qubits]['target'][length] = []
+                                if storecircuits:
+                                    aux[specind][qubits]['circuit'][length] = []
+                                for pkey in predictions.keys():
+                                    predsummarydata[pkey][specind][qubits]['success_probabilities'][length] = []
+
+                        #dsrow = self.ds[circ]
+                        for qubits in structure:
+                            if datatype == 'raw':
+                                summarydata[specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
+                                summarydata[specind][qubits]['total_counts'][length].append(dsrow.total)
+                            elif datatype == 'adjusted':
+                                summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
+
                             if addaux:
-                                aux[specind][qubits]['twoQgate_count'] = {}
-                                aux[specind][qubits]['depth'] = {}
-                                aux[specind][qubits]['target'] = {}
+                                aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
+                                aux[specind][qubits]['depth'][length].append(circ.depth())
+                                aux[specind][qubits]['target'][length].append(target)                            
                             if storecircuits:
-                                aux[specind][qubits]['circuit'] = {}
+                                aux[specind][qubits]['circuit'][length].append(circ.str)
+                            for pkey, predmodel in predictions.items():
+                                if pkey != preddskey:
+                                    if set(circ.line_labels) != set(qubits):
+                                        trimmedcirc = circ.copy(editable=True)
+                                        for q in circ.line_labels:
+                                            if q not in qubits:
+                                                trimmedcirc.delete_lines(q)
+                                    else:
+                                        trimmedcirc = circ
+                                    predsp = predmodel.success_prob(trimmedcirc, add_uniform_dist=True)
+                                    predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
 
-                    for qubits in structure:
-                        if length not in summarydata[specind][qubits]['success_counts'].keys():
-                            summarydata[specind][qubits]['success_counts'][length] = []
-                            summarydata[specind][qubits]['total_counts'][length] = []
-                            summarydata[specind][qubits]['hamming_distance_counts'][length] = []
+            if preddskey is not None:
+                
+                for i, ((circ, dsrow), (auxcirc, auxdict), (pcirc, pdsrow)) in enumerate(zip(self.ds.items(), self.ds.auxInfo.items(), predds.items())):
+
+                    assert(circ == auxcirc)
+                    if not circ == pcirc:
+                        pdsrow = predds[circ]
+                        print("Predicted DataSet is ordered differently to the main DataSet! Reverting to potentially slow dictionary hashing!")
+                    #print(i, end=',')
+                    if verbosity > 0:
+                        if _np.floor(100 * i / numcircuits) >= percent:
+                            percent += 1
+                            print("{} percent complete".format(percent))
+
+                    # specindices = self.ds.auxInfo[circ]['specindices']
+                    # length = self.ds.auxInfo[circ]['length']
+                    # target = self.ds.auxInfo[circ]['target']
+                    specindices = auxdict['specindices']
+                    length = auxdict['length']
+                    target = auxdict['target']
+
+                    for specind in specindices:
+                        spec = self._specs[specind]
+                        structure = spec.get_structure()
+
+                        if specind not in summarydata.keys():
+
+                            summarydata[specind] = {}
+                            aux[specind] = {}
+                            for pkey in predictions.keys():
+                                predsummarydata[pkey][specind] = {}
+
+                            for qubits in structure:
+                                summarydata[specind][qubits] = {}
+                                summarydata[specind][qubits]['success_counts'] = {}
+                                summarydata[specind][qubits]['total_counts'] = {}
+                                summarydata[specind][qubits]['hamming_distance_counts'] = {}
+                                aux[specind][qubits] = {}
+                                if addaux:
+                                    aux[specind][qubits]['twoQgate_count'] = {}
+                                    aux[specind][qubits]['depth'] = {}
+                                    aux[specind][qubits]['target'] = {}
+                                if storecircuits:
+                                    aux[specind][qubits]['circuit'] = {}
+                                for pkey in predictions.keys():
+                                    predsummarydata[pkey][specind][qubits] = {}
+                                    if pkey != preddskey:
+                                        predsummarydata[pkey][specind][qubits]['success_probabilities'] = {}
+                                    else:
+                                        predsummarydata[pkey][specind][qubits]['success_counts'] = {}
+                                        predsummarydata[pkey][specind][qubits]['total_counts'] = {}
+                                        predsummarydata[pkey][specind][qubits]['hamming_distance_counts'] = {}
+
+                        for qubits in structure:
+                            if length not in summarydata[specind][qubits]['success_counts'].keys():
+                                summarydata[specind][qubits]['success_counts'][length] = []
+                                summarydata[specind][qubits]['total_counts'][length] = []
+                                summarydata[specind][qubits]['hamming_distance_counts'][length] = []
+                                if addaux:
+                                    aux[specind][qubits]['twoQgate_count'][length] = []
+                                    aux[specind][qubits]['depth'][length] = []
+                                    aux[specind][qubits]['target'][length] = []
+                                if storecircuits:
+                                    aux[specind][qubits]['circuit'][length] = []
+                                for pkey in predictions.keys():
+                                    if pkey != preddskey:
+                                        predsummarydata[pkey][specind][qubits]['success_probabilities'][length] = []
+                                    else:
+                                        predsummarydata[pkey][specind][qubits]['success_counts'][length] = []
+                                        predsummarydata[pkey][specind][qubits]['total_counts'][length] = []
+                                        predsummarydata[pkey][specind][qubits]['hamming_distance_counts'][length] = []
+
+                        #dsrow = self.ds[circ]
+                        for qubits in structure:
+                            if datatype == 'raw':
+                                summarydata[specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
+                                summarydata[specind][qubits]['total_counts'][length].append(dsrow.total)
+                                predsummarydata[preddskey][specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(pdsrow, circ, target, qubits))
+                                predsummarydata[preddskey][specind][qubits]['total_counts'][length].append(pdsrow.total)
+                            elif datatype == 'adjusted':
+                                summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
+                                predsummarydata[preddskey][specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(pdsrow, circ, target, qubits))
+
                             if addaux:
-                                aux[specind][qubits]['twoQgate_count'][length] = []
-                                aux[specind][qubits]['depth'][length] = []
-                                aux[specind][qubits]['target'][length] = []
+                                aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
+                                aux[specind][qubits]['depth'][length].append(circ.depth())
+                                aux[specind][qubits]['target'][length].append(target)
                             if storecircuits:
-                                aux[specind][qubits]['circuit'][length] = []
+                                aux[specind][qubits]['circuit'][length].append(circ.str)
+                            for pkey, predmodel in predictions.items():
+                                if pkey != preddskey:
+                                    if set(circ.line_labels) != set(qubits):
+                                        trimmedcirc = circ.copy(editable=True)
+                                        for q in circ.line_labels:
+                                            if q not in qubits:
+                                                trimmedcirc.delete_lines(q)
+                                    else:
+                                        trimmedcirc = circ
+                                    predsp = predmodel.success_prob(trimmedcirc, add_uniform_dist=True)
+                                    predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
 
-                    dsrow = self.ds[circ]
-                    for qubits in structure:
-                        if datatype == 'raw':
-                            summarydata[specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
-                            summarydata[specind][qubits]['total_counts'][length].append(dsrow.total)
-                        elif datatype == 'adjusted':
-                            summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
 
-                        if addaux:
-                            aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
-                            aux[specind][qubits]['depth'][length].append(circ.depth())
-                            aux[specind][qubits]['target'][length].append(target)                            
-                        if storecircuits:
-                            aux[specind][qubits]['circuit'][length].append(circ.str)
+            # if error_rates_model is not None:
+            #     ermtype = error_rates_model.get_model_type()
+            #     self._predicted_summary_data[ermtype] = {}
+            for pkey in predictions.keys():
+                self._predicted_summary_data[pkey] = {}
 
             for specind in summarydata.keys():
                 spec = self._specs[specind]
                 structure = spec.get_structure()
                 self._summary_data[specind] = {}
+                for pkey in predictions.keys():
+                    self._predicted_summary_data[pkey][specind] = {}
                 for qubits in structure:
                     if datatype == 'raw':
                         summarydata[specind][qubits]['hamming_distance_counts'] = None
                     elif datatype == 'adjusted':
                         summarydata[specind][qubits]['success_counts'] = None
                         summarydata[specind][qubits]['total_counts'] = None
+                    if preddskey is not None:
+                        if datatype == 'raw':
+                            predsummarydata[preddskey][specind][qubits]['hamming_distance_counts'] = None
+                        elif datatype == 'adjusted':
+                            predsummarydata[preddskey][specind][qubits]['success_counts'] = None
+                            predsummarydata[preddskey][specind][qubits]['total_counts'] = None
                     
                     self._summary_data[specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=summarydata[specind][qubits]['success_counts'],
                                                 total_counts=summarydata[specind][qubits]['total_counts'],
                                                 hamming_distance_counts=summarydata[specind][qubits]['hamming_distance_counts'],
                                                 aux=aux[specind][qubits])
-       
+
+                    for pkey in predictions.keys():
+                        if pkey != preddskey:
+                            self._predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_probabilities'],
+                                                    total_counts=None, hamming_distance_counts=None, finitecounts=False, aux=aux[specind][qubits])
+                        else:    
+                            self._predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_counts'],
+                                                    total_counts=predsummarydata[pkey][specind][qubits]['total_counts'],
+                                                    hamming_distance_counts=predsummarydata[pkey][specind][qubits]['hamming_distance_counts'],
+                                                    aux=aux[specind][qubits])
 
         else:
             raise ValueError("Input `method` must be 'fast' or 'simple'!")

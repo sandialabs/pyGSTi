@@ -13,7 +13,6 @@ import ast as _ast
 import warnings as _warnings
 import pickle as _pickle
 import os as _os
-import ast as _ast
 
 # todo : update
 from . import analysis as _results
@@ -23,7 +22,9 @@ from . import rbanalyzer as _rbanalyzer
 from ... import io as _io
 from ...objects import circuit as _cir
 
-def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', addaux=False,
+def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', addaux=True,
+                                   #error_rates_model=None, predictions_outfolder='predictedsummarydata',
+                                   predictions={}, predictions_outfolder={},
                                    verbosity=1, storecircuits=False):
 
     try:
@@ -34,8 +35,25 @@ def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', adda
         if verbosity > 0:
             print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
 
+    if len(predictions) > 0:
+
+        for pkey in predictions.keys():
+            if pkey not in predictions_outfolder.keys():
+                predictions_outfolder[pkey] = 'predictions/' + pkey + '/summarydata'
+
+        for folder in predictions_outfolder.values():
+            try:
+                _os.makdirs(folder)
+                if verbosity > 0:
+                    print(" - Created `" + folder + "` folder to store the predicted summary data files.")
+            except:
+                if verbosity > 0:
+                    print(" - `" + folder + "` folder already exists. Will write predictions data into that folder.")
+
     rbanalyzer = import_data(ds_or_filename, verbosity=verbosity)
-    rbanalyzer.create_summary_data(addaux=addaux, storecircuits=storecircuits)
+    rbanalyzer.create_summary_data(addaux=addaux, storecircuits=storecircuits,
+                                   #error_rates_model=error_rates_model)
+                                   predictions=predictions)
 
     with open(outfolder + '/readme.txt', 'w') as f:
         f.write('# This folder contains RB summary data\n')
@@ -45,18 +63,33 @@ def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', adda
     for i, spec in enumerate(rbanalyzer._specs):
         structure = spec.get_structure()
         write_rb_spec_to_file(spec, outfolder + '/rbspec' + str(i) + '.txt', warning=0)
+        for pfolder in predictions_outfolder.values():
+            write_rb_spec_to_file(spec, pfolder + '/rbspec' + str(i) + '.txt', warning=0)
+
         for j, qubits in enumerate(structure):
             write_rb_summary_data_to_file(rbanalyzer._summary_data[i][qubits], outfolder + '/rbsummarydata' + str(i) + '-'
                                           + str(j) + '.txt')
+            for pkey, pfolder in predictions_outfolder.items():
+                write_rb_summary_data_to_file(rbanalyzer._predicted_summary_data[pkey][i][qubits],
+                                              pfolder + '/rbsummarydata' + str(i) + '-' + str(j) + '.txt')
 
     return
 
 
-def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydatasets_folder=None, verbosity=1):
+def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydatasets_folder=None,
+                predicted_summarydatasets_folders={}, verbosity=1):
     """
     todo
 
     """
+    if len(predicted_summarydatasets_folders) == 0:
+        predictions = False
+    if len(predicted_summarydatasets_folders) > 0:
+        predictions = True
+        assert(summarydatasets_folder is not None)
+        #if len(predicted_summarydatasets_folders) > 1:
+        #    raise NotImplementedError("This is not yet supported!")
+
     if ds_or_filename is not None:
 
         # If it is a filename, then we import the dataset from file.
@@ -195,20 +228,32 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
             rbspeclist.append(rbspec)
 
         summary_data = {}
+        predicted_summary_data = {pkey: {} for pkey in predicted_summarydatasets_folders.keys()}
+
         for i, (specfilename, rbspec) in enumerate(zip(specfiles, rbspeclist)):
 
             structure = rbspec.get_structure()
             summary_data[i] = {}
+            for pkey in predicted_summarydatasets_folders.keys():
+                predicted_summary_data[pkey][i] = {}
 
             if summarydatasets_filenames is not None:
                 sds_filenames = summarydatasets_filenames[specfilename]
             elif summarydatasets_folder is not None:
                 sds_filenames = [summarydatasets_folder + '/rbsummarydata{}-{}.txt'.format(i, j) for j in range(len(structure))]
+                predsds_filenames_dict = {}
+                for pkey, pfolder in predicted_summarydatasets_folders.items():
+                    predsds_filenames_dict[pkey] = [pfolder + '/rbsummarydata{}-{}.txt'.format(i, j) for j in range(len(structure))]
 
             for sdsfn, qubits in zip(sds_filenames, structure):
                 summary_data[i][qubits] = import_rb_summary_data(sdsfn, len(qubits), verbosity=verbosity)
 
-        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=None, summary_data=summary_data)
+            for pkey, predsds_filenames in predsds_filenames_dict.items():
+                for sdsfn, qubits in zip(predsds_filenames, structure):
+                    predicted_summary_data[pkey][i][qubits] = import_rb_summary_data(sdsfn, len(qubits), verbosity=verbosity)
+
+        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=None, summary_data=summary_data,
+                                            predicted_summary_data=predicted_summary_data)
 
         return rbanalyzer
 
@@ -402,12 +447,12 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                         assert(line[3] == '#'), "Auxillary data must be divided from the core data!"
                     for i, key in enumerate(auxlabels):
                         if key != 'target' and key != 'circuit':
-                            aux[key][l].append(_ast.literal_eval(line[numqubits + 3 + i]))
+                            aux[key][l].append(_ast.literal_eval(line[4 + i]))
                         else:
                             if key == 'target':
-                                aux[key][l].append(line[numqubits + 3 + i])
+                                aux[key][l].append(line[4 + i])
                             if key == 'circuit':
-                                aux[key][l].append(_cir.Circuit(line[numqubits + 3 + i]))
+                                aux[key][l].append(_cir.Circuit(line[4 + i]))
 
     elif datatype == 'success_probabilities':
 
@@ -435,12 +480,12 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                         assert(line[2] == '#'), "Auxillary data must be divided from the core data!"
                     for i, key in enumerate(auxlabels):
                         if key != 'target' and key != 'circuit':
-                            aux[key][l].append(_ast.literal_eval(line[numqubits + 3 + i]))
+                            aux[key][l].append(_ast.literal_eval(line[3 + i]))
                         else:
                             if key == 'target':
-                                aux[key][l].append(line[numqubits + 3 + i])
+                                aux[key][l].append(line[3 + i])
                             if key == 'circuit':
-                                aux[key][l].append(_cir.Circuit(line[numqubits + 3 + i]))
+                                aux[key][l].append(_cir.Circuit(line[3 + i]))
 
     elif datatype == 'hamming_distance_counts' or datatype == 'hamming_distance_probabilities':
 
