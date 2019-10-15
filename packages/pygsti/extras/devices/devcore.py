@@ -12,6 +12,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from ..rb import analysis as _anl
 from ..rb import errorratesmodel as _erm
 from ...objects import processorspec as _pspec
+from ...objects import povm as _povm
+from ...construction import modelconstruction as _mconst
 
 from . import ibmq_melbourne
 from . import ibmq_ourense
@@ -44,9 +46,9 @@ def _get_dev_specs(devname):
 
 
 def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
-                  construct_clifford_compilations={'paulieq': ('1Qcliffords',),
-                                                   'absolute': ('paulis', '1Qcliffords')},
-                  verbosity=0):
+                          construct_clifford_compilations={'paulieq': ('1Qcliffords',),
+                                                           'absolute': ('paulis', '1Qcliffords')},
+                          verbosity=0):
     """
     todo
 
@@ -115,7 +117,7 @@ def create_error_rates_model(caldata, calformat=None, device=None):
             q = dct['name']
 
             dep = _anl.r_to_p(dct['gateError']['value'], 2, 'AGI')
-            errate = _anl.p_to_r(dep, 2, 'EI') 
+            errate = _anl.p_to_r(dep, 2, 'EI')
 
             error_rates['gates'][q] = errate
             error_rates['readout'][q] = dct['readoutError']['value']
@@ -176,5 +178,64 @@ def create_error_rates_model(caldata, calformat=None, device=None):
         raise ValueError("Calibration data format not understood!")
 
     model = _erm.ErrorRatesModel(error_rates, "Local-OneTwoReadout-NonUniform")
+
+    return model
+
+
+def create_local_depolarizing_model(pspec, caldata, calformat):
+    """
+    todo
+    """
+
+    def get_local_depolarization_channel(rate, numQs):
+
+        if numQs == 1:
+
+            channel = _np.identity(4, float)
+            channel[1, 1] = _anl.r_to_p(rate, 2, 'EI')
+            channel[2, 2] = _anl.r_to_p(rate, 2, 'EI')
+            channel[3, 3] = _anl.r_to_p(rate, 2, 'EI')
+
+            return channel
+
+        if numQs == 2:
+
+            perQrate = 1 - _np.sqrt(1 - rate)
+            channel = _np.identity(4, float)
+            channel[1, 1] = _anl.r_to_p(perQrate, 2, 'EI')
+            channel[2, 2] = _anl.r_to_p(perQrate, 2, 'EI')
+            channel[3, 3] = _anl.r_to_p(perQrate, 2, 'EI')
+
+            return _np.kron(channel, channel)
+
+    def get_local_povm(rate):
+
+        # Increase the error rate of X,Y,Z, as rate correpsonds to bit-flip rate.
+        deprate = 3 * rate / 2
+        p = _anl.r_to_p(deprate, 2, 'EI')
+        povm = _povm.UnconstrainedPOVM({'0': [1 / _np.sqrt(2), 0, 0, p / _np.sqrt(2)],
+                                        '1': [1 / _np.sqrt(2), 0, 0, -p / _np.sqrt(2)]
+                                        })
+        return povm
+
+    erm = create_error_rates_model(caldata, calformat)
+    model = _mconst.build_localnoise_model(nQubits=pspec.number_of_qubits,
+                                           qubit_labels=pspec.qubit_labels,
+                                           gate_names=pspec.root_gate_names,
+                                           availability=pspec.availability,
+                                           parameterization='full', independent_gates=True)
+
+    for lbl in model.operation_blks['gates'].keys():
+
+        if len(lbl.qubits) == 1:
+            errormap = get_local_depolarization_channel(erm.error_rates['gates'][lbl.qubits[0]], 1)
+            model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
+
+        if len(lbl.qubits) == 2:
+            errormap = get_local_depolarization_channel(erm.error_rates['gates'][frozenset(lbl.qubits)], 2)
+            model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
+
+    povms = [get_local_povm(erm.error_rates['readout'][q]) for q in model.qubit_labels]
+    model.povm_blks['layers']['Mdefault'] = _povm.TensorProdPOVM(povms)
 
     return model
