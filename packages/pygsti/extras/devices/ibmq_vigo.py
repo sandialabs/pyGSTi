@@ -9,6 +9,21 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-from ...objects import processorspec as _pspec
-from .ibmq_ourense import *
+# import numpy as _np
+# from ...objects import processorspec as _pspec
+# from .ibmq_ourense import *
+
+qubits = ['Q' + str(x) for x in range(5)]
+
+twoQgate = 'Gcnot'
+
+edgelist = [('Q1', 'Q0'),
+            ('Q0', 'Q1'),
+            ('Q2', 'Q1'),
+            ('Q1', 'Q2'),
+            ('Q1', 'Q3'),
+            ('Q3', 'Q1'),
+            ('Q3', 'Q4'),
+            ('Q4', 'Q3')]
+
+spec_format = 'ibmq_v2019'

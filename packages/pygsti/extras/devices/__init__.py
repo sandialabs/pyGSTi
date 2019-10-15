@@ -9,12 +9,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import caldatamodel
+from .devcore import *
 from . import ibmq_melbourne
+from . import ibmq_ourense
 from . import ibmq_rueschlikon
 from . import ibmq_tenerife
-from . import ibmq_yorktown
-from . import ibmq_ourense
 from . import ibmq_vigo
-from . import rigetti_aspen
+from . import ibmq_yorktown
 from . import rigetti_agave
+from . import rigetti_aspen4
+from . import rigetti_aspen6

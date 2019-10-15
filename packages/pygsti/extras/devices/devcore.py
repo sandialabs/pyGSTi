@@ -11,14 +11,87 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from ..rb import analysis as _anl
 from ..rb import errorratesmodel as _erm
+from ...objects import processorspec as _pspec
+
+from . import ibmq_melbourne
+from . import ibmq_ourense
+from . import ibmq_rueschlikon
+from . import ibmq_tenerife
+from . import ibmq_vigo
+from . import ibmq_yorktown
+from . import rigetti_agave
+from . import rigetti_aspen4
+from . import rigetti_aspen6
 
 import numpy as _np
 
 
-def create_error_rates_model(caldata, calformat):
+def _get_dev_specs(devname):
+
+    if devname == 'ibmq_melbourne': dev = ibmq_melbourne
+    elif devname == 'ibmq_ourense': dev = ibmq_ourense
+    elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
+    elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
+    elif devname == 'ibmq_vigo': dev = ibmq_vigo
+    elif devname == 'ibmq_yorktown': dev = ibmq_yorktown
+    elif devname == 'rigetti_agave': dev = rigetti_agave
+    elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
+    elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
+    else:
+        raise ValueError("This device name is not known!")
+
+    return dev
+
+
+def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
+                  construct_clifford_compilations={'paulieq': ('1Qcliffords',),
+                                                   'absolute': ('paulis', '1Qcliffords')},
+                  verbosity=0):
+    """
+    todo
+
+    """
+    dev = _get_dev_specs(device)
+
+    if qubitsubset is not None:
+        qubits = qubitsubset
+        assert(set(qubitsubset).issubset(set(dev.qubits)))
+    else:
+        qubits = dev.qubits.copy()
+
+    total_qubits = len(qubits)
+    twoQgate = dev.twoQgate
+    gate_names = [twoQgate] + oneQgates
+
+    edgelist = dev.edgelist.copy()
+
+    if qubitsubset is not None:
+        subset_edgelist = []
+        for edge in edgelist:
+            if edge[0] in qubits and edge[1] in qubits:
+                subset_edgelist.append(edge)
+
+        edgelist = subset_edgelist
+
+    for edge in removeedges: del edgelist[edgelist.index(edge)]
+
+    availability = {twoQgate: edgelist}
+    pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
+                                 construct_clifford_compilations=construct_clifford_compilations,
+                                 verbosity=verbosity, qubit_labels=qubits)
+
+    return pspec
+
+
+def create_error_rates_model(caldata, calformat=None, device=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
+    assert(not ((calformat is None) and (device is None))), "Must specify `calformat` or `device`"
+    if calformat is None:
+        dev = _get_dev_specs(device)
+        calformat = dev.spec_format
+
     error_rates = {}
     error_rates['gates'] = {}
     error_rates['readout'] = {}
