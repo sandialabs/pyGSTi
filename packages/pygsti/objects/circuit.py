@@ -464,7 +464,7 @@ class Circuit(object):
                             " mode in order to hash it.  You should call"
                             " circuit.done_editing() beforehand."))
             self.done_editing()
-        return hash(self._labels)  # just hash the tuple of labels
+        return hash((self._labels, self._line_labels))
 
     def __len__(self):
         return len(self._labels)
@@ -521,8 +521,10 @@ class Circuit(object):
 
     def __eq__(self, x):
         if x is None: return False
-        xtup = x.tup if isinstance(x, Circuit) else tuple(x)
-        return self.tup == xtup  # better than x.tup since x can be a tuple
+        if isinstance(x, Circuit):
+            return (self.tup, self.line_labels) == (x.tup, x.line_labels)
+        else:
+            return self.tup == tuple(x)
 
     def __lt__(self, x):
         return self.tup.__lt__(tuple(x))
@@ -2361,6 +2363,18 @@ class Circuit(object):
             return sum([lbl.depth() for lbl in self._labels])
         else:
             return sum([_Label(layer_lbl).depth() for layer_lbl in self._labels])
+
+    def width(self):
+        """
+        The circuit width. This is the number of qubits on which the circuit
+        acts. This includes qubits that only idle, but are included as part 
+        of the circuit according to self.line_labels.
+
+        Returns
+        -------
+        int
+        """
+        return len(self.line_labels)
 
     def size(self):
         """
