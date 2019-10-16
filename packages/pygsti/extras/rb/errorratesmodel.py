@@ -16,7 +16,7 @@ class ErrorRatesModel(object):
     """
     todo
     """
-    def __init__(self, error_rates, model_type):
+    def __init__(self, error_rates, model_type='GlobalDep'):
         """
 
         model_type: {'FiE', 'FiE+Uni', 'GlobalDep'}
