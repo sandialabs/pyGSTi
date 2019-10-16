@@ -3196,17 +3196,21 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
         #    newgermcircuit.insert_layer(layer,0)
         
     circs = []
+    germdepths = []
     for length in lengths:
+        gdepth = 0
         fullcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
         while len(fullcircuit) < length:
             fullcircuit.append_circuit(germcircuit)
+            gdepth += 1
 
         while len(fullcircuit) > length:
             fullcircuit.delete_layers(len(fullcircuit)-1)
             
         circs.append(fullcircuit)
+        germdepths.append(gdepth)
         
-    return circs, germcircuit
+    return circs, germcircuit, germdepths
 
 def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localclifford=True, paulirandomize=True, 
                                      interactingQs_density=1/16):
@@ -3230,7 +3234,7 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
         assert(gname in list(pspec.gate_inverse.keys())), \
             "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
 
-    circuits, germcircuit = random_germpower_circuits(pspec, lengths, interactingQs_density=interactingQs_density,
+    circuits, germcircuit, germdepths = random_germpower_circuits(pspec, lengths, interactingQs_density=interactingQs_density,
                                                       subsetQs=subsetQs)
     
     if paulirandomize:
@@ -3299,7 +3303,7 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
         outlist.append(idealout)
 
     #return circuit, idealout
-    return circlist, outlist, germcircuit
+    return circlist, outlist, germcircuit, germdepths
 
 
 def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='edgegrab',
@@ -3323,12 +3327,14 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
     experiment_dict['circuits'] = {}
     experiment_dict['idealout'] = {}
     experiment_dict['germcircuit'] = {}
+    experiment_dict['germdepths'] = {}
     
     circlist = {}
     outlist = {}
     germcircuit = {}
+    germdepths = {}
     for j in range(circuits_per_length):
-        circlist[j], outlist[j], germcircuit[j] = random_germpower_mirror_circuits(pspec, lengths, subsetQs=subsetQs,
+        circlist[j], outlist[j], germcircuit[j], germdepths[j] = random_germpower_mirror_circuits(pspec, lengths, subsetQs=subsetQs,
                                         localclifford=localclifford, paulirandomize=paulirandomize,
                                        interactingQs_density=samplerargs[0])
 
@@ -3344,6 +3350,7 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
             experiment_dict['circuits'][lengths[lind], j] = circlist[j][lind]
             experiment_dict['idealout'][lengths[lind], j] = outlist[j][lind]
             experiment_dict['germcircuit'][lengths[lind], j] = germcircuit[j]
+            experiment_dict['germdepths'][lengths[lind], j] = germdepths[j][lind]
 
     return experiment_dict
 
