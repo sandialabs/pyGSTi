@@ -28,7 +28,7 @@ def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', adda
                                    verbosity=1, storecircuits=False):
 
     try:
-        _os.mkdir(outfolder)
+        _os.makedirs(outfolder)
         if verbosity > 0:
             print(" - Created `" + outfolder + "` folder to store the summary data files.")
     except:
@@ -43,7 +43,7 @@ def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', adda
 
         for folder in predictions_outfolder.values():
             try:
-                _os.makdirs(folder)
+                _os.makedirs(folder)
                 if verbosity > 0:
                     print(" - Created `" + folder + "` folder to store the predicted summary data files.")
             except:
