@@ -3358,7 +3358,7 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
             experiment_dict['target'][lengths[lind], j] = outlist[j][lind]
             experiment_dict['germcircuits'][lengths[lind], j] = aux[j]['germcircuit']
             experiment_dict['germpowers'][lengths[lind], j] = aux[j]['germpowers'][lind]
-            experiment_dict['subgermdepths'][lengths[lind], j] = aux[j]['subgermdepth'][lind]
+            experiment_dict['subgermdepths'][lengths[lind], j] = aux[j]['subgermdepth']
 
     return experiment_dict
 
