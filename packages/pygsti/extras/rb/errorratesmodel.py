@@ -71,7 +71,7 @@ class ErrorRatesModel(object):
 
                 for q in circuit.line_labels:
                     if q not in usedQs:
-                        sp_layer = sp_layer * (1 - self.error_rates['gates'][frozenset(q)])
+                        sp_layer = sp_layer * (1 - self.error_rates['gates'][q])
 
                 p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
                 p = p * p_layer
