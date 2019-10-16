@@ -48,6 +48,7 @@ from . import replib
 #Repeated in spamvec.py - TODO: consolidate
 try:
     from . import fastopcalc as _fastopcalc
+    from .fastopcalc import fast_compact_deriv as _compact_deriv
 
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return _fastopcalc.fast_bulk_eval_compact_polys_complex(
@@ -58,6 +59,7 @@ try:
             
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    from .polynomial import compact_deriv as _compact_deriv
 
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
@@ -2310,6 +2312,20 @@ class StochasticNoiseOp(LinearOperator):
         rates = self._params_to_rates(self.to_vector())
         return _np.sum(_np.abs(rates))
 
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        # abs(rates) = rates = params**2
+        # so d( sum(abs(rates)) )/dparam_i = 2*param_i
+        return 2*self.to_vector()
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -3336,6 +3352,18 @@ class LindbladOp(LinearOperator):
         #return _np.exp(egttm)
         return _np.exp(self.errorgen.get_total_term_magnitude())
 
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        return _np.exp(self.errorgen.get_total_term_magnitude()) * self.errorgen.get_total_term_magnitude_deriv()
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -4282,9 +4310,9 @@ class ComposedOp(LinearOperator):
                 terms.append(_term.compose_terms(factors))
         self.terms[order] = terms
 
-        def _decompose_indices(x):
-            return tuple(_modelmember._decompose_gpindices(
-                self.gpindices, _np.array(x, _np.int64)))
+        #def _decompose_indices(x):
+        #    return tuple(_modelmember._decompose_gpindices(
+        #        self.gpindices, _np.array(x, _np.int64)))
         
         mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
         for ii,i in enumerate(self.gpindices_as_array()):
@@ -4353,6 +4381,26 @@ class ComposedOp(LinearOperator):
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
         return _np.product([f.get_total_term_magnitude() for f in self.factorops])
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        opmags = [f.get_total_term_magnitude() for f in self.factorops]
+        product = _np.product(opmags)
+        ret = _np.zeros(self.num_params(), 'd')
+        for opmag, f in zip(opmags, self.factorops):
+            f_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, f.gpindices)
+            local_deriv = product / opmag * f.get_total_term_magnitude_deriv()
+            ret[f_local_inds] += local_deriv
+        return ret
 
     def num_params(self):
         """
@@ -5091,6 +5139,18 @@ class EmbeddedOp(LinearOperator):
         #assert(sum(mags) <= ret+1e-4)
 
         return self.embedded_op.get_total_term_magnitude()
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        return self.embedded_op.get_total_term_magnitude_deriv()
 
     def num_params(self):
         """
@@ -5984,6 +6044,23 @@ class ComposedErrorgen(LinearOperator):
         #assert(sum(mags) <= ret+1e-4)
 
         return sum([eg.get_total_term_magnitude() for eg in self.factors])
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        ret = _np.zeros(self.num_params(), 'd')
+        for eg in self.factors:
+            eg_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            ret[eg_local_inds] += eg.get_total_term_magnitude_deriv()
+        return ret
 
     def num_params(self):
         """
@@ -7212,6 +7289,50 @@ class LindbladErrorgen(LinearOperator):
         # #print("  DB: LindbladErrorgen coeffs = ",coeffs)
         # 
         # return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        # In general: d(|x|)/dp = d( sqrt(x.r^2 + x.im^2) )/dp = (x.r*dx.r/dp + x.im*dx.im/dp) / |x| = Re(x * conj(dx/dp))/|x|
+        # The total term magnitude in this case is sum_i( |coeff_i| ) so we need to compute:
+        # d( sum_i( |coeff_i| )/dp = sum_i( d(|coeff_i|)/dp ) = sum_i( Re(coeff_i * conj(d(coeff_i)/dp)) / |coeff_i| )
+
+        wrtInds = _np.ascontiguousarray(_np.arange(self.num_params()), _np.int64)  # for Cython arg mapping
+        vtape, ctape = self.Lterm_coeffs
+        coeff_values = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
+        coeff_deriv_vals = _bulk_eval_complex_compact_polys(coeff_deriv_polys[0], coeff_deriv_polys[1],
+                                                            self.to_vector(), (len(self.Lterms), len(wrtInds)))
+        abs_coeff_values = _np.abs(coeff_values)
+        abs_coeff_values[abs_coeff_values < 1e-10] = 1.0  # so ratio is 0 in cases where coeff_value == 0
+        ret = _np.sum( _np.real(coeff_values[:,None] * _np.conj(coeff_deriv_vals)) / abs_coeff_values[:,None], axis=0) # row-sum
+        assert(_np.linalg.norm(_np.imag(ret)) < 1e-8)
+        return ret.real
+
+        #DEBUG
+        #ret2 = _np.empty(self.num_params(),'d')
+        #eps = 1e-8
+        #orig_vec = self.to_vector().copy()
+        #f0 = sum([abs(coeff) for coeff in coeff_values])
+        #for i in range(self.num_params()):
+        #    v = orig_vec.copy()
+        #    v[i] += eps
+        #    new_coeff_values = _bulk_eval_complex_compact_polys(vtape, ctape, v, (len(self.Lterms),))
+        #    ret2[i] = ( sum([abs(coeff) for coeff in new_coeff_values]) - f0 ) / eps
+
+        #test3 = _np.linalg.norm(ret-ret2)
+        #print("TEST3 = ",test3)
+        #if test3 > 10.0:
+        #    import bpdb; bpdb.set_trace()
+        #return ret
+            
 
     def num_params(self):
         """

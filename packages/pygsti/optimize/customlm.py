@@ -124,7 +124,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-    num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
+    #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     try:
 
@@ -210,6 +210,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 mu = tau * _np.max(undampled_JTJ_diag)  # initial damping element
                 #mu = min(mu, MU_TOL1)
 
+            nRejects = 0 #DEBUG
+            
             #determing increment using adaptive damping
             while True:  # inner loop
 
@@ -236,9 +238,16 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
+
+                    #HACK
+                    if nRejects >= 2:
+                        dx = -(10.0**(1-nRejects))*x
+                        print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
+                    
                     new_x = x + dx
                     norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
-
+                    #import bpdb; bpdb.set_trace()
+                    
                     #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
                     if max_norm_dx and norm_dx > max_norm_dx:
                         dx *= _np.sqrt(max_norm_dx / norm_dx)
@@ -351,6 +360,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 nu = 2 * nu
                 printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
                             % (reject_msg,mu, nu), 2)
+                nRejects += 1
 
                 JTJ[idiag] = undampled_JTJ_diag  # restore diagonal
             #end of inner loop

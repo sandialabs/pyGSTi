@@ -388,7 +388,8 @@ class TermForwardSimulator(ForwardSimulator):
                                opcache,
                                circuitsetup_cache,
                                comm=None,
-                               memLimit=None):
+                               memLimit=None,
+                               mode="normal"):
         """
         TODO: docstring - see OLD version
         """
@@ -397,7 +398,13 @@ class TermForwardSimulator(ForwardSimulator):
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
 
-        fastmode = True
+        if mode == "normal":
+            fastmode = 0
+        elif mode == "max-sopm":
+            fastmode = 2
+        else:
+            raise ValueError("Invalid mode argument: %s" % mode)
+            
         if repcache is None: repcache = {}
         circuitsetup_cache = {}
 
@@ -928,6 +935,7 @@ class TermForwardSimulator(ForwardSimulator):
             
             SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
+            assert(_np.all(gaps >= 0))
             subtree_penalties = _np.clip(gaps - self.pathmagnitude_gap, 0, None)
             
             _fas(termgap_penalty, [felInds], subtree_penalties)
@@ -936,10 +944,73 @@ class TermForwardSimulator(ForwardSimulator):
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
                              termgap_penalty, [], 0, comm)
-
-
-        #NOte: leave all failed circuits LOCAL to this proc for now, since this is just for debugging...    
         return termgap_penalty
+
+    def bulk_get_termgap_penalty_jacobian(self, evalTree, comm=None, memLimit=None):
+        """TODO: docstring """
+
+        assert(self.mode == "pruned")
+
+        # Finitie difference version used for testing/debugging TODO REMOVE
+        # FD_termgap_penalty_jac = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
+        # 
+        # eps = 1e-8  # HARDCODED
+        # penalty = self.bulk_get_termgap_penalty(evalTree, comm, memLimit)
+        # orig_vec = self.to_vector().copy()
+        # wrt_indices = list(range(self.Np))  # could make this function more general in the future
+        # iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
+        # for i in range(self.Np):
+        #     if i in iParamToFinal:  # LATER: add MPI support?
+        #         iFinal = iParamToFinal[i]
+        #         vec = orig_vec.copy(); vec[i] += eps
+        #         self.from_vector(vec, close=True)
+        #         FD_termgap_penalty_jac[:, iFinal] = (self.bulk_get_termgap_penalty(evalTree, comm, memLimit) - penalty) / eps
+        # self.from_vector(orig_vec, close=True)
+        # 
+        # #TEST NEW ANALYTIC METHOD
+        # # -----------------------------------------------------------------------------
+        # 
+        # FD_test = FD_termgap_penalty_jac
+        # #FD_test = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
+        # #penalty = self.bulk_get_termgap_penalty(evalTree, comm, memLimit, debug=True)
+        # #orig_vec = self.to_vector().copy()
+        # #wrt_indices = list(range(self.Np))  # could make this function more general in the future
+        # #iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
+        # #for i in range(self.Np):
+        # #    if i in iParamToFinal:  # LATER: add MPI support?
+        # #        iFinal = iParamToFinal[i]
+        # #        vec = orig_vec.copy(); vec[i] += eps
+        # #        self.from_vector(vec, close=True)
+        # #        FD_test[:, iFinal] = (self.bulk_get_termgap_penalty(evalTree, comm, memLimit, debug=True) - penalty) / eps
+        # #self.from_vector(orig_vec, close=True)
+        # # -----------------------
+        
+        termgap_penalty_jac = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+    
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+            
+            SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
+            gap_jacs = evalSubTree.get_sopm_gaps_jacobian_using_current_paths(self)
+            gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
+            _fas(termgap_penalty_jac, [felInds], gap_jacs)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             termgap_penalty_jac, [], 0, comm)
+
+        #test = _np.linalg.norm(termgap_penalty_jac - FD_test)
+        #print("TEST TERMGAP PENALTY JAC = ",test, _np.linalg.norm(termgap_penalty_jac), _np.linalg.norm(FD_test), test/FD_test.size)
+        #if test/FD_test.size > 1e-6:
+        #    import bpdb; bpdb.set_trace()
+
+        return termgap_penalty_jac
     
     def bulk_get_current_gaps(self, evalTree, comm=None, memLimit=None):
         """TODO: docstring - uses current "locked-in" paths, no adaption.  

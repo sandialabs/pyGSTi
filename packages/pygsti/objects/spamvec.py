@@ -3035,6 +3035,18 @@ class LindbladSPAMVec(SPAMVec):
         # return (sum of absvals of *all* term coeffs)
         return self.error_map.get_total_term_magnitude()  # error map is only part with terms
 
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        return self.error_map.get_total_term_magnitude_deriv()
+
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector

@@ -297,8 +297,11 @@ cdef extern from "fastreps.h" namespace "CReps":
     cdef cppclass PolyCRep:
         PolyCRep() except +        
         PolyCRep(unordered_map[PolyVarsIndex, complex], INT, INT) except +
+        PolyCRep abs()
         PolyCRep mult(PolyCRep&)
+        PolyCRep abs_mult(PolyCRep&)
         void add_inplace(PolyCRep&)
+        void add_abs_inplace(PolyCRep&)
         void add_scalar_to_all_coeffs_inplace(double complex offset)
         void scale(double complex scale)
         vector[INT] int_to_vinds(PolyVarsIndex indx_tup)
@@ -3109,7 +3112,7 @@ cdef double sv_find_best_pathmagnitude_threshold(
 
 def SV_compute_pruned_path_polys_given_threshold(
         threshold, calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-        comm=None, memLimit=None, fastmode=True):
+        comm=None, memLimit=None, fastmode=1):
 
     cdef INT i
     cdef INT numEs = len(elabels)
@@ -3129,7 +3132,7 @@ def SV_compute_pruned_path_polys_given_threshold(
     cdef vector[PolyCRep*] polys = sv_compute_pruned_polys_given_threshold(
         <double>threshold, cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
         cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.E_indices,
-        numEs, stateDim, <bool>fastmode,  mpv, vpi)
+        numEs, stateDim, <INT>fastmode,  mpv, vpi)
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
@@ -3138,7 +3141,7 @@ cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
     double threshold, vector[INT]& circuit,
     vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
     vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] E_indices,
-    INT numEs, INT dim, bool fastmode, INT max_poly_vars, INT vindices_per_int):
+    INT numEs, INT dim, INT fastmode, INT max_poly_vars, INT vindices_per_int):
 
     cdef INT N = circuit.size()
     cdef INT nFactorLists = N+2
@@ -3178,12 +3181,19 @@ cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
     cdef vector[PolyCRep] coeffSaved = vector[PolyCRep](nFactorLists-1)
 
     #Fill saved arrays with allocated states
-    if fastmode:
+    if fastmode == 1: # fastmode
         #fast mode
         addpath_fn = add_path_savepartials
         for i in range(nFactorLists-1):
             leftSaved[i] = new SVStateCRep(dim)
             rightSaved[i] = new SVStateCRep(dim)
+
+    elif fastmode == 2: #max-SOPM mode
+        addpath_fn = add_path_maxsopm
+        for i in range(nFactorLists-1):
+            leftSaved[i] = NULL
+            rightSaved[i] = NULL
+            
     else:
         addpath_fn = add_path
         for i in range(nFactorLists-1):
@@ -3286,6 +3296,31 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
     #Update the slots held by prop1 and prop2, which still have allocated states (though really no need?)
     pprop1[0] = prop1
     pprop2[0] = prop2
+    
+    
+cdef void add_path_maxsopm(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
+                           SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
+                           vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
+
+    cdef PolyCRep coeff
+    cdef PolyCRep result
+
+    cdef INT i,j, Ei
+    cdef SVTermCRep* factor
+    cdef INT nFactorLists = b.size()
+    cdef INT last_index = nFactorLists-1
+
+    # In this loop, b holds "current" indices into factor_lists
+    factor = deref(factor_lists[0])[b[0]]
+    coeff = deref(factor._coeff).abs() # an unordered_map (copies to new "coeff" variable)
+
+    for i in range(1,nFactorLists):
+        coeff = coeff.abs_mult( deref(deref(factor_lists[i])[b[i]]._coeff) )
+
+    #Add result to appropriate poly
+    result = coeff  # use a reference?
+    Ei = deref(Einds)[ b[last_index] ] #final "factor" index == E-vector index
+    deref(prps)[Ei].add_abs_inplace(result)
 
 
 cdef void add_path_savepartials(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
@@ -3741,9 +3776,14 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
     #print("MAX sopm = ",max_sum_of_pathmags)
     
     ret = np.empty(numEs,'d')
+    ret2 = np.empty(numEs,'d')  # DEBUG
+    ret3 = np.empty(numEs,'d')  # DEBUG
     for i in range(numEs):
         ret[i] = max_sum_of_pathmags[i] - mags[i]
-    return ret
+        ret2[i] = max_sum_of_pathmags[i]
+        ret3[i] = mags[i]
+        
+    return ret, ret2, ret3  #DEBUG!!!
 
 
 

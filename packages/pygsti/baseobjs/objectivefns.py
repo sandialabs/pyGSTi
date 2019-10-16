@@ -31,7 +31,7 @@ class ObjectiveFunction(object):
 class Chi2Function(ObjectiveFunction):
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                 spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+                 spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
                  gthrMem, check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
 
         from ..tools import slicetools as _slct
@@ -63,6 +63,7 @@ class Chi2Function(ObjectiveFunction):
         self.regularizeFactor = regularizeFactor
         self.cptp_penalty_factor = cptp_penalty_factor
         self.spam_penalty_factor = spam_penalty_factor
+        self.termgap_penalty_factor = termgap_penalty_factor
         self.minProbClipForWeighting = minProbClipForWeighting
         self.probClipInterval = probClipInterval
         self.wrtBlkSize = wrtBlkSize
@@ -95,16 +96,24 @@ class Chi2Function(ObjectiveFunction):
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
 
         if self.printer.verbosity < 4:  # Fast versions of functions
-            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:
+            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0 and termgap_penalty_factor == 0:
                 # Fast un-regularized version
-                self.fn = self.termgap_chi2 #self.simple_chi2 #DEBUG!!!
+                self.fn = self.simple_chi2
                 self.jfn = self.simple_jac
+                
             elif regularizeFactor != 0:
                 # Fast regularized version
                 assert(cptp_penalty_factor == 0), "Cannot have regularizeFactor and cptp_penalty_factor != 0"
                 assert(spam_penalty_factor == 0), "Cannot have regularizeFactor and spam_penalty_factor != 0"
+                assert(termgap_penalty_factor == 0), "Cannot have regularizeFactor and termgap_penalty_factor != 0"
                 self.fn = self.regularized_chi2
                 self.jfn = self.regularized_jac
+
+            elif termgap_penalty_factor != 0:
+                assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
+                assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
+                self.fn = self.termgap_chi2
+                self.jfn = self.termgap_jac
 
             else:  # cptp_pentalty_factor != 0 and/or spam_pentalty_factor != 0
                 assert(regularizeFactor == 0), "Cannot have regularizeFactor and other penalty factors > 0"
@@ -112,6 +121,8 @@ class Chi2Function(ObjectiveFunction):
                 self.jfn = self.penalized_jac
 
         else:  # Verbose (DEBUG) version of objective_func
+            if termgap_penalty_factor != 0:
+                raise NotImplementedError("Still need to add termgap penalty factor to verbose chi2!")
             self.fn = self.verbose_chi2
             self.jfn = self.verbose_jac
 
@@ -174,10 +185,10 @@ class Chi2Function(ObjectiveFunction):
             self.update_v_for_omitted_probs(v)
 
         #update_v_for_termgap_penalty (TODO: make this into a function?)
-        TERMETA = 1.0  # some adjustable damping strength?
+        TERMETA = self.termgap_penalty_factor
         termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
-        #print("DB: TERMGAP penalty = ",_np.linalg.norm(termgap_penalty))
-        v[:] = _np.sqrt(v[:]**2 + TERMETA*termgap_penalty)
+        print("DB: TERMGAP penalty = ",_np.linalg.norm(TERMETA*(termgap_penalty)), "vs normal chi2 = ", _np.linalg.norm(v[:]**2))
+        v[:] = _np.sqrt(v[:]**2 + TERMETA*(termgap_penalty))
         #NOTE: to compute derivative, need derivs of SV_circuit_pathmagnitude_gap in fastreplib.pyx/slowreplib.py
         # which might mean 1) get_total_term_magnitude_deriv functions throughout object structure
         #                  2) a way for count_paths_upto_threshold to sum the term magnitudes as *polys* rather than as floats
@@ -306,6 +317,66 @@ class Chi2Function(ObjectiveFunction):
             self.update_dprobs_for_omitted_probs(dprobs, weights)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+
+        # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
+        # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
+        self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
+        return self.jac
+
+    def termgap_jac(self, vectorGS):
+        tm = _time.time()
+        dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.KM, self.vec_gs_len)
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
+                                  check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
+                                  profiler=self.profiler, gatherMemLimit=self.gthrMem)
+        
+        if self.firsts is not None:
+            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+
+        #We'll need "v" below for computation (not needed for normal chi2)
+        v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        if self.firsts is not None:
+            self.update_v_for_omitted_probs(v)
+
+        weights = self.get_weights(self.probs)
+        dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None]
+        # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        # this multiply also computes jac, which is just dprobs
+        # with a different shape (jac.shape == [KM,vec_gs_len])
+
+        if self.firsts is not None:
+            self.update_dprobs_for_omitted_probs(dprobs, weights)
+
+        dprobs[:,:] *= 2.0 * v[:,None] # STEP1
+
+        #update_jac_for_termgap_penalty (TODO: make this into a function?)
+        TERMETA = self.termgap_penalty_factor
+        # objective is sqrt( (weight * (p-f))^2 + termgap_penalty) so deriv is:
+        # 0.5/sqrt(weight * (p-f))^2 + termgap_penalty) * ( 2 * weight * (p-f) * (dweight/dp * (p-f) * dp + weight * dp) + jac_termgap_pentalty)
+        # Note: jac_normal_chi2 = d( (weight * (p-f))^2 ) = 2 * weight * (p-f) * d(weight * (p-f)) = 2 * weight * (p-f) * normal_case_jac
+
+        # ALT objective is sqrt( (weight * (p-f))^2 + termgap_penalty^2) so deriv is:
+        # 0.5/sqrt(weight * (p-f))^2 + termgap_penalty^2) * ( 2 * weight * (p-f) * (dweight/dp * (p-f) * dp + weight * dp) + 2 * termgap_penalty *jac_termgap_pentalty)
+        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        jac_termgap_pentalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
+        v[:] = _np.sqrt(v[:]**2 + TERMETA*(termgap_penalty))
+
+        #Do this: self.jac[:,:] = (0.5 / v) * (2 * weight * (p-f) * self.jac[:,:] + jac_termgap_pentalty) in lines below:
+        #self.jac[:,:] *= 2.0 * v[:,None]
+
+        # HACK to handle v=0 case when we divide by it below
+        v[ v == 0.0 ] = 0.5; jac_termgap_pentalty[ v==0, :] = 0.0
+        
+        #self.jac[:,:] += 2*TERMETA*termgap_penalty[:,None]*jac_termgap_pentalty
+        self.jac[:,:] += TERMETA*jac_termgap_pentalty
+        self.jac[:,:] *= 0.5 / v[:,None]
+            
+        if self.check_jacobian: _opt.check_jac(lambda v: self.termgap_chi2(
             v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
@@ -457,11 +528,11 @@ class Chi2Function(ObjectiveFunction):
 class FreqWeightedChi2Function(Chi2Function):
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                 spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+                 spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
                  gthrMem, check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
 
         Chi2Function.__init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor,
-                              cptp_penalty_factor, spam_penalty_factor, cntVecMx, N, minProbClipForWeighting,
+                              cptp_penalty_factor, spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, minProbClipForWeighting,
                               probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, verbosity=0)
         self.fweights = fweights
         self.z = _np.zeros(self.KM, 'd')

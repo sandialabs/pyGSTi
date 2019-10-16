@@ -954,7 +954,7 @@ class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
         return replib.PolyRep(int_coeffs, max_num_vars, vindices_per_int)
 
 
-def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
+def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape, dtype="auto"):
     """
     Evaluate many compact polynomial forms at a given set of variable values.
 
@@ -973,13 +973,24 @@ def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         The shape of the final array of evaluated polynomials.  The resulting
         1D array of evaluated polynomials is reshaped accordingly.
 
+    dtype : {"auto", "real", "complex}
+        The type of the coefficient array that is returned.
+
     Returns
     -------
     numpy.ndarray
-        An array of the same type as the coefficient tape, with shape given
-        by `dest_shape`.
+        An array of the same type as the coefficient tape or with the type
+        given by `dtype`, and with shape given by `dest_shape`.
     """
-    result = _np.empty(dest_shape, ctape.dtype)  # auto-determine type?
+    if dtype == "auto":
+        result = _np.empty(dest_shape, ctape.dtype)  # auto-determine type?
+    elif dtype == "complex":
+        result = _np.empty(dest_shape, complex)
+    elif dtype == "real":
+        result = _np.empty(dest_shape, 'd')
+    else:
+        raise ValueError("Invalid dtype: %s" % dtype)
+        
     res = result.flat  # for 1D access
 
     c = 0; i = 0; r = 0
@@ -1001,7 +1012,7 @@ def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
     return result
 
 
-def bulk_load_compact_polys(vtape, ctape, keep_compact=False):
+def bulk_load_compact_polys(vtape, ctape, keep_compact=False, max_num_vars=100):
     """
     Create a list of Polynomial objects from a "tape" of their compact versions.
 
@@ -1016,6 +1027,8 @@ def bulk_load_compact_polys(vtape, ctape, keep_compact=False):
         If True the returned list has elements which are (vtape,ctape) tuples
         for each individual polynomial.  If False, then the elements are
         :class:`Polynomial` objects.
+
+    TODO docstring: max_num_vars
 
     Returns
     -------
@@ -1043,7 +1056,7 @@ def bulk_load_compact_polys(vtape, ctape, keep_compact=False):
                 a = ctape[c]; c += 1
                 #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a)))
                 poly_coeffs[tuple(vtape[i:i + nVars])] = a; i += nVars
-            result.append(Polynomial(poly_coeffs))
+            result.append(Polynomial(poly_coeffs, max_num_vars))
     return result
 
 

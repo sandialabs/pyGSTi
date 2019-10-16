@@ -2663,6 +2663,28 @@ namespace CReps {
     return ret; // need a copy constructor?
   }
 
+  PolyCRep PolyCRep::abs_mult(const PolyCRep& other) {
+    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it1, itk;
+    std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
+    std::unordered_map<PolyVarsIndex, dcomplex> result;
+    dcomplex val;
+    PolyVarsIndex k;
+
+    for(it1 = _coeffs.begin(); it1 != _coeffs.end(); ++it1) {
+      for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
+	k = mult_vinds_ints(it1->first, it2->first); //key to add
+	itk = result.find(k);
+	val = std::abs(it1->second * it2->second);
+	if(itk != result.end())
+	  itk->second = itk->second + val;
+	else result[k] = val;
+      }
+    }
+    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
+    return ret; // need a copy constructor?
+  }
+
+
   void PolyCRep::add_inplace(const PolyCRep& other) {
     std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
       std::unordered_map<PolyVarsIndex, dcomplex>::iterator itk;
@@ -2685,6 +2707,38 @@ namespace CReps {
 	_coeffs[k] = val;
       }
     }
+  }
+
+  void PolyCRep::add_abs_inplace(const PolyCRep& other) {
+    std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
+      std::unordered_map<PolyVarsIndex, dcomplex>::iterator itk;
+    double val;
+    PolyVarsIndex k;
+
+    for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
+      k = it2->first; // key
+      val = std::abs(it2->second); // value
+      if(val > 1e-12) {
+          itk = _coeffs.find(k);
+          if(itk != _coeffs.end()) {
+              itk->second = itk->second + (dcomplex)val; // note: += doens't work here (complex Cython?)
+          }
+          else {
+              _coeffs[k] = (dcomplex)val;
+          }
+      }
+    }
+  }
+
+  PolyCRep PolyCRep::abs() {
+    std::unordered_map<PolyVarsIndex, dcomplex> result;
+    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it;
+    for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
+        result[it->first] = std::abs(it->second);
+    }
+    
+    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
+    return ret; // need a copy constructor?
   }
 
   void PolyCRep::scale(dcomplex scale) {

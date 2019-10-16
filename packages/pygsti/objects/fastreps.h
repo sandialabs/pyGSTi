@@ -517,8 +517,11 @@ namespace CReps {
     PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int);
     PolyCRep(const PolyCRep& other);
     ~PolyCRep();
+    PolyCRep abs();
     PolyCRep mult(const PolyCRep& other);
+    PolyCRep abs_mult(const PolyCRep& other);
     void add_inplace(const PolyCRep& other);
+    void add_abs_inplace(const PolyCRep& other);
     void add_scalar_to_all_coeffs_inplace(dcomplex offset);
     void scale(dcomplex scale);
     PolyVarsIndex vinds_to_int(std::vector<INT> vinds);
