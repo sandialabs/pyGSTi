@@ -85,7 +85,7 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
     return pspec
 
 
-def create_error_rates_model(caldata, calformat=None, device=None):
+def create_error_rates_model(caldata, calformat=None, device=None, model_type='GlobalDep'):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
@@ -177,7 +177,7 @@ def create_error_rates_model(caldata, calformat=None, device=None):
     else:
         raise ValueError("Calibration data format not understood!")
 
-    model = _erm.ErrorRatesModel(error_rates, "Local-OneTwoReadout-NonUniform")
+    model = _erm.ErrorRatesModel(error_rates, model_type)
 
     return model
 
