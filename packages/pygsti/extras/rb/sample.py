@@ -1134,7 +1134,7 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
         The ith element of this tuple corresponds to this probability for the qubit on the ith wire of
         the output circuit.
 
-        - 'qubitordering'. The ordering of the qubits in the 'idealout' tuples.
+        - 'qubitordering'. The ordering of the qubits in the 'target' tuples.
 
         - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
         This then specifies how the circuits where generated.
@@ -1678,13 +1678,13 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
         - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit
         at DRB length l.
 
-        - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
+        - 'target'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
         key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
         to the error-free outcome for the qubit on the ith wire of the output circuit and/or the ith element
         of the list at the key 'qubitordering'. These tuples will all be (0,0,0,...) when `randomizeout` is
         False
 
-        - 'qubitordering'. The ordering of the qubits in the 'idealout' tuples.
+        - 'qubitordering'. The ordering of the qubits in the 'target' tuples.
 
         - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
         This then specifies how the circuits where generated.
@@ -1711,7 +1711,7 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
 
     experiment_dict['circuits'] = {}
-    experiment_dict['idealout'] = {}
+    experiment_dict['target'] = {}
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
@@ -1725,7 +1725,7 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
                                                   citerations=citerations, compilerargs=compilerargs,
                                                   partitioned=partitioned)
             experiment_dict['circuits'][l, j] = circuit
-            experiment_dict['idealout'][l, j] = idealout
+            experiment_dict['target'][l, j] = idealout
             if verbosity > 0: print(j + 1, end=',')
         if verbosity > 0: print('')
 
@@ -2179,7 +2179,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
-    experiment_dict['idealout'] = {}
+    experiment_dict['target'] = {}
     experiment_dict['settings'] = {}
 
     for subsetQs in structure:
@@ -2202,14 +2202,14 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
 
             if (not set_isolated) and (not setcomplement_isolated):
                 experiment_dict['circuits'][l, j] = circuit
-                experiment_dict['idealout'][l, j] = idealout
+                experiment_dict['target'][l, j] = idealout
 
             else:
                 experiment_dict['circuits'][l, j] = {}
-                experiment_dict['idealout'][l, j] = {}
+                experiment_dict['target'][l, j] = {}
                 experiment_dict['settings'][l, j] = {}
                 experiment_dict['circuits'][l, j][tuple(structure)] = circuit
-                experiment_dict['idealout'][l, j][tuple(structure)] = idealout
+                experiment_dict['target'][l, j][tuple(structure)] = idealout
                 experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, lengths,
                                                                                    circuits_per_length, structure)
 
@@ -2221,7 +2221,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                             subset_circuit.replace_with_idling_line(q)
                     subset_circuit.done_editing()
                     experiment_dict['circuits'][l, j][(tuple(subset),)] = subset_circuit
-                    experiment_dict['idealout'][l, j][(tuple(subset),)] = (idealout[subset_ind],)
+                    experiment_dict['target'][l, j][(tuple(subset),)] = (idealout[subset_ind],)
                     experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths,
                                                                                        circuits_per_length, structure)
 
@@ -2239,7 +2239,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                     subsetcomplement = tuple(subsetcomplement)
                     subsetcomplement_idealout = tuple(subsetcomplement_idealout)
                     experiment_dict['circuits'][l, j][subsetcomplement] = subsetcomplement_circuit
-                    experiment_dict['idealout'][l, j][subsetcomplement] = subsetcomplement_idealout
+                    experiment_dict['target'][l, j][subsetcomplement] = subsetcomplement_idealout
                     experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths,
                                                                                        circuits_per_length, structure)
 
@@ -2477,7 +2477,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
         - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit
         at CRB length l.
 
-        - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
+        - 'target'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
         key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
         to the error-free outcome for the qubit on the ith wire of the output circuit and/or the ith element
         of the list at the key 'qubitordering'. These tuples will all be (0,0,0,...) when `randomizeout` is
@@ -2501,7 +2501,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
 
     experiment_dict['circuits'] = {}
-    experiment_dict['idealout'] = {}
+    experiment_dict['target'] = {}
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
@@ -2512,7 +2512,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
             c, iout = clifford_rb_circuit(pspec, l, subsetQs=subsetQs, randomizeout=randomizeout,
                                           citerations=citerations, compilerargs=compilerargs)
             experiment_dict['circuits'][l, j] = c
-            experiment_dict['idealout'][l, j] = iout
+            experiment_dict['target'][l, j] = iout
             if verbosity > 0: print(j + 1, end=',')
         if verbosity > 0: print('')
 
@@ -2868,13 +2868,13 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
         - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit
         at MRB length l.
 
-        - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
+        - 'target'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
         key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
         to the error-free outcome for the qubit on the ith wire of the output circuit and/or the ith element
         of the list at the key 'qubitordering'. These tuples will all be (0,0,0,...) when `paulirandomize` is
         False
 
-        - 'qubitordering'. The ordering of the qubits in the 'idealout' tuples.
+        - 'qubitordering'. The ordering of the qubits in the 'target' tuples.
 
         - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
         This then specifies how the circuits where generated
@@ -2892,7 +2892,7 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
     if subsetQs is not None: experiment_dict['qubitordering'] = tuple(subsetQs)
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     experiment_dict['circuits'] = {}
-    experiment_dict['idealout'] = {}
+    experiment_dict['target'] = {}
 
     for l in lengths:
         for j in range(circuits_per_length):
@@ -2900,7 +2900,7 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
                                         localclifford=localclifford, paulirandomize=paulirandomize)
 
             experiment_dict['circuits'][l, j] = c
-            experiment_dict['idealout'][l, j] = iout
+            experiment_dict['target'][l, j] = iout
 
     return experiment_dict
 
@@ -3209,8 +3209,15 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
             
         circs.append(fullcircuit)
         germpowers.append(gdepth)
+
+    
+    aux = {'germpowers': germpowers,
+           'germcircuit': germcircuit,
+           'subgermdepth': germlength,
+           }
         
     return circs, germcircuit, germpowers
+
 
 def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localclifford=True, paulirandomize=True, 
                                      interactingQs_density=1/16):
@@ -3234,7 +3241,7 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
         assert(gname in list(pspec.gate_inverse.keys())), \
             "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
 
-    circuits, germcircuit, germpowers = random_germpower_circuits(pspec, lengths, interactingQs_density=interactingQs_density,
+    circuits, aux = random_germpower_circuits(pspec, lengths, interactingQs_density=interactingQs_density,
                                                       subsetQs=subsetQs)
     
     if paulirandomize:
@@ -3303,7 +3310,7 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
         outlist.append(idealout)
 
     #return circuit, idealout
-    return circlist, outlist, germcircuit, germpowers
+    return circlist, outlist, aux
 
 
 def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='edgegrab',
@@ -3325,16 +3332,16 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
     if subsetQs is not None: experiment_dict['qubitordering'] = tuple(subsetQs)
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     experiment_dict['circuits'] = {}
-    experiment_dict['idealout'] = {}
-    experiment_dict['germcircuit'] = {}
+    experiment_dict['target'] = {}
+    experiment_dict['germcircuits'] = {}
     experiment_dict['germpowers'] = {}
-    
+    experiment_dict['subgermdepths'] = {}
+
     circlist = {}
     outlist = {}
-    germcircuit = {}
-    germpowers = {}
+    aux = {}
     for j in range(circuits_per_length):
-        circlist[j], outlist[j], germcircuit[j], germpowers[j] = random_germpower_mirror_circuits(pspec, lengths, subsetQs=subsetQs,
+        circlist[j], outlist[j], aux[j] = random_germpower_mirror_circuits(pspec, lengths, subsetQs=subsetQs,
                                         localclifford=localclifford, paulirandomize=paulirandomize,
                                        interactingQs_density=samplerargs[0])
 
@@ -3346,11 +3353,12 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
             #                            localclifford=localclifford, paulirandomize=paulirandomize,
             #                           interactingQs_density=samplerargs[0])
 #             experiment_dict['circuits'][l, j] = c
-#             experiment_dict['idealout'][l, j] = iout
+#             experiment_dict['target'][l, j] = iout
             experiment_dict['circuits'][lengths[lind], j] = circlist[j][lind]
-            experiment_dict['idealout'][lengths[lind], j] = outlist[j][lind]
-            experiment_dict['germcircuit'][lengths[lind], j] = germcircuit[j]
-            experiment_dict['germpowers'][lengths[lind], j] = germpowers[j][lind]
+            experiment_dict['target'][lengths[lind], j] = outlist[j][lind]
+            experiment_dict['germcircuits'][lengths[lind], j] = aux['germcircuit'][j]
+            experiment_dict['germpowers'][lengths[lind], j] = aux['germpowers'][j][lind]
+            experiment_dict['subgermdepths'][lengths[lind], j] = aux['subgermdepth'][j][lind]
 
     return experiment_dict
 
