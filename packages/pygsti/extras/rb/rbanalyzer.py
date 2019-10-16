@@ -209,7 +209,7 @@ class RBAnalyzer(object):
                                                 trimmedcirc.delete_lines(q)
                                     else:
                                         trimmedcirc = circ
-                                    predsp = predmodel.success_prob(trimmedcirc, add_uniform_dist=True)
+                                    predsp = predmodel.success_prob(trimmedcirc)
                                     predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
 
             if preddskey is not None:
@@ -310,7 +310,7 @@ class RBAnalyzer(object):
                                                 trimmedcirc.delete_lines(q)
                                     else:
                                         trimmedcirc = circ
-                                    predsp = predmodel.success_prob(trimmedcirc, add_uniform_dist=True)
+                                    predsp = predmodel.success_prob(trimmedcirc)
                                     predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
 
 
