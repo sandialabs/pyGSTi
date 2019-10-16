@@ -67,7 +67,7 @@ class ErrorRatesModel(object):
                 for gate in layer:
                     if len(gate.qubits) > 1:
                         usedQs += list(gate.qubits)
-                        sp_layer = sp_layer * (1 - self.error_rates['gates'][frozenset(qs)])
+                        sp_layer = sp_layer * (1 - self.error_rates['gates'][frozenset(gate.qubits)])
 
                 for q in circuit.line_labels:
                     if q not in usedQs:
