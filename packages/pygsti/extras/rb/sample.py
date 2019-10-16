@@ -3216,7 +3216,7 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
            'subgermdepth': germlength,
            }
         
-    return circs, germcircuit, germpowers
+    return circs, aux
 
 
 def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localclifford=True, paulirandomize=True, 
