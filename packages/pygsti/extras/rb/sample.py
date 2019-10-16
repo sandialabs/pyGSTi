@@ -3322,6 +3322,7 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     experiment_dict['circuits'] = {}
     experiment_dict['idealout'] = {}
+    experiment_dict['germcircuit'] = {}
     
     circlist = {}
     outlist = {}
