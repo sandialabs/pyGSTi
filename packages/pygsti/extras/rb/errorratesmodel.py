@@ -76,7 +76,10 @@ class ErrorRatesModel(object):
                 p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
                 p = p * p_layer
 
-            p = p * _np.prod([(1 - self.error_rates['readout'][q]) for q in circuit.line_labels])
+            # Bit-flip readout error as a pre-measurement depolarizing channel.
+            sp_layer = _np.prod([(1 - 3 * self.error_rates['readout'][q] / 2) for q in circuit.line_labels])
+            p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
+            p = p * p_layer
             sp = p + (1 - p) * (1 / 2**width)
 
             return sp
