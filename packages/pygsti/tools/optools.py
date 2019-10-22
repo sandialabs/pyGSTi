@@ -78,10 +78,10 @@ def fidelity(A, B):
     """
     evals, U = _np.linalg.eig(A)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
-        # special case when A is rank 1
+        # special case when A is rank 1, A = vec * vec^T and sqrt(A) = A
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(B, vec)).real  # vec^T * B * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(B, vec)).real  # vec^T * B * vec
         return float(F)
 
     evals, U = _np.linalg.eig(B)
@@ -89,7 +89,7 @@ def fidelity(A, B):
         # special case when B is rank 1 (recally fidelity is sym in args)
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
         return float(F)
 
     #if _np.array_equal(A, B): return 1.0  # HACK - some cases when A and B are perfecty equal sqrtm(A) fails...
