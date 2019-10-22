@@ -19,6 +19,7 @@ from .. import objects as _objs
 from . import reportables as _reportables
 from .reportables import evaluate as _ev
 from ..baseobjs import Label as _Lbl
+from ..baseobjs import DirectSumBasis as _DirectSumBasis
 
 from .table import ReportTable as _ReportTable
 
@@ -311,6 +312,7 @@ class GatesTable(WorkspaceTable):
             models = [models]
 
         opLabels = models[0].get_primitive_op_labels()  # use labels of 1st model
+        instLabels = list(models[0].instruments.keys()) # requires an explicit model!
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
@@ -330,19 +332,29 @@ class GatesTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
+        #Create list of labels and gate-like objects, allowing instruments to be included:
+        label_op_tups = []
         for gl in opLabels:
+            tup_of_ops = tuple([model.operations[gl] for model in models]) #may want to gracefully handle index error here?
+            label_op_tups.append( (gl, tup_of_ops) )
+        for il in instLabels:
+            for comp_lbl in models[0].instruments[il].keys():
+                tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]) #may want to gracefully handle index error here?
+                label_op_tups.append( (il + "." + comp_lbl, tup_of_ops) )
+        
+        for lbl, per_model_ops in label_op_tups:
             #Note: currently, we don't use confidence region...
-            row_data = [gl]
+            row_data = [lbl]
             row_formatters = [None]
 
-            for model in models:
+            for model,op in zip(models,per_model_ops):
                 basis = model.basis
 
                 if display_as == "numbers":
-                    row_data.append(model.operations[gl])
+                    row_data.append(op)
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, model.operations[gl].todense(),
+                    fig = _wp.GateMatrixPlot(self.ws, op.todense(),
                                              colorbar=False,
                                              mxBasis=basis)
 
@@ -352,13 +364,13 @@ class GatesTable(WorkspaceTable):
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
             if confidenceRegionInfo is not None:
-                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:, None]
-                if isinstance(models[-1].operations[gl], _objs.FullDenseOp):
+                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:, None] #TODO: won't work for instruments
+                if isinstance(per_model_ops[-1], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].get_dimension()
                     basis = models[-1].basis
                     intervalMx = intervalVec.reshape(op_dim, op_dim)
-                elif isinstance(models[-1].operations[gl], _objs.TPDenseOp):
+                elif isinstance(per_model_ops[-1], _objs.TPDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].get_dimension()
                     basis = models[-1].basis
@@ -369,7 +381,7 @@ class GatesTable(WorkspaceTable):
                     # use derivative
                     op_dim = models[-1].get_dimension()
                     basis = models[-1].basis
-                    op_deriv = models[-1].operations[gl].deriv_wrt_params()
+                    op_deriv = per_model_ops[-1].deriv_wrt_params()
                     intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
 
                 if display_as == "numbers":
@@ -646,6 +658,7 @@ class GatesVsTargetTable(WorkspaceTable):
                 display, virtual_ops, wildcard):
 
         opLabels = model.get_primitive_op_labels()  # operation labels
+        instLabels = list(model.instruments.keys()) # requires an explicit model!
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
@@ -689,6 +702,40 @@ class GatesVsTargetTable(WorkspaceTable):
                 row_data.append(qty)
 
             table.addrow(row_data, formatters)
+
+        #Iterate over instruments
+        for il in instLabels:
+            row_data = [str(il)]
+            inst = model.instruments[il]
+            tinst = targetModel.instruments[il]
+            basis = model.basis
+            
+            #Note: could move this to a reportables function in future for easier
+            # confidence region support - for now, no CI support:
+            for disp in display:
+                if disp == "inf":
+                    sqrt_component_fidelities = [ _np.sqrt(_reportables.entanglement_fidelity(inst[l],tinst[l],basis))
+                                                    for l in inst.keys() ]
+                    qty = 1 - sum(sqrt_component_fidelities)**2
+                    row_data.append(_objs.reportableqty.ReportableQty(qty))
+                    
+                elif disp == "diamond":
+                    nComps = len(inst.keys())
+                    tpbasis = _DirectSumBasis([basis]*nComps)
+                    composite_op = _np.zeros( (inst.dim*nComps, inst.dim*nComps), 'd')
+                    composite_top = _np.zeros( (inst.dim*nComps, inst.dim*nComps), 'd')
+                    for i,clbl in enumerate(inst.keys()):
+                        a,b = i*inst.dim, (i+1)*inst.dim
+                        composite_op[a:b,a:b] = inst[clbl].todense()
+                        composite_top[a:b,a:b] = tinst[clbl].todense()
+                        qty = _reportables.half_diamond_norm(composite_op, composite_top, tpbasis)
+                    row_data.append(_objs.reportableqty.ReportableQty(qty))
+
+                else:
+                    row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
+                    
+            table.addrow(row_data, formatters)
+        
         table.finish()
         return table
 
@@ -1781,6 +1828,103 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_data.append(fig)
                     row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)
+
+        #Iterate over instruments
+        for il,inst in model.instruments.items():
+            tinst = targetModel.instruments[il]
+            for comp_lbl, comp in inst.items():
+                tcomp = tinst[comp_lbl]
+
+                row_data = [il + "." + comp_lbl]
+                row_formatters = [None]
+    
+                #FUTURE: use reportables to get instrument eigenvalues
+                evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.todense()))
+                evals = evals.reshape(evals.size, 1)
+    
+                if targetModel is not None:
+                    target_evals = _np.linalg.eigvals(tcomp.todense())  # no error bars
+                    #Note: no support for relative eigenvalues of instruments (yet)
+    
+                    # permute target eigenvalues according to min-weight matching
+                    _, pairs = _tools.minweight_match(evals.get_value(), target_evals, lambda x, y: abs(x - y))
+                    matched_target_evals = target_evals.copy()
+                    for i, j in pairs:
+                        matched_target_evals[i] = target_evals[j]
+                    target_evals = matched_target_evals
+                    target_evals = target_evals.reshape(evals.value.shape)
+                    # b/c evals have shape (x,1) and targets (x,),
+                    # which causes problems when we try to subtract them
+    
+                for disp in display:
+                    if disp == "evals":
+                        row_data.append(evals)
+                        row_formatters.append('Normal')
+    
+                    elif disp == "target" and targetModel is not None:
+                        row_data.append(target_evals)
+                        row_formatters.append('Normal')
+    
+                    elif disp == "rel" and targetModel is not None:
+                        row_data.append(_np.nan)
+                        row_formatters.append('Normal')
+    
+                    elif disp == "log-evals":
+                        logevals = evals.log()
+                        row_data.append(logevals.real())
+                        row_data.append(logevals.imag() / _np.pi)
+                        row_formatters.append('Normal')
+                        row_formatters.append('Pi')
+    
+                    elif disp == "log-rel":
+                        row_data.append(_np.nan)
+                        row_formatters.append('Normal')
+    
+                    elif disp == "absdiff-evals":
+                        absdiff_evals = evals.absdiff(target_evals)
+                        row_data.append(absdiff_evals)
+                        row_formatters.append('Vec')
+    
+                    elif disp == "infdiff-evals":
+                        infdiff_evals = evals.infidelity_diff(target_evals)
+                        row_data.append(infdiff_evals)
+                        row_formatters.append('Vec')
+    
+                    elif disp == "absdiff-log-evals":
+                        log_evals = evals.log()
+                        re_diff, im_diff = log_evals.absdiff(_np.log(target_evals.astype(complex)), separate_re_im=True)
+                        row_data.append(re_diff)
+                        row_data.append((im_diff / _np.pi).mod(2.0))
+                        row_formatters.append('Vec')
+                        row_formatters.append('Pi')
+    
+                    elif disp == "evdm":
+                        row_data.append(_np.nan)
+                        row_formatters.append('Normal')
+    
+                    elif disp == "evinf":
+                        row_data.append(_np.nan)
+                        row_formatters.append('Normal')
+    
+                    elif disp == "polar":
+                        evals_val = evals.get_value()
+                        if targetModel is None:
+                            fig = _wp.PolarEigenvaluePlot(
+                                self.ws, [evals_val], ["blue"], centerText=str(gl))
+                        else:
+                            fig = _wp.PolarEigenvaluePlot(
+                                self.ws, [target_evals, evals_val],
+                                ["black", "blue"], ["target", "gate"], centerText=str(gl))
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
+    
+                    elif disp == "relpolar" and targetModel is not None:
+                        row_data.append(_np.nan)
+                        row_formatters.append('Normal')
+                        row_formatters.append('Figure')
+                        
+                table.addrow(row_data, row_formatters)
+
         table.finish()
         return table
 
