@@ -124,7 +124,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-    #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
+    # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     try:
 
@@ -211,6 +211,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 #mu = min(mu, MU_TOL1)
 
             nRejects = 0 #DEBUG
+            bManual = False #DEBUG
             
             #determing increment using adaptive damping
             while True:  # inner loop
@@ -235,14 +236,73 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     success = False
 
                 reject_msg = ""
-                
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
 
                     #HACK
-                    if nRejects >= 2:
-                        dx = -(10.0**(1-nRejects))*x
-                        print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
+                    #if nRejects >= 2:
+                    #    dx = -(10.0**(1-nRejects))*x
+                    #    print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
+
+                    #HACK2
+                    if bManual:# or mu > 1e5:
+                        print("HACK - trying to find a good dx manually...")
+                        #import bpdb; bpdb.set_trace()
+                        gradient = -JTf
+                        test_dx = _np.zeros(len(dx),'d')
+                        last_normf = norm_f
+                        for ii in range(len(dx)):
+
+                            #Try adding
+                            while True:
+                                test_dx[ii] += 0.001
+                                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
+                                if test_normf < last_normf:
+                                    last_normf = test_normf
+                                else:
+                                    test_dx[ii] -= 0.001
+                                    break
+                                
+                            if test_dx[ii] == 0: #then try subtracting
+                                while True:
+                                    test_dx[ii] -= 0.001
+                                    test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
+                                    if test_normf < last_normf:
+                                        last_normf = test_normf
+                                    else:
+                                        test_dx[ii] += 0.001
+                                        break
+                                    
+                            if abs(test_dx[ii]) > 1e-6:
+                                test_prediction = norm_f + _np.dot(-2*JTf,test_dx)
+                                cmp_dx = -JTf
+                                print(" -> Adjusting index ",ii,"by",test_dx[ii]," => ",last_normf, "(cmp w/dx: ",
+                                      cmp_dx[ii], test_prediction, ") ", "YES" if test_dx[ii]*cmp_dx[ii] > 0 else "NO")
+                                
+                            #if test_normf < norm_f:
+                            #    dx = test_dx
+                            #    mu = 1e9
+                            #    break
+                            
+                        if _np.linalg.norm(test_dx) > 0:
+                            dx[:] = test_dx[:]
+                            #last_normf = test_normf
+                            #while True:
+                            #    test_dx *= 2
+                            #    test_f = obj_fn(x + test_dx)
+                            #    test_normf = _np.dot(test_f, test_f)
+                            #    if test_normf < last_normf:
+                            #        dx[:] = test_dx[:]
+                            #    else:
+                            #        break
+                            print("FOUND HACK dx w/norm = ",_np.linalg.norm(dx))
+                            mu = 1e9
+
+                    #HACK3
+                    #if mu > 1e10:
+                    #    for ii in range(len(dx)):
+                    #        if abs(dx[ii]) > abs(x[ii]) and dx[ii]*x[ii] < 0:
+                    #            dx[ii] = -x[ii] # just move to zero...
                     
                     new_x = x + dx
                     norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
@@ -258,14 +318,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
-                        msg = "Relative change in |x| is at most %g" % rel_xtol
-                        converged = True; break
+                        if bManual:
+                            msg = "Relative change in |x| is at most %g" % rel_xtol
+                            converged = True; break
+                        else:
+                            bManual = True
 
                     if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
 
                     try:
-                        print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                        #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                         new_f = obj_fn(new_x)
                         new_x_is_allowed = True
                     except ValueError:
@@ -316,9 +379,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                     (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
     
                         if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
-                            msg = "Both actual and predicted relative reductions in the" + \
-                                " sum of squares are at most %g" % rel_ftol
-                            converged = True; break
+                            if bManual:
+                                msg = "Both actual and predicted relative reductions in the" + \
+                                    " sum of squares are at most %g" % rel_ftol
+                                converged = True; break
+                            else:
+                                bManual = True
     
                         if profiler: profiler.mem_check("custom_leastsq: before success")
     

@@ -179,20 +179,76 @@ class Chi2Function(ObjectiveFunction):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+        #DEBUG TEST - insert termgap pentalty to indicate how bad chi2 can be affected?
+        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        SOFT = self.termgap_penalty_factor # 0.0001
+        if SOFT > 0.0005:
+            soften_indices = (termgap_penalty < SOFT)
+            #termgap_penalty[soften_indices] = termgap_penalty[soften_indices]**2 / SOFT
+            # x = x**2 / SOFT at x = SOFT and x = 0 and match derivs:
+            # f(x) = ax^2 + b*x + c; f(0) = 0, f(SOFT) = SOFT, f'(SOFT) = 1
+            # c = 0, a*SOFT + b = 1, 2*a*SOFT + b = 1 => a*SOFT = 0 => a = 0 -- so can't match deriv
+            # f'(SOFT) = 2 (would like == 1) to be smooth...
+            # f'(SOFT/2) = 1, but f(SOFT/2) = SOFT/4
+            
+            # ALT idea: set f(x) = x**2 / (2*SOFT) + 3*SOFT/2; f'(x) = x/SOFT
+            # then f(SOFT) = SOFT and f'(SOFT) = 1 so transition to g(x) = x is nice.  Downside is that f(0) = 3*SOFT/2.
+            #termgap_penalty[soften_indices] = termgap_penalty[soften_indices]**2 / (2*SOFT) + 3*SOFT/2.0
+
+            # ALT2 idea: set f(x) = x**2 / (2*SOFT); f'(x) = x/SOFT (yay), but f(SOFT) = SOFT/2, not SOFT, so need to shift...
+            #non_soften_indices = (termgap_penalty >= SOFT)
+            #termgap_penalty[soften_indices] = termgap_penalty[soften_indices]**2 / (2*SOFT)
+            #termgap_penalty[non_soften_indices] -= SOFT/2
+            
+            # what about quartic w/deriv at 0 == 0:
+            # a*x^4 + b*x^3 + c*x^2 s.t. f(S) = S, f'(S) = 1
+            # 4a*S^3 + 3b*S^2 + 2c*S = 1 and
+            # a*S^3 + b*S^2 + c*S = 1  => 3a*S^3 + 2b*S^2 + c*S = 0
+            # say b=0 b/c we don't need it, then 3a*S^2 + c = 0 => c = -3a*S^2
+            # and also a*S^3 + (-3a*S^2)*S = 1 => -2a*S^3 = 1 => a = -1/(2S^3), so c = 3/(2S)
+            # Finally we get: f(x) = -1/(2S^3)x^4 + 3/(2S)*x^2
+            # f(S) = -1/2 S + 3/2 S = S
+            # f''(0) < 0 though!
+            # say c=0 b/c we don't need it, then 3a*S + 2*b = 0 => b = -3/2*a*S
+            # and a*S^3 + (-3/2*a*S)*S^2 = 1 => -1/2 a*S^3 = 1 => a = -2/S^3 -- still no good.
+        
+        #test_probs = self.probs.copy()
+        #test_probs[ (self.probs - self.f) >= 0 ] += termgap_penalty[ (self.probs - self.f) >= 0 ]
+        #test_probs[ (self.probs - self.f) < 0 ] -= termgap_penalty[ (self.probs - self.f) < 0 ]
+        #test_probs4weights = self.probs.copy()
+        #test_probs4weights[ self.probs >= 0.5 ] += termgap_penalty[ self.probs >= 0.5 ]
+        #test_probs4weights[ self.probs < 0.5 ] -= termgap_penalty[ self.probs < 0.5 ]
+        #v = (test_probs - self.f) * self.get_weights(test_probs4weights)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        #print("Termgap abs max = ",max(_np.abs(termgap_penalty)))
+        #vorig = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        #print("DB BEFORE termgap: OBJ = ", _np.linalg.norm(vorig))
+        p1 = self.probs + termgap_penalty
+        v1 = (p1 - self.f) * self.get_weights(p1)
+        p2 = self.probs - termgap_penalty
+        v2 = (p2 - self.f) * self.get_weights(p2)
+        p = self.probs.copy()
+        p[ _np.abs(v1) >= _np.abs(v2) ] = p1[ _np.abs(v1) >= _np.abs(v2) ]
+        p[ _np.abs(v1) <  _np.abs(v2) ] = p2[ _np.abs(v1) <  _np.abs(v2) ]
+        self.probs[:] = p[:]
+        #print("probs range = ", min(self.probs), max(self.probs))
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        #print("DB termgap = ", _np.linalg.norm(termgap_penalty))
+        #print("DB AFTER termgap: OBJ = ", _np.linalg.norm(v))
+
+        #ORIG: v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
 
         if self.firsts is not None:
             self.update_v_for_omitted_probs(v)
 
         #update_v_for_termgap_penalty (TODO: make this into a function?)
-        TERMETA = self.termgap_penalty_factor
-        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
-        print("DB: TERMGAP penalty = ",_np.linalg.norm(TERMETA*(termgap_penalty)), "vs normal chi2 = ", _np.linalg.norm(v[:]**2))
-        v[:] = _np.sqrt(v[:]**2 + TERMETA*(termgap_penalty))
-        #NOTE: to compute derivative, need derivs of SV_circuit_pathmagnitude_gap in fastreplib.pyx/slowreplib.py
-        # which might mean 1) get_total_term_magnitude_deriv functions throughout object structure
-        #                  2) a way for count_paths_upto_threshold to sum the term magnitudes as *polys* rather than as floats
-        #                     (maybe complicated? since |poly| is sqrt((poly.real)^2 + (poly.im)^2)?
+        #TERMETA = self.termgap_penalty_factor
+        #termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #print("DB: TERMGAP penalty = ",_np.linalg.norm(TERMETA*(termgap_penalty)), "vs normal chi2 = ", _np.linalg.norm(v[:]**2))
+        #v[:] = _np.sqrt(v[:]**2 + TERMETA*(termgap_penalty))
+        ##NOTE: to compute derivative, need derivs of SV_circuit_pathmagnitude_gap in fastreplib.pyx/slowreplib.py
+        ## which might mean 1) get_total_term_magnitude_deriv functions throughout object structure
+        ##                  2) a way for count_paths_upto_threshold to sum the term magnitudes as *polys* rather than as floats
+        ##                     (maybe complicated? since |poly| is sqrt((poly.real)^2 + (poly.im)^2)?
 
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
@@ -333,6 +389,40 @@ class Chi2Function(ObjectiveFunction):
                                   prMxToFill=self.probs, clipTo=self.probClipInterval,
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        #DEBUG TEST - insert termgap pentalty to indicate how bad chi2 can be affected?
+        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        jac_termgap_pentalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
+        SOFT = self.termgap_penalty_factor # 0.0001
+        if SOFT > 0.0005:  # move gap -> gap^2/SOFT (deriv = 2*gap*dgap/SOFT)
+            soften_indices = (termgap_penalty < SOFT)
+            #termgap_penalty[soften_indices] = termgap_penalty[soften_indices]**2 / SOFT    # x = x**2 / SOFT at x = SOFT and x = 0
+            #jac_termgap_pentalty[soften_indices,:] = (2.0/SOFT)*termgap_penalty[soften_indices,None]*jac_termgap_pentalty[soften_indices,:]
+
+            #ALT IDEA
+            #termgap_penalty[soften_indices] = termgap_penalty[soften_indices]**2 / (2*SOFT) + (3*SOFT)/2    # ALT: x**2 / (2*SOFT) + 3*SOFT/2
+            #jac_termgap_pentalty[soften_indices,:] = (1.0/SOFT)*termgap_penalty[soften_indices,None]*jac_termgap_pentalty[soften_indices,:]
+
+            #ALT2 IDEA:
+            #non_soften_indices = (termgap_penalty >= SOFT)            
+            #termgap_penalty[soften_indices] = termgap_penalty[soften_indices]**2 / (2*SOFT)
+            #termgap_penalty[non_soften_indices] -= SOFT/2
+            #jac_termgap_pentalty[soften_indices,:] = (1.0/SOFT)*termgap_penalty[soften_indices,None]*jac_termgap_pentalty[soften_indices,:]
+
+        
+        p1 = self.probs + termgap_penalty
+        v1 = (p1 - self.f) * self.get_weights(p1)
+        p2 = self.probs - termgap_penalty
+        v2 = (p2 - self.f) * self.get_weights(p2)
+        p = self.probs.copy()
+        p[ _np.abs(v1) >= _np.abs(v2) ] = p1[ _np.abs(v1) >= _np.abs(v2) ]
+        p[ _np.abs(v1) <  _np.abs(v2) ] = p2[ _np.abs(v1) <  _np.abs(v2) ]
+        self.probs[:] = p[:]
+        #print("DB BEFORE termgap: JAC col0 = %g, col4 = %g" % (_np.linalg.norm(dprobs[:,0]), _np.linalg.norm(dprobs[:,4])))
+        dprobs[ _np.abs(v1) >= _np.abs(v2), : ] += jac_termgap_pentalty[  _np.abs(v1) >= _np.abs(v2), : ]
+        dprobs[ _np.abs(v1) <  _np.abs(v2), : ] -= jac_termgap_pentalty[  _np.abs(v1) <  _np.abs(v2), : ]
+        #print("DB AFTER termgap: JAC col0 = %g, col4 = %g" % (_np.linalg.norm(dprobs[:,0]), _np.linalg.norm(dprobs[:,4])))
+
         
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
@@ -352,29 +442,28 @@ class Chi2Function(ObjectiveFunction):
         if self.firsts is not None:
             self.update_dprobs_for_omitted_probs(dprobs, weights)
 
-        dprobs[:,:] *= 2.0 * v[:,None] # STEP1
-
-        #update_jac_for_termgap_penalty (TODO: make this into a function?)
-        TERMETA = self.termgap_penalty_factor
-        # objective is sqrt( (weight * (p-f))^2 + termgap_penalty) so deriv is:
-        # 0.5/sqrt(weight * (p-f))^2 + termgap_penalty) * ( 2 * weight * (p-f) * (dweight/dp * (p-f) * dp + weight * dp) + jac_termgap_pentalty)
-        # Note: jac_normal_chi2 = d( (weight * (p-f))^2 ) = 2 * weight * (p-f) * d(weight * (p-f)) = 2 * weight * (p-f) * normal_case_jac
-
-        # ALT objective is sqrt( (weight * (p-f))^2 + termgap_penalty^2) so deriv is:
-        # 0.5/sqrt(weight * (p-f))^2 + termgap_penalty^2) * ( 2 * weight * (p-f) * (dweight/dp * (p-f) * dp + weight * dp) + 2 * termgap_penalty *jac_termgap_pentalty)
-        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
-        jac_termgap_pentalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
-        v[:] = _np.sqrt(v[:]**2 + TERMETA*(termgap_penalty))
-
-        #Do this: self.jac[:,:] = (0.5 / v) * (2 * weight * (p-f) * self.jac[:,:] + jac_termgap_pentalty) in lines below:
-        #self.jac[:,:] *= 2.0 * v[:,None]
-
-        # HACK to handle v=0 case when we divide by it below
-        v[ v == 0.0 ] = 0.5; jac_termgap_pentalty[ v==0, :] = 0.0
-        
-        #self.jac[:,:] += 2*TERMETA*termgap_penalty[:,None]*jac_termgap_pentalty
-        self.jac[:,:] += TERMETA*jac_termgap_pentalty
-        self.jac[:,:] *= 0.5 / v[:,None]
+        #dprobs[:,:] *= 2.0 * v[:,None] # STEP1
+        ##update_jac_for_termgap_penalty (TODO: make this into a function?)
+        #TERMETA = self.termgap_penalty_factor
+        ## objective is sqrt( (weight * (p-f))^2 + termgap_penalty) so deriv is:
+        ## 0.5/sqrt(weight * (p-f))^2 + termgap_penalty) * ( 2 * weight * (p-f) * (dweight/dp * (p-f) * dp + weight * dp) + jac_termgap_pentalty)
+        ## Note: jac_normal_chi2 = d( (weight * (p-f))^2 ) = 2 * weight * (p-f) * d(weight * (p-f)) = 2 * weight * (p-f) * normal_case_jac
+        #
+        ## ALT objective is sqrt( (weight * (p-f))^2 + termgap_penalty^2) so deriv is:
+        ## 0.5/sqrt(weight * (p-f))^2 + termgap_penalty^2) * ( 2 * weight * (p-f) * (dweight/dp * (p-f) * dp + weight * dp) + 2 * termgap_penalty *jac_termgap_pentalty)
+        #termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #jac_termgap_pentalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
+        #v[:] = _np.sqrt(v[:]**2 + TERMETA*(termgap_penalty))
+        #
+        ##Do this: self.jac[:,:] = (0.5 / v) * (2 * weight * (p-f) * self.jac[:,:] + jac_termgap_pentalty) in lines below:
+        ##self.jac[:,:] *= 2.0 * v[:,None]
+        #
+        ## HACK to handle v=0 case when we divide by it below
+        #v[ v == 0.0 ] = 0.5; jac_termgap_pentalty[ v==0, :] = 0.0
+        #
+        ##self.jac[:,:] += 2*TERMETA*termgap_penalty[:,None]*jac_termgap_pentalty
+        #self.jac[:,:] += TERMETA*jac_termgap_pentalty
+        #self.jac[:,:] *= 0.5 / v[:,None]
             
         if self.check_jacobian: _opt.check_jac(lambda v: self.termgap_chi2(
             v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX

@@ -1582,3 +1582,27 @@ def ndarray_base(a, debug=False):
         a = a.base
     if debug: print(" ==> ", id(a))
     return a
+
+
+def to_unitary(scaled_unitary):
+    """
+    Compute the scaling factor required to turn a scalar multiple of a unitary matrix
+    to a unitary matrix.
+
+    Parameters
+    ----------
+    scaled_unitary : ndarray
+        A scaled unitary matrix
+    
+    Returns
+    -------
+    scale : float
+    unitary : ndarray
+        Such that `scale * unitary == scaled_unitary`.
+    
+    """
+    scaled_identity = _np.dot(scaled_unitary, _np.conjugate(scaled_unitary.T))
+    scale = _np.sqrt(scaled_identity[0,0])
+    assert(_np.allclose( scaled_identity / (scale**2), _np.identity(scaled_identity.shape[0],'d'))), \
+        "Given `scaled_unitary` does not appear to be a scaled unitary matrix!"
+    return scale, (scaled_unitary / scale)

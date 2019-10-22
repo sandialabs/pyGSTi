@@ -40,6 +40,10 @@ cdef double LARGE = 1000000000
 # a very high term weight which won't help (at all) a
 # path get included in the selected set of paths.
 
+cdef double SMALL = 1e-10
+# a small number which is used as a path weight when the
+# true path magnitude is zero.
+
 
 #Use 64-bit integers
 ctypedef long long INT
@@ -3534,6 +3538,7 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
     cdef INT n = b.size()
     cdef INT sub_order
     cdef double mag, mag2
+    cdef double numerator, denom
 
     for i in range(n-1, incd-1, -1):
         if b[i]+1 == nops[i]: continue
@@ -3550,14 +3555,22 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
 
         logmag = current_logmag + (deref(oprep_lists[i])[b[i]]._logmagnitude - deref(oprep_lists[i])[b[i]-1]._logmagnitude)
         if logmag >= log_thres:
-            if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
-                mag = 0
-            else:
-                mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
+            #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
+            #if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
+            #    mag = 0
+            #else:
+            #    mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
+            numerator = deref(oprep_lists[i])[b[i]]._magnitude
+            denom = deref(oprep_lists[i])[b[i]-1]._magnitude
+            if numerator == 0: numerator = SMALL
+            if denom == 0: denom = SMALL
+            mag = current_mag * (numerator / denom)
 
-            ## fn_visitpath(b, mag, i) ##
+            ## fn_visitpath(b, mag, i) ##            
             pathmags[E_indices[b[n-1]]] += mag
             nPaths[E_indices[b[n-1]]] += 1
+            #if E_indices[b[n-1]] == 0:  # TODO REMOVE
+            #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[b[i]-1]._magnitude, incd, i, "*1"
             if nPaths[E_indices[b[n-1]]] == max_npaths: return True
             #print("Adding ",b)
             ## --------------------------
@@ -3577,12 +3590,21 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
             for j in deref(foat_indices_per_op[i]):
                 if j >= orig_bi:
                     b[i] = j
-                    mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
-                        current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
+                    #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
+                    #mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
+                    #    current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
+                    
+                    numerator = deref(oprep_lists[i])[b[i]]._magnitude
+                    denom = deref(oprep_lists[i])[orig_bi-1]._magnitude
+                    if numerator == 0: numerator = SMALL
+                    if denom == 0: denom = SMALL
+                    mag = current_mag * (numerator / denom)
 
                     ## fn_visitpath(b, mag, i) ##
                     pathmags[E_indices[b[n-1]]] += mag
                     nPaths[E_indices[b[n-1]]] += 1
+                    #if E_indices[b[n-1]] == 0:  # TODO REMOVE
+                    #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[orig_bi-1]._magnitude, incd, i, "*2"
                     if nPaths[E_indices[b[n-1]]] == max_npaths: return True
                     #print("FOAT Adding ",b)
                     ## --------------------------
@@ -3598,6 +3620,8 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
                             ## fn_visitpath(b, mag2, n-1) ##
                             pathmags[E_indices[b[n-1]]] += mag2
                             nPaths[E_indices[b[n-1]]] += 1
+                            #if E_indices[b[n-1]] == 0:  # TODO REMOVE
+                            #    print nPaths[E_indices[b[n-1]]], mag2, pathmags[E_indices[b[n-1]]], b, mag, incd, i, " *3"
                             if nPaths[E_indices[b[n-1]]] == max_npaths: return True
                             #print("FOAT Adding ",b)
                             ## --------------------------

@@ -488,7 +488,11 @@ class TermEvalTree(EvalTree):
         #maxsopms = _bulk_eval_compact_polys_complex(
         #    polys[0], polys[1], _np.abs(calc.paramvec), (nEls,))  # shape (nElements,) -- could make this a *fill*
         #debug_i = 0
-        
+        #debug_maxsopm_list = []
+        #debug_mags_list = []
+        #debug_threshold_list = []
+        #debug_evalindex_list = []
+
         for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
             current_threshold, _ = self.percircuit_p_polys[circuit] # must have selected a set of paths for this to be populated!
@@ -499,6 +503,11 @@ class TermEvalTree(EvalTree):
 
             circuit_gaps, debug_maxsopm, debug_mags = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
                                                                                      calc.sos.opcache, current_threshold)
+
+            #DEBUG TODO REMOVE
+            #if i == 38:
+            #    import bpdb; bpdb.set_trace()
+            #    print(current_threshold, circuit_gaps, debug_maxsopm, debug_mags)
             
             #FUTURE: maybe use maxsopms within calc.circuit_pathmagnitude_gap?
             #assert(_np.allclose(maxsopms[debug_i:debug_i+len(debug_mags)], debug_mags))
@@ -509,8 +518,25 @@ class TermEvalTree(EvalTree):
             #    #gaps.extend(list(debug_mags))  #DEBUG
             #    gaps.extend(list(debug_maxsopm))  #DEBUG
             #else:
+            #debug_maxsopm_list.extend(list(debug_maxsopm))
+            #debug_mags_list.extend(list(debug_mags))
+            #debug_threshold_list.extend([current_threshold]*len(debug_mags))
+            #debug_evalindex_list.extend([i]*len(debug_mags))
             
             gaps.extend(list(circuit_gaps))
+
+        #DEBUG TODO REMOVE
+        #import os, pickle
+        #if not os.path.exists("debug_gaps.pkl"):
+        #    pickle.dump( (gaps, debug_maxsopm_list, debug_mags_list, debug_threshold_list, debug_evalindex_list), open("debug_gaps.pkl","wb"))
+        #    print("WROTE DEBUG FILE debug_gaps.pkl")
+        #else:
+        #    gaps1, debug_maxsopm_list1, debug_mags_list1, debug_threshold_list1, debug_evalindex_list1 = pickle.load(open("debug_gaps.pkl","rb"))
+        #    print("CHECKING for cases where gap1 < gap2...")
+        #    for i, (gap1, gap2) in enumerate(zip(gaps1, gaps)):
+        #        if gap2 > gap1:
+        #            print("GAP2 greater: ",i, gap1, gap2)
+        #    import bpdb; bpdb.set_trace()
 
         assert(len(gaps) == self.num_final_elements())
         return _np.array(gaps, 'd')

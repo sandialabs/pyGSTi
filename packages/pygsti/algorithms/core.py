@@ -1591,10 +1591,32 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         print("angle = ", angle, "(", angle * 360.0 / (2*_np.pi), " degrees)")
 
         orig_inflate = objective.mdl._termgap_inflation_factor
-        objective.mdl._termgap_inflation_factor = 1.0
+        objective.mdl._termgap_inflation_factor = None # 1.0
         objective.termgap_penalty_factor = 0.0
         
         objective_func = objective.fn
+
+        #DEBUG TODO REMOVE: why objective function can be higher with fewer paths
+        #orig_vec = mdl.to_vector()
+        #print("DEBUG HERE")
+        #fwdsim = mdl._fwdsim()
+        #pathSet, nFailures = fwdsim.find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+        #fwdsim.select_paths_set(evTree, pathSet, comm, memLimit)
+        #obj_datagen = objective_func(datagen_vec)
+        #obj_datagen = _np.linalg.norm(obj_datagen)**2
+        #print("OBJECTIVE at initial path set (pathmag gap = %g): " % fwdsim.pathmagnitude_gap, obj_datagen)
+        ##
+        #mdl.from_vector(orig_vec)
+        #fwdsim = mdl._fwdsim()
+        #fwdsim.pathmagnitude_gap /= 100
+        #pathSet, nFailures = fwdsim.find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+        #fwdsim.select_paths_set(evTree, pathSet, comm, memLimit)
+        ##currently_selected_pathSet = pathSet
+        #obj_datagen = objective_func(datagen_vec)
+        #obj_datagen = _np.linalg.norm(obj_datagen)**2
+        #print("OBJECTIVE at new path set (pathmag gap = %g): " % fwdsim.pathmagnitude_gap, obj_datagen)
+        #import sys; sys.exit()
+        
 
         try:
             obj_datagen = objective_func(datagen_vec)
@@ -1642,7 +1664,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     debug_paramvec()  # REMOVE
 
     alpha = 1.0 # no alpha controls inflation factor rather than interpolation - always start at 1.0
-    termgap_penalty = 1.0
+    termgap_penalty = 0.00001 #10.0
     minErrVec = None
     for sub_iter in range(maxSubIters):
         
@@ -1673,17 +1695,30 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
         #import sys; sys.exit()
         
-        if nFailures <= MAX_NUM_FAILURES:
-            if termgap_penalty <= 1:
-                #really we'd like 0 here... - meaning we've converged on a set of paths that without (much) termgap pentalty within the "allowed" radius/zone.
-                printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
-                break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
-            else:
-                #Do over with reduced termgap penalty factor
-                printer.log("No failures! Reducing termgap penalty factor")
-                mdl.from_vector(last_mdlvec)  # "do-over"
-                mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
-                termgap_penalty /= 10
+        if termgap_penalty < 0.0002: #nFailures <= MAX_NUM_FAILURES:
+
+            #print("Termgap penalty is small (no softening); re-computing paths")
+            #pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+            #printer.log("After adapting paths, num failures = %d" % (nFailures))
+            #mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+            #currently_selected_pathSet = pathSet
+
+            #OR: just converge:
+            print("DB: with penalty of 0.0001 there was no softening used!")
+            printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
+            break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
+
+            #OPTION2 additional logic
+            #if termgap_penalty <= 1:
+            #    #really we'd like 0 here... - meaning we've converged on a set of paths that without (much) termgap pentalty within the "allowed" radius/zone.
+            #    printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
+            #    break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
+            #else:
+            #    #Do over with reduced termgap penalty factor
+            #    printer.log("No failures! Reducing termgap penalty factor")
+            #    mdl.from_vector(last_mdlvec)  # "do-over"
+            #    mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
+            #    termgap_penalty /= 10
         else:
             ### OPTION1
             ##Adjust resulting model so that it has no post-reprep failures, then
@@ -1710,7 +1745,8 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             # There were failures, so stay at same paramvec location, keep same paths, and just increase termgap penalty
             mdl.from_vector(mdl.to_vector()) # just to be sure...
             mdl._fwdsim().refresh_magnitudes_in_repcache(currently_selected_pathSet)
-            termgap_penalty *= 10  #Note: there are failures at this point, so commented out assertion stmt below too..
+            #termgap_penalty *= 10  #Note: there are failures at this point, so commented out assertion stmt below too..
+            termgap_penalty /= 2
 
             ##OPTION2
             ## See if we can get a new paths set that achieves our base (non-inflated) pathmag-gap for all circuits
@@ -1736,6 +1772,14 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             #
             #    #alpha = max(alpha / 2, 1.0/MAX_INFLATE)  # reduce alpha => reduce gap inflation factor
             #    termgap_penalty *= 10
+
+            #OPTION3 - objective is a "worst case" objective with no adjustable termgap_penalty -- just try to
+            # get more paths if we can and use those regardless of whether there are failures -- we don't really
+            # care about failures per se in this case; we're just optimizing an objective function with "slack" in it.
+            #pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+            #printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
+            #mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+            #currently_selected_pathSet = pathSet
 
             ## Sanity check
             #assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] <= MAX_NUM_FAILURES), \

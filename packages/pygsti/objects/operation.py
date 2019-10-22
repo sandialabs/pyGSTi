@@ -6906,9 +6906,10 @@ class LindbladErrorgen(LinearOperator):
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
                 k = hamBasisIndices[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): -1j}, mpv), basis[termLbl[1]], IDENT, evotype))
-                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j}, mpv),
-                                                IDENT, basis[termLbl[1]].conjugate().T, evotype))
+                scale, U = _mt.to_unitary(basis[termLbl[1]]) # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
+                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): -1j*scale}, mpv), U, IDENT, evotype))
+                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j*scale}, mpv),
+                                                IDENT, U.conjugate().T, evotype))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
@@ -6916,23 +6917,27 @@ class LindbladErrorgen(LinearOperator):
                         k = numHamParams + 0  # index of parameter
                     else:
                         k = numHamParams + otherBasisIndices[termLbl[1]]  # index of parameter
-                    Lm = Ln = basis[termLbl[1]]
+                    scale, U = _mt.to_unitary(basis[termLbl[1]]) # ensure all Rank1Term operators are *unitary*
+                    Lm = Ln = U
                     # power to raise parameter to in order to get coeff
                     pw = 2 if self.param_mode in ("cptp", "depol") else 1
 
                     Lm_dag = Lm.conjugate().T
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: 1.0}, mpv), Ln, Lm_dag, evotype))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5}, mpv), IDENT, _np.dot(Ln_dag, Lm),
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: 1.0 * scale**2}, mpv), Ln, Lm_dag, evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), IDENT, _np.dot(Ln_dag, Lm),
                                                     evotype))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5}, mpv), _np.dot(Lm_dag, Ln), IDENT,
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), _np.dot(Lm_dag, Ln), IDENT,
                                                     evotype))
 
                 else:
                     i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
                     j = otherBasisIndices[termLbl[2]]  # index of col in "other" coefficient matrix
-                    Lm, Ln = basis[termLbl[1]], basis[termLbl[2]]
+                    scalem, Um = _mt.to_unitary(basis[termLbl[1]]) # ensure all Rank1Term operators are *unitary*
+                    scalen, Un = _mt.to_unitary(basis[termLbl[2]]) # ensure all Rank1Term operators are *unitary*
+                    Lm, Ln = Um, Un
+                    scale = scalem * scalen
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
@@ -6961,11 +6966,11 @@ class LindbladErrorgen(LinearOperator):
 
                     base_poly = _Polynomial(polyTerms, mpv)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(1.0 * base_poly, Ln, Lm, evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(1.0 * base_poly * scale, Ln, Lm, evotype))
                     # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm),
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly * scale, IDENT, _np.dot(Ln_dag, Lm),
                                                     evotype))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT,
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly * scale, _np.dot(Lm_dag, Ln), IDENT,
                                                     evotype))
 
             elif termType == "A":  # Affine
@@ -6979,13 +6984,16 @@ class LindbladErrorgen(LinearOperator):
                 #  are the normalized paulis (including the identity), and rho has trace == 1
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-                L = basis[termLbl[1]]
+                scale, U = _mt.to_unitary(basis[termLbl[1]]) # ensure all Rank1Term operators are *unitary*
+                L = U
                 # Note: only works when `d` corresponds to integral # of qubits!
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
+                Bscale = d2**0.25 # scaling to make Bmxs unitary (reverse of `scale` above, where scale * U == basis[.])
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): 1.0}, mpv), _np.dot(L, B), B,
-                                                    evotype))  # /(d2-1.)
+                    UB = Bscale * B # UB is unitary
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
+                                                                      _np.dot(L, UB), UB, evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 
@@ -7009,6 +7017,22 @@ class LindbladErrorgen(LinearOperator):
             vtape = _np.empty(0, _np.int64)
             ctape = _np.empty(0, complex)
         coeffs_as_compact_polys = (vtape, ctape)
+
+        #DEBUG TODO REMOVE - check norm of rank-1 terms:
+        # rho =OP=> coeff * A rho B
+        # want to bound | coeff * Tr(E Op rho) | = | coeff | * | <e|A|psi><psi|B|e> |
+        # so A and B should be unitary so that | <e|A|psi><psi|B|e> | <= 1
+        # but typically these are unitaries / (sqrt(2)*nqubits)
+        #import bpdb; bpdb.set_trace()
+        scale = 1.0
+        for t in Lterms:
+            for op in t._rep.pre_ops:
+                test = _np.dot(_np.conjugate(scale*op.base.T), scale*op.base)
+                assert(_np.allclose(test, _np.identity(test.shape[0],'d')))
+            for op in t._rep.post_ops:
+                test = _np.dot(_np.conjugate(scale*op.base.T), scale*op.base)
+                if not (_np.allclose(test, _np.identity(test.shape[0],'d'))):
+                    import bpdb; bpdb.set_trace()
 
         return Lterms, coeffs_as_compact_polys
 

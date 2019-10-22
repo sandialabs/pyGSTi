@@ -935,8 +935,11 @@ class TermForwardSimulator(ForwardSimulator):
             
             SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
-            assert(_np.all(gaps >= 0))
-            subtree_penalties = _np.clip(gaps - self.pathmagnitude_gap, 0, None)
+            if _np.min(gaps) < -1e-6:  #Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+                assert(_np.all(gaps >= 0))
+            else:
+                gaps = _np.clip(gaps, 0, None)
+            subtree_penalties = gaps #_np.clip(gaps - self.pathmagnitude_gap, 0, None)
             
             _fas(termgap_penalty, [felInds], subtree_penalties)
 
@@ -997,7 +1000,7 @@ class TermForwardSimulator(ForwardSimulator):
             SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
             gap_jacs = evalSubTree.get_sopm_gaps_jacobian_using_current_paths(self)
-            gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
+            #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
             _fas(termgap_penalty_jac, [felInds], gap_jacs)
 
         #collect/gather results
