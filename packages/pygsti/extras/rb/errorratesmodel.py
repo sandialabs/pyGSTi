@@ -20,6 +20,10 @@ class ErrorRatesModel(object):
         """
 
         model_type: {'FiE', 'FiE+Uni', 'GlobalDep'}
+        # Er=Fail
+        # Er=Unif
+        # TwirledGates
+        # TwirledLayers
         """
         self.error_rates = error_rates
         assert(model_type in ('FiE', 'FiE+U', 'GlobalDep'))
@@ -32,7 +36,7 @@ class ErrorRatesModel(object):
         depth = circuit.depth()
         width = circuit.width()
 
-        if self.model_type in ('FiE', 'FiE+U'):
+        if self.model_type in ('FE', 'FiE+U'):
 
             twoQgates = []
             for i in range(depth):

@@ -3107,22 +3107,32 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
     gcirclenpower = 0
     while _np.random.binomial(1, 0.5) == 1:
         gcirclenpower += 1
+
+    if interactingQs_density > 0:
+        mingermlengthpower = int(_np.ceil(_np.log2(1 / (len(qubits) * interactingQs_density * 0.5))))
+    else:
+        mingermlengthpower = 0
     
+    gcirclenpower = max(gcirclenpower, mingermlengthpower)
+    #print(gcirclenpower)
+
     germlength = {}
     for q in qubits:
         glp = 0
         while _np.random.binomial(1, 0.5) == 1 and glp < gcirclenpower:
-            glp += 1 
-        germlength[q] = 2 ** glp  
+            glp += 1
+        germlength[q] = 2 ** glp 
+
 
     #print(2**gcirclenpower)
     #print(germlength)
-    circleng = max(list(germlength.values()))
+    circleng = 2**gcirclenpower  #max(list(germlength.values()))
+    #print(circleng)
     #print(circleng)
     subgerm = {}
     poweredsubgerm = {}
             
-            
+
     for q in qubits:
         subgerm[q] = []
         possibleops = pspec.clifford_ops_on_qubits[(q,)]   
@@ -3142,12 +3152,13 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
     
     if interactingQs_density > 0:
     
-        while len(germcircuit) * len(qubits) * interactingQs_density < 1:
-
-            germcircuit.append_circuit(tempgermcircuit)
+        assert(len(germcircuit) * len(qubits) * interactingQs_density * 0.5 >= 1)
+        #while len(germcircuit) * len(qubits) * interactingQs_density * 0.5 < 1:
+        #
+        #    germcircuit.append_circuit(tempgermcircuit)
 
         #print(len(qubits))
-        num2Qtoadd = int(_np.floor(len(germcircuit) * len(qubits) * interactingQs_density))
+        num2Qtoadd = int(_np.floor(0.5 * len(germcircuit) * len(qubits) * interactingQs_density))
         #print(num2Qtoadd)
 
         edgelistdict = {}
@@ -3169,16 +3180,26 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
 
             edgelistdict[l] = selectededges
 
+        edge_and_depth_list = []
+        for l in edgelistdict.keys():
+            edge_and_depth_list += [(l, edge) for edge in edgelistdict[l]]
+
         #print(edgelistdict)
         for i in range(num2Qtoadd):
-            #print(i)
-            depthposition = list(edgelistdict.keys())[_np.random.randint(0, len(edgelistdict))]
-            edgeind = _np.random.randint(0, len(edgelistdict[depthposition]))
-            edge = edgelistdict[depthposition][edgeind]
-            del edgelistdict[depthposition][edgeind]
-            if len(edgelistdict[depthposition]) == 0:
-                #print('removing depth {}'.format(depthposition))
-                del edgelistdict[depthposition]
+            
+            # OLD VERSION
+            # #print(i)
+            # depthposition = list(edgelistdict.keys())[_np.random.randint(0, len(edgelistdict))]
+            # edgeind = _np.random.randint(0, len(edgelistdict[depthposition]))
+            # edge = edgelistdict[depthposition][edgeind]
+            # del edgelistdict[depthposition][edgeind]
+            # if len(edgelistdict[depthposition]) == 0:
+            #     #print('removing depth {}'.format(depthposition))
+            #     del edgelistdict[depthposition]
+
+            sampind = _np.random.randint(0, len(edge_and_depth_list))
+            (depthposition, edge) = edge_and_depth_list[sampind]
+            del edge_and_depth_list[sampind]
 
             # The two-qubit gates on that edge.
             possibleops = pspec.clifford_ops_on_qubits[edge]
