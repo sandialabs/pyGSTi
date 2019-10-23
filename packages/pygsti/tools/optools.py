@@ -78,10 +78,10 @@ def fidelity(A, B):
     """
     evals, U = _np.linalg.eig(A)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
-        # special case when A is rank 1
+        # special case when A is rank 1, A = vec * vec^T and sqrt(A) = A
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(B, vec)).real  # vec^T * B * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(B, vec)).real  # vec^T * B * vec
         return float(F)
 
     evals, U = _np.linalg.eig(B)
@@ -89,12 +89,16 @@ def fidelity(A, B):
         # special case when B is rank 1 (recally fidelity is sym in args)
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
         return float(F)
 
     #if _np.array_equal(A, B): return 1.0  # HACK - some cases when A and B are perfecty equal sqrtm(A) fails...
     sqrtA = _hack_sqrtm(A)  # _spl.sqrtm(A)
-    assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) < 1e-8)  # test the scipy sqrtm function
+    #assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) < 1e-8)  # test the scipy sqrtm function - sometimes fails when rank defficient
+    if _np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) > 1e-8:
+        evals = _np.linalg.eigvals(A)
+        _warning.warn(("sqrtm(A) failure when computing fidelity - beware result. "
+                       "Maybe due to rank defficiency - eigenvalues of A are: %s") % evals)
     F = (_mt.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(B, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
     return float(F)
 
