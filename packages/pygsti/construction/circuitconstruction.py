@@ -472,7 +472,7 @@ def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
 
     line_labels = prepStrs[0].line_labels if len(prepStrs) > 0 else 'auto'
     if line_labels is None or len(line_labels) == 0: line_labels = ('*',)
-    singleOps = [_cir.Circuit((gl,), line_labels=line_labels)**1 for gl in opLabels] # **1 adds parens to stringrep
+    singleOps = [_cir.Circuit((gl,), line_labels=line_labels)**1 for gl in opLabels]  # **1 adds parens to stringrep
     ret = create_circuit_list('eStr', 'prepStr', 'prepStr+eStr', 'prepStr+g+eStr',
                               eStr=effectStrs, prepStr=prepStrs, g=singleOps,
                               order=['g', 'prepStr', 'eStr'])  # LEXICOGRAPHICAL VS MATRIX ORDER
