@@ -3081,15 +3081,17 @@ def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=F
 
 
 def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
-    
+
     #import numpy as _np
     #from pygsti.objects import circuit as _cir
-    
+
     if subsetQs is None:
         qubits = list(pspec.qubit_labels[:])  # copy this list
     else:
         qubits = list(subsetQs[:])  # copy this list
-    
+
+    width = len(qubits)
+
     germcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
     
 #     germlength = {}
@@ -3104,61 +3106,79 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
 #     subgerm = {}
 #     poweredsubgerm = {}
 
-    gcirclenpower = 0
-    while _np.random.binomial(1, 0.5) == 1:
-        gcirclenpower += 1
+    rand = _np.random.rand()
+    if rand < 4 / 8:
+        max_subgerm_depth = 1
+    elif rand < 6 / 8:
+        max_subgerm_depth = 2
+    elif rand < 7 / 8:
+        max_subgerm_depth = 4
+    else:
+        max_subgerm_depth = 8
 
     if interactingQs_density > 0:
-        mingermlengthpower = int(_np.ceil(_np.log2(1 / (len(qubits) * interactingQs_density * 0.5))))
+        required_num_2Q_locations = max_subgerm_depth * width * interactingQs_density
+        R = int(_np.ceil(2 / required_num_2Q_locations))
     else:
-        mingermlengthpower = 0
+        R = 1
+
+    germ_depth = R * max_subgerm_depth
+
+    print(max_subgerm_depth, R, germ_depth)
+
+
+    # gcirclenpower = 0
+    # while _np.random.binomial(1, 0.5) == 1:
+    #     gcirclenpower += 1
+
+    # if interactingQs_density > 0:
+    #     logw = int(_np.floor(_np.log2(len(qubits))))
+    #     log2 = int(_np.log2(1 / interactingQs_density))
+
+    #     mingermlengthpower = min(0, 1 + log2 - logw)
+    #     #int(_np.ceil(_np.log2(1 / (len(qubits) * interactingQs_density * 0.5))))
+    # else:
+    #     mingermlengthpower = 0
     
-    gcirclenpower = max(gcirclenpower, mingermlengthpower)
-    #print(gcirclenpower)
+    # gcirclenpower = max(gcirclenpower, mingermlengthpower)
+    # print(mingermlengthpower, gcirclenpower)
 
-    germlength = {}
+    subgerm_depth = {}
     for q in qubits:
-        glp = 0
-        while _np.random.binomial(1, 0.5) == 1 and glp < gcirclenpower:
-            glp += 1
-        germlength[q] = 2 ** glp 
-
+        subgerm_depth_power = 0
+        while (_np.random.binomial(1, 0.5) == 1) and (2 ** subgerm_depth_power < max_subgerm_depth):
+            subgerm_depth_power += 1
+        subgerm_depth[q] = 2 ** subgerm_depth_power
 
     #print(2**gcirclenpower)
     #print(germlength)
-    circleng = 2**gcirclenpower  #max(list(germlength.values()))
+    #circleng = 2**gcirclenpower  #max(list(germlength.values()))
     #print(circleng)
     #print(circleng)
     subgerm = {}
-    poweredsubgerm = {}
-            
+    repeated_subgerm = {}
 
     for q in qubits:
         subgerm[q] = []
-        possibleops = pspec.clifford_ops_on_qubits[(q,)]   
-        for l in range(germlength[q]):
-            subgerm[q].append(possibleops[_np.random.randint(0, len(possibleops))])
-        
-        poweredsubgerm[q] = []
-        while len(poweredsubgerm[q]) < circleng:
-            poweredsubgerm[q] += subgerm[q]
-    
-    for l in range(circleng):
-        layer = [poweredsubgerm[q][l] for q in qubits]
-        #print(layer)
+        possibleops = pspec.clifford_ops_on_qubits[(q,)]
+        subgerm[q] = [possibleops[_np.random.randint(0, len(possibleops))] for l in range(subgerm_depth[q])]
+        repeated_subgerm[q] = (germ_depth // subgerm_depth[q]) * subgerm[q]
+
+    for l in range(germ_depth):
+        layer = [repeated_subgerm[q][l] for q in qubits]
         germcircuit.insert_layer(layer, 0)
-    
-    tempgermcircuit = germcircuit.copy()
+
+    #tempgermcircuit = germcircuit.copy()
     
     if interactingQs_density > 0:
     
-        assert(len(germcircuit) * len(qubits) * interactingQs_density * 0.5 >= 1)
+        assert(germ_depth * width * interactingQs_density >= 2)
         #while len(germcircuit) * len(qubits) * interactingQs_density * 0.5 < 1:
         #
         #    germcircuit.append_circuit(tempgermcircuit)
 
         #print(len(qubits))
-        num2Qtoadd = int(_np.floor(0.5 * len(germcircuit) * len(qubits) * interactingQs_density))
+        num2Qtoadd = int(_np.floor(germ_depth * width * interactingQs_density / 2))
         #print(num2Qtoadd)
 
         edgelistdict = {}
@@ -3226,22 +3246,23 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
             gdepth += 1
 
         while len(fullcircuit) > length:
-            fullcircuit.delete_layers(len(fullcircuit)-1)
+            fullcircuit.delete_layers(len(fullcircuit) - 1)
             
         circs.append(fullcircuit)
         germpowers.append(gdepth)
 
     
-    aux = {'germpowers': germpowers,
-           'germcircuit': germcircuit,
-           'subgermdepth': germlength,
+    aux = {'germ_powers': germpowers,
+           'germ_circuit': germcircuit,
+           'subgerm_depth': subgerm_depth,
+           'max_subgerm_depth': max_subgerm_depth
            }
         
     return circs, aux
 
 
 def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localclifford=True, paulirandomize=True, 
-                                     interactingQs_density=1/16):
+                                     interactingQs_density=1/4):
     """
     length : consistent with RB length.
     """
@@ -3335,7 +3356,7 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
 
 
 def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='edgegrab',
-                         samplerargs = [1/16],
+                         samplerargs = [1/4],
                          localclifford=True, paulirandomize=True,
                          descriptor=''):
 
@@ -3354,9 +3375,10 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     experiment_dict['circuits'] = {}
     experiment_dict['target'] = {}
-    experiment_dict['germcircuits'] = {}
-    experiment_dict['germpowers'] = {}
-    experiment_dict['subgermdepths'] = {}
+    experiment_dict['germ_circuits'] = {}
+    experiment_dict['germ_powers'] = {}
+    experiment_dict['subgerm_depths'] = {}
+    experiment_dict['max_subgerm_depth'] = {}
 
     circlist = {}
     outlist = {}
@@ -3377,9 +3399,10 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
 #             experiment_dict['target'][l, j] = iout
             experiment_dict['circuits'][lengths[lind], j] = circlist[j][lind]
             experiment_dict['target'][lengths[lind], j] = outlist[j][lind]
-            experiment_dict['germcircuits'][lengths[lind], j] = aux[j]['germcircuit']
-            experiment_dict['germpowers'][lengths[lind], j] = aux[j]['germpowers'][lind]
-            experiment_dict['subgermdepths'][lengths[lind], j] = aux[j]['subgermdepth']
+            experiment_dict['germ_circuits'][lengths[lind], j] = aux[j]['germ_circuit']
+            experiment_dict['germ_powers'][lengths[lind], j] = aux[j]['germ_powers'][lind]
+            experiment_dict['subgerm_depths'][lengths[lind], j] = aux[j]['subgerm_depth']
+            experiment_dict['max_subgerm_depth'][lengths[lind], j] = aux[j]['max_subgerm_depth']
 
     return experiment_dict
 
