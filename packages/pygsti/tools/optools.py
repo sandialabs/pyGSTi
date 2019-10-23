@@ -94,7 +94,11 @@ def fidelity(A, B):
 
     #if _np.array_equal(A, B): return 1.0  # HACK - some cases when A and B are perfecty equal sqrtm(A) fails...
     sqrtA = _hack_sqrtm(A)  # _spl.sqrtm(A)
-    assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) < 1e-8)  # test the scipy sqrtm function
+    #assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) < 1e-8)  # test the scipy sqrtm function - sometimes fails when rank defficient
+    if _np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) > 1e-8:
+        evals = _np.linalg.eigvals(A)
+        _warning.warn(("sqrtm(A) failure when computing fidelity - beware result. "
+                       "Maybe due to rank defficiency - eigenvalues of A are: %s") % evals)
     F = (_mt.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(B, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
     return float(F)
 
