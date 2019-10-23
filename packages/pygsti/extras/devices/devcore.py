@@ -30,12 +30,12 @@ import numpy as _np
 
 def _get_dev_specs(devname):
 
-    if devname == 'ibmq_melbourne' or 'ibmq_16_melbourne': dev = ibmq_melbourne
+    if devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
     elif devname == 'ibmq_ourense': dev = ibmq_ourense
     elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
     elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
     elif devname == 'ibmq_vigo': dev = ibmq_vigo
-    elif devname == 'ibmq_yorktown' or 'ibmqx2': dev = ibmq_yorktown
+    elif devname == 'ibmq_yorktown' or devname == 'ibmqx2': dev = ibmq_yorktown
     elif devname == 'rigetti_agave': dev = rigetti_agave
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
     elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
