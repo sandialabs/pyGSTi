@@ -20,6 +20,9 @@ from . import ibmq_ourense
 from . import ibmq_rueschlikon
 from . import ibmq_tenerife
 from . import ibmq_vigo
+from . import ibmq_essex
+from . import ibmq_burlington
+from . import ibmq_london
 from . import ibmq_yorktown
 from . import rigetti_agave
 from . import rigetti_aspen4
@@ -35,6 +38,9 @@ def _get_dev_specs(devname):
     elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
     elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
     elif devname == 'ibmq_vigo': dev = ibmq_vigo
+    elif devname == 'ibmq_essex': dev = ibmq_essex
+    elif devname == 'ibmq_burlington': dev = ibmq_burlington
+    elif devname == 'ibmq_london': dev = ibmq_london
     elif devname == 'ibmq_yorktown' or devname == 'ibmqx2': dev = ibmq_yorktown
     elif devname == 'rigetti_agave': dev = rigetti_agave
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
@@ -78,6 +84,7 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
     for edge in removeedges: del edgelist[edgelist.index(edge)]
 
     availability = {twoQgate: edgelist}
+    print(availability)
     pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
                                  construct_clifford_compilations=construct_clifford_compilations,
                                  verbosity=verbosity, qubit_labels=qubits)
