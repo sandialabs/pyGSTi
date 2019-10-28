@@ -29,7 +29,8 @@ MACH_PRECISION = 1e-12
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
-                   max_dx_scale=1.0, comm=None, verbosity=0, profiler=None):
+                   max_dx_scale=1.0, damping_clip=None, use_acceleration=False,
+                   uphill_step_threshold=0.0, comm=None, verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization
     algorithm customized for use within pyGSTi.  This general purpose routine
@@ -79,6 +80,29 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         If not None, impose a limit on the magnitude of the step, so that
         `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
         roughly, less than `max_dx_scale`).
+
+    damping_clip : tuple or None, optional
+        If None, then damping is additive (damping coefficient mu multiplies
+        the identity).  Otherwise, this should be a 2-tuple giving the
+        clipping that is applied to the diagonal terms of the approximate
+        Hessian (J^T*J) before they are scaled by mu.  For example, the value
+        is (1, 1e10) would allow for 10 orders of magnitude in Hessian
+        amplitudes, while (1, 1) would give additive damping (just like `None`).
+
+    use_acceleration : bool, optional
+        Whether to include a geodesic acceleration term as suggested in
+        arXiv:1201.5885.  This is supposed to increase the rate of
+        convergence with very little overhead.  In practice we've seen
+        mixed results.
+
+    uphill_step_threshold : float, optional
+        Allows uphill steps when taking two consecutive steps in nearly
+        the same direction.  The condition for accepting an uphill step
+        is that `(uphill_step_threshold-beta)*new_objective < old_objective`,
+        where `beta` is the cosine of the angle between successive steps.
+        If `uphill_step_threshold == 0` then no uphill steps are allowed,
+        otherwise it should take a value between 1.0 and 2.0, with 1.0 being
+        the most permissive to uphill steps.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -179,11 +203,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
             #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
             #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
-            scaleFctr = 1.0  # _np.linalg.norm(Jac)
-            Jac /= scaleFctr
-            f /= scaleFctr
-            #assert(_np.isfinite(Jac).all()), "Post-scaled non-finite Jacobian!" # NaNs tracking
-            #assert(_np.isfinite(_np.linalg.norm(Jac))), "Post-scaled Jacobian has inf norm!" # NaNs tracking
 
             tm = _time.time()
             if my_cols_slice is None:
@@ -211,39 +230,25 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 converged = True; break
 
             if k == 0:
-                #mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
-                #mu = tau # initial damping element
-                mu = 10000.0 # initial multiplicative damping element
-                #mu = min(mu, MU_TOL1)
+                if damping_clip is None:
+                    mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
+                else:
+                    #mu = tau # initial damping element
+                    mu = 10000.0 # initial multiplicative damping element
+                    #mu = min(mu, MU_TOL1)
 
-            nRejects = 0 #DEBUG
-            hack_next_iter = False #DEBUG
-            dx_has_been_hacked = True #DEBUG
-            MIN_JTJ_DIAG = 1.0
-            
             #determing increment using adaptive damping
             while True:  # inner loop
 
                 if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
-                #JTJ[idiag] += mu / scaleFctr**2  # augment normal equations
-                print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
-
-                #Use max JTJ diagonal elements seen so far
-                #current_JTJ_diag = JTJ.diagonal()
-                #indices_to_update = (current_JTJ_diag > max_JTJ_diag)
-                #max_JTJ_diag[indices_to_update] = current_JTJ_diag[indices_to_update]
-                #JTJ[idiag] = max_JTJ_diag
-
-                #OLD
-                #JTJ[idiag] *= (1.0 + mu) # augment normal equations
-                #clip_inds = JTJ.diagonal() < MIN_JTJ_DIAG
-                #JTJ[(idiag[0][clip_inds],idiag[1][clip_inds])] = MIN_JTJ_DIAG
-
-                add_to_diag = _np.clip(undamped_JTJ_diag.copy(), 1.0, 1e10) # allow for X orders of magnitude
-                add_to_diag *= mu
-                JTJ[idiag] = undamped_JTJ_diag + add_to_diag # augment normal equations - without clipping this is just *= (1.0 + mu), if entirely clipped this would be += CLIP*mu
-
-                print("DB: Post-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
+                #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
+                if damping_clip is None:
+                    JTJ[idiag] += mu  # augment normal equations
+                else:
+                    add_to_diag = mu * _np.clip(undamped_JTJ_diag.copy(), damping_clip[0], damping_clip[1])
+                    JTJ[idiag] = undamped_JTJ_diag + add_to_diag
+                    # augment normal equations - without clipping this is just *= (1.0 + mu), if entirely clipped this would be += CLIP*mu
+                #print("DB: Post-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
                 #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
@@ -254,32 +259,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     success = True
                     #dx = _np.linalg.solve(JTJ, -JTf)
                     #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym'
-                    dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
-
-                    #TEST
-                    if last_dx is not None: # and nRejects == 0:
-                        dotprod = _np.dot(dx,last_dx)/(_np.linalg.norm(dx)*_np.linalg.norm(last_dx))
-                        diff = dx - last_dx
-                        if last_diff is not None:
-                            dotprod2 = _np.dot(diff,last_diff)/(_np.linalg.norm(diff)*_np.linalg.norm(last_diff))
-                        else: dotprod2 = 0
-                        print("NEW DX! Dot with last = ", dotprod, "diff dot =",dotprod2)
-                        #if abs(dotprod) > 0.9 and _np.linalg.norm(dx-last_dx) < 1e-3:
-                        #    print("Moving in same direction we tried last time! - altering dx ******************************************")
-                            #import bpdb; bpdb.set_trace()
-                            #norm = _np.linalg.norm(dx)
-                            #accel_dir = (dx - last_dx)
-                            #dx += 10*accel_dir
-                            #dx *= norm/_np.linalg.norm(dx) #renormalize
-                        last_diff = diff
-                    last_dx = dx.copy()
-                                  
+                    dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)                                  
                     if profiler: profiler.add_time("custom_leastsq: linsolve", tm)
                 #except _np.linalg.LinAlgError:
                 except _scipy.linalg.LinAlgError:
                     success = False
 
-                use_acceleration = False
                 if success and use_acceleration: #Find acceleration term:
                     df2_eps = 1.0
                     df2_dx = df2_eps * dx
@@ -294,16 +279,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         # but ok to continue - just stick with first order term
                     except ValueError:
                         print("WARNING - value error during computation of acceleration term!")
-                else:
-                    dx1 = dx
-                    dx2 = _np.zeros(len(dx),'d')
                     
                 reject_msg = ""
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
-                    if hack_next_iter:
-                        dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
-                        dx_has_been_hacked = True
+                    #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
                     
                     new_x = x + dx
                     norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
@@ -319,11 +299,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
-                        if dx_has_been_hacked:
-                            msg = "Relative change in |x| is at most %g" % rel_xtol
-                            converged = True; break
-                        else:
-                            hack_next_iter = True
+                        msg = "Relative change in |x| is at most %g" % rel_xtol
+                        converged = True; break
 
                     if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
@@ -336,37 +313,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         new_x_is_allowed = False
                         #x = new_x; msg = "NO MANS LAND!"; converged=True; break  # TEST aborting at first out-of-bounds point
                         
-                        ##Binary search to find best |dx|
-                        #high = 1.0; low = 0.0; dx_orig = dx
-                        #while high-low > 0.1: # TOL??
-                        #    s = (high + low)/2.0
-                        #    dx = dx_orig * s
-                        #    new_x = x + dx
-                        #
-                        #    try:
-                        #        print("DB: Searching |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x), " s=",s)
-                        #        new_f = obj_fn(new_x)
-                        #        low = s
-                        #    except ValueError:
-                        #        high = s
-                        #
-                        ##Select "low" as the scaling
-                        #new_x_is_allowed = True
-                        #s = low
-                        #dx *= s
-                        #new_x = x + dx
-                        #norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2                        
-                        #new_f = obj_fn(new_x)
-                        #
-                        ##Test again for small norm_dx
-                        #if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
-                        #    msg = "Relative change in |x| is at most %g" % rel_xtol
-                        #    converged = True; break
-                        
-                    # DB: from ..tools import matrixtools as _mt
-                    # DB: print("DB XNEW (%s)=" % str(new_x.shape)); print(new_x)
-                    # DB: print("DB FNEW (%s)=" % str(new_f.shape)); print(new_f); assert(False)
-
                     if new_x_is_allowed:
                         
                         if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
@@ -374,82 +320,62 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         if not _np.isfinite(norm_new_f):  # avoid infinite loop...
                             msg = "Infinite norm of objective function!"; break
 
-                        #DEBUG: print out predictions
-                        def debug_regen_dx(mu_loc, max_diag=1e10):
-                            add_to_diag = _np.clip(undamped_JTJ_diag.copy(), 1.0, max_diag) # allow for X orders of magnitude
-                            add_to_diag *= mu_loc
-                            JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                            return _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
-                        def print_predictions(_dx, mu_loc, max_diag=1e10):
-                            loc_new_f = obj_fn(x + _dx)
-                            loc_norm_new_f = _np.dot(loc_new_f, loc_new_f)
-                            prediction1 = norm_f + _np.dot(2*JTf,_dx)
-                            Jdx = _np.dot(Jac,_dx)
-                            pred_f = f + Jdx
-                            prediction2 = _np.dot(pred_f,pred_f)
-                            prediction3 = prediction1 + _np.dot(Jdx,Jdx)
-                            loc_norm_dx = _np.sqrt(_np.dot(_dx,_dx))
-                            print("Candidate (max_diag=%g, mu=%g) |dx| = " % (max_diag,mu_loc),loc_norm_dx, " => ",loc_norm_new_f, \
-                                  "(predicted: ",prediction1, prediction2, prediction3, ")")
-                            #if prediction3 < loc_norm_new_f and loc_norm_new_f > norm_f and loc_norm_dx < 1e-9:
-                            #    import bpdb; bpdb.set_trace()
+                        #DEBUG: print out predictions TODO REMOVE
+                        #def debug_regen_dx(mu_loc, max_diag=1e10):
+                        #    add_to_diag = _np.clip(undamped_JTJ_diag.copy(), 1.0, max_diag) # allow for X orders of magnitude
+                        #    add_to_diag *= mu_loc
+                        #    JTJ[idiag] = undamped_JTJ_diag + add_to_diag
+                        #    return _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+                        #def print_predictions(_dx, mu_loc, max_diag=1e10):
+                        #    loc_new_f = obj_fn(x + _dx)
+                        #    loc_norm_new_f = _np.dot(loc_new_f, loc_new_f)
+                        #    prediction1 = norm_f + _np.dot(2*JTf,_dx)
+                        #    Jdx = _np.dot(Jac,_dx)
+                        #    pred_f = f + Jdx
+                        #    prediction2 = _np.dot(pred_f,pred_f)
+                        #    prediction3 = prediction1 + _np.dot(Jdx,Jdx)
+                        #    loc_norm_dx = _np.sqrt(_np.dot(_dx,_dx))
+                        #    print("Candidate (max_diag=%g, mu=%g) |dx| = " % (max_diag,mu_loc),loc_norm_dx, " => ",loc_norm_new_f, \
+                        #          "(predicted: ",prediction1, prediction2, prediction3, ")")
+                        #
+                        #print("Undamped JTJ diag els in [%g,%g]" % (_np.min(undamped_JTJ_diag), _np.max(undamped_JTJ_diag)))
+                        #print_predictions(dx, mu)
+                        ##print_predictions(debug_regen_dx(mu/10), mu/10)
+                        ##print_predictions(debug_regen_dx(mu/100), mu/100)
+                        ##print_predictions(debug_regen_dx(mu/1000), mu/1000)
+                        #
+                        #print_predictions(debug_regen_dx(mu*1e2, 1e8), mu*1e2, 1e8)
+                        #print_predictions(debug_regen_dx(mu*1e4, 1e6), mu*1e4, 1e6)
+                        #print_predictions(debug_regen_dx(mu*1e6, 1e4), mu*1e6, 1e4)
 
-                        print("Undamped JTJ diag els in [%g,%g]" % (_np.min(undamped_JTJ_diag), _np.max(undamped_JTJ_diag)))
-                        print_predictions(dx, mu)
-                        #print_predictions(debug_regen_dx(mu/10), mu/10)
-                        #print_predictions(debug_regen_dx(mu/100), mu/100)
-                        #print_predictions(debug_regen_dx(mu/1000), mu/1000)
-
-                        print_predictions(debug_regen_dx(mu*1e2, 1e8), mu*1e2, 1e8)
-                        print_predictions(debug_regen_dx(mu*1e4, 1e6), mu*1e4, 1e6)
-                        print_predictions(debug_regen_dx(mu*1e6, 1e4), mu*1e6, 1e4)
-
-    
                         dL = _np.dot(dx, mu * dx - JTf)  # expected decrease in ||F||^2 from linear model
                         dF = norm_f - norm_new_f      # actual decrease in ||F||^2
-                        accel_ratio = 2 * _np.linalg.norm(dx2) / _np.linalg.norm(dx1)
-                        beta = 0 if last_accepted_dx is None else \
-                            _np.dot(dx,last_accepted_dx)/(_np.linalg.norm(dx)*_np.linalg.norm(last_accepted_dx))
-                        uphill_ok = False if dF > 0 else (1.5-beta)*norm_new_f < min(min_norm_f, norm_f)
-    
-                        printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" %
+
+                        if dF <= 0 and uphill_step_threshold > 0:
+                            beta = 0 if last_accepted_dx is None else \
+                                _np.dot(dx,last_accepted_dx)/(_np.linalg.norm(dx)*_np.linalg.norm(last_accepted_dx))
+                            uphill_ok = (uphill_step_threshold-beta)*norm_new_f < min(min_norm_f, norm_f)
+                        else:
+                            uphill_ok = False
+
+                        if use_acceleration:
+                            accel_ratio = 2 * _np.linalg.norm(dx2) / _np.linalg.norm(dx1)
+                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" %
                                     (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
+
+                        else:
+                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
+                                        (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
+                            accel_ratio = 0.0
     
                         if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
-                            if dx_has_been_hacked:
-                                msg = "Both actual and predicted relative reductions in the" + \
-                                    " sum of squares are at most %g" % rel_ftol
-                                converged = True; break
-                            else:
-                                hack_next_iter = True
+                            msg = "Both actual and predicted relative reductions in the" + \
+                                " sum of squares are at most %g" % rel_ftol
+                            converged = True; break
                             
                         if profiler: profiler.mem_check("custom_leastsq: before success")
     
-                        if (dL > 0 and dF > 0 and accel_ratio <= alpha and not hack_next_iter) or uphill_ok:
-                            ##HACK: search to find best |dx|
-                            #if norm_dx < 1e-6:
-                            #    dx_orig = dx.copy()
-                            #    best_s = 1.0; best_normf = norm_f; best_f = new_f
-                            #    for s in (2.0,10.0,100.0,1000.0):
-                            #        new_x = x + s*dx
-                            #        new_f = obj_fn(new_x)
-                            #        new_normf = _np.dot(new_f,new_f)
-                            #        print("DB: Searching |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x), " s=",s, "==>", new_normf)
-                            #        if new_normf < best_normf:
-                            #            best_s = s
-                            #            best_f = new_f
-                            #            best_normf = new_normf
-                            #    
-                            #    #Select "low" as the scaling
-                            #    print("DB: Best scaling = ",best_s)
-                            #    dx *= best_s
-                            #    new_x = x + dx
-                            #    norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2                        
-                            #    new_f = best_f
-                            #    norm_new_f = best_normf
-                            #    dL = _np.dot(dx, mu * dx - JTf)
-                            #    dF = norm_f - norm_new_f
-                            
+                        if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
                             # reduction in error: increment accepted!
                             t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
                             mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3 # always reduce mu for accepted step when |dx| is small
@@ -461,10 +387,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             last_accepted_dx = dx.copy()
                             min_norm_f = min(min_norm_f, norm_f)
 
-                            #SIMPLE mu *= 0.5
-                            #printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
-                            #            % (dF / dL, 0.5, mu), 2)
-    
                             #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                             #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
     
@@ -476,7 +398,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     
                             break  # exit inner loop normally
 
-                        #TEST - update Jac w/rank1 term given info from failed evaluation
+                        #TEST TODO REMOVE - update Jac w/rank1 term given info from failed evaluation
                         #else:
                         #    if _np.sqrt(norm_dx) < 0.1:
                         #        print("DB: updating jac w/rank1")
@@ -501,7 +423,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 # if this point is reached, either the linear solve failed
                 # or the error did not reduce.  In either case, reject increment.
 
-                #SIMPLE: mu *= 3.0
                 #Increase damping (mu), then increase damping factor to
                 # accelerate further damping increases.
                 mu *= nu
@@ -510,7 +431,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 nu = 2 * nu
                 printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
                             % (reject_msg,mu, nu), 2)
-                nRejects += 1
 
                 JTJ[idiag] = undamped_JTJ_diag  # restore diagonal
             #end of inner loop
