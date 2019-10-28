@@ -1700,7 +1700,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
 
         #Check how many failures the final model has (using the *same* path integrals)
         nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit) # uses "locked in" paths
-        printer.log("%sTerm-stage %d final model has %d failures" % (final_prefix, sub_iter+1, nFailures))
+        printer.log("%sTerm-stage %d final model has %d failures" % ("", sub_iter+1, nFailures)) # final_prefix
         #import sys; sys.exit()
         
         if nFailures <= MAX_NUM_FAILURES: # termgap_penalty < 0.0002: #
@@ -2708,8 +2708,10 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         #    return ret1
 
     else:
+        #Create a termgap-penalizable objective function in termgap case
+        termgap_penalty_factor = 1.0 if mdl.simtype == "termgap" else 0
         objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
+                                         spam_penalty_factor, termgap_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
                                          probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
                                          shiftFctr, check, comm, profiler, printer)
 

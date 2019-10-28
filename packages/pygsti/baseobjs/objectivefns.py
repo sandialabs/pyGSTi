@@ -180,7 +180,6 @@ class Chi2Function(ObjectiveFunction):
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
         termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
-        #SOFT = 0.00 #self.termgap_penalty_factor # 0.0001
         #print("Termgap abs max = ",max(_np.abs(termgap_penalty)))
 
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
@@ -197,7 +196,10 @@ class Chi2Function(ObjectiveFunction):
             self.update_v_for_omitted_probs(v_plus, p_plus)
             self.update_v_for_omitted_probs(v_minus, p_minus)
 
+        #a = self.termgap_penalty_factor
         v = _np.sqrt(v_plus**2 + v_minus**2)
+        #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
+        #v += _np.sqrt(v_plus**2 + v_minus**2); v /= 2
 
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
@@ -360,8 +362,11 @@ class Chi2Function(ObjectiveFunction):
             self.update_v_for_omitted_probs(v_plus, p_plus)
             self.update_v_for_omitted_probs(v_minus, p_minus)
 
-        #SUM of squares mode: for sqrt(v1**2 + v2**2) -> deriv = 1.0/sqrt(...) *(v1*dv1 + v2*dv2)
+        #SUM of squares mode: for sqrt(v_plus**2 + v_minus**2) -> deriv = 1.0/sqrt(...) *(v1*dv1 + v2*dv2)
+        #a = self.termgap_penalty_factor
         v = _np.sqrt(v_plus**2 + v_minus**2)
+        #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
+        #v += _np.sqrt(v_plus**2 + v_minus**2); v /= 2
 
         dprobs_plus = dprobs + jac_termgap_penalty
         dprobs_minus = dprobs - jac_termgap_penalty
@@ -375,15 +380,18 @@ class Chi2Function(ObjectiveFunction):
                 dprobs_plus_omitted_rowsum[ii, :] = _np.sum(dprobs_plus[self.lookup[i], :], axis=0)
                 dprobs_minus_omitted_rowsum[ii, :] = _np.sum(dprobs_minus[self.lookup[i], :], axis=0)
 
-        dprobs_plus *= (weights_plus + (p_plus - self.f) * self.get_dweights(p_plus, weights_plus))[:, None] # now dv1
-        dprobs_minus *= (weights_minus + (p_minus - self.f) * self.get_dweights(p_minus, weights_minus))[:, None] # now dv2
+        dprobs_plus *= (weights_plus + (p_plus - self.f) * self.get_dweights(p_plus, weights_plus))[:, None] # now dv_plus
+        dprobs_minus *= (weights_minus + (p_minus - self.f) * self.get_dweights(p_minus, weights_minus))[:, None] # now dv_minus
         dprobs[:,:] = (1.0/_np.sqrt(v_plus**2+v_minus**2))[:,None] \
             * (v_plus[:,None]*dprobs_plus + v_minus[:,None]*dprobs_minus)
+        #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
+        #dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None] # now dv
+        #dprobs[:,:] = 0.5*(dprobs + (1.0/_np.sqrt(v_plus**2+v_minus**2))[:,None] \
+        #    * (v_plus[:,None]*dprobs_plus + v_minus[:,None]*dprobs_minus))
         
         # (KM,N) * (KM,1)   (N = dim of vectorized model)
         # this multiply also computes jac, which is just dprobs
         # with a different shape (jac.shape == [KM,vec_gs_len])
-        #print("DB: JAC norm = ",_np.linalg.norm(dprobs)," w/out termgap=",_np.linalg.norm(cmp_dprobs))
 
         if self.firsts is not None:
             self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
@@ -704,9 +712,9 @@ class TimeDependentChi2Function(ObjectiveFunction):
 class LogLFunction(ObjectiveFunction):
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                 spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval, wrtBlkSize,
-                 gthrMem, forcefn_grad, poissonPicture, shiftFctr=100,
-                 check=False, comm=None, profiler=None, verbosity=0):
+                 spam_penalty_factor, termgap_penalty_factor, cntVecMx, totalCntVec, minProbClip,
+                 radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
+                 shiftFctr=100, check=False, comm=None, profiler=None, verbosity=0):
         from .. import tools as _tools
 
         self.mdl = mdl
@@ -789,8 +797,15 @@ class LogLFunction(ObjectiveFunction):
             #index to jacobian row of first forcing term
 
         if poissonPicture:
-            self.fn = self.poisson_picture_logl
-            self.jfn = self.poisson_picture_jacobian
+            if termgap_penalty_factor != 0:
+                assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
+                assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
+                assert(self.forcefn_grad is None), "Cannot use force functions with termgap_penalty_factor"
+                self.fn = self.termgap_poisson_picture_logl
+                self.jfn = self.termgap_poisson_picture_jacobian
+            else:
+                self.fn = self.poisson_picture_logl
+                self.jfn = self.poisson_picture_jacobian
         else:
             self.fn = None
             self.jfn = None
@@ -957,6 +972,130 @@ class LogLFunction(ObjectiveFunction):
                                       tol=1e-3, eps=1e-6, errType='abs')
         self.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
+
+    def _termgap_v2_from_probs(self, probs, S, S2):
+        pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
+        v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs) + self.totalCntVec * \
+            pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+        v = _np.maximum(v, 0)
+        
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(probs < self.min_p, v + S * (probs - self.min_p) + S2 * (probs - self.min_p)**2, v)
+        v = _np.where(self.minusCntVecMx == 0,
+                      self.totalCntVec * _np.where(probs >= self.a,
+                                                   probs,
+                                                   (-1.0 / (3 * self.a**2)) * probs**3 + probs**2 / self.a
+                                                   + self.a / 3.0),
+                      v)
+        # special handling for f == 0 terms
+        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+
+        if self.firsts is not None:
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
+                                             for i in self.indicesOfCircuitsWithOmittedData])
+            v[self.firsts] += self.totalCntVec[self.firsts] * \
+                _np.where(omitted_probs >= self.a, omitted_probs,
+                          (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
+            
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        return v
+
+    def _termgap_dv2_from_dprobs(self, dprobs, probs, S, S2):
+        """Note: this function computes dv2 *in-place* using the memory of `dprobs` """
+        pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
+        dprobs_factor_pos = self.minusCntVecMx / pos_probs + self.totalCntVec
+        dprobs_factor_neg = S + 2 * S2 * (probs - self.min_p)
+        dprobs_factor_zerofreq = self.totalCntVec * _np.where(probs >= self.a,
+                                                              1.0, (-1.0 / self.a**2) * probs**2
+                                                              + 2 * probs / self.a)
+        dprobs_factor = _np.where(probs < self.min_p, dprobs_factor_neg, dprobs_factor_pos)
+        dprobs_factor = _np.where(self.minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
+
+        if self.firsts is not None:  # Note -1 factor in below compared to above
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
+                                             for i in self.indicesOfCircuitsWithOmittedData])
+            dprobs_factor_omitted =  self.totalCntVec[self.firsts] \
+                * _np.where(omitted_probs >= self.a,
+                            -1.0, (1.0 / self.a**2) * omitted_probs**2 - 2 * omitted_probs / self.a)
+
+            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+
+        dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        #Note: this also sets jac[0:KM,:]
+
+        # need to multipy dprobs_factor_omitted[i] * dprobs[k] for k in lookup[i] and
+        # add to dprobs[firsts[i]] for i in indicesOfCircuitsWithOmittedData
+        if self.firsts is not None:
+            dprobs[self.firsts, :] += dprobs_factor_omitted[:, None] * self.dprobs_omitted_rowsum
+            # nCircuitsWithOmittedData x N
+            
+        return dprobs
+
+
+    def termgap_poisson_picture_logl(self, vectorGS):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
+                                 self.check, self.comm)
+        S = self.minusCntVecMx / self.min_p + self.totalCntVec
+        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
+
+        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        p_plus = self.probs + termgap_penalty
+        p_minus = self.probs - termgap_penalty
+        
+        #v2 = self._termgap_v2_from_probs(self.probs, S, S2)
+        v2_plus = self._termgap_v2_from_probs(p_plus, S, S2)
+        v2_minus = self._termgap_v2_from_probs(p_minus, S, S2)
+
+        v = _np.sqrt(v2_plus + v2_minus)
+
+        self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+                  # sqrt is well defined unless probClipInterval is set within [0,1].
+
+    def termgap_poisson_picture_jacobian(self, vectorGS):
+        tm = _time.time()
+        dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.KM, self.vec_gs_len)
+        S = self.minusCntVecMx / self.min_p + self.totalCntVec
+        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
+
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
+                                  check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
+                                  profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        jac_termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
+        p_plus = self.probs + termgap_penalty
+        p_minus = self.probs - termgap_penalty
+        
+        #v2 = self._termgap_v2_from_probs(self.probs, S, S2)
+        v2_plus = self._termgap_v2_from_probs(p_plus, S, S2)
+        v2_minus = self._termgap_v2_from_probs(p_minus, S, S2)
+
+        v = _np.sqrt(v2_plus + v2_minus)
+        #Deriv is 0.5/v * ( deriv(v2_plus) + deriv(v2_minus)
+
+        v = _np.maximum(v, 1e-100)
+        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
+        # below
+
+        dprobs_plus = dprobs + jac_termgap_penalty
+        dprobs_minus = dprobs - jac_termgap_penalty
+        dv2_plus = self._termgap_dv2_from_dprobs(dprobs_plus, p_plus, S, S2)
+        dv2_minus = self._termgap_dv2_from_dprobs(dprobs_minus, p_minus, S, S2)
+        self.jac[:,:] = (0.5 / v[:,None]) * (dv2_plus + dv2_minus)
+
+        if self.check: _opt.check_jac(lambda v: self.termgap_poisson_picture_logl(v), vectorGS, self.jac,
+                                      tol=1e-3, eps=1e-6, errType='abs')
+        self.profiler.add_time("do_mlgst: JACOBIAN", tm)
+        return self.jac
+
+
 
 
 class TimeDependentLogLFunction(ObjectiveFunction):
