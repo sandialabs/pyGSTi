@@ -110,6 +110,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     norm_f = _np.dot(f, f)  # _np.linalg.norm(f)**2
     half_max_nu = 2**62  # what should this be??
     tau = 1e-3
+    alpha = 0.5  # for acceleration
     nu = 2
     mu = 0  # initialized on 1st iter
     my_cols_slice = None
@@ -126,6 +127,9 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
     # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
+    dx = None; last_dx = None; last_diff = None #DEBUG
+    last_accepted_dx = None # zeros might work?
+    min_norm_f = 1e100  #sentinel
     try:
 
         for k in range(max_iter):  # outer loop
@@ -198,7 +202,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             idiag = _np.diag_indices_from(JTJ)
             norm_JTf = _np.linalg.norm(JTf, ord=_np.inf)
             norm_x = _np.dot(x, x)  # _np.linalg.norm(x)**2
-            undampled_JTJ_diag = JTJ.diagonal().copy()
+            undamped_JTJ_diag = JTJ.diagonal().copy()
+            #max_JTJ_diag = JTJ.diagonal().copy()
             #printer.log("PT6: %.3fs" % (_time.time()-t0)) # REMOVE
 
             if norm_JTf < jac_norm_tol:
@@ -206,19 +211,39 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 converged = True; break
 
             if k == 0:
+                #mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
                 #mu = tau # initial damping element
-                mu = tau * _np.max(undampled_JTJ_diag)  # initial damping element
+                mu = 10000.0 # initial multiplicative damping element
                 #mu = min(mu, MU_TOL1)
 
             nRejects = 0 #DEBUG
-            bManual = False #DEBUG
+            hack_next_iter = False #DEBUG
+            dx_has_been_hacked = True #DEBUG
+            MIN_JTJ_DIAG = 1.0
             
             #determing increment using adaptive damping
             while True:  # inner loop
 
                 if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
-                JTJ[idiag] += mu / scaleFctr**2  # augment normal equations
+                #JTJ[idiag] += mu / scaleFctr**2  # augment normal equations
+                print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
+
+                #Use max JTJ diagonal elements seen so far
+                #current_JTJ_diag = JTJ.diagonal()
+                #indices_to_update = (current_JTJ_diag > max_JTJ_diag)
+                #max_JTJ_diag[indices_to_update] = current_JTJ_diag[indices_to_update]
+                #JTJ[idiag] = max_JTJ_diag
+
+                #OLD
                 #JTJ[idiag] *= (1.0 + mu) # augment normal equations
+                #clip_inds = JTJ.diagonal() < MIN_JTJ_DIAG
+                #JTJ[(idiag[0][clip_inds],idiag[1][clip_inds])] = MIN_JTJ_DIAG
+
+                add_to_diag = _np.clip(undamped_JTJ_diag.copy(), 1.0, 1e10) # allow for X orders of magnitude
+                add_to_diag *= mu
+                JTJ[idiag] = undamped_JTJ_diag + add_to_diag # augment normal equations - without clipping this is just *= (1.0 + mu), if entirely clipped this would be += CLIP*mu
+
+                print("DB: Post-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
                 #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
@@ -230,79 +255,55 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #dx = _np.linalg.solve(JTJ, -JTf)
                     #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym'
                     dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+
+                    #TEST
+                    if last_dx is not None: # and nRejects == 0:
+                        dotprod = _np.dot(dx,last_dx)/(_np.linalg.norm(dx)*_np.linalg.norm(last_dx))
+                        diff = dx - last_dx
+                        if last_diff is not None:
+                            dotprod2 = _np.dot(diff,last_diff)/(_np.linalg.norm(diff)*_np.linalg.norm(last_diff))
+                        else: dotprod2 = 0
+                        print("NEW DX! Dot with last = ", dotprod, "diff dot =",dotprod2)
+                        #if abs(dotprod) > 0.9 and _np.linalg.norm(dx-last_dx) < 1e-3:
+                        #    print("Moving in same direction we tried last time! - altering dx ******************************************")
+                            #import bpdb; bpdb.set_trace()
+                            #norm = _np.linalg.norm(dx)
+                            #accel_dir = (dx - last_dx)
+                            #dx += 10*accel_dir
+                            #dx *= norm/_np.linalg.norm(dx) #renormalize
+                        last_diff = diff
+                    last_dx = dx.copy()
+                                  
                     if profiler: profiler.add_time("custom_leastsq: linsolve", tm)
                 #except _np.linalg.LinAlgError:
                 except _scipy.linalg.LinAlgError:
                     success = False
 
+                use_acceleration = False
+                if success and use_acceleration: #Find acceleration term:
+                    df2_eps = 1.0
+                    df2_dx = df2_eps * dx
+                    try:
+                        df2 = (obj_fn(x+df2_dx) + obj_fn(x-df2_dx) - 2*f) / df2_eps**2  #2nd deriv of f along dx direction
+                        JTdf2 = _np.dot(Jac.T, df2)
+                        dx2 = _scipy.linalg.solve(JTJ, -0.5*JTdf2, sym_pos=True)
+                        dx1 = dx.copy()
+                        dx += dx2  # add acceleration term to dx
+                    except _scipy.linalg.LinAlgError:
+                        print("WARNING - linear solve failed for acceleration term!")
+                        # but ok to continue - just stick with first order term
+                    except ValueError:
+                        print("WARNING - value error during computation of acceleration term!")
+                else:
+                    dx1 = dx
+                    dx2 = _np.zeros(len(dx),'d')
+                    
                 reject_msg = ""
                 if profiler: profiler.mem_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
-
-                    #HACK
-                    #if nRejects >= 2:
-                    #    dx = -(10.0**(1-nRejects))*x
-                    #    print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
-
-                    #HACK2
-                    if bManual:# or mu > 1e5:
-                        print("HACK - trying to find a good dx manually...")
-                        #import bpdb; bpdb.set_trace()
-                        gradient = -JTf
-                        test_dx = _np.zeros(len(dx),'d')
-                        last_normf = norm_f
-                        for ii in range(len(dx)):
-
-                            #Try adding
-                            while True:
-                                test_dx[ii] += 0.001
-                                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                                if test_normf < last_normf:
-                                    last_normf = test_normf
-                                else:
-                                    test_dx[ii] -= 0.001
-                                    break
-                                
-                            if test_dx[ii] == 0: #then try subtracting
-                                while True:
-                                    test_dx[ii] -= 0.001
-                                    test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                                    if test_normf < last_normf:
-                                        last_normf = test_normf
-                                    else:
-                                        test_dx[ii] += 0.001
-                                        break
-                                    
-                            if abs(test_dx[ii]) > 1e-6:
-                                test_prediction = norm_f + _np.dot(-2*JTf,test_dx)
-                                cmp_dx = -JTf
-                                print(" -> Adjusting index ",ii,"by",test_dx[ii]," => ",last_normf, "(cmp w/dx: ",
-                                      cmp_dx[ii], test_prediction, ") ", "YES" if test_dx[ii]*cmp_dx[ii] > 0 else "NO")
-                                
-                            #if test_normf < norm_f:
-                            #    dx = test_dx
-                            #    mu = 1e9
-                            #    break
-                            
-                        if _np.linalg.norm(test_dx) > 0:
-                            dx[:] = test_dx[:]
-                            #last_normf = test_normf
-                            #while True:
-                            #    test_dx *= 2
-                            #    test_f = obj_fn(x + test_dx)
-                            #    test_normf = _np.dot(test_f, test_f)
-                            #    if test_normf < last_normf:
-                            #        dx[:] = test_dx[:]
-                            #    else:
-                            #        break
-                            print("FOUND HACK dx w/norm = ",_np.linalg.norm(dx))
-                            mu = 1e9
-
-                    #HACK3
-                    #if mu > 1e10:
-                    #    for ii in range(len(dx)):
-                    #        if abs(dx[ii]) > abs(x[ii]) and dx[ii]*x[ii] < 0:
-                    #            dx[ii] = -x[ii] # just move to zero...
+                    if hack_next_iter:
+                        dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
+                        dx_has_been_hacked = True
                     
                     new_x = x + dx
                     norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
@@ -318,11 +319,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
-                        if bManual:
+                        if dx_has_been_hacked:
                             msg = "Relative change in |x| is at most %g" % rel_xtol
                             converged = True; break
                         else:
-                            bManual = True
+                            hack_next_iter = True
 
                     if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
@@ -367,35 +368,102 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     # DB: print("DB FNEW (%s)=" % str(new_f.shape)); print(new_f); assert(False)
 
                     if new_x_is_allowed:
+                        
                         if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
                         norm_new_f = _np.dot(new_f, new_f)  # _np.linalg.norm(new_f)**2
                         if not _np.isfinite(norm_new_f):  # avoid infinite loop...
                             msg = "Infinite norm of objective function!"; break
+
+                        #DEBUG: print out predictions
+                        def debug_regen_dx(mu_loc, max_diag=1e10):
+                            add_to_diag = _np.clip(undamped_JTJ_diag.copy(), 1.0, max_diag) # allow for X orders of magnitude
+                            add_to_diag *= mu_loc
+                            JTJ[idiag] = undamped_JTJ_diag + add_to_diag
+                            return _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+                        def print_predictions(_dx, mu_loc, max_diag=1e10):
+                            loc_new_f = obj_fn(x + _dx)
+                            loc_norm_new_f = _np.dot(loc_new_f, loc_new_f)
+                            prediction1 = norm_f + _np.dot(2*JTf,_dx)
+                            Jdx = _np.dot(Jac,_dx)
+                            pred_f = f + Jdx
+                            prediction2 = _np.dot(pred_f,pred_f)
+                            prediction3 = prediction1 + _np.dot(Jdx,Jdx)
+                            loc_norm_dx = _np.sqrt(_np.dot(_dx,_dx))
+                            print("Candidate (max_diag=%g, mu=%g) |dx| = " % (max_diag,mu_loc),loc_norm_dx, " => ",loc_norm_new_f, \
+                                  "(predicted: ",prediction1, prediction2, prediction3, ")")
+                            #if prediction3 < loc_norm_new_f and loc_norm_new_f > norm_f and loc_norm_dx < 1e-9:
+                            #    import bpdb; bpdb.set_trace()
+
+                        print("Undamped JTJ diag els in [%g,%g]" % (_np.min(undamped_JTJ_diag), _np.max(undamped_JTJ_diag)))
+                        print_predictions(dx, mu)
+                        #print_predictions(debug_regen_dx(mu/10), mu/10)
+                        #print_predictions(debug_regen_dx(mu/100), mu/100)
+                        #print_predictions(debug_regen_dx(mu/1000), mu/1000)
+
+                        print_predictions(debug_regen_dx(mu*1e2, 1e8), mu*1e2, 1e8)
+                        print_predictions(debug_regen_dx(mu*1e4, 1e6), mu*1e4, 1e6)
+                        print_predictions(debug_regen_dx(mu*1e6, 1e4), mu*1e6, 1e4)
+
     
                         dL = _np.dot(dx, mu * dx - JTf)  # expected decrease in ||F||^2 from linear model
                         dF = norm_f - norm_new_f      # actual decrease in ||F||^2
+                        accel_ratio = 2 * _np.linalg.norm(dx2) / _np.linalg.norm(dx1)
+                        beta = 0 if last_accepted_dx is None else \
+                            _np.dot(dx,last_accepted_dx)/(_np.linalg.norm(dx)*_np.linalg.norm(last_accepted_dx))
+                        uphill_ok = False if dF > 0 else (1.5-beta)*norm_new_f < min(min_norm_f, norm_f)
     
-                        printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
-                                    (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
+                        printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" %
+                                    (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
     
-                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
-                            if bManual:
+                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
+                            if dx_has_been_hacked:
                                 msg = "Both actual and predicted relative reductions in the" + \
                                     " sum of squares are at most %g" % rel_ftol
                                 converged = True; break
                             else:
-                                bManual = True
-    
+                                hack_next_iter = True
+                            
                         if profiler: profiler.mem_check("custom_leastsq: before success")
     
-                        if dL > 0 and dF > 0:
+                        if (dL > 0 and dF > 0 and accel_ratio <= alpha and not hack_next_iter) or uphill_ok:
+                            ##HACK: search to find best |dx|
+                            #if norm_dx < 1e-6:
+                            #    dx_orig = dx.copy()
+                            #    best_s = 1.0; best_normf = norm_f; best_f = new_f
+                            #    for s in (2.0,10.0,100.0,1000.0):
+                            #        new_x = x + s*dx
+                            #        new_f = obj_fn(new_x)
+                            #        new_normf = _np.dot(new_f,new_f)
+                            #        print("DB: Searching |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x), " s=",s, "==>", new_normf)
+                            #        if new_normf < best_normf:
+                            #            best_s = s
+                            #            best_f = new_f
+                            #            best_normf = new_normf
+                            #    
+                            #    #Select "low" as the scaling
+                            #    print("DB: Best scaling = ",best_s)
+                            #    dx *= best_s
+                            #    new_x = x + dx
+                            #    norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2                        
+                            #    new_f = best_f
+                            #    norm_new_f = best_normf
+                            #    dL = _np.dot(dx, mu * dx - JTf)
+                            #    dF = norm_f - norm_new_f
+                            
                             # reduction in error: increment accepted!
                             t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
-                            mu *= max(t, 1.0 / 3.0)
+                            mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3 # always reduce mu for accepted step when |dx| is small
+                            mu *= mu_factor
                             nu = 2
                             x, f, norm_f = new_x, new_f, norm_new_f
-                            printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
-                                        % (dF / dL, max(t, 1.0 / 3.0), mu), 2)
+                            printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
+                                        % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
+                            last_accepted_dx = dx.copy()
+                            min_norm_f = min(min_norm_f, norm_f)
+
+                            #SIMPLE mu *= 0.5
+                            #printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
+                            #            % (dF / dL, 0.5, mu), 2)
     
                             #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                             #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
@@ -407,6 +475,21 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
     
                             break  # exit inner loop normally
+
+                        #TEST - update Jac w/rank1 term given info from failed evaluation
+                        #else:
+                        #    if _np.sqrt(norm_dx) < 0.1:
+                        #        print("DB: updating jac w/rank1")
+                        #        delta_f = (new_f - f) - _np.dot(Jac,dx)  # df_actual - df_expected_from_Jac
+                        #        Jac -= 0.1 * _np.outer(delta_f,dx) / norm_dx
+                        #        Jnorm = _np.linalg.norm(Jac)
+                        #        JTJ = _mpit.mpidot(Jac.T, Jac, my_cols_slice, comm)  # _np.dot(Jac.T,Jac)
+                        #        JTf = _np.dot(Jac.T, f)
+                        #        norm_JTf = _np.linalg.norm(JTf, ord=_np.inf)
+                        #        undamped_JTJ_diag = JTJ.diagonal().copy()
+                        #        mu *= 1/3.0 # so mu stays level when updating J
+                        #        print("DB: new |J| = ",Jnorm)
+                            
                     else:
                         reject_msg = " (No man's land)"
                         #printer.log("    NO MANS LAND!!", 2)
@@ -418,6 +501,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 # if this point is reached, either the linear solve failed
                 # or the error did not reduce.  In either case, reject increment.
 
+                #SIMPLE: mu *= 3.0
                 #Increase damping (mu), then increase damping factor to
                 # accelerate further damping increases.
                 mu *= nu
@@ -428,7 +512,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             % (reject_msg,mu, nu), 2)
                 nRejects += 1
 
-                JTJ[idiag] = undampled_JTJ_diag  # restore diagonal
+                JTJ[idiag] = undamped_JTJ_diag  # restore diagonal
             #end of inner loop
 
             #printer.log("PT7: %.3fs" % (_time.time()-t0)) # REMOVE
@@ -457,6 +541,118 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     #solution.success = converged
     #solution.message = msg
     #return solution
+
+
+def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
+    #HACK1
+    #if nRejects >= 2:
+    #    dx = -(10.0**(1-nRejects))*x
+    #    print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
+    #    return dx
+
+    #HACK2
+    if True:
+        print("HACK2 - trying to find a good dx by iteratively stepping in each direction...")
+    
+        test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
+        print("Compare with suggested step => ",cmp_normf)
+        STEP = 0.0001
+        
+        #import bpdb; bpdb.set_trace()
+        gradient = -JTf
+        test_dx = _np.zeros(len(dx),'d')
+        last_normf = norm_f
+        for ii in range(len(dx)):
+    
+            #Try adding
+            while True:
+                test_dx[ii] += STEP
+                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
+                if test_normf < last_normf:
+                    last_normf = test_normf
+                else:
+                    test_dx[ii] -= STEP
+                    break
+                
+            if test_dx[ii] == 0: #then try subtracting
+                while True:
+                    test_dx[ii] -= STEP
+                    test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
+                    if test_normf < last_normf:
+                        last_normf = test_normf
+                    else:
+                        test_dx[ii] += STEP
+                        break
+                    
+            if abs(test_dx[ii]) > 1e-6:
+                test_prediction = norm_f + _np.dot(-2*JTf,test_dx)
+                tp2_f = f + _np.dot(Jac,test_dx)
+                test_prediction2 = _np.dot(tp2_f,tp2_f)
+                cmp_dx = dx #-JTf
+                print(" -> Adjusting index ",ii,":",x[ii], "+", test_dx[ii]," => ",last_normf, "(cmp w/dx: ",
+                      cmp_dx[ii], test_prediction, test_prediction2, ") ", "YES" if test_dx[ii]*cmp_dx[ii] > 0 else "NO")
+                
+        if _np.linalg.norm(test_dx) > 0 and last_normf < cmp_normf:
+            print("FOUND HACK dx w/norm = ",_np.linalg.norm(test_dx))
+            return test_dx
+        else:
+            print("KEEPING ORIGINAL dx")                        
+            
+    #HACK3
+    if False:
+        print("HACK3 - checking if there's a simple dx that is better...")
+        test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
+        orig_prediction = norm_f + _np.dot(2*JTf,dx)
+        Jdx = _np.dot(Jac,dx)
+        op2_f = f + Jdx
+        orig_prediction2 = _np.dot(op2_f,op2_f)
+        # main objective = fT*f = norm_f
+        # at new x => (f+J*dx)T * (f+J*dx) = norm_f + JdxT*f + fT*Jdx = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
+        #                                                             = norm_f + 2*dxT*(JT*f)
+        # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (JTJ) * dx
+        orig_prediction3 = orig_prediction + _np.dot(Jdx,Jdx)
+        norm_dx = _np.linalg.norm(dx)
+        print("Compare with suggested |dx| = ",norm_dx, " => ",cmp_normf, "(predicted: ",orig_prediction, orig_prediction2, orig_prediction3)
+        STEP = norm_dx #0.0001
+        
+        #import bpdb; bpdb.set_trace()
+        test_dx = _np.zeros(len(dx),'d')
+        best_ii = -1; best_normf = norm_f; best_dx = 0
+        for ii in range(len(dx)):
+    
+            #Try adding a small amount
+            test_dx[ii] = STEP
+            test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
+            if test_normf < best_normf:
+                best_normf = test_normf
+                best_dx = STEP
+                best_ii = ii
+            else:
+                test_dx[ii] = -STEP
+                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
+                if test_normf < best_normf:
+                    best_normf = test_normf
+                    best_dx = -STEP
+                    best_ii = ii
+            test_dx[ii] = 0
+    
+        test_dx[best_ii] = best_dx
+        test_prediction = norm_f + _np.dot(2*JTf,test_dx)
+        tp2_f = f + _np.dot(Jac,test_dx)
+        test_prediction2 = _np.dot(tp2_f,tp2_f)
+    
+        jj = _np.argmax(_np.abs(dx))
+        print("Best decrease = index",best_ii,":",x[best_ii],'+',best_dx,"==>",best_normf, " (predictions: ", test_prediction, test_prediction2,")")
+        print(" compare with original dx[",best_ii,"]=",dx[best_ii],"YES" if test_dx[best_ii]*dx[best_ii] > 0 else "NO")
+        print(" max of abs(dx) is index ",jj,":",dx[jj], "yes" if jj == best_ii else "no")
+            
+        if _np.linalg.norm(test_dx) > 0 and best_normf < cmp_normf:
+            print("FOUND HACK dx w/norm = ",_np.linalg.norm(test_dx))
+            return test_dx
+        else:
+            print("KEEPING ORIGINAL dx")
+    return dx
+
 
 
 #Wikipedia-version of LM algorithm, testing mu and mu/nu damping params and taking
