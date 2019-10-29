@@ -168,6 +168,14 @@ class Circuit(object):
     """
     default_expand_subcircuits = True
 
+    @classmethod
+    def fromtup(cls, tup):
+        if '@' in tup:
+            k = tup.index('@')
+            return cls(tup[0:k], tup[k+1:])
+        else:
+            return cls(tup)
+
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
                  stringrep=None, name='', check=True, expand_subcircuits="default"):
         """
@@ -401,7 +409,7 @@ class Circuit(object):
                                  str(removed_not_idling))
             else:
                 self.delete_lines(tuple(removed_not_idling))
-        self._line_labels = value
+        self._line_labels = tuple(value)
 
     @property
     def name(self):
@@ -413,12 +421,20 @@ class Circuit(object):
     #    return self._reps
 
     @property
-    def tup(self):
-        """ This Circuit as a standard Python tuple of layer Labels."""
+    def layertup(self):
+        """ This Circuit's layers as a standard Python tuple of layer Labels."""
         if self._static:
             return self._labels
         else:
             return tuple([toLabel(layer_lbl) for layer_lbl in self._labels])
+
+    @property
+    def tup(self):
+        """ This Circuit as a standard Python tuple of layer Labels and line labels."""
+        if self._line_labels in (('*',),()): #No line labels
+            return self.layertup
+        else:
+            return self.layertup + ('@',) + self._line_labels
 
     @property
     def str(self):
@@ -464,7 +480,11 @@ class Circuit(object):
                             " mode in order to hash it.  You should call"
                             " circuit.done_editing() beforehand."))
             self.done_editing()
-        return hash((self._labels, self._line_labels))
+        return hash(self.tup)
+        #if self._line_labels in (('*',),()): #No line labels
+        #    return hash(self._labels)
+        #else:
+        #    return hash(self._labels + ('@',) + self._line_labels)
 
     def __len__(self):
         return len(self._labels)
@@ -494,7 +514,7 @@ class Circuit(object):
         new_line_labels = self.line_labels + added_labels
         if new_line_labels != ('*',):
             s += "@(" + ','.join(map(str, new_line_labels)) + ")"  # matches to _opSeqToStr in circuit.py!
-        return Circuit(self.tup + x.tup, new_line_labels,
+        return Circuit(self.layertup + x.layertup, new_line_labels,
                        None, editable, s, check=False)
 
     def repeat(self, ntimes, expand="default"):
@@ -511,7 +531,7 @@ class Circuit(object):
             return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
         else:
             # just adds parens to string rep & copies
-            return Circuit(self.tup * ntimes, self.line_labels, None, not self._static, s, check=False)
+            return Circuit(self.layertup * ntimes, self.line_labels, None, not self._static, s, check=False)
 
     def __mul__(self, x):
         return self.repeat(x)
@@ -522,7 +542,7 @@ class Circuit(object):
     def __eq__(self, x):
         if x is None: return False
         if isinstance(x, Circuit):
-            return (self.tup, self.line_labels) == (x.tup, x.line_labels)
+            return self.tup == x.tup
         else:
             return self.tup == tuple(x)
 
@@ -557,7 +577,7 @@ class Circuit(object):
         Circuit
         """
         if editable == "auto": editable = not self._static
-        return Circuit(self.tup, self.line_labels, None, editable, self._str, check=False)
+        return Circuit(self.layertup, self.line_labels, None, editable, self._str, check=False)
 
     def clear(self):
         """
@@ -1220,7 +1240,7 @@ class Circuit(object):
         for opLabel in opLabels:
             translateDict[opLabel] = c
             c = chr(ord(c) + 1)
-        return "".join([translateDict[opLabel] for opLabel in self.tup])
+        return "".join([translateDict[opLabel] for opLabel in self.layertup])
 
     @classmethod
     def from_pythonstr(cls, pythonString, opLabels):
@@ -1266,7 +1286,7 @@ class Circuit(object):
         Circuit
         """
         serial_lbls = []
-        for lbl in self.tup:
+        for lbl in self.layertup:
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             for c in lbl.components:
@@ -1306,7 +1326,7 @@ class Circuit(object):
         """
         parallel_lbls = []
         first_free = {'*': 0}
-        for lbl in self.tup:
+        for lbl in self.layertup:
             if can_break_labels:  # then process label components individually
                 for c in lbl.components:
                     if c.sslbls is None:  # ~= acts on *all* sslbls
@@ -1881,7 +1901,7 @@ class Circuit(object):
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func, self.line_labels))
-        return Circuit([l.map_state_space_labels(mapper_func) for l in self.tup],
+        return Circuit([l.map_state_space_labels(mapper_func) for l in self.layertup],
                        mapped_line_labels, None, not self._static)
 
     def reorder_lines(self, order):

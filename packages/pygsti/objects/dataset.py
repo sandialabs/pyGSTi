@@ -879,7 +879,7 @@ class DataSet(object):
         # because name-only Labels still don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
         if not isinstance(circuit, _cir.Circuit):
-            circuit = _cir.Circuit(circuit)
+            circuit = _cir.Circuit.fromtup(circuit)
 
         if occurrence > 0:
             circuit = circuit + _cir.Circuit(("#%d" % occurrence,))
