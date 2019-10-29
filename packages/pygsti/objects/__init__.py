@@ -69,6 +69,7 @@ from .explicitmodel import ExplicitOpModel as GateSet  # alias
 from .implicitmodel import ImplicitOpModel
 from .localnoisemodel import LocalNoiseModel
 from .cloudnoisemodel import CloudNoiseModel
+from .oplessmodel import OplessModel
 from .circuitstructure import CircuitStructure
 from .circuitstructure import LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure
