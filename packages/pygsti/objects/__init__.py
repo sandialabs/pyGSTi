@@ -70,6 +70,7 @@ from .implicitmodel import ImplicitOpModel
 from .localnoisemodel import LocalNoiseModel
 from .cloudnoisemodel import CloudNoiseModel
 from .oplessmodel import OplessModel
+from .oplessmodel import SuccessFailModel
 from .circuitstructure import CircuitStructure
 from .circuitstructure import LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure
