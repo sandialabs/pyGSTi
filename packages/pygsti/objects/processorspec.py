@@ -247,6 +247,19 @@ class ProcessorSpec(object):
 
         return  # done with __init__(...)
 
+    def get_edges(self, qubits):
+        # todo
+        edgelist = []
+
+        for oplabel in self.models['clifford'].get_primitive_op_labels():
+            # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
+            # something we may need to do at some point.
+            if oplabel.number_of_qubits == 2:
+                if oplabel.qubits[0] in qubits and oplabel.qubits[1] in qubits:
+                    edgelist.append(oplabel.qubits)
+
+        return edgelist
+
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         # Erik future : improve docstring.
         """
