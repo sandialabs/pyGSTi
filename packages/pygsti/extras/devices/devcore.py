@@ -84,7 +84,7 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
     for edge in removeedges: del edgelist[edgelist.index(edge)]
 
     availability = {twoQgate: edgelist}
-    print(availability)
+    #print(availability)
     pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
                                  construct_clifford_compilations=construct_clifford_compilations,
                                  verbosity=verbosity, qubit_labels=qubits)

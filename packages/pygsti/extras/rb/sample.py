@@ -3124,8 +3124,7 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
 
     germ_depth = R * max_subgerm_depth
 
-    print(max_subgerm_depth, R, germ_depth)
-
+    #print(max_subgerm_depth, R, germ_depth)
 
     # gcirclenpower = 0
     # while _np.random.binomial(1, 0.5) == 1:
