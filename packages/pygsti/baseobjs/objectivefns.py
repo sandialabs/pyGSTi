@@ -112,8 +112,8 @@ class Chi2Function(ObjectiveFunction):
             elif termgap_penalty_factor != 0:
                 assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
                 assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
-                self.fn = self.termgap_chi2
-                self.jfn = self.termgap_jac
+                self.fn = self.simple_termgap_chi2
+                self.jfn = self.simple_termgap_jac
 
             else:  # cptp_pentalty_factor != 0 and/or spam_pentalty_factor != 0
                 assert(regularizeFactor == 0), "Cannot have regularizeFactor and other penalty factors > 0"
@@ -223,11 +223,34 @@ class Chi2Function(ObjectiveFunction):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+        
+        #DEBUGGING HACK - make sure computed probs like in expected range
+        achieved_sopm, max_sopm = self.mdl._fwdsim().bulk_get_achieved_and_max_sopm(self.evTree, self.comm, memLimit=None)
+        gaps = max_sopm - achieved_sopm
+        mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
+        db_probs = _np.zeros(self.probs.shape, 'd')
+        mdl_fullsim.from_vector(vectorGS)
+        mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
+        for i,(fullsim_prob, approx_prob, errorbar) in enumerate(zip(db_probs, self.probs, gaps)):
+            if not (approx_prob - errorbar < fullsim_prob < approx_prob + errorbar):
+                print("Failed: %g < %g < %g" % (approx_prob - errorbar, fullsim_prob, approx_prob + errorbar))
+                #import bpdb; bpdb.set_trace()
+                assert(False),"STOP"
+        heur_scale = self.probs / achieved_sopm
+        #heur_scale = 1.0 / max_sopm
+        print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" % 
+              (max(gaps), _np.mean(gaps),
+               max(_np.abs(db_probs - self.probs)), _np.mean(gaps * heur_scale),
+               max(_np.abs(db_probs - self.probs)) / _np.mean(gaps),
+               max(_np.abs(db_probs - self.probs)) / _np.mean(gaps * heur_scale),
+              ))
+        allowable_mean_gap = 0.01  # need to plumb to Model or fwd sim...
+        #END DEBUGGING
 
-        #termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
-        #mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
-        #db_probs = _np.zeros(self.probs.shape, 'd')
-        #mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
+        self.check_for_no_mans_land = True
+        if self.check_for_no_mans_land:
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
+                raise AssertionError("NO MANS LAND") # Currently, AssertionError's stop the LM simulator
 
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
         
@@ -374,7 +397,7 @@ class Chi2Function(ObjectiveFunction):
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
 
-        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        termgap_penalty, _ = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
         jac_termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
         #termgap_penalty = 0.5*_np.dot(vectorGS, _np.dot(self.frozen_H, vectorGS))  # T(0) + dot(Jac,x) + 0.5xH*x => 0.5 sum(xi * Hiaj * xj)
         #jac_termgap_penalty = _np.einsum('i,iak->ak', vectorGS, self.frozen_H) # =d/dxk=> 0.5 sum(xi*Hiak) + sum(Hkaj * xj) = dot(x,H) b/c H*a* is symmetric 
@@ -455,7 +478,7 @@ class Chi2Function(ObjectiveFunction):
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
 
-        #termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #termgap_penalty, _ = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
         #jac_termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
 
         if self.firsts is not None:
@@ -875,8 +898,10 @@ class LogLFunction(ObjectiveFunction):
                 assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
                 assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
                 assert(self.forcefn_grad is None), "Cannot use force functions with termgap_penalty_factor"
-                self.fn = self.termgap_poisson_picture_logl
-                self.jfn = self.termgap_poisson_picture_jacobian
+                self.fn = self.poisson_picture_logl
+                self.jfn = self.poisson_picture_jacobian
+                #self.fn = self.termgap_poisson_picture_logl
+                #self.jfn = self.termgap_poisson_picture_jacobian
             else:
                 self.fn = self.poisson_picture_logl
                 self.jfn = self.poisson_picture_jacobian
@@ -1115,7 +1140,7 @@ class LogLFunction(ObjectiveFunction):
         S = self.minusCntVecMx / self.min_p + self.totalCntVec
         S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
 
-        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        termgap_penalty, _ = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
         p_plus = self.probs + termgap_penalty
         p_minus = self.probs - termgap_penalty
         
@@ -1142,7 +1167,7 @@ class LogLFunction(ObjectiveFunction):
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
 
-        termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        termgap_penalty, _ = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
         jac_termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
         p_plus = self.probs + termgap_penalty
         p_minus = self.probs - termgap_penalty

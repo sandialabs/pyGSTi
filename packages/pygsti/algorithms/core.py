@@ -1231,8 +1231,8 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                                     extra_lm_opts, comm, printer, profiler, nDataParams, memLimit)
     else:
         #Normal case of just a single "sub-iteration"
-        minErrVec = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                               printer, profiler, nDataParams, memLimit)
+        minErrVec, _ = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                  printer, profiler, nDataParams, memLimit)
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -1289,18 +1289,20 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
     x0 = mdl.to_vector()
     if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
     if CUSTOMLM:
-        opt_x, converged, msg = _opt.custom_leastsq(
+        opt_x, converged, msg, mu, nu = _opt.custom_leastsq(
             objective_func, jacobian, x0, f_norm2_tol=tol['f'],
             jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
             max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
             comm=comm, verbosity=printer - 1, profiler=profiler, **extra_lm_opts)
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
+        opt_state = (msg, mu, nu)
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
                          maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
+        opt_state = (msg,)
 
     full_minErrVec = objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
     # don't include "extra" regularization terms
@@ -1377,9 +1379,9 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
 
     if objective_name == "logl":
         deltaLogL = sum_minErrVec
-        return (logL_upperbound - deltaLogL)
+        return (logL_upperbound - deltaLogL), opt_state
     else:
-        return minErrVec
+        return minErrVec, opt_state
 
 
 def _interpolate_model_until_no_failures(mdl, known_no_error_param_vec, desired_param_vec,
@@ -1582,7 +1584,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     """ TODO: docstring """
 
     MAX_NUM_FAILURES = 0
-    maxSubIters = 1
+    maxSubIters = 3
     final_iter = False
 
     def debug_paramvec():  # REMOVE
@@ -1669,44 +1671,13 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     printer.log("Initial Term-stage model has %d failures" % (nFailures))
     currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
 
-    #Set "frozen hessian" a (#params, #elements, #params)-shaped array used to compute a proxy for the termgap penalty
-    def create_frozen_H(fwdsim):
-        return
-        print("DB: CREATING FROZEN H")
-        #J = mdl._fwdsim().bulk_get_termgap_penalty_jacobian(evTree, comm, memLimit)
-        #return _np.einsum('ij,ik->jik',J,J)
-        eps = 0.3
-        vorig = fwdsim.to_vector()
-        Np = fwdsim.Np
-
-        v0 = _np.zeros(Np,'d')
-        fwdsim.from_vector(v0)
-        penalty0 = fwdsim.bulk_get_termgap_penalty(evTree, comm, memLimit)
-
-        H = _np.zeros( (Np,len(penalty0),Np), 'd')
-        for i in range(Np):
-            v = v0.copy()
-            v[i] += eps; fwdsim.from_vector(v)
-            penalty_plus = fwdsim.bulk_get_termgap_penalty(evTree, comm, memLimit)
-            v = v0.copy()
-            v[i] -= eps; fwdsim.from_vector(v)
-            penalty_minus = fwdsim.bulk_get_termgap_penalty(evTree, comm, memLimit)
-            H[i,:,i] = (penalty_plus + penalty_minus - 2*penalty0) / eps**2
-
-        fwdsim.from_vector(vorig)
-        return H
-        
-    objective.frozen_H = create_frozen_H(mdl._fwdsim())
-    
-    debug_paramvec()  # REMOVE
+    #debug_paramvec()  # REMOVE
 
     #alpha = 1.0 # no alpha controls inflation factor rather than interpolation - always start at 1.0
     #termgap_penalty = 0.00001 #10.0
     minErrVec = None
     for sub_iter in range(maxSubIters):
 
-        objective.frozen_H = create_frozen_H(mdl._fwdsim())
-        
         #inflate_factor = 1.0 if final_iter else 50.0
         #MAX_INFLATE = 2.5
         #inflate_factor = max(1.0, MAX_INFLATE*alpha)
@@ -1725,17 +1696,17 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         # because TermForwardSimulator.bulk_fill_probs calls TermEvalTree.num_circuit_sopm_failures_using_current_paths)
         
         #objective.termgap_penalty_factor = termgap_penalty
-        minErrVec = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                               printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
+        minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                          printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
-        debug_paramvec()  # REMOVE
+        #debug_paramvec()  # REMOVE
 
         #Check how many failures the final model has (using the *same* path integrals)
-        nFailures, _ = mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit) # uses "locked in" paths
-        printer.log("%sTerm-stage %d final model has %d failures" % ("", sub_iter+1, nFailures)) # final_prefix
+        #bOK = mdl.bulk_probs_paths_are_sufficient(evTree, None, comm, memLimit, printer) # uses "locked in" paths
+        #printer.log("%sTerm-stage %d final model's path's are sufficient = %s" % ("", sub_iter+1, bOK)) # final_prefix
         #import sys; sys.exit()
         
-        if nFailures <= MAX_NUM_FAILURES: # termgap_penalty < 0.0002: #
+        if not opt_state[0] == "Objective function requested STOP": #nFailures <= MAX_NUM_FAILURES: # termgap_penalty < 0.0002: #
 
             #print("Termgap penalty is small (no softening); re-computing paths")
             #pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
@@ -1821,6 +1792,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
             mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
             currently_selected_pathSet = pathSet
+            extra_lm_opts['init_munu'] = (opt_state[1],opt_state[2])
 
             ## Sanity check
             #assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] <= MAX_NUM_FAILURES), \
@@ -2766,8 +2738,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     else:
         #Normal case of just a single "sub-iteration"
         #Run optimization (use leastsq)
-        delta_logl = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                                printer, profiler, nDataParams, memLimit, logL_upperbound)  #updates mdl
+        delta_logl, _ = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                   printer, profiler, nDataParams, memLimit, logL_upperbound)  #updates mdl
 
     printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 

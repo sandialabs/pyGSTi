@@ -401,7 +401,7 @@ class OpModel(Model):
         else:  # create a basis with the proper structure & dimension
             self._basis = _Basis.cast(basis, self.state_space_labels)
 
-    def set_simtype(self, sim_type, calc_cache=None, max_cache_size=None):
+    def set_simtype(self, sim_type, **kwargs):
         """
         Reset the forward simulation type of this model.
 
@@ -411,9 +411,12 @@ class OpModel(Model):
             The type of forward simulator this model should use.  `"auto"`
             tries to determine the best type automatically.
 
-        calc_cache : dict or None
-            A cache of pre-computed values used in Taylor-term-based forward
-            simulation.
+        kwargs : various
+            Arguments for the specific simultator type.
+            TODO: docstring - list options here, e.g. for "map":
+            cache : dict or None
+                A cache of pre-computed values used in Taylor-term-based forward
+                simulation.
 
         Returns
         -------
@@ -425,29 +428,43 @@ class OpModel(Model):
             default_param = self.operations.default_param  # assume the same for other dicts
             if _gt.is_valid_lindblad_paramtype(default_param) and \
                _gt.split_lindblad_paramtype(default_param)[1] in ("svterm", "cterm"):
-                sim_type = "termorder:1"
+                sim_type = "termorder"
+                kwargs = {'max_order': 1}
             else:
                 d = self._dim if (self._dim is not None) else 0
                 sim_type = "matrix" if d <= 16 else "map"
+                kwargs = {}
 
-        simtype_and_args = sim_type.split(":")
-        sim_type = simtype_and_args[0]
-        if sim_type == "matrix": c = _matrixfwdsim.MatrixForwardSimulator
-        elif sim_type == "map": c = _mapfwdsim.MapForwardSimulator
-        elif sim_type in ("termorder", "termgap", "termdirect"): c = _termfwdsim.TermForwardSimulator
-        else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
+        if sim_type == "matrix":
+            c = _matrixfwdsim.MatrixForwardSimulator
+            assert(len(kwargs) == 0)
+        elif sim_type == "map":
+            c = _mapfwdsim.MapForwardSimulator
+            assert(all([k in ('max_cache_size',) for k in kwargs.keys()])), "Invalid sim_type arguments!"
+        elif sim_type in ("termorder", "termgap", "termdirect"):
+            c = _termfwdsim.TermForwardSimulator
+            if sim_type == "termorder":
+                assert(all([k in ('max_order', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
+                kwargs['mode'] = "taylor_order"
+                if 'max_order' not in kwargs: kwargs['max_order'] = 1
+                if 'cache' not in kwargs: kwargs['cache'] = None # Needed?
+                                
+            else: # termgap and termdirect
+                assert(all([k in ('desired_perr', 'allowed_perr', 'max_paths_per_outcome', 'max_order',
+                                  'min_term_mag', 'perr_heuristic', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
+                kwargs['mode'] = "pruned" if (sim_type == "termgap") else "direct"
+                if 'desired_perr' not in kwargs: kwargs['desired_perr'] = 0.01
+                if 'allowed_perr' not in kwargs: kwargs['allowed_perr'] = 0.1
+                if 'max_paths_per_outcome' not in kwargs: kwargs['max_paths_per_outcome'] = 500
+                if 'max_order' not in kwargs: kwargs['max_order'] = 3
+                if 'min_term_mag' not in kwargs: kwargs['min_term_mag'] = kwargs['desired_perr'] / (10*kwargs['max_paths_per_outcome'])
+
+        else:
+            raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._calcClass = c
         self._sim_type = sim_type
-        self._sim_args = list(simtype_and_args[1:])
-        self._termgap_inflation_factor = None  #used only for term-based calcs -- maybe absorb into _sim_args?
-
-        if sim_type.startswith("term"):
-            #cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
-            cache = calc_cache  # allow None cache to indicate *direct* computation of terms (no polys)
-            self._sim_args.append(cache)  # add calculation cache as another argument
-        elif sim_type == "map":
-            self._sim_args.append(max_cache_size)  # add cache size as another argument
+        self._sim_args = kwargs
 
     #TODO REMOVE
     #def reset_basis(self):
@@ -789,30 +806,9 @@ class OpModel(Model):
         self._clean_paramvec()
         layer_lizard = self._layer_lizard()
         layer_lizard.set_opcache(self._opcache, self.to_vector())
-        #print("FWDSIM OPCACHE LEN = ",len(self._opcache))  # TODO REMOVE
-
-        kwargs = {}
-        if self._sim_type == "termorder":
-            assert(len(self._sim_args) == 1 + 1), "termorder must have <order> arg, e.g. 'termorder:1'"
-            kwargs['mode'] = "taylor-order"
-            kwargs['max_order'] = int(self._sim_args[0])
-            kwargs['cache'] = self._sim_args[-1]  # always the last argument
-        if self._sim_type in ("termgap", "termdirect"):
-            assert(len(self._sim_args) >= 1 + 1), \
-                "%s must have <gap>,[<maxpaths>,<maxorder>,<min_term_mag>] args, e.g. '%s:500:0.1:3'" \
-                % (self._sim_type, self._sim_type)
-            kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
-            kwargs['pathmag_gap'] = float(self._sim_args[0])
-            kwargs['max_paths_per_outcome'] = int(self._sim_args[1]) if len(self._sim_args) > 2 else 500
-            kwargs['max_order'] = int(self._sim_args[2]) if len(self._sim_args) > 3 else 3
-            kwargs['min_term_mag'] = float(self._sim_args[3]) if len(self._sim_args) > 4 else kwargs['pathmag_gap'] / (10*kwargs['max_paths_per_outcome'])
-            kwargs['gap_inflation_factor'] = self._termgap_inflation_factor
-            kwargs['cache'] = self._sim_args[-1]  # always the last argument
-        if self._sim_type == "map":
-            kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None  # backward compat
 
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
-        return self._calcClass(self._dim, layer_lizard, self._paramvec, **kwargs)  # fwdsim class
+        return self._calcClass(self._dim, layer_lizard, self._paramvec, **self._sim_args)  # fwdsim class
 
     def split_circuit(self, circuit, erroron=('prep', 'povm')):
         """
@@ -1684,11 +1680,13 @@ class OpModel(Model):
     #    """ TODO: docstring """
     #    return self._fwdsim().bulk_get_current_gaps(evalTree, comm, memLimit)
     
-    def bulk_probs_num_termgap_failures(self, evalTree, comm=None, memLimit=None):
+    def bulk_probs_paths_are_sufficient(self, evalTree, probs, comm=None, memLimit=None, verbosity=0):
         """
         Only applicable for models with a term-based (path-integral) forward simulator.
-        Counts the number of circuits for which the achieved sum-of-path-magnitudes is less
-        than the corresponding target, as set by the pathmagnitude-gap.
+
+        Returns a boolean indicating whether the currently selected paths are able to 
+        predict the outcome probabilities of the circuits in `evalTree` accurately enough,
+        as defined by the simulation-type arguments such as `allowed_perr`.
 
         Parameters
         ----------
@@ -1696,22 +1694,31 @@ class OpModel(Model):
             The evaluation tree used to define a list of circuits and hold (cache)
             any computed quantities.
 
+        probs : ndarray, optional
+            A list of the pre-computed probabilities for the circuits in `evalTree`,
+            as these are needed by some heuristics used to predict errors in the
+            probabilities.  If None, then the probabilities are computed internally.
+
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
            subtrees of `evalTree` (if it is split).
 
         memLimit : TODO: docstring
-        after_adapting_paths : TODO docstring -- see comments below -- if True then other paths are considered up to limits in fwdsim params
-            if False then the number of failures using the current set of "locked in" paths of `evalTree` are used.  -- NOW no option for this
-            -- just get the number of failures using the current "locked-in" paths.
-        restrict_to : 
+
+        Returns
+        -------
+        bool
         """
         #print("BULK PROBS NUM TERMGAP FAILURES") #TODO REMOVE
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
-        return fwdsim.bulk_get_num_failures(evalTree, comm, memLimit)
+        printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        if probs is None:
+            probs = _np.empty(evalTree.num_final_elements(), 'd')
+            self.bulk_fill_probs(probs, evalTree, clipTo=None, comm=comm)
+        return fwdsim.bulk_test_if_paths_are_sufficient(evalTree, probs, comm, memLimit, printer)
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):

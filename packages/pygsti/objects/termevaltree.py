@@ -134,7 +134,7 @@ class TermEvalTree(EvalTree):
         self.percircuit_p_polys = {}  # keys = circuits, values = (threshold, compact_polys)
         
         self.merged_compact_polys = None
-        self.merged_maxsopm_compact_polys = None
+        self.merged_achievedsopm_compact_polys = None
 
         self.myFinalToParentFinalMap = None  # this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None  # i.e. has not been created by a 'split'
@@ -441,57 +441,48 @@ class TermEvalTree(EvalTree):
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
-    def num_circuit_sopm_failures_using_current_paths(self, calc, pathmagnitude_gap, return_gaps=False):  # TODO REMOVE restrict_to args? HERE
-        """ TODO: docstring """
-        num_failed = 0  # number of circuits which fail to achieve the target sopm
-        failed_circuits = []
-        per_circuit_gaps = []
-        #db_tested = 0;  #DEBUG, REMOVE
-        
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
-            circuit = self[i]
-            if circuit not in self.percircuit_p_polys:
-                continue  # if circuit not a "current" circuit, so don't count as a failure
-            current_threshold, _ = self.percircuit_p_polys[circuit]
-            #db_tested += 1 #REMOVE
+    #TODO REMOVE - duplicates 
+    #def num_circuit_sopm_failures_using_current_paths(self, calc, pathmagnitude_gap, return_gaps=False):  # TODO REMOVE restrict_to args? HERE
+    #    """ TODO: docstring """
+    #    num_failed = 0  # number of circuits which fail to achieve the target sopm
+    #    failed_circuits = []
+    #    per_circuit_gaps = []
+    #    #db_tested = 0;  #DEBUG, REMOVE
+    #    
+    #    for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+    #        circuit = self[i]
+    #        if circuit not in self.percircuit_p_polys:
+    #            continue  # if circuit not a "current" circuit, so don't count as a failure
+    #        current_threshold, _ = self.percircuit_p_polys[circuit]
+    #        #db_tested += 1 #REMOVE
+    #
+    #        rholabel = circuit[0]
+    #        opstr = circuit[1:]
+    #        elabels = self.simplified_circuit_elabels[i]
+    #
+    #        #DEBUG TODO REMOVE
+    #        #print("NUM CIRCUIT FAILURES for: ",circuit)
+    #        #print(" - threshold = ",current_threshold)
+    #        #print(" - repcache = ",id(self.highmag_termrep_cache))
+    #        #print(" - opcache = ",id(calc.sos.opcache))
+    #        #print(" - rholabel = ",rholabel)
+    #        #print(" - elabels = ",elabels)
+    #
+    #        gaps, DEBUG1,DEBUG2 = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
+    #                                              calc.sos.opcache, current_threshold)
+    #        num_failed += 1 if _np.count_nonzero(gaps > pathmagnitude_gap) > 0 else 0  #just count # failed *circuits*
+    #        per_circuit_gaps.append( max(gaps) )
+    #        if _np.count_nonzero(gaps > pathmagnitude_gap) > 0:
+    #            failed_circuits.append(circuit)
+    #
+    #    if return_gaps:
+    #        return num_failed, failed_circuits, per_circuit_gaps
+    #    else:
+    #        return num_failed, failed_circuits
 
-            rholabel = circuit[0]
-            opstr = circuit[1:]
-            elabels = self.simplified_circuit_elabels[i]
-
-            #DEBUG TODO REMOVE
-            #print("NUM CIRCUIT FAILURES for: ",circuit)
-            #print(" - threshold = ",current_threshold)
-            #print(" - repcache = ",id(self.highmag_termrep_cache))
-            #print(" - opcache = ",id(calc.sos.opcache))
-            #print(" - rholabel = ",rholabel)
-            #print(" - elabels = ",elabels)
-
-            gaps, DEBUG1,DEBUG2 = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
-                                                  calc.sos.opcache, current_threshold)
-            num_failed += 1 if _np.count_nonzero(gaps > pathmagnitude_gap) > 0 else 0  #just count # failed *circuits*
-            per_circuit_gaps.append( max(gaps) )
-            if _np.count_nonzero(gaps > pathmagnitude_gap) > 0:
-                failed_circuits.append(circuit)
-
-        if return_gaps:
-            return num_failed, failed_circuits, per_circuit_gaps
-        else:
-            return num_failed, failed_circuits
-
-    def get_sopm_gaps_using_current_paths(self, calc):  # TODO REMOVE restrict_to args? HERE
-        gaps = []
-
-        #DEBUG - TODO REMOVE - testing merged_maxsopm_compact_polys values
-        #nEls = self.num_final_elements()
-        #polys = self.merged_maxsopm_compact_polys
-        #maxsopms = _bulk_eval_compact_polys_complex(
-        #    polys[0], polys[1], _np.abs(calc.paramvec), (nEls,))  # shape (nElements,) -- could make this a *fill*
-        #debug_i = 0
-        #debug_maxsopm_list = []
-        #debug_mags_list = []
-        #debug_threshold_list = []
-        #debug_evalindex_list = []
+    def get_achieved_and_max_sopm(self, calc):
+        achieved_sopm = []
+        max_sopm = []
 
         for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
@@ -501,61 +492,27 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
 
-            circuit_gaps, debug_maxsopm, debug_mags = calc.circuit_pathmagnitude_gap(rholabel, elabels, opstr, self.highmag_termrep_cache,
-                                                                                     calc.sos.opcache, current_threshold)
+            achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel, elabels, opstr, self.highmag_termrep_cache,
+                                                                calc.sos.opcache, current_threshold)
+            achieved_sopm.extend(list(achieved))
+            max_sopm.extend(list(maxx))
 
-            #DEBUG TODO REMOVE
-            #if i == 38:
-            #    import bpdb; bpdb.set_trace()
-            #    print(current_threshold, circuit_gaps, debug_maxsopm, debug_mags)
-            
-            #FUTURE: maybe use maxsopms within calc.circuit_pathmagnitude_gap?
-            #assert(_np.allclose(maxsopms[debug_i:debug_i+len(debug_mags)], debug_mags))
-            #debug_i += len(debug_mags)
+        assert(len(achieved_sopm) == len(max_sopm) == self.num_final_elements())
+        return _np.array(achieved_sopm, 'd'), _np.array(max_sopm, 'd')
 
-            #For DEBUGGING TODO REMOVE (when fn had a debug arg)
-            #if debug:
-            #    #gaps.extend(list(debug_mags))  #DEBUG
-            #    gaps.extend(list(debug_maxsopm))  #DEBUG
-            #else:
-            #debug_maxsopm_list.extend(list(debug_maxsopm))
-            #debug_mags_list.extend(list(debug_mags))
-            #debug_threshold_list.extend([current_threshold]*len(debug_mags))
-            #debug_evalindex_list.extend([i]*len(debug_mags))
-            
-            gaps.extend(list(circuit_gaps))
+    def get_sopm_gaps(self, calc):
+        achieved_sopm, max_sopm = self.get_achieved_and_max_sopm_gaps(calc)
+        return max_sopm - achieved_sopm
 
-        #DEBUG TODO REMOVE
-        #import os, pickle
-        #if not os.path.exists("debug_gaps.pkl"):
-        #    pickle.dump( (gaps, debug_maxsopm_list, debug_mags_list, debug_threshold_list, debug_evalindex_list), open("debug_gaps.pkl","wb"))
-        #    print("WROTE DEBUG FILE debug_gaps.pkl")
-        #else:
-        #    gaps1, debug_maxsopm_list1, debug_mags_list1, debug_threshold_list1, debug_evalindex_list1 = pickle.load(open("debug_gaps.pkl","rb"))
-        #    print("CHECKING for cases where gap1 < gap2...")
-        #    for i, (gap1, gap2) in enumerate(zip(gaps1, gaps)):
-        #        if gap2 > gap1:
-        #            print("GAP2 greater: ",i, gap1, gap2)
-        #    import bpdb; bpdb.set_trace()
-
-        assert(len(gaps) == self.num_final_elements())
-        return _np.array(gaps, 'd')
-
-    def get_sopm_gaps_jacobian_using_current_paths(self, calc):
-        gaps = []
-
+    def get_achieved_and_max_sopm_jacobian(self, calc):
         nEls = self.num_final_elements()
-        polys = self.merged_maxsopm_compact_polys
-        #from .polynomial import bulk_load_compact_polys  # DEBUG!!!
-        #poly_objects = bulk_load_compact_polys(polys[0], polys[1], False, calc.Np) # DEBUG!!!
+        polys = self.merged_achievedsopm_compact_polys
         dpolys = _compact_deriv(polys[0], polys[1], _np.arange(calc.Np))
-        #dpoly_objects = bulk_load_compact_polys(dpolys[0], dpolys[1], False, calc.Np) # DEBUG!!!
         d_achieved_mags = _bulk_eval_compact_polys_complex(
             dpolys[0], dpolys[1], _np.abs(calc.paramvec), (nEls,calc.Np))
         assert(_np.linalg.norm(_np.imag(d_achieved_mags)) < 1e-8)
         d_achieved_mags = d_achieved_mags.real
         d_achieved_mags[:, (calc.paramvec < 0)] *= -1
-        #import bpdb; bpdb.set_trace()
 
         d_max_sopms = _np.empty( (nEls,calc.Np), 'd')
         k = 0  # current element position for loop below
@@ -568,8 +525,8 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[iCircuit]
 
-            #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-            # Here we take d(MAX) (above merged_maxsopm_compact_polys give d(gap)).  Since each
+            #Get MAX-SOPM for circuit outcomes and thereby the SOPM gap (via MAX - achieved)
+            # Here we take d(MAX) (above merged_achievedsopm_compact_polys give d(achieved)).  Since each
             # MAX-SOPM value is a product of max term magnitudes, to get deriv we use the chain rule:
             partial_ops = [ opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel) ]
             for glbl in opstr:
@@ -600,12 +557,12 @@ class TermEvalTree(EvalTree):
             d_max_sopms[k:k+len(elabels),:] = deriv
             k += len(elabels)
 
+        return d_achieved_mags, d_max_sopms
+    
+    def get_sopm_gaps_jacobian(self, calc):
+        d_achieved_mags, d_max_sopms = self.get_achieved_and_max_sopm_jacobian(calc)
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
-
-
-    #def num_circuit_sopm_failures_after_adapting_paths(self, calc, comm, memLimit, pathmagnitude_gap,
-    #                                                   min_term_mag, max_paths, exit_after_first_failure=True):
     
     def find_minimal_paths_set(self, calc, comm, memLimit, exit_after_this_many_failures=1):
         """TODO: docstring: returns caches but only when the # failures <= exit_after_this_many_failures """
@@ -694,7 +651,7 @@ class TermEvalTree(EvalTree):
         #self.percircuit_p_polys = {}
 
         all_compact_polys = []  # holds one compact polynomial per final *element*
-        all_maxsopm_compact_polys = []
+        all_achievedsopm_compact_polys = []
         num_failed = 0  # number of circuits which fail to achieve the target sopm
 
         for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
@@ -722,36 +679,36 @@ class TermEvalTree(EvalTree):
                                                        comm,
                                                        memLimit)
 
-            raw_maxsopm_polyreps = calc.prs_as_pruned_polyreps(threshold,
-                                                               rholabel,
-                                                               elabels,
-                                                               opstr,
-                                                               repcache,
-                                                               calc.sos.opcache,
-                                                               circuitsetup_cache,
-                                                               comm,
-                                                               memLimit,
-                                                               mode="max-sopm")
+            raw_achievedsopm_polyreps = calc.prs_as_pruned_polyreps(threshold,
+                                                                    rholabel,
+                                                                    elabels,
+                                                                    opstr,
+                                                                    repcache,
+                                                                    calc.sos.opcache,
+                                                                    circuitsetup_cache,
+                                                                    comm,
+                                                                    memLimit,
+                                                                    mode="achieved-sopm")
 
             compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
             self.percircuit_p_polys[circuit] = (threshold, compact_polys)
             all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
 
-            compact_maxsopm_polys = [polyrep.compact_complex() for polyrep in raw_maxsopm_polyreps]
-            #print("DB: coeff lengths = ",[len(polyrep.int_coeffs) for polyrep in raw_maxsopm_polyreps],
+            compact_achievedsopm_polys = [polyrep.compact_complex() for polyrep in raw_achievedsopm_polyreps]
+            #print("DB: coeff lengths = ",[len(polyrep.int_coeffs) for polyrep in raw_achievedsopm_polyreps],
             #      "vs", [len(polyrep.int_coeffs) for polyrep in raw_polyreps])
             #assert(False), "STOP"
-            all_maxsopm_compact_polys.extend(compact_maxsopm_polys)
+            all_achievedsopm_compact_polys.extend(compact_achievedsopm_polys)
                 
         tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
         vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
         ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
         self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
-        tapes = all_maxsopm_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        tapes = all_achievedsopm_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
         vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
         ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
-        self.merged_maxsopm_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
+        self.merged_achievedsopm_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
         return
         

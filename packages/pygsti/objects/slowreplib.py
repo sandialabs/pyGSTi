@@ -1110,6 +1110,18 @@ class PolyRep(dict):
         """
         return PolyRep(self, self.max_num_vars, self.vindices_per_int) #construct expects "int" keys
 
+    def abs(self):
+        """
+        Return a polynomial whose coefficents are the absolute values of this PolyRep's coefficients.
+
+        Returns
+        -------
+        PolyRep
+        """
+        result = {k: abs(v) for k,v in self.items()}
+        return PolyRep(result, self.max_num_vars, self.vindices_per_int)
+
+
     @property
     def int_coeffs(self):  # so we can convert back to python Polys
         """ The coefficient dictionary (with encoded integer keys) """
@@ -2103,7 +2115,7 @@ def SB_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elab
     return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
                                                       circuitsetup_cache, comm, memLimit, fastmode)
 
-def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
     """ TODO: docstring """
     mpv = calc.Np  # max_poly_vars
     distinct_gateLabels = sorted(set(circuit))
@@ -2164,7 +2176,7 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
 
     traverse_paths_upto_threshold(factor_lists, threshold, len(elabels),
                                   foat_indices_per_op, count_path)  # sets mag and nPaths
-    return max_sum_of_pathmags - mag
+    return mag, max_sum_of_pathmags
 
     #threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
     #    factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
@@ -2362,7 +2374,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
     #fastmode = False  # REMOVE - was used for DEBUG b/c "_ex" path traversal won't always work w/fast mode
-    if fastmode:
+    if fastmode == 1: # fastmode
         leftSaved = [None] * (len(factor_lists) - 1)  # saved[i] is state after i-th
         rightSaved = [None] * (len(factor_lists) - 1)  # factor has been applied
         coeffSaved = [None] * (len(factor_lists) - 1)
@@ -2428,6 +2440,17 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
             if prps[Ei] is None: prps[Ei] = res
             else: prps[Ei].add_inplace(res) # prps[Ei] += res
 
+    elif fastmode == 2: # achieved-SOPM mode
+        def add_path(b, mag, incd):
+            """Adds in |pathmag| = |prod(factor_coeffs)| for computing achieved SOPM"""
+            factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
+            result = _functools.reduce(lambda x, y: x.mult(y), [f.coeff.abs() for f in factors])
+
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+            if prps[Ei] is None: prps[Ei] = res
+            else: prps[Ei].add_inplace(res) # prps[Ei] += res
+        
     else:
         def add_path(b, mag, incd):
             factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]

@@ -30,7 +30,7 @@ MACH_PRECISION = 1e-12
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_clip=None, use_acceleration=False,
-                   uphill_step_threshold=0.0, comm=None, verbosity=0, profiler=None):
+                   uphill_step_threshold=0.0, init_munu="auto", comm=None, verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization
     algorithm customized for use within pyGSTi.  This general purpose routine
@@ -230,12 +230,15 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 converged = True; break
 
             if k == 0:
-                if damping_clip is None:
-                    mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
+                if init_munu == "auto":
+                    if damping_clip is None:
+                        mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
+                    else:
+                        #mu = tau # initial damping element
+                        mu = 100000.0 # initial multiplicative damping element
+                        #mu = min(mu, MU_TOL1)
                 else:
-                    #mu = tau # initial damping element
-                    mu = 10000.0 # initial multiplicative damping element
-                    #mu = min(mu, MU_TOL1)
+                    mu, nu = init_munu
 
             #determing increment using adaptive damping
             while True:  # inner loop
@@ -309,9 +312,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                         new_f = obj_fn(new_x)
                         new_x_is_allowed = True
-                    except ValueError:
+                    except ValueError:  #Use this to mean - "not allowed, but don't stop"
                         new_x_is_allowed = False
                         #x = new_x; msg = "NO MANS LAND!"; converged=True; break  # TEST aborting at first out-of-bounds point
+                    except AssertionError:  #Use this to mean - "STOP now"
+                        msg = "Objective function requested STOP"
+                        converged = True; break
                         
                     if new_x_is_allowed:
                         
@@ -455,7 +461,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         converged = True
 
     #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    return x, converged, msg
+    return x, converged, msg, mu, nu
     #solution = _optResult()
     #solution.x = x; solution.fun = f
     #solution.success = converged

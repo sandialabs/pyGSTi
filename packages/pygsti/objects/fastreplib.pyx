@@ -3206,8 +3206,8 @@ cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
             leftSaved[i] = new SVStateCRep(dim)
             rightSaved[i] = new SVStateCRep(dim)
 
-    elif fastmode == 2: #max-SOPM mode
-        addpath_fn = add_path_maxsopm
+    elif fastmode == 2: #achieved-SOPM mode
+        addpath_fn = add_path_achievedsopm
         for i in range(nFactorLists-1):
             leftSaved[i] = NULL
             rightSaved[i] = NULL
@@ -3316,9 +3316,9 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
     pprop2[0] = prop2
     
     
-cdef void add_path_maxsopm(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
-                           SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
-                           vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
+cdef void add_path_achievedsopm(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
+                                SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
+                                vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
 
     cdef PolyCRep coeff
     cdef PolyCRep result
@@ -3743,7 +3743,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
     return threshold_lower_bound
 
-def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
     """ TODO: docstring """
 
     #Same beginning as SV_prs_as_pruned_polys -- should consolidate this setup code elsewhere
@@ -3813,15 +3813,13 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
     #print("npaths = ",npaths)
     #print("MAX sopm = ",max_sum_of_pathmags)
     
-    ret = np.empty(numEs,'d')
-    ret2 = np.empty(numEs,'d')  # DEBUG
-    ret3 = np.empty(numEs,'d')  # DEBUG
+    achieved_sopm = np.empty(numEs,'d')
+    max_sopm = np.empty(numEs,'d')
     for i in range(numEs):
-        ret[i] = max_sum_of_pathmags[i] - mags[i]
-        ret2[i] = max_sum_of_pathmags[i]
-        ret3[i] = mags[i]
+        achieved_sopm[i] = mags[i]
+        max_sopm[i] = max_sum_of_pathmags[i]
         
-    return ret, ret2, ret3  #DEBUG!!!
+    return achieved_sopm, max_sopm
 
 
 
