@@ -3083,11 +3083,10 @@ def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=F
         return _objs.Circuit(random_string), bitflip
 
 
-def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
-
-    #import numpy as _np
-    #from pygsti.objects import circuit as _cir
-
+def random_germ(pspec, lengths, interactingQs_density, subsetQs):
+    """
+    todo.
+    """
     if subsetQs is None:
         qubits = list(pspec.qubit_labels[:])  # copy this list
     else:
@@ -3237,12 +3236,35 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
         #newgermcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
         #for layer in germcircuit:
         #    newgermcircuit.insert_layer(layer,0)
+
+    return germcircuit
+
+
+def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs, fixed_versus_depth=False):
+
+    #import numpy as _np
+    #from pygsti.objects import circuit as _cir
+
+    if subsetQs is None:
+        qubits = list(pspec.qubit_labels[:])  # copy this list
+    else:
+        qubits = list(subsetQs[:])  # copy this list
+
+    width = len(qubits)
         
+    if fixed_versus_depth:
+        germcircuit = random_germ(pspec, lengths, interactingQs_density, subsetQs)
+    else:
+        germcircuits = []
+
     circs = []
-    germpowers = []
+    #germpowers = []
     for length in lengths:
         gdepth = 0
         fullcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
+        if not fixed_versus_depth:
+            germcircuit = random_germ(pspec, lengths, interactingQs_density, subsetQs)
+            germcircuits.append(germcircuit)
         while len(fullcircuit) < length:
             fullcircuit.append_circuit(germcircuit)
             gdepth += 1
@@ -3251,20 +3273,23 @@ def random_germpower_circuits(pspec, lengths, interactingQs_density, subsetQs):
             fullcircuit.delete_layers(len(fullcircuit) - 1)
             
         circs.append(fullcircuit)
-        germpowers.append(gdepth)
+        #germpowers.append(gdepth)
 
-    
-    aux = {'germ_powers': germpowers,
-           'germ_circuit': germcircuit,
-           'subgerm_depth': subgerm_depth,
-           'max_subgerm_depth': max_subgerm_depth
+    aux = {#'germ_powers': germpowers,
+           #'subgerm_depth': subgerm_depth,
+           #'max_subgerm_depth': max_subgerm_depth
            }
+
+    if fixed_versus_depth:
+        aux['germ'] = germcircuit
+    else:
+        aux['germ'] = germcircuits
         
     return circs, aux
 
 
 def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localclifford=True, paulirandomize=True, 
-                                     interactingQs_density=1/4):
+                                     interactingQs_density=1/8, fixed_versus_depth=False):
     """
     length : consistent with RB length.
     """
@@ -3286,7 +3311,8 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
             "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
 
     circuits, aux = random_germpower_circuits(pspec, lengths, interactingQs_density=interactingQs_density,
-                                                      subsetQs=subsetQs)
+                                              subsetQs=subsetQs, fixed_versus_depth=fixed_versus_depth)
+
     
     if paulirandomize:
         pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
@@ -3311,20 +3337,25 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
         circuit_inv.map_names_inplace(pspec.gate_inverse)
 
         if paulirandomize:
-        #    pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
+            # If .....
+            if not fixed_versus_depth:
+                pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)             
+
             circuit.append_circuit(pauli_circuit)
             circuit.append_circuit(circuit_inv)
 
         # If we start with a random layer of 1-qubit Cliffords, we sample this here.
         if localclifford:
-#             # Sample a compiled 1Q Cliffords layer
-#             oneQclifford_circuit_out = oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
-#             # Generate the inverse in the same way as before (note that this will not be the same in some
-#             # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
-#             # matter much which we do).
-#             oneQclifford_circuit_back = oneQclifford_circuit_out.copy(editable=True)
-#             oneQclifford_circuit_back.reverse()
-#             oneQclifford_circuit_back.map_names_inplace(pspec.gate_inverse)
+            # If .....            
+            if not fixed_versus_depth:
+                # Sample a compiled 1Q Cliffords layer
+                oneQclifford_circuit_out = oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+                # Generate the inverse in the same way as before (note that this will not be the same in some
+                # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
+                # matter much which we do).
+                oneQclifford_circuit_back = oneQclifford_circuit_out.copy(editable=True)
+                oneQclifford_circuit_back.reverse()
+                oneQclifford_circuit_back.map_names_inplace(pspec.gate_inverse)
 
             # Put one these 1Q clifford circuits at the start and one at then end.
             circuit.append_circuit(oneQclifford_circuit_out)
@@ -3358,9 +3389,8 @@ def random_germpower_mirror_circuits(pspec, lengths, subsetQs=None, localcliffor
 
 
 def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='edgegrab',
-                         samplerargs = [1/4],
-                         localclifford=True, paulirandomize=True,
-                         descriptor=''):
+                                               samplerargs = [1/4], localclifford=True, paulirandomize=True,
+                                               fixed_versus_depth=False, descriptor=''):
 
     assert(sampler == 'edgegrab'), "The germ must be selected with edgegrab sampling!"
     experiment_dict = {}
@@ -3377,10 +3407,10 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     experiment_dict['circuits'] = {}
     experiment_dict['target'] = {}
-    experiment_dict['germ_circuits'] = {}
-    experiment_dict['germ_powers'] = {}
-    experiment_dict['subgerm_depths'] = {}
-    experiment_dict['max_subgerm_depth'] = {}
+    experiment_dict['germs'] = {}
+    #experiment_dict['germ_powers'] = {}
+    #experiment_dict['subgerm_depths'] = {}
+    #experiment_dict['max_subgerm_depth'] = {}
 
     circlist = {}
     outlist = {}
@@ -3388,9 +3418,10 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
     for j in range(circuits_per_length):
         circlist[j], outlist[j], aux[j] = random_germpower_mirror_circuits(pspec, lengths, subsetQs=subsetQs,
                                         localclifford=localclifford, paulirandomize=paulirandomize,
-                                       interactingQs_density=samplerargs[0])
+                                       interactingQs_density=samplerargs[0], fixed_versus_depth=fixed_versus_depth)
 
         
+    #print(aux[0])
     #for l in lengths:
     for lind in range(len(lengths)):
         for j in range(circuits_per_length):
@@ -3401,10 +3432,13 @@ def random_germpower_mirror_circuit_experiment(pspec, lengths, circuits_per_leng
 #             experiment_dict['target'][l, j] = iout
             experiment_dict['circuits'][lengths[lind], j] = circlist[j][lind]
             experiment_dict['target'][lengths[lind], j] = outlist[j][lind]
-            experiment_dict['germ_circuits'][lengths[lind], j] = aux[j]['germ_circuit']
-            experiment_dict['germ_powers'][lengths[lind], j] = aux[j]['germ_powers'][lind]
-            experiment_dict['subgerm_depths'][lengths[lind], j] = aux[j]['subgerm_depth']
-            experiment_dict['max_subgerm_depth'][lengths[lind], j] = aux[j]['max_subgerm_depth']
+            if fixed_versus_depth:
+                experiment_dict['germs'][lengths[lind], j] = aux[j]['germ']
+            else:
+                experiment_dict['germs'][lengths[lind], j] = aux[j]['germ'][lind]
+            #experiment_dict['germ_powers'][lengths[lind], j] = aux[j]['germ_powers'][lind]
+            #experiment_dict['subgerm_depths'][lengths[lind], j] = aux[j]['subgerm_depth']
+            #experiment_dict['max_subgerm_depth'][lengths[lind], j] = aux[j]['max_subgerm_depth']
 
     return experiment_dict
 
