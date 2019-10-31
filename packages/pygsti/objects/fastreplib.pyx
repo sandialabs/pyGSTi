@@ -1673,8 +1673,14 @@ cdef class SVTermRep:
     def copy(self):
         return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                         self.pre_ops, self.post_ops)        
+                         self.pre_ops, self.post_ops)
 
+    #Not needed - and this implementation is quite right as it will need to change
+    # the ordering of the pre/post ops also.
+    #def conjugate(self):
+    #    return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
+    #                     self.post_ops, self.pre_ops)
 
 
 #Note: to use direct term reps (numerical coeffs) we'll need to update
@@ -1833,7 +1839,15 @@ cdef class SBTermRep:
     def copy(self):
         return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                         self.pre_ops, self.post_ops)        
+                         self.pre_ops, self.post_ops)
+
+    #Not needed - and this implementation is quite right as it will need to change
+    # the ordering of the pre/post ops also.
+    #def conjugate(self):
+    #    return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
+    #                     self.post_ops, self.pre_ops)
+
 
 
 
@@ -3259,8 +3273,8 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
 
 	# can't propagate effects, so effect's post_ops are constructed to act on *state*
     EVec = factor._post_effect
-    for j in range(<INT>factor._post_ops.size()):
-        rhoVec = factor._post_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._pre_ops.size()):
+        rhoVec = factor._pre_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
     pLeft = EVec.amplitude(prop1)
 
@@ -3278,8 +3292,8 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
     factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
 
     EVec = factor._pre_effect
-    for j in range(<INT>factor._pre_ops.size()):
-        factor._pre_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._post_ops.size()):
+        factor._post_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
     pRight = EVec.amplitude(prop1).conjugate()
 
@@ -3420,16 +3434,16 @@ cdef void add_path_savepartials(vector[PolyCRep*]* prps, vector[INT]& b, INT inc
     factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
     EVec = factor._post_effect
     prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-    for j in range(<INT>factor._post_ops.size()):
-        factor._post_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._pre_ops.size()):
+        factor._pre_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop
     pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
 
     #print "DB: right ampl"
     EVec = factor._pre_effect
     prop1.copy_from(rhoVecR)
-    for j in range(<INT>factor._pre_ops.size()):
-        factor._pre_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._post_ops.size()):
+        factor._post_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop
     pRight = EVec.amplitude(prop1).conjugate()
 
@@ -4714,8 +4728,8 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
 
         # can't propagate effects, so effect's post_ops are constructed to act on *state*
         EVec = factor._post_effect
-        for j in range(<INT>factor._post_ops.size()):
-            rhoVec = factor._post_ops[j].acton(prop1,prop2)
+        for j in range(<INT>factor._pre_ops.size()):
+            rhoVec = factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         pLeft = EVec.amplitude(prop1)
 
@@ -4733,8 +4747,8 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
 
         EVec = factor._pre_effect
-        for j in range(<INT>factor._pre_ops.size()):
-            factor._pre_ops[j].acton(prop1,prop2)
+        for j in range(<INT>factor._post_ops.size()):
+            factor._post_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         pRight = EVec.amplitude(prop1).conjugate()
 
@@ -4887,8 +4901,8 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
         EVec = factor._post_effect
         prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-        for j in range(<INT>factor._post_ops.size()):
-            factor._post_ops[j].acton(prop1,prop2)
+        for j in range(<INT>factor._pre_ops.size()):
+            factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop
         pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
 
@@ -4897,11 +4911,11 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         prop1.copy_from(rhoVecR)
         pRight = EVec.amplitude(prop1)
         #DEBUG print "  - begin: ",complex(pRight)
-        for j in range(<INT>factor._pre_ops.size()):
+        for j in range(<INT>factor._post_ops.size()):
             #DEBUG print " - state = ", [ prop1._smatrix[ii] for ii in range(2*2)]
             #DEBUG print "         = ", [ prop1._pvectors[ii] for ii in range(2)]
             #DEBUG print "         = ", [ prop1._amps[ii] for ii in range(1)]
-            factor._pre_ops[j].acton(prop1,prop2)
+            factor._post_ops[j].acton(prop1,prop2)
             #DEBUG print " - action with ", [ (<SBOpCRep_Clifford*>factor._pre_ops[j])._smatrix_inv[ii] for ii in range(2*2)]
             #DEBUG print " - action with ", [ (<SBOpCRep_Clifford*>factor._pre_ops[j])._svector_inv[ii] for ii in range(2)]
             #DEBUG print " - action with ", [ (<SBOpCRep_Clifford*>factor._pre_ops[j])._unitary_adj[ii] for ii in range(2*2)]

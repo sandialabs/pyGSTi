@@ -6883,6 +6883,7 @@ class LindbladErrorgen(LinearOperator):
     def _init_terms(self, Ltermdict, basis, evotype, dim, max_poly_vars):
 
         d2 = dim
+        d = int(round(_np.sqrt(d2)))  #needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
         mpv = max_poly_vars
 
         # Lookup dictionaries for getting the *parameter* index associated
@@ -6907,6 +6908,7 @@ class LindbladErrorgen(LinearOperator):
             if termType == "H":  # Hamiltonian
                 k = hamBasisIndices[termLbl[1]]  # index of parameter
                 scale, U = _mt.to_unitary(basis[termLbl[1]]) # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
+                scale *= _np.sqrt(d)/2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
                 Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): -1j*scale}, mpv), U, IDENT, evotype))
                 Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j*scale}, mpv),
                                                 IDENT, U.conjugate().T, evotype))
@@ -6918,6 +6920,7 @@ class LindbladErrorgen(LinearOperator):
                     else:
                         k = numHamParams + otherBasisIndices[termLbl[1]]  # index of parameter
                     scale, U = _mt.to_unitary(basis[termLbl[1]]) # ensure all Rank1Term operators are *unitary*
+                    scale *= _np.sqrt(d)  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
                     Lm = Ln = U
                     # power to raise parameter to in order to get coeff
                     pw = 2 if self.param_mode in ("cptp", "depol") else 1
@@ -6938,6 +6941,7 @@ class LindbladErrorgen(LinearOperator):
                     scalen, Un = _mt.to_unitary(basis[termLbl[2]]) # ensure all Rank1Term operators are *unitary*
                     Lm, Ln = Um, Un
                     scale = scalem * scalen
+                    scale *= d  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
 
                     # TODO: create these polys and place below...
                     polyTerms = {}

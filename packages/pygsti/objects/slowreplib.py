@@ -2021,13 +2021,13 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     #  if factors[-1].opname == cur_effect_opname: (or opint in C-case)
                     #      <skip application of post_ops & preops - just load from (new) saved slot get pLeft & pRight>
 
-                    for f in factors[-1].post_ops:
+                    for f in factors[-1].pre_ops:
                         rhoVecL = f.acton(rhoVecL)
                     E = factors[-1].post_effect  # effect representation
                     pLeft = E.amplitude(rhoVecL)
 
-                    #Same for pre_ops and rhoVecR
-                    for f in factors[-1].pre_ops:
+                    #Same for post_ops and rhoVecR
+                    for f in factors[-1].post_ops:
                         rhoVecR = f.acton(rhoVecR)
                     E = factors[-1].pre_effect
                     pRight = _np.conjugate(E.amplitude(rhoVecR))
@@ -2409,13 +2409,13 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
 
             # for the last index, no need to save, and need to construct
             # and apply effect vector
-            for f in factors[-1].post_ops:
+            for f in factors[-1].pre_ops:
                 rhoVecL = f.acton(rhoVecL)
             E = factors[-1].post_effect  # effect representation
             pLeft = E.amplitude(rhoVecL)
 
-            #Same for pre_ops and rhoVecR
-            for f in factors[-1].pre_ops:
+            #Same for post_ops and rhoVecR
+            for f in factors[-1].post_ops:
                 rhoVecR = f.acton(rhoVecR)
             E = factors[-1].pre_effect
             pRight = _np.conjugate(E.amplitude(rhoVecR))
@@ -2718,13 +2718,13 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
 
             # for the last index, no need to save, and need to construct
             # and apply effect vector
-            for f in factors[-1].post_ops:
+            for f in factors[-1].pre_ops:
                 rhoVecL = f.acton(rhoVecL)
             E = factors[-1].post_effect  # effect representation
             pLeft = E.amplitude(rhoVecL)
 
-            #Same for pre_ops and rhoVecR
-            for f in factors[-1].pre_ops:
+            #Same for post_ops and rhoVecR
+            for f in factors[-1].post_ops:
                 rhoVecR = f.acton(rhoVecR)
             E = factors[-1].pre_effect
             pRight = _np.conjugate(E.amplitude(rhoVecR))
@@ -3170,7 +3170,7 @@ def _unitary_sim_pre(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec)  # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    for f in complete_factors[-1].post_ops:
+    for f in complete_factors[-1].pre_ops:
         rhoVec = f.acton(rhoVec)
 
     EVec = complete_factors[-1].post_effect
@@ -3184,7 +3184,7 @@ def _unitary_sim_post(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec)  # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    for f in complete_factors[-1].pre_ops:
+    for f in complete_factors[-1].post_ops:
         rhoVec = f.acton(rhoVec)
     EVec = complete_factors[-1].pre_effect
     return _np.conjugate(EVec.amplitude(rhoVec))  # conjugate for same reason as above
