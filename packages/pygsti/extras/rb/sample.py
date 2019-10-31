@@ -2603,6 +2603,9 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
     oneQclifford_circuit.change_gate_library(pspec.compilations['absolute'])
     oneQclifford_circuit.done_editing()
 
+    if len(oneQclifford_circuit) == 0:
+        oneQclifford_circuit = _cir.Circuit(layer_labels='[]', line_labels=qubits)
+
     return oneQclifford_circuit
 
 
