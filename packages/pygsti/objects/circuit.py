@@ -961,7 +961,7 @@ class Circuit(object):
         -------
         None
         """
-        if isinstance(lbls, Circuit): lbls = lbls.tup
+        if isinstance(lbls, Circuit): lbls = tuple(lbls)
         # lbls is expected to be a list/tuple of Label-like items, one per inserted layer
         lbls = tuple(map(toLabel, lbls))
         numLayersToInsert = len(lbls)
