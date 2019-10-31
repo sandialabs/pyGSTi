@@ -1582,7 +1582,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     """ TODO: docstring """
 
     MAX_NUM_FAILURES = 0
-    maxSubIters = 10
+    maxSubIters = 1
     final_iter = False
 
     def debug_paramvec():  # REMOVE
@@ -1668,12 +1668,44 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
     printer.log("Initial Term-stage model has %d failures" % (nFailures))
     currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
+
+    #Set "frozen hessian" a (#params, #elements, #params)-shaped array used to compute a proxy for the termgap penalty
+    def create_frozen_H(fwdsim):
+        return
+        print("DB: CREATING FROZEN H")
+        #J = mdl._fwdsim().bulk_get_termgap_penalty_jacobian(evTree, comm, memLimit)
+        #return _np.einsum('ij,ik->jik',J,J)
+        eps = 0.3
+        vorig = fwdsim.to_vector()
+        Np = fwdsim.Np
+
+        v0 = _np.zeros(Np,'d')
+        fwdsim.from_vector(v0)
+        penalty0 = fwdsim.bulk_get_termgap_penalty(evTree, comm, memLimit)
+
+        H = _np.zeros( (Np,len(penalty0),Np), 'd')
+        for i in range(Np):
+            v = v0.copy()
+            v[i] += eps; fwdsim.from_vector(v)
+            penalty_plus = fwdsim.bulk_get_termgap_penalty(evTree, comm, memLimit)
+            v = v0.copy()
+            v[i] -= eps; fwdsim.from_vector(v)
+            penalty_minus = fwdsim.bulk_get_termgap_penalty(evTree, comm, memLimit)
+            H[i,:,i] = (penalty_plus + penalty_minus - 2*penalty0) / eps**2
+
+        fwdsim.from_vector(vorig)
+        return H
+        
+    objective.frozen_H = create_frozen_H(mdl._fwdsim())
+    
     debug_paramvec()  # REMOVE
 
     #alpha = 1.0 # no alpha controls inflation factor rather than interpolation - always start at 1.0
     #termgap_penalty = 0.00001 #10.0
     minErrVec = None
     for sub_iter in range(maxSubIters):
+
+        objective.frozen_H = create_frozen_H(mdl._fwdsim())
         
         #inflate_factor = 1.0 if final_iter else 50.0
         #MAX_INFLATE = 2.5

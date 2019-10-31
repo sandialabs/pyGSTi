@@ -180,7 +180,21 @@ class Chi2Function(ObjectiveFunction):
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
         termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #test_penalty = termgap_penalty.copy()
+        ##termgap_penalty[:] = 1.0*_np.dot(vectorGS,vectorGS)  # sum(x_i^2)
+        #termgap_penalty = 0.5*_np.dot(vectorGS, _np.dot(self.frozen_H, vectorGS))  # T(0) + dot(Jac,x) + 0.5xH*x => 0.5 sum(xi * Hiaj * xj)
+        #print("DB: Real norm = ",_np.linalg.norm(test_penalty), " proxy=",_np.linalg.norm(termgap_penalty), " count=",_np.count_nonzero(termgap_penalty < test_penalty))
         #print("Termgap abs max = ",max(_np.abs(termgap_penalty)))
+        
+        mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
+        db_probs = _np.zeros(self.probs.shape, 'd')
+        mdl_fullsim.from_vector(vectorGS)
+        mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
+        for i,(fullsim_prob, approx_prob, errorbar) in enumerate(zip(db_probs, self.probs, termgap_penalty)):
+            if not (approx_prob - errorbar < fullsim_prob < approx_prob + errorbar):
+                print("Failed: %g < %g < %g" % (approx_prob - errorbar, fullsim_prob, approx_prob + errorbar))
+                #import bpdb; bpdb.set_trace()
+                assert(False),"STOP"
 
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
         #print("DB BEFORE termgap: OBJ = ", _np.linalg.norm(v))
@@ -200,6 +214,25 @@ class Chi2Function(ObjectiveFunction):
         v = _np.sqrt(v_plus**2 + v_minus**2)
         #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
         #v += _np.sqrt(v_plus**2 + v_minus**2); v /= 2
+
+        self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+        assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
+        return v
+
+    def simple_termgap_chi2(self, vectorGS):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+
+        #termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
+        #db_probs = _np.zeros(self.probs.shape, 'd')
+        #mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
+
+        v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        
+        if self.firsts is not None:
+            self.update_v_for_omitted_probs(v, self.probs)
 
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
@@ -321,7 +354,7 @@ class Chi2Function(ObjectiveFunction):
         # with a different shape (jac.shape == [KM,vec_gs_len])
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
             v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
@@ -343,6 +376,11 @@ class Chi2Function(ObjectiveFunction):
 
         termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
         jac_termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
+        #termgap_penalty = 0.5*_np.dot(vectorGS, _np.dot(self.frozen_H, vectorGS))  # T(0) + dot(Jac,x) + 0.5xH*x => 0.5 sum(xi * Hiaj * xj)
+        #jac_termgap_penalty = _np.einsum('i,iak->ak', vectorGS, self.frozen_H) # =d/dxk=> 0.5 sum(xi*Hiak) + sum(Hkaj * xj) = dot(x,H) b/c H*a* is symmetric 
+        
+        #termgap_penalty[:] = 1.0*_np.dot(vectorGS,vectorGS)  # sum(x_i^2)
+        #jac_termgap_penalty[:,:] = 1.0*2*vectorGS[None,:]  # d/dx_i -> 2 x_i
 
         #We'll need "v" below for computation (not needed for normal chi2)
 
@@ -367,7 +405,7 @@ class Chi2Function(ObjectiveFunction):
         v = _np.sqrt(v_plus**2 + v_minus**2)
         #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
         #v += _np.sqrt(v_plus**2 + v_minus**2); v /= 2
-
+        
         dprobs_plus = dprobs + jac_termgap_penalty
         dprobs_minus = dprobs - jac_termgap_penalty
 
@@ -380,12 +418,18 @@ class Chi2Function(ObjectiveFunction):
                 dprobs_plus_omitted_rowsum[ii, :] = _np.sum(dprobs_plus[self.lookup[i], :], axis=0)
                 dprobs_minus_omitted_rowsum[ii, :] = _np.sum(dprobs_minus[self.lookup[i], :], axis=0)
 
+        dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None] # now dv
         dprobs_plus *= (weights_plus + (p_plus - self.f) * self.get_dweights(p_plus, weights_plus))[:, None] # now dv_plus
         dprobs_minus *= (weights_minus + (p_minus - self.f) * self.get_dweights(p_minus, weights_minus))[:, None] # now dv_minus
+
+        if self.firsts is not None:
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
+            self.update_dprobs_for_omitted_probs(dprobs_plus, p_plus, weights_plus, dprobs_plus_omitted_rowsum)
+            self.update_dprobs_for_omitted_probs(dprobs_minus, p_minus, weights_minus, dprobs_minus_omitted_rowsum)
+        
         dprobs[:,:] = (1.0/_np.sqrt(v_plus**2+v_minus**2))[:,None] \
             * (v_plus[:,None]*dprobs_plus + v_minus[:,None]*dprobs_minus)
         #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
-        #dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None] # now dv
         #dprobs[:,:] = 0.5*(dprobs + (1.0/_np.sqrt(v_plus**2+v_minus**2))[:,None] \
         #    * (v_plus[:,None]*dprobs_plus + v_minus[:,None]*dprobs_minus))
         
@@ -393,12 +437,42 @@ class Chi2Function(ObjectiveFunction):
         # this multiply also computes jac, which is just dprobs
         # with a different shape (jac.shape == [KM,vec_gs_len])
 
+        if self.check_jacobian: _opt.check_jac(lambda v: self.termgap_chi2(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+
+        # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
+        # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
+        self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
+        return self.jac
+
+    def simple_termgap_jac(self, vectorGS):
+        tm = _time.time()
+        dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.KM, self.vec_gs_len)
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
+                                  check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
+                                  profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        #termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty(self.evTree, self.comm, memLimit=None)
+        #jac_termgap_penalty = self.mdl._fwdsim().bulk_get_termgap_penalty_jacobian(self.evTree, self.comm, memLimit=None)
+
+        if self.firsts is not None:
+            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+
+        weights = self.get_weights(self.probs)
+        dprobs *= (weights + (self.probs - self.f) * self.get_dweights(self.probs, weights))[:, None] # now dv
+
         if self.firsts is not None:
             self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
-            self.update_dprobs_for_omitted_probs(dprobs_plus, p_plus, weights_plus, dprobs_plus_omitted_rowsum)
-            self.update_dprobs_for_omitted_probs(dprobs_minus, p_minus, weights_minus, dprobs_minus_omitted_rowsum)
+        
+        # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        # this multiply also computes jac, which is just dprobs
+        # with a different shape (jac.shape == [KM,vec_gs_len])
 
-        if self.check_jacobian: _opt.check_jac(lambda v: self.termgap_chi2(
+        if self.check_jacobian: _opt.check_jac(lambda v: self.simple_termgap_chi2(
             v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
@@ -424,7 +498,7 @@ class Chi2Function(ObjectiveFunction):
         # Note: this also computes jac[0:KM,:]
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         gsVecGrad = _np.diag([(self.regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0)
                               for x in vectorGS])  # (N,N)
@@ -456,7 +530,7 @@ class Chi2Function(ObjectiveFunction):
         # Note: this also computes jac[0:KM,:]
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         off = 0
         if self.cptp_penalty_factor > 0:
@@ -493,7 +567,7 @@ class Chi2Function(ObjectiveFunction):
         dprobs *= dPr_prefactor[:, None]  # (KM,N) * (KM,1) = (KM,N)  (N = dim of vectorized model)
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         if self.regularizeFactor != 0:
             gsVecGrad = _np.diag([(self.regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
