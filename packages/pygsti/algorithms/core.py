@@ -1584,7 +1584,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     """ TODO: docstring """
 
     MAX_NUM_FAILURES = 0
-    maxSubIters = 3
+    maxSubIters = 2
     final_iter = False
 
     def debug_paramvec():  # REMOVE
@@ -1596,9 +1596,9 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         angle = _np.arccos(_np.dot(current_vec, datagen_vec) / (_np.linalg.norm(current_vec) * _np.linalg.norm(datagen_vec)))
         print("angle = ", angle, "(", angle * 360.0 / (2*_np.pi), " degrees)")
 
-        orig_inflate = objective.mdl._termgap_inflation_factor
-        objective.mdl._termgap_inflation_factor = None # 1.0
-        objective.termgap_penalty_factor = 0.0
+        #orig_inflate = objective.mdl._termgap_inflation_factor
+        #objective.mdl._termgap_inflation_factor = None # 1.0
+        #objective.termgap_penalty_factor = 0.0
         
         objective_func = objective.fn
 
@@ -1642,17 +1642,19 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         except ValueError:
             obj_current = "NO-MANS-LAND"
 
-        objective.mdl._termgap_inflation_factor = orig_inflate
+        #objective.mdl._termgap_inflation_factor = orig_inflate
     
         print("Objective = ",obj_current," at current, vs ",obj_datagen, obj_datagen_postfix, " at datagen")
-        print("Interpolation of objective values from current -> datagen paramvec:")
-        vals = []
-        for alpha in _np.linspace(0,1.0,30):
-            try:
-                vals.append( str(_np.linalg.norm(objective_func(alpha*datagen_vec + (1-alpha)*current_vec))**2)  )
-            except ValueError:
-                vals.append( "NML" )
-        print(" ".join(vals))
+
+        #print("Interpolation of objective values from current -> datagen paramvec:")
+        #vals = []
+        #for alpha in _np.linspace(0,1.0,30):
+        #    try:
+        #        vals.append( str(_np.linalg.norm(objective_func(alpha*datagen_vec + (1-alpha)*current_vec))**2)  )
+        #    except ValueError:
+        #        vals.append( "NML" )
+        #print(" ".join(vals))
+        
         mdl.from_vector(current_vec)
         
     #Prepare for first iteration - this updates `mdl` (to correspond to an interpolation
@@ -1671,7 +1673,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     printer.log("Initial Term-stage model has %d failures" % (nFailures))
     currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
 
-    #debug_paramvec()  # REMOVE
+    debug_paramvec()  # REMOVE
 
     #alpha = 1.0 # no alpha controls inflation factor rather than interpolation - always start at 1.0
     #termgap_penalty = 0.00001 #10.0
@@ -1696,17 +1698,19 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         # because TermForwardSimulator.bulk_fill_probs calls TermEvalTree.num_circuit_sopm_failures_using_current_paths)
         
         #objective.termgap_penalty_factor = termgap_penalty
+        extra_lm_opts['oob_check_interval'] = 5
+        extra_lm_opts['oob_action'] = "stop" if sub_iter < (maxSubIters-1) else "reject"  # don't stop early on last iter - do as much as possible.
         minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
                                           printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
-        #debug_paramvec()  # REMOVE
+        debug_paramvec()  # REMOVE
 
         #Check how many failures the final model has (using the *same* path integrals)
         #bOK = mdl.bulk_probs_paths_are_sufficient(evTree, None, comm, memLimit, printer) # uses "locked in" paths
         #printer.log("%sTerm-stage %d final model's path's are sufficient = %s" % ("", sub_iter+1, bOK)) # final_prefix
         #import sys; sys.exit()
         
-        if not opt_state[0] == "Objective function requested STOP": #nFailures <= MAX_NUM_FAILURES: # termgap_penalty < 0.0002: #
+        if not opt_state[0] == "Objective function out-of-bounds! STOP": #nFailures <= MAX_NUM_FAILURES: # termgap_penalty < 0.0002: #
 
             #print("Termgap penalty is small (no softening); re-computing paths")
             #pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
@@ -1792,6 +1796,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
             mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
             currently_selected_pathSet = pathSet
+            #HERE - make 'final' iteration if number of paths is near (90%+?) the total number allowed
             extra_lm_opts['init_munu'] = (opt_state[1],opt_state[2])
 
             ## Sanity check

@@ -679,36 +679,36 @@ class TermEvalTree(EvalTree):
                                                        comm,
                                                        memLimit)
 
-            raw_achievedsopm_polyreps = calc.prs_as_pruned_polyreps(threshold,
-                                                                    rholabel,
-                                                                    elabels,
-                                                                    opstr,
-                                                                    repcache,
-                                                                    calc.sos.opcache,
-                                                                    circuitsetup_cache,
-                                                                    comm,
-                                                                    memLimit,
-                                                                    mode="achieved-sopm")
+            #UNUSED (TODO REMOVE?) if we don't need the jacobian of the achieved SOPM
+            #raw_achievedsopm_polyreps = calc.prs_as_pruned_polyreps(threshold,
+            #                                                        rholabel,
+            #                                                        elabels,
+            #                                                        opstr,
+            #                                                        repcache,
+            #                                                        calc.sos.opcache,
+            #                                                        circuitsetup_cache,
+            #                                                        comm,
+            #                                                        memLimit,
+            #                                                        mode="achieved-sopm")
 
             compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
             self.percircuit_p_polys[circuit] = (threshold, compact_polys)
             all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
 
-            compact_achievedsopm_polys = [polyrep.compact_complex() for polyrep in raw_achievedsopm_polyreps]
-            #print("DB: coeff lengths = ",[len(polyrep.int_coeffs) for polyrep in raw_achievedsopm_polyreps],
-            #      "vs", [len(polyrep.int_coeffs) for polyrep in raw_polyreps])
-            #assert(False), "STOP"
-            all_achievedsopm_compact_polys.extend(compact_achievedsopm_polys)
+            #UNUSED (TODO REMOVE?) if we don't need the jacobian of the achieved SOPM
+            #compact_achievedsopm_polys = [polyrep.compact_complex() for polyrep in raw_achievedsopm_polyreps]            
+            #all_achievedsopm_compact_polys.extend(compact_achievedsopm_polys)
                 
         tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
         vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
         ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
         self.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
-        tapes = all_achievedsopm_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
-        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
-        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
-        self.merged_achievedsopm_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
+        #UNUSED (TODO REMOVE?) if we don't need the jacobian of the achieved SOPM
+        #tapes = all_achievedsopm_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        #vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
+        #ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
+        #self.merged_achievedsopm_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
         return
         

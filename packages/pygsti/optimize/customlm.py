@@ -30,7 +30,8 @@ MACH_PRECISION = 1e-12
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_clip=None, use_acceleration=False,
-                   uphill_step_threshold=0.0, init_munu="auto", comm=None, verbosity=0, profiler=None):
+                   uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
+                   oob_action="reject", comm=None, verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization
     algorithm customized for use within pyGSTi.  This general purpose routine
@@ -104,6 +105,23 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         otherwise it should take a value between 1.0 and 2.0, with 1.0 being
         the most permissive to uphill steps.
 
+    init_munu : tuple, optional
+        If not None, a (mu, nu) tuple of 2 floats giving the initial values
+        for mu and nu.
+
+    oob_check_interval : int, optional
+        Every `oob_check_interval` outer iterations, the objective function
+        (`obj_fn`) is called with a second argument 'oob_check', set to True.
+        In this case, `obj_fn` can raise a ValueError exception to indicate
+        that it is Out Of Bounds.  If `oob_check_interval` is 0 then this
+        check is never performed; if 1 then it is always performed.
+
+    oob_action : {"reject","stop"}
+        What to do when the objective function indicates (by raising a ValueError
+        as described above).  `"reject"` means the step is rejected but the
+        optimization proceeds; `"stop"` means the optimization stops and returns
+        as converged at the last known-in-bounds point.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -153,7 +171,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     dx = None; last_dx = None; last_diff = None #DEBUG
     last_accepted_dx = None # zeros might work?
-    min_norm_f = 1e100  #sentinel
+    min_norm_f = 1e100  # sentinel
+    best_x = x.copy() # the x-value corresponding to min_norm_f
+    best_x_state = (mu, nu)
+    
     try:
 
         for k in range(max_iter):  # outer loop
@@ -164,8 +185,16 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 break  # exit outer loop if an exit-message has been set
 
             if norm_f < f_norm2_tol:
-                msg = "Sum of squares is at most %g" % f_norm2_tol
-                converged = True; break
+                if oob_check_interval <= 1:
+                    msg = "Sum of squares is at most %g" % f_norm2_tol
+                    converged = True; break
+                else:
+                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
+                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                    oob_check_interval = 1
+                    x[:] = best_x[:]
+                    mu, nu, norm_f, f = best_x_state
+                    continue
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
 
@@ -226,8 +255,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("PT6: %.3fs" % (_time.time()-t0)) # REMOVE
 
             if norm_JTf < jac_norm_tol:
-                msg = "norm(jacobian) is at most %g" % jac_norm_tol
-                converged = True; break
+                if oob_check_interval <= 1:
+                    msg = "norm(jacobian) is at most %g" % jac_norm_tol
+                    converged = True; break
+                else:
+                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
+                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                    oob_check_interval = 1
+                    x[:] = best_x[:]
+                    mu, nu, norm_f, f = best_x_state
+                    continue
+
 
             if k == 0:
                 if init_munu == "auto":
@@ -246,7 +284,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
                 #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
                 if damping_clip is None:
-                    JTJ[idiag] += mu  # augment normal equations
+                    JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
                 else:
                     add_to_diag = mu * _np.clip(undamped_JTJ_diag.copy(), damping_clip[0], damping_clip[1])
                     JTJ[idiag] = undamped_JTJ_diag + add_to_diag
@@ -302,22 +340,54 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
-                        msg = "Relative change in |x| is at most %g" % rel_xtol
-                        converged = True; break
+                        if oob_check_interval <= 1:
+                            msg = "Relative change in |x| is at most %g" % rel_xtol
+                            converged = True; break
+                        else:
+                            printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
+                                         "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                            oob_check_interval = 1
+                            x[:] = best_x[:]
+                            mu, nu, norm_f, f = best_x_state
+                            break
 
                     if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
 
-                    try:
-                        #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                    if oob_check_interval > 0:
+                        if k % oob_check_interval == 0:
+                            #Check to see if objective function is out of bounds
+                            try:
+                                #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                                new_f = obj_fn(new_x, oob_check=True)
+                                new_x_is_allowed = True
+                                new_x_is_known_inbounds = True
+                            except ValueError:  #Use this to mean - "not allowed, but don't stop"
+                                MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                                if oob_action == "reject" or k < MIN_STOP_ITER:
+                                    new_x_is_allowed = False  # (and also not in bounds)
+                                elif oob_action == "stop":
+                                    if oob_check_interval == 1:
+                                        msg = "Objective function out-of-bounds! STOP"
+                                        converged = True; break
+                                    else:  # reset to last know in-bounds point and not do oob check every step
+                                        printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last "
+                                                     "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                        oob_check_interval = 1
+                                        x[:] = best_x[:]
+                                        mu, nu, norm_f, f = best_x_state
+                                        break # restart next outer loop
+                                else:
+                                    raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+                        else:  # don't check this time
+                            new_f = obj_fn(new_x, oob_check=False)
+                            new_x_is_allowed = True
+                            new_x_is_known_inbounds = False
+                    else:
+                        #Just evaluate objective function normally; never check for in-bounds condition
                         new_f = obj_fn(new_x)
                         new_x_is_allowed = True
-                    except ValueError:  #Use this to mean - "not allowed, but don't stop"
-                        new_x_is_allowed = False
-                        #x = new_x; msg = "NO MANS LAND!"; converged=True; break  # TEST aborting at first out-of-bounds point
-                    except AssertionError:  #Use this to mean - "STOP now"
-                        msg = "Objective function requested STOP"
-                        converged = True; break
+                        new_x_is_known_inbounds = True  # always considered "in bounds" when not checking
                         
                     if new_x_is_allowed:
                         
@@ -375,9 +445,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             accel_ratio = 0.0
     
                         if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
-                            msg = "Both actual and predicted relative reductions in the" + \
-                                " sum of squares are at most %g" % rel_ftol
-                            converged = True; break
+                            if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
+                                msg = "Both actual and predicted relative reductions in the" + \
+                                    " sum of squares are at most %g" % rel_ftol
+                                converged = True; break
+                            else:
+                                printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
+                                             "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                oob_check_interval = 1
+                                x[:] = best_x[:]
+                                mu, nu, norm_f, f = best_x_state
+                                break
                             
                         if profiler: profiler.mem_check("custom_leastsq: before success")
     
@@ -391,7 +469,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
                                         % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
                             last_accepted_dx = dx.copy()
-                            min_norm_f = min(min_norm_f, norm_f)
+                            if new_x_is_known_inbounds and norm_f < min_norm_f:
+                                min_norm_f = norm_f
+                                best_x[:] = x[:]
+                                best_x_state = (mu,nu,norm_f,f)
 
                             #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                             #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
@@ -419,12 +500,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         #        print("DB: new |J| = ",Jnorm)
                             
                     else:
-                        reject_msg = " (No man's land)"
-                        #printer.log("    NO MANS LAND!!", 2)
+                        reject_msg = " (out-of-bounds)"
                             
                 else:
                     reject_msg = " (LinSolve Failure)"
-                    #printer.log("LinSolve Failure!!", 2)
 
                 # if this point is reached, either the linear solve failed
                 # or the error did not reduce.  In either case, reject increment.
@@ -438,7 +517,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
                             % (reject_msg,mu, nu), 2)
 
-                JTJ[idiag] = undamped_JTJ_diag  # restore diagonal
+                #JTJ[idiag] = undamped_JTJ_diag  # restore diagonal - not needed anymore TODO REMOVE
             #end of inner loop
 
             #printer.log("PT7: %.3fs" % (_time.time()-t0)) # REMOVE
@@ -451,8 +530,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     except KeyboardInterrupt:
         if comm is not None:
-            # ensure all procs agree on what x is (in case the interrupt occurred around x being updated)
-            comm.Bcast(x, root=0)
+            # ensure all procs agree on what best_x is (in case the interrupt occurred around x being updated)
+            comm.Bcast(best_x, root=0)
             printer.log("Rank %d caught keyboard interrupt!  Returning the current solution as being *converged*."
                         % comm.Get_rank())
         else:
@@ -461,7 +540,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         converged = True
 
     #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    return x, converged, msg, mu, nu
+    return best_x, converged, msg, mu, nu
     #solution = _optResult()
     #solution.x = x; solution.fun = f
     #solution.success = converged

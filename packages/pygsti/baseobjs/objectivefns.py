@@ -219,38 +219,37 @@ class Chi2Function(ObjectiveFunction):
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
         return v
 
-    def simple_termgap_chi2(self, vectorGS):
+    def simple_termgap_chi2(self, vectorGS, oob_check=False):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
-        
-        #DEBUGGING HACK - make sure computed probs like in expected range
-        achieved_sopm, max_sopm = self.mdl._fwdsim().bulk_get_achieved_and_max_sopm(self.evTree, self.comm, memLimit=None)
-        gaps = max_sopm - achieved_sopm
-        mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
-        db_probs = _np.zeros(self.probs.shape, 'd')
-        mdl_fullsim.from_vector(vectorGS)
-        mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
-        for i,(fullsim_prob, approx_prob, errorbar) in enumerate(zip(db_probs, self.probs, gaps)):
-            if not (approx_prob - errorbar < fullsim_prob < approx_prob + errorbar):
-                print("Failed: %g < %g < %g" % (approx_prob - errorbar, fullsim_prob, approx_prob + errorbar))
-                #import bpdb; bpdb.set_trace()
-                assert(False),"STOP"
-        heur_scale = self.probs / achieved_sopm
-        #heur_scale = 1.0 / max_sopm
-        print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" % 
-              (max(gaps), _np.mean(gaps),
-               max(_np.abs(db_probs - self.probs)), _np.mean(gaps * heur_scale),
-               max(_np.abs(db_probs - self.probs)) / _np.mean(gaps),
-               max(_np.abs(db_probs - self.probs)) / _np.mean(gaps * heur_scale),
-              ))
-        allowable_mean_gap = 0.01  # need to plumb to Model or fwd sim...
-        #END DEBUGGING
 
-        self.check_for_no_mans_land = True
-        if self.check_for_no_mans_land:
+        if oob_check:
+            #DEBUGGING HACK - make sure computed probs like in expected range
+            #achieved_sopm, max_sopm = self.mdl._fwdsim().bulk_get_achieved_and_max_sopm(self.evTree, self.comm, memLimit=None)
+            #gaps = max_sopm - achieved_sopm
+            #mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
+            #db_probs = _np.zeros(self.probs.shape, 'd')
+            #mdl_fullsim.from_vector(vectorGS)
+            #mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
+            #for i,(fullsim_prob, approx_prob, errorbar) in enumerate(zip(db_probs, self.probs, gaps)):
+            #    if not (approx_prob - errorbar < fullsim_prob < approx_prob + errorbar):
+            #        print("Failed: %g < %g < %g" % (approx_prob - errorbar, fullsim_prob, approx_prob + errorbar))
+            #        #import bpdb; bpdb.set_trace()
+            #        assert(False),"STOP"
+            #heur_scale = self.probs / achieved_sopm
+            ##heur_scale = 1.0 / max_sopm
+            #print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" % 
+            #      (max(gaps), _np.mean(gaps),
+            #       max(_np.abs(db_probs - self.probs)), _np.mean(gaps * heur_scale),
+            #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps),
+            #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps * heur_scale),
+            #      ))
+            #allowable_mean_gap = 0.01  # need to plumb to Model or fwd sim...
+            #END DEBUGGING
+
             if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
-                raise AssertionError("NO MANS LAND") # Currently, AssertionError's stop the LM simulator
+                raise ValueError("Out of bounds!")  #signals LM optimizer
 
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
         
