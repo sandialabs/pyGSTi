@@ -1157,9 +1157,9 @@ class TermForwardSimulator(ForwardSimulator):
             if self.mode == "pruned":
                 #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
                 #                                           self.min_term_mag, self.max_paths_per_outcome)
-                thresholds, highmag_termrep_cache, circuitsetup_cache, nFailed = \
-                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit) # pruning_thresholds_and_highmag_terms
-                evalSubTree.select_path_set(self, thresholds, highmag_termrep_cache, circuitsetup_cache) # this sets these as internal cached qtys
+                thresholds, highmag_termrep_cache, circuitsetup_cache, nPaths, nFailed = \
+                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures=0) # pruning_thresholds_and_highmag_terms
+                evalSubTree.select_paths_set(self, thresholds, highmag_termrep_cache, circuitsetup_cache, mySubComm, memLimit) # this sets these as internal cached qtys
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 nFailed = 0
@@ -1167,7 +1167,10 @@ class TermForwardSimulator(ForwardSimulator):
             nTotFailed += nFailed
 
         nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
-        assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
+        #assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
+        if nTotFailed > 0:
+            _warnings.warn("Unable to find a path set that achieves the desired pathmagnitude gap (%d circuits failed)" % nTotFailed)
+
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):

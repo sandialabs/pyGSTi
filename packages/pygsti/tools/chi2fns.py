@@ -104,6 +104,7 @@ def chi2_terms(model, dataset, circuits=None,
     else:
         firsts = None
 
+    model.bulk_prep_probs(evTree, comm, memLimit) # TODO: smartcache this in future?
     smart(model.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
     cprobs = _np.clip(probs, minProbClipForWeighting, 1e10)  # effectively no upper bound
@@ -291,6 +292,9 @@ def chi2(model, dataset, circuits=None,
 
     if maxEvalSubTreeSize is not None:
         lookup = evTree.split(lookup, maxEvalSubTreeSize, None)
+
+    #make sure model is ready to compute probabilities
+    model.bulk_prep_probs(evTree, comm, memLimit) # TODO: smartcache this in future?
 
     #DEBUG - no verbosity passed in to just leave commented out
     #if memLimit is not None:

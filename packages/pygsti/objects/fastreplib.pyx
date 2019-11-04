@@ -1645,6 +1645,11 @@ cdef class SVTermRep:
     def __dealloc__(self):
         del self.c_term
 
+    def __reduce__(self):
+        return (SVTermRep, (self.coeff, self.magnitude, self.logmagnitude, 
+                self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                self.pre_ops, self.post_ops))
+
     def set_magnitude(self, double mag):
         self.c_term._magnitude = mag
         self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE

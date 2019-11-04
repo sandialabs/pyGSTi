@@ -1673,7 +1673,7 @@ class OpModel(Model):
 
         memLimit : TODO: docstring
         """
-        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit, adapt_paths=True)
+        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit)
 
     #TODO REMOVE UNNECESSARY?
     #def bulk_probs_get_termgaps(self, evalTree, comm=None, memLimit=None):

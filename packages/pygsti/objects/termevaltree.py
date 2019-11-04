@@ -603,7 +603,7 @@ class TermEvalTree(EvalTree):
                 num_failed += 1
                 failed_circuits.append( (i,circuit) )  #(circuit,npaths, threshold, target_sopm, achieved_sopm))
                 if exit_after_this_many_failures > 0 and num_failed == exit_after_this_many_failures:
-                    return None, None, None, num_failed #, failed_circuits
+                    return None, None, None, tot_npaths, num_failed #, failed_circuits
                 
             tot_npaths += npaths
             tot_target_sopm += target_sopm
