@@ -609,7 +609,6 @@ class TermEvalTree(EvalTree):
             tot_target_sopm += target_sopm
             tot_achieved_sopm += achieved_sopm
 
-
         #if comm is None or comm.Get_rank() == 0:
         rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
         nC = self.num_final_strings()
@@ -618,7 +617,7 @@ class TermEvalTree(EvalTree):
         print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
               (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
-        return thresholds, repcache, circuitsetup_cache, num_failed #, failed_circuits
+        return thresholds, repcache, circuitsetup_cache, tot_npaths, num_failed #, failed_circuits
 
     #def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
     #                         min_term_mag, max_paths, adapt_paths):

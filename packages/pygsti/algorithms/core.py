@@ -1583,8 +1583,11 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
                     extra_lm_opts, comm, printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
 
+    #Parameters to possibly make into arguments??
     MAX_NUM_FAILURES = 0
-    maxSubIters = 2
+    maxSubIters = 5
+    pathFractionThreshold = 0.9
+    oob_check_interval = 5
     final_iter = False
 
     def debug_paramvec():  # REMOVE
@@ -1668,10 +1671,13 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     #mdl.bulk_prep_probs(evTree, comm, memLimit)  # locks in a set of paths
     #mdl._fwdsim().refresh_magnitudes_in_repcache(pathSet)
 
-    pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+    pathSet, nTotPaths, nMaxPaths, nFailures = mdl._fwdsim().find_minimal_paths_set(
+        evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
     mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
-    printer.log("Initial Term-stage model has %d failures" % (nFailures))
+    pathFraction = nTotPaths/nMaxPaths  # fraction of allowed paths used
     currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
+    printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
+                (nFailures, 100*pathFraction))
 
     debug_paramvec()  # REMOVE
 
@@ -1698,8 +1704,9 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         # because TermForwardSimulator.bulk_fill_probs calls TermEvalTree.num_circuit_sopm_failures_using_current_paths)
         
         #objective.termgap_penalty_factor = termgap_penalty
-        extra_lm_opts['oob_check_interval'] = 5
-        extra_lm_opts['oob_action'] = "stop" if sub_iter < (maxSubIters-1) else "reject"  # don't stop early on last iter - do as much as possible.
+        bFinalIter = (sub_iter == maxSubIters-1) or (pathFraction > pathFractionThreshold)
+        extra_lm_opts['oob_check_interval'] = oob_check_interval
+        extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"  # don't stop early on last iter - do as much as possible.
         minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
                                           printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
@@ -1792,12 +1799,13 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             #OPTION3 - objective is a "worst case" objective with no adjustable termgap_penalty -- just try to
             # get more paths if we can and use those regardless of whether there are failures -- we don't really
             # care about failures per se in this case; we're just optimizing an objective function with "slack" in it.
-            pathSet, nFailures = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
-            printer.log("TEST after adapting paths, num failures = %d" % (nFailures))
+            pathSet, nTotPaths, nMaxPaths, nFailures = mdl._fwdsim().find_minimal_paths_set(
+                evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
             mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
+            pathFraction = nTotPaths/nMaxPaths  # fraction of allowed paths used
             currently_selected_pathSet = pathSet
-            #HERE - make 'final' iteration if number of paths is near (90%+?) the total number allowed
             extra_lm_opts['init_munu'] = (opt_state[1],opt_state[2])
+            printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." % (nFailures, 100*pathFraction))
 
             ## Sanity check
             #assert(mdl.bulk_probs_num_termgap_failures(evTree, comm, memLimit)[0] <= MAX_NUM_FAILURES), \

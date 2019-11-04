@@ -1058,7 +1058,9 @@ class TermForwardSimulator(ForwardSimulator):
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
-        nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
+        nTotFailed = 0  # the number of circuits with at least one failure to create an accurate-enough polynomial for a given circuit probability
+        nTotPaths = 0  # the total number of paths selected across all circuit outcomes
+        nOutcomes = 0  # the total number of outcomes - should be the same as evalTree.num_final_elements()
         thresholds_per_subtree = []
         repcache_per_subtree = []
         cscache_per_subtree = []
@@ -1067,13 +1069,15 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
 
             if self.mode == "pruned":
-                thresholds, highmag_termrep_cache, circuitsetup_cache, nFailed = \
+                thresholds, highmag_termrep_cache, circuitsetup_cache, nPaths, nFailed = \
                     evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures) # pruning_thresholds_and_highmag_terms
             else:
                 thresholds = highmag_termrep_cache = circuitsetup_cache = None
-                nFailed = 0
+                nFailed = nPaths = 0
                 
+            nTotPaths += nPaths
             nTotFailed += nFailed
+            nOutcomes += evalSubTree.num_final_elements()
             thresholds_per_subtree.append(thresholds)
             repcache_per_subtree.append(highmag_termrep_cache)
             cscache_per_subtree.append(circuitsetup_cache)
@@ -1081,9 +1085,13 @@ class TermForwardSimulator(ForwardSimulator):
         #It's ok that thresholds and caches are per-*local*-subtree, but we need nTotFailed to be a global number of failures
         #print("Rank%d: find_minimal_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))  # REMOVE
         nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
+        nTotPaths = _mpit.sum_across_procs(nTotPaths, comm)
+        nOutcomes = _mpit.sum_across_procs(nOutcomes, comm)
+        assert(nOutcomes == evalTree.num_final_elements()) #nOutcomes should be the # of elements in the *parent* tree
+        nMaxAllowedPaths = self.max_paths_per_outcome * nOutcomes
 
         pathSet = (thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree)
-        return pathSet, nTotFailed
+        return pathSet, nTotPaths, nMaxAllowedPaths, nTotFailed
 
     def select_paths_set(self, evalTree, pathSet, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
