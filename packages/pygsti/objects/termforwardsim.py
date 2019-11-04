@@ -403,7 +403,7 @@ class TermForwardSimulator(ForwardSimulator):
         #    return [ self.cache[ck] for ck in cache_keys ]
 
         if mode == "normal":
-            fastmode = 0
+            fastmode = 1
         elif mode == "achieved-sopm":
             fastmode = 2
         else:
