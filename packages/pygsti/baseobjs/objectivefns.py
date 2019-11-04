@@ -175,7 +175,7 @@ class Chi2Function(ObjectiveFunction):
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
         return v
 
-    def termgap_chi2(self, vectorGS):
+    def worstcase_termgap_chi2(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
@@ -225,7 +225,7 @@ class Chi2Function(ObjectiveFunction):
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
 
         if oob_check:
-            #DEBUGGING HACK - make sure computed probs like in expected range
+            #DEBUGGING HACK TODO REMOVE - make sure computed probs like in expected range
             #achieved_sopm, max_sopm = self.mdl._fwdsim().bulk_get_achieved_and_max_sopm(self.evTree, self.comm, memLimit=None)
             #gaps = max_sopm - achieved_sopm
             #mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
@@ -386,7 +386,7 @@ class Chi2Function(ObjectiveFunction):
         self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
         return self.jac
 
-    def termgap_jac(self, vectorGS):
+    def worstcase_termgap_jac(self, vectorGS):
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.KM, self.vec_gs_len)
@@ -897,10 +897,8 @@ class LogLFunction(ObjectiveFunction):
                 assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
                 assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
                 assert(self.forcefn_grad is None), "Cannot use force functions with termgap_penalty_factor"
-                self.fn = self.poisson_picture_logl
-                self.jfn = self.poisson_picture_jacobian
-                #self.fn = self.termgap_poisson_picture_logl
-                #self.jfn = self.termgap_poisson_picture_jacobian
+                self.fn = self.simple_termgap_poisson_picture_logl
+                self.jfn = self.poisson_picture_jacobian  #same jacobian as normal case
             else:
                 self.fn = self.poisson_picture_logl
                 self.jfn = self.poisson_picture_jacobian
@@ -1130,8 +1128,41 @@ class LogLFunction(ObjectiveFunction):
             
         return dprobs
 
+    def simple_termgap_poisson_picture_logl(self, vectorGS, oob_check=False):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
+                                 self.check, self.comm)
 
-    def termgap_poisson_picture_logl(self, vectorGS):
+        if oob_check:
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
+                raise ValueError("Out of bounds!")  #signals LM optimizer
+        
+        S = self.minusCntVecMx / self.min_p + self.totalCntVec
+        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
+        v2 = self._termgap_v2_from_probs(self.probs, S, S2)
+        v = _np.sqrt(v2)
+
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        if self.cptp_penalty_factor != 0:
+            cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
+        else: cpPenaltyVec = []
+
+        if self.spam_penalty_factor != 0:
+            spamPenaltyVec = _spam_penalty(self.mdl, self.spam_penalty_factor, self.opBasis)
+        else: spamPenaltyVec = []
+
+        v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
+
+        if self.forcefn_grad is not None:
+            forceVec = self.forceShift - _np.dot(self.forcefn_grad, vectorGS)
+            assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
+            v = _np.concatenate((v, _np.sqrt(forceVec)))
+
+        self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+    
+    def worstcase_termgap_poisson_picture_logl(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
@@ -1153,7 +1184,7 @@ class LogLFunction(ObjectiveFunction):
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
                   # sqrt is well defined unless probClipInterval is set within [0,1].
 
-    def termgap_poisson_picture_jacobian(self, vectorGS):
+    def worstcase_termgap_poisson_picture_jacobian(self, vectorGS):
         tm = _time.time()
         dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.KM, self.vec_gs_len)
