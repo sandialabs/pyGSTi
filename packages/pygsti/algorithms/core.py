@@ -1335,11 +1335,9 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     pathFractionThreshold = 0.9
     oob_check_interval = 10
 
-    pathSet = mdl._fwdsim().find_minimal_paths_set(
-        evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
-    mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
-    
-    #pathSet = mdl._fwdsim().get_pathset(evTree, comm)
+    #assume a path set has already been chosen, as one should have been chosen
+    # when evTree was created.
+    pathSet = mdl._fwdsim().get_current_pathset(evTree, comm)
     pathFraction = pathSet.get_allowed_path_fraction()
     printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                 (pathSet.num_failures, 100*pathFraction))
