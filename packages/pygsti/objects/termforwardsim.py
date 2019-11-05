@@ -958,42 +958,7 @@ class TermForwardSimulator(ForwardSimulator):
     def bulk_get_sopm_gaps_jacobian(self, evalTree, comm=None, memLimit=None):
         """TODO: docstring """
 
-        assert(self.mode == "pruned")
-
-        # Finitie difference version used for testing/debugging TODO REMOVE
-        # FD_termgap_penalty_jac = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
-        # 
-        # eps = 1e-8  # HARDCODED
-        # penalty = self.bulk_get_termgap_penalty(evalTree, comm, memLimit)
-        # orig_vec = self.to_vector().copy()
-        # wrt_indices = list(range(self.Np))  # could make this function more general in the future
-        # iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
-        # for i in range(self.Np):
-        #     if i in iParamToFinal:  # LATER: add MPI support?
-        #         iFinal = iParamToFinal[i]
-        #         vec = orig_vec.copy(); vec[i] += eps
-        #         self.from_vector(vec, close=True)
-        #         FD_termgap_penalty_jac[:, iFinal] = (self.bulk_get_termgap_penalty(evalTree, comm, memLimit) - penalty) / eps
-        # self.from_vector(orig_vec, close=True)
-        # 
-        # #TEST NEW ANALYTIC METHOD
-        # # -----------------------------------------------------------------------------
-        # 
-        # FD_test = FD_termgap_penalty_jac
-        # #FD_test = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
-        # #penalty = self.bulk_get_termgap_penalty(evalTree, comm, memLimit, debug=True)
-        # #orig_vec = self.to_vector().copy()
-        # #wrt_indices = list(range(self.Np))  # could make this function more general in the future
-        # #iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
-        # #for i in range(self.Np):
-        # #    if i in iParamToFinal:  # LATER: add MPI support?
-        # #        iFinal = iParamToFinal[i]
-        # #        vec = orig_vec.copy(); vec[i] += eps
-        # #        self.from_vector(vec, close=True)
-        # #        FD_test[:, iFinal] = (self.bulk_get_termgap_penalty(evalTree, comm, memLimit, debug=True) - penalty) / eps
-        # #self.from_vector(orig_vec, close=True)
-        # # -----------------------
-        
+        assert(self.mode == "pruned")        
         termgap_penalty_jac = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
@@ -1014,40 +979,12 @@ class TermForwardSimulator(ForwardSimulator):
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
                              termgap_penalty_jac, [], 0, comm)
 
-        #test = _np.linalg.norm(termgap_penalty_jac - FD_test)
-        #print("TEST TERMGAP PENALTY JAC = ",test, _np.linalg.norm(termgap_penalty_jac), _np.linalg.norm(FD_test), test/FD_test.size)
-        #if test/FD_test.size > 1e-6:
-        #    import bpdb; bpdb.set_trace()
-
         return termgap_penalty_jac
-
-    #TODO REMOVE - redundant with bulk_get_sopm_gaps
-    #def bulk_get_current_gaps(self, evalTree, comm=None, memLimit=None):
-    #    """TODO: docstring - uses current "locked-in" paths, no adaption.  
-    #       returns per_circuit_gaps """
-    #    if self.mode != "pruned": return [] # no "gaps" for non-pruned-path mode
-    #    
-    #    subtrees = evalTree.get_sub_trees()
-    #    mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-    #    all_gaps = []
-    #
-    #    for iSubTree in mySubTreeIndices:
-    #        evalSubTree = subtrees[iSubTree]
-    #        _, _, gaps = evalSubTree.num_circuit_sopm_failures_using_current_paths(
-    #            self, self.pathmagnitude_gap, return_gaps=True)
-    #        all_gaps.extend(gaps)
-    #
-    #    if comm is not None:
-    #        all_gap_lists = comm.allgather(all_gaps)
-    #        all_gaps = list(_itertools.chain(*all_gap_lists)) # Note: ordering of gaps doesn't matter - we just want *all* of them.
-    #        
-    #    return all_gaps
 
     def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=1):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         TODO: docstring
         """
-        #t0 = _time.time() #REMOVE
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
         local_subtree_pathsets = [] # call this list of TermPathSets for each subtree a "pathset" too
@@ -1067,7 +1004,6 @@ class TermForwardSimulator(ForwardSimulator):
         """
         TODO: docstring
         """
-        #t0 = _time.time() #REMOVE
         evalTree = pathSet.tree
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
@@ -1080,7 +1016,6 @@ class TermForwardSimulator(ForwardSimulator):
                 #This computes (&caches) polys for this path set as well
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
-        #print("Rank%d: select_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0)) #REMOVE
 
     def get_current_pathset(self, evalTree, comm):
         """ TODO: docstring """
@@ -1088,16 +1023,6 @@ class TermForwardSimulator(ForwardSimulator):
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
         local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
         return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
-
-    #TODO REMOVE
-    #def refresh_magnitudes_in_repcache(self, pathSet):
-    #    paramvec = self.to_vector()
-    #    for repcache in pathSet.repcache_per_subtree:
-    #        if self.evotype == "svterm":
-    #            print("DB: refresh_magnitudes_in_repcache: Refreshing mags w/ |v|=", _np.linalg.norm(paramvec))
-    #            replib.SV_refresh_magnitudes_in_repcache(repcache, paramvec)
-    #        else:
-    #            raise NotImplementedError("cterm case not implemented yet!")                
 
     def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
@@ -1127,8 +1052,6 @@ class TermForwardSimulator(ForwardSimulator):
         #all_failed_circuits = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
-            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if self.mode == "pruned":
                 #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
@@ -1200,8 +1123,6 @@ class TermForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
-            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
             
             felInds = evalSubTree.final_element_indices(evalTree)
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
@@ -1309,9 +1230,6 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             nEls = evalSubTree.num_final_elements()
-
-            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
-            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
@@ -1477,9 +1395,6 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-
-            #self.sos.set_opcache(evalSubTree.opcache, self.to_vector()) REMOVE
-            #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
