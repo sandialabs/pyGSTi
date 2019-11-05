@@ -154,7 +154,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     tau = 1e-3
     alpha = 0.5  # for acceleration
     nu = 2
-    mu = 0  # initialized on 1st iter
+    mu = 1  # just a guess - initialized on 1st iter and only used if rejected
     my_cols_slice = None
 
     # don't let any component change by more than ~max_dx_scale
@@ -173,7 +173,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     last_accepted_dx = None # zeros might work?
     min_norm_f = 1e100  # sentinel
     best_x = x.copy() # the x-value corresponding to min_norm_f
-    best_x_state = (mu, nu)
+    
+    if init_munu != "auto":
+        mu, nu = init_munu
+    best_x_state = (mu, nu, norm_f, f)
     
     try:
 
