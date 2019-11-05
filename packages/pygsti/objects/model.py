@@ -466,6 +466,9 @@ class OpModel(Model):
         self._sim_type = sim_type
         self._sim_args = kwargs
 
+    def get_simtype(self):
+        return self._sim_type
+
     #TODO REMOVE
     #def reset_basis(self):
     #    """
