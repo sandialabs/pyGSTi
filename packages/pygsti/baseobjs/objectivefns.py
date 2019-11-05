@@ -31,7 +31,7 @@ class ObjectiveFunction(object):
 class Chi2Function(ObjectiveFunction):
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                 spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+                 spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
                  gthrMem, check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
 
         from ..tools import slicetools as _slct
@@ -63,7 +63,6 @@ class Chi2Function(ObjectiveFunction):
         self.regularizeFactor = regularizeFactor
         self.cptp_penalty_factor = cptp_penalty_factor
         self.spam_penalty_factor = spam_penalty_factor
-        self.termgap_penalty_factor = termgap_penalty_factor
         self.minProbClipForWeighting = minProbClipForWeighting
         self.probClipInterval = probClipInterval
         self.wrtBlkSize = wrtBlkSize
@@ -96,7 +95,7 @@ class Chi2Function(ObjectiveFunction):
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
 
         if self.printer.verbosity < 4:  # Fast versions of functions
-            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0 and termgap_penalty_factor == 0:
+            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0 and mdl.get_simtype() != "termgap":
                 # Fast un-regularized version
                 self.fn = self.simple_chi2
                 self.jfn = self.simple_jac
@@ -105,11 +104,10 @@ class Chi2Function(ObjectiveFunction):
                 # Fast regularized version
                 assert(cptp_penalty_factor == 0), "Cannot have regularizeFactor and cptp_penalty_factor != 0"
                 assert(spam_penalty_factor == 0), "Cannot have regularizeFactor and spam_penalty_factor != 0"
-                assert(termgap_penalty_factor == 0), "Cannot have regularizeFactor and termgap_penalty_factor != 0"
                 self.fn = self.regularized_chi2
                 self.jfn = self.regularized_jac
 
-            elif termgap_penalty_factor != 0:
+            elif mdl.get_simtype() == "termgap":
                 assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
                 assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
                 self.fn = self.simple_termgap_chi2
@@ -121,8 +119,8 @@ class Chi2Function(ObjectiveFunction):
                 self.jfn = self.penalized_jac
 
         else:  # Verbose (DEBUG) version of objective_func
-            if termgap_penalty_factor != 0:
-                raise NotImplementedError("Still need to add termgap penalty factor to verbose chi2!")
+            if mdl.get_simtype() == "termgap":
+                raise NotImplementedError("Still need to add termgap support to verbose chi2!")
             self.fn = self.verbose_chi2
             self.jfn = self.verbose_jac
 
@@ -210,7 +208,6 @@ class Chi2Function(ObjectiveFunction):
             self.update_v_for_omitted_probs(v_plus, p_plus)
             self.update_v_for_omitted_probs(v_minus, p_minus)
 
-        #a = self.termgap_penalty_factor
         v = _np.sqrt(v_plus**2 + v_minus**2)
         #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
         #v += _np.sqrt(v_plus**2 + v_minus**2); v /= 2
@@ -423,7 +420,6 @@ class Chi2Function(ObjectiveFunction):
             self.update_v_for_omitted_probs(v_minus, p_minus)
 
         #SUM of squares mode: for sqrt(v_plus**2 + v_minus**2) -> deriv = 1.0/sqrt(...) *(v1*dv1 + v2*dv2)
-        #a = self.termgap_penalty_factor
         v = _np.sqrt(v_plus**2 + v_minus**2)
         #ALT: objective = 0.5(chi2 + sqrt(chi2_plus^2 + chi2_minus^2))
         #v += _np.sqrt(v_plus**2 + v_minus**2); v /= 2
@@ -646,11 +642,11 @@ class Chi2Function(ObjectiveFunction):
 class FreqWeightedChi2Function(Chi2Function):
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                 spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
+                 spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
                  gthrMem, check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
 
         Chi2Function.__init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor,
-                              cptp_penalty_factor, spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, minProbClipForWeighting,
+                              cptp_penalty_factor, spam_penalty_factor, cntVecMx, N, minProbClipForWeighting,
                               probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, verbosity=0)
         self.fweights = fweights
         self.z = _np.zeros(self.KM, 'd')
@@ -808,7 +804,7 @@ class TimeDependentChi2Function(ObjectiveFunction):
 class LogLFunction(ObjectiveFunction):
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                 spam_penalty_factor, termgap_penalty_factor, cntVecMx, totalCntVec, minProbClip,
+                 spam_penalty_factor, cntVecMx, totalCntVec, minProbClip,
                  radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
                  shiftFctr=100, check=False, comm=None, profiler=None, verbosity=0):
         from .. import tools as _tools
@@ -893,10 +889,10 @@ class LogLFunction(ObjectiveFunction):
             #index to jacobian row of first forcing term
 
         if poissonPicture:
-            if termgap_penalty_factor != 0:
-                assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
-                assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
-                assert(self.forcefn_grad is None), "Cannot use force functions with termgap_penalty_factor"
+            if mdl.get_simtype() == "termgap":
+                assert(cptp_penalty_factor == 0), "Cannot have cptp_penalty_factor != 0 when using the termgap simtype"
+                assert(spam_penalty_factor == 0), "Cannot have spam_penalty_factor != 0 when using the termgap simtype"
+                assert(self.forcefn_grad is None), "Cannot use force functions when using the termgap simtype"
                 self.fn = self.simple_termgap_poisson_picture_logl
                 self.jfn = self.poisson_picture_jacobian  #same jacobian as normal case
             else:

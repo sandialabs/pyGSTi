@@ -1193,14 +1193,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['cntVecMx'] = cntVecMx
             evaltree_cache['totalCntVec'] = N
 
-    #Create a termgap-penalizable objective function in termgap case
-    termgap_penalty_factor = 1.0 if mdl.simtype == "termgap" else 0
-            
     if useFreqWeightedChiSq:
         assert(not time_dependent), "Cannot use frequency-weighted chi2 with `time_dependent` == True!"
         objective = _objfns.FreqWeightedChi2Function(
             mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-            spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting,
+            spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting,
             probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
     else:
         if time_dependent:
@@ -1211,7 +1208,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         else:
             objective = _objfns.Chi2Function(
                 mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                spam_penalty_factor, termgap_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval,
+                spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval,
                 wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
 
     #Get number of maximal-model parameter ("dataset params") if needed for print messages
@@ -2726,9 +2723,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     else:
         #Create a termgap-penalizable objective function in termgap case
-        termgap_penalty_factor = 1.0 if mdl.simtype == "termgap" else 0
         objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                                         spam_penalty_factor, termgap_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
+                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
                                          probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
                                          shiftFctr, check, comm, profiler, printer)
 
