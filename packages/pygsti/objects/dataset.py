@@ -675,10 +675,11 @@ class DataSet(object):
             Specify this argument and no others to create a static DataSet by loading
             from a file (just like using the load(...) function).
 
-        collisionAction : {"aggregate","keepseparate"}
+        collisionAction : {"aggregate","overwrite","keepseparate"}
             Specifies how duplicate circuits should be handled.  "aggregate"
             adds duplicate-sequence counts to the same circuit's data at the
-            next integer timestamp.  "keepseparate" tags duplicate-sequences by
+            next integer timestamp.  "overwrite" only keeps the latest given
+            data for a circuit.  "keepseparate" tags duplicate-sequences by
             appending a final "#<number>" operation label to the duplicated gate
             sequence, which can then be accessed via the `get_row` and `set_row`
             functions.
@@ -790,7 +791,7 @@ class DataSet(object):
         self.bStatic = bStatic
 
         # collision action
-        assert(collisionAction in ('aggregate', 'keepseparate'))
+        assert(collisionAction in ('aggregate', 'overwrite', 'keepseparate'))
         self.collisionAction = collisionAction
 
         # comment
@@ -1087,8 +1088,7 @@ class DataSet(object):
         for oliAr in self.oliData:
             self.repData.append(_np.ones(len(oliAr), self.repType))
 
-    def add_count_dict(self, circuit, countDict, overwriteExisting=True,
-                       recordZeroCnts=True, aux=None):
+    def add_count_dict(self, circuit, countDict, recordZeroCnts=True, aux=None):
         """
         Add a single circuit's counts to this DataSet
 
@@ -1099,11 +1099,6 @@ class DataSet(object):
 
         countDict : dict
             A dictionary with keys = outcome labels and values = counts
-
-        overwriteExisting : bool, optional
-            If `True`, overwrite any existing data for the `circuit`.  If
-            `False`, add this count data with the next non-negative integer
-            timestamp.
 
         recordZeroCnts : bool, optional
             Whether zero-counts are actually recorded (stored) in this DataSet.
@@ -1136,12 +1131,14 @@ class DataSet(object):
         # if "keepseparate" mode, add tag onto end of circuit
         circuit = self._keepseparate_update_circuit(circuit)
 
-        if not overwriteExisting and circuit in self:
+        if self.collisionAction == "aggregate" and circuit in self:
             iNext = int(max(self[circuit].time)) + 1 \
                 if (len(self[circuit].time) > 0) else 0
             timeStampList = [iNext] * len(countList)
+            overwriteExisting = False
         else:
             timeStampList = [0] * len(countList)
+            overwriteExisting = True
 
         self.add_raw_series_data(circuit, outcomeLabelList, timeStampList,
                                  countList, overwriteExisting, recordZeroCnts,
