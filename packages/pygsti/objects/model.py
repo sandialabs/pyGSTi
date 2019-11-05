@@ -451,13 +451,17 @@ class OpModel(Model):
                                 
             else: # termgap and termdirect
                 assert(all([k in ('desired_perr', 'allowed_perr', 'max_paths_per_outcome', 'max_order',
-                                  'min_term_mag', 'perr_heuristic', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
+                                  'min_term_mag', 'perr_heuristic', 'max_term_stages', 'path_fraction_threshold',
+                                  'oob_check_interval', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
                 kwargs['mode'] = "pruned" if (sim_type == "termgap") else "direct"
                 if 'desired_perr' not in kwargs: kwargs['desired_perr'] = 0.01
                 if 'allowed_perr' not in kwargs: kwargs['allowed_perr'] = 0.1
                 if 'max_paths_per_outcome' not in kwargs: kwargs['max_paths_per_outcome'] = 500
                 if 'max_order' not in kwargs: kwargs['max_order'] = 3
                 if 'min_term_mag' not in kwargs: kwargs['min_term_mag'] = kwargs['desired_perr'] / (10*kwargs['max_paths_per_outcome'])
+                if 'max_term_stages' not in kwargs: kwargs['max_term_stages'] = 5
+                if 'path_fraction_threshold' not in kwargs: kwargs['path_fraction_threshold'] = 0.9
+                if 'oob_check_interval' not in kwargs: kwargs['oob_check_interval'] = 10
 
         else:
             raise ValueError("Invalid `sim_type` (%s)" % sim_type)

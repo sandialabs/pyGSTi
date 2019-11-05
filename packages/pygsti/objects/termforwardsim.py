@@ -77,7 +77,8 @@ class TermForwardSimulator(ForwardSimulator):
 
     def __init__(self, dim, simplified_op_server, paramvec,  #below here are simtype-specific args
                  mode, max_order, desired_perr, allowed_perr,
-                 min_term_mag, max_paths_per_outcome, perr_heuristic="none", cache=None):
+                 min_term_mag, max_paths_per_outcome, perr_heuristic="none",
+                 max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
         """
         Construct a new TermForwardSimulator object.
         TODO: fix this docstring (and maybe other fwdsim __init__ functions?
@@ -156,6 +157,12 @@ class TermForwardSimulator(ForwardSimulator):
         self.times_debug = {'tstartup': 0.0, 'total': 0.0,
                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0}
+
+        # not used except by _do_term_runopt in core.py -- maybe these should move to advancedoptions?
+        self.max_term_stages = max_term_stages
+        self.path_fraction_threshold = path_fraction_threshold
+        self.oob_check_interval = oob_check_interval
+
 
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
@@ -981,7 +988,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         return termgap_penalty_jac
 
-    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=1):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=0):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         TODO: docstring
         """

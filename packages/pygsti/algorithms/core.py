@@ -1329,27 +1329,26 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
                     extra_lm_opts, comm, printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
 
-    #Parameters to possibly make into arguments??
-    MAX_NUM_FAILURES = 0
-    maxSubIters = 5
-    pathFractionThreshold = 0.9
-    oob_check_interval = 10
+    fwdsim = mdl._fwdsim()
+
+    #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
+    maxTermStages = fwdsim.max_term_stages
+    pathFractionThreshold = fwdsim.path_fraction_threshold
+    oob_check_interval = fwdsim.oob_check_interval
 
     #assume a path set has already been chosen, as one should have been chosen
     # when evTree was created.
-    pathSet = mdl._fwdsim().get_current_pathset(evTree, comm)
+    pathSet = fwdsim.get_current_pathset(evTree, comm)
     pathFraction = pathSet.get_allowed_path_fraction()
     printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                 (pathSet.num_failures, 100*pathFraction))
 
     minErrVec = None
-    for sub_iter in range(maxSubIters):
+    for sub_iter in range(maxTermStages):
 
         last_mdlvec = mdl.to_vector().copy()
-        last_minErrVec = minErrVec
-        #Note: _do_runopt uses "locked in" paths
         
-        bFinalIter = (sub_iter == maxSubIters-1) or (pathFraction > pathFractionThreshold)
+        bFinalIter = (sub_iter == maxTermStages-1) or (pathFraction > pathFractionThreshold)
         extra_lm_opts['oob_check_interval'] = oob_check_interval
         extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"  # don't stop early on last iter - do as much as possible.
         minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
@@ -1357,13 +1356,18 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         new_mdlvec = mdl.to_vector().copy()
         
         if not opt_state[0] == "Objective function out-of-bounds! STOP":
-            printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
+            if not bFinalIter:
+                printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
+            elif pathFraction > pathFractionThreshold:
+                printer.log("Last term-stage used %.1f%% > %.0f%% of allowed paths, so exiting."
+                            % (100*pathFraction, 100*pathFractionThreshold))
+            else:
+                printer.log("Max num of term-stages (%d) reached." % maxTermStages)
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
         
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
-            pathSet = mdl._fwdsim().find_minimal_paths_set(
-                evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
+            pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
             mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
             pathFraction = pathSet.get_allowed_path_fraction()
             extra_lm_opts['init_munu'] = (opt_state[1],opt_state[2])

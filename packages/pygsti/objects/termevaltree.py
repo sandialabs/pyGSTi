@@ -509,7 +509,7 @@ class TermEvalTree(EvalTree):
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
     
-    def find_minimal_paths_set(self, calc, comm, memLimit, exit_after_this_many_failures=1):
+    def find_minimal_paths_set(self, calc, comm, memLimit, exit_after_this_many_failures=0):
         """TODO: docstring: returns caches but only when the # failures <= exit_after_this_many_failures """
 
         tot_npaths = 0
@@ -548,7 +548,7 @@ class TermEvalTree(EvalTree):
                 num_failed += 1
                 failed_circuits.append( (i,circuit) )  #(circuit,npaths, threshold, target_sopm, achieved_sopm))
                 if exit_after_this_many_failures > 0 and num_failed == exit_after_this_many_failures:
-                    return None, None, None, tot_npaths, num_failed #, failed_circuits
+                    return UnsplitTreeTermPathSet(self, None, None, None, 0, 0, num_failed)
                 
             tot_npaths += npaths
             tot_target_sopm += target_sopm
