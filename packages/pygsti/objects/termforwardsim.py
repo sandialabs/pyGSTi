@@ -65,16 +65,6 @@ except ImportError:
 _dummy_profiler = _DummyProfiler()
 
 
-#TEST
-def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
-    for repcel in repcache.values():
-        #repcel = <RepCacheEl?>repcel
-        for termrep in repcel.pyterm_references:
-            v,c = termrep.coeff.compact_complex()
-            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(v,c,paramvec,(1,))
-            termrep.set_magnitude_only(abs(coeff_array[0]))
-
-
 class TermForwardSimulator(ForwardSimulator):
     """
     Encapsulates a calculation tool used by model objects that evaluates
@@ -892,7 +882,7 @@ class TermForwardSimulator(ForwardSimulator):
         if self.mode != "pruned":
             return True # no "failures" for non-pruned-path mode
 
-        SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector())
+        replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector())
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
         gaps = max_sopm - achieved_sopm  #a strict bound on the error in each outcome probability, but often pessimistic
         assert(_np.all(gaps >= -1e-6)) #Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
@@ -938,7 +928,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             
-            SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             maxx, achieved = evalSubTree.get_achieved_and_max_sopm(self)
             
             _fas(max_sopm, [felInds], maxx)
@@ -1010,7 +1000,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             
-            SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
             gap_jacs = evalSubTree.get_sopm_gaps_jacobian(self)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
@@ -1119,7 +1109,7 @@ class TermForwardSimulator(ForwardSimulator):
         for repcache in repcache_per_subtree:
             if self.evotype == "svterm":
                 print("DB: refresh_magnitudes_in_repcache: Refreshing mags w/ |v|=", _np.linalg.norm(paramvec))
-                SV_refresh_magnitudes_in_repcache(repcache, paramvec)
+                replib.SV_refresh_magnitudes_in_repcache(repcache, paramvec)
             else:
                 raise NotImplementedError("cterm case not implemented yet!")                
 
@@ -1231,7 +1221,7 @@ class TermForwardSimulator(ForwardSimulator):
             felInds = evalSubTree.final_element_indices(evalTree)
             #TODO REMOVE
             #if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
-            #    SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            #    replib.SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
             #    nFailures += evalSubTree.num_circuit_sopm_failures_using_current_paths(
             #        self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation)[0]
             #    print("DB: bulk_fill_probs nFailures = ",nFailures)

@@ -1654,7 +1654,7 @@ cdef class SVTermRep:
         self.c_term._magnitude = mag
         self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE
 
-    def set_magnitude_only(self, double mag):  # EXPERIMENTAL
+    def set_magnitude_only(self, double mag):  # TODO: better name?
         self.c_term._magnitude = mag
 
     def mapvec_indices_inplace(self, mapvec):
@@ -3025,6 +3025,14 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
     cscel.E_foat_indices = E_foat_indices
     cscel.E_indices = E_indices
     return cscel
+
+def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+    for repcel in repcache.values():
+        #repcel = <RepCacheEl?>repcel
+        for termrep in repcel.pyterm_references:
+            v,c = termrep.coeff.compact_complex()
+            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(v,c,paramvec,(1,))
+            termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
 def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,

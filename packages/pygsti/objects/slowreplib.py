@@ -1516,6 +1516,9 @@ class SVTermRep(object):
         self.magnitude = mag
         self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
 
+    def set_magnitude_only(self, mag):
+        self.magnitude = mag
+
     def mapvec_indices_inplace(self, mapvec):
         self.coeff.mapvec_indices_inplace(mapvec)
 
@@ -2094,6 +2097,15 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
     #return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
+
+def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+    from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
+    for repcel in repcache.values():
+        #repcel = <RepCacheEl?>repcel
+        for termrep in repcel[0]:  #first element of tuple contains list of term-reps
+            v,c = termrep.coeff.compact_complex()
+            coeff_array = _bulk_eval_compact_polys(v,c,paramvec,(1,),dtype="complex")
+            termrep.set_magnitude_only(abs(coeff_array[0]))
 
 def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
                                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
@@ -3211,3 +3223,4 @@ def _unitary_sim_post(complete_factors, comm, memLimit):
         rhoVec = f.acton(rhoVec)
     EVec = complete_factors[-1].pre_effect
     return _np.conjugate(EVec.amplitude(rhoVec))  # conjugate for same reason as above
+
