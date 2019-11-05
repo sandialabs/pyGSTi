@@ -42,9 +42,13 @@ Repcount_type = _np.float32
 class DataSet_KeyValIterator(object):
     """ Iterator class for op_string,DataSetRow pairs of a DataSet """
 
-    def __init__(self, dataset):
+    def __init__(self, dataset, stripOccurrenceTags=False):
         self.dataset = dataset
-        self.gsIter = dataset.cirIndex.__iter__()
+        if stripOccurrenceTags:
+            self.gsIter = map(DataSet.strip_occurence_tag, dataset.cirIndex.keys())
+        else:
+            self.gsIter = dataset.cirIndex.__iter__()
+
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
@@ -617,6 +621,10 @@ class DataSet(object):
     `time = dataset[circuit][i].time`
     """
 
+    @classmethod
+    def strip_occurence_tag(cls, circuit):
+        return circuit[:-1] if (len(circuit) > 0 and circuit[-1].name.startswith("#")) else circuit
+
     def __init__(self, oliData=None, timeData=None, repData=None,
                  circuits=None, circuitIndices=None,
                  outcomeLabels=None, outcomeLabelIndices=None,
@@ -934,7 +942,7 @@ class DataSet(object):
         stripOccurrenceTags : bool, optional
             Only applicable if `collisionAction` has been set to
             "keepseparate", when this argument is set to True
-            any final "#<number>" elements of (would-be dupilcate)
+            any final "#<number>" elements of (would-be duplicate)
             circuits are stripped so that the returned list
             may have *duplicate* entries.
 
@@ -946,12 +954,11 @@ class DataSet(object):
         """
         if stripOccurrenceTags and self.collisionAction == "keepseparate":
             # Note: assumes keys are Circuits containing Labels
-            return [(opstr[:-1] if (len(opstr) > 0 and opstr[-1].name.startswith("#")) else opstr)
-                    for opstr in self.cirIndex.keys()]
+            return [self.strip_occurence_tag(opstr) for opstr in self.cirIndex.keys()]
         else:
             return list(self.cirIndex.keys())
 
-    def items(self):
+    def items(self, stripOccurrenceTags=False):
         """
         Iterator over (circuit, timeSeries) pairs,
         where circuit is a tuple of operation labels
@@ -959,8 +966,17 @@ class DataSet(object):
         which behaves similarly to a list of
         spam labels whose index corresponds to
         the time step.
+
+        Parameters
+        ----------
+        stripOccurrenceTags : bool, optional
+            Only applicable if `collisionAction` has been set to
+            "keepseparate", when this argument is set to True
+            any final "#<number>" elements of (would-be duplicate)
+            circuits are stripped so that the returned list
+            may have *duplicate* entries.
         """
-        return DataSet_KeyValIterator(self)
+        return DataSet_KeyValIterator(self, stripOccurrenceTags)
 
     def values(self):
         """
@@ -1068,7 +1084,7 @@ class DataSet(object):
         if circuit in self.cirIndex and self.collisionAction == "keepseparate":
             i = 0; tagged_circuit = circuit
             while tagged_circuit in self.cirIndex:
-                i += 1; tagged_circuit = circuit + _cir.Circuit(("#%d" % i,))
+                i += 1; tagged_circuit = circuit + _cir.Circuit(("#%d" % i,), line_labels=circuit.line_labels)
             #add data for a new (duplicate) circuit
             circuit = tagged_circuit
 
