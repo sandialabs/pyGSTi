@@ -274,12 +274,15 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if init_munu == "auto":
                     if damping_clip is None:
                         mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
-                    else:
-                        #mu = tau # initial damping element
-                        mu = 100000.0 # initial multiplicative damping element
                         #mu = min(mu, MU_TOL1)
+                    else:
+                        # initial multiplicative damping element
+                        #mu = tau # initial damping element - but this seem to low, at least for termgap...
+                        mu = min(1.0e5, _np.max(undamped_JTJ_diag)/norm_JTf)  #Erik's heuristic
+                        #tries to avoid making mu so large that dx is tiny and we declare victory prematurely
                 else:
                     mu, nu = init_munu
+                best_x_state = mu, nu, norm_f, f  # update mu,nu of initial "best state"
 
             #determing increment using adaptive damping
             while True:  # inner loop

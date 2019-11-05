@@ -1587,7 +1587,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     MAX_NUM_FAILURES = 0
     maxSubIters = 5
     pathFractionThreshold = 0.9
-    oob_check_interval = 5
+    oob_check_interval = 10
     final_iter = False
 
     def debug_paramvec():  # REMOVE
@@ -1679,7 +1679,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                 (nFailures, 100*pathFraction))
 
-    debug_paramvec()  # REMOVE
+    #debug_paramvec()  # REMOVE
 
     #alpha = 1.0 # no alpha controls inflation factor rather than interpolation - always start at 1.0
     #termgap_penalty = 0.00001 #10.0
@@ -1710,7 +1710,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
                                           printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
         new_mdlvec = mdl.to_vector().copy()
-        debug_paramvec()  # REMOVE
+        #debug_paramvec()  # REMOVE
 
         #Check how many failures the final model has (using the *same* path integrals)
         #bOK = mdl.bulk_probs_paths_are_sufficient(evTree, None, comm, memLimit, printer) # uses "locked in" paths

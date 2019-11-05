@@ -882,7 +882,7 @@ class TermForwardSimulator(ForwardSimulator):
         if self.mode != "pruned":
             return True # no "failures" for non-pruned-path mode
 
-        replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector())
+        # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector()) # done in bulk_get_achieved_and_max_sopm
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
         gaps = max_sopm - achieved_sopm  #a strict bound on the error in each outcome probability, but often pessimistic
         assert(_np.all(gaps >= -1e-6)) #Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.

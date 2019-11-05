@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=False
+# cython: profile=True
 # cython: linetrace=False
 
 #***************************************************************************************************
@@ -1591,7 +1591,9 @@ cdef class SVTermRep:
     cdef public SVEffectRep post_effect
     cdef public object pre_ops
     cdef public object post_ops
+    cdef public object compact_coeff
 
+    
     @classmethod
     def composed(cls, terms_to_compose, double magnitude):
         cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
@@ -1610,6 +1612,7 @@ cdef class SVTermRep:
                   SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
         self.coeff = coeff
+        self.compact_coeff = coeff.compact_complex()
         self.pre_ops = pre_ops
         self.post_ops = post_ops
 
@@ -3027,11 +3030,16 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
     return cscel
 
 def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+    cdef RepCacheEl repcel
+    cdef SVTermRep termrep
+    cdef np.ndarray coeff_array
+    
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel.pyterm_references:
-            v,c = termrep.coeff.compact_complex()
-            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(v,c,paramvec,(1,))
+            #if termrep.compact_coeff is None:
+            #    termrep.compact_coeff = termrep.coeff.compact_complex() # v,c
+            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
