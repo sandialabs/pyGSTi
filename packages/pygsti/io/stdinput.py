@@ -124,6 +124,10 @@ class StdInputParser(object):
             if p == '--':
                 counts.append('--')  # special blank symbol
                 continue
+            if p == 'BAD':  # special symbol to indicate an experiment malfunction
+                counts.append('BAD')
+                continue
+            
             try:  # single float/int format
                 f = float(p)
                 counts.append(f)
@@ -246,7 +250,8 @@ class StdInputParser(object):
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,
-                       collisionAction="aggregate", recordZeroCnts=True):
+                       collisionAction="aggregate", recordZeroCnts=True,
+                       ignoreZeroCountLines=True):
         """
         Parse a data set file into a DataSet object.
 
@@ -268,6 +273,10 @@ class StdInputParser(object):
             Whether zero-counts are actually recorded (stored) in the returned
             DataSet.  If False, then zero counts are ignored, except for potentially
             registering new outcome labels.
+
+        ignoreZeroCountLines : bool, optional
+            Whether circuits for which there are no counts should be ignored
+            (i.e. omitted from the DataSet) or not.
 
         Returns
         -------
@@ -364,11 +373,16 @@ class StdInputParser(object):
                     # header, then use "default" column label info.
                     fillInfo = default_fillInfo
 
+                bBad = ('BAD' in valueList)  #supresses warnings
                 countDict = _OrderedDict()
                 self._fillDataCountDict(countDict, fillInfo, valueList)
                 if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
-                    warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
-                    continue  # skip lines in dataset file with zero counts (no experiments done)
+                    if ignoreZeroCountLines:
+                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
+                        continue  # skip lines in dataset file with zero counts (no experiments done)
+                    else:
+                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts." % circuitStr)
+
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                 circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
                                         line_labels=circuitLbls, check=False)  # , lookup=lookupDict)
@@ -413,6 +427,9 @@ class StdInputParser(object):
         return outcomeLabels, fillInfo
 
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
+        if 'BAD' in colValues:
+            return  #indicates entire row is known to be bad (no counts)
+        
         if fillInfo is not None:
             countCols, freqCols, impliedCountTotCol1Q = fillInfo
 
