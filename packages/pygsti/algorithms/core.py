@@ -1335,30 +1335,27 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     pathFractionThreshold = 0.9
     oob_check_interval = 10
 
-    pathSet, nTotPaths, nMaxPaths, nFailures = mdl._fwdsim().find_minimal_paths_set(
+    pathSet = mdl._fwdsim().find_minimal_paths_set(
         evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
-    mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
-    pathFraction = nTotPaths/nMaxPaths  # fraction of allowed paths used
-    currently_selected_pathSet = pathSet  # maybe have a better way to access this via mdl or fwdsim in FUTURE
+    mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
+    
+    #pathSet = mdl._fwdsim().get_pathset(evTree, comm)
+    pathFraction = pathSet.get_allowed_path_fraction()
     printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
-                (nFailures, 100*pathFraction))
+                (pathSet.num_failures, 100*pathFraction))
 
     minErrVec = None
     for sub_iter in range(maxSubIters):
 
-        inflate_factor = None
-                
         last_mdlvec = mdl.to_vector().copy()
         last_minErrVec = minErrVec
-        #Note: _do_runopt uses "locked in" paths (for sopm too if needed - if inflate_factor is not None,
-        # because TermForwardSimulator.bulk_fill_probs calls TermEvalTree.num_circuit_sopm_failures_using_current_paths)
+        #Note: _do_runopt uses "locked in" paths
         
-        #objective.termgap_penalty_factor = termgap_penalty
         bFinalIter = (sub_iter == maxSubIters-1) or (pathFraction > pathFractionThreshold)
         extra_lm_opts['oob_check_interval'] = oob_check_interval
         extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"  # don't stop early on last iter - do as much as possible.
         minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                                          printer, profiler, nDataParams, memLimit, logL_upperbound, inflate_factor) 
+                                          printer, profiler, nDataParams, memLimit, logL_upperbound) 
         new_mdlvec = mdl.to_vector().copy()
         
         if not opt_state[0] == "Objective function out-of-bounds! STOP":
@@ -1367,13 +1364,12 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
-            pathSet, nTotPaths, nMaxPaths, nFailures = mdl._fwdsim().find_minimal_paths_set(
+            pathSet = mdl._fwdsim().find_minimal_paths_set(
                 evTree, comm, memLimit, exit_after_this_many_failures=0) # MAX_NUM_FAILURES+1  (0 == no limit)
-            mdl._fwdsim().select_paths_set(evTree, pathSet, comm, memLimit)
-            pathFraction = nTotPaths/nMaxPaths  # fraction of allowed paths used
-            currently_selected_pathSet = pathSet
+            mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
+            pathFraction = pathSet.get_allowed_path_fraction()
             extra_lm_opts['init_munu'] = (opt_state[1],opt_state[2])
-            printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." % (nFailures, 100*pathFraction))
+            printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." % (pathSet.num_failures, 100*pathFraction))
 
     return minErrVec
 

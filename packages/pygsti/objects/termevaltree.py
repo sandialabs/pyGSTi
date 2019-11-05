@@ -14,6 +14,7 @@ import copy as _copy
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
+from ..tools import mpitools as _mpit
 from .evaltree import EvalTree
 
 try:
@@ -129,8 +130,7 @@ class TermEvalTree(EvalTree):
         # cache of the high-magnitude terms (actually their represenations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,
         # defines a set of paths to use in probability computations.
-        self.highmag_termrep_cache = {}
-        self.circuitsetup_cache = {}
+        self.pathset = None
         self.percircuit_p_polys = {}  # keys = circuits, values = (threshold, compact_polys)
         
         self.merged_compact_polys = None
@@ -492,7 +492,7 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
 
-            achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel, elabels, opstr, self.highmag_termrep_cache,
+            achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel, elabels, opstr, self.pathset.highmag_termrep_cache,
                                                                 calc.sos.opcache, current_threshold)
             achieved_sopm.extend(list(achieved))
             max_sopm.extend(list(maxx))
@@ -572,7 +572,7 @@ class TermEvalTree(EvalTree):
         tot_achieved_sopm = 0
         
         #We're only testing how many failures there are, don't update the "locked in" persistent
-        # set of paths given by self.percircuit_p_polys and self.highmag_termrep_cache - just use a
+        # set of paths given by self.percircuit_p_polys and self.pathset.highmag_termrep_cache - just use a
         # temporary repcache.
         repcache = {}
         circuitsetup_cache = {}
@@ -612,42 +612,35 @@ class TermEvalTree(EvalTree):
         #if comm is None or comm.Get_rank() == 0:
         rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
         nC = self.num_final_strings()
-        print("%sPruned path-integral: kept %d paths w/magnitude %.4g (target=%.4g, #circuits=%d, #failed=%d)" %
-              (rankStr, tot_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
+        max_npaths = calc.max_paths_per_outcome * self.num_final_elements()
+        print("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g (target=%.4g, #circuits=%d, #failed=%d)" %
+              (rankStr, tot_npaths, 100*tot_npaths/max_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
         print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
               (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
-        return thresholds, repcache, circuitsetup_cache, tot_npaths, num_failed #, failed_circuits
+        return UnsplitTreeTermPathSet(self, thresholds, repcache, circuitsetup_cache, tot_npaths, max_npaths, num_failed)
 
-    #def cache_p_pruned_polys(self, calc, comm, memLimit, pathmagnitude_gap,
-    #                         min_term_mag, max_paths, adapt_paths):
-
-    def select_paths_set(self, calc, thresholds, highmag_termrep_cache, circuitsetup_cache, comm, memLimit):
+    def get_paths_set(self):
+        """TODO: docstring """
+        return self.pathset
+    
+    def select_paths_set(self, calc, pathset, comm, memLimit):
         """ TODO: docstring  - selects *and* computes polys for the given "path set" defined by the arguments."""
 
         #TODO: update this outdated docstring
         # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
         # means we're going to re-compute the high-magnitude terms for each operation (in
-        # self.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
+        # self.pathset.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
         # for each circuit (using the computed high-magnitude terms).  This all occurs for
         # the particular current value of the parameter vector (found via calc.to_vector());
         # these values determine what is a "high-magnitude" term and the path magnitudes that are
         # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
 
+        self.pathset = pathset
         self.percircuit_p_polys = {}
-        self.highmag_termrep_cache = highmag_termrep_cache
-        self.circuitsetup_cache = circuitsetup_cache
-        repcache = self.highmag_termrep_cache
-        circuitsetup_cache = self.circuitsetup_cache
-
-        ##DEBUG - TODO REMOVE -- for debugging a particular case where were getting unexpected
-        ## failures and wanted to rule out parts of select_path_set as the cause
-        #for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
-        #    circuit = self[i]
-        #    threshold = thresholds[circuit]
-        #    self.percircuit_p_polys[circuit] = (threshold, None)
-        #assert(self.num_circuit_sopm_failures_using_current_paths(calc, calc.pathmagnitude_gap)[0] == 0), "STOP1"
-        #self.percircuit_p_polys = {}
+        repcache = self.pathset.highmag_termrep_cache
+        circuitsetup_cache = self.pathset.circuitsetup_cache
+        thresholds = self.pathset.thresholds
 
         all_compact_polys = []  # holds one compact polynomial per final *element*
         all_achievedsopm_compact_polys = []
@@ -883,3 +876,41 @@ class TermEvalTree(EvalTree):
     #            self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)] = (vtape, ctape)
     #        ret.append(self.hp_polys[(rholabel, elabel, slcTup1, slcTup2)])
     #    return ret
+
+class TermPathSet(object):
+    """TODO: docstring"""
+    def __init__(self, evaltree, npaths, maxpaths, nfailed):
+        """TODO: docstring """
+        self.tree = evaltree
+        self.npaths = npaths
+        self.max_allowed_paths = maxpaths
+        self.num_failures = nfailed  # number of failed *circuits* (not outcomes)
+        
+    def get_allowed_path_fraction(self):
+        return self.npaths / self.max_allowed_paths
+
+class UnsplitTreeTermPathSet(TermPathSet):
+    def __init__(self, evaltree, thresholds, highmag_termrep_cache,
+                 circuitsetup_cache, npaths, maxpaths, nfailed):
+        """TODO: docstring """
+        TermPathSet.__init__(self, evaltree, npaths, maxpaths, nfailed)
+        self.thresholds = thresholds
+        self.highmag_termrep_cache = highmag_termrep_cache
+        self.circuitsetup_cache = circuitsetup_cache
+
+class SplitTreeTermPathSet(TermPathSet):
+    def __init__(self, evaltree, local_subtree_pathsets, comm):
+
+        #Get local-subtree totals
+        nTotPaths = sum([sps.npaths for sps in local_subtree_pathsets])
+        nTotFailed = sum([sps.num_failures for sps in local_subtree_pathsets])
+        nAllowed = sum([sps.max_allowed_paths for sps in local_subtree_pathsets])
+
+        #Get global totals
+        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
+        nTotPaths = _mpit.sum_across_procs(nTotPaths, comm)
+        nAllowed = _mpit.sum_across_procs(nAllowed, comm)
+        
+        TermPathSet.__init__(self, evaltree, nTotPaths, nAllowed, nTotFailed)
+        self.local_subtree_pathsets = local_subtree_pathsets
+    

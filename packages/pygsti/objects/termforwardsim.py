@@ -24,6 +24,9 @@ from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label
 from .termevaltree import TermEvalTree as _TermEvalTree
+from .termevaltree import TermPathSet as _TermPathSet
+from .termevaltree import UnsplitTreeTermPathSet as _UnsplitTreeTermPathSet
+from .termevaltree import SplitTreeTermPathSet as _SplitTreeTermPathSet
 from .forwardsim import ForwardSimulator
 from .polynomial import Polynomial as _Polynomial
 from . import replib
@@ -928,7 +931,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             
-            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             maxx, achieved = evalSubTree.get_achieved_and_max_sopm(self)
             
             _fas(max_sopm, [felInds], maxx)
@@ -1000,7 +1003,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             
-            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
             gap_jacs = evalSubTree.get_sopm_gaps_jacobian(self)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
@@ -1047,71 +1050,54 @@ class TermForwardSimulator(ForwardSimulator):
         #t0 = _time.time() #REMOVE
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-
-        nTotFailed = 0  # the number of circuits with at least one failure to create an accurate-enough polynomial for a given circuit probability
-        nTotPaths = 0  # the total number of paths selected across all circuit outcomes
-        nOutcomes = 0  # the total number of outcomes - should be the same as evalTree.num_final_elements()
-        thresholds_per_subtree = []
-        repcache_per_subtree = []
-        cscache_per_subtree = []
+        local_subtree_pathsets = [] # call this list of TermPathSets for each subtree a "pathset" too
         
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-
             if self.mode == "pruned":
-                thresholds, highmag_termrep_cache, circuitsetup_cache, nPaths, nFailed = \
-                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures) # pruning_thresholds_and_highmag_terms
+                subPathSet = evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit,
+                                                                exit_after_this_many_failures)
             else:
-                thresholds = highmag_termrep_cache = circuitsetup_cache = None
-                nFailed = nPaths = 0
-                
-            nTotPaths += nPaths
-            nTotFailed += nFailed
-            nOutcomes += evalSubTree.num_final_elements()
-            thresholds_per_subtree.append(thresholds)
-            repcache_per_subtree.append(highmag_termrep_cache)
-            cscache_per_subtree.append(circuitsetup_cache)
+                subPathSet = _UnsplitTreeTermPathSet(evalSubTree, None, None, None, 0, 0, 0)
+            local_subtree_pathsets.append(subPathSet)
 
-        #It's ok that thresholds and caches are per-*local*-subtree, but we need nTotFailed to be a global number of failures
-        #print("Rank%d: find_minimal_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0))  # REMOVE
-        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
-        nTotPaths = _mpit.sum_across_procs(nTotPaths, comm)
-        nOutcomes = _mpit.sum_across_procs(nOutcomes, comm)
-        assert(nOutcomes == evalTree.num_final_elements()) #nOutcomes should be the # of elements in the *parent* tree
-        nMaxAllowedPaths = self.max_paths_per_outcome * nOutcomes
+        return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
 
-        pathSet = (thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree)
-        return pathSet, nTotPaths, nMaxAllowedPaths, nTotFailed
-
-    def select_paths_set(self, evalTree, pathSet, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def select_paths_set(self, pathSet, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
         TODO: docstring
         """
         #t0 = _time.time() #REMOVE
+        evalTree = pathSet.tree
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-        thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
 
-        for iSubTree, thresholds, highmag_termrep_cache, circuitsetup_cache in \
-            zip(mySubTreeIndices, thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree):
+        for iSubTree, subtree_pathset in zip(mySubTreeIndices, pathSet.local_subtree_pathsets):
             evalSubTree = subtrees[iSubTree]
 
             if self.mode == "pruned":
-                evalSubTree.select_paths_set(self, thresholds, highmag_termrep_cache, circuitsetup_cache, mySubComm, memLimit)
+                evalSubTree.select_paths_set(self, subtree_pathset, mySubComm, memLimit)
                 #This computes (&caches) polys for this path set as well
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
         #print("Rank%d: select_paths_set done in %.3fs" % (comm.Get_rank(), _time.time()-t0)) #REMOVE
 
-    def refresh_magnitudes_in_repcache(self, pathSet):
-        thresholds_per_subtree, repcache_per_subtree, cscache_per_subtree = pathSet
-        paramvec = self.to_vector()
-        for repcache in repcache_per_subtree:
-            if self.evotype == "svterm":
-                print("DB: refresh_magnitudes_in_repcache: Refreshing mags w/ |v|=", _np.linalg.norm(paramvec))
-                replib.SV_refresh_magnitudes_in_repcache(repcache, paramvec)
-            else:
-                raise NotImplementedError("cterm case not implemented yet!")                
+    def get_current_pathset(self, evalTree, comm):
+        """ TODO: docstring """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
+        return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+
+    #TODO REMOVE
+    #def refresh_magnitudes_in_repcache(self, pathSet):
+    #    paramvec = self.to_vector()
+    #    for repcache in pathSet.repcache_per_subtree:
+    #        if self.evotype == "svterm":
+    #            print("DB: refresh_magnitudes_in_repcache: Refreshing mags w/ |v|=", _np.linalg.norm(paramvec))
+    #            replib.SV_refresh_magnitudes_in_repcache(repcache, paramvec)
+    #        else:
+    #            raise NotImplementedError("cterm case not implemented yet!")                
 
     def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
         """
@@ -1147,14 +1133,13 @@ class TermForwardSimulator(ForwardSimulator):
             if self.mode == "pruned":
                 #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
                 #                                           self.min_term_mag, self.max_paths_per_outcome)
-                thresholds, highmag_termrep_cache, circuitsetup_cache, nPaths, nFailed = \
-                    evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures=0) # pruning_thresholds_and_highmag_terms
-                evalSubTree.select_paths_set(self, thresholds, highmag_termrep_cache, circuitsetup_cache, mySubComm, memLimit) # this sets these as internal cached qtys
+                pathset = evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures=0) # pruning_thresholds_and_highmag_terms
+                evalSubTree.select_paths_set(self, pathset, mySubComm, memLimit) # this sets these as internal cached qtys
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
-                nFailed = 0
+                pathset = _TermPathSet(evalSubTree, 0, 0, 0)
                 
-            nTotFailed += nFailed
+            nTotFailed += pathset.num_failures
 
         nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
         #assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
@@ -1219,12 +1204,6 @@ class TermForwardSimulator(ForwardSimulator):
             #self.sos.set_opcache(self.sos.opcache, self.to_vector()) REMOVE
             
             felInds = evalSubTree.final_element_indices(evalTree)
-            #TODO REMOVE
-            #if self.pathmagnitude_gap_inflation is not None:  # otherwise don't count failures
-            #    replib.SV_refresh_magnitudes_in_repcache(evalSubTree.highmag_termrep_cache, self.to_vector())
-            #    nFailures += evalSubTree.num_circuit_sopm_failures_using_current_paths(
-            #        self, self.pathmagnitude_gap*self.pathmagnitude_gap_inflation)[0]
-            #    print("DB: bulk_fill_probs nFailures = ",nFailures)
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
         #collect/gather results
