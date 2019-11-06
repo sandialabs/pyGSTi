@@ -1081,7 +1081,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-    mdl = startModel #.copy()  # to allow caches in startModel to be retained
+    mdl = startModel  # .copy()  # to allow caches in startModel to be retained
     if maxfev is None: maxfev = maxiter
 
     #printer.log('', 2)
@@ -1252,7 +1252,7 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
     if extra_lm_opts is None: extra_lm_opts = {}
     objective_func = objective.fn
     jacobian = objective.jfn
-    
+
     x0 = mdl.to_vector()
     if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
     if CUSTOMLM:
@@ -1275,7 +1275,7 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
     # don't include "extra" regularization terms
     minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
     sum_minErrVec = sum(minErrVec**2)  # total chi2 or (upperBoundLogL - logl), depending on objective_name
-    
+
     profiler.add_time("do_mc2gst: leastsq", tm)
 
     tm = _time.time()
@@ -1305,8 +1305,8 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
             printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
                         (totChi2, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
         else:
-            assert(objective_name == "logl") # assume only options are "chi2" or "logl"
-                        # reject GST if p-value < threshold (~0.05?)
+            assert(objective_name == "logl")  # assume only options are "chi2" or "logl"
+            # reject GST if p-value < threshold (~0.05?)
             deltaLogL = sum_minErrVec
 
             if _np.isfinite(deltaLogL):
@@ -1324,7 +1324,7 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
     else:
         return minErrVec, opt_state
 
-    
+
 def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer,
                     extra_lm_opts, comm, printer, profiler, nDataParams, memLimit, logL_upperbound=None):
     """ TODO: docstring """
@@ -1341,40 +1341,38 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     pathSet = fwdsim.get_current_pathset(evTree, comm)
     pathFraction = pathSet.get_allowed_path_fraction()
     printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
-                (pathSet.num_failures, 100*pathFraction))
+                (pathSet.num_failures, 100 * pathFraction))
 
     minErrVec = None
     for sub_iter in range(maxTermStages):
 
-        last_mdlvec = mdl.to_vector().copy()
-        
-        bFinalIter = (sub_iter == maxTermStages-1) or (pathFraction > pathFractionThreshold)
+        bFinalIter = (sub_iter == maxTermStages - 1) or (pathFraction > pathFractionThreshold)
         extra_lm_opts['oob_check_interval'] = oob_check_interval
-        extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"  # don't stop early on last iter - do as much as possible.
+        # don't stop early on last iter - do as much as possible.
+        extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"
         minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                                          printer, profiler, nDataParams, memLimit, logL_upperbound) 
-        new_mdlvec = mdl.to_vector().copy()
-        
+                                          printer, profiler, nDataParams, memLimit, logL_upperbound)
+
         if not opt_state[0] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
                 printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             elif pathFraction > pathFractionThreshold:
                 printer.log("Last term-stage used %.1f%% > %.0f%% of allowed paths, so exiting."
-                            % (100*pathFraction, 100*pathFractionThreshold))
+                            % (100 * pathFraction, 100 * pathFractionThreshold))
             else:
                 printer.log("Max num of term-stages (%d) reached." % maxTermStages)
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
-        
+
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
             pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
             mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
             pathFraction = pathSet.get_allowed_path_fraction()
-            extra_lm_opts['init_munu'] = (opt_state[1],opt_state[2])
-            printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." % (pathSet.num_failures, 100*pathFraction))
+            extra_lm_opts['init_munu'] = (opt_state[1], opt_state[2])
+            printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
+                        (pathSet.num_failures, 100 * pathFraction))
 
     return minErrVec
-
 
 
 def do_mc2gst_with_model_selection(
@@ -2159,7 +2157,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-    mdl = startModel #.copy()  # to allow caches in startModel to be retained
+    mdl = startModel  # .copy()  # to allow caches in startModel to be retained
 
     if maxfev is None: maxfev = maxiter
 
@@ -2308,12 +2306,12 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     if mdl.simtype in ("termgap", "termorder"):
         delta_logl = _do_term_runopt(evTree, mdl, objective, "logl", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                                     printer, profiler, nDataParams, memLimit, logL_upperbound)  #updates mdl
+                                     printer, profiler, nDataParams, memLimit, logL_upperbound)  # updates mdl
     else:
         #Normal case of just a single "sub-iteration"
         #Run optimization (use leastsq)
         delta_logl, _ = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                                   printer, profiler, nDataParams, memLimit, logL_upperbound)  #updates mdl
+                                   printer, profiler, nDataParams, memLimit, logL_upperbound)  # updates mdl
 
     printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 

@@ -230,7 +230,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     if old_version < totup("0.9.9"):
 
         def SPAMVec_setstate(self, state):
-            #Note: include "dirty" 
+            #Note: include "dirty"
             if old_version >= totup("0.9.7.1"):  # b/c this clobbers older-version upgrade
                 if "dirty" in state:  # backward compat: .dirty was replaced with ._dirty in ModelMember
                     state['_dirty'] = state['dirty']; del state['dirty']
@@ -239,7 +239,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
             if "base1D" not in state and 'base' in state:
                 state['base1D'] = state['base'].flatten()
                 del state['base']
-                
+
             self.__dict__.update(state)
 
         #HERE TODO: need to remake/add ._reps to all spam & operation objects

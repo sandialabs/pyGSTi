@@ -99,7 +99,7 @@ class Chi2Function(ObjectiveFunction):
                 # Fast un-regularized version
                 self.fn = self.simple_chi2
                 self.jfn = self.simple_jac
-                
+
             elif regularizeFactor != 0:
                 # Fast regularized version
                 assert(cptp_penalty_factor == 0), "Cannot have regularizeFactor and cptp_penalty_factor != 0"
@@ -153,7 +153,8 @@ class Chi2Function(ObjectiveFunction):
         dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, self.N[self.firsts],
                                           2 * self.N[self.firsts] * omitted_probs / clipped_oprobs)
         fullv = _np.sqrt(v[self.firsts]**2 + self.N[self.firsts] * omitted_probs**2 / clipped_oprobs)
-        fullv[ v[self.firsts] == 0.0 ] = 1.0  # avoid NaNs when both fullv and v[firsts] are zero - result should be *zero* in this case
+        # avoid NaNs when both fullv and v[firsts] are zero - result should be *zero* in this case
+        fullv[v[self.firsts] == 0.0] = 1.0
         dprobs[self.firsts, :] = (0.5 / fullv[:, None]) * (
             2 * v[self.firsts, None] * dprobs[self.firsts, :]
             - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
@@ -193,7 +194,7 @@ class Chi2Function(ObjectiveFunction):
             #        assert(False),"STOP"
             #heur_scale = self.probs / achieved_sopm
             ##heur_scale = 1.0 / max_sopm
-            #print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" % 
+            #print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" %
             #      (max(gaps), _np.mean(gaps),
             #       max(_np.abs(db_probs - self.probs)), _np.mean(gaps * heur_scale),
             #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps),
@@ -203,10 +204,10 @@ class Chi2Function(ObjectiveFunction):
             #END DEBUGGING
 
             if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
-                raise ValueError("Out of bounds!")  #signals LM optimizer
+                raise ValueError("Out of bounds!")  # signals LM optimizer
 
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
-        
+
         if self.firsts is not None:
             self.update_v_for_omitted_probs(v, self.probs)
 
@@ -318,7 +319,7 @@ class Chi2Function(ObjectiveFunction):
         #    print("DB: dprobs per el mismatch = ",_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
         #self.mdl.from_vector(vectorGS)
         #dprobs[:,:] = db_dprobs[:,:]
-        
+
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
@@ -736,7 +737,7 @@ class LogLFunction(ObjectiveFunction):
                 assert(spam_penalty_factor == 0), "Cannot have spam_penalty_factor != 0 when using the termgap simtype"
                 assert(self.forcefn_grad is None), "Cannot use force functions when using the termgap simtype"
                 self.fn = self.termgap_poisson_picture_logl
-                self.jfn = self.poisson_picture_jacobian  #same jacobian as normal case
+                self.jfn = self.poisson_picture_jacobian  # same jacobian as normal case
             else:
                 self.fn = self.poisson_picture_logl
                 self.jfn = self.poisson_picture_jacobian
@@ -912,7 +913,7 @@ class LogLFunction(ObjectiveFunction):
         v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs) + self.totalCntVec * \
             pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
         v = _np.maximum(v, 0)
-        
+
         # quadratic extrapolation of logl at min_p for probabilities < min_p
         v = _np.where(probs < self.min_p, v + S * (probs - self.min_p) + S2 * (probs - self.min_p)**2, v)
         v = _np.where(self.minusCntVecMx == 0,
@@ -930,7 +931,7 @@ class LogLFunction(ObjectiveFunction):
             v[self.firsts] += self.totalCntVec[self.firsts] * \
                 _np.where(omitted_probs >= self.a, omitted_probs,
                           (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
-            
+
         v.shape = [self.KM]  # reshape ensuring no copy is needed
         return v
 
@@ -942,8 +943,8 @@ class LogLFunction(ObjectiveFunction):
 
         if oob_check:
             if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
-                raise ValueError("Out of bounds!")  #signals LM optimizer
-        
+                raise ValueError("Out of bounds!")  # signals LM optimizer
+
         S = self.minusCntVecMx / self.min_p + self.totalCntVec
         S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
         v2 = self._termgap_v2_from_probs(self.probs, S, S2)
@@ -967,7 +968,6 @@ class LogLFunction(ObjectiveFunction):
 
         self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
-
 
 
 class TimeDependentLogLFunction(ObjectiveFunction):

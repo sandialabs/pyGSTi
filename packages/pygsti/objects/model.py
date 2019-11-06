@@ -447,9 +447,9 @@ class OpModel(Model):
                 assert(all([k in ('max_order', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
                 kwargs['mode'] = "taylor_order"
                 if 'max_order' not in kwargs: kwargs['max_order'] = 1
-                if 'cache' not in kwargs: kwargs['cache'] = None # Needed?
-                                
-            else: # termgap and termdirect
+                if 'cache' not in kwargs: kwargs['cache'] = None  # Needed?
+
+            else:  # termgap and termdirect
                 assert(all([k in ('desired_perr', 'allowed_perr', 'max_paths_per_outcome', 'max_order',
                                   'min_term_mag', 'perr_heuristic', 'max_term_stages', 'path_fraction_threshold',
                                   'oob_check_interval', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
@@ -458,7 +458,8 @@ class OpModel(Model):
                 if 'allowed_perr' not in kwargs: kwargs['allowed_perr'] = 0.1
                 if 'max_paths_per_outcome' not in kwargs: kwargs['max_paths_per_outcome'] = 500
                 if 'max_order' not in kwargs: kwargs['max_order'] = 3
-                if 'min_term_mag' not in kwargs: kwargs['min_term_mag'] = kwargs['desired_perr'] / (10*kwargs['max_paths_per_outcome'])
+                if 'min_term_mag' not in kwargs: kwargs['min_term_mag'] = kwargs['desired_perr'] / \
+                    (10 * kwargs['max_paths_per_outcome'])
                 if 'max_term_stages' not in kwargs: kwargs['max_term_stages'] = 5
                 if 'path_fraction_threshold' not in kwargs: kwargs['path_fraction_threshold'] = 0.9
                 if 'oob_check_interval' not in kwargs: kwargs['oob_check_interval'] = 10
@@ -587,7 +588,7 @@ class OpModel(Model):
         #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
         #import inspect, pprint
         #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
-        
+
         if self._need_to_rebuild:
             self._rebuild_paramvec()
             self._need_to_rebuild = False
@@ -624,7 +625,7 @@ class OpModel(Model):
                 obj.from_vector(self._paramvec[obj.gpindices], nodirty=True)
                 reset_dirty(obj)  # like "obj.dirty = False" but recursive
                 #object is known to be consistent with _paramvec
-                
+
             self.dirty = False
 
         if OpModel._pcheck: self._check_paramvec()
@@ -958,7 +959,7 @@ class OpModel(Model):
                     observed_povm_outcomes = sorted(set(
                         [full_out_tup[-1] for full_out_tup in dataset[circuit].outcomes]))
                     elabels = [povm_lbl + "_" + elbl
-                                for elbl in observed_povm_outcomes]
+                               for elbl in observed_povm_outcomes]
                     # elbl = oout[-1] -- the last element corresponds
                     # to the POVM (earlier ones = instruments)
                 else:
@@ -1079,7 +1080,6 @@ class OpModel(Model):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
             oouts = None if (dataset is None) else set(dataset[orig_circuit].outcomes)
             process(opstr, elabels, oouts, elIndsToOutcomesByParent[iParent])
-            
 
         # Step2: fill raw_offsets dictionary
         off = 0
@@ -1570,7 +1570,7 @@ class OpModel(Model):
 
         #Prepare any computationally intensive preparation
         calc.bulk_prep_probs(evt, comm, memLimit)
-        
+
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 
     def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
@@ -1686,12 +1686,12 @@ class OpModel(Model):
     #def bulk_probs_get_termgaps(self, evalTree, comm=None, memLimit=None):
     #    """ TODO: docstring """
     #    return self._fwdsim().bulk_get_current_gaps(evalTree, comm, memLimit)
-    
+
     def bulk_probs_paths_are_sufficient(self, evalTree, probs, comm=None, memLimit=None, verbosity=0):
         """
         Only applicable for models with a term-based (path-integral) forward simulator.
 
-        Returns a boolean indicating whether the currently selected paths are able to 
+        Returns a boolean indicating whether the currently selected paths are able to
         predict the outcome probabilities of the circuits in `evalTree` accurately enough,
         as defined by the simulation-type arguments such as `allowed_perr`.
 

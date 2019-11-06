@@ -527,30 +527,32 @@ class SPAMVec(_modelmember.ModelMember):
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 mags = _np.abs(coeffs)
-                last_len = len(terms)                
+                last_len = len(terms)
                 #OLD: terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
-                
+
                 if taylor_order == 1:
                     #OLD: first_order_magmax = max([t.magnitude for t in terms_at_order])
                     first_order_magmax = max(mags)
 
                     if force_firstorder:
-                        terms.extend([(taylor_order, t.copy_with_magnitude(mag)) for coeff, mag, t in zip(coeffs, mags, terms_at_order)])
+                        terms.extend([(taylor_order, t.copy_with_magnitude(mag))
+                                      for coeff, mag, t in zip(coeffs, mags, terms_at_order)])
                     else:
                         for mag, t in zip(mags, terms_at_order):
                             if mag >= min_term_mag:
-                                terms.append( (taylor_order, t.copy_with_magnitude(mag)) )
+                                terms.append((taylor_order, t.copy_with_magnitude(mag)))
                 else:
                     for mag, t in zip(mags, terms_at_order):
                         if mag >= min_term_mag:
-                            terms.append( (taylor_order, t.copy_with_magnitude(mag)) )
+                            terms.append((taylor_order, t.copy_with_magnitude(mag)))
 
                 #OLD:
                 #for t in terms_at_order:
                 #    if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
                 #        terms.append((taylor_order, t))
             else:
-                terms.extend( [(taylor_order, t) for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)] )
+                terms.extend([(taylor_order, t)
+                              for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)])
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -566,9 +568,8 @@ class SPAMVec(_modelmember.ModelMember):
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
         coeffs = _bulk_eval_complex_compact_polys(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-        terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
-        return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
-
+        terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
+        return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist2(self, otherSpamVec, typ, transform=None,
                        inv_transform=None):
@@ -941,7 +942,7 @@ class DenseSPAMVec(SPAMVec):
         #use __dict__ so no chance for recursive __getattr__
         if 'base1D' in self.__dict__:
             ret = getattr(self.base, attr)
-        else: 
+        else:
             raise AttributeError("No attribute:", attr)
         self.dirty = True
         return ret
@@ -1785,9 +1786,9 @@ class TensorProdSPAMVec(SPAMVec):
 
         else:  # self._evotype in ("svterm","cterm")
             rep = dim  # no reps for term-based evotypes
-        
+
         SPAMVec.__init__(self, rep, evotype, typ)
-        self._update_rep() # initializes rep data
+        self._update_rep()  # initializes rep data
         #sets gpindices, so do before stuff below
 
         if typ == "effect":
@@ -1829,7 +1830,7 @@ class TensorProdSPAMVec(SPAMVec):
             if self._prep_or_effect == "prep":
                 self._rep.base = self.todense()
             else:
-                self._fill_fast_kron() # updates effect reps
+                self._fill_fast_kron()  # updates effect reps
         elif self._evotype == "stabilizer":
             if self._prep_or_effect == "prep":
                 #we need to update self._rep, which is a SBStateRep object.  For now, we
@@ -2806,7 +2807,7 @@ class LindbladSPAMVec(SPAMVec):
         #Create representation
         if evotype == "densitymx":
             assert(self.state_vec._prep_or_effect == typ), "LindbladSPAMVec prep/effect mismatch with given statevec!"
-            
+
             if typ == "prep":
                 dmRep = self.state_vec._rep
                 errmapRep = self.error_map._rep
@@ -3004,8 +3005,9 @@ class LindbladSPAMVec(SPAMVec):
         stateTerm = state_terms[0]
         stateTerm = stateTerm.copy_with_magnitude(1.0)
         #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
-        
-        err_terms = self.error_map.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag / stateTerm.magnitude)
+
+        err_terms = self.error_map.get_taylor_order_terms_above_mag(
+            order, max_poly_vars, min_term_mag / stateTerm.magnitude)
 
         #This gives the appropriate logic, but *both* prep or effect results in *same* expression, so just run it:
         #if self._prep_or_effect == "prep":

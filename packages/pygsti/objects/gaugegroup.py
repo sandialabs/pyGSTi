@@ -12,6 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from . import operation as _op
 
+
 class GaugeGroup(object):
     """
     A GaugeGroup describes a parameterized set (ideally a group) of gauge

@@ -75,7 +75,7 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec,  #below here are simtype-specific args
+    def __init__(self, dim, simplified_op_server, paramvec,  # below here are simtype-specific args
                  mode, max_order, desired_perr, allowed_perr,
                  min_term_mag, max_paths_per_outcome, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
@@ -113,7 +113,7 @@ class TermForwardSimulator(ForwardSimulator):
             computing any single circuit outcome probability.
 
         gap_inflation_factor : float, optional
-            A multiplicative factor typically > 1 that multiplies `pathmag_gap` 
+            A multiplicative factor typically > 1 that multiplies `pathmag_gap`
             to creat a new "inflated gap".  If an achieved sum-of-path-magnitudes
             is more than this inflated-gap below the maximum for a circuit,
             computation of the circuit outcome's probability will result in an
@@ -138,12 +138,13 @@ class TermForwardSimulator(ForwardSimulator):
         self.cache = cache
 
         # only used in "pruned" mode:
-        self.desired_pathmagnitude_gap = desired_perr # used when generating a list of paths - try to get gaps to be this (*no* heuristic)
+        # used when generating a list of paths - try to get gaps to be this (*no* heuristic)
+        self.desired_pathmagnitude_gap = desired_perr
         self.allowed_perr = allowed_perr  # used to abort optimizations when errors in probs are too high
         self.perr_heuristic = perr_heuristic  # method used to compute expected errors in probs (often heuristic)
         self.min_term_mag = min_term_mag  # minimum abs(term coeff) to consider
         self.max_paths_per_outcome = max_paths_per_outcome
-        
+
         self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
@@ -162,7 +163,6 @@ class TermForwardSimulator(ForwardSimulator):
         self.max_term_stages = max_term_stages
         self.path_fraction_threshold = path_fraction_threshold
         self.oob_check_interval = oob_check_interval
-
 
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
@@ -247,7 +247,7 @@ class TermForwardSimulator(ForwardSimulator):
             wrt_indices = _slct.indices(wrtSlice)
         else:
             wrt_indices = wrtSlice
-            
+
         eps = 1e-6  # HARDCODED
         probs = self.prs_directly(evalTree, comm, memLimit, resetWts, repcache)
         dprobs = _np.empty((evalTree.num_final_elements(), len(wrt_indices)), 'd')
@@ -288,43 +288,43 @@ class TermForwardSimulator(ForwardSimulator):
     #     different POVM effects).  Employs a truncated or pruned path-integral
     #     approach, as opposed to just including everything up to some Taylor
     #     order as in :method:`prs_as_polys`.
-    # 
+    #
     #     Parameters
     #     ----------
     #     rho_label : Label
     #         The state preparation label.
-    # 
+    #
     #     elabels : list
     #         A list of :class:`Label` objects giving the *simplified* effect labels.
-    # 
+    #
     #     circuit : Circuit or tuple
     #         A tuple-like object of *simplified* gates (e.g. may include
     #         instrument elements like 'Imyinst_0')
-    # 
+    #
     #     repcache, opcache : dict, optional
     #         Dictionaries used to cache operator representations and
     #         operators themselves (respectively) to speed up future calls
     #         to this function that would use the same set of operations.
-    # 
+    #
     #     comm : mpi4py.MPI.Comm, optional
     #         When not None, an MPI communicator for distributing the computation
     #         across multiple processors.
-    # 
+    #
     #     memLimit : int, optional
     #         A memory limit in bytes to impose on the computation.
-    # 
+    #
     #     pathmagnitude_gap : float, optional
     #         The amount less than the perfect sum-of-path-magnitudes that
     #         is desired.  This sets the target sum-of-path-magnitudes for each
     #         circuit -- the threshold that determines how many paths are added.
-    # 
+    #
     #     min_term_mag : float, optional
     #         A technical parameter to the path pruning algorithm; this value
     #         sets a threshold for how small a term magnitude (one factor in
     #         a path magnitude) must be before it is removed from consideration
     #         entirely (to limit the number of even *potential* paths).  Terms
     #         with a magnitude lower than this values are neglected.
-    # 
+    #
     #     current_threshold : float, optional
     #         A more sophisticated aspect of the term-based calculation is that
     #         path polynomials should not be re-computed when we've already
@@ -337,7 +337,7 @@ class TermForwardSimulator(ForwardSimulator):
     #         if it is determined that the threshold is less than this value, the
     #         function should exit immediately and return an empty list of
     #         polynomial reps.
-    # 
+    #
     #     Returns
     #     -------
     #     polyreps : list
@@ -357,12 +357,12 @@ class TermForwardSimulator(ForwardSimulator):
     #     #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
     #     #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
     #     #    return [ self.cache[ck] for ck in cache_keys ]
-    # 
+    #
     #     fastmode = True
     #     if repcache is None: repcache = {}
     #     if current_threshold is None: current_threshold = -1.0  # use negatives to signify "None" in C
     #     circuitsetup_cache = {}
-    # 
+    #
     #     if self.evotype == "svterm":
     #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
     #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
@@ -374,14 +374,13 @@ class TermForwardSimulator(ForwardSimulator):
     #             replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
     #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
     #                                           current_threshold, compute_polyreps)
-    # 
+    #
     #     if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
     #         prps = None
     #     else:
     #         prps = poly_reps
-    # 
+    #
     #     return prps, npaths, threshold, target_sopm, achieved_sopm
-
 
     def prs_as_pruned_polyreps(self,
                                threshold,
@@ -408,7 +407,7 @@ class TermForwardSimulator(ForwardSimulator):
             fastmode = 2
         else:
             raise ValueError("Invalid mode argument: %s" % mode)
-            
+
         if repcache is None: repcache = {}
         circuitsetup_cache = {}
 
@@ -426,7 +425,6 @@ class TermForwardSimulator(ForwardSimulator):
             prps = poly_reps
 
         return prps
-
 
     def compute_pruned_pathmag_threshold(self,
                                          rholabel,
@@ -458,10 +456,9 @@ class TermForwardSimulator(ForwardSimulator):
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             raise NotImplementedError("Just need to mimic SV version")
-            
+
         return npaths, threshold, target_sopm, achieved_sopm
 
-    
     def circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache,
                                       opcache, threshold):
         if self.evotype == "svterm":
@@ -843,7 +840,7 @@ class TermForwardSimulator(ForwardSimulator):
         nEls = evalTree.num_final_elements()
         if self.mode == "direct":
             probs = self.prs_directly(evalTree, comm, memLimit)  # could make into a fill_routine?
-        else: # "pruned" or "taylor order"
+        else:  # "pruned" or "taylor order"
             polys = evalTree.merged_compact_polys
             probs = _bulk_eval_compact_polys(
                 polys[0], polys[1], self.paramvec, (nEls,))  # shape (nElements,) -- could make this a *fill*
@@ -887,17 +884,18 @@ class TermForwardSimulator(ForwardSimulator):
         _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
     def bulk_test_if_paths_are_sufficient(self, evalTree, probs, comm, memLimit, printer):
-        """TODO: docstring  
+        """TODO: docstring
            returns nFailures, failed_circuits """
         if self.mode != "pruned":
-            return True # no "failures" for non-pruned-path mode
+            return True  # no "failures" for non-pruned-path mode
 
         # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector()) # done in bulk_get_achieved_and_max_sopm
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
-        gaps = max_sopm - achieved_sopm  #a strict bound on the error in each outcome probability, but often pessimistic
-        assert(_np.all(gaps >= -1e-6)) #Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        gaps = max_sopm - achieved_sopm  # a strict bound on the error in each outcome probability, but often pessimistic
+        # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        assert(_np.all(gaps >= -1e-6))
         gaps = _np.clip(gaps, 0, None)
-        
+
         if self.perr_heuristic == "none":
             nFailures = _np.count_nonzero(gaps > self.allowed_perr)
             if nFailures > 0:
@@ -920,27 +918,27 @@ class TermForwardSimulator(ForwardSimulator):
                 return False
         else:
             raise ValueError("Unknown probability-error heuristic name: %s" % self.perr_heuristic)
-        
+
         return True
 
     def bulk_get_achieved_and_max_sopm(self, evalTree, comm=None, memLimit=None):
         """TODO: docstring """
 
         assert(self.mode == "pruned")
-        max_sopm = _np.empty(evalTree.num_final_elements(),'d')
-        achieved_sopm = _np.empty(evalTree.num_final_elements(),'d')
-        
+        max_sopm = _np.empty(evalTree.num_final_elements(), 'd')
+        achieved_sopm = _np.empty(evalTree.num_final_elements(), 'd')
+
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-    
+
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            
+
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             maxx, achieved = evalSubTree.get_achieved_and_max_sopm(self)
-            
+
             _fas(max_sopm, [felInds], maxx)
             _fas(achieved_sopm, [felInds], achieved)
 
@@ -957,26 +955,27 @@ class TermForwardSimulator(ForwardSimulator):
         """TODO: docstring  """
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
         gaps = max_sopm - achieved_sopm
-        assert(_np.all(gaps >= -1e-6)) #Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        assert(_np.all(gaps >= -1e-6))
         gaps = _np.clip(gaps, 0, None)
-            
+
         return gaps
 
     def bulk_get_sopm_gaps_jacobian(self, evalTree, comm=None, memLimit=None):
         """TODO: docstring """
 
-        assert(self.mode == "pruned")        
-        termgap_penalty_jac = _np.empty( (evalTree.num_final_elements(), self.Np),'d')
+        assert(self.mode == "pruned")
+        termgap_penalty_jac = _np.empty((evalTree.num_final_elements(), self.Np), 'd')
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-    
+
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            
+
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
-            gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
+            #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
             gap_jacs = evalSubTree.get_sopm_gaps_jacobian(self)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
             _fas(termgap_penalty_jac, [felInds], gap_jacs)
@@ -988,14 +987,15 @@ class TermForwardSimulator(ForwardSimulator):
 
         return termgap_penalty_jac
 
-    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=0):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=0):
         """
         TODO: docstring
         """
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-        local_subtree_pathsets = [] # call this list of TermPathSets for each subtree a "pathset" too
-        
+        local_subtree_pathsets = []  # call this list of TermPathSets for each subtree a "pathset" too
+
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             if self.mode == "pruned":
@@ -1007,7 +1007,8 @@ class TermForwardSimulator(ForwardSimulator):
 
         return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
 
-    def select_paths_set(self, pathSet, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def select_paths_set(self, pathSet, comm=None, memLimit=None):
         """
         TODO: docstring
         """
@@ -1031,7 +1032,8 @@ class TermForwardSimulator(ForwardSimulator):
         local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
         return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
 
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):  # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -1063,19 +1065,21 @@ class TermForwardSimulator(ForwardSimulator):
             if self.mode == "pruned":
                 #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
                 #                                           self.min_term_mag, self.max_paths_per_outcome)
-                pathset = evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit, exit_after_this_many_failures=0) # pruning_thresholds_and_highmag_terms
-                evalSubTree.select_paths_set(self, pathset, mySubComm, memLimit) # this sets these as internal cached qtys
+                pathset = evalSubTree.find_minimal_paths_set(
+                    self, mySubComm, memLimit, exit_after_this_many_failures=0)  # pruning_thresholds_and_highmag_terms
+                # this sets these as internal cached qtys
+                evalSubTree.select_paths_set(self, pathset, mySubComm, memLimit)
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 pathset = _TermPathSet(evalSubTree, 0, 0, 0)
-                
+
             nTotFailed += pathset.num_failures
 
         nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
         #assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
         if nTotFailed > 0:
-            _warnings.warn("Unable to find a path set that achieves the desired pathmagnitude gap (%d circuits failed)" % nTotFailed)
-
+            _warnings.warn(
+                "Unable to find a path set that achieves the desired pathmagnitude gap (%d circuits failed)" % nTotFailed)
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
@@ -1130,7 +1134,7 @@ class TermForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            
+
             felInds = evalSubTree.final_element_indices(evalTree)
             self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
@@ -1236,7 +1240,7 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            nEls = evalSubTree.num_final_elements()
+            #nEls = evalSubTree.num_final_elements()
 
             if prMxToFill is not None:
                 self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
@@ -1397,7 +1401,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         if self.mode == "direct":
             raise NotImplementedError("hprobs does not support direct path-integral evaluation")
-        
+
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
@@ -1414,7 +1418,7 @@ class TermForwardSimulator(ForwardSimulator):
 
                 if deriv1MxToFill is not None:
                     self._fill_dprobs_block(deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1,
-                                            mySubComm, memLimit=None)   
+                                            mySubComm, memLimit=None)
                 if deriv2MxToFill is not None:
                     if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
                         deriv2MxToFill[felInds, :] = deriv1MxToFill[felInds, :]

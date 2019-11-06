@@ -17,6 +17,7 @@ from . import replib
 assert(_platform.architecture()[0].endswith("bit"))  # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
+
 def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
     """ Convert tuple index of ints to single int given max_numvars """
     ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
@@ -120,7 +121,7 @@ class FASTPolynomial(object):
 
     @property
     def coeffs(self):
-        max_num_vars = self._rep.max_num_vars 
+        max_num_vars = self._rep.max_num_vars
 
         def int_to_vinds(indx_tup):
             ret = []
@@ -136,7 +137,7 @@ class FASTPolynomial(object):
         return {int_to_vinds(k): val for k, val in self._rep.int_coeffs.items()}
 
     @property
-    def max_num_vars(self): # so we can convert back to python Polys
+    def max_num_vars(self):  # so we can convert back to python Polys
         return self._rep.max_num_vars
 
     @property
@@ -288,7 +289,6 @@ class FASTPolynomial(object):
         """
         self._rep.mapvec_indices_inplace(mapvec)
 
-        
     def mult(self, x):
         """
         Multiplies this polynomial by another polynomial `x`.
@@ -421,7 +421,7 @@ class FASTPolynomial(object):
     def __copy__(self):
         return self.copy()
 
-    def torep(self):  #, max_num_vars=None not needed anymore -- given at __init__ time
+    def torep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
         """
         Construct a representation of this polynomial.
 
@@ -435,10 +435,12 @@ class FASTPolynomial(object):
         PolyRep
         """
         return self._rep
-Polynomial = FASTPolynomial
-    
 
-class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
+
+Polynomial = FASTPolynomial
+
+
+class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
     """
     Encapsulates a polynomial as a subclass of the standard Python dict.
 
@@ -529,18 +531,18 @@ class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
     def check_fastpoly(self, raiseErr=True):
         if set(self.fastpoly.coeffs.keys()) != set(self.keys()):
             print("FAST", self.fastpoly.coeffs, " != SLOW", dict(self))
-            if raiseErr: assert(False),"STOP"
+            if raiseErr: assert(False), "STOP"
             return False
         for k in self.fastpoly.coeffs.keys():
             if not _np.isclose(self.fastpoly.coeffs[k], self[k]):
                 print("FAST", self.fastpoly.coeffs, " != SLOW", dict(self))
-                if raiseErr: assert(False),"STOP"
+                if raiseErr: assert(False), "STOP"
                 return False
         if self.max_num_vars != self.fastpoly.max_num_vars:
-            print("#Var mismatch: FAST", self.fastpoly.max_num_vars, " != SLOW", self.max_num_vars)            
-            if raiseErr: assert(False),"STOP"
+            print("#Var mismatch: FAST", self.fastpoly.max_num_vars, " != SLOW", self.max_num_vars)
+            if raiseErr: assert(False), "STOP"
             return False
-                
+
         return True
 
     def deriv(self, wrtParam):
@@ -645,7 +647,7 @@ class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
             vtape[i:i + l] = k; i += l
         assert(i == len(vtape)), "Logic Error!"
         fast_vtape, fast_ctape = self.fastpoly.compact(iscomplex)
-        assert(_np.allclose(fast_vtape,vtape) and _np.allclose(fast_ctape,ctape))
+        assert(_np.allclose(fast_vtape, vtape) and _np.allclose(fast_ctape, ctape))
         self.check_fastpoly()
         return vtape, ctape
 
@@ -730,7 +732,7 @@ class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
                 k = tuple(sorted(k1 + k2))
                 if k in newpoly: newpoly[k] += v1 * v2
                 else: newpoly[k] = v1 * v2
-        
+
         newpoly.fastpoly = self.fastpoly.mult(x.fastpoly)
         self.check_fastpoly()
         newpoly.check_fastpoly()
@@ -950,7 +952,7 @@ class SLOWPolynomial(dict):  #REMOVE THIS CLASS (just for reference)
         # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
         vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
         self.check_fastpoly()
-        
+
         return replib.PolyRep(int_coeffs, max_num_vars, vindices_per_int)
 
 
@@ -990,7 +992,7 @@ def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape, dtype="auto"):
         result = _np.empty(dest_shape, 'd')
     else:
         raise ValueError("Invalid dtype: %s" % dtype)
-        
+
     res = result.flat  # for 1D access
 
     c = 0; i = 0; r = 0

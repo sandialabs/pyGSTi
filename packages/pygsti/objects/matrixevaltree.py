@@ -88,7 +88,7 @@ class MatrixEvalTree(EvalTree):
                 rhoLbl = simple_circuit_with_prep[0]  # assume first circuit layer is a prep
                 simple_circuit_no_prep = simple_circuit_with_prep[1:]
                 simplified_circuit_list[simple_circuit_no_prep] = [(rhoLbl, eLbl) for eLbl in elabels]
-        
+
         # opLabels : A list of all the length-0 & 1 operation labels to be stored
         #  at the beginning of the tree.  This list must include all the gate
         #  labels contained in the elements of simplified_circuit_list
@@ -660,7 +660,8 @@ class MatrixEvalTree(EvalTree):
         old_indices_in_new_order = self._finish_split(elIndicesDict, subTreeSetList,
                                                       permute_parent_element, create_subtree)
         self.simplified_circuit_spamTuples, updated_elIndices = \
-            self._permute_simplified_circuit_Xs(self.simplified_circuit_spamTuples, elIndicesDict, old_indices_in_new_order)
+            self._permute_simplified_circuit_Xs(self.simplified_circuit_spamTuples,
+                                                elIndicesDict, old_indices_in_new_order)
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
 
         self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here - just for clarity
@@ -778,7 +779,7 @@ class MatrixEvalTree(EvalTree):
 
     def _update_eval_order_helpers(self, indexPermutation):
         """Update anything pertaining to the "full" evaluation order - e.g. init_inidces in matrix-based case (HACK)"""
-        self.init_indices = [ indexPermutation[iCur] for iCur in self.init_indices]
+        self.init_indices = [indexPermutation[iCur] for iCur in self.init_indices]
 
 
 def _compute_spamtuple_indices(simplified_circuit_spamTuples,

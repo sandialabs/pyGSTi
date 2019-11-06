@@ -23,10 +23,12 @@ from . import modelmember as _mm
 from . import operation as _op
 from . import spamvec as _spamvec
 
+
 def compose_terms_with_mag(terms, magnitude):
     """ TODO: docstring """
     assert(len(terms) > 0)
     return terms[0].compose(terms, magnitude)
+
 
 def compose_terms(terms):
     """
@@ -81,7 +83,7 @@ def exp_terms(terms, order, postterm, cache=None, order_base=None):
         A dictionary used to cache results for speeding up repeated calls
         to this function.  Usually an empty dictionary is supplied to the
         first call.
-    
+
     order_base : float, optional
         What constitutes 1 order of magnitude.  If None, then
         polynomial coefficients are used.
@@ -107,20 +109,20 @@ def exp_terms(terms, order, postterm, cache=None, order_base=None):
     def build_terms(order_to_build):
         if order_to_build in cache:  # Note: 0th order is *always* in cache
             return cache[order_to_build]
-        previous_order_terms = build_terms(order_to_build-1)
+        previous_order_terms = build_terms(order_to_build - 1)
         a = 1.0 / order_to_build  # builds up 1/factorial prefactor
-        premultiplied_terms = [ a * factor for factor in terms ]
-        cache[order_to_build] = [ compose_terms((previous_order_term, a_factor))
-                                  for previous_order_term in previous_order_terms
-                                  for a_factor in premultiplied_terms ]
+        premultiplied_terms = [a * factor for factor in terms]
+        cache[order_to_build] = [compose_terms((previous_order_term, a_factor))
+                                 for previous_order_term in previous_order_terms
+                                 for a_factor in premultiplied_terms]
         return cache[order_to_build]
-    
+
     if persistent_cache:
         return [t.copy() for t in build_terms(order)]  # copy the terms if we need to store them in cache
     else:
         return build_terms(order)
 
-    
+
 def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     """
     Exponentiate a list of terms, collecting those terms of the orders given
@@ -147,7 +149,7 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     list
     """
     cache = {}  # DON'T allow the user to pass in a previous cache
-                # since this may have used a different min_term_mag
+    # since this may have used a different min_term_mag
     #Note: for performance, `cache` stores only term-*reps* not the full
     # term objects themselves.  Term objects are build (wrapped around
     # reps) at the end based on the type of postterm.
@@ -160,11 +162,11 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     termType = postterm.__class__
     composeFn = postterm._rep.__class__.composed
     termreps = [t._rep for t in terms]
-    
+
     def build_terms(order_to_build):
         if order_to_build in cache:  # Note: 0th order is *always* in cache
             return cache[order_to_build]
-        previous_order_terms = build_terms(order_to_build-1)
+        previous_order_terms = build_terms(order_to_build - 1)
         a = 1.0 / order_to_build  # builds up 1/factorial prefactor
 
         #OLD - when we used full objects
@@ -174,19 +176,20 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
         #                                      for previous_order_term in previous_order_terms
         #                                      for a_factor in premultiplied_terms) if t.magnitude >= min_term_mag ]
 
-        premultiplied_terms = [ factor.scalar_mult(a) for factor in termreps ]  # terms are expected to have their magnitudes set.
+        # terms are expected to have their magnitudes set.
+        premultiplied_terms = [factor.scalar_mult(a) for factor in termreps]
         tuples_to_iter = [(previous_order_term, a_factor)
                           for previous_order_term in previous_order_terms
                           for a_factor in premultiplied_terms
-                          if previous_order_term.magnitude * a_factor.magnitude >= min_term_mag ]
-        cache[order_to_build] = [ composeFn((previous_order_term, a_factor),
-                                            previous_order_term.magnitude * a_factor.magnitude) 
-                                  for (previous_order_term,a_factor) in tuples_to_iter ]
-        
+                          if previous_order_term.magnitude * a_factor.magnitude >= min_term_mag]
+        cache[order_to_build] = [composeFn((previous_order_term, a_factor),
+                                           previous_order_term.magnitude * a_factor.magnitude)
+                                 for (previous_order_term, a_factor) in tuples_to_iter]
+
         # **Assume** individual term magnitudes are <= 1.0 so that we
         # don't include any order terms that have magnitude < min_term_mag.
         return cache[order_to_build]
-    
+
     #return build_terms(order)  #OLD - when cache held full objects
     return [termType(rep) for rep in build_terms(order)]
 
@@ -315,6 +318,7 @@ class RankOneTerm(object):
     representing the prefactor for this term as a part of a larger density
     matrix evolution.
     """
+
     def __init__(self, rep):
         self._rep = rep
 
@@ -322,7 +326,7 @@ class RankOneTerm(object):
         return self._rep
 
     def copy(self):
-        return self.__class__(self._rep.copy())        
+        return self.__class__(self._rep.copy())
 
     def __mul__(self, x):
         """ Multiply by scalar """
@@ -340,28 +344,28 @@ class RankOneTerm(object):
     # for effect-type LindbladSPAMVec objects, for example.
     #def conjugate(self):
     #    return self.__class__(self._rep.conjugate())
-    
+
 
 class HasMagnitude(object):
     @property
     def magnitude(self):
         return self._rep.magnitude
-    
+
     @property
     def logmagnitude(self):
         return self._rep.logmagnitude
-    
+
     def compose(self, all_terms, magnitude):
         return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude))
 
-    
-class NoMagnitude(object):    
+
+class NoMagnitude(object):
     def compose(self, all_terms):
         return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0))
 
 
 class RankOnePrepTerm(RankOneTerm, NoMagnitude):
-    
+
     @classmethod
     def simple_init(cls, coeff, pre_state, post_state, evotype):
         if evotype not in ('svterm', 'cterm'):
@@ -382,7 +386,7 @@ class RankOnePrepTerm(RankOneTerm, NoMagnitude):
         rep = reptype(cls._coeff_rep(coeff), 1.0, 0.0,
                       pre_state._rep, post_state._rep, None, None, [], [])
         return cls(rep)
-            
+
     def embed(self, stateSpaceLabels, targetLabels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
@@ -392,10 +396,10 @@ class RankOnePrepTerm(RankOneTerm, NoMagnitude):
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, self._rep.pre_state, self._rep.post_state,
                                                   None, None, pre_ops, post_ops))
 
-        
+
 class RankOneEffectTerm(RankOneTerm, NoMagnitude):
     @classmethod
-    def simple_init(cls, coeff, pre_effect, post_effect, evotype):    
+    def simple_init(cls, coeff, pre_effect, post_effect, evotype):
         if evotype not in ('svterm', 'cterm'):
             raise ValueError("Invalid evotype: %s" % evotype)
 
@@ -416,7 +420,7 @@ class RankOneEffectTerm(RankOneTerm, NoMagnitude):
                       None, None, pre_effect._rep, post_effect._rep,
                       [], [])
         return cls(rep)
-            
+
     def embed(self, stateSpaceLabels, targetLabels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
@@ -426,7 +430,7 @@ class RankOneEffectTerm(RankOneTerm, NoMagnitude):
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
                                                   self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
 
-    
+
 class RankOneOpTerm(RankOneTerm, NoMagnitude):
     @classmethod
     def simple_init(cls, coeff, pre_op, post_op, evotype):
@@ -445,7 +449,7 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
                 else:
                     raise ValueError("Invalid `evotype` argument: %s" % evotype)
             pre_ops.append(pre_op)
-                
+
         if post_op is not None:
             if not isinstance(post_op, _mm.ModelMember):
                 if evotype == "svterm":
@@ -461,8 +465,8 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
         pre_op_reps = [op._rep for op in pre_ops]
         post_op_reps = [op._rep for op in post_ops]
         rep = reptype(cls._coeff_rep(coeff), 1.0, 0.0,
-                            None, None, None, None,
-                            pre_op_reps, post_op_reps)
+                      None, None, None, None,
+                      pre_op_reps, post_op_reps)
         return cls(rep)
 
     def embed(self, stateSpaceLabels, targetLabels):
@@ -473,7 +477,7 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
                                                   None, None, pre_ops, post_ops))
-        
+
 
 class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
     def embed(self, stateSpaceLabels, targetLabels):
@@ -485,7 +489,7 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
         return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
                                                   self._rep.pre_state, self._rep.post_state, None, None, pre_ops, post_ops))
 
-        
+
 class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
     def embed(self, stateSpaceLabels, targetLabels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
@@ -496,7 +500,7 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
         return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
                                                   None, None, self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
 
-    
+
 class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
     def embed(self, stateSpaceLabels, targetLabels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
@@ -507,7 +511,7 @@ class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
         return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
                                                   None, None, None, None, pre_ops, post_ops))
 
-    
+
 class HasNumericalCoefficient(object):
     @classmethod
     def _coeff_rep(cls, coeff):
@@ -517,10 +521,10 @@ class HasNumericalCoefficient(object):
     def coeff(self):
         return self._rep.coeff
 
-        
+
 class HasPolyCoefficient(object):
     @classmethod
-    def _coeff_rep(cls,coeff):
+    def _coeff_rep(cls, coeff):
         return coeff.torep()
 
     @property
@@ -572,14 +576,15 @@ class HasPolyCoefficient(object):
         """
         #self.coeff.mapvec_indices_inplace(mapvec)
         self._rep.coeff.mapvec_indices_inplace(mapvec)
-    
-                 
+
+
 class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
         return RankOnePolyPrepTermWithMagnitude(rep)
+
 
 class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
@@ -588,6 +593,7 @@ class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
         rep.set_magnitude(mag)
         return RankOnePolyEffectTermWithMagnitude(rep)
 
+
 class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
     def copy_with_magnitude(self, mag):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
@@ -595,9 +601,15 @@ class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
         rep.set_magnitude(mag)
         return RankOnePolyOpTermWithMagnitude(rep)
 
+
 class RankOnePolyPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, HasPolyCoefficient): pass
+
+
 class RankOnePolyEffectTermWithMagnitude(RankOneEffectTermWithMagnitude, HasPolyCoefficient): pass
+
+
 class RankOnePolyOpTermWithMagnitude(RankOneOpTermWithMagnitude, HasPolyCoefficient): pass
+
 
 class RankOneDirectPrepTerm(RankOnePrepTerm, HasNumericalCoefficient): pass
 class RankOneDirectEffectTerm(RankOneEffectTerm, HasNumericalCoefficient): pass
