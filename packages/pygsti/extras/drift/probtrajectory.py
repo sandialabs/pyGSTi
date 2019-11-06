@@ -34,6 +34,7 @@ class ProbTrajectory(object):
     Encapulates a time-dependent probability distribution, as a sum of time-dependent basis functions.
 
     """
+
     def __init__(self, outcomes, hyperparameters, parameters):
         """
         Initializes a ProbTrajectory object.
@@ -204,6 +205,7 @@ class ConstantProbTrajectory(ProbTrajectory):
     can be used consistently with any other ProbTrajectory object.
 
     """
+
     def __init__(self, outcomes, probabilities):
         """
         Initializes a ConstantProbTrajectory object.
@@ -239,6 +241,7 @@ class CosineProbTrajectory(ProbTrajectory):
     basis functions.
 
     """
+
     def __init__(self, outcomes, hyperparameters, parameters, starttime, timestep, numtimes):
         """
         Initializes a CosineProbTrajectory object.

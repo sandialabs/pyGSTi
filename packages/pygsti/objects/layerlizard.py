@@ -74,7 +74,7 @@ class LayerLizard(object):
         self.opcache = cache_dict
         if v is not None:
             for _, obj in self.opcache.items():
-                obj.from_vector(v[obj.gpindices]) #, close, nodirty)
+                obj.from_vector(v[obj.gpindices])  # , close, nodirty)
 
     #Helper functions for derived classes:
     def get_circuitlabel_op(self, circuitlbl, dense):

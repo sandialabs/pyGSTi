@@ -719,7 +719,7 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
         #Note: this means self._labels contains nested lists of simple labels
-        
+
         #Convert layers to a list/tuple of layer indices
         all_layers = bool(layers is None)  # whether we're assigning to *all* layers
         int_layers = isinstance(layers, int)
@@ -1403,7 +1403,7 @@ class Circuit(object):
             #Allow insertion of a layer into an empty circuit to update the circuit's line_labels
             layer_lbl = toLabel(circuit_layer)
             self.line_labels = layer_lbl.sslbls if (layer_lbl.sslbls is not None) else ('*',)
-            
+
         self.insert_labels_into_layers([circuit_layer], j)
 
     def insert_circuit(self, circuit, j):
@@ -2792,7 +2792,7 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, num_qubits=None,gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 

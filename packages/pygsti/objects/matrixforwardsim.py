@@ -2758,4 +2758,3 @@ class MatrixForwardSimulator(ForwardSimulator):
             calc_and_fill_fn(spamTuple, fInds, gInds, pslc1, pslc2, False)  # TODO: remove SumInto == True cases
 
         return
-

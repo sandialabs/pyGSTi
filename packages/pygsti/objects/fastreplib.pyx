@@ -40,6 +40,10 @@ cdef double LARGE = 1000000000
 # a very high term weight which won't help (at all) a
 # path get included in the selected set of paths.
 
+cdef double SMALL = 1e-10
+# a small number which is used as a path weight when the
+# true path magnitude is zero.
+
 
 #Use 64-bit integers
 ctypedef long long INT
@@ -297,8 +301,11 @@ cdef extern from "fastreps.h" namespace "CReps":
     cdef cppclass PolyCRep:
         PolyCRep() except +        
         PolyCRep(unordered_map[PolyVarsIndex, complex], INT, INT) except +
+        PolyCRep abs()
         PolyCRep mult(PolyCRep&)
+        PolyCRep abs_mult(PolyCRep&)
         void add_inplace(PolyCRep&)
+        void add_abs_inplace(PolyCRep&)
         void add_scalar_to_all_coeffs_inplace(double complex offset)
         void scale(double complex scale)
         vector[INT] int_to_vinds(PolyVarsIndex indx_tup)
@@ -1584,7 +1591,9 @@ cdef class SVTermRep:
     cdef public SVEffectRep post_effect
     cdef public object pre_ops
     cdef public object post_ops
+    cdef public object compact_coeff
 
+    
     @classmethod
     def composed(cls, terms_to_compose, double magnitude):
         cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
@@ -1603,6 +1612,7 @@ cdef class SVTermRep:
                   SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
         self.coeff = coeff
+        self.compact_coeff = coeff.compact_complex()
         self.pre_ops = pre_ops
         self.post_ops = post_ops
 
@@ -1638,11 +1648,16 @@ cdef class SVTermRep:
     def __dealloc__(self):
         del self.c_term
 
+    def __reduce__(self):
+        return (SVTermRep, (self.coeff, self.magnitude, self.logmagnitude, 
+                self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                self.pre_ops, self.post_ops))
+
     def set_magnitude(self, double mag):
         self.c_term._magnitude = mag
         self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE
 
-    def set_magnitude_only(self, double mag):  # EXPERIMENTAL
+    def set_magnitude_only(self, double mag):  # TODO: better name?
         self.c_term._magnitude = mag
 
     def mapvec_indices_inplace(self, mapvec):
@@ -1666,8 +1681,14 @@ cdef class SVTermRep:
     def copy(self):
         return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                         self.pre_ops, self.post_ops)        
+                         self.pre_ops, self.post_ops)
 
+    #Not needed - and this implementation is quite right as it will need to change
+    # the ordering of the pre/post ops also.
+    #def conjugate(self):
+    #    return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
+    #                     self.post_ops, self.pre_ops)
 
 
 #Note: to use direct term reps (numerical coeffs) we'll need to update
@@ -1826,7 +1847,15 @@ cdef class SBTermRep:
     def copy(self):
         return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                         self.pre_ops, self.post_ops)        
+                         self.pre_ops, self.post_ops)
+
+    #Not needed - and this implementation is quite right as it will need to change
+    # the ordering of the pre/post ops also.
+    #def conjugate(self):
+    #    return SBTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
+    #                     self.post_ops, self.pre_ops)
+
 
 
 
@@ -2100,10 +2129,14 @@ def DM_mapfill_dprobs_block(calc,
     dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
+    # NOTE: these calc._X_from_label(lbl) functions cache the returned operation
+    # inside calc.sos's (the layer lizard's) opcache.  This speeds up future calls, but
+    # more importantly causes calc.from_vector to be aware of these operations and to
+    # re-initialize them with updated parameter vectors as is necessary for the finite difference loop.
     rho_lookup = { lbl:i for i,lbl in enumerate(evalTree.rholabels) } # rho labels -> ints for faster lookup
     rhoreps = { i: calc._rho_from_label(rholbl)._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc._op_from_label(lbl)._rep for lbl,i in operation_lookup.items() }
     ereps = [E._rep for E in calc._Es_from_labels(evalTree.elabels)]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
@@ -2134,7 +2167,7 @@ def DM_mapfill_dprobs_block(calc,
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
     dm_mapfill_probs(probs, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+                     elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, subComm)
         
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
@@ -2144,12 +2177,14 @@ def DM_mapfill_dprobs_block(calc,
             vec = orig_vec.copy(); vec[i] += eps
             calc.from_vector(vec, close=True)
             dm_mapfill_probs(probs2, c_evalTree, c_gatereps, c_rhos, c_ereps, &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, comm)
+                             elabel_indices_per_circuit, final_indices_per_circuit, calc.dim, subComm)
             _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
     calc.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of mxToFill, so gather together:
     _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
+
+    free_rhocache(rho_cache)  #delete cache entries
 
     
 cdef double TDchi2_obj_fn(double p, double f, double Ni, double N, double omitted_p, double minProbClipForWeighting, double extra):
@@ -2994,6 +3029,19 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
     cscel.E_indices = E_indices
     return cscel
 
+def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+    cdef RepCacheEl repcel
+    cdef SVTermRep termrep
+    cdef np.ndarray coeff_array
+    
+    for repcel in repcache.values():
+        #repcel = <RepCacheEl?>repcel
+        for termrep in repcel.pyterm_references:
+            #if termrep.compact_coeff is None:
+            #    termrep.compact_coeff = termrep.coeff.compact_complex() # v,c
+            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
+            termrep.set_magnitude_only(abs(coeff_array[0]))
+
 
 def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
                                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
@@ -3103,7 +3151,7 @@ cdef double sv_find_best_pathmagnitude_threshold(
 
 def SV_compute_pruned_path_polys_given_threshold(
         threshold, calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-        comm=None, memLimit=None, fastmode=True):
+        comm=None, memLimit=None, fastmode=1):
 
     cdef INT i
     cdef INT numEs = len(elabels)
@@ -3123,7 +3171,7 @@ def SV_compute_pruned_path_polys_given_threshold(
     cdef vector[PolyCRep*] polys = sv_compute_pruned_polys_given_threshold(
         <double>threshold, cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
         cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.E_indices,
-        numEs, stateDim, <bool>fastmode,  mpv, vpi)
+        numEs, stateDim, <INT>fastmode,  mpv, vpi)
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
@@ -3132,7 +3180,7 @@ cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
     double threshold, vector[INT]& circuit,
     vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
     vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] E_indices,
-    INT numEs, INT dim, bool fastmode, INT max_poly_vars, INT vindices_per_int):
+    INT numEs, INT dim, INT fastmode, INT max_poly_vars, INT vindices_per_int):
 
     cdef INT N = circuit.size()
     cdef INT nFactorLists = N+2
@@ -3172,12 +3220,19 @@ cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
     cdef vector[PolyCRep] coeffSaved = vector[PolyCRep](nFactorLists-1)
 
     #Fill saved arrays with allocated states
-    if fastmode:
+    if fastmode == 1: # fastmode
         #fast mode
         addpath_fn = add_path_savepartials
         for i in range(nFactorLists-1):
             leftSaved[i] = new SVStateCRep(dim)
             rightSaved[i] = new SVStateCRep(dim)
+
+    elif fastmode == 2: #achieved-SOPM mode
+        addpath_fn = add_path_achievedsopm
+        for i in range(nFactorLists-1):
+            leftSaved[i] = NULL
+            rightSaved[i] = NULL
+            
     else:
         addpath_fn = add_path
         for i in range(nFactorLists-1):
@@ -3239,8 +3294,8 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
 
 	# can't propagate effects, so effect's post_ops are constructed to act on *state*
     EVec = factor._post_effect
-    for j in range(<INT>factor._post_ops.size()):
-        rhoVec = factor._post_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._pre_ops.size()):
+        rhoVec = factor._pre_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
     pLeft = EVec.amplitude(prop1)
 
@@ -3258,8 +3313,8 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
     factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
 
     EVec = factor._pre_effect
-    for j in range(<INT>factor._pre_ops.size()):
-        factor._pre_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._post_ops.size()):
+        factor._post_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
     pRight = EVec.amplitude(prop1).conjugate()
 
@@ -3280,6 +3335,31 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vec
     #Update the slots held by prop1 and prop2, which still have allocated states (though really no need?)
     pprop1[0] = prop1
     pprop2[0] = prop2
+    
+    
+cdef void add_path_achievedsopm(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
+                                SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
+                                vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
+
+    cdef PolyCRep coeff
+    cdef PolyCRep result
+
+    cdef INT i,j, Ei
+    cdef SVTermCRep* factor
+    cdef INT nFactorLists = b.size()
+    cdef INT last_index = nFactorLists-1
+
+    # In this loop, b holds "current" indices into factor_lists
+    factor = deref(factor_lists[0])[b[0]]
+    coeff = deref(factor._coeff).abs() # an unordered_map (copies to new "coeff" variable)
+
+    for i in range(1,nFactorLists):
+        coeff = coeff.abs_mult( deref(deref(factor_lists[i])[b[i]]._coeff) )
+
+    #Add result to appropriate poly
+    result = coeff  # use a reference?
+    Ei = deref(Einds)[ b[last_index] ] #final "factor" index == E-vector index
+    deref(prps)[Ei].add_abs_inplace(result)
 
 
 cdef void add_path_savepartials(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
@@ -3375,16 +3455,16 @@ cdef void add_path_savepartials(vector[PolyCRep*]* prps, vector[INT]& b, INT inc
     factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
     EVec = factor._post_effect
     prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-    for j in range(<INT>factor._post_ops.size()):
-        factor._post_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._pre_ops.size()):
+        factor._pre_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop
     pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
 
     #print "DB: right ampl"
     EVec = factor._pre_effect
     prop1.copy_from(rhoVecR)
-    for j in range(<INT>factor._pre_ops.size()):
-        factor._pre_ops[j].acton(prop1,prop2)
+    for j in range(<INT>factor._post_ops.size()):
+        factor._post_ops[j].acton(prop1,prop2)
         tprop = prop1; prop1 = prop2; prop2 = tprop
     pRight = EVec.amplitude(prop1).conjugate()
 
@@ -3493,6 +3573,7 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
     cdef INT n = b.size()
     cdef INT sub_order
     cdef double mag, mag2
+    cdef double numerator, denom
 
     for i in range(n-1, incd-1, -1):
         if b[i]+1 == nops[i]: continue
@@ -3509,14 +3590,22 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
 
         logmag = current_logmag + (deref(oprep_lists[i])[b[i]]._logmagnitude - deref(oprep_lists[i])[b[i]-1]._logmagnitude)
         if logmag >= log_thres:
-            if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
-                mag = 0
-            else:
-                mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
+            #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
+            #if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
+            #    mag = 0
+            #else:
+            #    mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
+            numerator = deref(oprep_lists[i])[b[i]]._magnitude
+            denom = deref(oprep_lists[i])[b[i]-1]._magnitude
+            if numerator == 0: numerator = SMALL
+            if denom == 0: denom = SMALL
+            mag = current_mag * (numerator / denom)
 
-            ## fn_visitpath(b, mag, i) ##
+            ## fn_visitpath(b, mag, i) ##            
             pathmags[E_indices[b[n-1]]] += mag
             nPaths[E_indices[b[n-1]]] += 1
+            #if E_indices[b[n-1]] == 0:  # TODO REMOVE
+            #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[b[i]-1]._magnitude, incd, i, "*1"
             if nPaths[E_indices[b[n-1]]] == max_npaths: return True
             #print("Adding ",b)
             ## --------------------------
@@ -3536,12 +3625,21 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
             for j in deref(foat_indices_per_op[i]):
                 if j >= orig_bi:
                     b[i] = j
-                    mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
-                        current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
+                    #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
+                    #mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
+                    #    current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
+                    
+                    numerator = deref(oprep_lists[i])[b[i]]._magnitude
+                    denom = deref(oprep_lists[i])[orig_bi-1]._magnitude
+                    if numerator == 0: numerator = SMALL
+                    if denom == 0: denom = SMALL
+                    mag = current_mag * (numerator / denom)
 
                     ## fn_visitpath(b, mag, i) ##
                     pathmags[E_indices[b[n-1]]] += mag
                     nPaths[E_indices[b[n-1]]] += 1
+                    #if E_indices[b[n-1]] == 0:  # TODO REMOVE
+                    #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[orig_bi-1]._magnitude, incd, i, "*2"
                     if nPaths[E_indices[b[n-1]]] == max_npaths: return True
                     #print("FOAT Adding ",b)
                     ## --------------------------
@@ -3557,6 +3655,8 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
                             ## fn_visitpath(b, mag2, n-1) ##
                             pathmags[E_indices[b[n-1]]] += mag2
                             nPaths[E_indices[b[n-1]]] += 1
+                            #if E_indices[b[n-1]] == 0:  # TODO REMOVE
+                            #    print nPaths[E_indices[b[n-1]]], mag2, pathmags[E_indices[b[n-1]]], b, mag, incd, i, " *3"
                             if nPaths[E_indices[b[n-1]]] == max_npaths: return True
                             #print("FOAT Adding ",b)
                             ## --------------------------
@@ -3664,7 +3764,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
     return threshold_lower_bound
 
-def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
     """ TODO: docstring """
 
     #Same beginning as SV_prs_as_pruned_polys -- should consolidate this setup code elsewhere
@@ -3734,10 +3834,13 @@ def SV_circuit_pathmagnitude_gap(calc, rholabel, elabels, circuit, repcache, opc
     #print("npaths = ",npaths)
     #print("MAX sopm = ",max_sum_of_pathmags)
     
-    ret = np.empty(numEs,'d')
+    achieved_sopm = np.empty(numEs,'d')
+    max_sopm = np.empty(numEs,'d')
     for i in range(numEs):
-        ret[i] = max_sum_of_pathmags[i] - mags[i]
-    return ret
+        achieved_sopm[i] = mags[i]
+        max_sopm[i] = max_sum_of_pathmags[i]
+        
+    return achieved_sopm, max_sopm
 
 
 
@@ -4644,8 +4747,8 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
 
         # can't propagate effects, so effect's post_ops are constructed to act on *state*
         EVec = factor._post_effect
-        for j in range(<INT>factor._post_ops.size()):
-            rhoVec = factor._post_ops[j].acton(prop1,prop2)
+        for j in range(<INT>factor._pre_ops.size()):
+            rhoVec = factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         pLeft = EVec.amplitude(prop1)
 
@@ -4663,8 +4766,8 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
 
         EVec = factor._pre_effect
-        for j in range(<INT>factor._pre_ops.size()):
-            factor._pre_ops[j].acton(prop1,prop2)
+        for j in range(<INT>factor._post_ops.size()):
+            factor._post_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         pRight = EVec.amplitude(prop1).conjugate()
 
@@ -4817,8 +4920,8 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
         EVec = factor._post_effect
         prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-        for j in range(<INT>factor._post_ops.size()):
-            factor._post_ops[j].acton(prop1,prop2)
+        for j in range(<INT>factor._pre_ops.size()):
+            factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop
         pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
 
@@ -4827,11 +4930,11 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         prop1.copy_from(rhoVecR)
         pRight = EVec.amplitude(prop1)
         #DEBUG print "  - begin: ",complex(pRight)
-        for j in range(<INT>factor._pre_ops.size()):
+        for j in range(<INT>factor._post_ops.size()):
             #DEBUG print " - state = ", [ prop1._smatrix[ii] for ii in range(2*2)]
             #DEBUG print "         = ", [ prop1._pvectors[ii] for ii in range(2)]
             #DEBUG print "         = ", [ prop1._amps[ii] for ii in range(1)]
-            factor._pre_ops[j].acton(prop1,prop2)
+            factor._post_ops[j].acton(prop1,prop2)
             #DEBUG print " - action with ", [ (<SBOpCRep_Clifford*>factor._pre_ops[j])._smatrix_inv[ii] for ii in range(2*2)]
             #DEBUG print " - action with ", [ (<SBOpCRep_Clifford*>factor._pre_ops[j])._svector_inv[ii] for ii in range(2)]
             #DEBUG print " - action with ", [ (<SBOpCRep_Clifford*>factor._pre_ops[j])._unitary_adj[ii] for ii in range(2*2)]

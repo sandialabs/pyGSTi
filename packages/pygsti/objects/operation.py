@@ -48,19 +48,23 @@ from . import replib
 #Repeated in spamvec.py - TODO: consolidate
 try:
     from . import fastopcalc as _fastopcalc
+    from .fastopcalc import fast_compact_deriv as _compact_deriv
 
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return _fastopcalc.fast_bulk_eval_compact_polys_complex(
             vtape, ctape, paramvec, dest_shape)
+
     def _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_size):
         return _fastopcalc.fast_abs_sum_bulk_eval_compact_polys_complex(
             vtape, ctape, paramvec, dest_size)
-            
+
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    from .polynomial import compact_deriv as _compact_deriv
 
     def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
         return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+
     def _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_size):
         return _np.sum(_np.abs(_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, (dest_size,))))
 
@@ -619,7 +623,7 @@ class LinearOperator(_modelmember.ModelMember):
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
                 coeffs = _bulk_eval_complex_compact_polys(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-                terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
+                terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
 
                 #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
                 #for t in terms_at_order:
@@ -628,17 +632,18 @@ class LinearOperator(_modelmember.ModelMember):
                 #    if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
                 #        print(coeff_array[0], "vs.", t._rep.magnitude)
                 #        import bpdb; bpdb.set_trace()
-    
+
                 if taylor_order == 1:
                     first_order_magmax = max([t.magnitude for t in terms_at_order])
-    
+
                 last_len = len(terms)
                 for t in terms_at_order:
                     if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
                         terms.append((taylor_order, t))
             else:
-                terms.extend( [(taylor_order, t) for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)] )
-                        
+                terms.extend([(taylor_order, t)
+                              for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)])
+
             #print("order ", taylor_order, " : ", len(terms_at_order), " maxmag=",
             #      max([t.magnitude for t in terms_at_order]), len(terms), " running terms ",
             #      len(terms)-last_len, "added at this order")
@@ -676,7 +681,7 @@ class LinearOperator(_modelmember.ModelMember):
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
         coeffs = _bulk_eval_complex_compact_polys(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-        terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
+        terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
 
         #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
         #for t in terms_at_order:
@@ -686,7 +691,7 @@ class LinearOperator(_modelmember.ModelMember):
         #        print(coeff_array[0], "vs.", t._rep.magnitude)
         #        import bpdb; bpdb.set_trace()
 
-        return [ t for t in terms_at_order if t.magnitude >= min_term_mag]
+        return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist2(self, otherOp, transform=None, inv_transform=None):
         """
@@ -1135,7 +1140,7 @@ class DenseOperator(DenseOperatorInterface, LinearOperator):
         else:
             self.base = rep.base
 
-        DenseOperatorInterface.__init__(self, self.base) # so we use the protected array
+        DenseOperatorInterface.__init__(self, self.base)  # so we use the protected array
 
     def __str__(self):
         s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
@@ -2310,6 +2315,20 @@ class StochasticNoiseOp(LinearOperator):
         rates = self._params_to_rates(self.to_vector())
         return _np.sum(_np.abs(rates))
 
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        # abs(rates) = rates = params**2
+        # so d( sum(abs(rates)) )/dparam_i = 2*param_i
+        return 2 * self.to_vector()
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -2758,7 +2777,7 @@ class LindbladOp(LinearOperator):
         if evotype in ("svterm", "cterm"):
             dense_rep = True  # we need *dense* unitary postfactors for the term-based processing below
         self.dense_rep = dense_rep
-        
+
         # make unitary postfactor sparse when dense_rep == False and vice versa.
         # (This doens't have to be the case, but we link these two "sparseness" notions:
         #  when we perform matrix exponentiation in a "sparse" way we assume the matrices
@@ -2820,7 +2839,7 @@ class LindbladOp(LinearOperator):
 
         #Cache values
         self.terms = {}
-        self.exp_terms_cache = {} # used for repeated calls to the exp_terms function
+        self.exp_terms_cache = {}  # used for repeated calls to the exp_terms function
         self.local_term_poly_coeffs = {}
         self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
         self.base_deriv = None
@@ -2941,7 +2960,7 @@ class LindbladOp(LinearOperator):
                     upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
                 else:
                     upost = self.unitary_postfactor
-            
+
                 dense = _np.dot(exp_errgen, upost)
             else:
                 dense = exp_errgen
@@ -2991,7 +3010,7 @@ class LindbladOp(LinearOperator):
     #            errorgen_rep = self.errorgen.torep()
     #            return replib.DMOpRep_Lindblad(errorgen_rep,
     #                                           mu, eta, m_star, s,
-    #                                           Udata, Uindices, Uindptr) # HERE 
+    #                                           Udata, Uindices, Uindptr) # HERE
     #        else:
     #            if self.unitary_postfactor is not None:
     #                dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
@@ -3017,7 +3036,7 @@ class LindbladOp(LinearOperator):
             raise NotImplementedError("deriv_wrt_params is only implemented for *dense-rep* LindbladOps")
             # because we need self.unitary_postfactor to be a dense operation below (and it helps to
             # have self.exp_err_gen cached)
-            
+
         if self.base_deriv is None:
             d2 = self.dim
 
@@ -3169,7 +3188,7 @@ class LindbladOp(LinearOperator):
         """
         if order not in self.terms:
             self._compute_taylor_order_terms(order, max_poly_vars)
-            
+
         if return_coeff_polys:
             return self.terms[order], self.local_term_poly_coeffs[order]
         else:
@@ -3177,8 +3196,8 @@ class LindbladOp(LinearOperator):
 
     def _compute_taylor_order_terms(self, order, max_poly_vars):  # separated for profiling
 
-        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
-        for ii,i in enumerate(self.gpindices_as_array()):
+        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars, _np.int64))
+        for ii, i in enumerate(self.gpindices_as_array()):
             mapvec[ii] = i
 
         def _compose_poly_indices(terms):
@@ -3194,7 +3213,7 @@ class LindbladOp(LinearOperator):
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_poly_vars
         postTerm = _term.RankOnePolyOpTerm.simple_init(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                     self.unitary_postfactor, self._evotype)
+                                                       self.unitary_postfactor, self._evotype)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
@@ -3219,8 +3238,8 @@ class LindbladOp(LinearOperator):
 
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
 
-        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
-        for ii,i in enumerate(self.gpindices_as_array()):
+        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars, _np.int64))
+        for ii, i in enumerate(self.gpindices_as_array()):
             mapvec[ii] = i
 
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
@@ -3229,7 +3248,7 @@ class LindbladOp(LinearOperator):
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_poly_vars
         postTerm = _term.RankOnePolyOpTerm.simple_init(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                     self.unitary_postfactor, self._evotype)
+                                                       self.unitary_postfactor, self._evotype)
         postTerm = postTerm.copy_with_magnitude(1.0)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
@@ -3258,7 +3277,7 @@ class LindbladOp(LinearOperator):
         #evaluate errgen_terms' coefficients using their local vector of parameters
         # (which happends to be the same as our paramvec in this case)
         egvec = self.errorgen.to_vector()
-        errgen_terms = [ egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms ]
+        errgen_terms = [egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms]
 
         #DEBUG!!!
         #import bpdb; bpdb.set_trace()
@@ -3287,20 +3306,19 @@ class LindbladOp(LinearOperator):
         #    if not _np.isclose(abs(coeff1), t.magnitude):
         #        assert(False),"STOP"
         #    #t.set_magnitude(abs(t.coeff.evaluate(egvec)))
-        
 
         #FUTURE:  maybe use bulk eval of compact polys? Something like this:
         #coeffs = _bulk_eval_complex_compact_polys(
         #    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         #for coeff, t in zip(coeffs, terms_at_order):
         #    t.set_magnitude(abs(coeff))
-        
+
         terms = []
         for term in _term.exp_terms_above_mag(errgen_terms, order,
-                                    postTerm, min_term_mag=min_term_mag):
+                                              postTerm, min_term_mag=min_term_mag):
             #poly_coeff = term.coeff
             #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
-            term.mapvec_indices_inplace(mapvec) # local -> global indices
+            term.mapvec_indices_inplace(mapvec)  # local -> global indices
 
             #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
             #t = term
@@ -3310,7 +3328,7 @@ class LindbladOp(LinearOperator):
             #    print(coeff_array[0], "vs.", t._rep.magnitude)
             #    import bpdb; bpdb.set_trace()
             #    c1 = _Polynomial.fromrep(t._rep.coeff)
-            
+
             terms.append(term)
         return terms
 
@@ -3335,6 +3353,18 @@ class LindbladOp(LinearOperator):
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
         return _np.exp(self.errorgen.get_total_term_magnitude())
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        return _np.exp(self.errorgen.get_total_term_magnitude()) * self.errorgen.get_total_term_magnitude_deriv()
 
     def num_params(self):
         """
@@ -3695,7 +3725,7 @@ class LindbladDenseOp(LindbladOp, DenseOperatorInterface):
         LindbladOp.__init__(self, unitaryPostfactor, errorgen, dense_rep=True)
         DenseOperatorInterface.__init__(self, self._rep.base)
 
-        
+
 def _dexpSeries(X, dX):
     TERM_TOL = 1e-12
     tr = len(dX.shape)  # tensor rank of dX; tr-2 == # of derivative dimensions
@@ -4082,7 +4112,7 @@ class ComposedOp(LinearOperator):
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
         self._rep.base.flags.writeable = False
-        
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
@@ -4258,7 +4288,7 @@ class ComposedOp(LinearOperator):
         """
         if order not in self.terms:
             self._compute_taylor_order_terms(order, max_poly_vars)
-            
+
         if return_coeff_polys:
             #Return coefficient polys in terms of *local* parameters (get_taylor_terms
             #  and above composition gives polys in terms of *global*, model params)
@@ -4266,7 +4296,7 @@ class ComposedOp(LinearOperator):
         else:
             return self.terms[order]
 
-    def _compute_taylor_order_terms(self, order, max_poly_vars):  #separated for profiling
+    def _compute_taylor_order_terms(self, order, max_poly_vars):  # separated for profiling
         terms = []
 
         #DEBUG TODO REMOVE
@@ -4282,14 +4312,14 @@ class ComposedOp(LinearOperator):
                 terms.append(_term.compose_terms(factors))
         self.terms[order] = terms
 
-        def _decompose_indices(x):
-            return tuple(_modelmember._decompose_gpindices(
-                self.gpindices, _np.array(x, _np.int64)))
-        
-        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars,_np.int64))
-        for ii,i in enumerate(self.gpindices_as_array()):
+        #def _decompose_indices(x):
+        #    return tuple(_modelmember._decompose_gpindices(
+        #        self.gpindices, _np.array(x, _np.int64)))
+
+        mapvec = _np.ascontiguousarray(_np.zeros(max_poly_vars, _np.int64))
+        for ii, i in enumerate(self.gpindices_as_array()):
             mapvec[i] = ii
-        
+
         #poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
         poly_coeffs = [t.coeff.mapvec_indices(mapvec) for t in terms]  # with *local* indices
         tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
@@ -4304,11 +4334,11 @@ class ComposedOp(LinearOperator):
 
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         terms = []
-        factor_lists_cache = [ [ops.get_taylor_order_terms_above_mag(i, max_poly_vars, min_term_mag) for i in range(order+1)]
-                               for ops in self.factorops]
+        factor_lists_cache = [[ops.get_taylor_order_terms_above_mag(i, max_poly_vars, min_term_mag) for i in range(order + 1)]
+                              for ops in self.factorops]
         for p in _lt.partition_into(order, len(self.factorops)):
             #factor_lists = [self.factorops[i].get_taylor_order_terms_above_mag(pi, max_poly_vars, min_term_mag) for i, pi in enumerate(p)]
-            factor_lists = [ factor_lists_cache[i][pi] for i, pi in enumerate(p)]
+            factor_lists = [factor_lists_cache[i][pi] for i, pi in enumerate(p)]
             for factors in _itertools.product(*factor_lists):
                 mag = _np.product([factor.magnitude for factor in factors])
                 if mag >= min_term_mag:
@@ -4334,7 +4364,6 @@ class ComposedOp(LinearOperator):
         #coeffs_as_compact_polys = (vtape, ctape)
         #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
-        
     def get_total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -4353,6 +4382,26 @@ class ComposedOp(LinearOperator):
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
         return _np.product([f.get_total_term_magnitude() for f in self.factorops])
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        opmags = [f.get_total_term_magnitude() for f in self.factorops]
+        product = _np.product(opmags)
+        ret = _np.zeros(self.num_params(), 'd')
+        for opmag, f in zip(opmags, self.factorops):
+            f_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, f.gpindices)
+            local_deriv = product / opmag * f.get_total_term_magnitude_deriv()
+            ret[f_local_inds] += local_deriv
+        return ret
 
     def num_params(self):
         """
@@ -4460,7 +4509,7 @@ class ComposedOp(LinearOperator):
         bool
         """
         return any([op.has_nonzero_hessian() for op in self.factorops])
-    
+
     def transform(self, S):
         """
         Update operation matrix G with inv(S) * G * S,
@@ -4491,11 +4540,12 @@ class ComposedOp(LinearOperator):
             s += str(gate)
         return s
 
-    
+
 class ComposedDenseOp(ComposedOp, DenseOperatorInterface):
     """
     A gate that is the composition of a number of matrix factors (possibly other gates).
     """
+
     def __init__(self, ops_to_compose, dim="auto", evotype="auto"):
         """
         Creates a new ComposedDenseOp.
@@ -4596,7 +4646,7 @@ class ExponentiatedOp(LinearOperator):
         """ Return the operation as a sparse matrix """
         if self.power == 0:
             return _sps.identity(self.dim, dtype=_np.dtype('d'), format='csr')
-        
+
         op = self.exponentiated_op.tosparse()
         mx = op.copy()
         for i in range(self.power - 1):
@@ -4723,7 +4773,7 @@ class EmbeddedOp(LinearOperator):
         self.targetLabels = targetLabels
         self.embedded_op = gate_to_embed
         self.dense_rep = dense_rep
-        self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly 
+        self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
 
         evotype = gate_to_embed._evotype
         opDim = self.state_space_labels.dim
@@ -4847,7 +4897,7 @@ class EmbeddedOp(LinearOperator):
         for l in self.targetLabels:
             divisors.append(divisor)
             divisor *= self.state_space_labels.labeldims[l]  # e.g. 4 or 2 for qubits (depending on evotype)
-    
+
         iTensorProdBlk = [self.state_space_labels.tpb_index[label] for label in self.targetLabels][0]
         tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
         basisInds = [list(range(self.state_space_labels.labeldims[l])) for l in tensorProdBlkLabels]
@@ -4906,7 +4956,7 @@ class EmbeddedOp(LinearOperator):
                 ret.append(indx // d)
                 indx = indx % d
             return ret
-        
+
         divisors, multipliers, sorted_bili, basisInds_noop, nonrel_offset = self._iter_matrix_elements_precalc()
         offset = 0 if relToBlock else nonrel_offset
 
@@ -4923,7 +4973,8 @@ class EmbeddedOp(LinearOperator):
                     # - so really a loop over diagonal dm elements
                     # using same b_noop for in and out says we're acting
                     b_out = _merge_op_and_noop_bases(op_b1, b_noop, sorted_bili)
-                    b_in = _merge_op_and_noop_bases(op_b2, b_noop, sorted_bili)  # as the identity on the no-op state space
+                    # as the identity on the no-op state space
+                    b_in = _merge_op_and_noop_bases(op_b2, b_noop, sorted_bili)
                     # index of output dm basis el within vec(tensor block basis)
                     out_vec_index = _np.dot(multipliers, tuple(b_out))
                     # index of input dm basis el within vec(tensor block basis)
@@ -5048,20 +5099,18 @@ class EmbeddedOp(LinearOperator):
         sslbls.reduce_dims_densitymx_to_state()
         if return_coeff_polys:
             terms, coeffs = self.embedded_op.get_taylor_order_terms(order, max_poly_vars, True)
-            embedded_terms = [ t.embed(sslbls, self.targetLabels) for t in terms]
+            embedded_terms = [t.embed(sslbls, self.targetLabels) for t in terms]
             return embedded_terms, coeffs
-        else:            
-            return [ t.embed(sslbls, self.targetLabels)
+        else:
+            return [t.embed(sslbls, self.targetLabels)
                     for t in self.embedded_op.get_taylor_order_terms(order, max_poly_vars, False)]
 
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         """TODO: docstring """
         sslbls = self.state_space_labels.copy()
         sslbls.reduce_dims_densitymx_to_state()
-        return [ t.embed(sslbls, self.targetLabels)
+        return [t.embed(sslbls, self.targetLabels)
                 for t in self.embedded_op.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag)]
-
-        
 
     def get_total_term_magnitude(self):
         """
@@ -5091,6 +5140,18 @@ class EmbeddedOp(LinearOperator):
         #assert(sum(mags) <= ret+1e-4)
 
         return self.embedded_op.get_total_term_magnitude()
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        return self.embedded_op.get_total_term_magnitude_deriv()
 
     def num_params(self):
         """
@@ -5938,7 +5999,7 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             eg_terms = [t.copy() for t in eg.get_taylor_order_terms(order, max_poly_vars, return_coeff_polys)]
             mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
-                    self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params()))))
+                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params()))))
             for t in eg_terms:
                 #t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
                 #    self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.array(x, _np.int64))))) #map global to *local* indices
@@ -5984,6 +6045,23 @@ class ComposedErrorgen(LinearOperator):
         #assert(sum(mags) <= ret+1e-4)
 
         return sum([eg.get_total_term_magnitude() for eg in self.factors])
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        ret = _np.zeros(self.num_params(), 'd')
+        for eg in self.factors:
+            eg_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            ret[eg_local_inds] += eg.get_total_term_magnitude_deriv()
+        return ret
 
     def num_params(self):
         """
@@ -6688,7 +6766,7 @@ class LindbladErrorgen(LinearOperator):
             assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
             #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
 
-            self.LtermdictAndBasis = (Ltermdict, basis) #HACK
+            self.LtermdictAndBasis = (Ltermdict, basis)  # HACK
             self.Lterms, self.Lterm_coeffs = None, None
             # OLD: do this lazily now that we need max_poly_vars... self._init_terms(Ltermdict, basis, evotype, dim, max_poly_vars)
             rep = dim  # rep = None for term-based evotypes
@@ -6806,6 +6884,7 @@ class LindbladErrorgen(LinearOperator):
     def _init_terms(self, Ltermdict, basis, evotype, dim, max_poly_vars):
 
         d2 = dim
+        d = int(round(_np.sqrt(d2)))  # needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
         mpv = max_poly_vars
 
         # Lookup dictionaries for getting the *parameter* index associated
@@ -6817,8 +6896,8 @@ class LindbladErrorgen(LinearOperator):
 
         # as we expect `basis` will contain *dense* basis
         # matrices (maybe change in FUTURE?)
-        numHamParams = max(len(hamBasisIndices) - 1,0)  # compensate for first basis el, 
-        numOtherBasisEls = max(len(otherBasisIndices) - 1,0)  # being the identity. (if there are any els at all)
+        numHamParams = max(len(hamBasisIndices) - 1, 0)  # compensate for first basis el,
+        numOtherBasisEls = max(len(otherBasisIndices) - 1, 0)  # being the identity. (if there are any els at all)
 
         # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
         # coeffs (w/ *local* variable indices) that get converted to per-order
@@ -6829,9 +6908,13 @@ class LindbladErrorgen(LinearOperator):
             termType = termLbl[0]
             if termType == "H":  # Hamiltonian
                 k = hamBasisIndices[termLbl[1]]  # index of parameter
-                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): -1j}, mpv), basis[termLbl[1]], IDENT, evotype))
-                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j}, mpv),
-                                                IDENT, basis[termLbl[1]].conjugate().T, evotype))
+                # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
+                scale, U = _mt.to_unitary(basis[termLbl[1]])
+                scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
+                Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, evotype))
+                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j * scale}, mpv),
+                                                                  IDENT, U.conjugate().T, evotype))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
@@ -6839,23 +6922,30 @@ class LindbladErrorgen(LinearOperator):
                         k = numHamParams + 0  # index of parameter
                     else:
                         k = numHamParams + otherBasisIndices[termLbl[1]]  # index of parameter
-                    Lm = Ln = basis[termLbl[1]]
+                    scale, U = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
+                    scale *= _np.sqrt(d)  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
+                    Lm = Ln = U
                     # power to raise parameter to in order to get coeff
                     pw = 2 if self.param_mode in ("cptp", "depol") else 1
 
                     Lm_dag = Lm.conjugate().T
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: 1.0}, mpv), Ln, Lm_dag, evotype))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5}, mpv), IDENT, _np.dot(Ln_dag, Lm),
-                                                    evotype))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5}, mpv), _np.dot(Lm_dag, Ln), IDENT,
-                                                    evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                        _Polynomial({(k,) * pw: 1.0 * scale**2}, mpv), Ln, Lm_dag, evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), IDENT, _np.dot(Ln_dag, Lm),
+                                                                      evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), _np.dot(Lm_dag, Ln), IDENT,
+                                                                      evotype))
 
                 else:
                     i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
                     j = otherBasisIndices[termLbl[2]]  # index of col in "other" coefficient matrix
-                    Lm, Ln = basis[termLbl[1]], basis[termLbl[2]]
+                    scalem, Um = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
+                    scalen, Un = _mt.to_unitary(basis[termLbl[2]])  # ensure all Rank1Term operators are *unitary*
+                    Lm, Ln = Um, Un
+                    scale = scalem * scalen
+                    scale *= d  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
@@ -6884,12 +6974,12 @@ class LindbladErrorgen(LinearOperator):
 
                     base_poly = _Polynomial(polyTerms, mpv)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(1.0 * base_poly, Ln, Lm, evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(1.0 * base_poly * scale, Ln, Lm, evotype))
                     # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm),
-                                                    evotype))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT,
-                                                    evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly * scale, IDENT, _np.dot(Ln_dag, Lm),
+                                                                      evotype))
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(-0.5 * base_poly * scale, _np.dot(Lm_dag, Ln), IDENT,
+                                                                      evotype))
 
             elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
@@ -6902,13 +6992,17 @@ class LindbladErrorgen(LinearOperator):
                 #  are the normalized paulis (including the identity), and rho has trace == 1
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-                L = basis[termLbl[1]]
+                scale, U = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
+                L = U
                 # Note: only works when `d` corresponds to integral # of qubits!
                 Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
+                # scaling to make Bmxs unitary (reverse of `scale` above, where scale * U == basis[.])
+                Bscale = d2**0.25
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): 1.0}, mpv), _np.dot(L, B), B,
-                                                    evotype))  # /(d2-1.)
+                    UB = Bscale * B  # UB is unitary
+                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
+                                                                      _np.dot(L, UB), UB, evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 
@@ -6932,6 +7026,22 @@ class LindbladErrorgen(LinearOperator):
             vtape = _np.empty(0, _np.int64)
             ctape = _np.empty(0, complex)
         coeffs_as_compact_polys = (vtape, ctape)
+
+        #DEBUG TODO REMOVE - check norm of rank-1 terms:
+        # rho =OP=> coeff * A rho B
+        # want to bound | coeff * Tr(E Op rho) | = | coeff | * | <e|A|psi><psi|B|e> |
+        # so A and B should be unitary so that | <e|A|psi><psi|B|e> | <= 1
+        # but typically these are unitaries / (sqrt(2)*nqubits)
+        #import bpdb; bpdb.set_trace()
+        scale = 1.0
+        for t in Lterms:
+            for op in t._rep.pre_ops:
+                test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
+                assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
+            for op in t._rep.post_ops:
+                test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
+                if not (_np.allclose(test, _np.identity(test.shape[0], 'd'))):
+                    import bpdb; bpdb.set_trace()
 
         return Lterms, coeffs_as_compact_polys
 
@@ -6977,22 +7087,22 @@ class LindbladErrorgen(LinearOperator):
                 coeffs = otherCoeffs.flatten()
 
             if coeffs is not None:
-                _mt.csr_sum_flat(data, coeffs, self._CSRSumIndices, self._CSRSumData, self._CSRSumPtr)                
+                _mt.csr_sum_flat(data, coeffs, self._CSRSumIndices, self._CSRSumData, self._CSRSumPtr)
 
             #TODO: REMOVE
             # data.fill(0.0)  # data starts at zero
-            # 
+            #
             # if hamCoeffs is not None:
             #     # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
             #     _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
             #     onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
-            # 
+            #
             # if otherCoeffs is not None:
             #     if self.nonham_mode == "diagonal":
             #         # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
             #         _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
             #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
-            # 
+            #
             #     else:  # nonham_mode in ("diag_affine", "all")
             #         # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
             #         #                      for c,gen in zip(cRow,genRow)])
@@ -7083,20 +7193,20 @@ class LindbladErrorgen(LinearOperator):
                 hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
                     self.paramvals, self.ham_basis_size, self.other_basis_size,
                     self.param_mode, self.nonham_mode)
-    
+
                 hamGens, otherGens = self._init_generators(self.dim)
-    
+
                 if hamCoeffs is not None:
                     lnd_error_gen = sum([c * gen for c, gen in zip(hamCoeffs, hamGens)])
                 else:
                     lnd_error_gen = _sps.csr_matrix((self.dim, self.dim))
-        
+
                 if otherCoeffs is not None:
                     if self.nonham_mode == "diagonal":
                         lnd_error_gen += sum([c * gen for c, gen in zip(otherCoeffs, otherGens)])
                     else:  # nonham_mode in ("diag_affine", "all")
                         lnd_error_gen += sum([c * gen for cRow, genRow in zip(otherCoeffs, otherGens)
-                                             for c, gen in zip(cRow, genRow)])
+                                              for c, gen in zip(cRow, genRow)])
 
                 return lnd_error_gen
             else:
@@ -7104,7 +7214,7 @@ class LindbladErrorgen(LinearOperator):
                                        shape=(self.dim, self.dim))
 
         else:
-            return _sps.csr_matrix(self.todense())            
+            return _sps.csr_matrix(self.todense())
 
     #def torep(self):
     #    """
@@ -7200,7 +7310,7 @@ class LindbladErrorgen(LinearOperator):
 
         #OLD SLOW
         # coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
-        # 
+        #
         # #DEBUG TODO REMOVE
         # #coeffs_chk = _np.array([ x.evaluate_coeff(self.to_vector()).coeff for x in self.Lterms])
         # #assert(_np.allclose(coeffs, coeffs_chk))
@@ -7210,8 +7320,52 @@ class LindbladErrorgen(LinearOperator):
         # #print("LindbladErrorgen CHECK = ",sum(mags), " vs ", ret)
         # #assert(sum(mags) <= ret+1e-4)
         # #print("  DB: LindbladErrorgen coeffs = ",coeffs)
-        # 
+        #
         # return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
+
+    def get_total_term_magnitude_deriv(self):
+        """
+        Get the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params()
+        """
+        # In general: d(|x|)/dp = d( sqrt(x.r^2 + x.im^2) )/dp = (x.r*dx.r/dp + x.im*dx.im/dp) / |x| = Re(x * conj(dx/dp))/|x|
+        # The total term magnitude in this case is sum_i( |coeff_i| ) so we need to compute:
+        # d( sum_i( |coeff_i| )/dp = sum_i( d(|coeff_i|)/dp ) = sum_i( Re(coeff_i * conj(d(coeff_i)/dp)) / |coeff_i| )
+
+        wrtInds = _np.ascontiguousarray(_np.arange(self.num_params()), _np.int64)  # for Cython arg mapping
+        vtape, ctape = self.Lterm_coeffs
+        coeff_values = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
+        coeff_deriv_vals = _bulk_eval_complex_compact_polys(coeff_deriv_polys[0], coeff_deriv_polys[1],
+                                                            self.to_vector(), (len(self.Lterms), len(wrtInds)))
+        abs_coeff_values = _np.abs(coeff_values)
+        abs_coeff_values[abs_coeff_values < 1e-10] = 1.0  # so ratio is 0 in cases where coeff_value == 0
+        ret = _np.sum(_np.real(coeff_values[:, None] * _np.conj(coeff_deriv_vals))
+                      / abs_coeff_values[:, None], axis=0)  # row-sum
+        assert(_np.linalg.norm(_np.imag(ret)) < 1e-8)
+        return ret.real
+
+        #DEBUG
+        #ret2 = _np.empty(self.num_params(),'d')
+        #eps = 1e-8
+        #orig_vec = self.to_vector().copy()
+        #f0 = sum([abs(coeff) for coeff in coeff_values])
+        #for i in range(self.num_params()):
+        #    v = orig_vec.copy()
+        #    v[i] += eps
+        #    new_coeff_values = _bulk_eval_complex_compact_polys(vtape, ctape, v, (len(self.Lterms),))
+        #    ret2[i] = ( sum([abs(coeff) for coeff in new_coeff_values]) - f0 ) / eps
+
+        #test3 = _np.linalg.norm(ret-ret2)
+        #print("TEST3 = ",test3)
+        #if test3 > 10.0:
+        #    import bpdb; bpdb.set_trace()
+        #return ret
 
     def num_params(self):
         """
@@ -7505,7 +7659,7 @@ class LindbladErrorgen(LinearOperator):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
             err_gen_mx = self.tosparse() if self.sparse else self.todense()
-            
+
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
                 err_gen_mx = _mt.safedot(Uinv, err_gen_mx)

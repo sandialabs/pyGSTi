@@ -79,10 +79,26 @@ class MapForwardSimulator(ForwardSimulator):
         return MapForwardSimulator(self.dim, self.sos, self.paramvec)
 
     def _rho_from_label(self, rholabel):
-        return self.sos.get_prep(rholabel)
+        # Note: caching here is *essential* to the working of bulk_fill_dprobs,
+        # which assumes that the op returned will be affected by self.from_vector() calls.
+        if rholabel not in self.sos.opcache:
+            self.sos.opcache[rholabel] = self.sos.get_prep(rholabel)
+        return self.sos.opcache[rholabel]
 
     def _Es_from_labels(self, elabels):
-        return [self.sos.get_effect(elabel) for elabel in elabels]
+        # Note: caching here is *essential* to the working of bulk_fill_dprobs,
+        # which assumes that the ops returned will be affected by self.from_vector() calls.
+        for elabel in elabels:
+            if elabel not in self.sos.opcache:
+                self.sos.opcache[elabel] = self.sos.get_effect(elabel)
+        return [self.sos.opcache[elabel] for elabel in elabels]
+
+    def _op_from_label(self, oplabel):
+        # Note: caching here is *essential* to the working of bulk_fill_dprobs,
+        # which assumes that the op returned will be affected by self.from_vector() calls.
+        if oplabel not in self.sos.opcache:
+            self.sos.opcache[oplabel] = self.sos.get_operation(oplabel)
+        return self.sos.opcache[oplabel]
 
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
@@ -299,7 +315,7 @@ class MapForwardSimulator(ForwardSimulator):
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
-        
+
         numSubtreeComms : int
             The number of processor groups that will be assigned to
             subtrees of the created tree.  This aids in the tree construction
@@ -624,7 +640,8 @@ class MapForwardSimulator(ForwardSimulator):
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    replib.DM_mapfill_dprobs_block(self, mxToFill, felInds, paramSlice, evalSubTree, paramSlice, blkComm)
+                    replib.DM_mapfill_dprobs_block(self, mxToFill, felInds, paramSlice,
+                                                   evalSubTree, paramSlice, blkComm)
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
@@ -765,13 +782,15 @@ class MapForwardSimulator(ForwardSimulator):
             if blkSize1 is None and blkSize2 is None:  # wrtFilter1 & wrtFilter2 dictate block
                 #Compute all requested derivative columns at once
                 if deriv1MxToFill is not None:
-                    replib.DM_mapfill_dprobs_block(self, deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1, mySubComm)
+                    replib.DM_mapfill_dprobs_block(self, deriv1MxToFill, felInds, None,
+                                                   evalSubTree, wrtSlice1, mySubComm)
                 if deriv2MxToFill is not None:
                     if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
                         deriv2MxToFill[felInds, :] = deriv1MxToFill[felInds, :]
                     else:
-                        replib.DM_mapfill_dprobs_block(self, deriv2MxToFill, felInds, None, evalSubTree, wrtSlice2, mySubComm)
-                        
+                        replib.DM_mapfill_dprobs_block(self, deriv2MxToFill, felInds,
+                                                       None, evalSubTree, wrtSlice2, mySubComm)
+
                 self.DM_mapfill_hprobs_block(mxToFill, felInds, None, None, evalSubTree,
                                              wrtSlice1, wrtSlice2, mySubComm)
 
@@ -804,9 +823,9 @@ class MapForwardSimulator(ForwardSimulator):
                     if derivMxToFill is not None:
                         replib.DM_mapfill_dprobs_block(self, derivMxToFill, felInds, paramSlice1, evalSubTree,
                                                        paramSlice1, blk1Comm)
-                    
+
                     for iBlk2 in myBlk2Indices:
-                        paramSlice2 = blocks2[iBlk2]                        
+                        paramSlice2 = blocks2[iBlk2]
                         self.DM_mapfill_hprobs_block(mxToFill, felInds, paramSlice1, paramSlice2, evalSubTree,
                                                      paramSlice1, paramSlice2, blk2Comm)
 
@@ -1011,7 +1030,7 @@ class MapForwardSimulator(ForwardSimulator):
             replib.DM_mapfill_TDchi2_terms(self, mxToFill, felInds, num_outcomes,
                                            evalSubTree, dataset_rows, minProbClipForWeighting,
                                            probClipInterval, mySubComm)
-            
+
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,

@@ -2371,7 +2371,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when maxIdleWeight < nQubits!
     printer.log("Creating \"idle error\" model on %d qubits" % maxIdleWeight)
     idle_model = _CloudNoiseModel.build_from_hops_and_weights(
-        maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line', #qubitGraph
+        maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
         sim_type="termorder:1", parameterization=ptermstype)

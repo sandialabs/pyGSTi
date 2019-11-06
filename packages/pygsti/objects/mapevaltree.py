@@ -89,11 +89,11 @@ class MapEvalTree(EvalTree):
             self._build_elabels_lookups()
 
         self.rholabels = set()
-        for c,elabels in simplified_circuit_list.items():
+        for c, elabels in simplified_circuit_list.items():
             if elabels != [None]:  # so we know c[0] is a prep label
                 self.rholabels.add(c[0])
         self.rholabels = sorted(list(self.rholabels))
-        
+
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
         #UNNEEDED? self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
@@ -232,7 +232,7 @@ class MapEvalTree(EvalTree):
 
         # Create lookup so elabel_lookup[eLbl] gives index of eLbl
         # within all_elabels (for faster lookup, Cython routines in ptic)
-        elabel_lookup = { elbl:i for i,elbl in enumerate(all_elabels) }
+        elabel_lookup = {elbl: i for i, elbl in enumerate(all_elabels)}
 
         #Create arrays that tell us, for a given rholabel, what the elabel indices
         # are for each simplified circuit.  This is obviously convenient for computing
@@ -243,11 +243,11 @@ class MapEvalTree(EvalTree):
             element_offset = self.element_offsets_for_circuit[i]  # offset to i-th simple circuits elements
             for j, eLbl in enumerate(elabels):
                 if i in eLbl_indices_per_circuit:
-                    eLbl_indices_per_circuit[i].append( elabel_lookup[eLbl] )
-                    final_indices_per_circuit[i].append( element_offset + j )
+                    eLbl_indices_per_circuit[i].append(elabel_lookup[eLbl])
+                    final_indices_per_circuit[i].append(element_offset + j)
                 else:
-                    eLbl_indices_per_circuit[i] = [ elabel_lookup[eLbl] ]
-                    final_indices_per_circuit[i] = [ element_offset + j ]
+                    eLbl_indices_per_circuit[i] = [elabel_lookup[eLbl]]
+                    final_indices_per_circuit[i] = [element_offset + j]
 
         return all_elabels, eLbl_indices_per_circuit, final_indices_per_circuit
 
@@ -698,9 +698,10 @@ class MapEvalTree(EvalTree):
             subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices  # parent index of each subtree index
             subTree.simplified_circuit_elabels = [self.simplified_circuit_elabels[k]
-                                                     for k in _slct.indices(subTree.myFinalToParentFinalMap)]
+                                                  for k in _slct.indices(subTree.myFinalToParentFinalMap)]
             subTree.simplified_circuit_nEls = list(map(len, subTree.simplified_circuit_elabels))
-            subTree.element_offsets_for_circuit = _np.cumsum([0] + [len(elabelList) for elabelList in subTree.simplified_circuit_elabels])[:-1]
+            subTree.element_offsets_for_circuit = _np.cumsum(
+                [0] + [len(elabelList) for elabelList in subTree.simplified_circuit_elabels])[:-1]
             subTree.elabels, subTree.eLbl_indices_per_circuit, subTree.final_indices_per_circuit = \
                 subTree._build_elabels_lookups()
             subTree.rholabels = self.rholabels  # don't bother trying to thin this out for now - just take the parent's list
@@ -730,7 +731,8 @@ class MapEvalTree(EvalTree):
             subTree.trim_nonfinal_els()
             #t7 = _time.time() #REMOVE
             circuits = subTree.generate_circuit_list(permute=False)
-            subTree.opLabels = self._get_opLabels({c: elbls for c,elbls in zip(circuits,subTree.simplified_circuit_elabels)})
+            subTree.opLabels = self._get_opLabels(
+                {c: elbls for c, elbls in zip(circuits, subTree.simplified_circuit_elabels)})
 
             #t8 = _time.time() #REMOVE
             # print("DB: create_subtree timing: "
@@ -747,7 +749,8 @@ class MapEvalTree(EvalTree):
                                                       all_final=bool(self.cache_size() == 0))
 
         self.simplified_circuit_elabels, updated_elIndices = \
-            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels, elIndicesDict, old_indices_in_new_order)
+            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels,
+                                                elIndicesDict, old_indices_in_new_order)
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
 
         # Update element_offsets_for_circuit, etc

@@ -40,7 +40,7 @@ class EvalTree(list):
         # *after* evaluating all of the initial indices (init_indices)
         self.eval_order = []
 
-        # list giving the number of elements (~effect labels) associated 
+        # list giving the number of elements (~effect labels) associated
         # with each simplified circuit.
         self.simplified_circuit_nEls = None
 
@@ -572,8 +572,9 @@ class EvalTree(list):
         #print("DEBUG: PERM MAP = ", parentIndexPerm)
 
         #Permute parent indices
-        self._update_eval_order_helpers(parentIndexPerm)  #HACK to allow .init_indices to be updated in Matrix tree case
-        self.eval_order = [parentIndexPerm[iCur] for iCur in self.eval_order]        
+        # HACK to allow .init_indices to be updated in Matrix tree case
+        self._update_eval_order_helpers(parentIndexPerm)
+        self.eval_order = [parentIndexPerm[iCur] for iCur in self.eval_order]
         self[:] = [permute_parent_element(parentIndexPerm, self[iCur])
                    for iCur in parentIndexRevPerm]
         #print("PT3 = %.3fs" % (_time.time()-t0)); t0 = _time.time()  # REMOVE
@@ -640,7 +641,7 @@ class EvalTree(list):
             immaterial - it could be an elabel or spamtuple, etc).
 
         old_indices_in_new_order : list
-            giving the new ordering of the old indices.        
+            giving the new ordering of the old indices.
 
         Returns
         -------
@@ -674,8 +675,6 @@ class EvalTree(list):
         updated_simplified_circuit_Xs = [simplified_circuit_Xs[iCur]
                                          for iCur in old_indices_in_new_order[0:self.num_final_strings()]]
         return updated_simplified_circuit_Xs, updated_elIndices
-
-
 
     def is_split(self):
         """ Returns boolean indicating whether tree is split into sub-trees or not. """

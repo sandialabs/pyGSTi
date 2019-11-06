@@ -191,6 +191,7 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
     """
     A constructor for a basis containing just a single element (e.g. the identity).
     """
+
     def sizes(self, dim, sparse):
         """ See docstring for :class:`MatrixBasisConstructor` """
         nElements = 1   # the number of matrices in the basis
