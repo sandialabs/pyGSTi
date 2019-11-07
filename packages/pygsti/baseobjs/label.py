@@ -220,7 +220,7 @@ class LabelTup(Label, tuple):
         tup = (name,) + sslbls
         return cls.__new__(cls, tup, time)
 
-    def __new__(cls, tup, time):
+    def __new__(cls, tup, time=0.0):
         ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
         ret.time = time
         return ret
@@ -412,7 +412,7 @@ class LabelStr(Label, strlittype):
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         return cls.__new__(cls, name, time)
 
-    def __new__(cls, name, time):
+    def __new__(cls, name, time=0.0):
         ret = strlittype.__new__(cls, name)
         ret.time = time
         return ret
@@ -543,7 +543,7 @@ class LabelTupTup(Label, tuple):
                 max([lbl.time for lbl in tupOfLabels])
         return cls.__new__(cls, tupOfLabels, time)
 
-    def __new__(cls, tupOfLabels, time):
+    def __new__(cls, tupOfLabels, time=0.0):
         ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
         ret.time = time
         return ret
@@ -724,7 +724,7 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None):
+    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None): #Note: may need default args for all but 1st for pickling!
         """
         Creates a new Model-item label, which defines a set of other labels
         as a sub-circuit and allows that sub-circuit to be repeated some integer
@@ -1007,7 +1007,7 @@ class LabelTupWithArgs(Label, tuple):
 
         return cls.__new__(cls, tup, time)
     
-    def __new__(cls, tup, time):
+    def __new__(cls, tup, time=0.0):
         ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
         ret.time = time
         return ret
@@ -1195,7 +1195,7 @@ class LabelTupTupWithArgs(Label, tuple):
                 max([lbl.time for lbl in tupOfLabels])
         return cls.__new__(cls, tupOfLabels, time)
 
-    def __new__(cls, tupOfLabels, time):
+    def __new__(cls, tupOfLabels, time=0.0):
         ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
         ret.time = time
         return ret
