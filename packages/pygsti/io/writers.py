@@ -128,14 +128,16 @@ def write_dataset(filename, dataset, circuit_list=None,
         for circuit in circuit_list:  # circuit should be a Circuit object here
             dataRow = dataset[circuit.tup]
             counts = dataRow.counts
+            circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
+                if dataset.collisionAction == "keepseparate" else circuit
 
             if fixedColumnMode:
                 #output '--' for outcome labels that aren't present in this row
-                output.write(circuit.str + "  "
+                output.write(circuit_to_write.str + "  "
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
                                           for ol in outcomeLabels]))
             else:  # use expanded label:count format
-                output.write(circuit.str + "  "
+                output.write(circuit_to_write.str + "  "
                              + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
                                           for ol in outcomeLabels if ol in counts]))
 
