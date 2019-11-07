@@ -13,6 +13,7 @@ import numpy as _np
 import pickle as _pickle
 import copy as _copy
 from collections import OrderedDict as _OrderedDict
+from collections import defaultdict as _DefaultDict
 
 from ..tools import compattools as _compat
 
@@ -40,11 +41,13 @@ class MultiDataSet_KeyValIterator(object):
         else:
             repData = None
 
-        return datasetName, _DataSet(oliData, timeData, repData,
-                                     circuitIndices=self.multidataset.cirIndex,
-                                     outcomeLabelIndices=self.multidataset.olIndex,
-                                     collisionAction=self.multidataset.collisionActions[datasetName],
-                                     bStatic=True)
+        ds = _DataSet(oliData, timeData, repData,
+                      circuitIndices=self.multidataset.cirIndex,
+                      outcomeLabelIndices=self.multidataset.olIndex,
+                      collisionAction=self.multidataset.collisionActions[datasetName],
+                      bStatic=True, auxInfo=None)
+        ds.auxInfo = self.multidataset.auxInfo  # avoids shallow-copying dict
+        return datasetName, ds
 
     next = __next__
 
@@ -68,11 +71,13 @@ class MultiDataSet_ValIterator(object):
         else:
             repData = None
 
-        return _DataSet(oliData, timeData, repData,
+        ds = _DataSet(oliData, timeData, repData,
                         circuitIndices=self.multidataset.cirIndex,
                         outcomeLabelIndices=self.multidataset.olIndex,
                         collisionAction=self.multidataset.collisionActions[datasetName],
-                        bStatic=True)
+                        bStatic=True, auxInfo=None)
+        ds.auxInfo = self.multidataset.auxInfo  # avoids shallow-copying dict
+        return ds
 
     next = __next__
 
@@ -95,7 +100,7 @@ class MultiDataSet(object):
                  circuitIndices=None,
                  outcomeLabels=None, outcomeLabelIndices=None,
                  fileToLoadFrom=None, collisionActions=None,
-                 comment=None, comments=None):
+                 comment=None, comments=None, auxInfo=None):
         """
         Initialize a MultiDataSet.
 
@@ -148,6 +153,10 @@ class MultiDataSet(object):
             A user-specified dictionary of comments, one per dataset.  Keys
             are dataset names (same as `oliDict` keys).
 
+        auxInfo : dict, optional
+            A user-specified dictionary of per-circuit auxiliary information.
+            Keys should be the circuits in this MultiDataSet and value should
+            be Python dictionaries.
 
         Returns
         -------
@@ -223,6 +232,12 @@ class MultiDataSet(object):
 
         # comment
         self.comment = comment
+
+        #auxiliary info
+        if auxInfo is None:
+            self.auxInfo = _DefaultDict(dict)
+        else:
+            self.auxInfo = _DefaultDict(dict, auxInfo)
 
         #data types - should stay in sync with DataSet
         self.oliType = _np.uint32
@@ -510,7 +525,7 @@ class MultiDataSet(object):
                             circuitIndices=_copy.deepcopy(self.cirIndex) if (self.cirIndex is not None) else None,
                             outcomeLabelIndices=_copy.deepcopy(self.olIndex) if (self.olIndex is not None) else None,
                             collisionActions=self.collisionActions, comments=_copy.deepcopy(self.comments),
-                            comment=(self.comment + " copy") if self.comment else None)
+                            comment=(self.comment + " copy") if self.comment else None, auxInfo=self.auxInfo)
 
     def __getstate__(self):
         toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit,
@@ -521,6 +536,7 @@ class MultiDataSet(object):
                     'timeDict': self.timeDict,
                     'repDict': self.repDict,
                     'collisionActions': self.collisionActions,
+                    'auxInfo': self.auxInfo,
                     'comments': self.comments,
                     'comment': self.comment}
         return toPickle
@@ -535,6 +551,13 @@ class MultiDataSet(object):
         self.collisionActions = state_dict['collisionActions']
         self.comments = state_dict['comments']
         self.comment = state_dict['comment']
+
+        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict))
+        if not isinstance(self.auxInfo, _DefaultDict) and isinstance(self.auxInfo, dict):
+            self.auxInfo = _DefaultDict(dict, self.auxInfo)
+            # some types of serialization (e.g. JSON) just save a *normal* dict
+            # so promote to a defaultdict if needed..
+
 
     def save(self, fileOrFilename):
         """
@@ -555,6 +578,7 @@ class MultiDataSet(object):
                     'timeKeys': list(self.timeDict.keys()),
                     'repKeys': list(self.repDict.keys()) if self.repDict else None,
                     'collisionActions': self.collisionActions,
+                    'auxInfo': self.auxInfo,
                     'comments': self.comments,
                     'comment': self.comment}  # Don't pickle *Dict numpy data b/c it's inefficient
         # Compatability for unicode-literal filenames
@@ -618,6 +642,7 @@ class MultiDataSet(object):
         self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
         self.olIndex = state_dict['olIndex']
         self.collisionActions = state_dict['collisionActions']
+        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict))  # backward compat
         self.comments = state_dict["comments"]
         self.comment = state_dict["comment"]
 
@@ -637,3 +662,24 @@ class MultiDataSet(object):
             self.repDict = None
 
         if bOpen: f.close()
+
+    def add_auxiliary_info(self, circuit, aux):
+        """
+        Add auxiliary meta information to `circuit`.
+
+        Parameters
+        ----------
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the circuit or a Circuit object
+
+        aux : dict, optional
+            A dictionary of auxiliary meta information to be included with
+            this set of data counts (associated with `circuit`).
+
+        Returns
+        -------
+        None
+        """
+        self.auxInfo[circuit].clear()  # needed? (could just update?)
+        self.auxInfo[circuit].update(aux)
+

@@ -629,7 +629,7 @@ class DataSet(object):
                  circuits=None, circuitIndices=None,
                  outcomeLabels=None, outcomeLabelIndices=None,
                  bStatic=False, fileToLoadFrom=None, collisionAction="aggregate",
-                 comment=None):
+                 comment=None, auxInfo=None):
         """
         Initialize a DataSet.
 
@@ -696,6 +696,11 @@ class DataSet(object):
             A user-specified comment string that gets carried around with the
             data.  A common use for this field is to attach to the data details
             regarding its collection.
+
+        auxInfo : dict, optional
+            A user-specified dictionary of per-circuit auxiliary information.
+            Keys should be the circuits in this DataSet and value should
+            be Python dictionaries.
 
         Returns
         -------
@@ -817,7 +822,10 @@ class DataSet(object):
         self.repType = Repcount_type
 
         #auxiliary info
-        self.auxInfo = _DefaultDict(dict)
+        if auxInfo is None:
+            self.auxInfo = _DefaultDict(dict)
+        else:
+            self.auxInfo = _DefaultDict(dict, auxInfo)
 
         # count cache (only used when static; not saved/loaded from disk)
         if bStatic:

@@ -484,6 +484,10 @@ class StdInputParser(object):
             MultiDataSet.  If False, then zero counts are ignored, except for
             potentially registering new outcome labels.
 
+        ignoreZeroCountLines : bool, optional
+            Whether circuits for which there are no counts should be ignored
+            (i.e. omitted from the MultiDataSet) or not.
+
         Returns
         -------
         MultiDataSet
@@ -535,28 +539,59 @@ class StdInputParser(object):
         nSkip = max(int(nLines / 100.0), 1)
 
         display_progress = get_display_progress_fn(showProgress)
+        warnings = []  # to display *after* display progress
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
                 if iLine % nSkip == 0 or iLine + 1 == nLines: display_progress(iLine + 1, nLines, filename)
 
                 line = line.strip()
-                if len(line) == 0 or line[0] == '#': continue
+                if '#' in line:
+                    i = line.index('#')
+                    dataline, comment = line[:i], line[i + 1:]
+                else:
+                    dataline, comment = line, ""
+                if len(dataline) == 0: continue
+
                 try:
                     circuitTuple, circuitStr, circuitLbls, valueList = \
-                        self.parse_dataline(line, lookupDict, nDataCols)
+                        self.parse_dataline(dataline, lookupDict, nDataCols,
+                                            create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+
+                    commentDict = {}
+                    comment = comment.strip()
+                    if len(comment) > 0:
+                        try:
+                            if comment.startswith("{") and comment.endswith("}"):
+                                commentDict = _ast.literal_eval(comment)
+                            else:  # put brackets around it
+                                commentDict = _ast.literal_eval("{ " + comment + " }")
+                        except:
+                            warnings.append("%s Line %d: Could not parse comment '%s'"
+                                            % (filename, iLine, comment))
+
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels aren't given find them automatically
                 opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
-                                      check=False)  # , lookup=lookupDict)
+                                      check=False, expand_subcircuits=False)  # , lookup=lookupDict)
+                #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
+                bBad = ('BAD' in valueList)  #supresses warnings
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
                 for dsLabel, countDict in dsCountDicts.items():
-                    datasets[dsLabel].add_count_dict(opStr, countDict, recordZeroCnts=recordZeroCnts)
+                    if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
+                        if ignoreZeroCountLines:
+                            if not bBad: warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
+                            continue  # skip lines in dataset file with zero counts (no experiments done)
+                        else:
+                            if not bBad: warnings.append("Dataline for circuit '%s' has zero counts." % circuitStr)
+                    datasets[dsLabel].add_count_dict(opStr, countDict, recordZeroCnts=recordZeroCnts, update_ol=False)
+                    mds.add_auxiliary_info(opStr, commentDict)
 
         mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel, ds in datasets.items():
+            dataset.update_ol() #because we set update_ol=False above, we need to do this
             ds.done_adding_data()
             mds.add_dataset(dsLabel, ds)
         return mds
