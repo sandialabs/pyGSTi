@@ -347,6 +347,14 @@ class OutcomeLabelDict(_collections.OrderedDict):
             key = OutcomeLabelDict.to_outcome(key)
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
+    def setitem_unsafe(self, key, val):
+        """
+        Sets item without checking that the key is a properly formatted outcome tuple.
+        Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
+        just a string. 
+        """
+        super(OutcomeLabelDict, self).__setitem__(key, val)
+
     def __contains__(self, key):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)

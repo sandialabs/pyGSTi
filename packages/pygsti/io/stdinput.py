@@ -63,7 +63,7 @@ class StdInputParser(object):
         """ Create a new standard-input parser object """
         pass
 
-    def parse_circuit(self, s, lookup={}):
+    def parse_circuit(self, s, lookup={}, create_subcircuits=True):
         """
         Parse a operation sequence (string in grammar)
 
@@ -76,18 +76,23 @@ class StdInputParser(object):
             A dictionary with keys == reflbls and values == tuples of operation labels
             which can be used for substitutions using the S<reflbl> syntax.
 
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
+
         Returns
         -------
         tuple of operation labels
             Representing the operation sequence.
         """
         self._circuit_parser.lookup = lookup
-        circuit_tuple, circuit_labels = self._circuit_parser.parse(s)
+        circuit_tuple, circuit_labels = self._circuit_parser.parse(s, create_subcircuits)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
         return circuit_tuple, circuit_labels
 
-    def parse_dataline(self, s, lookup={}, expectedCounts=-1):
+    def parse_dataline(self, s, lookup={}, expectedCounts=-1, create_subcircuits=True):
         """
         Parse a data line (dataline in grammar)
 
@@ -119,41 +124,34 @@ class StdInputParser(object):
 
         # get counts from end of s
         parts = s.split()
+        circuitStr = parts[0]
+        
         counts = []
-        for p in reversed(parts):
-            if p == '--':
-                counts.append('--')  # special blank symbol
-                continue
-            if p == 'BAD':  # special symbol to indicate an experiment malfunction
-                counts.append('BAD')
-                continue
-            
-            try:  # single float/int format
-                f = float(p)
-                counts.append(f)
-            except:
-                if 'G' in p: break  # somewhat a hack - if there's a 'G' in it, then it's not a count column
-                try:  # "expanded" ColonContainingLabels:count
+        if expectedCounts == -1:  # then we expect to be given <outcomeLabel>:<count> items
+            if len(parts) < 2 or parts[1] == "BAD":
+                counts.append("BAD")
+            else:
+                for p in parts[1:]:
                     t = p.split(':')
-                    assert(len(t) > 1)
-                    f = float(t[-1])
-                    counts.append((tuple(t[0:-1]), f))
-                except:
-                    break
+                    counts.append((tuple(t[0:-1]), float(t[-1])))
+                    
+        else:  # data is in columns as given by header
+            for p in parts[1:]:
+                if p in ('--','BAD'):
+                    counts.append(p)
+                else:
+                    counts.append(float(p))
+        
+            if len(counts) > expectedCounts >= 0:
+                counts = counts[0:expectedCounts]
 
-        counts.reverse()  # because we appended them in reversed order
-        totalCounts = len(counts)  # in case expectedCounts is less
-        if len(counts) > expectedCounts >= 0:
-            counts = counts[0:expectedCounts]
+            nCounts = len(counts)
+            if nCounts != expectedCounts:
+                raise ValueError("Found %d count columns when %d were expected" % (nCounts, expectedCounts))
+            if nCounts == len(parts):
+                raise ValueError("No circuit column found -- all columns look like data")
 
-        nCounts = len(counts)
-        if expectedCounts >= 0 and nCounts != expectedCounts:
-            raise ValueError("Found %d count columns when %d were expected" % (nCounts, expectedCounts))
-        if nCounts == len(parts):
-            raise ValueError("No circuit column found -- all columns look like data")
-
-        circuitStr = " ".join(parts[0:len(parts) - totalCounts])
-        circuitTuple, circuitLabels = self.parse_circuit(circuitStr, lookup)
+        circuitTuple, circuitLabels = self.parse_circuit(circuitStr, lookup, create_subcircuits)
         return circuitTuple, circuitStr, circuitLabels, counts
 
     def parse_dictline(self, s):
@@ -313,11 +311,6 @@ class StdInputParser(object):
             else:
                 outcomeLabels = fillInfo = None
                 nDataCols = -1  # no column count check
-
-            # "default" case when we have no columns and no "expanded-form" counts
-            default_colLabels = ['1 count', 'count total']  # outcomeLabel (' frequency' | ' count') | 'count total'
-            _, default_fillInfo = self._extractLabelsFromColLabels(default_colLabels)
-
         finally:
             _os.chdir(orig_cwd)
 
@@ -347,7 +340,8 @@ class StdInputParser(object):
                 if len(dataline) == 0: continue
                 try:
                     circuitTuple, circuitStr, circuitLbls, valueList = \
-                        self.parse_dataline(dataline, lookupDict, nDataCols)
+                        self.parse_dataline(dataline, lookupDict, nDataCols,
+                                            create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
                     commentDict = {}
                     comment = comment.strip()
@@ -366,15 +360,8 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                if (len(dataset) == 0) and (fillInfo is None) and \
-                   (len(valueList) > 0) and (not isinstance(valueList[0], tuple)):
-                    #In order to preserve backward compatibility, if the first
-                    # data-line is not in expanded form and there was no column
-                    # header, then use "default" column label info.
-                    fillInfo = default_fillInfo
-
                 bBad = ('BAD' in valueList)  #supresses warnings
-                countDict = _OrderedDict()
+                countDict = _objs.labeldicts.OutcomeLabelDict()
                 self._fillDataCountDict(countDict, fillInfo, valueList)
                 if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
                     if ignoreZeroCountLines:
@@ -385,9 +372,12 @@ class StdInputParser(object):
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                 circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
-                                        line_labels=circuitLbls, check=False)  # , lookup=lookupDict)
-                dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts)
+                                        line_labels=circuitLbls, expand_subcircuits=False, check=False)  # , lookup=lookupDict)
+                #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
+                dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts,
+                                       update_ol=False) #for performance - to this once at the end.
 
+        dataset.update_ol() #because we set update_ol=False above, we need to do this
         if warnings:
             _warnings.warn('\n'.join(warnings))  # to be displayed at end, after potential progress updates
 
@@ -429,7 +419,10 @@ class StdInputParser(object):
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
         if 'BAD' in colValues:
             return  #indicates entire row is known to be bad (no counts)
-        
+
+        #Note: can use setitem_unsafe here because countDict is a OutcomeLabelDict and
+        # by construction (see str_to_outcome in _extractLabelsFromColLabels) the
+        # outcome labels in fillInfo are *always* tuples.
         if fillInfo is not None:
             countCols, freqCols, impliedCountTotCol1Q = fillInfo
 
@@ -440,7 +433,7 @@ class StdInputParser(object):
                                    "could this be a frequency?" % iCol)
                 assert(not isinstance(colValues[iCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
-                countDict[outcomeLabel] = colValues[iCol]
+                countDict.setitem_unsafe(outcomeLabel, colValues[iCol])
 
             for outcomeLabel, iCol, iTotCol in freqCols:
                 if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue  # skip blank sentinels
@@ -449,14 +442,14 @@ class StdInputParser(object):
                                    "could this be a count?" % iCol)
                 assert(not isinstance(colValues[iTotCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
-                countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
+                countDict.setitem_unsafe(outcomeLabel, colValues[iCol] * colValues[iTotCol])
 
             if impliedCountTotCol1Q[1] >= 0:
                 impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
                 if impliedOutcomeLabel == ('0',):
-                    countDict[('0',)] = colValues[impliedCountTotCol] - countDict[('1',)]
+                    countDict.setitem_unsafe(('0',), colValues[impliedCountTotCol] - countDict[('1',)])
                 else:
-                    countDict[('1',)] = colValues[impliedCountTotCol] - countDict[('0',)]
+                    countDict.setitem_unsafe(('1',), colValues[impliedCountTotCol] - countDict[('0',)])
 
         else:  # assume colValues is a list of (outcomeLabel, count) tuples
             for tup in colValues:
@@ -464,7 +457,7 @@ class StdInputParser(object):
                     ("Outcome labels must be specified with"
                      "count data when there's no column-key header")
                 assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
-                countDict[tup[0]] = tup[1]
+                countDict.setitem_unsafe(tup[0], tup[1])
         return countDict
 
     def parse_multidatafile(self, filename, showProgress=True,

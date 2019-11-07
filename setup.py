@@ -40,6 +40,14 @@ try:
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.baseobjs.fastcircuitparser",
+            sources=["packages/pygsti/baseobjs/fastcircuitparser.pyx"],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
         )
     ]
     ext_modules = cythonize(ext_modules)

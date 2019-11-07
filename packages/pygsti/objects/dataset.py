@@ -735,12 +735,15 @@ class DataSet(object):
         #                           the outcome labels.
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
+            self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcomeLabels is not None:
             tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                  for ol in outcomeLabels]  # strings -> tuple outcome labels
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
+            self.olIndex_max = len(tup_outcomeLabels)-1
         else:
             self.olIndex = _OrderedDict()  # OK, as outcome labels are added as they appear
+            self.olIndex_max = -1
 
         # self.ol :  Ordered dictionary where keys = integer indices, values = outcome
         #            labels (strings or tuples) -- just the reverse of self.olIndex
@@ -773,7 +776,7 @@ class DataSet(object):
             self.repData = repData
 
             if len(self.cirIndex) > 0:
-                maxOlIndex = max(self.olIndex.values())
+                maxOlIndex = self.olIndex_max
                 if bStatic:
                     assert(_np.amax(self.oliData) <= maxOlIndex)
                     # self.oliData.shape[0] > maxIndex doesn't make sense since cirIndex holds slices
@@ -1104,7 +1107,7 @@ class DataSet(object):
         for oliAr in self.oliData:
             self.repData.append(_np.ones(len(oliAr), self.repType))
 
-    def add_count_dict(self, circuit, countDict, recordZeroCnts=True, aux=None):
+    def add_count_dict(self, circuit, countDict, recordZeroCnts=True, aux=None, update_ol=True):
         """
         Add a single circuit's counts to this DataSet
 
@@ -1124,6 +1127,10 @@ class DataSet(object):
         aux : dict, optional
             A dictionary of auxiliary meta information to be included with
             this set of data counts (associated with `circuit`).
+
+        update_ol : bool, optional
+            This argument is for internal use only and should be left as True.
+        
 
         Returns
         -------
@@ -1158,11 +1165,13 @@ class DataSet(object):
 
         self.add_raw_series_data(circuit, outcomeLabelList, timeStampList,
                                  countList, overwriteExisting, recordZeroCnts,
-                                 aux)
+                                 aux, update_ol, unsafe=True)
+        #unsafe=True OK b/c outcomeLabelList contains the keys of an OutcomeLabelDict
 
     def add_raw_series_data(self, circuit, outcomeLabelList, timeStampList,
                             repCountList=None, overwriteExisting=True,
-                            recordZeroCnts=True, aux=None):
+                            recordZeroCnts=True, aux=None, update_ol=True,
+                            unsafe=False):
         """
         Add a single circuit's counts to this DataSet
 
@@ -1201,6 +1210,15 @@ class DataSet(object):
             A dictionary of auxiliary meta information to be included with
             this set of data counts (associated with `circuit`).
 
+        update_ol : bool, optional
+            This argument is for internal use only and should be left as True.
+
+        unsafe : bool, optional
+            When True, don't bother checking that outcomeLabelList contains
+            tuple-type outcome labels and automatically upgrading strings to
+            1-tuples.  Only set this to True if you know what you're doing
+            and need the marginally faster performance.
+
         Returns
         -------
         None
@@ -1210,18 +1228,24 @@ class DataSet(object):
         # if "keepseparate" mode, add tag onto end of circuit
         circuit = self._keepseparate_update_circuit(circuit)
 
-        #strings -> tuple outcome labels
-        tup_outcomeLabelList = [_ld.OutcomeLabelDict.to_outcome(ol)
-                                for ol in outcomeLabelList]
+        if unsafe:
+            tup_outcomeLabelList = outcomeLabelList
+        else:
+            #strings -> tuple outcome labels
+            tup_outcomeLabelList = [_ld.OutcomeLabelDict.to_outcome(ol)
+                                    for ol in outcomeLabelList]
+
 
         #Add any new outcome labels
         added = False
+        iNext = self.olIndex_max
         for ol in tup_outcomeLabelList:
             if ol not in self.olIndex:
-                iNext = max(self.olIndex.values()) + 1 if len(self.olIndex) > 0 else 0
+                iNext += 1
                 self.olIndex[ol] = iNext; added = True
-        if added:  # rebuild self.ol because olIndex has changed
-            self.ol = _OrderedDict([(i, sl) for (sl, i) in self.olIndex.items()])
+        if added and update_ol:  # rebuild self.ol because olIndex has changed
+            self.update_ol()
+        self.olIndex_max = iNext
 
         oliArray = _np.array([self.olIndex[ol] for ol in tup_outcomeLabelList], self.oliType)
         timeArray = _np.array(timeStampList, self.timeType)
@@ -1268,6 +1292,14 @@ class DataSet(object):
             self.cirIndex[circuit] = circuitIndx
 
         if aux is not None: self.add_auxiliary_info(circuit, aux)
+
+    def update_ol(self):
+        """
+        Updates the internal outcome-label list in this dataset.  Call this
+        after calling add_count_dict(...) or add_raw_series_data(...) with
+        `update_olIndex=False`.
+        """
+        self.ol = _OrderedDict([(i, sl) for (sl, i) in self.olIndex.items()])
 
     def add_series_data(self, circuit, countDictList, timeStampList,
                         overwriteExisting=True, recordZeroCnts=True, aux=None):
@@ -1976,6 +2008,7 @@ class DataSet(object):
         toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit, self.cirIndex.keys())),
                     'cirIndexVals': list(self.cirIndex.values()),
                     'olIndex': self.olIndex,
+                    'olIndex_max': self.olIndex_max,
                     'ol': self.ol,
                     'bStatic': self.bStatic,
                     'oliData': self.oliData,
@@ -2029,6 +2062,8 @@ class DataSet(object):
             self.bStatic = bStatic
             self.cirIndex = cirIndex
             self.olIndex = state_dict['olIndex']
+            self.olIndex_max = state_dict.get('olIndex_max',
+                                              max(self.olIndex.values()) if len(self.olIndex) > 0 else -1)
             self.ol = state_dict['ol']
             self.oliData = state_dict['oliData']
             self.timeData = state_dict['timeData']
@@ -2068,6 +2103,7 @@ class DataSet(object):
         toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit, self.cirIndex.keys())) if self.cirIndex else [],
                     'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
                     'olIndex': self.olIndex,
+                    'olIndex_max': self.olIndex_max,
                     'ol': self.ol,
                     'bStatic': self.bStatic,
                     'oliType': self.oliType,
@@ -2160,6 +2196,8 @@ class DataSet(object):
         #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
         self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
         self.olIndex = state_dict['olIndex']
+        self.olIndex_max = state_dict.get('olIndex_max',
+                                          max(self.olIndex.values()) if len(self.olIndex) > 0 else -1)
         self.ol = state_dict['ol']
         self.bStatic = state_dict['bStatic']
         self.oliType = state_dict['oliType']
