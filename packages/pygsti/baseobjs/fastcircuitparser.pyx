@@ -27,6 +27,11 @@ from libcpp.unordered_map cimport unordered_map
 from cython.operator cimport dereference as deref, preincrement as inc
 cimport cython
 
+
+#from cpython.ref cimport PyObject
+#cdef extern from "Python.h":
+#    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
+
 from . import label as _lbl
 
 
@@ -34,6 +39,8 @@ from . import label as _lbl
 ctypedef long long INT
 ctypedef unsigned long long UINT
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls):
     if '@' in code:  # format:  <string>@<line_labels>
         code, labels = code.split(u'@')
@@ -48,6 +55,8 @@ def fast_parse_circuit(unicode code, bool create_subcircuits, bool integerize_ss
     i = 0; end = len(code); segment = 0
     #print "DB -FASTPARSE: ", code
 
+    #cdef Py_UCS4* codep = PyUnicode_4BYTE_DATA(<PyObject*>code)
+    
     while(True):
         if i == end: break
         #print "TOP at:",code[i:]
@@ -57,8 +66,9 @@ def fast_parse_circuit(unicode code, bool create_subcircuits, bool integerize_ss
 
     return result, labels
 
-
-def get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool integerize_sslbls, INT segment):
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool integerize_sslbls, INT segment):
 
     cdef INT i
     cdef INT last
@@ -106,18 +116,29 @@ def get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool i
         exponent, i = parse_exponent(s,i,end)
         return lbls*exponent, i, segment
 
-
-def get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, INT segment):
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, INT segment):
     cdef INT  i
     cdef INT last
     cdef Py_UCS4 c
     cdef double time
     cdef bool is_int
+    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
     
     i = start
     c = s[i]
-    if segment == 0 and s[i:i+3] == u'rho':
-        i += 3; segment = 1
+    if segment == 0 and s[i] == u'r':
+        i += 1
+        if s[i] == u'h':
+            i += 1
+            if s[i] == u'o':
+                i += 1
+                segment = 1
+            else:
+                raise ValueError("Invalid prefix at: %s..." % s[i-2:i+3])
+        else:
+            raise ValueError("Invalid prefix at: %s..." % s[i-1:i+4])
     elif segment <= 1:
         if (c == u'G' or c == u'I'):
             i += 1; segment = 1
@@ -197,18 +218,24 @@ def get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, I
         return [_lbl.LabelTupWithArgs((name, 2 + len(args)) + tuple(args) + tuple(sslbls), time)], i, segment
     #return _Label(name,sslbls,time,args), i
 
-def parse_exponent(unicode s, INT i, INT end):
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef parse_exponent(unicode s, INT i, INT end):
     #z = re.match("\^([0-9]+)", s[i:end])
+    cdef Py_UCS4 c
     cdef INT last
     cdef INT exponent = 1
+    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     if i < end and s[i] == u'^':
         i += 1
         last = i
+        #exponent = 0
         while i < end:
             c = s[i]
             if u'0' <= c <= u'9':
                 i += 1
+                #exponent = exponent * 10 + (<INT>c-<INT>u'0')
             else:
                 break
         exponent = int(s[last:i])
