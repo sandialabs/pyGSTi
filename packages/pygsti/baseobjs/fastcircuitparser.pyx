@@ -74,8 +74,11 @@ def get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool i
         exponent, i = parse_exponent(s,i,end)
 
         if create_subcircuits:
-            tmp = _lbl.Label(lbls_list)  # just for total sslbs - should probably do something faster
-            return [_lbl.CircuitLabel('', lbls_list, tmp.sslbls, exponent)], i, segment
+            if len(lbls_list) == 0: # special case of {}^power => remain empty
+                return [], i, segment
+            else:
+                tmp = _lbl.Label(lbls_list)  # just for total sslbs - should probably do something faster
+                return [_lbl.CircuitLabel('', lbls_list, tmp.sslbls, exponent)], i, segment
         else:
             return lbls_list * exponent, i, segment
 
@@ -83,13 +86,15 @@ def get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool i
         i = start+1
         lbls_list = []
         while i < end and s[i] != u"]":
-            lbl,i,segment = get_next_simple_lbl(s,i,end, integerize_sslbls, segment)
-            lbls_list.append(lbl)
+            lbls,i,segment = get_next_simple_lbl(s,i,end, integerize_sslbls, segment)
+            lbls_list.extend(lbls)
         if i == end: raise ValueError("mismatched parenthesis")
         i += 1
         exponent, i = parse_exponent(s,i,end)
 
-        if len(lbls_list) > 1:
+        if len(lbls_list) == 0:
+            to_exponentiate = _lbl.LabelTupTup( () )
+        elif len(lbls_list) > 1:
             time = max([l.time for l in lbls_list])
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list), time) #create a layer label - a label of the labels within square brackets
         else:
@@ -97,9 +102,9 @@ def get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool i
         return [to_exponentiate] * exponent, i, segment
         
     else:
-        lbl,i,segment = get_next_simple_lbl(s,start,end, integerize_sslbls, segment)
+        lbls,i,segment = get_next_simple_lbl(s,start,end, integerize_sslbls, segment)
         exponent, i = parse_exponent(s,i,end)
-        return [lbl]*exponent, i, segment
+        return lbls*exponent, i, segment
 
 
 def get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, INT segment):
@@ -118,6 +123,13 @@ def get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, I
             i += 1; segment = 1
         elif c == u'M':
             i += 1; segment = 2 #marks end - no more labels allowed
+        elif c == u'{':
+            i += 1
+            if i < end and s[i] == u'}':
+                i += 1
+                return [], i, segment
+            else:
+                raise ValueError("Invalid '{' at: %s..." % s[i-1:i+4])
         else:
             raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
     else:
@@ -178,11 +190,11 @@ def get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, I
 
     if len(args) == 0:
         if len(sslbls) == 0:
-            return _lbl.LabelStr(name, time), i, segment
+            return [_lbl.LabelStr(name, time)], i, segment
         else:
-            return _lbl.LabelTup((name,) + tuple(sslbls), time), i, segment
+            return [_lbl.LabelTup((name,) + tuple(sslbls), time)], i, segment
     else:
-        return _lbl.LabelTupWithArgs((name, 2 + len(args)) + tuple(args) + tuple(sslbls), time), i, segment
+        return [_lbl.LabelTupWithArgs((name, 2 + len(args)) + tuple(args) + tuple(sslbls), time)], i, segment
     #return _Label(name,sslbls,time,args), i
 
 def parse_exponent(unicode s, INT i, INT end):
