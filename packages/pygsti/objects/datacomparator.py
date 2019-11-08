@@ -414,7 +414,7 @@ class DataComparator():
         self.aggregate_pVal_threshold = None
 
     def implement(self, significance=0.05, per_sequence_correction='Hochberg',
-                  aggregate_test_weighting=0.5, pass_alpha=True, verbosity=1):
+                  aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
         Implements statistical hypothesis testing, to detect whether there is statistically
         significant variation between the DateSets in this DataComparator. This performs
@@ -508,7 +508,7 @@ class DataComparator():
         assert(aggregate_test_weighting <= 1. or aggregate_test_weighting >= 0.), \
             "The weighting on the aggregate test must be between 0 and 1!"
 
-        if verbosity >= 2:
+        if verbosity >= 3:
             print("Implementing {0:.2f}% significance statistical hypothesis testing...".format(
                 self.significance * 100), end='')
 
@@ -558,10 +558,10 @@ class DataComparator():
                     sstvds[opstr] = self.tvds[opstr]
             self.sstvds = sstvds
 
-        if verbosity >= 2:
+        if verbosity >= 3:
             print("complete.")
 
-        if verbosity >= 2:
+        if verbosity >= 3:
             print("\n--- Results ---\n")
 
         if verbosity >= 1:
@@ -578,7 +578,8 @@ class DataComparator():
                 if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences > 0:
                     max_SSTVD_gs, max_SSTVD = self.get_maximum_SSTVD()
                     print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD))
-                    print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
+                    if verbosity >= 2:
+                        print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
             else:
                 print("Statistical hypothesis tests did NOT find inconsistency "
                       "between the datasets at {0:.2f}% significance.".format(self.significance * 100))
