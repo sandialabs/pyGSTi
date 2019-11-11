@@ -126,7 +126,7 @@ def write_dataset(filename, dataset, circuit_list=None,
     with open(filename, 'w') as output:
         output.write(headerString)
         for circuit in circuit_list:  # circuit should be a Circuit object here
-            dataRow = dataset[circuit.tup]
+            dataRow = dataset[circuit]
             counts = dataRow.counts
             circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
                 if dataset.collisionAction == "keepseparate" else circuit
