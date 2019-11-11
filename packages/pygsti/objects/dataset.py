@@ -36,6 +36,7 @@ from . import labeldicts as _ld
 Oindex_type = _np.uint32
 Time_type = _np.float64
 Repcount_type = _np.float32
+DATAROW_AUTOCACHECOUNT_THRESHOLD = 256
 # thought: _np.uint16 but doesn't play well with rescaling
 
 
@@ -375,15 +376,26 @@ class DataSetRow(object):
         elif isinstance(indexOrOutcomeLabel, _numbers.Real):  # timestamp
             return self.counts_at_time(indexOrOutcomeLabel)
         else:
-            try:
-                return self.counts[indexOrOutcomeLabel]
-            except KeyError:
-                # if outcome label isn't in counts but *is* in the dataset's
-                # outcome labels then return 0 (~= return self.allcounts[...])
-                key = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel)
-                if key in self.dataset.get_outcome_labels(): return 0
-                raise KeyError("%s is not an index, timestamp, or outcome label!"
-                               % str(indexOrOutcomeLabel))
+            if len(self.dataset.olIndex) > DATAROW_AUTOCACHECOUNT_THRESHOLD:
+                #There are a lot of outcomes in this dataset - it's not worth computing
+                # and caching *all* of the counts just to extract the one being asked for now.
+                outcome_label = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel)
+                if outcome_label not in self.dataset.olIndex:
+                    raise KeyError("%s is not an index, timestamp, or outcome label!"
+                                   % str(indexOrOutcomeLabel))
+                return self._get_single_count(outcome_label)
+            
+            else:
+                #Compute and cache *all* of the counts, since there aren't so many of them.        
+                try:
+                    return self.counts[indexOrOutcomeLabel]
+                except KeyError:
+                    # if outcome label isn't in counts but *is* in the dataset's
+                    # outcome labels then return 0 (~= return self.allcounts[...])
+                    key = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel)
+                    if key in self.dataset.get_outcome_labels(): return 0
+                    raise KeyError("%s is not an index, timestamp, or outcome label!"
+                                   % str(indexOrOutcomeLabel))
 
     def __setitem__(self, indexOrOutcomeLabel, val):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
@@ -412,6 +424,22 @@ class DataSetRow(object):
                     self.reps[i] = count; break
             else:  # need to add a new label & entry to reps[]
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
+
+    def _get_single_count(self, outcome_label, timestamp=None):
+        if timestamp is not None:
+            tslc = _np.where(_np.isclose(self.time, timestamp))[0]
+        else: tslc = slice(None)
+        
+        if self.reps is None:
+            i = self.dataset.olIndex[outcome_label]
+            return float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
+        else:
+            i = self.dataset.olIndex[outcome_label]
+            inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
+            if len(inds) > 0:
+                return float(sum(self.reps[tslc][inds]))
+            else:
+                return 0.0
 
     def _get_counts(self, timestamp=None, all_outcomes=False):
         """
