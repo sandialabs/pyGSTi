@@ -267,11 +267,14 @@ class MultiDataSet(object):
 
     def __getitem__(self, datasetName):  # return a static DataSet
         repData = self.repDict[datasetName] if self.repDict else None
-        return _DataSet(self.oliDict[datasetName],
-                        self.timeDict[datasetName], repData,
-                        circuitIndices=self.cirIndex,
-                        outcomeLabelIndices=self.olIndex, bStatic=True,
-                        collisionAction=self.collisionActions[datasetName])
+        ds = _DataSet(self.oliDict[datasetName],
+                      self.timeDict[datasetName], repData,
+                      circuitIndices=self.cirIndex,
+                      outcomeLabelIndices=self.olIndex, bStatic=True,
+                      collisionAction=self.collisionActions[datasetName],
+                      auxInfo=None)
+        ds.auxInfo = self.auxInfo  # avoids shallow-copying dict
+        return ds
 
     def __setitem__(self, datasetName, dataset):
         self.add_dataset(datasetName, dataset)
@@ -365,12 +368,14 @@ class MultiDataSet(object):
         agg_rep = _np.array(agg_rep, self.repType)
         if _np.max(agg_rep) == 1: agg_rep = None  # don't store trivial reps
 
-        return _DataSet(agg_oli, agg_time, agg_rep,
-                        circuitIndices=gstrSlices,
-                        outcomeLabelIndices=self.olIndex, bStatic=True)
-        #leave collisionAction as default "aggregate"
+        ds = _DataSet(agg_oli, agg_time, agg_rep,
+                      circuitIndices=gstrSlices,
+                      outcomeLabelIndices=self.olIndex, bStatic=True,
+                      auxInfo = None) #leave collisionAction as default "aggregate"
+        ds.auxInfo = self.multidataset.auxInfo  # avoids shallow-copying dict
+        return ds
 
-    def add_dataset(self, datasetName, dataset):
+    def add_dataset(self, datasetName, dataset, update_auxinfo=True):
         """
         Add a DataSet to this MultiDataSet.  The dataset
         must be static and conform with the circuits and
@@ -385,6 +390,10 @@ class MultiDataSet(object):
 
         dataset : DataSet
             The data set to add.
+
+        update_auxinfo : bool, optional
+            Whether the auxiliary information (if any exists) in `dataset` is added to
+            the information already stored in this `MultiDataSet`.
         """
 
         #Check if dataset is compatible
@@ -431,8 +440,6 @@ class MultiDataSet(object):
             if dataset.repData is not None:
                 self.repDict = _OrderedDict()  # OK since this is the first DataSet added
                 self.repDict[datasetName] = dataset.repData
-
-            self.auxInfo = dataset.auxInfo.copy()
 
         elif dataset.cirIndex == self.cirIndex:
             # self.cirIndex is fine as is - no need to reconcile anything
@@ -511,6 +518,14 @@ class MultiDataSet(object):
                     self.oliDict[datasetName][new_slc_part2] = oliVal
                     self.timeDict[datasetName][new_slc_part2] = timeVal
                     # (leave self.repDict[datasetName] with zeros in remaining "part2" of slice)
+
+        # Update auxInfo
+        if update_auxinfo and dataset.auxInfo:
+            if len(self.auxInfo) == 0:
+                self.auxInfo.update(dataset.auxInfo)
+            else:
+                for circuit,aux in dataset.auxInfo.items():
+                    self.auxInfo[circuit].update(aux)
 
     def __str__(self):
         s = "MultiDataSet containing: %d datasets, each with %d strings\n" % (

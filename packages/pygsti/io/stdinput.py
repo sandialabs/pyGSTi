@@ -461,7 +461,7 @@ class StdInputParser(object):
         return countDict
 
     def parse_multidatafile(self, filename, showProgress=True,
-                            collisionAction="aggregate", recordZeroCnts=True):
+                            collisionAction="aggregate", recordZeroCnts=True, ignoreZeroCountLines=True):
         """
         Parse a multiple data set file into a MultiDataSet object.
 
@@ -540,6 +540,7 @@ class StdInputParser(object):
 
         display_progress = get_display_progress_fn(showProgress)
         warnings = []  # to display *after* display progress
+        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -579,21 +580,24 @@ class StdInputParser(object):
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 bBad = ('BAD' in valueList)  #supresses warnings
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
-                for dsLabel, countDict in dsCountDicts.items():
-                    if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
-                        if ignoreZeroCountLines:
-                            if not bBad: warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
-                            continue  # skip lines in dataset file with zero counts (no experiments done)
-                        else:
-                            if not bBad: warnings.append("Dataline for circuit '%s' has zero counts." % circuitStr)
-                    datasets[dsLabel].add_count_dict(opStr, countDict, recordZeroCnts=recordZeroCnts, update_ol=False)
-                    mds.add_auxiliary_info(opStr, commentDict)
 
-        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
+                bSkip = False
+                if all([(abs(v) < 1e-9) for cDict in dsCountDicts.values() for v in cDict.values()]):
+                    if ignoreZeroCountLines:
+                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
+                        bSkip = True  # skip lines in dataset file with zero counts (no experiments done)
+                    else:
+                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts." % circuitStr)
+
+                if not bSkip:
+                    for dsLabel, countDict in dsCountDicts.items():
+                        datasets[dsLabel].add_count_dict(opStr, countDict, recordZeroCnts=recordZeroCnts, update_ol=False)
+                        mds.add_auxiliary_info(opStr, commentDict)
+
         for dsLabel, ds in datasets.items():
-            dataset.update_ol() #because we set update_ol=False above, we need to do this
+            ds.update_ol() #because we set update_ol=False above, we need to do this
             ds.done_adding_data()
-            mds.add_dataset(dsLabel, ds)
+            mds.add_dataset(dsLabel, ds, update_auxinfo=False) #auxinfo already added, and ds shouldn't have any anyway
         return mds
 
     #Note: outcome labels must not contain spaces since we use spaces to separate
