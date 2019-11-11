@@ -394,10 +394,10 @@ class MultiDataSet(object):
             raise ValueError("Cannot add dataset: circuits do not match")
 
         if self.cirIndex is None:
-            self.cirIndex = dataset.cirIndex
+            self.cirIndex = dataset.cirIndex.copy()  # copy b/c we may modify our cirIndex later
 
         if self.olIndex is None:
-            self.olIndex = dataset.olIndex
+            self.olIndex = dataset.olIndex.copy()  # copy b/c we may modify our olIndex later
 
         # Check if outcome labels use the same indexing; if not, update dataset.oliData
         ds_oliData = dataset.oliData  # default - just use dataset's outcome indices as is...
@@ -423,7 +423,7 @@ class MultiDataSet(object):
         if len(self.oliDict) == 0:
             # this is the first added DataSet, so we can just overwrite
             # cirIndex even if it isn't None.
-            self.cirIndex = dataset.cirIndex
+            self.cirIndex = dataset.cirIndex.copy()  #copy b/c we may modify our cirIndex later
 
             #And then add data:
             self.oliDict[datasetName] = ds_oliData
