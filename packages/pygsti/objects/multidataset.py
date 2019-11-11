@@ -432,6 +432,8 @@ class MultiDataSet(object):
                 self.repDict = _OrderedDict()  # OK since this is the first DataSet added
                 self.repDict[datasetName] = dataset.repData
 
+            self.auxInfo = dataset.auxInfo.copy()
+
         elif dataset.cirIndex == self.cirIndex:
             # self.cirIndex is fine as is - no need to reconcile anything
             self.oliDict[datasetName] = ds_oliData
