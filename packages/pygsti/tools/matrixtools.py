@@ -1643,7 +1643,7 @@ def kite_block_diag_quick(mx, kite):
     using a matrix R = exp(r) such that r is zero on the kite.  I.e.
     K = exp(r) * mx * exp(-r) has the given kite structure and r is zero on the kite.
     """
-
+    
     if len(kite) == 1: #then there's no non-kite area in matrix...
         K = mx
         R = _np.identity(mx.shape[0],'d')
@@ -1653,30 +1653,44 @@ def kite_block_diag_quick(mx, kite):
     ev, R = sorted_eig(mx) # R that diagonalizes mx but doesn't have kite form
     Rbd = project_onto_kite(R, kite)
     R = _np.dot(R, _np.linalg.inv(Rbd)) #try to make kite of R close to identity, and sacrifice
-                                      # exact diag of mx so R only block-diagonalizes mx
+                                        # exact diag of mx so R only block-diagonalizes mx
+    
     lastR = None
     iter = 0
     while iter < 100:
+
+        #0.  Let R be a matrix that maps G0 -> G.
+        #1.  Does R vanish on the commutant of G0?  If so, we’re done.
+        #2.  Define x = PROJ_COMMUTANT[ log(R) ], and X = exp(-x).
+        #3.  Redefine R = R.X
+        #4.  GOTO 1.
+
         #Starting condition = R block-diagonalizes mx
         test = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
         assert(_np.linalg.norm(project_onto_antikite(test, kite)) < 1e-8)
         
         r = _spl.logm(R)
-        onkite_norm = _np.linalg.norm(project_onto_kite(r, kite))
+        x = project_onto_kite(r, kite)
+        onkite_norm = _np.linalg.norm(x)
         #print("Iter %d: onkite-norm = %g" % (iter, onkite_norm))
         if onkite_norm < 1e-8 or (iter > 0 and _np.linalg.norm(R-lastR) < 1e-6):  #if r has desired form or we didn't really update R
             break #STOP - converged!
 
-        Rp = _spl.expm(project_onto_antikite(r, kite)) 
-        # R' has desired form, but might not block-diagonalize mx (like R does)
-            
-        # solve RX = R' to see how R would change to become R'.  But we're only allowed to tweak R by block-diagonal
-        # matrices, otherwise R will lose it's block-diagonalizing property, so update R using just X', the
-        # block-diag part of X:
-        X = _np.dot(_np.linalg.inv(R), Rp)
-        Xp = project_onto_kite(X, kite)
+        X = _spl.expm(-x) # X is in commutant of G0 (is block diag) and is a good guess to fix R
         lastR = R
-        R = _np.dot(R, Xp)
+        R = _np.dot(R, X)
+
+        #OLD
+        #Rp = _spl.expm(project_onto_antikite(r, kite)) 
+        ## R' has desired form, but might not block-diagonalize mx (like R does)
+        ## solve RX = R' to see how R would change to become R'.  But we're only allowed to tweak R by block-diagonal
+        ## matrices, otherwise R will lose it's block-diagonalizing property, so update R using just X', the
+        ## block-diag part of X:
+        #X = _np.dot(_np.linalg.inv(R), Rp)
+        #Xp = project_onto_kite(X, kite)
+        #lastR = R
+        #R = _np.dot(R, Xp)
+        
         iter += 1
     
     R = _spl.expm(r)
