@@ -911,6 +911,7 @@ def create_standard_report(results, filename, title="auto",
            display=('evinf', 'evagi', 'evnuinf', 'evnuagi', 'evdiamond', 'evnudiamond'))
     addqty(3, 'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
            display=('evdiamond', 'evnudiamond'), virtual_ops=germs)
+    addqty(4, 'bestGIGatesetTable', ws.GaugeInvModelTable, gsFinal, gsTgt, "boxes", cri(1))
 
     summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond'); wildcardBudget = None
     if toggles["ShowUnmodeledError"]:

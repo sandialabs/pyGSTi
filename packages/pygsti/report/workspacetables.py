@@ -343,7 +343,6 @@ class GatesTable(WorkspaceTable):
                 label_op_tups.append( (il + "." + comp_lbl, tup_of_ops) )
         
         for lbl, per_model_ops in label_op_tups:
-            #Note: currently, we don't use confidence region...
             row_data = [lbl]
             row_formatters = [None]
 
@@ -535,6 +534,118 @@ class ChoiTable(WorkspaceTable):
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
+
+class GaugeInvModelTable(WorkspaceTable):
+    """ Create a table showing a model in a gauge-invariant (or close to it) representation. """
+
+    def __init__(self, ws, model, target_model, display_as="boxes",
+                 confidenceRegionInfo=None):
+        """
+        Create a table showing a gauge-invariant representation of a model.
+
+        Parameters
+        ----------
+        model : Model
+            The Model to display.
+
+        target_model : Model
+            The (usually ideal) reference model to compute gauge-invariant
+            quantities with respect to.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the operation matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored
+            boxes (space-conserving and better for large matrices).
+
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals for the *final*
+            element of `models`.
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(GaugeInvModelTable, self).__init__(ws, self._create, model, target_model,
+                                                 display_as, confidenceRegionInfo)
+
+    def _create(self, model, target_model, display_as, confidenceRegionInfo):
+
+        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        opLabels = model.get_primitive_op_labels()  # use labels of 1st model
+
+        colHeadings = ['Gate', 'M'] + ['FinvF(%s)' % lbl for lbl in opLabels]
+        formatters = [None] * len(colHeadings)
+        confidenceRegionInfo = None #Don't deal with CIs yet...
+
+        def get_gig_decomp(mx, tmx):  #"Gauge invariant gateset" decomposition
+            G0, G = tmx, mx
+            ev0, U0 = _tools.sorted_eig(G0)
+            ev, U = _tools.sorted_eig(G)
+            U0inv = _np.linalg.inv(U0)
+            Uinv = _np.linalg.inv(U)
+
+            kite = _tools.get_kite(ev0)
+            A = _np.dot(U0inv, _np.dot(G, U0))
+
+            K,R,r = _tools.kite_block_diag_quick(A,kite)
+            K,R,r = _tools.kite_block_diag_brute(A,kite,r)
+            Kp = _np.dot(K, _np.diag(1.0/ev0))
+
+            M = _np.dot(U0, _np.dot(Kp, U0inv))
+            F = _np.dot(U0, _np.dot(R, U0inv))
+            Finv = _np.linalg.inv(F)
+            assert(_np.allclose(G, _np.dot(F, _np.dot(M, _np.dot(G0,Finv)))))
+            return F,M,Finv
+
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+
+        op_decomps = {}
+        for gl in opLabels:
+            op_decomps[gl] = get_gig_decomp(model.operations[gl].todense(),
+                                            target_model.operations[gl].todense())
+        #FUTURE: instruments too?
+
+        for i,lbl in enumerate(opLabels):
+            row_data = [lbl]
+            row_formatters = [None]
+            basis = model.basis
+            Fi,Mi,Finvi = op_decomps[lbl]
+
+            #Print "M" matrix
+            if display_as == "numbers":
+                row_data.append(_np.abs(Mi))
+                row_formatters.append('Brackets')
+            elif display_as == "boxes":
+                fig = _wp.GateMatrixPlot(self.ws, _np.abs(Mi), colorbar=False)
+                row_data.append(fig)
+                row_formatters.append('Figure')
+            else:
+                raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
+            for j,lbl2 in enumerate(opLabels):
+                if i == j:
+                    row_data.append("I")
+                    row_formatters.append(None)
+                else:
+                    val = _np.abs(_np.dot(Finvi, op_decomps[lbl2][0]))
+
+                    #Print "Finv*F" matrix
+                    if display_as == "numbers":
+                        row_data.append(val)
+                        row_formatters.append('Brackets')
+                    elif display_as == "boxes":
+                        fig = _wp.GateMatrixPlot(self.ws, val, colorbar=False)
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
+                    else:
+                        raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
+            table.addrow(row_data, row_formatters)
+
+        table.finish()
+        return table
+
 
 
 class ModelVsTargetTable(WorkspaceTable):

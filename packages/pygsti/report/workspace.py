@@ -287,6 +287,7 @@ class Workspace(object):
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
         self.ErrgenTable = makefactory(_wt.ErrgenTable)
         self.GaugeRobustErrgenTable = makefactory(_wt.GaugeRobustErrgenTable)
+        self.GaugeInvModelTable = makefactory(_wt.GaugeInvModelTable)
         self.NQubitErrgenTable = makefactory(_wt.NQubitErrgenTable)
         self.StandardErrgenTable = makefactory(_wt.StandardErrgenTable)
 

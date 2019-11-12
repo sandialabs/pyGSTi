@@ -1606,3 +1606,195 @@ def to_unitary(scaled_unitary):
     assert(_np.allclose(scaled_identity / (scale**2), _np.identity(scaled_identity.shape[0], 'd'))), \
         "Given `scaled_unitary` does not appear to be a scaled unitary matrix!"
     return scale, (scaled_unitary / scale)
+
+
+def sorted_eig(mx):
+    """
+    TODO: docstring
+    Like numpy.eig, but returns the eigenvalues and vectors sorted by eigenvalue,
+    where sorting is done according to (real_part, imaginary_part) tuple.
+    """
+    ev, U = _np.linalg.eig(mx)
+    sorted_evals = sorted(list(enumerate(ev)), key=lambda x: (x[1].real,x[1].imag) )
+    sorted_ev = ev.copy()
+    sorted_U = U.copy()
+    for idest,(isrc,_) in enumerate(sorted_evals):
+        sorted_ev[idest] = ev[isrc]
+        sorted_U[:,idest] = U[:,isrc]
+    return sorted_ev, sorted_U
+
+def get_kite(evals):
+    """ TODO: docstring.  Assumes evals are sorted """
+    kite = []
+    blk = 0; last_ev = evals[0]
+    for ev in evals:    
+        if _np.isclose(ev, last_ev):
+            blk += 1
+        else:
+            kite.append(blk)
+            blk = 1; last_ev = ev
+    kite.append(blk)
+    return kite
+
+def kite_block_diag_quick(mx, kite):
+    """
+    TODO: docstring
+    Block-diagonalize `mx` so it is zero everwhere except on the given kite
+    using a matrix R = exp(r) such that r is zero on the kite.  I.e.
+    K = exp(r) * mx * exp(-r) has the given kite structure and r is zero on the kite.
+    """
+
+    if len(kite) == 1: #then there's no non-kite area in matrix...
+        K = mx
+        R = _np.identity(mx.shape[0],'d')
+        r = _np.zeros(mx.shape,'d')
+        return K,R,r
+
+    ev, R = sorted_eig(mx) # R that diagonalizes mx but doesn't have kite form
+    Rbd = project_onto_kite(R, kite)
+    R = _np.dot(R, _np.linalg.inv(Rbd)) #try to make kite of R close to identity, and sacrifice
+                                      # exact diag of mx so R only block-diagonalizes mx
+    lastR = None
+    iter = 0
+    while iter < 100:
+        #Starting condition = R block-diagonalizes mx
+        test = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
+        assert(_np.linalg.norm(project_onto_antikite(test, kite)) < 1e-8)
+        
+        r = _spl.logm(R)
+        onkite_norm = _np.linalg.norm(project_onto_kite(r, kite))
+        #print("Iter %d: onkite-norm = %g" % (iter, onkite_norm))
+        if onkite_norm < 1e-8 or (iter > 0 and _np.linalg.norm(R-lastR) < 1e-6):  #if r has desired form or we didn't really update R
+            break #STOP - converged!
+
+        Rp = _spl.expm(project_onto_antikite(r, kite)) 
+        # R' has desired form, but might not block-diagonalize mx (like R does)
+            
+        # solve RX = R' to see how R would change to become R'.  But we're only allowed to tweak R by block-diagonal
+        # matrices, otherwise R will lose it's block-diagonalizing property, so update R using just X', the
+        # block-diag part of X:
+        X = _np.dot(_np.linalg.inv(R), Rp)
+        Xp = project_onto_kite(X, kite)
+        lastR = R
+        R = _np.dot(R, Xp)
+        iter += 1
+    
+    R = _spl.expm(r)
+    K = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
+    return K, R, r    
+
+def kite_block_diag_brute(mx, kite, starting_r=None):
+    """
+    TODO: docstring
+    Block-diagonalize `mx` so it is zero everwhere except on the given kite
+    using a matrix R = exp(r) such that r is zero on the kite.  I.e.
+    K = exp(r) * mx * exp(-r) has the given kite structure and r is zero on the kite.
+    """
+
+    if len(kite) == 1: #then there's no non-kite area in matrix...
+        K = mx
+        R = _np.identity(mx.shape[0],'d')
+        r = _np.zeros(mx.shape,'d')
+        return K,R,r
+
+    if starting_r is None:
+        ev, R = sorted_eig(mx) # R that diagonalizes mx but doesn't have kite form
+        r = _spl.logm(R)
+    else:
+        r = starting_r
+    
+    def obj(x):
+        r = vector_to_antikite(x, kite)
+        R = _spl.expm(r)
+        test = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
+        return antikite_to_vector(test, kite)
+    
+    x0 = antikite_to_vector(r, kite)
+    xbest, _, info, mesg, ierr = _spo.leastsq(obj, x0, full_output=True)
+    if not (1 <= ierr <= 4):
+        assert(False), "Failed to converge: %s" % mesg
+    else:
+        #print('Converged using %d function evals: %s' % (info['nfev'], mesg))
+        pass
+    
+    r = vector_to_antikite(xbest, kite)
+    R = _spl.expm(r)
+    K = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
+    fbest = antikite_to_vector(K, kite)
+    #print("DB: fbest = ",_np.linalg.norm(fbest))
+    if _np.linalg.norm(fbest) > 1e-6:
+        assert(False), "STOP - unable to find a viable solution!"
+    return K, R, r    
+
+def vector_to_antikite(vec, kite):
+    """
+    TODO: docstring
+    """
+    dim = sum(kite)
+    mx = _np.zeros((dim,dim),complex)
+    i = 0; k0 = 0
+    for k in kite:
+        k1 = k0 + k
+        l = dim-k1
+        m = k*l
+        mx[k0:k1, k1:dim] = vec[i:i+m].reshape((k,l)) + 1j*vec[i+m:i+2*m].reshape((k,l)); i += 2*m
+        mx[k1:dim, k0:k1] = vec[i:i+m].reshape((l,k)) + 1j*vec[i+m:i+2*m].reshape((l,k)); i += 2*m
+        k0 = k1
+    return mx
+
+def antikite_to_vector(mx, kite):
+    """
+    TODO: docstring
+    """
+    dim = sum(kite)
+    
+    vec_dim = 0
+    k0 = 0
+    for k in kite:
+        k1 = k0 + k
+        vec_dim += 4*k*(dim-k1)
+        k0 = k1
+    vec = _np.empty(vec_dim,'d')
+    
+    i = 0; k0 = 0
+    for k in kite:
+        k1 = k0 + k
+        m = k*(dim-k1)
+        vec[i:i+m] = mx[k0:k1, k1:dim].real.flat; i += m
+        vec[i:i+m] = mx[k0:k1, k1:dim].imag.flat; i += m
+        vec[i:i+m] = mx[k1:dim, k0:k1].real.flat; i += m
+        vec[i:i+m] = mx[k1:dim, k0:k1].imag.flat; i += m
+        k0 = k1
+    return vec
+        
+
+def project_onto_kite(mx, kite):
+    """
+    Project `mx` onto `kite`, so `mx` is zero everywhere except on the kite.
+    """
+    #Kite is a list of block sizes, such that sum(kite) == dimension of `mx`
+    mx = mx.copy()
+    dim = mx.shape[0]
+    assert(dim == mx.shape[1]), "`mx` must be square!"
+    k0 = 0
+    for k in kite:
+        mx[k0:k0+k, k0+k:] = 0
+        mx[k0+k:, k0:k0+k] = 0
+        k0 += k
+    assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
+    return mx
+
+def project_onto_antikite(mx, kite):
+    """
+    Project `mx` onto the complement of `kite`, so `mx` is zero everywhere *on* the kite.
+    """
+    #Kite is a list of block sizes, such that sum(kite) == dimension of `mx`
+    mx = mx.copy()
+    dim = mx.shape[0]
+    assert(dim == mx.shape[1]), "`mx` must be square!"
+    k0 = 0
+    for k in kite:
+        mx[k0:k0+k, k0:k0+k] = 0
+        k0 += k
+    assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
+    return mx
