@@ -69,28 +69,36 @@ class Benchmarker(object):
 
             self.numpasses = len(self.multids[list(self.multids.keys())[0]])
         else:
+            assert(summary_data is not None), "Must specify one or more DataSets or a summary data dict!"
             self.multids = None
             self.success_outcome = None
             self.success_key = None
+            self
 
-        self.dscomparator = dscomparator
+        self.dscomparator = _copy.deepcopy(dscomparator)
 
         self._specs = tuple(specs.values())
         self._speckeys = tuple(specs.keys())
 
         if summary_data is None:
-            self._pass_summary_data = {}
-            self._global_summary_data = {}
-            self._aux = {}
+            self.pass_summary_data = {}
+            self.global_summary_data = {}
+            self.aux = {}
         else:
-            self._pass_summary_data = summary_data['pass'].copy()
-            self._global_summary_data = summary_data['global'].copy()
-            self._aux = summary_data['aux'].copy()
+            assert(isinstance(summary_data, dict)), "The summary data must be a dictionary"
+            self.pass_summary_data = summary_data['pass'].copy()
+            self.global_summary_data = summary_data['global'].copy()
+            self.aux = summary_data.get('aux', {}).copy()
+            if self.multids is None:
+                arbqubits =  self._specs[0].get_structure()[0]
+                arbkey = list(self.pass_summary_data[0][arbqubits].keys())[0]
+                arbdepth = list(self.pass_summary_data[0][arbqubits][arbkey].keys())[0]
+                self.numpasses = len(self.pass_summary_data[0][arbqubits][arbkey][arbdepth])
 
         if predicted_summary_data is None:
-            self._predicted_summary_data = {}
+            self.predicted_summary_data = {}
         else:
-            self._predicted_summary_data = predicted_summary_data.copy()
+            self.predicted_summary_data = predicted_summary_data.copy()
 
         #self._results = {}
         #self._rbresults['raw'] = {}
@@ -117,15 +125,16 @@ class Benchmarker(object):
 
         qubits = self._specs[0].get_structure()[0]
         if aggregate:
-            flattened_data = {dtype: [] for dtype in self._pass_summary_data[0][qubits].keys()}
+            flattened_data = {dtype: [] for dtype in self.pass_summary_data[0][qubits].keys()}
         else:
-            flattened_data = {dtype: [[] for i in range(self.numpasses)] for dtype in self._pass_summary_data[0][qubits].keys()}
-        flattened_data.update({dtype: [] for dtype in self._global_summary_data[0][qubits].keys()})
-        flattened_data.update({dtype: [] for dtype in self._aux[0][qubits].keys()})
+            flattened_data = {dtype: [[] for i in range(self.numpasses)] for dtype in self.pass_summary_data[0][qubits].keys()}
+        flattened_data.update({dtype: [] for dtype in self.global_summary_data[0][qubits].keys()})
+        flattened_data.update({dtype: [] for dtype in self.aux[0][qubits].keys()})
+        flattened_data.update({'predictions':{pkey: {'success_probabilities': []} for pkey in self.predicted_summary_data.keys()}})
 
         for specind, structure in specs.items():
             for qubits in structure:
-                for dtype, data in self._pass_summary_data[specind][qubits].items():
+                for dtype, data in self.pass_summary_data[specind][qubits].items():
                     for depth, dataline in data.items():
                         #print(specind, qubits, dtype, depth)
                         if aggregate:
@@ -143,12 +152,26 @@ class Benchmarker(object):
                             for i in range(self.numpasses):
                                 flattened_data[dtype][i] += dataline[i]
 
-                for dtype, data in self._global_summary_data[specind][qubits].items():
+                for dtype, data in self.global_summary_data[specind][qubits].items():
                     for depth, dataline in data.items():
                         flattened_data[dtype] += dataline
-                for dtype, data in self._aux[specind][qubits].items():
+                for dtype, data in self.aux[specind][qubits].items():
                     for depth, dataline in data.items():
                         flattened_data[dtype] += dataline
+                for pkey in self.predicted_summary_data.keys():
+                    if 'success_probabilities' in self.predicted_summary_data[pkey][specind][qubits].keys():
+                        for depth, dataline in self.predicted_summary_data[pkey][specind][qubits]['success_probabilities'].items():
+                            flattened_data['predictions'][pkey]['success_probabilities'] += dataline
+                    else:
+                        for (depth, dataline1), dataline2 in zip(self.predicted_summary_data[pkey][specind][qubits]['success_counts'].items(), 
+                                                               self.predicted_summary_data[pkey][specind][qubits]['total_counts'].values()):
+                            flattened_data['predictions'][pkey]['success_probabilities'] += list(_np.array(dataline1) / _np.array(dataline2))
+
+        if ('success_counts' in flattened_data) and ('total_counts' in flattened_data) and ('success_probabilities' not in flattened_data):
+            if aggregate:
+                flattened_data['success_probabilities'] = [sc / tc if tc > 0 else _np.nan for sc, tc in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
+            else:
+                flattened_data['success_probabilities'] = [[sc / tc if tc > 0 else _np.nan for sc, tc in zip(scpass, tcpass)] for scpass, tcpass in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
 
         return flattened_data
 
@@ -206,9 +229,9 @@ class Benchmarker(object):
 
         assert(qubits in structure), "Invalid choice of qubits for this spec!"
 
-        return self._pass_summary_data[specindex][qubits][datatype]
+        return self.pass_summary_data[specindex][qubits][datatype]
 
-    #def get_auxillary_data(self, datatype, specindex, qubits=None):
+    #def getauxillary_data(self, datatype, specindex, qubits=None):
 
     #def get_predicted_summary_data(self, prediction, datatype, specindex, qubits=None):
 
@@ -279,9 +302,9 @@ class Benchmarker(object):
 
             for i, ((circ, dsrow), auxdict, (pcirc, pdsrow)) in enumerate(iterator):
 
-                #assert(circ == auxcirc)  # Maybe remove, this should always hold?
                 if pcirc is not None:
                     if not circ == pcirc:
+                        print('-{}-'.format(i))
                         pdsrow = predds[circ]
                         _warnings.warn("Predicted DataSet is ordered differently to the main DataSet!"
                                        + "Reverting to potentially slow dictionary hashing!")
@@ -406,10 +429,10 @@ class Benchmarker(object):
                 print('')
 
         #  Record the data in the object at the end.
-        self._predicted_summary_data = predsummarydata
-        self._pass_summary_data = summarydata
-        self._global_summary_data = globalsummarydata
-        self._aux = aux
+        self.predicted_summary_data = predsummarydata
+        self.pass_summary_data = summarydata
+        self.global_summary_data = globalsummarydata
+        self.aux = aux
 
     # def create_summary_data(self, datatype='adjusted', addaux=True, storecircuits=False, predictions={}, verbosity=2):
     #     """
@@ -670,12 +693,12 @@ class Benchmarker(object):
 
     #         # if error_rates_model is not None:
     #         #     ermtype = error_rates_model.get_model_type()
-    #         #     self._predicted_summary_data[ermtype] = {}
+    #         #     self.predicted_summary_data[ermtype] = {}
 
     #         print(summarydata.keys())
 
     #         for pkey in predictions.keys():
-    #             self._predicted_summary_data[pkey] = {}
+    #             self.predicted_summary_data[pkey] = {}
 
     #         for specind in summarydata.keys():
     #             spec = self._specs[specind]
@@ -685,7 +708,7 @@ class Benchmarker(object):
     #             if specind not in self._summary_data.keys():
     #                 self._summary_data[specind] = {}
     #             for pkey in predictions.keys():
-    #                 self._predicted_summary_data[pkey][specind] = {}
+    #                 self.predicted_summary_data[pkey][specind] = {}
     #             for qubits in structure:
     #                 if datatype == 'raw':
     #                     summarydata[specind][qubits]['hamming_distance_counts'] = None
@@ -709,10 +732,10 @@ class Benchmarker(object):
 
     #                 for pkey in predictions.keys():
     #                     if pkey != preddskey:
-    #                         self._predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_probabilities'],
+    #                         self.predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_probabilities'],
     #                                                 total_counts=None, hamming_distance_counts=None, finitecounts=False, aux=aux[specind][qubits])
     #                     else:    
-    #                         self._predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_counts'],
+    #                         self.predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_counts'],
     #                                                 total_counts=predsummarydata[pkey][specind][qubits]['total_counts'],
     #                                                 hamming_distance_counts=predsummarydata[pkey][specind][qubits]['hamming_distance_counts'],
     #                                                 aux=aux[specind][qubits])
@@ -762,7 +785,7 @@ class Benchmarker(object):
 
                 if keep:
                     if benchmarktype is not None:
-                        if spec._rbtype != benchmarktype:
+                        if spec.type != benchmarktype:
                             keep = False
 
                 if keep:
