@@ -113,9 +113,13 @@ def marginalized_success_counts(dsrow, circ, target, qubits):
     margtarget = ''.join([target[i] for i in indices])
 
     if qubits == circ.line_labels:
-        return dsrow.get(target, 0)
+        try:
+            return dsrow.counts[target]
+        except:
+            return 0
 
     else:
+
         success_counts = 0
 
         for (outbitstring,), counts in dsrow.counts.items():

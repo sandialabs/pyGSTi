@@ -14,7 +14,6 @@ from . import theory
 from . import sample
 from . import io
 from . import dataset
-from .rbanalyzer import RBAnalyzer
+from .benchmarker import Benchmarker
 from . import simulate
 from . import analysis
-from .errorratesmodel import ErrorRatesModel

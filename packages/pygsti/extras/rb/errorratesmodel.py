@@ -9,88 +9,88 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
+# import numpy as _np
 
 
-class ErrorRatesModel(object):
-    """
-    todo
-    """
-    def __init__(self, error_rates, model_type='GlobalDep'):
-        """
+# class ErrorRatesModel(object):
+#     """
+#     todo
+#     """
+#     def __init__(self, error_rates, model_type='GlobalDep'):
+#         """
 
-        model_type: {'FiE', 'FiE+Uni', 'GlobalDep'}
-        # Er=Fail
-        # Er=Unif
-        # TwirledGates
-        # TwirledLayers
-        """
-        self.error_rates = error_rates
-        assert(model_type in ('FiE', 'FiE+U', 'GlobalDep'))
-        self.model_type = model_type
+#         model_type: {'FiE', 'FiE+Uni', 'GlobalDep'}
+#         # Er=Fail
+#         # Er=Unif
+#         # TwirledGates
+#         # TwirledLayers
+#         """
+#         self.error_rates = error_rates
+#         assert(model_type in ('FiE', 'FiE+U', 'GlobalDep'))
+#         self.model_type = model_type
 
-    def success_prob(self, circuit):
-        """
-        todo
-        """
-        depth = circuit.depth()
-        width = circuit.width()
+#     def success_prob(self, circuit):
+#         """
+#         todo
+#         """
+#         depth = circuit.depth()
+#         width = circuit.width()
 
-        if self.model_type in ('FE', 'FiE+U'):
+#         if self.model_type in ('FiE', 'FiE+U'):
 
-            twoQgates = []
-            for i in range(depth):
-                layer = circuit.get_layer(i)
-                twoQgates += [q.qubits for q in layer if len(q.qubits) > 1]
+#             twoQgates = []
+#             for i in range(depth):
+#                 layer = circuit.get_layer(i)
+#                 twoQgates += [q.qubits for q in layer if len(q.qubits) > 1]
 
-            sp = 1
-            oneqs = {q: depth for q in circuit.line_labels}
+#             sp = 1
+#             oneqs = {q: depth for q in circuit.line_labels}
 
-            for qs in twoQgates:
-                sp = sp * (1 - self.error_rates['gates'][frozenset(qs)])
-                oneqs[qs[0]] += -1
-                oneqs[qs[1]] += -1
+#             for qs in twoQgates:
+#                 sp = sp * (1 - self.error_rates['gates'][frozenset(qs)])
+#                 oneqs[qs[0]] += -1
+#                 oneqs[qs[1]] += -1
 
-            sp = sp * _np.prod([(1 - self.error_rates['gates'][q])**oneqs[q]
-                                * (1 - self.error_rates['readout'][q]) for q in circuit.line_labels])
+#             sp = sp * _np.prod([(1 - self.error_rates['gates'][q])**oneqs[q]
+#                                 * (1 - self.error_rates['readout'][q]) for q in circuit.line_labels])
 
-            if self.model_type == 'FiE+U':
-                sp = sp + (1 - sp) * (1 / 2**width)
+#             if self.model_type == 'FiE+U':
+#                 sp = sp + (1 - sp) * (1 / 2**width)
 
-            return sp
+#             return sp
 
-        if self.model_type == 'GlobalDep':
+#         if self.model_type == 'GlobalDep':
 
-            p = 1
-            for i in range(depth):
+#             p = 1
+#             for i in range(depth):
 
-                layer = circuit.get_layer(i)
-                sp_layer = 1
-                usedQs = []
+#                 layer = circuit.get_layer(i)
+#                 sp_layer = 1
+#                 usedQs = []
 
-                for gate in layer:
-                    if len(gate.qubits) > 1:
-                        usedQs += list(gate.qubits)
-                        sp_layer = sp_layer * (1 - self.error_rates['gates'][frozenset(gate.qubits)])
+#                 for gate in layer:
+#                     if len(gate.qubits) > 1:
+#                         usedQs += list(gate.qubits)
+#                         sp_layer = sp_layer * (1 - self.error_rates['gates'][frozenset(gate.qubits)])
 
-                for q in circuit.line_labels:
-                    if q not in usedQs:
-                        sp_layer = sp_layer * (1 - self.error_rates['gates'][q])
+#                 for q in circuit.line_labels:
+#                     if q not in usedQs:
+#                         sp_layer = sp_layer * (1 - self.error_rates['gates'][q])
 
-                p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
-                p = p * p_layer
+#                 p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
+#                 p = p * p_layer
 
-            # Bit-flip readout error as a pre-measurement depolarizing channel.
-            sp_layer = _np.prod([(1 - 3 * self.error_rates['readout'][q] / 2) for q in circuit.line_labels])
-            p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
-            p = p * p_layer
-            sp = p + (1 - p) * (1 / 2**width)
+#             # Bit-flip readout error as a pre-measurement depolarizing channel.
+#             sp_layer = _np.prod([(1 - 3 * self.error_rates['readout'][q] / 2) for q in circuit.line_labels])
+#             p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
+#             p = p * p_layer
+#             sp = p + (1 - p) * (1 / 2**width)
 
-            return sp
+#             return sp
 
-    # todo: remove this.
-    def get_model_type(self):
-        """
+#     # todo: remove this.
+#     def get_model_type(self):
+#         """
 
-        """
-        return self.model_type
+#         """
+#         return self.model_type

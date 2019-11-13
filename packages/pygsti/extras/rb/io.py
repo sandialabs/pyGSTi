@@ -13,70 +13,244 @@ import ast as _ast
 import warnings as _warnings
 import pickle as _pickle
 import os as _os
+import json as _json
 
 # todo : update
 from . import analysis as _results
 from . import sample as _sample
 from . import dataset as _dataset
-from . import rbanalyzer as _rbanalyzer
+from . import benchmarker as _benchmarker
 from ... import io as _io
 from ...objects import circuit as _cir
+from ...objects import multidataset as _mds
 
-def create_and_export_summary_data(ds_or_filename, outfolder='summarydata', addaux=True,
-                                   #error_rates_model=None, predictions_outfolder='predictedsummarydata',
-                                   predictions={}, predictions_outfolder={},
-                                   verbosity=1, storecircuits=False):
 
-    try:
-        _os.makedirs(outfolder)
-        if verbosity > 0:
-            print(" - Created `" + outfolder + "` folder to store the summary data files.")
-    except:
-        if verbosity > 0:
-            print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
+#def load_benchmarking_data(basedir):
 
-    if len(predictions) > 0:
+def load_benchmarker(directory, load_datasets=True, verbosity=1):
+    """
 
-        for pkey in predictions.keys():
-            if pkey not in predictions_outfolder.keys():
-                predictions_outfolder[pkey] = 'predictions/' + pkey + '/summarydata'
+    """
+    with open(directory + '/global.json', 'r') as f:
+        globaldict = _json.load(f)
 
-        for folder in predictions_outfolder.values():
-            try:
-                _os.makedirs(folder)
-                if verbosity > 0:
-                    print(" - Created `" + folder + "` folder to store the predicted summary data files.")
-            except:
-                if verbosity > 0:
-                    print(" - `" + folder + "` folder already exists. Will write predictions data into that folder.")
+    numpasses = globaldict['numpasses']
+    speckeys = globaldict['speckeys']
+    success_key = globaldict['success_key']
+    success_outcome = globaldict['success_outcome']
+    dscomparator = globaldict['dscomparator']
 
-    rbanalyzer = import_data(ds_or_filename, verbosity=verbosity)
-    rbanalyzer.create_summary_data(addaux=addaux, storecircuits=storecircuits,
-                                   #error_rates_model=error_rates_model)
-                                   predictions=predictions)
+    if load_datasets:
+        dskeys = [dskey.name for dskey in _os.scandir(directory + '/datasets') if dskey.is_dir()]
+        multidsdict = {dskey: _mds.MultiDataSet()for dskey in dskeys}
 
-    with open(outfolder + '/readme.txt', 'w') as f:
-        f.write('# This folder contains RB summary data\n')
-        f.write('# The RB specifications (read in as RBSpec objects) are in files RBSpec*.txt where * is an integer\n')
-        f.write('# The summary data for the RB specification in RBSpec*.txt is stored in rbsummary_data*-#.txt where # is an integer running from 0 to the number of different qubits sets that simul., independent RB was performed on.\n')
+        for dskey in dskeys:
+            for passnum in range(numpasses):
+                dsfn = directory + '/datasets/{}/ds{}.txt'.format(dskey, passnum)
+                ds = _io.load_dataset(dsfn, collisionAction='keepseparate', recordZeroCnts=False,
+                                      ignoreZeroCountLines=False, verbosity=verbosity)
+                multidsdict[dskey].add_dataset(passnum, ds)
+    else:
+        multidsdict = None
 
-    for i, spec in enumerate(rbanalyzer._specs):
+    specs = {}
+    for i, speckey in enumerate(speckeys):
+        specs[speckey] = load_benchmarkspec(directory + '/specs/{}.txt'.format(i))
+
+    summary_data = {'global': {}, 'pass': {}, 'aux':{}}
+    predictionkeys = [pkey.name for pkey in _os.scandir(directory + '/predictions') if pkey.is_dir()]
+    predicted_summary_data = {pkey: {} for pkey in predictionkeys}
+
+    for i, spec in enumerate(specs.values()):
+
+        summary_data['pass'][i] = {}
+        summary_data['global'][i] = {}
+        summary_data['aux'][i] = {}
+        for pkey in predictionkeys:
+            predicted_summary_data[pkey][i] = {}
+
         structure = spec.get_structure()
-        write_rb_spec_to_file(spec, outfolder + '/rbspec' + str(i) + '.txt', warning=0)
-        for pfolder in predictions_outfolder.values():
-            write_rb_spec_to_file(spec, pfolder + '/rbspec' + str(i) + '.txt', warning=0)
 
         for j, qubits in enumerate(structure):
-            write_rb_summary_data_to_file(rbanalyzer._summary_data[i][qubits], outfolder + '/rbsummarydata' + str(i) + '-'
-                                          + str(j) + '.txt')
-            for pkey, pfolder in predictions_outfolder.items():
-                write_rb_summary_data_to_file(rbanalyzer._predicted_summary_data[pkey][i][qubits],
-                                              pfolder + '/rbsummarydata' + str(i) + '-' + str(j) + '.txt')
 
-    return
+            # Import the summary data for that spec and qubit subset
+            with open(directory + '/summarydata/{}-{}.json'.format(i, j), 'r') as f:
+                sd = _json.load(f)
+                summary_data['pass'][i][qubits] = {}
+                for dtype, data in sd['pass'].items():
+                    summary_data['pass'][i][qubits][dtype] = {int(key): value for (key, value) in data.items()}
+                summary_data['global'][i][qubits] = {}
+                for dtype, data in sd['global'].items():
+                    summary_data['global'][i][qubits][dtype] = {int(key): value for (key, value) in data.items()}
+
+            # Import the auxillary data
+            with open(directory + '/aux/{}-{}.json'.format(i, j), 'r') as f:
+                aux = _json.load(f)
+                summary_data['aux'][i][qubits] = {}
+                for dtype, data in aux.items():
+                    summary_data['aux'][i][qubits][dtype] = {int(key): value for (key, value) in data.items()}
+
+            # Import the predicted summary data for that spec and qubit subset
+            for pkey in predictionkeys:
+                with open(directory + '/predictions/{}/summarydata/{}-{}.json'.format(pkey, i, j), 'r') as f:
+                    psd = _json.load(f)
+                    predicted_summary_data[pkey][i][qubits] = {}
+                    for dtype, data in psd.items():
+                        predicted_summary_data[pkey][i][qubits][dtype] = {int(key): value for (key, value) in data.items()}
+
+    benchmarker = _benchmarker.Benchmarker(specs, ds=multidsdict, summary_data=summary_data,
+                                           predicted_summary_data=predicted_summary_data,
+                                           dstype='dict', success_outcome=success_outcome,
+                                           success_key=success_key, dscomparator=dscomparator)
+
+    return benchmarker
 
 
-def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydatasets_folder=None,
+def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
+
+    try:
+        _os.makedirs(outdir)
+        if verbosity > 0:
+            print(" - Created `" + outdir + "` folder to store benchmarker in txt format.")
+    except:
+        if overwrite:
+            if verbosity > 0:
+                print(" - `" + outdir + "` folder already exists. Will write data into that folder.")
+        else:
+            raise ValueError("Directory already exists! Set overwrite to True or change the directory name!")
+
+    globaldict = {}
+    globaldict['speckeys'] = benchmarker._speckeys
+    globaldict['numpasses'] = benchmarker.numpasses
+    globaldict['success_outcome'] = benchmarker.success_outcome
+    globaldict['success_key'] = benchmarker.success_key
+
+    if benchmarker.dscomparator is not None:
+
+        globaldict['dscomparator'] = {}
+        globaldict['dscomparator']['pVal_pseudothreshold'] = benchmarker.dscomparator.pVal_pseudothreshold
+        globaldict['dscomparator']['llr_pseudothreshold'] = benchmarker.dscomparator.llr_pseudothreshold
+        globaldict['dscomparator']['pVal_pseudothreshold'] = benchmarker.dscomparator.pVal_pseudothreshold
+        globaldict['dscomparator']['jsd_pseudothreshold'] = benchmarker.dscomparator.jsd_pseudothreshold
+        globaldict['dscomparator']['aggregate_llr_threshold'] = benchmarker.dscomparator.aggregate_llr_threshold
+        globaldict['dscomparator']['aggregate_nsigma_threshold'] = benchmarker.dscomparator.aggregate_nsigma_threshold
+        globaldict['dscomparator']['aggregate_pVal_threshold'] = benchmarker.dscomparator.aggregate_pVal_threshold
+        globaldict['dscomparator']['inconsistent_datasets_detected'] = benchmarker.dscomparator.inconsistent_datasets_detected
+        globaldict['dscomparator']['number_of_significant_sequences'] = int(benchmarker.dscomparator.number_of_significant_sequences)
+
+    else:
+        globaldict['dscomparator'] = None
+
+    # Write global details to file
+    with open(outdir + '/global.json', 'w') as f:
+        _json.dump(globaldict, f, indent=4)
+
+    _os.makedirs(outdir + '/specs')
+    _os.makedirs(outdir + '/summarydata')
+    _os.makedirs(outdir + '/aux')
+
+    for pkey in benchmarker._predicted_summary_data.keys():
+        _os.makedirs(outdir + '/predictions/{}/summarydata'.format(pkey))
+
+    for i, spec in enumerate(benchmarker._specs):
+        structure = spec.get_structure()
+        write_benchmarkspec(spec, outdir + '/specs/{}.txt'.format(i), warning=0)
+
+        for j, qubits in enumerate(structure):
+            summarydict = {'pass': benchmarker._pass_summary_data[i][qubits],
+                           'global': benchmarker._global_summary_data[i][qubits]
+                           }
+            fname = outdir + '/summarydata/' + '{}-{}.json'.format(i, j)
+            with open(fname, 'w') as f:
+                _json.dump(summarydict, f, indent=4)
+
+            aux = benchmarker._aux[i][qubits]
+            fname = outdir + '/aux/' + '{}-{}.json'.format(i, j)
+            with open(fname, 'w') as f:
+                _json.dump(aux, f, indent=4)
+
+            for pkey in benchmarker._predicted_summary_data.keys():
+                summarydict = benchmarker._predicted_summary_data[pkey][i][qubits]
+                fname = outdir + '/predictions/{}/summarydata/'.format(pkey) + '{}-{}.json'.format(i, j)
+                with open(fname, 'w') as f:
+                    _json.dump(summarydict, f, indent=4)
+
+    for dskey in benchmarker.multids.keys():
+        fdir = outdir + '/datasets/{}'.format(dskey)
+        _os.makedirs(fdir)
+        for dsind in benchmarker.multids[dskey].keys():
+            fname = fdir + '/ds{}.txt'.format(dsind)
+            _io.write_dataset(fname, benchmarker.multids[dskey][dsind], fixedColumnMode=False)
+
+def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtypes=[], verbosity=1):
+    
+    # try:
+    #     _os.makedirs(outfolder)
+    #     if verbosity > 0:
+    #         print(" - Created `" + outfolder + "` folder to store the summary data files.")
+    # except:
+    #     if verbosity > 0:
+    #         print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
+
+    # if len(predictions) > 0:
+
+    #     for pkey in predictions.keys():
+    #         if pkey not in predictions_outfolder.keys():
+    #             predictions_outfolder[pkey] = 'predictions/' + pkey + '/summarydata'
+
+    #     for folder in predictions_outfolder.values():
+    #         try:
+    #             _os.makedirs(folder)
+    #             if verbosity > 0:
+    #                 print(" - Created `" + folder + "` folder to store the predicted summary data files.")
+    #         except:
+    #             if verbosity > 0:
+    #                 print(" - `" + folder + "` folder already exists. Will write predictions data into that folder.")
+
+    benchmarker = load_data_into_benchmarker(dsfilenames, verbosity=verbosity)
+    if test_stability:
+        if verbosity > 0:
+            print(" - Running stability analysis...", end='')
+        benchmarker.test_pass_stability(formatdata=True, verbosity=0)
+        if verbosity > 0:
+            print("complete.")
+
+    benchmarker.create_summary_data(predictions=predictions, auxtypes=auxtypes)
+
+    return benchmarker
+
+    # with open(outfolder + '/readme.txt', 'w') as f:
+    #     f.write('# This folder contains RB summary data\n')
+    #     f.write('# The RB specifications (read in as RBSpec objects) are in files RBSpec*.txt where * is an integer\n')
+    #     f.write('# The summary data for the RB specification in RBSpec*.txt is stored in rbsummary_data*-#.txt where # is an integer running from 0 to the number of different qubits sets that simul., independent RB was performed on.\n')
+
+    # for i, spec in enumerate(benchmarker._specs):
+    #     structure = spec.get_structure()
+    #     if storecircuits:
+    #         circuitsfilename = outfolder + '/circuits{}.txt'.format(i)
+    #     else: 
+    #         circuitsfilename = None
+    #     write_rb_spec_to_file(spec, outfolder + '/rbspec' + str(i) + '.txt', circuitsfilename=circuitsfilename, warning=0)
+    #     for pfolder in predictions_outfolder.values():
+    #         write_rb_spec_to_file(spec, pfolder + '/rbspec' + str(i) + '.txt', warning=0)
+
+    #     for j, qubits in enumerate(structure):
+    #         if len(benchmarker.multids) == 1:
+    #             write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][0], outfolder + '/rbsummarydata' + str(i) + '-'
+    #                                             + str(j) + '.txt')
+    #         else:
+    #             for key in benchmarker.multids.keys():
+    #                 write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][key], outfolder + '/rbsummarydata' + str(i) + '-'
+    #                                                 + str(j) + '-' + str(key) + '.txt')
+    #         for pkey, pfolder in predictions_outfolder.items():
+    #             write_rb_summary_data_to_file(benchmarker._predicted_summary_data[pkey][i][qubits],
+    #                                           pfolder + '/rbsummarydata' + str(i) + '-' + str(j) + '.txt')
+
+    # return
+
+# Todo : just make this and create_benchmarker a single function? This import has been superceded
+# by load_benchmarker
+def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None, summarydatasets_folder=None,
                 predicted_summarydatasets_folders={}, verbosity=1):
     """
     todo
@@ -90,50 +264,58 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
         #if len(predicted_summarydatasets_folders) > 1:
         #    raise NotImplementedError("This is not yet supported!")
 
-    if ds_or_filename is not None:
+    if dsfilenames is not None:
 
         # If it is a filename, then we import the dataset from file.
-        if isinstance(ds_or_filename, str):
+        if isinstance(dsfilenames, str):
+            dsfilenames = [dsfilenames, ]
+        elif not isinstance(dsfilenames, list):
+            raise ValueError("dsfilenames must be a str or a list of strings!")
 
-            if ds_or_filename[-4:] == '.txt':
+        mds = _mds.MultiDataSet()
+        for dsfn_ind, dsfn in enumerate(dsfilenames):
 
-                ds = _io.load_dataset(ds_or_filename, collisionAction='aggregate', recordZeroCnts=False, verbosity=verbosity)
+            if dsfn[-4:] == '.txt':
 
-            elif ds_or_filename[-4:] == '.pkl':
+                mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn, collisionAction='keepseparate', recordZeroCnts=False, ignoreZeroCountLines=False, verbosity=verbosity))
+
+            elif dsfn[-4:] == '.pkl':
 
                 if verbosity > 0:
                     print(" - Loading DataSet from pickle file...", end='')
-                with open(ds_or_filename, 'rb') as f:
-                    ds = _pickle.load(f)
+                with open(dsfn, 'rb') as f:
+                    mds.add_dataset(dsfn_ind, _pickle.load(f))
                 if verbosity > 0:
                     print("complete.")
 
             else:
                 raise ValueError("File must end in .pkl or .txt!")
 
-        # If it isn't a string, we assume that `ds_or_filename` is a DataSet.
-        else:
 
-            ds = ds_or_filename
+        # # If it isn't a string, we assume that `dsfilenames` is a DataSet.
+        # else:
 
-        if verbosity > 0: print(" - Extracting RB metadata from the DataSet...", end='')
+        #     ds = dsfilenames
+
+        if verbosity > 0: print(" - Extracting metadata from the DataSet...", end='')
 
         # To store the aux information about the RB experiments.
         all_spec_filenames = []
-        circuits_for_specfile = {}
-
-        # We make a copy, as we need to edit the dataset
-        editable_ds = ds.copy_nonstatic()
+        # circuits_for_specfile = {}
+        # outdslist = []
 
         # We go through the dataset and extract all the necessary auxillary information.
-        for circ in ds.keys():
+        for circ in mds[mds.keys()[0]].keys():
 
             # The spec filename or names for this circuits
-            specfns_forcirc = ds.auxInfo[circ]['spec']
+            specfns_forcirc = mds.auxInfo[circ]['spec']
             # The RB length for this circuit
-            l = ds.auxInfo[circ]['length']
+            # try:
+                # l = mds.auxInfo[circ]['depth']
+            # except:
+                # l = mds.auxInfo[circ]['length']
             # The target bitstring for this circuit.
-            target = ds.auxInfo[circ]['target']
+            # target = mds.auxInfo[circ]['target']
 
             # This can be a string (a single spec filename) or a list, so make always a list.
             if isinstance(specfns_forcirc, str):
@@ -145,32 +327,29 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
                     # ... we store it in the list of all spec filenames to import later.
                     all_spec_filenames.append(sfn_forcirc)
                     # And it won't yet be a key in the circuits_for_specfile dict, so we add it.
-                    circuits_for_specfile[sfn_forcirc] = {}
+            #         circuits_for_specfile[sfn_forcirc] = {}
 
-                # If we've not yet had this length for that spec filename, we add that as a key.
-                if l not in circuits_for_specfile[sfn_forcirc].keys():
-                    circuits_for_specfile[sfn_forcirc][l] = []
+            #     # If we've not yet had this length for that spec filename, we add that as a key.
+            #     if l not in circuits_for_specfile[sfn_forcirc].keys():
+            #         circuits_for_specfile[sfn_forcirc][l] = []
 
-                # We add the circuit and target output to the dict for the corresponding spec files.
-                circuits_for_specfile[sfn_forcirc][l].append((circ, target))
+            #     # We add the circuit and target output to the dict for the corresponding spec files.
+            #     circuits_for_specfile[sfn_forcirc][l].append((circ, target))
 
-            circ_specindices = []
-            for sfn_forcirc in specfns_forcirc:
-                circ_specindices.append(all_spec_filenames.index(sfn_forcirc))
-
-            editable_ds.auxInfo[circ]['specindices'] = circ_specindices
-
-        editable_ds.done_adding_data()
+            # circ_specindices = []
+            # for sfn_forcirc in specfns_forcirc:
+            #     circ_specindices.append(all_spec_filenames.index(sfn_forcirc))
 
         if verbosity > 0:
             print("complete.")
             print(" - Reading in the metadata from the extracted filenames...", end='')
 
-        # We put RB specs that we create via file import (and the circuits above) into this list.
-        rbspeclist = []
+        # We put RB specs that we create via file import (and the circuits above) into this dict
+        rbspecdict = {}
 
-        # We look for spec files in the same directory as the datafile, so we find what that is.
-        directory = ds_or_filename.split('/')
+        # We look for spec files in the same directory as the datafiles, so we find what that is.
+        # THIS REQUIRES ALL THE FILES TO BE IN THE SAME DIRECTORY
+        directory = dsfilenames[0].split('/')
         directory = '/'.join(directory[: -1])
         if len(directory) > 0:
             directory += '/'
@@ -178,26 +357,26 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
         for specfilename in all_spec_filenames:
 
             # Import the RB spec file.
-            rbspec = import_rb_spec(directory + specfilename)
+            rbspec = load_benchmarkspec(directory + specfilename)
             # Add in the circuits that correspond to each spec, extracted from the dataset.
-            rbspec.add_circuits(circuits_for_specfile[specfilename])
+            # rbspec.add_circuits(circuits_for_specfile[specfilename])
             # Record the spec in a list, to be given to an RBAnalyzer object.
-            rbspeclist.append(rbspec)
+            rbspecdict[specfilename] = rbspec
 
         if verbosity > 0:
             print("complete.")
-            print(" - Recording all of the data in an RBAnalyzer...", end='')
+            print(" - Recording all of the data in a Benchmarker...", end='')
 
         # Put everything into an RBAnalyzer object, which is a container for RB data, and return this.
-        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=editable_ds, summary_data=None)
+        benchmarker = _benchmarker.Benchmarker(rbspecdict, ds=mds, summary_data=None)
 
         if verbosity > 0: print("complete.")
 
-        return rbanalyzer
+        return benchmarker
 
     elif (summarydatasets_filenames is not None) or (summarydatasets_folder is not None):
 
-        rbspeclist = []
+        rbspecdict = {}
 
         # If a dict, its just the keys of the dict that are the rbspec file names.
         if summarydatasets_filenames is not None:
@@ -211,7 +390,7 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
             i = 0
             while specfilefound:
                 try:
-                    filename = summarydatasets_folder + "/rbspec{}.txt".format(i)
+                    filename = summarydatasets_folder + "/spec{}.txt".format(i)
                     with open(filename, 'r') as f:
                         if verbosity > 0:
                             print(filename + " found")
@@ -222,15 +401,15 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
                     if verbosity > 0:
                         print(filename + " not found so terminating spec file search.")
 
-        for specfilename in specfiles:
+        for sfn_ind, specfilename in enumerate(specfiles):
 
-            rbspec = import_rb_spec(specfilename)
-            rbspeclist.append(rbspec)
+            rbspec = load_benchmarkspec(specfilename)
+            rbspecdict[sfn_ind] = rbspec
 
         summary_data = {}
         predicted_summary_data = {pkey: {} for pkey in predicted_summarydatasets_folders.keys()}
 
-        for i, (specfilename, rbspec) in enumerate(zip(specfiles, rbspeclist)):
+        for i, (specfilename, rbspec) in enumerate(zip(specfiles, rbspecdict.values())):
 
             structure = rbspec.get_structure()
             summary_data[i] = {}
@@ -240,10 +419,10 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
             if summarydatasets_filenames is not None:
                 sds_filenames = summarydatasets_filenames[specfilename]
             elif summarydatasets_folder is not None:
-                sds_filenames = [summarydatasets_folder + '/rbsummarydata{}-{}.txt'.format(i, j) for j in range(len(structure))]
+                sds_filenames = [summarydatasets_folder + '/{}-{}.txt'.format(i, j) for j in range(len(structure))]
                 predsds_filenames_dict = {}
                 for pkey, pfolder in predicted_summarydatasets_folders.items():
-                    predsds_filenames_dict[pkey] = [pfolder + '/rbsummarydata{}-{}.txt'.format(i, j) for j in range(len(structure))]
+                    predsds_filenames_dict[pkey] = [pfolder + '/{}-{}.txt'.format(i, j) for j in range(len(structure))]
 
             for sdsfn, qubits in zip(sds_filenames, structure):
                 summary_data[i][qubits] = import_rb_summary_data(sdsfn, len(qubits), verbosity=verbosity)
@@ -252,36 +431,37 @@ def import_data(ds_or_filename=None, summarydatasets_filenames=None, summarydata
                 for sdsfn, qubits in zip(predsds_filenames, structure):
                     predicted_summary_data[pkey][i][qubits] = import_rb_summary_data(sdsfn, len(qubits), verbosity=verbosity)
 
-        rbanalyzer = _rbanalyzer.RBAnalyzer(rbspeclist, ds=None, summary_data=summary_data,
-                                            predicted_summary_data=predicted_summary_data)
+        benchmarker = _benchmarker.Benchmarker(rbspecdict, ds=None, summary_data=summary_data,
+                                               predicted_summary_data=predicted_summary_data)
 
-        return rbanalyzer
+        return benchmarker
 
     else:
         raise ValueError("Either a filename for a DataSet or filenames for a set of RBSpecs "
                          + "and RBSummaryDatasets must be provided!")
 
 
-def import_rb_spec(filename):
+def load_benchmarkspec(filename, circuitsfilename=None):
     """
     todo
 
     """
-    d = {}
+    #d = {}
     with open(filename) as f:
-        for line in f:
-            if len(line) > 0 and line[0] != '#':
-                line = line.strip('\n')
-                line = line.split(' ', 1)
-                try:
-                    d[line[0]] = _ast.literal_eval(line[1])
-                except:
-                    d[line[0]] = line[1]
+        d = _json.load(f)
+        # for line in f:
+        #     if len(line) > 0 and line[0] != '#':
+        #         line = line.strip('\n')
+        #         line = line.split(' ', 1)
+        #         try:
+        #             d[line[0]] = _ast.literal_eval(line[1])
+        #         except:
+        #             d[line[0]] = line[1]
 
-    assert(d.get('type', None) == 'rb'), "This is for importing RB specs!"
+    #assert(d.get('type', None) == 'rb'), "This is for importing RB specs!"
 
     try:
-        rbtype = d['rbtype']
+        rbtype = d['type']
     except:
         raise ValueError("Input file does not contain a line specifying the RB type!")
     assert(isinstance(rbtype, str)), "The RB type (specified as rbtype) must be a string!"
@@ -290,6 +470,8 @@ def import_rb_spec(filename):
         structure = d['structure']
     except:
         raise ValueError("Input file does not contain a line specifying the structure!")
+    if isinstance(structure, list):
+        structure = tuple([tuple(qubits) for qubits in structure])
     assert(isinstance(structure, tuple)), "The structure must be a tuple!"
 
     try:
@@ -299,45 +481,52 @@ def import_rb_spec(filename):
     assert(isinstance(sampler, str)), "The sampler name must be a string!"
 
     samplerargs = d.get('samplerargs', None)
-    lengths = d.get('lengths', None)
+    depths = d.get('depths', None)
     numcircuits = d.get('numcircuits', None)
-    rbsubtype = d.get('rbsubtype', None)
+    subtype = d.get('subtype', None)
 
     if samplerargs is not None:
         assert(isinstance(samplerargs, dict)), "The samplerargs must be a dict!"
 
-    if lengths is not None:
-        assert(isinstance(lengths, list) or isinstance(lengths, tuple)), "The lengths must be a list of tuple!"
+    if depths is not None:
+        assert(isinstance(depths, list) or isinstance(depths, tuple)), "The depths must be a list or tuple!"
 
     if numcircuits is not None:
-        assert(isinstance(numcircuits, list) or isinstance(numcircuits, tuple)), "numcircuits must be a list of tuple!"
+        assert(isinstance(numcircuits, list) or isinstance(numcircuits, int)), "numcircuits must be an int or list!"
 
-    spec = _sample.RBSpec(rbtype, structure, sampler, samplerargs, circuits=None, lengths=lengths,
-                          numcircuits=numcircuits, rbsubtype=rbsubtype)
+    spec = _sample.BenchmarkSpec(rbtype, structure, sampler, samplerargs, depths=depths,
+                                 numcircuits=numcircuits, subtype=subtype)
 
     return spec
 
 
-def write_rb_spec_to_file(rbspec, filename, warning=1):
+def write_benchmarkspec(spec, filename, circuitsfilename=None, warning=1):
     """
     todo
 
     """
-    if rbspec._circuits is not None:
-        if warning > 0:
+    if spec.circuits is not None:
+        if circuitsfilename is not None:
+            circuitlist = [circ for sublist in [spec.circuits[l] for l in spec.depths] for circ in sublist]
+            _io.write_circuit_list(circuitsfilename, circuitlist)
+        elif warning > 0:
             _warnings.warn("The circuits recorded in this RBSpec are not being written to file!")
 
-    with open(filename, 'w') as f:
-        f.write('type rb\n')
-        f.write('rbtype ' + rbspec._rbtype + '\n')
-        f.write('structure ' + str(rbspec._structure) + '\n')
-        f.write('sampler ' + rbspec._sampler + '\n')
-        f.write('lengths ' + str(rbspec._lengths) + '\n')
-        f.write('numcircuits ' + str(rbspec._numcircuits) + '\n')
-        f.write('rbsubtype ' + str(rbspec._rbsubtype) + '\n')
-        f.write('samplerargs ' + str(rbspec._samplerargs) + '\n')
+    # with open(filename, 'w') as f:
+    #     f.write('type rb\n')
+    #     f.write('rbtype ' + rbspec._rbtype + '\n')
+    #     f.write('structure ' + str(rbspec._structure) + '\n')
+    #     f.write('sampler ' + rbspec._sampler + '\n')
+    #     f.write('lengths ' + str(rbspec._lengths) + '\n')
+    #     f.write('numcircuits ' + str(rbspec._numcircuits) + '\n')
+    #     f.write('rbsubtype ' + str(rbspec._rbsubtype) + '\n')
+    #     f.write('samplerargs ' + str(rbspec._samplerargs) + '\n')
 
-    return
+    specdict = spec.to_dict()
+    del specdict['circuits']  # Don't write the circuits to this file.
+
+    with open(filename, 'w') as f:
+        _json.dump(specdict, f, indent=4)
 
 
 def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
