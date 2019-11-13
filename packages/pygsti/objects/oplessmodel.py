@@ -22,6 +22,7 @@ from ..tools import slicetools as _slct
 try:
     from . import fastopcalc as _fastopcalc
     from .fastopcalc import fast_compact_deriv as _compact_deriv
+    from .fastopcalc import float_product as prod
 
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         if _np.iscomplexobj(ctape):
@@ -47,6 +48,13 @@ except ImportError:
 
             ret = _np.real(ret)
         return ret  # always return a *real* vector
+
+    def prod(ar):
+        ret = 1.0
+        for x in ar:
+            ret *= x
+        return ret
+
 
 
 class OplessModelTree(_EvalTree):
@@ -148,7 +156,7 @@ class OplessModel(_Model):
                
         deriv = { k:_np.empty(Np, 'd') for k in probs0.keys() }
         for i in range(Np):
-            p_plus_dp = p.copy()
+            p_plus_dp = orig_pvec.copy()
             p_plus_dp[i] += eps
             self.from_vector(p_plus_dp)
             probs1 = self.probs(circuit, clipTo, None)
@@ -255,18 +263,22 @@ class OplessModel(_Model):
             for i,c in enumerate(evalTree):
                 cache = evalTree.cache[i] if evalTree.cache else None
                 probs0 = self.probs(c,clipTo,cache)
+                dprobs0 = self.dprobs(c,False,clipTo,cache)
                 elInds = _slct.indices(evalTree.element_indices[i]) \
                     if isinstance(evalTree.element_indices[i], slice) else evalTree.element_indices[i]
                 for k,outcome in zip(elInds, evalTree.outcomes[i]):
                     if prMxToFill is not None:
                         prMxToFill[k] = probs0[outcome]
-                    for j in range(Np):
-                        p_plus_dp = p.copy()
-                        p_plus_dp[j] += eps
-                        self.from_vector(p_plus_dp)
-                        probs1 = self.probs(c,clipTo,cache)
-                        mxToFill[k,j] = (probs1[outcome]-probs0[outcome]) / eps
-                    self.from_vector(p)
+                    mxToFill[k,:] = dprobs0[outcome]
+
+                    #Do this to fill mxToFill instead of calling dprobs above as it's a little faster for finite diff?
+                    #for j in range(Np):
+                    #    p_plus_dp = p.copy()
+                    #    p_plus_dp[j] += eps
+                    #    self.from_vector(p_plus_dp)
+                    #    probs1 = self.probs(c,clipTo,cache)
+                    #    mxToFill[k,j] = (probs1[outcome]-probs0[outcome]) / eps
+                    #self.from_vector(p)
 
     def __str__(self):
         raise "Derived classes should implement OplessModel.__str__ !!"
@@ -280,7 +292,10 @@ class SuccessFailModel(OplessModel):
     def get_num_outcomes(self, circuit):  # needed for sparse data detection
         return 2
 
-    def _success_prob(self, circuit):
+    def _success_prob(self, circuit, cache):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def _success_dprob(self, circuit, cache):
         raise NotImplementedError("Derived classes should implement this!")
         
     #FUTURE?: def _fill_circuit_probs(self, array_to_fill, outcomes, circuit, clipTo):
@@ -306,6 +321,42 @@ class SuccessFailModel(OplessModel):
         sp = self._success_prob(circuit, cache)
         if clipTo is not None: sp = _np.clip(sp, clipTo[0], clipTo[1])
         return _OutcomeLabelDict([('success',sp), ('fail',1-sp)])
+
+    def dprobs(self, circuit, returnPr=False, clipTo=None, cache=None):
+        """
+        Construct a dictionary containing the probability derivatives of every
+        spam label for a given operation sequence.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
+
+        returnPr : bool, optional
+          when set to True, additionally return the probabilities.
+
+        clipTo : 2-tuple, optional
+           (min,max) to clip returned probability to if not None.
+           Only relevant when returnPr == True.
+
+        Returns
+        -------
+        dprobs : dictionary
+            A dictionary such that
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            for each spam label (string) SL.
+        """
+        try:
+            dsp = self._success_dprob(circuit, cache)
+        except NotImplementedError:
+            return OplessModel.dprobs(self, circuit, returnPr, clipTo)
+
+        if returnPr:
+            sp = self._success_prob(circuit, cache)
+            if clipTo is not None: sp = _np.clip(sp, clipTo[0], clipTo[1])
+            return { ('success',): (sp, dsp), ('fail',): (1-sp, -dsp) }
+        else:
+            return { ('success',): dsp, ('fail',): -dsp }
 
     def poly_probs(self, circuit):
         """ 
@@ -408,17 +459,21 @@ class ErrorRatesModel(SuccessFailModel):
         #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
 
         # else:
-        inds_to_mult_by_layer = [g_inds[self._alias_dict.get(str(gate), str(gate))] for layer in
-                                 [circuit.get_layer_with_idles(i, idleGateName=self._idlename) for i in range(depth)]
-                                 for gate in layer]
+        layers_with_idles = [circuit.get_layer_with_idles(i, idleGateName=self._idlename) for i in range(depth)]
+        inds_to_mult_by_layer = [ _np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
+                                  for layer in layers_with_idles ]
 
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]
         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
 
-        return (width, depth, inds_to_mult_by_layer)
+        # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
+        # channel with entanglement infidelity of epsilon.
+        alpha = 4**width / (4**width - 1)
 
+        return (width, depth, alpha, 1 / 2**width, inds_to_mult_by_layer)
 
+    
 class TwirledLayersModel(ErrorRatesModel):
 
     def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
@@ -436,21 +491,56 @@ class TwirledLayersModel(ErrorRatesModel):
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        width, depth, inds_to_mult_by_layer = cache
+        width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
         sp = 1.0 - self._paramvec
-        # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
-        # channel with entanglement infidelity of epsilon.
-        alpha = 4**width / (4**width - 1)
 
         # The depolarizing constant for the full sequence of twirled layers.
-        lambda_all_layers = _np.prod([(1 - alpha * (1 - _np.prod(sp[inds_to_mult]))) for inds_to_mult in inds_to_mult_by_layer[:-1]])
+        lambda_all_layers = 1.0
+        for inds_to_mult in inds_to_mult_by_layer[:-1]:
+            lambda_all_layers *= 1 - alpha * (1 - prod(sp[inds_to_mult]))
+        #lambda_all_layers = prod([(1 - alpha * (1 - prod(sp[inds_to_mult]))) for inds_to_mult in inds_to_mult_by_layer[:-1]])
+        
         # The readout success probability.
-        successprob_readout = _np.prod(sp[inds_to_mult_by_layer[-1]])
+        successprob_readout = prod(sp[inds_to_mult_by_layer[-1]])
         # THe success probability of the circuit.
-        successprob_circuit = lambda_all_layers * (successprob_readout - 1 / 2**width) + 1 / 2**width
+        successprob_circuit = lambda_all_layers * (successprob_readout - one_over_2_width) + one_over_2_width
 
         return successprob_circuit
+
+    def _success_dprob(self, circuit, cache):
+        pvec = self._paramvec
+        if cache is None:
+            cache = self._circuit_cache(circuit)
+
+        # p = product_layers( 1 - alpha * (1 - prod_[inds4layer](1- param)) ) * (prod_[inds4LASTlayer](1 - param) - 1/2**width)
+        # Note: indices cannot be repeated in a layer, i.e. either a given index appears one or zero times in inds4layer
+
+        width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = cache
+        sp = 1.0 - self._paramvec
+        deriv = _np.zeros(len(pvec), 'd')
+
+        nLayers = len(inds_to_mult_by_layer)
+        lambda_per_layer = _np.empty(nLayers,'d')
+        for i,inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
+            lambda_per_layer[i] = 1 - alpha * (1 - prod(sp[inds_to_mult]))
+            
+        successprob_readout = prod(sp[inds_to_mult_by_layer[-1]])
+        lambda_per_layer[nLayers-1] = successprob_readout - one_over_2_width
+        lambda_all_layers = prod(lambda_per_layer) # includes readout factor as last layer
+
+        #All layers except last
+        for i,inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
+            lambda_all_but_current_layer = lambda_all_layers / lambda_per_layer[i]
+            for ind in inds_to_mult: # for each such ind, when we take deriv wrt this index, we need to differentiate this layer, etc.
+                deriv[ind] += lambda_all_but_current_layer * alpha * (prod(sp[inds_to_mult]) / sp[ind]) * -1.0 # what if sp[ind] == 0?
+
+        #Last layer
+        lambda_all_but_current_layer = lambda_all_layers / lambda_per_layer[-1]
+        for ind in inds_to_mult_by_layer[-1]:
+            deriv[ind] += lambda_all_but_current_layer * (successprob_readout / sp[ind]) * -1.0 # what if sp[ind] == 0?
+
+        return deriv
 
 
 class TwirledGatesModel(ErrorRatesModel):
@@ -462,6 +552,15 @@ class TwirledGatesModel(ErrorRatesModel):
         ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
+    def _circuit_cache(self, circuit):
+        width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
+        all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer[:-1])
+        readout_inds_to_mult = inds_to_mult_by_layer[-1]
+        all_inds_to_mult_cnt = _np.zeros(self.num_params(), int)
+        for i in all_inds_to_mult:
+            all_inds_to_mult_cnt[i] += 1
+        return width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt
+        
     def _success_prob(self, circuit, cache):
         """
         todo
@@ -470,23 +569,50 @@ class TwirledGatesModel(ErrorRatesModel):
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        width, depth, inds_to_mult_by_layer = cache
+        width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
         sp = 1.0 - self._paramvec
-        # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
-        # channel with entanglement infidelity of epsilon.
-        alpha = 4**width / (4**width - 1)
+
         # The 'lambda' for all gates (+ readout, which isn't used).
         lambda_ops = 1.0 - alpha * self._paramvec
 
         # The depolarizing constant for the full sequence of twirled gates.
-        lambda_all_layers = _np.prod([_np.prod(lambda_ops[inds_to_mult]) for inds_to_mult in inds_to_mult_by_layer[:-1]])
+        lambda_all_layers = prod(lambda_ops[all_inds_to_mult])
         # The readout success probability.
-        successprob_readout = _np.prod(sp[inds_to_mult_by_layer[-1]])
+        successprob_readout = prod(sp[readout_inds_to_mult])
         # THe success probability of the circuit.
-        successprob_circuit = lambda_all_layers * (successprob_readout - 1 / 2**width) + 1 / 2**width
+        successprob_circuit = lambda_all_layers * (successprob_readout - one_over_2_width) + one_over_2_width
 
         return successprob_circuit
+
+
+    def _success_dprob(self, circuit, cache):
+        """
+        todo
+        """
+        pvec = self._paramvec
+        if cache is None:
+            cache = self._circuit_cache(circuit)
+
+        width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt = cache
+        sp = 1.0 - self._paramvec
+        lambda_ops = 1.0 - alpha * self._paramvec
+        deriv = _np.zeros(len(pvec), 'd')
+
+        # The depolarizing constant for the full sequence of twirled gates.
+        lambda_all_layers = prod(lambda_ops[all_inds_to_mult])
+        for i,n in enumerate(all_inds_to_mult_cnt):
+            deriv[i] = n * lambda_all_layers / lambda_ops[i] * -alpha  #-alpha = d(lambda_ops/dparam)
+            
+        # The readout success probability.
+        readout_deriv = _np.zeros(len(pvec), 'd')
+        successprob_readout = prod(sp[readout_inds_to_mult])
+        for ind in readout_inds_to_mult:
+            readout_deriv[ind] = (successprob_readout / sp[ind]) * -1.0 # what if sp[ind] == 0?
+        
+        # The success probability of the circuit.
+        #successprob_circuit = lambda_all_layers * (successprob_readout - one_over_2_width) + one_over_2_width
+        return deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv # product rule
 
 
 class AnyErrorCausesFailureModel(ErrorRatesModel):
@@ -498,6 +624,14 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
                                  alias_dict=alias_dict, idlename=idlename)
 
+    def _circuit_cache(self, circuit):
+        width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
+        all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params(), int)
+        for i in all_inds_to_mult:
+            all_inds_to_mult_cnt[i] += 1
+        return all_inds_to_mult, all_inds_to_mult_cnt
+
     def _success_prob(self, circuit, cache):
         """
         todo
@@ -506,14 +640,32 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        width, depth, inds_to_mult_by_layer = cache
+        all_inds_to_mult, all_inds_to_mult_cnt = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
         sp = 1.0 - self._paramvec
 
         # The probability that every operation succeeds.
-        successprob_circuit = _np.prod([_np.prod(sp[inds_to_mult]) for inds_to_mult in inds_to_mult_by_layer])
+        successprob_circuit = prod(sp[all_inds_to_mult])
 
         return successprob_circuit
+
+
+    def _success_dprob(self, circuit, cache):
+        """
+        todo
+        """
+        pvec = self._paramvec
+        if cache is None:
+            cache = self._circuit_cache(circuit)
+
+        all_inds_to_mult, all_inds_to_mult_cnt = cache
+        sp = 1.0 - self._paramvec
+        successprob_circuit = prod(sp[all_inds_to_mult])
+        deriv = _np.zeros(len(pvec), 'd')
+        for i,n in enumerate(all_inds_to_mult_cnt):
+            deriv[i] = n * successprob_circuit / sp[i] * -1.0
+
+        return deriv
 
 
 class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
@@ -525,6 +677,14 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
                                  alias_dict=alias_dict, idlename=idlename)
 
+    def _circuit_cache(self, circuit):
+        width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
+        all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params(), int)
+        for i in all_inds_to_mult:
+            all_inds_to_mult_cnt[i] += 1
+        return one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt
+
     def _success_prob(self, circuit, cache):
         """
         todo
@@ -533,16 +693,37 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        width, depth, inds_to_mult_by_layer = cache
+        one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
         sp = 1.0 - self._paramvec
 
         # The probability that every operation succeeds.
-        successprob_all_ops = _np.prod([_np.prod(sp[inds_to_mult]) for inds_to_mult in inds_to_mult_by_layer])
+        successprob_all_ops = prod(sp[all_inds_to_mult])
         # The circuit succeeds if all ops succeed, and has a random outcome otherwise.
-        successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width
+        successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) * one_over_2_width
 
         return successprob_circuit
+
+    def _success_dprob(self, circuit, cache):
+        """
+        todo
+        """
+        pvec = self._paramvec
+        if cache is None:
+            cache = self._circuit_cache(circuit)
+
+        one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt = cache
+        sp = 1.0 - self._paramvec
+
+        successprob_all_ops = prod(sp[all_inds_to_mult])
+        deriv = _np.zeros(len(pvec), 'd')
+        for i,n in enumerate(all_inds_to_mult_cnt):
+            deriv[i] = n * successprob_all_ops / sp[i] * -1.0
+        
+        # The circuit succeeds if all ops succeed, and has a random outcome otherwise.
+        #successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width = const + (1-1/2**width)*successprobs_all_ops
+        deriv *= (1.0 - one_over_2_width)
+        return deriv
 
     # def ORIGINAL_success_prob(self, circuit, cache):
     #     """

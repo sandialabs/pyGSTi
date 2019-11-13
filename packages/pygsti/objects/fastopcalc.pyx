@@ -825,8 +825,15 @@ cdef double stabilizer_measurement_prob(state_sp_tuple, moutcomes):
             p *= p1; state_s, state_p = ss1, sp1
     return p
 
-
-
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def float_product(np.ndarray[double, ndim=1] ar):
+    cdef double ret = 1.0
+    cdef INT N = ar.shape[0]
+    cdef INT i
+    for i in range(N):
+        ret = ret * ar[i]
+    return ret
 
 def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
     cdef long N = f.shape[0]
