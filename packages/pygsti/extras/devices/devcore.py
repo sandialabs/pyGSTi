@@ -32,6 +32,9 @@ from . import rigetti_aspen6
 import numpy as _np
 
 
+def get_device_specs(devname):
+    return _get_dev_specs(devname)
+
 def _get_dev_specs(devname):
 
     if devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
@@ -114,7 +117,10 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
         assert('Gi' not in oneQgates), "Cannot ascertain idle gate name!"
         idlename = 'Gci'
     else:
-        raise ValueError("Must specify the idle gate!")
+        if model_type == 'dict':
+            pass
+        else:
+            raise ValueError("Must specify the idle gate!")
 
     assert(not ((calformat is None) and (device is None))), "Must specify `calformat` or `device`"
     if calformat is None:
@@ -281,9 +287,12 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
     return model
 
 
-def create_local_depolarizing_model(pspec, caldata, calformat):
+def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_native={}, calformat=None):
     """
     todo
+
+    Note: this model is *** NOT *** suitable for optimization: it is not aware that it is a local depolarization
+    with non-independent error rates model.
     """
 
     def get_local_depolarization_channel(rate, numQs):
@@ -317,24 +326,32 @@ def create_local_depolarizing_model(pspec, caldata, calformat):
                                         })
         return povm
 
-    erm = create_error_rates_model(caldata, calformat)
-    model = _mconst.build_localnoise_model(nQubits=pspec.number_of_qubits,
-                                           qubit_labels=pspec.qubit_labels,
-                                           gate_names=pspec.root_gate_names,
-                                           availability=pspec.availability,
+    tempdict  =  create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native=oneQgates_to_native,
+                                          calformat=calformat,  model_type='dict')
+
+    error_rates = tempdict['error_rates']
+    alias_dict = tempdict['alias_dict']
+    devspecs = get_device_specs(device)
+
+    model = _mconst.build_localnoise_model(nQubits=len(devspecs.qubits),
+                                           qubit_labels=devspecs.qubits,
+                                           gate_names=[devspecs.twoQgate] + oneQgates,
+                                           availability={devspecs.twoQgate: devspecs.edgelist},
                                            parameterization='full', independent_gates=True)
 
     for lbl in model.operation_blks['gates'].keys():
 
+        gatestr = str(lbl)
+
         if len(lbl.qubits) == 1:
-            errormap = get_local_depolarization_channel(erm.error_rates['gates'][lbl.qubits[0]], 1)
+            errormap = get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 1)
             model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
 
         if len(lbl.qubits) == 2:
-            errormap = get_local_depolarization_channel(erm.error_rates['gates'][frozenset(lbl.qubits)], 2)
+            errormap = get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 2)
             model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
 
-    povms = [get_local_povm(erm.error_rates['readout'][q]) for q in model.qubit_labels]
+    povms = [get_local_povm(error_rates['readout'][q]) for q in model.qubit_labels]
     model.povm_blks['layers']['Mdefault'] = _povm.TensorProdPOVM(povms)
 
     return model
