@@ -10,7 +10,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 from ..rb import analysis as _anl
-from ..rb import errorratesmodel as _erm
+#from ..rb import errorratesmodel as _erm
+from ...objects import oplessmodel as _oplessmodel
 from ...objects import processorspec as _pspec
 from ...objects import povm as _povm
 from ...construction import modelconstruction as _mconst
@@ -49,6 +50,12 @@ def _get_dev_specs(devname):
         raise ValueError("This device name is not known!")
 
     return dev
+
+def get_edgelist(device):
+
+    specs = _get_dev_specs(device)
+
+    return specs.edgelist
 
 
 def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
@@ -92,14 +99,33 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
     return pspec
 
 
-def create_error_rates_model(caldata, calformat=None, device=None, model_type='GlobalDep'):
+def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={}, calformat=None,
+                             model_type='TwirledLayers', idlename=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
+
+    specs = _get_dev_specs(device)
+    twoQgate = specs.twoQgate
+    if 'Gc0' in oneQgates:
+        assert('Gi' not in oneQgates), "Cannot ascertain idle gate name!"
+        idlename = 'Gc0'
+    elif 'Gi' in oneQgates:
+        assert('Gi' not in oneQgates), "Cannot ascertain idle gate name!"
+        idlename = 'Gci'
+    else:
+        raise ValueError("Must specify the idle gate!")
+
     assert(not ((calformat is None) and (device is None))), "Must specify `calformat` or `device`"
     if calformat is None:
-        dev = _get_dev_specs(device)
-        calformat = dev.spec_format
+        calformat = specs.spec_format
+
+    def average_gate_infidelity_to_entanglement_infidelity(agi, numqubits):
+
+        dep = _anl.r_to_p(agi, 2**numqubits, 'AGI')
+        ent_inf = _anl.p_to_r(dep, 2**numqubits, 'EI')
+
+        return ent_inf
 
     error_rates = {}
     error_rates['gates'] = {}
@@ -107,48 +133,79 @@ def create_error_rates_model(caldata, calformat=None, device=None, model_type='G
 
     if calformat == 'ibmq-v2018':
 
-        # This goes through the multi-qubit gates.
+        assert(oneQgates_to_native == {}), "There is only a single one-qubit gate error rate for this calibration data format!"
+        # This goes through the multi-qubit gates and records their error rates
         for dct in caldata['multiQubitGates']:
 
-            q1 = 'Q' + str(dct['qubits'][0])
-            q2 = 'Q' + str(dct['qubits'][1])
+            # Converts to our gate name convention.
+            gatename = twoQgate + ':Q' + str(dct['qubits'][0]) + ':Q' + str(dct['qubits'][1])
+            # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
+            agi = dct['gateError']['value']
+            # Maps the AGI to an entanglement infidelity.
+            error_rates['gates'][gatename] = average_gate_infidelity_to_entanglement_infidelity(agi, 2)
 
-            dep = _anl.r_to_p(dct['gateError']['value'], 4, 'AGI')
-            errate = _anl.p_to_r(dep, 4, 'EI')
-
-            error_rates['gates'][frozenset((q1, q2))] = errate
-
-        # This stores the error rates of the 1-qubit gates and measurements.
+        # This goes through the 1-qubit gates and readouts and stores their error rates.
         for dct in caldata['qubits']:
 
             q = dct['name']
+            agi = dct['gateError']['value']
+            error_rates['gates'][q] = average_gate_infidelity_to_entanglement_infidelity(agi, 1)
 
-            dep = _anl.r_to_p(dct['gateError']['value'], 2, 'AGI')
-            errate = _anl.p_to_r(dep, 2, 'EI')
-
-            error_rates['gates'][q] = errate
+            # This assumes that this error rate is the rate of bit-flips.
             error_rates['readout'][q] = dct['readoutError']['value']
+
+        # Because the one-qubit gates are all set to the same error rate, we have an alias dict that maps each one-qubit
+        # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
+        alias_dict = {}
+        for q in specs.qubit:
+            alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
 
     elif calformat == 'ibmq-v2019':
 
+        # These'll be the keys in the error model, with the pyGSTi gate names aliased to these keys. If unspecified,
+        # we set the error rate of a gate to the 'u3' gate error rate.
+        oneQgatekeys = []
+        for oneQgate in oneQgates:
+            try:
+                nativekey = oneQgates_to_native[oneQgate]
+            except:
+                oneQgates_to_native[oneQgate] = 'u3'
+                nativekey = 'u3'
+            assert(nativekey in ('id', 'u1', 'u2', 'u3')), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
+            if nativekey not in oneQgatekeys:
+                oneQgatekeys.append(nativekey)
+
+        alias_dict = {}
+        for q in specs.qubits:
+            alias_dict.update({oneQgate + ':' + q: oneQgates_to_native[oneQgate] + ':' + q for oneQgate in oneQgates})
+
+        # Loop through all the gates, and record the error rates that we use in our error model.
         for gatecal in caldata['gates']:
 
             if gatecal['gate'] == 'cx':
 
+                # The qubits the gate is on, in the IBM Q notation
                 qubits = gatecal['qubits']
+                # Converts to our gate name convention.
+                gatename = twoQgate + ':Q' + str(qubits[0]) + ':Q' + str(qubits[1])
+                # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
+                agi = gatecal['parameters'][0]['value']
+                # Maps the AGI to an entanglement infidelity.
+                error_rates['gates'][gatename] = average_gate_infidelity_to_entanglement_infidelity(agi, 2)
 
-                dep = _anl.r_to_p(gatecal['parameters'][0]['value'], 4, 'AGI')
-                errate = _anl.p_to_r(dep, 4, 'EI')
+            if gatecal['gate'] in oneQgatekeys:
 
-                error_rates['gates'][frozenset(('Q' + str(qubits[0]), 'Q' + str(qubits[1])))] = errate
-
-            if gatecal['gate'] == 'u3':
-
+                # The qubits the gate is on, in the IBM Q notation
                 qubits = gatecal['qubits']
-                dep = _anl.r_to_p(gatecal['parameters'][0]['value'], 2, 'AGI')
-                errate = _anl.p_to_r(dep, 2, 'EI')
-                error_rates['gates']['Q' + str(qubits[0])] = errate
+                # Converts to pyGSTi-like gate name convention, but using the IBM Q name.
+                gatename = gatecal['gate'] + ':Q' + str(qubits[0])
+                # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
+                agi = gatecal['parameters'][0]['value']
+                # Maps the AGI to an entanglement infidelity.
+                error_rates['gates'][gatename] = average_gate_infidelity_to_entanglement_infidelity(agi, 1)
 
+        # Record the readout error rates. Because we don't do any rescaling, this assumes that this error
+        # rate is the rate of bit-flips.
         for q, qcal in enumerate(caldata['qubits']):
 
             for qcaldatum in qcal:
@@ -157,34 +214,69 @@ def create_error_rates_model(caldata, calformat=None, device=None, model_type='G
 
     elif calformat == 'rigetti':
 
-        # Fidelities reported by Rigetti can be > 1. Any such fidelity is mapped to 1.
-        for qs in caldata['2Q'].keys():
+        # This goes through the multi-qubit gates and records their error rates
+        for qs, gatedata in caldata['2Q'].items():
 
+            # The qubits the qubit is on.
             qslist = qs.split('-')
+            # Converts to our gate name convention.
+            gatename = twoQgate + ':Q' + qslist[0], ':Q' + qslist[1]
+            # We use the controlled-Z fidelity if available, and the Bell state fidelity otherwise.
+            # Here we are assuming that this is an average gate fidelity (as stated in the pyQuil docs)
+            if gatedata['fCZ'] is not None:
+                agi = 1 - gatedata['fCZ']
+            else:
+                agi = 1 - gatedata['fBellState']
+            # We map the infidelity to 0 if it is less than 0 (sometimes this occurs with Rigetti
+            # calibration data).
+            agi = max([0, agi])
+            # Maps the AGI to an entanglement infidelity.
+            error_rates['gates'][gatename] = average_gate_infidelity_to_entanglement_infidelity(agi, 2)
 
-            # We use the CZ fidelity if available, and the Bell state fidelity otherwise.
-            if caldata['2Q'][qs]['fCZ'] is not None: f = caldata['2Q'][qs]['fCZ']
-            else: f = caldata['2Q'][qs]['fBellState']
+        for q, qdata in caldata['1Q'].items():
 
-            dep = _anl.r_to_p(1 - min([1, f]), 4, 'AGI')
-            errate = _anl.p_to_r(dep, 4, 'EI')
-            error_rates['gates'][frozenset(('Q' + qslist[0], 'Q' + qslist[1]))] = errate
+            qlabel = 'Q' + q
+            # We are assuming that this is an average gate fidelity (as stated in the pyQuil docs).
+            agi = 1 - qdata['f1QRB']
+            # We map the infidelity to 0 if it is less than 0 (sometimes this occurs with Rigetti
+            # calibration data).
+            agi = max([0, agi])
+            # Maps the AGI to an entanglement infidelity. Use the qlabel, ..... TODO
+            error_rates['gates'][qlabel] = average_gate_infidelity_to_entanglement_infidelity(agi, 1)
+            # Record the readout error rates. Because we don't do any rescaling (except forcing to be
+            # non-negative) this assumes that this error rate is the rate of bit-flips.
+            error_rates['readout'][qlabel] = 1 - min([1, qdata['fRO']])
 
-        for q in caldata['1Q'].keys():
-
-            dep = _anl.r_to_p(1 - min([1, caldata['1Q'][q]['f1QRB']]), 2, 'AGI')
-            error_rate = _anl.p_to_r(dep, 2, 'EI')
-            error_rates['gates']['Q' + q] = error_rate
-            error_rates['readout']['Q' + q] = 1 - min([1, caldata['1Q'][q]['fRO']])
+        # Because the one-qubit gates are all set to the same error rate, we have an alias dict that maps each one-qubit
+        # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
+        alias_dict = {}
+        for q in specs.qubit:
+            alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
 
     elif calformat == 'native':
-
         error_rates = caldata
 
     else:
         raise ValueError("Calibration data format not understood!")
 
-    model = _erm.ErrorRatesModel(error_rates, model_type)
+    nQubits = len(specs.qubits)
+    if model_type == 'dict':
+        model = {'error_rates': error_rates, 'alias_dict': alias_dict}
+
+    elif model_type == 'TwirledLayers':
+        model = _oplessmodel.TwirledLayersModel(error_rates, nQubits, state_space_labels=specs.qubits,
+                                                alias_dict=alias_dict, idlename=idlename)
+    elif model_type == 'TwirledGates':
+        model = _oplessmodel.TwirledGatesModel(error_rates, nQubits, state_space_labels=specs.qubits,
+                                               alias_dict=alias_dict, idlename=idlename)
+    elif model_type == 'AnyErrorCausesFailure':
+        model = _oplessmodel.AnyErrorCausesFailureModel(error_rates, nQubits, state_space_labels=specs.qubits,
+                                                        alias_dict=alias_dict, idlename=idlename)
+    elif model_type == 'AnyErrorCausesRandomOutput':
+        model = _oplessmodel.AnyErrorCausesRandomOutputModel(error_rates, nQubits, state_space_labels=specs.qubits,
+                                                             alias_dict=alias_dict, idlename=idlename)
+    else:
+        raise ValueError("Model type not understood!")
 
     return model
 
