@@ -267,7 +267,8 @@ class DataComparator():
     """
 
     def __init__(self, dataset_list_or_multidataset, circuits='all',
-                 op_exclusions=None, op_inclusions=None, DS_names=None):
+                 op_exclusions=None, op_inclusions=None, DS_names=None,
+                 allow_bad_circuits=False):
         """
         Initializes a DataComparator object.
 
@@ -299,6 +300,13 @@ class DataComparator():
         DS_names : None or list, optional (default is None)
             If `dataset_list_multidataset` is a list of DataSets, this can be used to specify names
             for the DataSets in the list. E.g., ["Time 0", "Time 1", "Time 3"] or ["Driving","NoDriving"].
+
+        allow_bad_circuits : bool, optional
+            Whether or not the data is allowed to have zero total counts for any circuits in any of the
+            passes. If false, then an error will be raise when there are such unimplemented circuits. If
+            true, then the data from those circuits that weren't run in one or more of the passes will
+            be discarded before any analysis is performed (equivalent to excluding them explicitly in with
+            the `circuits` input.
 
         Returns
         -------
@@ -336,6 +344,13 @@ class DataComparator():
 
         else:
             raise ValueError("The `dataset_list_or_multidataset` must be a list of DataSets of a MultiDataSet!")
+
+        if allow_bad_circuits:
+            trimmedcircuits = []
+            for circuit in circuits:
+                if min([ds[circuit].total for ds in dsList]) > 0:
+                    trimmedcircuits.append(circuit)
+            circuits = trimmedcircuits
 
         if op_exclusions is not None:
             circuits_exc_temp = []
