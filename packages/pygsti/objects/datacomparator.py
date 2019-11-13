@@ -424,10 +424,6 @@ class DataComparator():
         self.pVal_pseudothreshold = None
         self.jsd_pseudothreshold = None
 
-        self.aggregate_llr_threshold = None
-        self.aggregate_nsigma_threshold = None
-        self.aggregate_pVal_threshold = None
-
     def implement(self, significance=0.05, per_sequence_correction='Hochberg',
                   aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
