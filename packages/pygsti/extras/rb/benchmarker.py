@@ -181,11 +181,11 @@ class Benchmarker(object):
         sfmultids = _multids.MultiDataSet()
 
         for ds_ind, ds in self.multids['standard'].items():
-            sfds = _stdds.DataSet(outcomeLabels=['success', 'fail'])
-            for (circ, dsrow), aux in zip(ds.items(), self.multids['standard'].auxInfo.values()):
-                scounts = dsrow[aux[self.success_key]]
+            sfds = _stdds.DataSet(outcomeLabels=['success', 'fail'], collisionAction=ds.collisionAction)
+            for circ, dsrow in ds.items(stripOccurrenceTags=True):
+                scounts = dsrow[ dsrow.aux[self.success_key] ]
                 tcounts = dsrow.total
-                sfds.add_count_dict(circ, {'success': scounts, 'fail': tcounts - scounts}, aux=aux)
+                sfds.add_count_dict(circ, {'success': scounts, 'fail': tcounts - scounts}, aux=dsrow.aux)
 
             sfds.done_adding_data()
             sfmultids.add_dataset(ds_ind, sfds)
