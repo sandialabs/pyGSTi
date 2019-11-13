@@ -365,10 +365,14 @@ class StdInputParser(object):
                 self._fillDataCountDict(countDict, fillInfo, valueList)
                 if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
                     if ignoreZeroCountLines:
-                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
+                        if not bBad:
+                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                         continue  # skip lines in dataset file with zero counts (no experiments done)
                     else:
-                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts." % circuitStr)
+                        if not bBad:
+                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            warnings.append("Dataline for circuit '%s' has zero counts." % s)
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                 circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
@@ -584,10 +588,14 @@ class StdInputParser(object):
                 bSkip = False
                 if all([(abs(v) < 1e-9) for cDict in dsCountDicts.values() for v in cDict.values()]):
                     if ignoreZeroCountLines:
-                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
+                        if not bBad:
+                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                         bSkip = True  # skip lines in dataset file with zero counts (no experiments done)
                     else:
-                        if not bBad: warnings.append("Dataline for circuit '%s' has zero counts." % circuitStr)
+                        if not bBad:
+                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            warnings.append("Dataline for circuit '%s' has zero counts." % s)
 
                 if not bSkip:
                     for dsLabel, countDict in dsCountDicts.items():
