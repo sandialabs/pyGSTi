@@ -31,7 +31,7 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
     """
 
     """
-    with open(directory + '/global.json', 'r') as f:
+    with open(directory + '/global.txt', 'r') as f:
         globaldict = _json.load(f)
 
     numpasses = globaldict['numpasses']
@@ -74,7 +74,7 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
         for j, qubits in enumerate(structure):
 
             # Import the summary data for that spec and qubit subset
-            with open(directory + '/summarydata/{}-{}.json'.format(i, j), 'r') as f:
+            with open(directory + '/summarydata/{}-{}.txt'.format(i, j), 'r') as f:
                 sd = _json.load(f)
                 summary_data['pass'][i][qubits] = {}
                 for dtype, data in sd['pass'].items():
@@ -84,7 +84,7 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
                     summary_data['global'][i][qubits][dtype] = {int(key): value for (key, value) in data.items()}
 
             # Import the auxillary data
-            with open(directory + '/aux/{}-{}.json'.format(i, j), 'r') as f:
+            with open(directory + '/aux/{}-{}.txt'.format(i, j), 'r') as f:
                 aux = _json.load(f)
                 summary_data['aux'][i][qubits] = {}
                 for dtype, data in aux.items():
@@ -92,7 +92,7 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
 
             # Import the predicted summary data for that spec and qubit subset
             for pkey in predictionkeys:
-                with open(directory + '/predictions/{}/summarydata/{}-{}.json'.format(pkey, i, j), 'r') as f:
+                with open(directory + '/predictions/{}/summarydata/{}-{}.txt'.format(pkey, i, j), 'r') as f:
                     psd = _json.load(f)
                     predicted_summary_data[pkey][i][qubits] = {}
                     for dtype, data in psd.items():
@@ -132,24 +132,28 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
         globaldict['dscomparator']['llr_pseudothreshold'] = benchmarker.dscomparator.llr_pseudothreshold
         globaldict['dscomparator']['pVal_pseudothreshold'] = benchmarker.dscomparator.pVal_pseudothreshold
         globaldict['dscomparator']['jsd_pseudothreshold'] = benchmarker.dscomparator.jsd_pseudothreshold
+        globaldict['dscomparator']['aggregate_llr'] = benchmarker.dscomparator.aggregate_llr
         globaldict['dscomparator']['aggregate_llr_threshold'] = benchmarker.dscomparator.aggregate_llr_threshold
+        globaldict['dscomparator']['aggregate_nsigma'] = benchmarker.dscomparator.aggregate_nsigma
         globaldict['dscomparator']['aggregate_nsigma_threshold'] = benchmarker.dscomparator.aggregate_nsigma_threshold
+        globaldict['dscomparator']['aggregate_pVal'] = benchmarker.dscomparator.aggregate_pVal
         globaldict['dscomparator']['aggregate_pVal_threshold'] = benchmarker.dscomparator.aggregate_pVal_threshold
         globaldict['dscomparator']['inconsistent_datasets_detected'] = benchmarker.dscomparator.inconsistent_datasets_detected
         globaldict['dscomparator']['number_of_significant_sequences'] = int(benchmarker.dscomparator.number_of_significant_sequences)
+        globaldict['dscomparator']['significance'] = benchmarker.dscomparator.significance
 
     else:
         globaldict['dscomparator'] = None
 
     # Write global details to file
-    with open(outdir + '/global.json', 'w') as f:
+    with open(outdir + '/global.txt', 'w') as f:
         _json.dump(globaldict, f, indent=4)
 
     _os.makedirs(outdir + '/specs')
     _os.makedirs(outdir + '/summarydata')
     _os.makedirs(outdir + '/aux')
 
-    for pkey in benchmarker._predicted_summary_data.keys():
+    for pkey in benchmarker.predicted_summary_data.keys():
         _os.makedirs(outdir + '/predictions/{}/summarydata'.format(pkey))
 
     for i, spec in enumerate(benchmarker._specs):
@@ -157,21 +161,21 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
         write_benchmarkspec(spec, outdir + '/specs/{}.txt'.format(i), warning=0)
 
         for j, qubits in enumerate(structure):
-            summarydict = {'pass': benchmarker._pass_summary_data[i][qubits],
-                           'global': benchmarker._global_summary_data[i][qubits]
+            summarydict = {'pass': benchmarker.pass_summary_data[i][qubits],
+                           'global': benchmarker.global_summary_data[i][qubits]
                            }
-            fname = outdir + '/summarydata/' + '{}-{}.json'.format(i, j)
+            fname = outdir + '/summarydata/' + '{}-{}.txt'.format(i, j)
             with open(fname, 'w') as f:
                 _json.dump(summarydict, f, indent=4)
 
-            aux = benchmarker._aux[i][qubits]
-            fname = outdir + '/aux/' + '{}-{}.json'.format(i, j)
+            aux = benchmarker.aux[i][qubits]
+            fname = outdir + '/aux/' + '{}-{}.txt'.format(i, j)
             with open(fname, 'w') as f:
                 _json.dump(aux, f, indent=4)
 
-            for pkey in benchmarker._predicted_summary_data.keys():
-                summarydict = benchmarker._predicted_summary_data[pkey][i][qubits]
-                fname = outdir + '/predictions/{}/summarydata/'.format(pkey) + '{}-{}.json'.format(i, j)
+            for pkey in benchmarker.predicted_summary_data.keys():
+                summarydict = benchmarker.predicted_summary_data[pkey][i][qubits]
+                fname = outdir + '/predictions/{}/summarydata/'.format(pkey) + '{}-{}.txt'.format(i, j)
                 with open(fname, 'w') as f:
                     _json.dump(summarydict, f, indent=4)
 
@@ -181,6 +185,7 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
         for dsind in benchmarker.multids[dskey].keys():
             fname = fdir + '/ds{}.txt'.format(dsind)
             _io.write_dataset(fname, benchmarker.multids[dskey][dsind], fixedColumnMode=False)
+
 
 def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtypes=[], verbosity=1):
     
@@ -243,7 +248,7 @@ def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtype
     #                 write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][key], outfolder + '/rbsummarydata' + str(i) + '-'
     #                                                 + str(j) + '-' + str(key) + '.txt')
     #         for pkey, pfolder in predictions_outfolder.items():
-    #             write_rb_summary_data_to_file(benchmarker._predicted_summary_data[pkey][i][qubits],
+    #             write_rb_summary_data_to_file(benchmarker.predicted_summary_data[pkey][i][qubits],
     #                                           pfolder + '/rbsummarydata' + str(i) + '-' + str(j) + '.txt')
 
     # return
