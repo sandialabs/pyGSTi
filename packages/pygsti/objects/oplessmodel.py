@@ -345,19 +345,39 @@ def compact_poly_list(list_of_polys):
     return vtape, ctape
 
 
-class TimsErrorRatesModel(SuccessFailModel):
-    def __init__(self, nQubits, error_rates, model_type='GlobalDep'):
-        state_space_labels = ['Q%d' % i for i in range(nQubits)]
+class ErrorRatesModel(SuccessFailModel):
+
+    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+        """
+        todo
+        """
+        if state_space_labels is None:
+            state_space_labels = ['Q%d' % i for i in range(nQubits)]
+        else:
+            assert(len(state_space_labels) == nQubits)
+
         SuccessFailModel.__init__(self, state_space_labels, use_cache=True)
-        
+
         gate_error_rate_keys = (list(error_rates['gates'].keys()))
         readout_error_rate_keys = (list(error_rates['readout'].keys()))
-        self._gate_error_rate_indices = { k:i for i,k in enumerate(gate_error_rate_keys) }
-        self._readout_error_rate_indices = { k:i+len(gate_error_rate_keys) for i,k in enumerate(readout_error_rate_keys) }
-        self._paramvec = _np.concatenate( (_np.array([error_rates['gates'][k] for k in gate_error_rate_keys], 'd'),
-                                           _np.array([error_rates['readout'][k] for k in readout_error_rate_keys], 'd')) )
-        assert(model_type in ('FiE', 'FiE+U', 'GlobalDep'))
-        self.model_type = model_type
+
+        # if gate_error_rate_keys[0] in state_space_labels:
+        #     self._gateind = True
+        # else:
+        #     self._gateind = False
+
+        self._idlename = idlename
+        self._alias_dict = alias_dict.copy()
+        self._gate_error_rate_indices = {k: i for i, k in enumerate(gate_error_rate_keys)}
+        self._readout_error_rate_indices = {k: i + len(gate_error_rate_keys) for i, k in enumerate(readout_error_rate_keys)}
+        self._paramvec = _np.concatenate((_np.array([error_rates['gates'][k] for k in gate_error_rate_keys], 'd'),
+                                          _np.array([error_rates['readout'][k] for k in readout_error_rate_keys], 'd')))
+
+    def __str__(self):
+        s = "Error Rates model with error rates: \n" + \
+            "\n".join(["%s = %g" % (k, self._paramvec[i]) for k, i in self._gate_error_rate_indices.items()]) + "\n" + \
+            "\n".join(["%s = %g" % (k, self._paramvec[i]) for k, i in self._readout_error_rate_indices.items()])
+        return s
 
     def _circuit_cache(self, circuit):
         if not isinstance(circuit, _Circuit):
@@ -368,32 +388,45 @@ class TimsErrorRatesModel(SuccessFailModel):
         g_inds = self._gate_error_rate_indices
         r_inds = self._readout_error_rate_indices
 
-        if self.model_type == 'GlobalDep':
-            inds_to_mult_by_layer = []
-            for i in range(depth):
+        # if self._gateind:
+        #     inds_to_mult_by_layer = []
+        #     for i in range(depth):
 
-                layer = circuit.get_layer(i)
-                inds_to_mult = []
-                usedQs = []
+        #         layer = circuit.get_layer(i)
+        #         inds_to_mult = []
+        #         usedQs = []
 
-                for gate in layer:
-                    if len(gate.qubits) > 1:
-                        usedQs += list(gate.qubits)
-                        inds_to_mult.append(g_inds[frozenset(gate.qubits)])
+        #         for gate in layer:
+        #             if len(gate.qubits) > 1:
+        #                 usedQs += list(gate.qubits)
+        #                 inds_to_mult.append(g_inds[frozenset(gate.qubits)])
 
-                for q in circuit.line_labels:
-                    if q not in usedQs:
-                        inds_to_mult.append(g_inds[q])
-                        
-                inds_to_mult_by_layer.append(_np.array(inds_to_mult,int))
+        #         for q in circuit.line_labels:
+        #             if q not in usedQs:
+        #                 inds_to_mult.append(g_inds[q])
 
-            # Bit-flip readout error as a pre-measurement depolarizing channel.
-            inds_to_mult = [ r_inds[q] for q in circuit.line_labels ]
-            inds_to_mult_by_layer.append(_np.array(inds_to_mult,int))
+        #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
 
-            return (width, depth, inds_to_mult_by_layer)
-        else:
-            raise NotImplementedError("Other model types not implemented yet!")
+        # else:
+        inds_to_mult_by_layer = [g_inds[self._alias_dict.get(str(gate), str(gate))] for layer in
+                                 [circuit.get_layer_with_idles(i, idleGateName=self._idlename) for i in range(depth)]
+                                 for gate in layer]
+
+        # Bit-flip readout error as a pre-measurement depolarizing channel.
+        inds_to_mult = [r_inds[q] for q in circuit.line_labels]
+        inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
+
+        return (width, depth, inds_to_mult_by_layer)
+
+
+class TwirledLayersModel(ErrorRatesModel):
+
+    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+        """
+        todo
+        """
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
+                                 alias_dict=alias_dict, idlename=idlename)
 
     def _success_prob(self, circuit, cache):
         """
@@ -403,87 +436,175 @@ class TimsErrorRatesModel(SuccessFailModel):
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        if self.model_type == 'GlobalDep':
-            width, depth, inds_to_mult_by_layer = cache
-            pvec1 = 1.0 - self._paramvec
-            pvec2 = 1.0 - 3*self._paramvec/2
-            alpha = 4**width / (4**width - 1)
-            
-            p = _np.prod([ (1 - alpha * (1 - _np.prod(pvec1[inds_to_mult]))) \
-                           for inds_to_mult in inds_to_mult_by_layer[:-1]])
-            sp_layer = _np.prod(pvec2[inds_to_mult_by_layer[-1]])
-            p *= 1 - alpha * (1 - sp_layer)
-            return p + (1 - p) * (1 / 2**width)
-        else:
-            raise NotImplementedError("Other model types not implemented yet!")
+        width, depth, inds_to_mult_by_layer = cache
+        # The success probability for all the operations (the entanglment fidelity for the gates)
+        sp = 1.0 - self._paramvec
+        # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
+        # channel with entanglement infidelity of epsilon.
+        alpha = 4**width / (4**width - 1)
 
-    def ORIGINAL_success_prob(self, circuit, cache):
+        # The depolarizing constant for the full sequence of twirled layers.
+        lambda_all_layers = _np.prod([(1 - alpha * (1 - _np.prod(sp[inds_to_mult]))) for inds_to_mult in inds_to_mult_by_layer[:-1]])
+        # The readout success probability.
+        successprob_readout = _np.prod(sp[inds_to_mult_by_layer[-1]])
+        # THe success probability of the circuit.
+        successprob_circuit = lambda_all_layers * (successprob_readout - 1 / 2**width) + 1 / 2**width
+
+        return successprob_circuit
+
+
+class TwirledGatesModel(ErrorRatesModel):
+
+    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        if not isinstance(circuit, _Circuit):
-            circuit = _Circuit.fromtup(circuit)
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
+                                 alias_dict=alias_dict, idlename=idlename)
 
-        depth = circuit.depth()
-        width = circuit.width()
+    def _success_prob(self, circuit, cache):
+        """
+        todo
+        """
         pvec = self._paramvec
-        g_inds = self._gate_error_rate_indices
-        r_inds = self._readout_error_rate_indices
+        if cache is None:
+            cache = self._circuit_cache(circuit)
 
-        if self.model_type in ('FE', 'FiE+U'):
+        width, depth, inds_to_mult_by_layer = cache
+        # The success probability for all the operations (the entanglment fidelity for the gates)
+        sp = 1.0 - self._paramvec
+        # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
+        # channel with entanglement infidelity of epsilon.
+        alpha = 4**width / (4**width - 1)
+        # The 'lambda' for all gates (+ readout, which isn't used).
+        lambda_ops = 1.0 - alpha * self._paramvec
 
-            twoQgates = []
-            for i in range(depth):
-                layer = circuit.get_layer(i)
-                twoQgates += [q.qubits for q in layer if len(q.qubits) > 1]
+        # The depolarizing constant for the full sequence of twirled gates.
+        lambda_all_layers = _np.prod([_np.prod(lambda_ops[inds_to_mult]) for inds_to_mult in inds_to_mult_by_layer[:-1]])
+        # The readout success probability.
+        successprob_readout = _np.prod(sp[inds_to_mult_by_layer[-1]])
+        # THe success probability of the circuit.
+        successprob_circuit = lambda_all_layers * (successprob_readout - 1 / 2**width) + 1 / 2**width
 
-            sp = 1
-            oneqs = {q: depth for q in circuit.line_labels}
+        return successprob_circuit
 
-            for qs in twoQgates:
-                sp = sp * (1 - pvec[g_inds[frozenset(qs)]])
-                oneqs[qs[0]] += -1
-                oneqs[qs[1]] += -1
 
-            sp = sp * _np.prod([(1 - pvec[g_inds[q]])**oneqs[q]
-                                * (1 - pvec[r_inds[q]]) for q in circuit.line_labels])
+class AnyErrorCausesFailureModel(ErrorRatesModel):
 
-            if self.model_type == 'FiE+U':
-                sp = sp + (1 - sp) * (1 / 2**width)
+    def __init__(self, error_rates, nQubits, state_space_labels=None,  alias_dict={}, idlename='Gi'):
+        """
+        todo
+        """
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
+                                 alias_dict=alias_dict, idlename=idlename)
 
-            return sp
+    def _success_prob(self, circuit, cache):
+        """
+        todo
+        """
+        pvec = self._paramvec
+        if cache is None:
+            cache = self._circuit_cache(circuit)
 
-        if self.model_type == 'GlobalDep':
+        width, depth, inds_to_mult_by_layer = cache
+        # The success probability for all the operations (the entanglment fidelity for the gates)
+        sp = 1.0 - self._paramvec
 
-            p = 1
-            for i in range(depth):
+        # The probability that every operation succeeds.
+        successprob_circuit = _np.prod([_np.prod(sp[inds_to_mult]) for inds_to_mult in inds_to_mult_by_layer])
 
-                layer = circuit.get_layer(i)
-                sp_layer = 1
-                usedQs = []
+        return successprob_circuit
 
-                for gate in layer:
-                    if len(gate.qubits) > 1:
-                        usedQs += list(gate.qubits)
-                        sp_layer = sp_layer * (1 - pvec[g_inds[frozenset(gate.qubits)]])
 
-                for q in circuit.line_labels:
-                    if q not in usedQs:
-                        sp_layer = sp_layer * (1 - pvec[g_inds[q]])
+class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
 
-                p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
-                p = p * p_layer
+    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+        """
+        todo
+        """
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
+                                 alias_dict=alias_dict, idlename=idlename)
 
-            # Bit-flip readout error as a pre-measurement depolarizing channel.
-            sp_layer = _np.prod([(1 - 3 * pvec[r_inds[q]] / 2) for q in circuit.line_labels])
-            p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
-            p = p * p_layer
-            sp = p + (1 - p) * (1 / 2**width)
+    def _success_prob(self, circuit, cache):
+        """
+        todo
+        """
+        pvec = self._paramvec
+        if cache is None:
+            cache = self._circuit_cache(circuit)
 
-            return sp
+        width, depth, inds_to_mult_by_layer = cache
+        # The success probability for all the operations (the entanglment fidelity for the gates)
+        sp = 1.0 - self._paramvec
 
-    def __str__(self):
-        s = "Error Rates model with error rates: \n" + \
-            "\n".join(["%s = %g" % (k,self._paramvec[i]) for k,i in self._gate_error_rate_indices.items()]) + "\n" + \
-            "\n".join(["%s = %g" % (k,self._paramvec[i]) for k,i in self._readout_error_rate_indices.items()])
-        return s
+        # The probability that every operation succeeds.
+        successprob_all_ops = _np.prod([_np.prod(sp[inds_to_mult]) for inds_to_mult in inds_to_mult_by_layer])
+        # The circuit succeeds if all ops succeed, and has a random outcome otherwise.
+        successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width
+
+        return successprob_circuit
+
+    # def ORIGINAL_success_prob(self, circuit, cache):
+    #     """
+    #     todo
+    #     """
+    #     if not isinstance(circuit, _Circuit):
+    #         circuit = _Circuit.fromtup(circuit)
+
+    #     depth = circuit.depth()
+    #     width = circuit.width()
+    #     pvec = self._paramvec
+    #     g_inds = self._gate_error_rate_indices
+    #     r_inds = self._readout_error_rate_indices
+
+    #     if self.model_type in ('FE', 'FiE+U'):
+
+    #         twoQgates = []
+    #         for i in range(depth):
+    #             layer = circuit.get_layer(i)
+    #             twoQgates += [q.qubits for q in layer if len(q.qubits) > 1]
+
+    #         sp = 1
+    #         oneqs = {q: depth for q in circuit.line_labels}
+
+    #         for qs in twoQgates:
+    #             sp = sp * (1 - pvec[g_inds[frozenset(qs)]])
+    #             oneqs[qs[0]] += -1
+    #             oneqs[qs[1]] += -1
+
+    #         sp = sp * _np.prod([(1 - pvec[g_inds[q]])**oneqs[q]
+    #                             * (1 - pvec[r_inds[q]]) for q in circuit.line_labels])
+
+    #         if self.model_type == 'FiE+U':
+    #             sp = sp + (1 - sp) * (1 / 2**width)
+
+    #         return sp
+
+    #     if self.model_type == 'GlobalDep':
+
+    #         p = 1
+    #         for i in range(depth):
+
+    #             layer = circuit.get_layer(i)
+    #             sp_layer = 1
+    #             usedQs = []
+
+    #             for gate in layer:
+    #                 if len(gate.qubits) > 1:
+    #                     usedQs += list(gate.qubits)
+    #                     sp_layer = sp_layer * (1 - pvec[g_inds[frozenset(gate.qubits)]])
+
+    #             for q in circuit.line_labels:
+    #                 if q not in usedQs:
+    #                     sp_layer = sp_layer * (1 - pvec[g_inds[q]])
+
+    #             p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
+    #             p = p * p_layer
+
+    #         # Bit-flip readout error as a pre-measurement depolarizing channel.
+    #         sp_layer = _np.prod([(1 - 3 * pvec[r_inds[q]] / 2) for q in circuit.line_labels])
+    #         p_layer = 1 - 4**width * (1 - sp_layer) / (4**width - 1)
+    #         p = p * p_layer
+    #         sp = p + (1 - p) * (1 / 2**width)
+
+    #         return sp
