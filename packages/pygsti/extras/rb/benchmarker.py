@@ -101,8 +101,7 @@ class Benchmarker(object):
             self.predicted_summary_data = predicted_summary_data.copy()
 
     def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities', 
-                                      statistic='mean', specs=None,  aggregate=True,  rescaler='auto',
-                                      predictionskey=None):
+                                      statistic='mean', specs=None,  aggregate=True,  rescaler='auto'):
 
         assert(statistic in ('max', 'mean', 'min', 'dist'))
 
@@ -171,13 +170,25 @@ class Benchmarker(object):
             vb = [{d: {} for d in depths} for i in range(self.numpasses)]
             fails = [{d: {} for d in depths} for i in range(self.numpasses)]
 
+        if len(self.predicted_summary_data) > 0:
+            arbkey = list(self.predicted_summary_data.keys())[0]
+            dopredictions = datatype in self.predicted_summary_data[arbkey][0][qs].keys()
+            if dopredictions:
+                pkeys = self.predicted_summary_data.keys()
+                predictedvb = {pkey: {d: {} for d in depths} for pkey in pkeys}
+            else:
+                predictedvb = {pkey: None for pkey in self.predicted_summary_data.keys()}
+
         for w in widths:
             (i, qs) = width_to_spec[w]
             data = datadict[i][qs][datatype]
+            if dopredictions:
+                preddata = {pkey: self.predicted_summary_data[pkey][i][qs][datatype] for pkey in pkeys}
             for d in depths:
                 if d in data.keys():
+                    
                     dline = data[d]
-
+ 
                     if globaldata:
 
                         failcount = _np.sum(_np.isnan(dline))
@@ -235,7 +246,20 @@ class Benchmarker(object):
                                 else:
                                     vb[d][w] = _np.nan
 
-        out = {'data': vb, 'fails': fails}
+                    # Repeat the process for the predictions, but with simpler code as don't have to deal with passes or NaNs.
+                    if dopredictions:
+                        pdline = {pkey: preddata[pkey][d] for pkey in pkeys}
+                        for pkey in pkeys:
+                            if statistic == 'dist':
+                                predictedvb[pkey][d][w] = rescale_function(pdline[pkey], w)
+                            if statistic == 'max':
+                                predictedvb[pkey][d][w] = _np.max(rescale_function(pdline[pkey], w))
+                            if statistic == 'mean':
+                                predictedvb[pkey][d][w] = _np.mean(rescale_function(pdline[pkey], w))
+                            if statistic == 'min':
+                                predictedvb[pkey][d][w] = _np.min(rescale_function(pdline[pkey], w))
+
+        out = {'data': vb, 'fails': fails, 'predictions': predictedvb}
         
         return out
        
