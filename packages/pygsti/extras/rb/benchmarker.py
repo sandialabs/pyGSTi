@@ -180,8 +180,8 @@ class Benchmarker(object):
 
                     if globaldata:
 
-                        if _np.isnan(dline).any():
-                            fails[d][w] = True
+                        failcount = _np.sum(_np.isnan(dline))
+                        fails[d][w] = (len(dline) - failcount, failcount)
 
                         if statistic == 'dist':
                             vb[d][w] = rescale_function(dline, w)
@@ -197,7 +197,7 @@ class Benchmarker(object):
                                 vb[d][w] = _np.nan
 
                     else:
-                        failline = [_np.isnan(dpass).any() for dpass in dline]
+                        failline = [(len(dpass) - _np.sum(_np.isnan(dpass)), _np.sum(_np.isnan(dpass))) for dpass in dline]
 
                         if statistic == 'max':
                             vbdataline = [_np.nanmax(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
@@ -210,16 +210,20 @@ class Benchmarker(object):
 
                         if not aggregate:
                             for i in range(len(vb)):
-                                vbdataline[i]
                                 vb[i][d][w] = vbdataline[i]
-                                if failline[i]:
-                                    fails[i][d][w] = True
+                                fails[i][d][w] = failline[i]
 
                         if aggregate:
+
+                            successcount = 0
+                            failcount = 0
+                            for (successcountpass, failcountpass) in failline:
+                                successcount += successcountpass
+                                failcount += failcountpass
+                                fails[d][w] = (successcount, failcount)
+
                             if statistic == 'dist':
                                 vb[d][w] = [item for sublist in vbdataline for item in sublist]
-                                if _np.array(failline).any():
-                                    fails[d][w] = True
                             else:
                                 if not _np.isnan(vbdataline).all():
                                     if statistic == 'max':
