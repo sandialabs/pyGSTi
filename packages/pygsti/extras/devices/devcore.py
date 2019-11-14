@@ -225,8 +225,11 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
 
             # The qubits the qubit is on.
             qslist = qs.split('-')
-            # Converts to our gate name convention.
-            gatename = twoQgate + ':Q' + qslist[0], ':Q' + qslist[1]
+            # Converts to our gate name convention. Do both orderings of the qubits as symmetric and we 
+            # are not necessarily consistent with Rigetti's ordering in the cal dict.
+            gatename1 = twoQgate + ':Q' + qslist[0] + ':Q' + qslist[1]
+            gatename2 = twoQgate + ':Q' + qslist[1] + ':Q' + qslist[0]
+
             # We use the controlled-Z fidelity if available, and the Bell state fidelity otherwise.
             # Here we are assuming that this is an average gate fidelity (as stated in the pyQuil docs)
             if gatedata['fCZ'] is not None:
@@ -237,7 +240,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
             # calibration data).
             agi = max([0, agi])
             # Maps the AGI to an entanglement infidelity.
-            error_rates['gates'][gatename] = average_gate_infidelity_to_entanglement_infidelity(agi, 2)
+            error_rates['gates'][gatename1] = average_gate_infidelity_to_entanglement_infidelity(agi, 2)
+            error_rates['gates'][gatename2] = average_gate_infidelity_to_entanglement_infidelity(agi, 2)
 
         for q, qdata in caldata['1Q'].items():
 
@@ -337,7 +341,10 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
         qubits = devspecs.qubits
         edgelist = devspecs.edgelist
     else:
-        edgelist = [edge for edge in edgelist if set(edge).issubset(set(qubits))]
+        edgelist = [edge for edge in devspecs.edgelist if set(edge).issubset(set(qubits))]
+
+    print(qubits)
+    print(edgelist)
 
     model = _mconst.build_localnoise_model(nQubits=len(qubits),
                                            qubit_labels=qubits,
