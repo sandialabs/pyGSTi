@@ -100,21 +100,141 @@ class Benchmarker(object):
         else:
             self.predicted_summary_data = predicted_summary_data.copy()
 
-        #self._results = {}
-        #self._rbresults['raw'] = {}
-        #self._rbresults['adjusted'] = {}
+    def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities', 
+                                      statistic='mean', specs=None,  aggregate=True,  rescaler='auto',
+                                      predictionskey=None):
 
-    # def discard_dataset(self):
-    #     """
-    #     todo
-    #     """
-    #     self.multids = None
+        assert(statistic in ('max', 'mean', 'min', 'dist'))
 
-    # def add_dataset(self, ds):
-    #     """
-    #     todo
-    #     """
-    #     self.multids = ds.copy()
+        if isinstance(widths, str):
+            assert(widths == 'all')
+        else:
+            assert(isinstance(widths, list) or isinstance(widths, tuple))
+
+        if specs is None:  # If we're not given a filter, we use all of the data.
+            specs = {i: [qs for qs in spec.get_structure()] for i, spec in enumerate(self._specs)}
+
+        width_to_spec = {}
+        for i, structure in specs.items():
+            for qs in structure:
+                w = len(qs)
+                if widths == 'all' or w in widths:
+                    if w not in width_to_spec:
+                        width_to_spec[w] = (i, qs)
+                    else:
+                        raise ValueError("There are multiple qubit subsets of size {} benchmarked! Cannot have specs as None!".format(w))
+
+        if widths == 'all':
+            widths = list(width_to_spec.keys())
+            widths.sort()
+        else:
+            assert(set(widths) == set(list(width_to_spec.keys())))
+
+        if isinstance(rescaler, str):
+            if rescaler == 'auto':
+                if datatype == 'success_probabilities': 
+                    def rescale_function(data, width):
+                        return list((_np.array(data) - 1 / 2**width) / (1 - 1 / 2**width))
+                else:
+                    def rescale_function(data, width):
+                        return data
+            elif rescale == 'none':
+                
+                def rescale_function(data, width):
+                    return data
+
+            else:
+                raise ValueError("Unknown rescaling option!")
+
+        else:
+            rescale_function = rescaler
+
+        # if samecircuitpredictions:
+        #     predvb = {d: {} for d in depths}
+        # else:
+        #     predvb = None
+
+        qs = self._specs[0].get_structure()[0]  # An arbitrary key 
+        if datatype in self.pass_summary_data[0][qs].keys():
+            datadict = self.pass_summary_data
+            globaldata = False 
+        elif datatype in self.global_summary_data[0][qs].keys():
+            datadict = self.global_summary_data
+            globaldata = True
+        else:
+            raise ValueError("Unknown datatype!")
+
+        if aggregate or globaldata:
+            vb = {d: {} for d in depths}
+            fails = {d: {} for d in depths}
+        else:
+            vb = [{d: {} for d in depths} for i in range(self.numpasses)]
+            fails = [{d: {} for d in depths} for i in range(self.numpasses)]
+
+        for w in widths:
+            (i, qs) = width_to_spec[w]
+            data = datadict[i][qs][datatype]
+            for d in depths:
+                if d in data.keys():
+                    dline = data[d]
+
+                    if globaldata:
+
+                        if _np.isnan(dline).any():
+                            fails[d][w] = True
+
+                        if statistic == 'dist':
+                            vb[d][w] = rescale_function(dline, w)
+                        else:
+                            if not _np.isnan(rescale_function(dline, w)).all():
+                                if statistic == 'max':
+                                    vb[d][w] = _np.nanmax(rescale_function(dline,w))
+                                elif statistic == 'mean':
+                                    vb[d][w] = _np.nanmean(rescale_function(dline,w))
+                                elif statistic == 'min':
+                                    vb[d][w] = _np.nanmin(rescale_function(dline,w))
+                            else:
+                                vb[d][w] = _np.nan
+
+                    else:
+                        failline = [_np.isnan(dpass).any() for dpass in dline]
+
+                        if statistic == 'max':
+                            vbdataline = [_np.nanmax(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
+                        elif statistic == 'mean':
+                            vbdataline = [_np.nanmean(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
+                        elif statistic == 'min':
+                            vbdataline = [_np.nanmin(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
+                        elif statistic == 'dist':
+                            vbdataline = [rescale_function(dpass, w) for dpass in dline]
+
+                        if not aggregate:
+                            for i in range(len(vb)):
+                                vbdataline[i]
+                                vb[i][d][w] = vbdataline[i]
+                                if failline[i]:
+                                    fails[i][d][w] = True
+
+                        if aggregate:
+                            if statistic == 'dist':
+                                vb[d][w] = [item for sublist in vbdataline for item in sublist]
+                                if _np.array(failline).any():
+                                    fails[d][w] = True
+                            else:
+                                if not _np.isnan(vbdataline).all():
+                                    if statistic == 'max':
+                                        vb[d][w] = _np.nanmax(vbdataline)
+                                    elif statistic == 'mean':
+                                        vb[d][w] = _np.nanmean(vbdataline)
+                                    elif statistic == 'min':
+                                        vb[d][w] = _np.nanmin(vbdataline)
+                                else:
+                                    vb[d][w] = _np.nan
+
+        out = {'data': vb, 'fails': fails}
+        
+        return out
+       
 
     def get_flattened_data(self, specs=None, aggregate=True):
 
@@ -123,7 +243,7 @@ class Benchmarker(object):
         if specs is None:
             specs = self.filter_experiments()
 
-        qubits = self._specs[0].get_structure()[0]
+        qubits = self._specs[0].get_structure()[0]  # An arbitrary key in the dict of the summary data.
         if aggregate:
             flattened_data = {dtype: [] for dtype in self.pass_summary_data[0][qubits].keys()}
         else:
@@ -167,6 +287,7 @@ class Benchmarker(object):
                                                                self.predicted_summary_data[pkey][specind][qubits]['total_counts'].values()):
                             flattened_data['predictions'][pkey]['success_probabilities'] += list(_np.array(dataline1) / _np.array(dataline2))
 
+        #  Only do this if we've not already stored the success probabilities in the benchamrker.
         if ('success_counts' in flattened_data) and ('total_counts' in flattened_data) and ('success_probabilities' not in flattened_data):
             if aggregate:
                 flattened_data['success_probabilities'] = [sc / tc if tc > 0 else _np.nan for sc, tc in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
@@ -261,7 +382,7 @@ class Benchmarker(object):
             else:
                 assert(isinstance(predictions[pkey], _oplessmodel.SuccessFailModel)), "If not a DataSet must be an ErrorRatesModel!"
 
-        datatypes = ['success_counts', 'total_counts', 'hamming_distance_counts']
+        datatypes = ['success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities']
         if self.dscomparator is not None:
             stabdatatypes = ['tvds', 'pvals', 'jsds', 'llrs', 'sstvds']
         else:
@@ -278,6 +399,13 @@ class Benchmarker(object):
                 return dsrow.total
             elif datatype == 'hamming_distance_counts':
                 return _analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits)
+            elif datatype == 'success_probabilities':
+                sc = _analysis.marginalized_success_counts(dsrow, circ, target, qubits)
+                tc = dsrow.total
+                if tc == 0:
+                    return _np.nan
+                else:
+                    return sc / tc 
             else:
                 raise ValueError("Unknown data type!")
 
