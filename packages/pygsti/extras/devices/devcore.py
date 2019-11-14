@@ -256,7 +256,7 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
         # Because the one-qubit gates are all set to the same error rate, we have an alias dict that maps each one-qubit
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
-        for q in specs.qubit:
+        for q in specs.qubits:
             alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
 
     elif calformat == 'native':
@@ -287,7 +287,7 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
     return model
 
 
-def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_native={}, calformat=None):
+def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_native={}, calformat=None, qubits=None):
     """
     todo
 
@@ -333,10 +333,16 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
     alias_dict = tempdict['alias_dict']
     devspecs = get_device_specs(device)
 
-    model = _mconst.build_localnoise_model(nQubits=len(devspecs.qubits),
-                                           qubit_labels=devspecs.qubits,
+    if qubits is None:
+        qubits = devspecs.qubits
+        edgelist = devspecs.edgelist
+    else:
+        edgelist = [edge for edge in edgelist if set(edge).issubset(set(qubits))]
+
+    model = _mconst.build_localnoise_model(nQubits=len(qubits),
+                                           qubit_labels=qubits,
                                            gate_names=[devspecs.twoQgate] + oneQgates,
-                                           availability={devspecs.twoQgate: devspecs.edgelist},
+                                           availability={devspecs.twoQgate: edgelist},
                                            parameterization='full', independent_gates=True)
 
     for lbl in model.operation_blks['gates'].keys():
