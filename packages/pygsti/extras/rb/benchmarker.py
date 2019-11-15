@@ -100,6 +100,99 @@ class Benchmarker(object):
         else:
             self.predicted_summary_data = predicted_summary_data.copy()
 
+    def select_volumetric_benchmark_regions(self, depths, boundary, widths='all', datatype='success_probabilities', 
+                                            statistic='mean', merit = 'aboveboundary', specs=None, aggregate=True,
+                                            passnum=None, rescaler='auto'):
+
+
+        # Selected regions encodes the selected regions, but in the slighty obtuse format of a dictionary of spec
+        # indices and a list of tuples of qubit regions. (so, e.g., if 1- and 2-qubit circuit are run in parallel
+        # the width-1 and width-2 spec chosen could by encoded as the index of that spec and a length-2 list of those
+        # regions.). A less obtuse way to represent the region selection should maybe be used in the future.
+        selected_regions = {}
+        assert(statistic in ('max', 'mean', 'min'))
+
+        if specs is None:
+            specs = self._specs
+
+        specsbywidth = {}
+        for ind, structure in specs.items():
+            for qs in structure:
+                w = len(qs) 
+                if widths == 'all' or w in widths:
+                    if w not in specsbywidth.keys():
+                        specsbywidth[w] = []
+                    specsbywidth[w].append((ind, qs))
+
+        if not aggregate:
+            assert(passnum is not None), "Must specify the passnumber data to use for selection if not aggregating!"
+
+        for w, specsforw in specsbywidth.items():
+            
+            if len(specsforw) == 1:  # There's no decision to make: only one benchmark of one region of the size w.
+                (ind, qs) = specsforw[0]
+                if ind not in selected_regions:
+                    selected_regions[ind] = [qs,]
+                else:
+                    selected_regions[ind].append(qs)
+
+            else:  # There's data for more than one region (and/or multiple benchmarks of a single region) of size w
+                boundard_index = {}
+                best_boundary_index = 0
+                best_vb_at_best_boundary_index = None
+                for (ind, qs) in specsforw:
+                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w,], datatype=datatype, statistic=statistic, 
+                                                           specs={ind: [qs,]},  aggregate=aggregate,  rescaler=rescaler)['data']
+                    # Only looking at 1 width, so drop the width key, and keep only the depths with data
+                    if not aggregate: 
+                        vbdata = {d:vbdata[d][w][passnum] for d in vbdata.keys() if w in vbdata[d].keys()}
+                    else:
+                        vbdata = {d:vbdata[d][w] for d in vbdata.keys() if w in vbdata[d].keys()}
+                    
+                    # We calcluate the depth index of the largest depth at which the data is above/below the boundary, ignoring
+                    # cases where there's data missing at some depths as long as we're still above/below the boundard at a larger depth.
+                    if merit == 'aboveboundary':
+                        x =  [vbdata[d] > boundary if d in vbdata.keys() else None for d in depths]
+                    if merit == 'belowboundary':
+                        x =  [vbdata[d] < boundary if d in vbdata.keys() else None for d in depths]
+                    try:
+                        x = x[:x.index(False)]
+                    except:
+                        pass
+                    x.reverse()
+                    try:
+                        boundary_index = len(x) - 1 - x.index(True)
+                        #print("There's a non-zero boundary!", str(w), qs)
+                    except:
+                        boundary_index = 0
+                        #print("Zero boundary!", str(w), qs)
+
+                    if boundary_index > best_boundary_index:
+                        best_boundary_index = boundary_index
+                        selected_region_at_w = (ind, qs)
+                        best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
+                    elif boundary_index == best_boundary_index:
+                        if best_vb_at_best_boundary_index is None:  # On first run through we automatically select that region
+                            selected_region_at_w = (ind, qs)
+                            best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
+                        else:
+                            if merit == 'aboveboundary' and vbdata[depths[boundary_index]] > best_vb_at_best_boundary_index:
+                                selected_region_at_w = (ind, qs)
+                                best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
+                            if merit == 'belowboundary' and vbdata[depths[boundary_index]] < best_vb_at_best_boundary_index:
+                                selected_region_at_w = (ind, qs)
+                                best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
+                    else:
+                        pass
+
+                (ind, qs) = selected_region_at_w
+                if ind not in selected_regions:
+                    selected_regions[ind] = [qs, ]
+                else:
+                    selected_regions[ind].append(qs)
+
+        return selected_regions     
+
     def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities', 
                                       statistic='mean', specs=None,  aggregate=True,  rescaler='auto'):
 
