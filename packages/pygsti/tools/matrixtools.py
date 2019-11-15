@@ -1636,151 +1636,54 @@ def get_kite(evals):
     kite.append(blk)
     return kite
 
-def kite_block_diag_quick(mx, kite):
+def find_zero_communtant_connection(U, Uinv, U0, U0inv, kite):
     """
-    TODO: docstring
-    Block-diagonalize `mx` so it is zero everwhere except on the given kite
-    using a matrix R = exp(r) such that r is zero on the kite.  I.e.
-    K = exp(r) * mx * exp(-r) has the given kite structure and r is zero on the kite.
+    Find a matrix `R` such that Uinv R U0 is diagonal (so G = R G0 Rinv if
+    G and G0 share the same eigenvalues and have eigenvectors U and U0 respectively)
+    AND log(R) has no (zero) projection onto the commutant of G0 = U0 diag(evals) U0inv.
     """
     
-    if len(kite) == 1: #then there's no non-kite area in matrix...
-        K = mx
-        R = _np.identity(mx.shape[0],'d')
-        r = _np.zeros(mx.shape,'d')
-        return K,R,r
+    #0.  Let R be a matrix that maps G0 -> Gp, where Gp has evecs of G and evals of G0.
+    #1.  Does R vanish on the commutant of G0?  If so, we’re done.
+    #2.  Define x = PROJ_COMMUTANT[ log(R) ], and X = exp(-x).
+    #3.  Redefine R = X.R.
+    #4.  GOTO 1.
+    
+    D = project_onto_kite(_np.dot(Uinv,U0), kite)
+    R = _np.dot(U, _np.dot(D,U0inv)) #Include D so R is as close to identity as possible
 
-    ev, R = sorted_eig(mx) # R that diagonalizes mx but doesn't have kite form
-    Rbd = project_onto_kite(R, kite)
-    R = _np.dot(R, _np.linalg.inv(Rbd)) #try to make kite of R close to identity, and sacrifice
-                                        # exact diag of mx so R only block-diagonalizes mx
+    def project_onto_commutant(x):
+        a = _np.dot(U0inv, _np.dot(x, U0))
+        a = project_onto_kite(a, kite)
+        return _np.dot(U0, _np.dot(a, U0inv))
     
-    lastR = None
-    iter = 0
+    iter = 0; lastR = R
     while iter < 100:
-
-        #0.  Let R be a matrix that maps G0 -> G.
-        #1.  Does R vanish on the commutant of G0?  If so, we’re done.
-        #2.  Define x = PROJ_COMMUTANT[ log(R) ], and X = exp(-x).
-        #3.  Redefine R = R.X
-        #4.  GOTO 1.
-
-        #Starting condition = R block-diagonalizes mx
-        test = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
+        #Starting condition = Uinv * R * U0 is diagonal, so
+        # G' = R G0 Rinv where G' has the same spectrum as G0 but different eigenvecs (U vs U0)
+        assert(_np.linalg.norm(R.imag) < 1e-8)
+        test = _np.dot(Uinv, _np.dot(R, U0))
         assert(_np.linalg.norm(project_onto_antikite(test, kite)) < 1e-8)
+    
+        r = real_matrix_log(R)
+        assert(_np.linalg.norm(r.imag) < 1e-8), "log of real matrix should be real!"
+        r_on_comm = project_onto_commutant(r)
+        assert(_np.linalg.norm(r_on_comm.imag) < 1e-8), "projection to commutant should not make complex!"
         
-        r = _spl.logm(R)
-        x = project_onto_kite(r, kite)
-        onkite_norm = _np.linalg.norm(x)
-        #print("Iter %d: onkite-norm = %g" % (iter, onkite_norm))
-        if onkite_norm < 1e-8 or (iter > 0 and _np.linalg.norm(R-lastR) < 1e-6):  #if r has desired form or we didn't really update R
+        oncomm_norm = _np.linalg.norm(r_on_comm)
+        #print("Iter %d: onkite-norm = %g  lastdiff = %g" % (iter, oncomm_norm, _np.linalg.norm(R-lastR)))
+        if oncomm_norm < 1e-12 or (iter > 0 and _np.linalg.norm(R-lastR) < 1e-8):  #if r has desired form or we didn't really update R
             break #STOP - converged!
 
-        X = _spl.expm(-x) # X is in commutant of G0 (is block diag) and is a good guess to fix R
+        X = _spl.expm(-r_on_comm)
+        assert(_np.linalg.norm(X.imag) < 1e-8)
+        
         lastR = R
         R = _np.dot(R, X)
+        iter += 1 
 
-        #OLD
-        #Rp = _spl.expm(project_onto_antikite(r, kite)) 
-        ## R' has desired form, but might not block-diagonalize mx (like R does)
-        ## solve RX = R' to see how R would change to become R'.  But we're only allowed to tweak R by block-diagonal
-        ## matrices, otherwise R will lose it's block-diagonalizing property, so update R using just X', the
-        ## block-diag part of X:
-        #X = _np.dot(_np.linalg.inv(R), Rp)
-        #Xp = project_onto_kite(X, kite)
-        #lastR = R
-        #R = _np.dot(R, Xp)
-        
-        iter += 1
-    
-    R = _spl.expm(r)
-    K = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
-    return K, R, r    
-
-def kite_block_diag_brute(mx, kite, starting_r=None):
-    """
-    TODO: docstring
-    Block-diagonalize `mx` so it is zero everwhere except on the given kite
-    using a matrix R = exp(r) such that r is zero on the kite.  I.e.
-    K = exp(r) * mx * exp(-r) has the given kite structure and r is zero on the kite.
-    """
-
-    if len(kite) == 1: #then there's no non-kite area in matrix...
-        K = mx
-        R = _np.identity(mx.shape[0],'d')
-        r = _np.zeros(mx.shape,'d')
-        return K,R,r
-
-    if starting_r is None:
-        ev, R = sorted_eig(mx) # R that diagonalizes mx but doesn't have kite form
-        r = _spl.logm(R)
-    else:
-        r = starting_r
-    
-    def obj(x):
-        r = vector_to_antikite(x, kite)
-        R = _spl.expm(r)
-        test = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
-        return antikite_to_vector(test, kite)
-    
-    x0 = antikite_to_vector(r, kite)
-    xbest, _, info, mesg, ierr = _spo.leastsq(obj, x0, full_output=True)
-    if not (1 <= ierr <= 4):
-        assert(False), "Failed to converge: %s" % mesg
-    else:
-        #print('Converged using %d function evals: %s' % (info['nfev'], mesg))
-        pass
-    
-    r = vector_to_antikite(xbest, kite)
-    R = _spl.expm(r)
-    K = _np.dot(_np.linalg.inv(R), _np.dot(mx, R))
-    fbest = antikite_to_vector(K, kite)
-    #print("DB: fbest = ",_np.linalg.norm(fbest))
-    if _np.linalg.norm(fbest) > 1e-6:
-        assert(False), "STOP - unable to find a viable solution!"
-    return K, R, r    
-
-def vector_to_antikite(vec, kite):
-    """
-    TODO: docstring
-    """
-    dim = sum(kite)
-    mx = _np.zeros((dim,dim),complex)
-    i = 0; k0 = 0
-    for k in kite:
-        k1 = k0 + k
-        l = dim-k1
-        m = k*l
-        mx[k0:k1, k1:dim] = vec[i:i+m].reshape((k,l)) + 1j*vec[i+m:i+2*m].reshape((k,l)); i += 2*m
-        mx[k1:dim, k0:k1] = vec[i:i+m].reshape((l,k)) + 1j*vec[i+m:i+2*m].reshape((l,k)); i += 2*m
-        k0 = k1
-    return mx
-
-def antikite_to_vector(mx, kite):
-    """
-    TODO: docstring
-    """
-    dim = sum(kite)
-    
-    vec_dim = 0
-    k0 = 0
-    for k in kite:
-        k1 = k0 + k
-        vec_dim += 4*k*(dim-k1)
-        k0 = k1
-    vec = _np.empty(vec_dim,'d')
-    
-    i = 0; k0 = 0
-    for k in kite:
-        k1 = k0 + k
-        m = k*(dim-k1)
-        vec[i:i+m] = mx[k0:k1, k1:dim].real.flat; i += m
-        vec[i:i+m] = mx[k0:k1, k1:dim].imag.flat; i += m
-        vec[i:i+m] = mx[k1:dim, k0:k1].real.flat; i += m
-        vec[i:i+m] = mx[k1:dim, k0:k1].imag.flat; i += m
-        k0 = k1
-    return vec
-        
+    assert(_np.linalg.norm(R.imag) < 1e-8), "R should always be real!"
+    return R.real
 
 def project_onto_kite(mx, kite):
     """

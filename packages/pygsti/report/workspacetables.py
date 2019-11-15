@@ -586,16 +586,19 @@ class GaugeInvModelTable(WorkspaceTable):
             Uinv = _np.linalg.inv(U)
 
             kite = _tools.get_kite(ev0)
-            A = _np.dot(U0inv, _np.dot(G, U0))
-
-            K,R,r = _tools.kite_block_diag_quick(A,kite)
-            K,R,r = _tools.kite_block_diag_brute(A,kite,r)
-            Kp = _np.dot(K, _np.diag(1.0/ev0))
-
-            M = _np.dot(U0, _np.dot(Kp, U0inv))
-            F = _np.dot(U0, _np.dot(R, U0inv))
+            
+            F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite) # Uinv * F * U0 is block diag
             Finv = _np.linalg.inv(F)
-            assert(_np.allclose(G, _np.dot(F, _np.dot(M, _np.dot(G0,Finv)))))
+            # if G0 = U0 * E0 * U0inv then
+            # Uinv * F * G0 * Finv * U = D * E0 * Dinv = E0 b/c D is block diagonal w/E0's degenercies
+            # so F * G0 * Finv = U * E0 * Uinv = Gp ==> Finv * G * F = M * G0
+            M = _np.dot(Finv, _np.dot(G, _np.dot(F, _np.linalg.inv(G0))))
+            assert(_np.linalg.norm(M.imag) < 1e-8)
+            
+            M0 = _np.dot(U0inv, _np.dot(M, U0)) # M in G0's eigenbasis
+            assert(_np.linalg.norm(_tools.project_onto_antikite(M0,kite)) < 1e-8)  # should be block diagonal
+            assert(_np.allclose(G, _np.dot(F,_np.dot(M, _np.dot(G0,Finv))))) # this is desired decomp
+            assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everthing should be real
             return F,M,Finv
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
@@ -614,10 +617,10 @@ class GaugeInvModelTable(WorkspaceTable):
 
             #Print "M" matrix
             if display_as == "numbers":
-                row_data.append(_np.abs(Mi))
+                row_data.append(Mi)
                 row_formatters.append('Brackets')
             elif display_as == "boxes":
-                fig = _wp.GateMatrixPlot(self.ws, _np.abs(Mi), colorbar=False)
+                fig = _wp.GateMatrixPlot(self.ws, Mi, colorbar=False)
                 row_data.append(fig)
                 row_formatters.append('Figure')
             else:
@@ -628,7 +631,7 @@ class GaugeInvModelTable(WorkspaceTable):
                     row_data.append("I")
                     row_formatters.append(None)
                 else:
-                    val = _np.abs(_np.dot(Finvi, op_decomps[lbl2][0]))
+                    val = _np.dot(Finvi, op_decomps[lbl2][0])
 
                     #Print "Finv*F" matrix
                     if display_as == "numbers":
