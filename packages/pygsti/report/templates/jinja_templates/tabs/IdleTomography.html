@@ -1,6 +1,3 @@
-{% extends 'common/base.html' %}
-
-{% block content %}
 <h1>Idle Tomography</h1>
 
 <p>This tab tells you about Idle Tomography results.  Idle tomography is a lightweight form of tomography that characterizes small, low-weight errors on an idle gate (one that is supposed to perform the identity operation).  This tab is a work in progress, and is apt to change significantly in the future.</p>
@@ -14,4 +11,3 @@
 	<figcaption><span class="captiontitle">Observed rates.</span> <span class="captiondetail">This figure shows traces of the largest observed-data rates and fits.</span></figcaption>
 	{{ idtObservedRatesTable|render }}
 </figure>
-{% endblock %}

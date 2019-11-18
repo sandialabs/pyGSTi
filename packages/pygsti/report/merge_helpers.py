@@ -767,31 +767,10 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, auto_open=False,
         }
     }
 
-    # Select templates to render
-    # TODO generalize this
-    templates = ['index.html', 'Help.html']
-    if toggles['BrevityLT4']:
-        templates.extend(['Goodness.html', 'GaugeInvariants_gates.html', 'GaugeVariants.html', 'GaugeVariants_raw.html', 'GaugeVariants_decomp.html', 'GaugeVariants_errgen.html'])
-        if toggles['BrevityLT3']:
-            templates.extend(['GaugeInvariants_germs.html'])
-        if toggles['BrevityLT2']:
-            templates.extend(['Input.html', 'Meta.html'])
-        if toggles['BrevityLT1']:
-            templates.extend(['Goodness_colorboxplot.html'])
-        if toggles['ShowScaling']:
-            templates.extend(['Goodness_scaling.html'])
-        if toggles['ShowUnmodeledError']:
-            templates.extend(['Goodness_unmodeled.html'])
-        if toggles['CompareDatasets']:
-            templates.extend(['DataComparison.html'])
-        if toggles['IdleTomography']:
-            templates.extend(['IdleTomography.html'])
-
-    # Render page templates to output path
-    for name in templates:
-        template = env.get_template(name)
-        with open(out_path / name, 'w') as outfile:
-            outfile.write(template.render(render_params))
+    # Render main page template to output path
+    template = env.get_template('main.html')
+    with open(out_path / 'main.html', 'w') as outfile:
+        outfile.write(template.render(render_params))
 
 
 def process_call(call):

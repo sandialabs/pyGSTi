@@ -410,6 +410,14 @@ div.topnav button {
 }
 /* Fade-in tabs end */
 
+.tabcontent {
+    display: none;
+}
+
+.tabcontent.active {
+    display: block;
+}
+
 #content-wrapper {
     display: flex;
     flex-flow: column;

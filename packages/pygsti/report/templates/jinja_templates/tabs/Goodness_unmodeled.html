@@ -1,6 +1,3 @@
-{% extends 'common/base.html' %}
-
-{% block content %}
 <h1>Model Violation Analysis: quantifying un-modeled error</h1>
 <p>GST datasets are often <em>very</em> inconsistent with the Markovian gateset model.  This is relatively unsurprising, and means only that real qubits often drift or experience other forms of noise that aren't stationary and Markovian.  A standard way of measuring the amount of this model violation is to express the degree to which we would expect the model to generate the observed data, given as a number of standard deviations (<span class="math">N_\sigma</span>) or p-value.  Large <span class="math">N_\sigma</span> or small p-value indicate high certainty that the model is incorrect (violated) but do not express how much would need to be done to "fix" the model.  In this tab, we attempt to quantify the un-modeled error by allowing an amount of slack, measured in total variational distance (TVD) in the probabilities predicted by the model.  With enough slack the model will be able to predict, and therefore "fit" any data; we answer the question "What is the minimum amount of slack needed to predict the data?", and allocate slack on a per-gate basis. (TODO: MORE DESCRIPTION)</p>
 
@@ -58,4 +55,3 @@
 {% else %}
 <p>Note: Unmodeled error figures are not shown because none of the estimates in this report have significant unmodeled error.</p>
 {% endif %}
-{% endblock %}

@@ -1,6 +1,3 @@
-{% extends 'common/base.html' %}
-
-{% block content %}
 <h1>Gauge Invariant Error Metrics</h1>
 <p>GST can estimate gates <em>up to an overall gauge</em>.  PyGSTi tries to find a good gauge in which to report process matrices and gauge-variant metrics like fidelity -- but sometimes this goes wrong.  The most reliable error metrics and gate properties are <em>gauge-invariant</em> ones, and these are listed on this tab.</p>
 
@@ -36,4 +33,3 @@
 	<figcaption><span class="captiontitle">Eigenvalues of estimated gates.</span> <span class="captiondetail"> This table lists the spectrum of each estimated gate.  It also breaks out the real and imaginary parts of each eigenvalue, <em>and</em> it compares the estimated eigenvalues to those of the ideal target gates in several useful ways.  To do these comparisons, each estimated eigenvalue needs to be matched up with a target eigenvalue, and pyGSTi does this independently for each metric by computing a minimum-weight matching based on that metric.  Hovering over a column header will pop up a mathematical description of the corresponding metric.</span></figcaption>
     {{ bestGatesetEvalTable|render }}
 </figure>
-{% endblock %}

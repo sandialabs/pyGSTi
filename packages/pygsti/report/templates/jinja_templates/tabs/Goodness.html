@@ -1,6 +1,3 @@
-{% extends 'common/base.html' %}
-
-{% block content %}
 <h1>Model Violation Analysis</h1>
 <p>The plots and tables on this tab summarize how well the GST estimate actually fits the data.  Although they may be less familiar to you than, say, process fidelity, these analyses are essential to understanding the GST estimate, and how much to trust it!  Real qubit systems often display behavior that isn't consistent with modeling each gate as a stationary CPTP map.  When pyGSTi tries to fit such data to its model (a single gateset), this "non-Markovianity" manifests as <em>model violation</em>.  This tab provides several views of the model violation observed for this fit, ranging from the coarse-grained (total violation) to hyper-detailed (per-circuit violation).  More observed model violation &#8658; the error metrics on other tabs should be trusted <em>less</em>.</p>
 
@@ -19,4 +16,3 @@
 	<figcaption><span class="captiontitle">Per-circuit model violation vs. circuit length</span> <span class="captiondetail">The fit's total <span class="math">2\Delta\log(\mathcal{L})</span> is a sum over all <span class="math">N_s</span> circuits used for GST.  This plot shows <span class="math">2\Delta\log(\mathcal{L})</span> for each individual circuit, plotted against that circuit's length (on the X axis).  Certain forms of non-Markovian noise, like slow drift, produce a characteristic linear relationship.  Note that the length plotted here is the <em>actual</em> length of the circuit, not its nominal <span class="math">L</span>.</span> </figcaption>
 	{{ bestEstimateColorScatterPlot|render }}
 </figure>
-{% endblock %}

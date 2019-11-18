@@ -1,6 +1,3 @@
-{% extends 'common/base.html' %}
-
-{% block content %}
 <h1>Gauge Invariant Error Metrics applied to germ sequences</h1>
 <p> All of the per-gate gauge-invariant metrics of the previous tab are functions of each gate's spectrum and do not account for how the gate relates to other gates.  In an attempt to extract some of that information in a gauge-invariant way, this tab looks at the spectra of the germ-sequences.  Each germ amplifies (i.e. has eigenvalues which correspond to) certain directions in <q>gate-set space</q>.  Some of these directions describe how the single gates relate to one another, and, if an amplificationally complete set of germs was used, <em>every direction is amplified by at least one germ</em>.  This implies that the (gauge-invariant) spectra of the germs should constitute a full description of the gate set.  This tab compares each germ-spectrum to the spectrum of that germ if it were generated using the set <q>eigenspace-projected</q> gates obtained by placing each gate&#39;s GST-estimated eigenvalues within eigenbasis of the ideal target gate.</p>
 
@@ -13,4 +10,3 @@
 	<figcaption><span class="captiontitle">Eigenvalues of estimated germs.</span> <span class="captiondetail">GST directly estimates each gate's spectrum (it's gauge-invariant), But the gates' eigen<em>bases</em> are relational to other gates and gauge-variant.  GST infers them from the spectra of <em>germs</em> that incorporate multiple gates.  Each germ's spectrum is gauge-invariant and directly estimatable, and this table lists them.  It also lists metrics that compare these spectra to the ones predicted by the <q>eigenspace-projected</q> gates (see elsewhere on this tab).  If the individual gates' eigenvalues account for all imperfections, then the estimated and predicted germ spectra should be equal.  Since spectra aren't ordered, the eigenvalues need to be matched up or aligned somehow.  PyGSTi does this by identifying a minimum-weight matching based on the metric being computed.  Mathematical descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
 	{{ bestGermsEvalTable|render }}
 </figure>
-{% endblock %}
