@@ -1398,6 +1398,12 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        if self.line_labels is None or self.line_labels == ():
+            #Allow insertion of a layer into an empty circuit to update the circuit's line_labels
+            layer_lbl = toLabel(circuit_layer)
+            self.line_labels = layer_lbl.sslbls if (layer_lbl.sslbls is not None) else ('*',)
+
         self.insert_labels_into_layers([circuit_layer], j)
 
     def insert_circuit(self, circuit, j):
@@ -2638,6 +2644,7 @@ class Circuit(object):
         f.close()
 
     def convert_to_quil(self,
+                        num_qubits=None,
                         gatename_conversion=None,
                         qubit_conversion=None,
                         readout_conversion=None,
@@ -2699,11 +2706,15 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
+
         # Init the quil string.
         quil = ''
         depth = self.num_layers()
 
-        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(num_qubits))
 
         quil += 'RESET\n'
 
@@ -2781,7 +2792,7 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -2825,7 +2836,8 @@ class Circuit(object):
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
-        num_qubits = len(self.line_labels)
+        if num_qubits is None:
+            num_qubits = len(self.line_labels)
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.

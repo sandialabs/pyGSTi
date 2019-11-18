@@ -199,6 +199,9 @@ class Estimate(object):
                         gop["targetModel"] = self.models['target']
                     else: raise ValueError("Must supply 'targetModel' in 'goparams' argument")
 
+                if "maxiter" not in gop:
+                    gop["maxiter"] = 100
+
                 gop['returnAll'] = True
                 _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
                 gop['_gaugeGroupEl'] = gaugeGroupEl  # an output stored here for convenience

@@ -67,6 +67,14 @@ class LayerLizard(object):
             The "parent" model for this layer lizard.
         """
         self.model = model
+        self.opcache = {}  # a cache of operators, which should get initialized by from_vector calls
+
+    def set_opcache(self, cache_dict, v):
+        """ TODO: docstring - v is optional paramvec to init ops"""
+        self.opcache = cache_dict
+        if v is not None:
+            for _, obj in self.opcache.items():
+                obj.from_vector(v[obj.gpindices])  # , close, nodirty)
 
     #Helper functions for derived classes:
     def get_circuitlabel_op(self, circuitlbl, dense):
@@ -173,7 +181,7 @@ class ExplicitLayerLizard(LayerLizard):
         else:
             return self.ops[layerlbl]
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Re-initialize the simplified operators from model-parameter-vector `v`.
 
@@ -184,8 +192,9 @@ class ExplicitLayerLizard(LayerLizard):
         """
         for _, obj in _itertools.chain(self.preps.items(),
                                        self.effects.items(),
-                                       self.ops.items()):
-            obj.from_vector(v[obj.gpindices])
+                                       self.ops.items(),
+                                       self.opcache.items()):
+            obj.from_vector(v[obj.gpindices], close, nodirty)
 
 
 class ImplicitLayerLizard(LayerLizard):
@@ -252,7 +261,7 @@ class ImplicitLayerLizard(LayerLizard):
         """
         return self.model._evotype
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False, nodirty=False):
         """
         Re-initialize the simplified operators from model-parameter-vector `v`.
 
@@ -265,4 +274,7 @@ class ImplicitLayerLizard(LayerLizard):
                                            self.effect_blks.items(),
                                            self.op_blks.items()):
             for _, obj in objdict.items():
-                obj.from_vector(v[obj.gpindices])
+                obj.from_vector(v[obj.gpindices], close, nodirty)
+
+        for _, obj in self.opcache.items():
+            obj.from_vector(v[obj.gpindices], close, nodirty)

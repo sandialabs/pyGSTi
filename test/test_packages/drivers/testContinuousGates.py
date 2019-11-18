@@ -28,7 +28,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
     def to_vector(self):
         return np.array([self.depol_amt, self.over_rotation],'d') #our parameter vector
         
-    def from_vector(self,v):
+    def from_vector(self,v, close=False, nodirty=False):
         #initialize from parameter vector v
         self.depol_amt = v[0]
         self.over_rotation = v[1]
@@ -63,7 +63,7 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
     def to_vector(self):
         return self.params #our parameter vector
         
-    def from_vector(self,v):
+    def from_vector(self, v, clean=False, nodirty=False):
         self.params[:] = v
 
 

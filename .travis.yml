@@ -1,23 +1,21 @@
 dist: xenial
 language: python
 
-python: 3.7
+python:
+  - 3.7
+  - 3.5
 
-if: (branch IN (master, beta, develop, ci-fixes)) OR (tag IS present)
+if: (branch IN (master, beta, develop, refactor-unit-tests)) OR (tag IS present)
 
 env:
   global:
     - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
+    - NOSEOPTS_COVER="--with-coverage --cover-package=pygsti"
     - NOSEOPTS_PARALLEL="--processes=-1 --process-timeout=2400" # timeout after 40 minutes (travis job timeout is 50 minutes)
-    - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
+    - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_COVER $NOSEOPTS_PARALLEL"
+    - SKIP_DEAP=1 # skip evolutionary optimization
   matrix:
-    - NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL # first in build mx because long duration
-    - NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_DEFAULT # cannot be run in parallel
+    - NOSEOPTS="$NOSEOPTS_ALL"
 
 # Install native package dependencies & initialize build environment
 before_install:
@@ -34,11 +32,13 @@ install:
   - pip install -e .
   # Install test dependencies
   - pip install -e .[testing]
+  # Show pip environment, for diagnostics
+  - pip freeze
 
 # Default `test' stage script
 script:
   - cd test/test_packages
-  - nosetests $NOSEOPTS $NOSETESTS
+  - nosetests $NOSEOPTS test.unit
 
 # Cache pip packages
 cache:
@@ -51,7 +51,7 @@ stages:
   - name: lint-comprehensive
     if: branch IN (master, beta)
   - test
-  # Run tests on python 2.7 & 3.5, but only on master/beta
+  # Run extra tests, but only on master/beta
   - name: test-extra
     if: branch IN (master, beta)
   - name: push
@@ -79,47 +79,47 @@ jobs:
 
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 3.5
+      python: 3.7
       env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
 
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
     - stage: test-extra
-      python: 2.7
+      python: 3.5
       env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
 
     - stage: push

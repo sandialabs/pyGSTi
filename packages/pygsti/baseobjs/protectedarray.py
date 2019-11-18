@@ -10,6 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import numpy as _np
+import copy as _copy
 from ..tools import compattools as _compat
 
 
@@ -73,6 +74,14 @@ class ProtectedArray(object):
 
     def __reduce__(self):
         return (ProtectedArray, (_np.zeros(self.base.shape),), self.__dict__)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, _copy.deepcopy(v, memo))
+        return result
 
     def __setstate__(self, state):
         self.__dict__.update(state)

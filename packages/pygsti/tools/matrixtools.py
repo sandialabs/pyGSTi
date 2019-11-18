@@ -959,7 +959,7 @@ def _fas(a, inds, rhs, add=False):
         single_int_inds = []  # for Cython, a and rhs must have the same
         # number of dims.  This keeps track of single-ints
         for ii, i in enumerate(inds):
-            if isinstance(i, int):
+            if isinstance(i, (int, _np.int64)):
                 b.append(_np.array([i], _np.int64))
                 single_int_inds.append(ii)
             elif isinstance(i, slice):
@@ -977,7 +977,7 @@ def _fas(a, inds, rhs, add=False):
                     remove_single_int_dims = [b[i][0] if (i in single_int_inds) else slice(None)
                                               for i in range(nDims)]  # e.g. [:,2,:] if index 1 is a single int
                     for ii in reversed(single_int_inds): del b[ii]  # remove single-int els of b
-                    av = a[remove_single_int_dims]  # a view into a
+                    av = a[tuple(remove_single_int_dims)]  # a view into a
                     nDims -= len(single_int_inds)  # for cython routines below
                 else:
                     av = a
@@ -1181,6 +1181,25 @@ def safenorm(A, part=None):
     # could also use _spsl.norm(A)
 
 
+def safe_onenorm(A):
+    """
+    Computes the 1-norm of the dense or sparse matrix `A`.
+
+    Parameters
+    ----------
+    A : ndarray or sparse matrix
+        The matrix or vector to take the norm of.
+
+    Returns
+    -------
+    float
+    """
+    if _sps.isspmatrix(A):
+        return sparse_onenorm(A)
+    else:
+        return _np.linalg.norm(A, 1)
+
+
 def get_csr_sum_indices(csr_matrices):
     """
     Precomputes the indices needed to sum a set of CSR sparse matrices.
@@ -1206,7 +1225,7 @@ def get_csr_sum_indices(csr_matrices):
         The dimension of the destination matrix (and of each member of
         `csr_matrices`)
     """
-    if len(csr_matrices) == 0: return []
+    if len(csr_matrices) == 0: return [], _np.empty(0, int), _np.empty(0, int), 0
 
     N = csr_matrices[0].shape[0]
     for mx in csr_matrices:
@@ -1274,6 +1293,93 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
     """
     for coeff, mx, inds in zip(coeffs, csr_mxs, csr_sum_indices):
         data[inds] += coeff * mx.data
+
+
+def get_csr_sum_flat_indices(csr_matrices):
+    """
+    Precomputes two arrays which can be used to quickly compute
+    a linear combination of the CSR sparse matrices `csr_matrices`.
+
+    Computes the index and data arrays needed for use in :method:`csr_sum_flat`,
+    along with the index pointer and column-indices arrays for constructing
+    a "template" CSR matrix to be the destination of `csr_sum_flat`.
+
+    Parameters
+    ----------
+    csr_matrices : list
+        The SciPy CSR matrices to be summed.
+
+    Returns
+    -------
+    flat_dest_index_array : numpy array
+        A 1D array of one element per nonzero element in any of
+        `csr_matrices`, giving the destination-index of that element.
+    flat_csr_mx_data : numpy array
+        A 1D array of the same length as `flat_dest_index_array`, which
+        simply concatenates the data arrays of `csr_matrices`.
+    mx_nnz_indptr : numpy array
+        A 1D array of length `len(csr_matrices)+1` such that the data
+        for the i-th element of `csr_matrices` lie in the index-range of
+        mx_nnz_indptr[i] to mx_nnz_indptr[i+1]-1 of the flat arrays.
+    indptr, indices : numpy.ndarray
+        The row-pointer and column-indices arrays specifying the sparsity
+        structure of a the destination CSR matrix.
+    N : int
+        The dimension of the destination matrix (and of each member of
+        `csr_matrices`)
+    """
+    csr_sum_array, indptr, indices, N = get_csr_sum_indices(csr_matrices)
+    if len(csr_sum_array) == 0:
+        return (_np.empty(0, int), _np.empty(0, 'd'), _np.zeros(1, int), indptr, indices, N)
+
+    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=int)
+    flat_csr_mx_data = _np.ascontiguousarray(_np.concatenate([mx.data for mx in csr_matrices], axis=0), dtype=complex)
+    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=int)
+
+    return flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr, indptr, indices, N
+
+
+if _fastcalc is None:
+    def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+        """
+        Accelerated summation of several CSR-format sparse matrices.
+
+        :method:`get_csr_sum_flat_indices` precomputes the necessary indices for
+        summing directly into the data-array of a destination CSR sparse matrix.
+        If `data` is the data-array of matrix `D` (for "destination"), then this
+        method performs:
+
+        `D += sum_i( coeff[i] * csr_mxs[i] )`
+
+        Note that `D` is not returned; the sum is done internally into D's
+        data-array.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            The data-array of the destination CSR-matrix.
+
+        coeffs : ndarray
+            The weight coefficients which multiply each summed matrix.
+
+        flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr : ndarray
+            The index, data, and nnz-pointer arrays generated by
+            :function:`get_csr_sum_flat_indices` given a set of CSR matrices
+            to sum.
+
+        Returns
+        -------
+        None
+        """
+        Nmxs = len(mx_nnz_indptr) - 1  # the number of CSR matrices
+        for iMx in range(Nmxs):
+            coeff = coeffs[iMx]
+            for i in range(mx_nnz_indptr[iMx], mx_nnz_indptr[iMx + 1]):
+                data[flat_dest_index_array[i]] += coeff * flat_csr_mx_data[i]
+else:
+    def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+        coeffs_complex = _np.ascontiguousarray(coeffs, dtype=complex)
+        return _fastcalc.fast_csr_sum_flat(data, coeffs_complex, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr)
 
 
 def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
@@ -1378,7 +1484,7 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta):  # t == 1.
 #    else:
 #        return np.linalg.norm(A, 1)
 
-def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
+def expop_multiply_prep(op, A_1_norm=None, tol=EXPM_DEFAULT_TOL):
     """
     Returns "prepared" meta-info about operation op,
       which is assumed to be traceless (so no shift is needed).
@@ -1395,7 +1501,8 @@ def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
     #ASSUME op is *traceless*
 
     #FUTURE: get exact_1_norm specific for our ops - now just use approximate
-    A_1_norm = _spsl.onenormest(op)
+    if A_1_norm is None:
+        A_1_norm = _spsl.onenormest(op)
 
     #t = 1.0 # always, so t*<X> => just <X> below
     if A_1_norm == 0:
@@ -1446,3 +1553,56 @@ def sparse_equal(A, B, atol=1e-8):
         V1 = v1[sidx1]
         V2 = v2[sidx2]
     return _np.allclose(V1, V2, atol=atol)
+
+
+def sparse_onenorm(A):
+    """
+    Computes the 1-norm of the scipy sparse matrix `A`.
+
+    Parameters
+    ----------
+    A : scipy sparse matrix
+        The matrix or vector to take the norm of.
+
+    Returns
+    -------
+    float
+    """
+    return max(abs(A).sum(axis=0).flat)
+
+
+def ndarray_base(a, debug=False):
+    """
+    Get the base memory object for numpy array `a`,
+    found by following `.base` until it comes up None.
+    """
+    if debug: print("ndarray_base debug:")
+    while a.base is not None:
+        if debug: print(" -> base = ", id(a.base))
+        a = a.base
+    if debug: print(" ==> ", id(a))
+    return a
+
+
+def to_unitary(scaled_unitary):
+    """
+    Compute the scaling factor required to turn a scalar multiple of a unitary matrix
+    to a unitary matrix.
+
+    Parameters
+    ----------
+    scaled_unitary : ndarray
+        A scaled unitary matrix
+
+    Returns
+    -------
+    scale : float
+    unitary : ndarray
+        Such that `scale * unitary == scaled_unitary`.
+
+    """
+    scaled_identity = _np.dot(scaled_unitary, _np.conjugate(scaled_unitary.T))
+    scale = _np.sqrt(scaled_identity[0, 0])
+    assert(_np.allclose(scaled_identity / (scale**2), _np.identity(scaled_identity.shape[0], 'd'))), \
+        "Given `scaled_unitary` does not appear to be a scaled unitary matrix!"
+    return scale, (scaled_unitary / scale)

@@ -208,6 +208,11 @@ def enable_old_object_unpickling(old_version="0.9.6"):
             """ Hacked version to rely on string rep & re-parse if it's there """
             return _objs.Circuit(None, self._line_labels, editable=False, stringrep=self._str)
 
+        def SPAMVec_setstate(self, state):
+            if "dirty" in state:  # backward compat: .dirty was replaced with ._dirty in ModelMember
+                state['_dirty'] = state['dirty']; del state['dirty']
+            self.__dict__.update(state)
+
         dim = _ModuleType("dim")
         dim.Dim = dummy_Dim
         _sys.modules['pygsti.baseobjs.dim'] = dim
@@ -220,6 +225,26 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         _objs.labeldicts.StateSpaceLabels.__setstate__ = StateSpaceLabels_setstate
         _objs.circuit.CompressedCircuit.saved_expand = _objs.circuit.CompressedCircuit.expand
         _objs.circuit.CompressedCircuit.expand = Hack_CompressedCircuit_expand
+        _objs.spamvec.SPAMVec.__setstate__ = SPAMVec_setstate
+
+    if old_version < totup("0.9.9"):
+
+        def SPAMVec_setstate(self, state):
+            #Note: include "dirty"
+            if old_version >= totup("0.9.7.1"):  # b/c this clobbers older-version upgrade
+                if "dirty" in state:  # backward compat: .dirty was replaced with ._dirty in ModelMember
+                    state['_dirty'] = state['dirty']; del state['dirty']
+            if "_prep_or_effect" not in state:
+                state['_prep_or_effect'] = "unknown"
+            if "base1D" not in state and 'base' in state:
+                state['base1D'] = state['base'].flatten()
+                del state['base']
+
+            self.__dict__.update(state)
+
+        #HERE TODO: need to remake/add ._reps to all spam & operation objects
+
+        _objs.spamvec.SPAMVec.__setstate__ = SPAMVec_setstate
 
     yield  # body of context-manager block
 
@@ -254,3 +279,8 @@ def enable_old_object_unpickling(old_version="0.9.6"):
             delattr(_objs.Circuit, '__setstate__')
         _objs.circuit.CompressedCircuit.expand = _objs.circuit.CompressedCircuit.saved_expand
         delattr(_objs.circuit.CompressedCircuit, 'saved_expand')
+        delattr(_objs.spamvec.SPAMVec, '__setstate__')
+
+    if old_version < totup("0.9.9"):
+        if hasattr(_objs.spamvec.SPAMVec, '__setstate__'):  # b/c above block may have already deleted this
+            delattr(_objs.spamvec.SPAMVec, '__setstate__')

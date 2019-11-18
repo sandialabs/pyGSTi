@@ -392,6 +392,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                                                                est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.gsGIRepEP[d, i] = None
+            except AssertionError:  # if target is badly off, this can fail with an imaginary part assertion
+                switchBd.gsGIRepEP[d, i] = None
 
             switchBd.gsFinal[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
             switchBd.gsTargetAndFinal[d, i, :] = \

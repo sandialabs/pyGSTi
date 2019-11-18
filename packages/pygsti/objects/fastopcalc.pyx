@@ -107,7 +107,10 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
                                          np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
                                          np.ndarray[double, ndim=1, mode="c"] paramvec,
                                          dest_shape):
-    cdef INT dest_size = np.product(dest_shape)
+    cdef INT k
+    cdef INT dest_size = 1  # np.product(dest_shape) #SLOW!
+    for k in range(len(dest_shape)):
+        dest_size *= dest_shape[k] 
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] res = np.empty(dest_size, np.complex128)
 
     cdef INT c = 0
@@ -116,7 +119,7 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
     cdef INT vtape_sz = vtape.size
     cdef INT nTerms
     cdef INT m
-    cdef INT k
+    #cdef INT k
     cdef INT nVars
     cdef double complex a;
     cdef double complex poly_val;
@@ -136,6 +139,41 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
         res[r] = poly_val; r+=1
     # = dest_shape # reshape w/out possibility of copying
     return res.reshape(dest_shape)
+
+# sum(abs(bulk_eval_compact_polys_complex(.))), made into its own function because numpy sum(abs())
+#  is slow and this is done often in get_total_term_magnitude calls.
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_abs_sum_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                                 np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                                                 np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                                 INT dest_size):    
+    cdef INT c = 0
+    cdef INT i = 0
+    cdef INT vtape_sz = vtape.size
+    cdef INT nTerms
+    cdef INT m
+    cdef INT k
+    cdef INT nVars
+    cdef double complex a;
+    cdef double complex poly_val;
+    cdef double ret = 0.0
+
+    while i < vtape_sz:
+        poly_val = 0.0
+        nTerms = vtape[i]; i+=1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+        for m in range(nTerms):
+            nVars = vtape[i]; i+=1 # number of variable indices in this term
+            a = ctape[c]; c+=1
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a))
+            for k in range(nVars):
+                a *= paramvec[ vtape[i] ]; i+=1
+            poly_val += a
+            #print "  -> added %s to poly_val = %s" % (str(a),str(poly_val))," i=%d, vsize=%d" % (i,vtape.size)
+        ret = ret + abs(poly_val)
+    return ret
+
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

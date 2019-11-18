@@ -118,7 +118,7 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
     if n % 2 != 0:
         q = qubits[_np.random.randint(0, n)]
         name = oneQgatenames[_np.random.randint(0, num_oneQgatenames)]
-        del qubits[q]
+        del qubits[q]  # XXX is this correct?
         sampled_layer.append(_lbl.Label(name, q))
 
     # Go through n//2 times until all qubits have been paired up and gates on them sampled
