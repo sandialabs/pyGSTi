@@ -756,7 +756,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
     _, evotype = _gt.split_lindblad_paramtype(parameterization)  # what about "auto" parameterization?
     assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
     if sim_type == "auto":
-        if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
+        if evotype in ("svterm", "cterm"): sim_type = "termorder"
         else: sim_type = "map" if nQubits > 2 else "matrix"
     assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
 
@@ -878,7 +878,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
     model : Model
         The model used to compute the polynomial expressions of probabilities
         to first-order.  Thus, this model should always have (simulation)
-        type "termorder:1".
+        type "termorder".
 
     singleQfiducials : list, optional
         A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
@@ -970,9 +970,9 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
     # we can use the usual scipy/numpy routines for computing a matrix
     # rank, etc.
 
-    # Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
+    # Assert that model uses termorder, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(model._sim_type == "termorder" and model._sim_args[0] == '1'), \
+    assert(model._sim_type == "termorder" and model._sim_args['max_order'] == 1), \
         '`model` must use "termorder:1" simulation type!'
 
     printer = _VerbosityPrinter.build_printer(verbosity, comm)
@@ -1150,7 +1150,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model, prepLbl=None, e
     model : Model
         The model used to compute the polynomial expressions of probabilities
         to first-order.  Thus, this model should always have (simulation)
-        type "termorder:1".
+        type "termorder".
 
     prepLbl : Label, optional
         The state preparation label to use.  If None, then the first (and
@@ -1180,7 +1180,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model, prepLbl=None, e
     """
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(model._sim_type == "termorder" and model._sim_args[0] == '1'), \
+    assert(model._sim_type == "termorder" and model._sim_args['max_order'] == 1), \
         '`model` must use "termorder:1" simulation type!'
 
     # printer = _VerbosityPrinter.build_printer(verbosity)
@@ -1278,7 +1278,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     model : Model
         The model used to compute the polynomial expressions of probabilities
         to first-order.  Thus, this model should always have (simulation)
-        type "termorder:1".
+        type "termorder".
 
     singleQfiducials : list, optional
         A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
@@ -1339,7 +1339,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
 
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(model._sim_type == "termorder" and model._sim_args[0] == '1'), \
+    assert(model._sim_type == "termorder" and model._sim_args['max_order'] == 1), \
         '`model` must use "termorder:1" simulation type!'
 
     printer = _VerbosityPrinter.build_printer(verbosity)
@@ -2339,7 +2339,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         availability, None, qubitGraph,
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
-        sim_type="termorder:1", parameterization=ptermstype)
+        sim_type="termorder", parameterization=ptermstype)
     clouds = model.get_clouds()
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
@@ -2374,7 +2374,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
-        sim_type="termorder:1", parameterization=ptermstype)
+        sim_type="termorder", parameterization=ptermstype)
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -2452,7 +2452,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                 maxSyntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
                 maxIdleWeight, 0, maxhops, extraWeight1Hops,
                 extraGateWeight, sparse, verbosity=printer - 5,
-                sim_type="termorder:1", parameterization=ptermstype)
+                sim_type="termorder", parameterization=ptermstype)
             sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
             # these are the params we want to amplify...
             idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices

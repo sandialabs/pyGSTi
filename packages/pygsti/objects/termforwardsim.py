@@ -76,8 +76,8 @@ class TermForwardSimulator(ForwardSimulator):
     """
 
     def __init__(self, dim, simplified_op_server, paramvec,  # below here are simtype-specific args
-                 mode, max_order, desired_perr, allowed_perr,
-                 min_term_mag, max_paths_per_outcome, perr_heuristic="none",
+                 mode, max_order, desired_perr=None, allowed_perr=None,
+                 min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
         """
         Construct a new TermForwardSimulator object.
