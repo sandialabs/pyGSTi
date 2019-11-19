@@ -2339,7 +2339,8 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         availability, None, qubitGraph,
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
-        sim_type="termorder", parameterization=ptermstype)
+        sim_type="termorder", parameterization=ptermstype,
+        errcomp_type="gates")
     clouds = model.get_clouds()
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
@@ -2356,7 +2357,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         nQubits, tuple(gatedict.keys()), None, gatedict,
         availability, None, qubitGraph,
         0, 0, 0, 0, 0, False, verbosity=printer - 5,
-        sim_type="map", parameterization=paramroot)
+        sim_type="map", parameterization=paramroot, errcomp_type="gates")
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params()
@@ -2374,7 +2375,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         maxIdleWeight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         maxIdleWeight, 0, maxhops, extraWeight1Hops,
         extraGateWeight, sparse, verbosity=printer - 5,
-        sim_type="termorder", parameterization=ptermstype)
+        sim_type="termorder", parameterization=ptermstype, errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -2452,7 +2453,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                 maxSyntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
                 maxIdleWeight, 0, maxhops, extraWeight1Hops,
                 extraGateWeight, sparse, verbosity=printer - 5,
-                sim_type="termorder", parameterization=ptermstype)
+                sim_type="termorder", parameterization=ptermstype, errcomp_type="gates")
             sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
             # these are the params we want to amplify...
             idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices

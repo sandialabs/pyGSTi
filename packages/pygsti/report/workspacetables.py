@@ -695,8 +695,11 @@ class GatesVsTargetTable(WorkspaceTable):
 
                 #import time as _time #DEBUG
                 #tStart = _time.time() #DEBUG
-                qty = _reportables.evaluate_opfn_by_name(
-                    disp, model, targetModel, gl, confidenceRegionInfo)
+                if targetModel is None:
+                    qty = _objs.reportableqty.ReportableQty(_np.nan)
+                else:
+                    qty = _reportables.evaluate_opfn_by_name(
+                        disp, model, targetModel, gl, confidenceRegionInfo)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append(qty)
@@ -1637,11 +1640,12 @@ class GateEigenvalueTable(WorkspaceTable):
                 formatters.append(None)
 
             elif disp == "target":
-                colHeadings.append('Target Evals. ($T$)')
-                formatters.append(None)
+                if targetModel is not None:  # silently ignore
+                    colHeadings.append('Target Evals. ($T$)')
+                    formatters.append(None)
 
             elif disp == "rel":
-                if(targetModel is not None):  # silently ignore
+                if targetModel is not None:  # silently ignore
                     colHeadings.append('Rel. Evals ($R$)')
                     formatters.append(None)
 
@@ -1773,17 +1777,17 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Vec')
                     row_formatters.append('Pi')
 
-                elif disp == "absdiff-evals":
+                elif disp == "absdiff-evals" and targetModel is not None:
                     absdiff_evals = evals.absdiff(target_evals)
                     row_data.append(absdiff_evals)
                     row_formatters.append('Vec')
 
-                elif disp == "infdiff-evals":
+                elif disp == "infdiff-evals" and targetModel is not None:
                     infdiff_evals = evals.infidelity_diff(target_evals)
                     row_data.append(infdiff_evals)
                     row_formatters.append('Vec')
 
-                elif disp == "absdiff-log-evals":
+                elif disp == "absdiff-log-evals" and targetModel is not None:
                     log_evals = evals.log()
                     re_diff, im_diff = log_evals.absdiff(_np.log(target_evals.astype(complex)), separate_re_im=True)
                     row_data.append(re_diff)
