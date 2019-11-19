@@ -372,7 +372,7 @@ class MultiDataSet(object):
                       circuitIndices=gstrSlices,
                       outcomeLabelIndices=self.olIndex, bStatic=True,
                       auxInfo = None) #leave collisionAction as default "aggregate"
-        ds.auxInfo = self.multidataset.auxInfo  # avoids shallow-copying dict
+        ds.auxInfo = self.auxInfo  # avoids shallow-copying dict
         return ds
 
     def add_dataset(self, datasetName, dataset, update_auxinfo=True):
