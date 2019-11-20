@@ -581,6 +581,7 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
     #render quantities as HTML
     qtys_html = render_as_html(qtys, dict(switched_item_mode="inline",
                                           global_requirejs=False,
+                                          within_report=True,
                                           resizable=resizable, autosize=autosize,
                                           output_dir=fig_dir, link_to=link_to,
                                           precision=precision), link_to, printer)
@@ -643,6 +644,7 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
     #render quantities as HTML
     qtys_html = render_as_html(qtys, dict(switched_item_mode="separate files",
                                           global_requirejs=False,
+                                          within_report=True,
                                           resizable=resizable, autosize=autosize,
                                           output_dir=figDir, link_to=link_to,
                                           precision=precision), link_to, printer)
@@ -752,6 +754,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, auto_open=False,
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
                           render_options=dict(switched_item_mode="inline",
                                               global_requirejs=False,
+                                              within_report=True,
                                               resizable=resizable, autosize=autosize,
                                               output_dir=None, link_to=link_to,
                                               precision=precision),

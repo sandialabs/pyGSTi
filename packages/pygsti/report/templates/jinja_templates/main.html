@@ -28,11 +28,12 @@
         <link rel="stylesheet" href="{{ static_ref('pygsti_dataviz.css') }}">
         <link rel="stylesheet" href="{{ static_ref('pygsti_dashboard.lite.css') }}">
         <link rel="stylesheet" href="{{ static_ref('pygsti_fonts.css') }}">
+
     </head>
 
     <body>
         <div id="content-wrapper">
-            <div id="theSidenav" class="sidenav">
+            <div id="theSidenav" class="sidenav loadable notloaded">
                 <!-- REMOVEME -->
                 <!-- <a href="javascript:void(0)" id="tackbtn" title="Toggle navigation bar auto-hide" onclick="tackNav()">&#8859;</a> -->
                 <div class="linkgroup">
@@ -111,28 +112,28 @@
                 </header>
                 <div id="main">
                     <!-- TODO clean this up / generalize -->
-                    <div id="Summary" class="tabcontent active">
+                    <div id="Summary" class="tabcontent loadable notloaded active">
                         {% include 'tabs/Summary.html' %}
                     </div>
 
                     {% if config['BrevityLT4'] %}
-                    <div id="Goodness" class="tabcontent">
+                    <div id="Goodness" class="tabcontent loadable notloaded">
                         {% include 'tabs/Goodness.html' %}
                     </div>
 
                     {% if config['BrevityLT1'] %}
-                    <div id="Goodness_colorboxplot" class="tabcontent">
+                    <div id="Goodness_colorboxplot" class="tabcontent loadable notloaded">
                         {% include 'tabs/Goodness_colorboxplot.html' %}
                     </div>
 
                     {% if config['ShowScaling'] %}
-                    <div id="Goodness_scaling" class="tabcontent">
+                    <div id="Goodness_scaling" class="tabcontent loadable notloaded">
                         {% include 'tabs/Goodness_scaling.html' %}
                     </div>
                     {% endif %}
 
                     {% if config['ShowUnmodeledError'] %}
-                    <div id="Goodness_unmodeled" class="tabcontent">
+                    <div id="Goodness_unmodeled" class="tabcontent loadable notloaded">
                         {% include 'tabs/Goodness_unmodeled.html' %}
                     </div>
                     {% endif %}
@@ -140,53 +141,53 @@
                     {% endif %}
 
 
-                    <div id="GaugeInvariants_gates" class="tabcontent">
+                    <div id="GaugeInvariants_gates" class="tabcontent loadable notloaded">
                         {% include 'tabs/GaugeInvariants_gates.html' %}
                     </div>
 
                     {% if config['BrevityLT3'] %}
-                    <div id="GaugeInvariants_germs" class="tabcontent">
+                    <div id="GaugeInvariants_germs" class="tabcontent loadable notloaded">
                         {% include 'tabs/GaugeInvariants_germs.html' %}
                     </div>
                     {% endif %}
 
                     {% if config['CompareDatasets'] %}
-                    <div id="DataComparison" class="tabcontent">
+                    <div id="DataComparison" class="tabcontent loadable notloaded">
                         {% include 'tabs/DataComparison.html' %}
                     </div>
                     {% endif %}
 
                     {% if config['IdleTomography'] %}
-                    <div id="IdleTomography" class="tabcontent">
+                    <div id="IdleTomography" class="tabcontent loadable notloaded">
                         {% include 'tabs/IdleTomography.html' %}
                     </div>
                     {% endif %}
 
 
-                    <div id="GaugeVariants" class="tabcontent">
+                    <div id="GaugeVariants" class="tabcontent loadable notloaded">
                         {% include 'tabs/GaugeVariants.html' %}
                     </div>
-                    <div id="GaugeVariants_raw" class="tabcontent">
+                    <div id="GaugeVariants_raw" class="tabcontent loadable notloaded">
                         {% include 'tabs/GaugeVariants_raw.html' %}
                     </div>
-                    <div id="GaugeVariants_decomp" class="tabcontent">
+                    <div id="GaugeVariants_decomp" class="tabcontent loadable notloaded">
                         {% include 'tabs/GaugeVariants_decomp.html' %}
                     </div>
-                    <div id="GaugeVariants_errgen" class="tabcontent">
+                    <div id="GaugeVariants_errgen" class="tabcontent loadable notloaded">
                         {% include 'tabs/GaugeVariants_errgen.html' %}
                     </div>
 
 
                     {% if config['BrevityLT2'] %}
-                    <div id="Input" class="tabcontent">
+                    <div id="Input" class="tabcontent loadable notloaded">
                         {% include 'tabs/Input.html' %}
                     </div>
-                    <div id="Meta" class="tabcontent">
+                    <div id="Meta" class="tabcontent loadable notloaded">
                         {% include 'tabs/Meta.html' %}
                     </div>
                     {% endif %}
 
-                    <div id="Help" class="tabcontent">
+                    <div id="Help" class="tabcontent loadable notloaded">
                         {% include 'tabs/Help.html' %}
                     </div>
                     {% endif %}
@@ -197,4 +198,12 @@
             </div>
         </div>
     </body>
+
+    <script>
+      $(document).ready(function() {
+          //Load sidebar, then active tab (and that's it!)
+          load_contents_if_necessary('theSidenav')  // always active
+          load_contents_if_necessary('Summary')  // the active tab (see 'active' class below)
+      });
+    </script>
 </html>

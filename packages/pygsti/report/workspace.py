@@ -30,7 +30,16 @@ from . import plotly_plot_ex as _plotly_ex
 from . import merge_helpers as _merge
 
 from pprint import pprint as _pprint
-#from IPython.display import clear_output as _clear_output
+
+try:
+    from IPython.core.display import display as _display
+    from IPython.core.display import HTML as _HTML
+    #from IPython.display import clear_output as _clear_output
+    in_ipython_notebook = True
+except ImportError:
+    in_ipython_notebook = False
+
+
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
@@ -365,11 +374,8 @@ class Workspace(object):
         -------
         None
         """
-        try:
-            from IPython.core.display import display as _display
-            from IPython.core.display import HTML as _HTML
-        except ImportError:
-            raise ImportError('Only run `init_notebook_mode` from inside an IPython Notebook.')
+        if not in_ipython_notebook:
+            raise ValueError('Only run `init_notebook_mode` from inside an IPython Notebook.')
 
         global _PYGSTI_WORKSPACE_INITIALIZED
 
@@ -688,7 +694,7 @@ class Switchboard(_collections.OrderedDict):
     """
 
     def __init__(self, ws, switches, positions, types, initial_pos=None,
-                 descriptions=None, show="all", ID=None):
+                 descriptions=None, show="all", ID=None, within_report=False):
         """
         Create a new Switchboard.
 
@@ -740,6 +746,7 @@ class Switchboard(_collections.OrderedDict):
         self.switchIDs = ["switchbd%s_%d" % (self.ID, i)
                           for i in range(len(switches))]
         self.positionLabels = positions
+        self.within_report = within_report
         if initial_pos is None:
             self.initialPositions = _np.array([0] * len(switches), _np.int64)
         else:
@@ -1038,8 +1045,13 @@ class Switchboard(_collections.OrderedDict):
             switch_js.append(js)
 
         html = "\n".join(switch_html)
-        js = "$(document).ready(function() {\n" +\
-             "\n".join(switch_js) + "\n});"
+        if not self.within_report:  #run JS as soon as the document is ready
+            js = "$(document).ready(function() {\n" + \
+                "\n".join(switch_js) + "\n});"
+        else:  #in a report, where we have a 'loadable' parent and might not want to load right away
+            js = "$(document).ready(function() {\n" + \
+                 "$('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID + \
+                "\n".join(switch_js) + "\n}); });"
 
         return {'html': html, 'js': js}
 
@@ -1108,8 +1120,8 @@ class Switchboard(_collections.OrderedDict):
         -------
         None
         """
-        from IPython.display import display as _display
-        from IPython.display import HTML as _HTML
+        if not in_ipython_notebook:
+            raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         #if self.widget is None:
         #    self.widget = _widgets.HTMLMath(value="?",
@@ -1237,8 +1249,8 @@ class SwitchboardView(object):
         -------
         None
         """
-        from IPython.display import display as _display
-        from IPython.display import HTML as _HTML
+        if not in_ipython_notebook:
+            raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         out = self.render("html")
         content = "<script>\n" + \
@@ -1334,6 +1346,7 @@ class WorkspaceOutput(object):
 
         #HTML specific
         'global_requirejs': False,
+        'within_report': False,
         'click_to_display': False,
         'render_math': True,
         'resizable': True,
@@ -1514,8 +1527,8 @@ class WorkspaceOutput(object):
         """
         Display this object within an iPython notebook.
         """
-        from IPython.display import display as _display
-        from IPython.display import HTML as _HTML
+        if not in_ipython_notebook:
+            raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         self.set_render_options(global_requirejs=True)  # b/c jupyter uses require.js
         out = self.render("html")
@@ -1561,16 +1574,24 @@ class WorkspaceOutput(object):
         """ Cached-computation using self.ws's smart cache """
         return self.ws.smartCache.cached_compute(fn, args, kwargs)[1]
 
-    def _create_onready_handler(self, content):
+    def _create_onready_handler(self, content, ID):
         global_requirejs = self.options.get('global_requirejs', False)
+        within_report = self.options.get('within_report', False)
         ret = ""
 
         if global_requirejs:
             ret += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
 
         ret += '  $(document).ready(function() {\n'
+        if within_report:
+            ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
+            
         ret += content
-        ret += '}); //end on-ready handler\n'
+        
+        if within_report:
+            ret += "  });"  # end load_loadable_item handler
+            
+        ret += '}); //end on-ready or on-load handler\n'
 
         if global_requirejs:
             ret += '}); //end require block\n'
@@ -1640,6 +1661,8 @@ class WorkspaceOutput(object):
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
 
+        within_report = self.options.get('within_report', False)
+        
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
         if div_css_classes is not None:
@@ -1779,6 +1802,7 @@ class WorkspaceOutput(object):
         js += "};\n"  # end of connect function
 
         #on-ready handler starts trying to connect to switches
+        # - note this is already in a 'load_loadable_item' handler, so no need for that here
         js += "$(document).ready(function() {\n"
         js += "  connect_%s_to_switches();\n" % ID
 
@@ -2257,7 +2281,7 @@ class WorkspaceTable(WorkspaceOutput):
             #Note: this MUST be below plot handler init, when it triggers plot creation
             content += init_table_js
 
-        return self._create_onready_handler(content)
+        return self._create_onready_handler(content, tableID)
 
 
 class WorkspacePlot(WorkspaceOutput):
@@ -2596,7 +2620,7 @@ class WorkspacePlot(WorkspaceOutput):
             content += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
                 plotID=plotID, initautosize=str(autosize in ("initial", "continual")).lower())
 
-        return self._create_onready_handler(content)
+        return self._create_onready_handler(content, plotID)
 
 
 class WorkspaceText(WorkspaceOutput):
@@ -2918,7 +2942,7 @@ class WorkspaceText(WorkspaceOutput):
                 'el = $("#{textid}");\n'
                 'if(el.hasClass("pygsti-wsoutput-group")) {{\n'
                 '  el.children("div.single_switched_value").each( function(i,el){{\n'
-                '    CollapsibleLists.applyTo( el.find("ul").first()[0] );\n'
+                '    CollapsibleLists.applyTo( $(el).find("ul").first()[0] );\n'
                 '  }});\n'
                 '}} else if(el.hasClass("single_switched_value")){{\n'
                 '  CollapsibleLists.applyTo(el[0]);\n'
@@ -2942,4 +2966,4 @@ class WorkspaceText(WorkspaceOutput):
         else:
             content += init_text_js
 
-        return self._create_onready_handler(content)
+        return self._create_onready_handler(content, textID)
