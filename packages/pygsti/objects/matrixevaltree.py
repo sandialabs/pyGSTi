@@ -657,16 +657,10 @@ class MatrixEvalTree(EvalTree):
 
             return subTree
 
-        old_indices_in_new_order = self._finish_split(elIndicesDict, subTreeSetList,
-                                                      permute_parent_element, create_subtree)
-        self.simplified_circuit_spamTuples, updated_elIndices = \
-            self._permute_simplified_circuit_Xs(self.simplified_circuit_spamTuples,
-                                                elIndicesDict, old_indices_in_new_order)
-        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
+        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
+                                               permute_parent_element, create_subtree)
 
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here - just for clarity
         #print("PT5 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
-
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
 
@@ -780,6 +774,22 @@ class MatrixEvalTree(EvalTree):
     def _update_eval_order_helpers(self, indexPermutation):
         """Update anything pertaining to the "full" evaluation order - e.g. init_inidces in matrix-based case (HACK)"""
         self.init_indices = [indexPermutation[iCur] for iCur in self.init_indices]
+
+    def _update_element_indices(self, new_indices_in_old_order, old_indices_in_new_order, element_indices_dict):
+        """
+        Update any additional members because this tree's elements are being permuted.
+        In addition, return an updated version of `element_indices_dict` a dict whose keys are
+        the tree's (unpermuted) circuit indices and whose values are the final element indices for
+        each circuit.
+        """
+        self.simplified_circuit_spamTuples, updated_elIndices = \
+            self._permute_simplified_circuit_Xs(self.simplified_circuit_spamTuples,
+                                                element_indices_dict, old_indices_in_new_order)
+        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
+        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here - just for clarity
+
+        return updated_elIndices
+
 
 
 def _compute_spamtuple_indices(simplified_circuit_spamTuples,

@@ -574,6 +574,7 @@ class EvalTree(list):
         #Permute parent indices
         # HACK to allow .init_indices to be updated in Matrix tree case
         self._update_eval_order_helpers(parentIndexPerm)
+        updated_elIndices = self._update_element_indices(parentIndexPerm, parentIndexRevPerm, elIndicesDict)
         self.eval_order = [parentIndexPerm[iCur] for iCur in self.eval_order]
         self[:] = [permute_parent_element(parentIndexPerm, self[iCur])
                    for iCur in parentIndexRevPerm]
@@ -615,7 +616,8 @@ class EvalTree(list):
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
         #assert(dbList == dbList2)
-        return parentIndexRevPerm
+        #return parentIndexRevPerm
+        return updated_elIndices
 
     def _get_full_eval_order(self):
         """Includes init_indices in matrix-based evaltree case... HACK """
@@ -625,6 +627,18 @@ class EvalTree(list):
         """Update anything pertaining to the "full" evaluation order
            - e.g. init_inidces in matrix-based case (HACK)"""
         pass
+
+    def _update_element_indices(self, new_indices_in_old_order, old_indices_in_new_order, element_indices_dict):
+        """
+        Update any additional members because this tree's elements are being permuted.
+        In addition, return an updated version of `element_indices_dict` a dict whose keys are
+        the tree's (unpermuted) circuit indices and whose values are the final element indices for
+        each circuit.
+        """
+        #default is to leave element indices alone, and assume that permuting the circuit
+        # indices doesn't affect how the elements are ordered (usually this is false, and
+        # the derived class should implement this).
+        return element_indices_dict.copy()
 
     def _permute_simplified_circuit_Xs(self, simplified_circuit_Xs, element_indices, old_indices_in_new_order):
         """
@@ -649,16 +663,17 @@ class EvalTree(list):
         updated_element_indices : OrderedDict
         """
 
-        # circuit_elements_to_permute is a list of nCircuits (#final circuits) lists,
-        # each of which gives the *element* indices for the corresponding circuit.
-
-        # Setting simplified_circuit_spamTuples, (re)sets the element ordering,
+        # Setting simplified_circuit_Xs, (re)sets the element ordering,
         # so before doing this compute the old_to_new mapping and update
         # elIndicesDict.
+
+        # just assume that len(simplified_circuit_Xs[k]) gives number of elements
+        # for circuit k.
+
         old_finalStringToElsMap = []; i = 0
-        for k, spamTuples in enumerate(simplified_circuit_Xs):
-            old_finalStringToElsMap.append(list(range(i, i + len(spamTuples))))
-            i += len(spamTuples)
+        for k, Xs in enumerate(simplified_circuit_Xs):  
+            old_finalStringToElsMap.append(list(range(i, i + len(Xs))))
+            i += len(Xs)
 
         permute_newToOld = []
         for iOldStr in old_indices_in_new_order[0:self.num_final_strings()]:
@@ -671,7 +686,7 @@ class EvalTree(list):
                 [permute_oldToNew[x] for x in
                  (_slct.indices(indices) if isinstance(indices, slice) else indices)])
 
-        # Now update simplified_circuit_spamTuples
+        # Now update simplified_circuit_Xs
         updated_simplified_circuit_Xs = [simplified_circuit_Xs[iCur]
                                          for iCur in old_indices_in_new_order[0:self.num_final_strings()]]
         return updated_simplified_circuit_Xs, updated_elIndices

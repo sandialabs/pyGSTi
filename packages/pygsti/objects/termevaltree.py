@@ -402,16 +402,24 @@ class TermEvalTree(EvalTree):
 
             return subTree
 
-        old_indices_in_new_order = self._finish_split(elIndicesDict, subTreeSetList,
-                                                      permute_parent_element, create_subtree)
-
-        self.simplified_circuit_elabels, updated_elIndices = \
-            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels,
-                                                elIndicesDict, old_indices_in_new_order)
-        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
+        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
+                                               permute_parent_element, create_subtree)
 
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
+        return updated_elIndices
+
+    def _update_element_indices(self, new_indices_in_old_order, old_indices_in_new_order, element_indices_dict):
+        """
+        Update any additional members because this tree's elements are being permuted.
+        In addition, return an updated version of `element_indices_dict` a dict whose keys are
+        the tree's (unpermuted) circuit indices and whose values are the final element indices for
+        each circuit.
+        """
+        self.simplified_circuit_elabels, updated_elIndices = \
+            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels,
+                                                element_indices_dict, old_indices_in_new_order)
+        self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
         return updated_elIndices
 
     def cache_size(self):
