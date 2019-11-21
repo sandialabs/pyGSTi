@@ -365,6 +365,13 @@ class SuccessFailModel(OplessModel):
         sp = self._success_prob_poly(circuit)
         return _OutcomeLabelDict([('success',sp), ('fail',_Polynomial({(): 1.0})-sp)])
 
+    def simplify_circuits(self, circuits, dataset=None):
+        rawdict = None #TODO - is this needed?
+        lookup = { i:slice(2*i,2*i+2,1) for i in range(len(circuits)) }
+        outcome_lookup = { i:(('success',),('fail',)) for i in range(len(circuits)) }
+
+        return rawdict, lookup, outcome_lookup, 2*len(circuits)
+
     def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
                       numSubtreeComms=1, dataset=None, verbosity=0):
         lookup = { i:slice(2*i,2*i+2,1) for i in range(len(circuit_list)) }
@@ -429,6 +436,13 @@ class ErrorRatesModel(SuccessFailModel):
             "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._gate_error_rate_indices.items()]) + "\n" + \
             "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._readout_error_rate_indices.items()])
         return s
+
+    def to_dict(self):
+        error_rate_dict = {'gates': {}, 'readout': {}}
+        error_rate_dict['gates'] = {k: self._paramvec[i]**2 for k, i in self._gate_error_rate_indices.items()}
+        error_rate_dict['readout'] = {k: self._paramvec[i]**2 for k, i in self._readout_error_rate_indices.items()}
+        return error_rate_dict
+
 
     def _circuit_cache(self, circuit):
         if not isinstance(circuit, _Circuit):
