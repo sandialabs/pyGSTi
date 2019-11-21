@@ -398,7 +398,8 @@ def _render_as_html(value, render_options, link_to):
             out = value.render('html')
             if link_to:
                 value.set_render_options(leave_includes_src=('tex' in link_to),
-                                       render_includes=('pdf' in link_to))
+                                         render_includes=('pdf' in link_to),
+                                         switched_item_mode='separate files')
                 if 'tex' in link_to or 'pdf' in link_to: value.render('latex')
                 if 'pkl' in link_to: value.render('python')
 
@@ -406,7 +407,7 @@ def _render_as_html(value, render_options, link_to):
             out = value.render('html')
 
         # Note: out is a dictionary of rendered portions
-        html = f"<script>%(js)s</script>%(html)s" % out
+        html = "<script>%(js)s</script>%(html)s" % out
 
     return html
 
@@ -741,21 +742,26 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, auto_open=False
 
     assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
     outputDir = _os.path.dirname(outputFilename)
+    out_path = Path(outputDir).absolute()
+    static_path = out_path / 'offline'
 
     #Copy offline directory into position
     if not connected:
         rsync_offline_dir(outputDir)
 
-    out_path = Path(outputDir).absolute()
-    static_path = out_path / 'offline'
+    if link_to is not None:
+        base,_ = _os.path.splitext(_os.path.basename(outputFilename))
+        figDir = out_path / (base + '.figures')
+        figDir.mkdir(exist_ok=True)
+    else:
+        figDir = None
 
-    assert(link_to is None), "Cannot use `link_to` when creating a non-directory HTML report!"
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
                           render_options=dict(switched_item_mode="inline",
                                               global_requirejs=False,
                                               within_report=True,
                                               resizable=resizable, autosize=autosize,
-                                              output_dir=None, link_to=link_to,
+                                              output_dir=figDir, link_to=link_to,
                                               precision=precision),
                           link_to=link_to
     )

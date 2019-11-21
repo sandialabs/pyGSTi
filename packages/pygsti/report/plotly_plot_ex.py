@@ -19,7 +19,8 @@ from plotly import tools as _plotlytools
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, lock_aspect_ratio=False,
-            master=True, click_to_display=False, link_to=None, link_to_id=False):
+            master=True, click_to_display=False, link_to=None, link_to_id=False,
+            rel_figure_dir="figures"):
     """
     Create a pyGSTi plotly graph locally, returning HTML & JS separately.
 
@@ -178,12 +179,12 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     if link_to and ('pdf' in link_to) and link_to_id:
         link_to_pdf_js = (
             "\n"
-            "  btn = $('#{id}').find('.modebar-btn[data-title=\"Save and edit plot in cloud\"]');\n"
+            "  btn = $('#{id}').find('.modebar-btn[data-title=\"Show closest data on hover\"]');\n"
             "  btn = cloneAndReplace( btn ); //Strips all event handlers\n"
             "  btn.attr('data-title','Download PDF');\n"
             "  btn.click( function() {{\n"
-            "     window.open('figures/{pdfid}.pdf');\n"
-            "  }});\n").format(id=plotdivid, pdfid=link_to_id)
+            "     window.open('{relfigdir}/{pdfid}.pdf');\n"
+            "  }});\n").format(id=plotdivid, pdfid=link_to_id, relfigdir=rel_figure_dir)
         plotly_create_js += link_to_pdf_js
     if link_to and ('pkl' in link_to) and link_to_id:
         link_to_pkl_js = (
@@ -192,8 +193,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             "  btn = cloneAndReplace( btn ); //Strips all event handlers\n"
             "  btn.attr('data-title','Download python pickle');\n"
             "  btn.click( function() {{\n"
-            "     window.open('figures/{pklid}.pkl');\n"
-            "  }});\n").format(id=plotdivid, pklid=link_to_id)
+            "     window.open('{relfigdir}/{pklid}.pkl');\n"
+            "  }});\n").format(id=plotdivid, pklid=link_to_id, relfigdir=rel_figure_dir)
         plotly_create_js += link_to_pkl_js
 
     plotly_click_js = ""

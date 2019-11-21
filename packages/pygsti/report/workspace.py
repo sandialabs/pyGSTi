@@ -1806,19 +1806,20 @@ class WorkspaceOutput(object):
         js += "$(document).ready(function() {\n"
         js += "  connect_%s_to_switches();\n" % ID
 
-        if not lod_files:
+        if not lod_files and link_to:
             # Add download links for all divs at once since they're all ready
-            if link_to and ('tex' in link_to):
+            rel_figure_dir = _os.path.basename(output_dir)
+            if 'tex' in link_to:
                 for div_id in div_ids:
-                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                    js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
-            if link_to and ('pdf' in link_to):
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
+                    js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n" % div_id
+            if 'pdf' in link_to:
                 for div_id in div_ids:
-                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                    js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-            if link_to and ('pkl' in link_to):
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
+                    js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n" % div_id
+            if 'pkl' in link_to:
                 for div_id in div_ids:
-                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
                     js += "%s.pkl\" target=\"_blank\">&#9660;PKL</a>');\n" % div_id
 
         js += "});\n\n"  # end on-ready handler
@@ -1964,7 +1965,8 @@ class WorkspaceTable(WorkspaceOutput):
                                               sciprecision=precDict['sci'],
                                               resizable=resizable, autosize=(autosize == "continual"),
                                               click_to_display=self.options['click_to_display'],
-                                              link_to=self.options['link_to'])
+                                              link_to=self.options['link_to'],
+                                              output_dir=output_dir)
 
                 if switched_item_mode == 'separate files':
                     # form entire table init JS as _render_html will put this in a separate file
@@ -1980,7 +1982,7 @@ class WorkspaceTable(WorkspaceOutput):
             if switched_item_mode == 'inline':
                 base = self._render_html(tableID, divHTML, None, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, None,
-                                         self.options.get('link_to', None))  # no JS yet...
+                                         self.options.get('link_to', None), False, output_dir)  # no JS yet...
                 js = self._form_table_js(tableID, base['html'], '\n'.join(divJS), base['js'])
                 # creates JS for everything: plot creation, switchboard init, autosize
 
@@ -2397,7 +2399,8 @@ class WorkspacePlot(WorkspaceOutput):
                         fig.plotlyfig, show_link=False, resizable=resizable,
                         lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
-                        link_to=self.options['link_to'], link_to_id=plotDivID)
+                        link_to=self.options['link_to'], link_to_id=plotDivID,
+                        rel_figure_dir=_os.path.basename(output_dir) if (output_dir is not None) else None)
 
                 if switched_item_mode == 'separate files':
                     assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file
@@ -2423,7 +2426,7 @@ class WorkspacePlot(WorkspaceOutput):
                     "Cannot render 'html' in separate files without a valid 'output_dir' render option"
                 base = self._render_html(plotID, divHTML, divJS, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, [relwrap_cls],
-                                         None, True, self.options['output_dir'])
+                                         None, True, output_dir)
                 # Don't link_to b/c plots will all have download buttons
                 js = self._form_plot_js(plotID, None, base['js'])
             else:
@@ -2706,7 +2709,7 @@ class WorkspaceText(WorkspaceOutput):
             if switched_item_mode == 'inline':
                 base = self._render_html(textID, divHTML, None, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, None,
-                                         self.options.get('link_to', None))  # no JS yet...
+                                         self.options.get('link_to', None), False, output_dir)  # no JS yet...
                 js = self._form_text_js(textID, base['html'], base['js'])
                 # creates JS for everything: plot creation, switchboard init, autosize
 
