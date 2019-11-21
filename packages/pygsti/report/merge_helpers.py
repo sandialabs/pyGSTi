@@ -141,7 +141,7 @@ def rsync_offline_dir(outputDir):
     """
     destDir = _os.path.join(outputDir, "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                               "templates", "offline")
+                               "templates", "offline")  # TODO package resources?
     if not _os.path.exists(destDir):
         _shutil.copytree(offlineDir, destDir)
 
@@ -727,13 +727,109 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
     return env
 
 
+def merge_jinja_template(qtys, outputFilename, templateDir=None, auto_open=False,
+                         precision=None, link_to=None, connected=False, toggles=None,
+                         renderMath=True, resizable=True, autosize='none', verbosity=0):
+    """
+    Renders `qtys` and merges them into a single HTML file `outputFilename`.
+    This functions parameters are the same as those of :func:`merge_jinja_template_dir.
+
+    Returns
+    -------
+    None
+    """
+
+    assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
+    outputDir = _os.path.dirname(outputFilename)
+
+    #Copy offline directory into position
+    if not connected:
+        rsync_offline_dir(outputDir)
+
+    out_path = Path(outputDir).absolute()
+    static_path = out_path / 'offline'
+
+    assert(link_to is None), "Cannot use `link_to` when creating a non-directory HTML report!"
+    env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
+                          render_options=dict(switched_item_mode="inline",
+                                              global_requirejs=False,
+                                              within_report=True,
+                                              resizable=resizable, autosize=autosize,
+                                              output_dir=None, link_to=link_to,
+                                              precision=precision),
+                          link_to=link_to
+    )
+
+    # Template rendering parameters are the given qtys plus a 'config' dict
+    render_params = {
+        **qtys,
+        'config': {
+            **(toggles or {})
+            # TODO whatever should be in config namespace
+        }
+    }
+
+    # Render main page template to output path
+    template = env.get_template('main.html')
+    with open(outputFilename, 'w') as outfile:
+        outfile.write(template.render(render_params))
+
+
 def merge_jinja_template_dir(qtys, outputDir, templateDir=None, auto_open=False,
                              precision=None, link_to=None, connected=False, toggles=None,
                              renderMath=True, resizable=True, autosize='none', verbosity=0):
     """
     Renders `qtys` and merges them into the HTML files under `templateDir`,
-    saving the output under `outputDir`.  This functions parameters are the
-    same as those of :func:`merge_html_template_dir.
+    saving the output under `outputDir`.
+
+    Parameters
+    ----------
+    qtys : dict
+        A dictionary of workspace quantities (switchboards and outputs).
+
+    outputDir : str
+        The merged-output directory..
+
+    templateDir : str, optional
+        The template filename, relative to pyGSTi's `templates` directory.
+
+    auto_open : bool, optional
+        Whether the output file should be automatically opened in a web browser.
+
+    precision : int or dict, optional
+        The amount of precision to display.  A dictionary with keys
+        "polar", "sci", and "normal" can separately specify the
+        precision for complex angles, numbers in scientific notation, and
+        everything else, respectively.  If an integer is given, it this
+        same value is taken for all precision types.  If None, then
+        a default is used.
+    link_to : list, optional
+        If not None, a list of one or more items from the set
+        {"tex", "pdf", "pkl"} indicating whether or not to
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.
+
+    connected : bool, optional
+        Whether an internet connection should be assumed.  If False, then an
+        'offline' folder is assumed to be present in the output HTML's folder.
+
+    toggles : dict, optional
+        A dictionary of toggle_name:bool pairs specifying
+        how to preprocess the template.
+
+    renderMath : bool, optional
+        Whether math should be rendered.
+
+    resizable : bool, optional
+        Whether figures should be resizable.
+
+    autosize : {'none', 'initial', 'continual'}
+        Whether tables and plots should be resized, either initially --
+        i.e. just upon first rendering (`"initial"`) -- or whenever
+        the browser window is resized (`"continual"`).
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
 
     Returns
     -------
@@ -743,20 +839,24 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, auto_open=False,
     # Create output directory if it does not already exist
     out_path = Path(outputDir).absolute()
     out_path.mkdir(parents=True, exist_ok=True)
-
-    # Write static resources to output path
     static_path = out_path / 'offline'
-    if not static_path.exists():
-        # TODO package resources
-        static_src = Path(__file__).absolute().parent / 'templates' / 'offline'
-        _shutil.copytree(static_src, static_path)
+
+    #Copy offline directory into position
+    if not connected:
+        rsync_offline_dir(outputDir)
+
+    if link_to is not None:
+        figDir = out_path / 'figures'
+        figDir.mkdir(exist_ok=True)
+    else:
+        figDir = None
 
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
                           render_options=dict(switched_item_mode="inline",
                                               global_requirejs=False,
                                               within_report=True,
                                               resizable=resizable, autosize=autosize,
-                                              output_dir=None, link_to=link_to,
+                                              output_dir=figDir, link_to=link_to,
                                               precision=precision),
                           link_to=link_to
     )
