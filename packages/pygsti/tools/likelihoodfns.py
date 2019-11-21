@@ -163,8 +163,11 @@ def logl_terms(model, dataset, circuit_list=None,
     nEls = evalTree.num_final_elements()
     probs = _np.zeros(nEls, 'd')  # _np.empty( nEls, 'd' ) - .zeros b/c of caching
 
-    ds_circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    if opLabelAliases:
+        ds_circuit_list = _lt.find_replace_tuple_list(
+            circuit_list, opLabelAliases)
+    else:
+        ds_circuit_list = circuit_list
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
@@ -1180,8 +1183,9 @@ def logl_max_terms(model, dataset, circuit_list=None,
         # won't make one here and so won't fill an empty
         # evaltree_cache.
 
-    circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    if opLabelAliases is not None:
+        circuit_list = _lt.find_replace_tuple_list(
+            circuit_list, opLabelAliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
