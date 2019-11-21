@@ -133,6 +133,7 @@ class WildcardBudget(object):
 
         #For these helper functions, see Robin's notes
         def computeTVD(A, B, alpha, beta, q, f):
+            # TVD = 0.5 * (qA - alpha*SA + beta*SB - qB)
             ret = 0.5 * (sum(q[A] - alpha * f[A]) + sum(beta * f[B] - q[B]))
             return ret
 
@@ -141,6 +142,9 @@ class WildcardBudget(object):
             # 2*TVD = qA - alpha*SA + [(1-alpha*SA - SC)/SB]*SB - qB
             # 2*TVD = qA - alpha(SA + SA) + (1-SC) - qB
             # alpha = [ qA-qB + (1-SC) - 2*TVD ] / 2*SA
+            # But if SB == 0 then 2*TVD = qA - alpha*SA - qB => alpha = (qA-qB-2*TVD)/SA
+            if sum(f[B]) == 0:
+                return (sum(q[A]) - sum(q[B]) - 2 * TVD) / sum(f[A])
             return (sum(q[A]) - sum(q[B]) + 1.0 - sum(f[C]) - 2 * TVD) / (2 * sum(f[A]))
 
         def compute_beta(A, B, C, TVD, q, f):
@@ -148,6 +152,9 @@ class WildcardBudget(object):
             # 2*TVD = qA - [(1-beta*SB - SC)/SA]*SA + beta*SB - qB
             # 2*TVD = qA - (1-SC) + beta(SB + SB) - qB
             # beta = -[ qA-qB - (1-SC) - 2*TVD ] / 2*SB
+            # But if SA == 0 then 2*TVD = qA + beta*SB - qB => beta = -(qA-qB-2*TVD)/SB
+            if sum(f[A]) == 0:
+                return -(sum(q[A]) - sum(q[B]) - 2 * TVD) / sum(f[B])
             return -(sum(q[A]) - sum(q[B]) - 1.0 + sum(f[C]) - 2 * TVD) / (2 * sum(f[B]))
 
         def compute_pvec(alpha, beta, A, B, C, q, f):
@@ -205,47 +212,57 @@ class WildcardBudget(object):
                     alpha_break = r
                     beta_break = beta_fn(alpha_break, A, B, C, fvec)
                     #print("alpha-break = %g -> beta-break = %g" % (alpha_break,beta_break))
-                    AorB = True
+                    AorBorC = "A"
                 elif k in B:
                     beta_break = r
                     alpha_break = alpha_fn(beta_break, A, B, C, fvec)
                     #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
-                    AorB = False
-                breaks.append((k, alpha_break, beta_break, AorB))
+                    AorBorC = "B"
+                else:
+                    alpha_break = beta_break = 1e100 # sentinel so it gets sorted at end
+                    AorBorC = "C"
+                breaks.append((k, alpha_break, beta_break, AorBorC))
             #print("Breaks = ",breaks)
 
             sorted_breaks = sorted(breaks, key=lambda x: x[1])
-            for j, alpha0, beta0, AorB in sorted_breaks:
+            for j, alpha0, beta0, AorBorC in sorted_breaks:
                 # will keep getting smaller with each iteration
                 TVD_at_breakpt = computeTVD(A, B, alpha0, beta0, qvec, fvec)
                 #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is
                 #the same
 
-                #print("break: j=",j," alpha=",alpha0," beta=",beta0," A?=",AorB, " TVD = ",TVD_at_breakpt)
+                #DB: print("break: j=",j," alpha=",alpha0," beta=",beta0," A?=",AorBorC, " TVD = ",TVD_at_breakpt)
                 tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
                 if TVD_at_breakpt <= W + tol:
                     break  # exit loop
 
                 #Move
-                if AorB:  # A
+                if AorBorC == "A":
                     Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst, int)
                     Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move A -> C
-                else:  # B
+                elif AorBorC == "B":
                     Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst, int)
                     Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move B -> C
-                    #B.remove(j); C.add(j) # move A -> C
-                #print(" --> A=",A," B=",B," C=",C)
+                else:
+                    pass
+                #DB: TVD_at_breakpt_chk = computeTVD(A, B, alpha0, beta0, qvec, fvec)
+                #DB: print(" --> A=",A," B=",B," C=",C, " chk = ",TVD_at_breakpt_chk)
+
             else:
                 assert(False), "TVD should eventually reach zero (I think)!"
 
             #Now A,B,C are fixed to what they need to be for our given W
+            #DB: print("Final A=",A,"B=",B,"C=",C,"W=",W,"qvec=",qvec,'fvec=',fvec)
             if len(A) > 0:
                 alpha = compute_alpha(A, B, C, W, qvec, fvec)
                 beta = beta_fn(alpha, A, B, C, fvec)
             else:  # fall back to this when len(A) == 0
                 beta = compute_beta(A, B, C, W, qvec, fvec)
                 alpha = alpha_fn(beta, A, B, C, fvec)
+            #DB: print("Computed final alpha,beta = ",alpha,beta)
+            #print("DB: probs_in = ",probs_in)
             _tools.matrixtools._fas(probs_out, (elInds,), compute_pvec(alpha, beta, A, B, C, qvec, fvec))
+            #print("DB: probs_out = ",probs_out)
             #print("TVD = ",computeTVD(A,B,alpha,beta_fn(alpha,A,B,C,fvec),qvec,fvec))
             compTVD = computeTVD(A, B, alpha, beta, qvec, fvec)
             #print("compare: ",W,compTVD)
