@@ -619,6 +619,8 @@ class StdInputParser(object):
             if len(wordsInColLabel) < 3: continue  # allow other columns we don't recognize
 
             if wordsInColLabel[-1] == 'count':
+                if len(wordsInColLabel) > 3:
+                    _warnings.warn("Column label '%s' has more words than were expected (3)" % colLabel)
                 outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
                 if dsLabel not in dsOutcomeLabels:
@@ -627,6 +629,8 @@ class StdInputParser(object):
                 countCols.append((dsLabel, outcomeLabel, i))
 
             elif wordsInColLabel[-1] == 'frequency':
+                if len(wordsInColLabel) > 3:
+                    _warnings.warn("Column label '%s' has more words than were expected (3)" % colLabel)
                 outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in colLabels:

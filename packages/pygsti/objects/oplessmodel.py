@@ -421,13 +421,13 @@ class ErrorRatesModel(SuccessFailModel):
         self._alias_dict = alias_dict.copy()
         self._gate_error_rate_indices = {k: i for i, k in enumerate(gate_error_rate_keys)}
         self._readout_error_rate_indices = {k: i + len(gate_error_rate_keys) for i, k in enumerate(readout_error_rate_keys)}
-        self._paramvec = _np.concatenate((_np.array([error_rates['gates'][k] for k in gate_error_rate_keys], 'd'),
-                                          _np.array([error_rates['readout'][k] for k in readout_error_rate_keys], 'd')))
+        self._paramvec = _np.concatenate((_np.array([_np.sqrt(error_rates['gates'][k]) for k in gate_error_rate_keys], 'd'),
+                                          _np.array([_np.sqrt(error_rates['readout'][k]) for k in readout_error_rate_keys], 'd')))
 
     def __str__(self):
         s = "Error Rates model with error rates: \n" + \
-            "\n".join(["%s = %g" % (k, self._paramvec[i]) for k, i in self._gate_error_rate_indices.items()]) + "\n" + \
-            "\n".join(["%s = %g" % (k, self._paramvec[i]) for k, i in self._readout_error_rate_indices.items()])
+            "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._gate_error_rate_indices.items()]) + "\n" + \
+            "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._readout_error_rate_indices.items()])
         return s
 
     def _circuit_cache(self, circuit):
@@ -487,13 +487,13 @@ class TwirledLayersModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
 
         # The depolarizing constant for the full sequence of twirled layers.
         lambda_all_layers = 1.0
@@ -509,7 +509,9 @@ class TwirledLayersModel(ErrorRatesModel):
         return successprob_circuit
 
     def _success_dprob(self, circuit, cache):
-        pvec = self._paramvec
+        pvec = self._paramvec**2
+        dpvec_dparams = 2*self._paramvec
+        
         if cache is None:
             cache = self._circuit_cache(circuit)
 
@@ -517,7 +519,7 @@ class TwirledLayersModel(ErrorRatesModel):
         # Note: indices cannot be repeated in a layer, i.e. either a given index appears one or zero times in inds4layer
 
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = cache
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
         deriv = _np.zeros(len(pvec), 'd')
 
         nLayers = len(inds_to_mult_by_layer)
@@ -540,7 +542,7 @@ class TwirledLayersModel(ErrorRatesModel):
         for ind in inds_to_mult_by_layer[-1]:
             deriv[ind] += lambda_all_but_current_layer * (successprob_readout / sp[ind]) * -1.0 # what if sp[ind] == 0?
 
-        return deriv
+        return deriv * dpvec_dparams
 
 
 class TwirledGatesModel(ErrorRatesModel):
@@ -565,16 +567,16 @@ class TwirledGatesModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
 
         # The 'lambda' for all gates (+ readout, which isn't used).
-        lambda_ops = 1.0 - alpha * self._paramvec
+        lambda_ops = 1.0 - alpha * pvec
 
         # The depolarizing constant for the full sequence of twirled gates.
         lambda_all_layers = prod(lambda_ops[all_inds_to_mult])
@@ -590,13 +592,15 @@ class TwirledGatesModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
+        dpvec_dparams = 2*self._paramvec
+        
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt = cache
-        sp = 1.0 - self._paramvec
-        lambda_ops = 1.0 - alpha * self._paramvec
+        sp = 1.0 - pvec
+        lambda_ops = 1.0 - alpha * pvec
         deriv = _np.zeros(len(pvec), 'd')
 
         # The depolarizing constant for the full sequence of twirled gates.
@@ -612,7 +616,7 @@ class TwirledGatesModel(ErrorRatesModel):
         
         # The success probability of the circuit.
         #successprob_circuit = lambda_all_layers * (successprob_readout - one_over_2_width) + one_over_2_width
-        return deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv # product rule
+        return (deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv) * dpvec_dparams  # product rule
 
 
 class AnyErrorCausesFailureModel(ErrorRatesModel):
@@ -636,13 +640,14 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
+                
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         all_inds_to_mult, all_inds_to_mult_cnt = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
 
         # The probability that every operation succeeds.
         successprob_circuit = prod(sp[all_inds_to_mult])
@@ -654,18 +659,20 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
+        dpvec_dparams = 2*self._paramvec
+                
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         all_inds_to_mult, all_inds_to_mult_cnt = cache
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
         successprob_circuit = prod(sp[all_inds_to_mult])
         deriv = _np.zeros(len(pvec), 'd')
         for i,n in enumerate(all_inds_to_mult_cnt):
             deriv[i] = n * successprob_circuit / sp[i] * -1.0
 
-        return deriv
+        return deriv * dpvec_dparams
 
 
 class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
@@ -689,13 +696,13 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt = cache
         # The success probability for all the operations (the entanglment fidelity for the gates)
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
 
         # The probability that every operation succeeds.
         successprob_all_ops = prod(sp[all_inds_to_mult])
@@ -708,12 +715,14 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         """
         todo
         """
-        pvec = self._paramvec
+        pvec = self._paramvec**2
+        dpvec_dparams = 2*self._paramvec
+        
         if cache is None:
             cache = self._circuit_cache(circuit)
 
         one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt = cache
-        sp = 1.0 - self._paramvec
+        sp = 1.0 - pvec
 
         successprob_all_ops = prod(sp[all_inds_to_mult])
         deriv = _np.zeros(len(pvec), 'd')
@@ -723,7 +732,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         # The circuit succeeds if all ops succeed, and has a random outcome otherwise.
         #successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width = const + (1-1/2**width)*successprobs_all_ops
         deriv *= (1.0 - one_over_2_width)
-        return deriv
+        return deriv * dpvec_dparams
 
     # def ORIGINAL_success_prob(self, circuit, cache):
     #     """
