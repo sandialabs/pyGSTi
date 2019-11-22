@@ -18,7 +18,6 @@ import webbrowser as _webbrowser
 import re as _re
 import subprocess as _subprocess
 
-import jinja2
 from pathlib import Path
 
 from ..tools import compattools as _compat
@@ -611,6 +610,11 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
 
 def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=None):
     """Build a jinja2 environment for generating pyGSTi reports"""
+    try:
+        import jinja2  # import locally since we don't want to require jinja to import pygsti
+    except ImportError:
+        raise ImportError(("The 'jinja2' optional package is required to create pyGSTi "
+                           "reports, and appears to be missing.  Try 'pip install jinja2'."))
 
     if templateDir is not None:
         loader = jinja2.FileSystemLoader(templateDir)

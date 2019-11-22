@@ -81,6 +81,7 @@ extras = {
     'evolutionary optimization algorithm': ['deap'],
     'pickling report tables': ['pandas'],
     'generating PDFs of report figures': ['matplotlib'],
+    'generating html reports': ['jinja2'],
     'generating report notebooks': [
         'ipython',
         'notebook'
@@ -171,7 +172,6 @@ setup(name='pyGSTi',
       },
       setup_requires=['setuptools_scm'],
       install_requires=[
-          'jinja2',
           'numpy>=1.15.0',
           'scipy',
           'plotly',
