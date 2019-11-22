@@ -714,11 +714,57 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
         return static_path / path
 
     @jinja_global
-    def static_lib(library):
-        """Render an href to a static library"""
-        # XXX equivalent to static_ref right now, but external libraries should later be bundled separately
-        return static_ref(library)
+    def static_jsref(library_local):
+        # XXX equivalent to static_jslib right now, but external libraries should later be bundled separately
+        return static_jslib(library_local)
+    
+    @jinja_global
+    def static_jslib(library_local, online_url=None, library_obj=None, integrity=None, crossorigin=None):
+        libpath = static_path / library_local
+        absname = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                "templates", libpath)
 
+        if not online_url:
+            if _os.path.exists(absname):  # a local-only file, so just insert directly
+                return '<!-- INSERTED ' + library_local + '-->\n<script type="text/javascript">\n' + \
+                    read_contents(absname) + "</script>\n"
+            else:  #try to link to local file only, since there's no file and there's no online url
+                return '<script src="{localsrc}"></script>\n'.format(localsrc=libpath)
+        else:
+            if integrity and crossorigin:
+                ret = ('<script src="{src}" integrity="{integrity}" crossorigin="{xorigin}"></script>\n'
+                       '    <script>\n'
+                       '    if (typeof {libobj} == "undefined") {{\n'
+                       '        document.write(unescape(\'%3Cscript src="{localsrc}" type="text/javascript"%3E%3C/script%3E\'));\n'
+                       '    }}</script>').format(src=online_url, integrity=integrity, xorigin=crossorigin, libobj=library_obj,
+                                             localsrc=libpath)
+            else:
+                ret = ('<script src="{src}"></script>\n'
+                       '<script>\n'
+                       'if (typeof {libobj} == "undefined") {{\n'
+                       '    console.log("***Failed to load {src}.  Falling back to local offline version.***");\n'
+                       '    document.write(unescape(\'%3Cscript src="{localsrc}" type="text/javascript"%3E%3C/script%3E\'));\n'
+                       '}}</script>').format(src=online_url, libobj=library_obj, localsrc=libpath)
+            return ret
+        
+    @jinja_global
+    def static_css(library_local, online_url=None):
+        libpath = static_path / library_local
+        absname = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                "templates", libpath)
+
+        if not online_url:
+            if _os.path.exists(absname):  # a local-only file, so just insert directly
+                return '<!-- INSERTED ' + library_local + '-->\n<style>\n' + read_contents(absname) + "</style>\n"
+            else:  #try to link to local file only, since there's no file and there's no online url
+                return '<link rel="stylesheet" href="{localsrc}"></script>\n'.format(localsrc=libpath)
+        else:
+            #Just try to apply both - they should be the same and so won't interfere with each other.
+            ret = ('<link rel="stylesheet" href="{src}">\n'
+                   '<link rel="stylesheet" href="{localsrc}">\n').format(src=online_url, localsrc=libpath)
+            return ret
+
+    
     @jinja_filter
     @jinja2.evalcontextfilter
     def render(eval_ctx, value):

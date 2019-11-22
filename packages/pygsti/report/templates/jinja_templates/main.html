@@ -15,20 +15,24 @@
         <link rel="icon" type="image/png" sizes="32x32" href="{{ static_ref('images/favicon-32x32.png') }}">
         <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
 
-        <script src="{{ static_lib('jquery-3.2.1.min.js') }}"></script>
-        <script src="{{ static_lib('jquery-ui.min.js') }}"></script>
-        <script src="{{ static_lib('plotly-latest.min.js') }}"></script>
-        <script src="{{ static_lib('katex.min.js') }}"></script>
-        <script src="{{ static_lib('auto-render.min.js') }}"></script>
-        <script src="{{ static_ref('pygsti_plotly_ex.js') }}"></script>
-        <script src="{{ static_ref('pygsti_dashboard.lite.js') }}"></script>
+        {{ static_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js", "jQuery",
+        "sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=", "anonymous") | safe }}
 
-        <link rel="stylesheet" href="{{ static_lib('smoothness-jquery-ui.css') }}">
-        <link rel="stylesheet" href="{{ static_lib('katex.css') }}">
-        <link rel="stylesheet" href="{{ static_ref('pygsti_dataviz.css') }}">
-        <link rel="stylesheet" href="{{ static_ref('pygsti_dashboard.lite.css') }}">
-        <link rel="stylesheet" href="{{ static_ref('pygsti_fonts.css') }}">
+        {{ static_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jQuery.ui",
+                        "sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=", "anonymous") | safe }}
 
+        {{ static_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js", "Plotly") | safe }}
+        {{ static_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js", "katex") | safe }}
+        {{ static_jslib("auto-render.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js", "renderMathInElement") | safe }}
+        {{ static_jsref("pygsti_plotly_ex.js") | safe }}
+        {{ static_jsref("pygsti_dashboard.lite.js") | safe }}
+
+        {{ static_css("smoothness-jquery-ui.css", "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css") | safe }}
+        {{ static_css("katex.css", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css") | safe }}
+        {{ static_css("pygsti_dataviz.css", "") | safe }}
+        {{ static_css("pygsti_dashboard.lite.css", "") | safe }}
+        {{ static_css("pygsti_fonts.css", "") | safe }}
+        
     </head>
 
     <body>
