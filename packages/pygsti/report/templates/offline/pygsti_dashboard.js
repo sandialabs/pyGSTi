@@ -46,6 +46,110 @@ function load_contents_if_necessary(itemID) {
     }
 }
 
+/* Set the width of the side navigation to open width and the left margin of the page content to the same */
+function openNav() {
+    document.getElementById("theSidenav").style.width = sidenav_width + "px";
+    document.getElementById("main").style.marginLeft = sidenav_width + "px"; // for push: 
+}
+
+/* Set the width of the side navigation to 0 and the left margin of the page content to 0 */
+function closeNav() {
+    document.getElementById("theSidenav").style.width = sidenav_closed_width + "px";
+    document.getElementById("main").style.marginLeft = sidenav_closed_width + "px"; // for push: 
+}
+
+function tackNav() {
+    if(window.navtacked) {
+	window.navtacked = false;
+	document.getElementById("tackbtn").innerHTML = "&#8857;"
+    } else {
+	window.navtacked = true;
+	document.getElementById("tackbtn").innerHTML = "&#8859;"
+    }
+}
+
+function initNav() {
+    load_contents_if_necessary('theSidenav')  // always active
+    window.navtacked = true;
+    openNav();
+
+    //Mousemove handler
+    $("body").on("mousemove",function(event) {
+	    if(!window.navtacked) {
+	        if (event.pageX < sidenav_mousetrigger_width) {
+		        openNav();
+	        }
+	        else if (event.pageX > sidenav_width) {
+		        closeNav();
+	        }
+	    }
+    });
+}
+
+function initBanner() {
+    //Top banner/header JS below here
+    var elSelector		= '.header',
+	elClassHidden	= 'header--hidden',
+	throttleTimeout	= 500,
+	$element		= $( elSelector );
+    
+    if( !$element.length ) return true;
+    
+    var $window			= $( window ),
+	wHeight			= 0,
+	wScrollCurrent	= 0,
+	wScrollBefore	= 0,
+	wScrollDiff		= 0,
+	$document		= $( document ),
+	dHeight			= 0,
+	
+	throttle = function( delay, fn ){
+	    var last, deferTimer;
+	    return function() {
+		var context = this, args = arguments, now = +new Date;
+		if( last && now < last + delay )
+		{
+		    clearTimeout( deferTimer );
+		    deferTimer = setTimeout( function(){ last = now; fn.apply( context, args ); }, delay );
+		}
+		else
+		{
+		    last = now;
+		    fn.apply( context, args );
+		}
+	    };
+	};
+    
+    $window.on( 'scroll',
+		throttle( throttleTimeout, function() {
+		    dHeight			= $document.height();
+		    wHeight			= $window.height();
+		    wScrollCurrent	= $window.scrollTop();
+		    wScrollDiff		= wScrollBefore - wScrollCurrent;
+		    
+		    if( wScrollCurrent <= 0 ) // scrolled to the very top; element sticks to the top
+			$element.removeClass( elClassHidden );
+		    
+		    else if( wScrollDiff > 0 && $element.hasClass( elClassHidden ) ) // scrolled up; element slides in
+			$element.removeClass( elClassHidden );
+		    
+		    else if( wScrollDiff < 0 ) // scrolled down
+		    {
+			if( wScrollCurrent + wHeight >= dHeight && $element.hasClass( elClassHidden ) ) // scrolled to the very bottom; element slides in
+			    $element.removeClass( elClassHidden );
+			
+			else // scrolled down; element slides out
+			    $element.addClass( elClassHidden );
+		    }
+		    
+		    wScrollBefore = wScrollCurrent;
+		}));
+}
+
+
+sidenav_width = 200;
+sidenav_closed_width = 10;
+sidenav_mousetrigger_width = 50;
 
 $(document).ready(function() {
     // Create window plot manager

@@ -38,8 +38,7 @@
     <body>
         <div id="content-wrapper">
             <div id="theSidenav" class="sidenav loadable notloaded">
-                <!-- REMOVEME -->
-                <!-- <a href="javascript:void(0)" id="tackbtn" title="Toggle navigation bar auto-hide" onclick="tackNav()">&#8859;</a> -->
+                <a href="javascript:void(0)" id="tackbtn" title="Toggle navigation bar auto-hide" onclick="tackNav()">&#8859;</a>
                 <div class="linkgroup">
                     {{ navlink('Summary', 'Summary', style='linkgroupheading active') }}
                 </div>
@@ -205,9 +204,9 @@
 
     <script>
       $(document).ready(function() {
-          //Load sidebar, then active tab (and that's it!)
-          load_contents_if_necessary('theSidenav')  // always active
-          load_contents_if_necessary('Summary')  // the active tab (see 'active' class below)
+          initNav(); // so sidebar is loaded and can hide/show
+          initBanner(); // so banner can hide/show
+          openTab('Summary'); // the active tab (see 'active' class above)
       });
     </script>
 </html>

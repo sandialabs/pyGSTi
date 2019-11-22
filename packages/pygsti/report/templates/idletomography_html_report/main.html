@@ -78,9 +78,9 @@
 
   <script>
     $(document).ready(function() {
-        //Load sidebar, then active tab (and that's it!)
-        load_contents_if_necessary('theSidenav')  // always active
-        load_contents_if_necessary('IdleTomography')  // the active tab (see 'active' class above)
+        initNav(); // so sidebar is loaded and can hide/show
+        initBanner(); // so banner can hide/show
+        openTab('IdleTomography'); // the active tab (see 'active' class above)
     });
   </script>
 </html>
