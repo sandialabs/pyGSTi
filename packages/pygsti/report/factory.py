@@ -1200,19 +1200,17 @@ def create_standard_report(results, filename, title="auto",
             if fmt == "html":
                 if filename.endswith(".html"):
                     _merge.merge_jinja_template(
-                        qtys, filename, auto_open=auto_open,
-                        precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles,
-                        renderMath=renderMath, resizable=resizable,
-                        autosize=autosize, verbosity=printer
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
                     )
                 else:
                     _merge.merge_jinja_template_dir(
-                        qtys, filename, auto_open=auto_open,
-                        precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles,
-                        renderMath=renderMath, resizable=resizable,
-                        autosize=autosize, verbosity=printer
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
                     )
 
             elif fmt == "latex":
@@ -1789,19 +1787,17 @@ def create_nqnoise_report(results, filename, title="auto",
             if fmt == "html":
                 if filename.endswith(".html"):
                     _merge.merge_jinja_template(
-                        qtys, filename, auto_open=auto_open,
-                        precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles,
-                        renderMath=renderMath, resizable=resizable,
-                        autosize=autosize, verbosity=printer
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
                     )
                 else:
                     _merge.merge_jinja_template_dir(
-                        qtys, filename, auto_open=auto_open,
-                        precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles,
-                        renderMath=renderMath, resizable=resizable,
-                        autosize=autosize, verbosity=printer
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
                     )
 
             elif fmt == "latex":
