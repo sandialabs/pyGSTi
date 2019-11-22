@@ -609,79 +609,6 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
         _webbrowser.open(url)
 
 
-def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
-                            precision=None, link_to=None, connected=False, toggles=None,
-                            renderMath=True, resizable=True, autosize='none', verbosity=0,
-                            CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
-                                      "pygsti_fonts.css")):
-    """
-    Renders `qtys` and merges them into the HTML files under `templateDir`,
-    saving the output under `outputDir`.  This functions parameters are the
-    same as those of :func:`merge_html_template_dir.
-
-    Returns
-    -------
-    None
-    """
-    printer = _VerbosityPrinter.build_printer(verbosity)
-
-    #Create directories if needed; otherwise clear it
-    figDir = makeEmptyDir(_os.path.join(outputDir, 'figures'))
-    tabDir = makeEmptyDir(_os.path.join(outputDir, 'tabs'))
-
-    #FIX
-    ##clear offline dir if it exists
-    #offlineDir = _os.path.join(outputDir, 'offline')
-    #if _os.path.isdir(offlineDir):
-    #    _clearDir(offlineDir)
-    #    _os.rmdir(offlineDir) #otherwise rsync doesn't work (?)
-
-    #Copy offline directory into position
-    if not connected:
-        rsync_offline_dir(outputDir)
-
-    fill_std_qtys(qtys, connected, renderMath, CSSnames)
-
-    #render quantities as HTML
-    qtys_html = render_as_html(qtys, dict(switched_item_mode="separate files",
-                                          global_requirejs=False,
-                                          within_report=True,
-                                          resizable=resizable, autosize=autosize,
-                                          output_dir=figDir, link_to=link_to,
-                                          precision=precision), link_to, printer)
-
-    #Insert qtys into template file(s)
-    baseTemplateDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "templates", templateDir)
-    templateFilenames = [fn for fn in _os.listdir(baseTemplateDir) if fn.endswith(".html")]
-    outputFilenames = []
-    for fn in templateFilenames:
-        outfn = _os.path.join(outputDir, fn) if (fn == 'main.html') else \
-            _os.path.join(tabDir, fn)
-        outputFilenames.append(outfn)
-
-    for templateFilename, outputName in zip(templateFilenames, outputFilenames):
-        templateFilename = _os.path.join(baseTemplateDir, templateFilename)
-        template = read_and_preprocess_template(templateFilename, toggles)
-
-        #Do actual fill -- everything needs to be unicode at this point.
-        filled_template = template % qtys_html
-        #.format_map(qtys_html) #need python 3.2+
-
-        if _sys.version_info <= (3, 0):  # Python2: need to re-encode for write(...)
-            filled_template = filled_template.encode('utf-8')
-
-        with open(outputName, 'w') as outputfile:
-            outputfile.write(filled_template)
-
-    printer.log("Output written to %s directory" % outputDir)
-
-    if auto_open:
-        outputFilename = _os.path.join(outputDir, 'main.html')
-        url = 'file://' + _os.path.abspath(outputFilename)
-        printer.log("Opening %s..." % outputFilename)
-        _webbrowser.open(url)
-
-
 def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=None):
     """Build a jinja2 environment for generating pyGSTi reports"""
 
@@ -689,7 +616,7 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
         loader = jinja2.FileSystemLoader(templateDir)
     else:
         # Use packaged templates by default
-        loader = jinja2.PackageLoader('pygsti', 'report/templates/jinja_templates')
+        loader = jinja2.PackageLoader('pygsti', 'report/templates/standard_html_report')
 
     # Construct jinja2 environment
     env = jinja2.Environment(
