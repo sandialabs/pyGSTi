@@ -1530,7 +1530,8 @@ class WorkspaceOutput(object):
         if not in_ipython_notebook:
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
-        self.set_render_options(global_requirejs=True)  # b/c jupyter uses require.js
+        self.set_render_options(global_requirejs=True,
+                                output_dir=None)  # b/c jupyter uses require.js
         out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
