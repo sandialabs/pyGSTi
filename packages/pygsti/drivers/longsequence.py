@@ -1444,7 +1444,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     percentile = 0.05; nBoxes = evTree.num_final_elements()
                     twoDeltaLogL_threshold = _chi2.ppf(1 - percentile, nDataParams - nModelParams)
                     redbox_threshold = _chi2.ppf(1 - percentile / nBoxes, 1)
-                    eta = 1000.0  # some default starting value - this *shouldn't* really matter
+                    eta = 10.0  # some default starting value - this *shouldn't* really matter
                     #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
                     assert(objective == "logl"), "Can only use wildcard scaling with 'logl' objective!"
@@ -1466,7 +1466,8 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                             budget.from_vector(Wv)
                             twoDLogL_terms = _tools.two_delta_logl_terms(mdl, ds, circuitsToUse, min_p, pci, a,
                                                                          poissonPicture=True,
-                                                                         evaltree_cache=evaltree_cache, wildcard=budget)
+                                                                         evaltree_cache=evaltree_cache,
+                                                                         comm=comm, wildcard=budget)
                             twoDLogL = sum(twoDLogL_terms)
                             return max(0, twoDLogL - twoDeltaLogL_threshold) \
                                 + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
@@ -1479,24 +1480,32 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                         # Stage 1: make eta large enough that we get a *large* nonzero objective; keep starting with
                         # same Wvec_init
-                        while nIters < 100:
-                            printer.log("  Finding initial eta: %g" % eta)
-                            soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                                                 method='L-BFGS-B', callback=None, tol=1e-6)
-                            if _wildcard_objective_firstTerms(soln.x) >= 100.0:  # some "high value" here
-                                eta_upper_bound = eta; eta /= 2
-                                break
-                            eta *= 10
-                            nIters += 1
+                        #while nIters < 10:
+                        #    printer.log("  Finding initial eta: %g" % eta)
+                        #    soln = _spo.minimize(_wildcard_objective, Wvec_init,
+                        #                         method='L-BFGS-B', callback=None, tol=1e-6)
+                        #    val = _wildcard_objective_firstTerms(soln.x)
+                        #    printer.log("  Firstterms value = %g" % val)
+                        #    if val >= 10.0:  # some "high value" here
+                        #        eta_upper_bound = eta; eta /= 2
+                        #        break
+                        #    eta *= 10
+                        #    nIters += 1
 
                         # Stage 2: hone in on good eta value, restarting from points where
                         # we've seen a nonzero objective (we don't trust Wvecs when the objective is 0)
-                        while nIters < 100:
+                        while nIters < 30:
+                            printer.log("  Iter %d: trying eta = %g" % (nIters,eta))
+
+                            def _wildcard_objective(Wv):
+                                return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
+
                             soln = _spo.minimize(_wildcard_objective, Wvec_init,
                                                  method='L-BFGS-B', callback=None, tol=1e-6)
                             Wvec = soln.x
                             # orig_eta = eta
                             firstTerms = _wildcard_objective_firstTerms(Wvec)
+                            printer.log("  Firstterms value = %g" % firstTerms)
                             meets_conditions = bool(firstTerms < 1e-4)  # some zero-tolerance here
                             #print("Value = ",_wildcard_objective_firstTerms(Wvec),_wildcard_objective(Wvec),Wvec)
                             if meets_conditions:  # try larger eta
