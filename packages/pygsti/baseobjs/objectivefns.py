@@ -14,6 +14,7 @@ import numpy as _np
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import optimize as _opt
+from ..tools import listtools as _lt
 
 
 class ObjectiveFunction(object):
@@ -877,7 +878,7 @@ class LogLFunction(ObjectiveFunction):
         v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
 
         if self.forcefn_grad is not None:
-            forceVec = self.forceShift - _np.dot(self.forcefn_grad, vectorGS)
+            forceVec = self.forceShift - _np.dot(self.forcefn_grad, self.mdl.to_vector())
             assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
             v = _np.concatenate((v, _np.sqrt(forceVec)))
 
