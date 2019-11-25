@@ -722,6 +722,9 @@ def create_standard_report(results, filename, title="auto",
         - idt_idle_oplabel : Label, optional
             The label identifying the idle gate (for use with idle tomography).
 
+        - colorboxplot_bgcolor : str, optional
+            Background color for the color box plots in this report.  Can be common
+            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -748,6 +751,7 @@ def create_standard_report(results, filename, title="auto",
     ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
     idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
     idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    bgcolor = advancedOptions.get('colorboxplot_bgcolor', 'white')
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -1015,19 +1019,19 @@ def create_standard_report(results, filename, title="auto",
     addqty(1, 'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
+           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
     addqty(1, 'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
-           'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
+           'tvd', gss, modvi_ds, gsL_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
     addqty(1, 'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm)
+           minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm, bgcolor=bgcolor)
     #TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
@@ -1036,7 +1040,7 @@ def create_standard_report(results, filename, title="auto",
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi,
-           typ="histogram", comm=comm)  # TODO: L-switchboard on summary page?
+           typ="histogram", comm=comm, bgcolor=bgcolor)  # TODO: L-switchboard on summary page?
 
     if combine_robust:
 
@@ -1058,19 +1062,19 @@ def create_standard_report(results, filename, title="auto",
         addqty(1, 'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, comm=comm)
+               minProbClipForWeighting=switchBd.mpc, comm=comm, bgcolor=bgcolor)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
             click_to_display=False, valign='bottom')
 
         addqty(1, 'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm)
+               minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm, bgcolor=bgcolor)
 
         addqty(A, 'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm)
+               minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm, bgcolor=bgcolor)
 
         #Plots for unmodeled error tab
         addqty(4, 'progressTable_ume', ws.FitComparisonTable,
@@ -1086,7 +1090,7 @@ def create_standard_report(results, filename, title="auto",
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, comm=comm,
-               wildcard=switchBd.wildcardBudget)
+               wildcard=switchBd.wildcardBudget, bgcolor=bgcolor)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_ume'].set_render_options(
             click_to_display=False, valign='bottom')
 
@@ -1094,19 +1098,19 @@ def create_standard_report(results, filename, title="auto",
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm,
-               wildcard=switchBd.wildcardBudget)
+               wildcard=switchBd.wildcardBudget, bgcolor=bgcolor)
 
         addqty(A, 'bestEstimateColorHistogram_ume', ws.ColorBoxPlot,
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm,
-               wildcard=switchBd.wildcardBudget)
+               wildcard=switchBd.wildcardBudget, bgcolor=bgcolor)
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1, 'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict, comm=comm)
+           submatrices=switchBd.scaledSubMxsDict, comm=comm, bgcolor=bgcolor)
 
     addqty(1, 'unmodeledErrorBudgetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, None,
            display=('unmodeled',), wildcard=switchBd.wildcardBudget)
@@ -1179,9 +1183,9 @@ def create_standard_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm, bgcolor=bgcolor)
             addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm, bgcolor=bgcolor)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False  # not comparable!
@@ -1346,6 +1350,10 @@ def create_nqnoise_report(results, filename, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
+        - colorboxplot_bgcolor : str, optional
+            Background color for the color box plots in this report.  Can be common
+            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
+
     verbosity : int, optional
        How much detail to send to stdout.
 
@@ -1371,6 +1379,7 @@ def create_nqnoise_report(results, filename, title="auto",
     ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
     idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
     idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    bgcolor = advancedOptions.get('colorboxplot_bgcolor', 'white')
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -1630,12 +1639,12 @@ def create_nqnoise_report(results, filename, title="auto",
     addqty(1, 'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
+           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
     addqty(1, 'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
-           'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
+           'tvd', gss, modvi_ds, gsL_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
@@ -1643,7 +1652,7 @@ def create_nqnoise_report(results, filename, title="auto",
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi,
-           typ="scatter", comm=comm)  # TODO: L-switchboard on modvi overview page?
+           typ="scatter", comm=comm, bgcolor=bgcolor)  # TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
@@ -1651,7 +1660,7 @@ def create_nqnoise_report(results, filename, title="auto",
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi,
-           typ="histogram", comm=comm)  # TODO: L-switchboard on summary page?
+           typ="histogram", comm=comm, bgcolor=bgcolor)  # TODO: L-switchboard on summary page?
 
     if combine_robust:
         # model-violation (using _modvi variables) plots show pre-scaling
@@ -1670,7 +1679,7 @@ def create_nqnoise_report(results, filename, title="auto",
         addqty(1, 'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, comm=comm)
+               minProbClipForWeighting=switchBd.mpc, comm=comm, bgcolor=bgcolor)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
             click_to_display=False, valign='bottom')
 
@@ -1678,19 +1687,19 @@ def create_nqnoise_report(results, filename, title="auto",
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc,
-               typ="scatter", comm=comm)
+               typ="scatter", comm=comm, bgcolor=bgcolor)
 
         addqty(A, 'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc,
-               typ="histogram", comm=comm)
+               typ="histogram", comm=comm, bgcolor=bgcolor)
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1, 'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict, comm=comm)
+           submatrices=switchBd.scaledSubMxsDict, comm=comm, bgcolor=bgcolor)
 
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
@@ -1756,9 +1765,9 @@ def create_nqnoise_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm, bgcolor=bgcolor)
             addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm, bgcolor=bgcolor)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False  # not comparable!
