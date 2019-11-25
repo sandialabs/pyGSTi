@@ -441,8 +441,8 @@ class ErrorRatesModel(SuccessFailModel):
         error_rate_dict = {'gates': {}, 'readout': {}}
         error_rate_dict['gates'] = {k: self._paramvec[i]**2 for k, i in self._gate_error_rate_indices.items()}
         error_rate_dict['readout'] = {k: self._paramvec[i]**2 for k, i in self._readout_error_rate_indices.items()}
-        return error_rate_dict
-
+        asdict = {'error_rates': error_rate_dict, 'alias_dict': self._alias_dict.copy()}
+        return asdict
 
     def _circuit_cache(self, circuit):
         if not isinstance(circuit, _Circuit):
