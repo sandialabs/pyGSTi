@@ -114,8 +114,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
         assert('Gi' not in oneQgates), "Cannot ascertain idle gate name!"
         idlename = 'Gc0'
     elif 'Gi' in oneQgates:
-        assert('Gi' not in oneQgates), "Cannot ascertain idle gate name!"
-        idlename = 'Gci'
+        assert('Gc0' not in oneQgates), "Cannot ascertain idle gate name!"
+        idlename = 'Gi'
     else:
         if model_type == 'dict':
             pass
@@ -163,7 +163,7 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
         # Because the one-qubit gates are all set to the same error rate, we have an alias dict that maps each one-qubit
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
-        for q in specs.qubit:
+        for q in specs.qubits:
             alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
 
     elif calformat == 'ibmq-v2019':
@@ -264,7 +264,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
             alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
 
     elif calformat == 'native':
-        error_rates = caldata
+        error_rates = caldata['error_rates'].copy()
+        alias_dict = caldata['alias_dict'].copy()
 
     else:
         raise ValueError("Calibration data format not understood!")

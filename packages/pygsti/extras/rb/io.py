@@ -281,7 +281,7 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
         for dsfn_ind, dsfn in enumerate(dsfilenames):
 
             if dsfn[-4:] == '.txt':
-
+                print(dsfn)
                 mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn, collisionAction='keepseparate', recordZeroCnts=False, ignoreZeroCountLines=False, verbosity=verbosity))
 
             elif dsfn[-4:] == '.pkl':

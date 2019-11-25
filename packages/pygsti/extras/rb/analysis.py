@@ -107,26 +107,29 @@ def marginalized_success_counts(dsrow, circ, target, qubits):
     todo
 
     """
-    # The rows of the circuit that we are interested in
-    indices = [circ.line_labels.index(q) for q in qubits]
-    # The ordering of this must be the same as what we compare it to. 
-    margtarget = ''.join([target[i] for i in indices])
-
-    if qubits == circ.line_labels:
-        try:
-            return dsrow.counts[target]
-        except:
-            return 0
-
+    if dsrow.total == 0:
+        return 0
     else:
+        # The rows of the circuit that we are interested in
+        indices = [circ.line_labels.index(q) for q in qubits]
+        # The ordering of this must be the same as what we compare it to. 
+        margtarget = ''.join([target[i] for i in indices])
 
-        success_counts = 0
+        if qubits == circ.line_labels:
+            try:
+                return dsrow.counts[target]
+            except:
+                return 0
 
-        for (outbitstring,), counts in dsrow.counts.items():
-            if ''.join([outbitstring[i] for i in indices]) == margtarget:
-                success_counts += counts
+        else:
 
-        return success_counts
+            success_counts = 0
+
+            for (outbitstring,), counts in dsrow.counts.items():
+                if ''.join([outbitstring[i] for i in indices]) == margtarget:
+                    success_counts += counts
+
+            return success_counts
 
 
 def hamming_distance(bs1, bs2):
@@ -142,17 +145,23 @@ def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
     todo
 
     """
-    # The rows of the circuit that we are interested in
-    indices = [circ.line_labels.index(q) for q in qubits]
-    # The ordering of this must be the same as what we compare it to.
-    margtarget = ''.join([target[i] for i in indices])
+    if dsrow.total == 0:
+        hamming_distance_counts = [0 for i in range(len(qubits) + 1)]
+    else:
+        # The rows of the circuit that we are interested in
+        indices = [circ.line_labels.index(q) for q in qubits]
+        # The ordering of this must be the same as what we compare it to.
+        margtarget = ''.join([target[i] for i in indices])
 
-    hamming_distance_counts = _np.zeros(len(qubits) + 1, float)
+        hamming_distance_counts = _np.zeros(len(qubits) + 1, float)
 
-    for (outbitstring,), counts in dsrow.counts.items():
-        hamming_distance_counts[hamming_distance(''.join([outbitstring[i] for i in indices]), margtarget)] += counts
+        for (outbitstring,), counts in dsrow.counts.items():
+            #print(outbitstring)
+            hamming_distance_counts[hamming_distance(''.join([outbitstring[i] for i in indices]), margtarget)] += counts
 
-    return list(hamming_distance_counts)
+        hamming_distance_counts = list(hamming_distance_counts)
+
+    return hamming_distance_counts
 
 
 def rescaling_factor(lengths, quantity, offset=2):

@@ -196,7 +196,11 @@ class Benchmarker(object):
     def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities', 
                                       statistic='mean', specs=None,  aggregate=True,  rescaler='auto'):
 
-        assert(statistic in ('max', 'mean', 'min', 'dist'))
+        # maxmax : max over all depths/widths larger or equal
+        # minmin : min over all deoths/widths smaller or equal.
+        
+        assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin'))
+
 
         if isinstance(widths, str):
             assert(widths == 'all')
@@ -291,11 +295,11 @@ class Benchmarker(object):
                             vb[d][w] = rescale_function(dline, w)
                         else:
                             if not _np.isnan(rescale_function(dline, w)).all():
-                                if statistic == 'max':
+                                if statistic == 'max' or statistic == 'maxmax':
                                     vb[d][w] = _np.nanmax(rescale_function(dline,w))
                                 elif statistic == 'mean':
                                     vb[d][w] = _np.nanmean(rescale_function(dline,w))
-                                elif statistic == 'min':
+                                elif statistic == 'min' or statistic == 'minmin':
                                     vb[d][w] = _np.nanmin(rescale_function(dline,w))
                             else:
                                 vb[d][w] = _np.nan
@@ -303,11 +307,11 @@ class Benchmarker(object):
                     else:
                         failline = [(len(dpass) - _np.sum(_np.isnan(dpass)), _np.sum(_np.isnan(dpass))) for dpass in dline]
 
-                        if statistic == 'max':
+                        if statistic == 'max' or statistic == 'maxmax':
                             vbdataline = [_np.nanmax(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
                         elif statistic == 'mean':
                             vbdataline = [_np.nanmean(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
-                        elif statistic == 'min':
+                        elif statistic == 'min' or statistic == 'minmin':
                             vbdataline = [_np.nanmin(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
                         elif statistic == 'dist':
                             vbdataline = [rescale_function(dpass, w) for dpass in dline]
@@ -330,11 +334,11 @@ class Benchmarker(object):
                                 vb[d][w] = [item for sublist in vbdataline for item in sublist]
                             else:
                                 if not _np.isnan(vbdataline).all():
-                                    if statistic == 'max':
+                                    if statistic == 'max' or statistic == 'maxmax':
                                         vb[d][w] = _np.nanmax(vbdataline)
                                     elif statistic == 'mean':
                                         vb[d][w] = _np.nanmean(vbdataline)
-                                    elif statistic == 'min':
+                                    elif statistic == 'min' or statistic == 'minmin':
                                         vb[d][w] = _np.nanmin(vbdataline)
                                 else:
                                     vb[d][w] = _np.nan
@@ -345,12 +349,35 @@ class Benchmarker(object):
                         for pkey in pkeys:
                             if statistic == 'dist':
                                 predictedvb[pkey][d][w] = rescale_function(pdline[pkey], w)
-                            if statistic == 'max':
+                            if statistic == 'max' or statistic == 'maxmax':
                                 predictedvb[pkey][d][w] = _np.max(rescale_function(pdline[pkey], w))
                             if statistic == 'mean':
                                 predictedvb[pkey][d][w] = _np.mean(rescale_function(pdline[pkey], w))
-                            if statistic == 'min':
+                            if statistic == 'min'  or statistic == 'minmin':
                                 predictedvb[pkey][d][w] = _np.min(rescale_function(pdline[pkey], w))
+
+
+        if statistic == 'minmin' or statistic == 'maxmax':
+            if aggregate:
+                for d in vb.keys():
+                    for w in vb[d].keys():       
+                        for d2 in vb.keys():
+                            for w2 in vb[d2].keys():
+                                if statistic == 'minmin' and d2 <= d and w2 <= w and vb[d2][w2] <  vb[d][w]:
+                                        vb[d][w] = vb[d2][w2]
+                                if statistic == 'maxmax' and d2 >= d and w2 >= w and vb[d2][w2] >  vb[d][w]:
+                                        vb[d][w] = vb[d2][w2]
+            else:
+                for i in range(self.numpasses):
+                    for d in vb[i].keys():
+                        for w in vb[i][d].keys():       
+                            for d2 in vb[i].keys():
+                                for w2 in vb[i][d2].keys():
+                                    if statistic == 'minmin' and d2 <= d and w2 <= w and vb[i][d2][w2] <  vb[i][d][w]:
+                                            vb[i][d][w] = vb[i][d2][w2]
+                                    if statistic == 'maxmax' and d2 >= d and w2 >= w and vb[i][d2][w2] >  vb[i][d][w]:
+                                            vb[i][d][w] = vb[i][d2][w2]
+
 
         out = {'data': vb, 'fails': fails, 'predictions': predictedvb}
         
@@ -448,7 +475,10 @@ class Benchmarker(object):
         for ds_ind, ds in self.multids['standard'].items():
             sfds = _stdds.DataSet(outcomeLabels=['success', 'fail'], collisionAction=ds.collisionAction)
             for circ, dsrow in ds.items(stripOccurrenceTags=True):
-                scounts = dsrow[ dsrow.aux[self.success_key] ]
+                try:
+                    scounts = dsrow[dsrow.aux[self.success_key]]
+                except:
+                    scounts = 0
                 tcounts = dsrow.total
                 sfds.add_count_dict(circ, {'success': scounts, 'fail': tcounts - scounts}, aux=dsrow.aux)
 
@@ -623,6 +653,7 @@ class Benchmarker(object):
                             for datatype in stabdatatypes:
                                 globalsummarydata[specind][qubits][datatype][depth] = []
 
+                    #print('---', i)
                     for qubits_ind, qubits in enumerate(structure):
                         for datatype in datatypes:
                             x = get_datatype(datatype, dsrow, circ, target, qubits)
