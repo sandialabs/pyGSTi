@@ -26,6 +26,7 @@ from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
 from ..tools import compattools as _compat
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..baseobjs import objectivefns as _objfns
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -1451,7 +1452,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     twoDeltaLogL_terms = fitQty
                     twoDeltaLogL = sum(twoDeltaLogL_terms)
 
-                    budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels())
+                    budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels(), add_spam=True)
 
                     if twoDeltaLogL <= twoDeltaLogL_threshold \
                        and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
@@ -1462,72 +1463,62 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                         min_p = advancedOptions.get('minProbClip', 1e-4)
                         a = advancedOptions.get('radius', 1e-4)
 
+                        loglFn = _objfns.LogLFunction.simple_init(mdl, ds, circuitsToUse, min_p, pci, a,
+                                                                  poissonPicture=True, evaltree_cache=evaltree_cache,
+                                                                  comm=comm)
+                        loglWCFn = _objfns.LogLWildcardFunction(loglFn, mdl.to_vector(), budget)
+                        nCircuits = len(circuitsToUse)
+                        dlogl_terms = _np.empty(nCircuits, 'd')
+                        dlogl_elements = loglFn.fn(mdl.to_vector())**2  # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
+                        for i in range(nCircuits):
+                            dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
+                        print("INITIAL 2DLogL (before any wildcard) = ",sum(2*dlogl_terms), max(2*dlogl_terms))
+                        print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold)
+
                         def _wildcard_objective_firstTerms(Wv):
-                            budget.from_vector(Wv)
-                            twoDLogL_terms = _tools.two_delta_logl_terms(mdl, ds, circuitsToUse, min_p, pci, a,
-                                                                         poissonPicture=True,
-                                                                         evaltree_cache=evaltree_cache,
-                                                                         comm=comm, wildcard=budget)
+                            dlogl_elements = loglWCFn.fn(Wv)**2  # b/c loglWCFn gives sqrt of terms (for use in leastsq optimizer)
+                            for i in range(nCircuits):
+                                dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
+
+                            twoDLogL_terms = 2*dlogl_terms
                             twoDLogL = sum(twoDLogL_terms)
                             return max(0, twoDLogL - twoDeltaLogL_threshold) \
                                 + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
 
-                        def _wildcard_objective(Wv):
-                            return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
-
-                        nIters = 0; eta_lower_bound = eta_upper_bound = None
+                        nIters = 0
                         Wvec_init = budget.to_vector()
+                        print("INITIAL Wildcard budget = ",str(budget))
 
-                        # Stage 1: make eta large enough that we get a *large* nonzero objective; keep starting with
-                        # same Wvec_init
-                        #while nIters < 10:
-                        #    printer.log("  Finding initial eta: %g" % eta)
-                        #    soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                        #                         method='L-BFGS-B', callback=None, tol=1e-6)
-                        #    val = _wildcard_objective_firstTerms(soln.x)
-                        #    printer.log("  Firstterms value = %g" % val)
-                        #    if val >= 10.0:  # some "high value" here
-                        #        eta_upper_bound = eta; eta /= 2
-                        #        break
-                        #    eta *= 10
-                        #    nIters += 1
-
-                        # Stage 2: hone in on good eta value, restarting from points where
-                        # we've seen a nonzero objective (we don't trust Wvecs when the objective is 0)
-                        while nIters < 30:
+                        # Find a value of eta that is small enough that the "first terms" are 0.
+                        while nIters < 10:
                             printer.log("  Iter %d: trying eta = %g" % (nIters,eta))
 
                             def _wildcard_objective(Wv):
                                 return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
 
+                            #TODO REMOVE
+                            #import bpdb; bpdb.set_trace()
+                            #Wvec_init[:] = 0.0; print("TEST budget 0\n", _wildcard_objective(Wvec_init))
+                            #Wvec_init[:] = 1e-5; print("TEST budget 1e-5\n", _wildcard_objective(Wvec_init))
+                            #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
+                            #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
+
+                            def callbackF(Wv):
+                                a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
+                                print('wildcard progress: misfit + L1_regularization = %g + %g = %g' % (a,b,a+b),Wv)
                             soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                                                 method='L-BFGS-B', callback=None, tol=1e-6)
+                                                 method='L-BFGS-B', callback=callbackF, tol=1e-6)
                             Wvec = soln.x
-                            # orig_eta = eta
                             firstTerms = _wildcard_objective_firstTerms(Wvec)
-                            printer.log("  Firstterms value = %g" % firstTerms)
+                            #printer.log("  Firstterms value = %g" % firstTerms)
                             meets_conditions = bool(firstTerms < 1e-4)  # some zero-tolerance here
-                            #print("Value = ",_wildcard_objective_firstTerms(Wvec),_wildcard_objective(Wvec),Wvec)
                             if meets_conditions:  # try larger eta
-                                eta_lower_bound = eta
-                                if eta_upper_bound is not None:
-                                    eta = (eta_upper_bound + eta_lower_bound) / 2
-                                else: eta *= 2
+                                break
                             else:  # nonzero objective => take Wvec as new starting point; try smaller eta
                                 Wvec_init = Wvec
-                                eta_upper_bound = eta
-                                if eta_lower_bound is not None:
-                                    eta = (eta_upper_bound + eta_lower_bound) / 2
-                                else: eta /= 2
+                                eta /= 10
 
-                            printer.log("  Interval: eta in [%s,%s]" % (str(eta_upper_bound), str(eta_lower_bound)))
-                            #print("Interval [%s,%s]: eta = %g -> %g  Wvec=%s firstTs=%g" % (
-                            #    str(eta_upper_bound),str(eta_lower_bound),orig_eta,eta,str(Wvec),firstTerms))
-
-                            if eta_upper_bound is not None and eta_lower_bound is not None and \
-                               (eta_upper_bound - eta_lower_bound) / eta_upper_bound < 1e-3:
-                                printer.log("Converged after %d iters!" % nIters)
-                                break
+                            printer.log("  Trying eta = %g" % eta)
                             nIters += 1
 
                     #print("Wildcard budget found for Wvec = ",Wvec)

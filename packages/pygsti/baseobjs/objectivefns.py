@@ -646,6 +646,66 @@ class TimeDependentChi2Function(ObjectiveFunction):
 # See LikelihoodFunction.py for details on patching
 class LogLFunction(ObjectiveFunction):
 
+    @classmethod
+    def simple_init(cls, model, dataset, circuit_list=None,
+                    minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
+                    poissonPicture=True, check=False, opLabelAliases=None,
+                    evaltree_cache=None, comm=None, wildcard=None):
+        """
+        Create a log-likelihood objective function using a simpler set of arguments.
+        """
+        
+        if circuit_list is None:
+            circuit_list = list(dataset.keys())
+    
+        if evaltree_cache and 'evTree' in evaltree_cache:
+            evalTree = evaltree_cache['evTree']
+            lookup = evaltree_cache['lookup']
+            outcomes_lookup = evaltree_cache['outcomes_lookup']
+            #tree_circuit_list = evalTree.generate_circuit_list()
+            # Note: this is != circuit_list, as the tree hold *simplified* circuits
+        else:
+            #OLD: evalTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuit_list, dataset=dataset)
+            evalTree, _, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
+                                                            circuit_list, comm, dataset=dataset)
+    
+            #Fill cache dict if one was given
+            if evaltree_cache is not None:
+                evaltree_cache['evTree'] = evalTree
+                evaltree_cache['lookup'] = lookup
+                evaltree_cache['outcomes_lookup'] = outcomes_lookup
+    
+        nEls = evalTree.num_final_elements()        
+        if evaltree_cache and 'cntVecMx' in evaltree_cache:
+            countVecMx = evaltree_cache['cntVecMx']
+            totalCntVec = evaltree_cache['totalCntVec']
+        else:
+            if opLabelAliases is not None:
+                ds_circuit_list = _lt.find_replace_tuple_list(
+                    circuit_list, opLabelAliases)
+            else:
+                ds_circuit_list = circuit_list
+            
+            countVecMx = _np.empty(nEls, 'd')
+            totalCntVec = _np.empty(nEls, 'd')
+            for (i, opStr) in enumerate(ds_circuit_list):
+                cnts = dataset[opStr].counts
+                totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+                countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
+    
+            #could add to cache, but we don't have option of circuitWeights
+            # here yet, so let's be conservative and not do this:
+            #if evaltree_cache is not None:
+            #    evaltree_cache['cntVecMx'] = countVecMx
+            #    evaltree_cache['totalCntVec'] = totalCntVec
+
+        return cls(model, evalTree, lookup, circuit_list, opLabelAliases, cptp_penalty_factor=0,
+                   spam_penalty_factor=0, cntVecMx=countVecMx, totalCntVec=totalCntVec, minProbClip=minProbClip,
+                   radius=radius, probClipInterval=probClipInterval, wrtBlkSize=None, gthrMem=None,
+                   forcefn_grad=None, poissonPicture=poissonPicture, shiftFctr=100, check=False,
+                   comm=comm, profiler=None, verbosity=0)
+
+    
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
                  spam_penalty_factor, cntVecMx, totalCntVec, minProbClip,
                  radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
@@ -738,21 +798,26 @@ class LogLFunction(ObjectiveFunction):
                 assert(self.forcefn_grad is None), "Cannot use force functions when using the termgap simtype"
                 self.fn = self.termgap_poisson_picture_logl
                 self.jfn = self.poisson_picture_jacobian  # same jacobian as normal case
+                self.v_from_probs_fn = None
             else:
                 self.fn = self.poisson_picture_logl
                 self.jfn = self.poisson_picture_jacobian
+                self.v_from_probs_fn = self._poisson_picture_v_from_probs
         else:
             self.fn = None
             self.jfn = None
 
             raise NotImplementedError(("Non-poisson-picture optimization must be done with something other than a "
                                        "least-squares optimizer and isn't implemented yet."))
-
+        
     def poisson_picture_logl(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
                                  self.check, self.comm)
+        return self._poisson_picture_v_from_probs(tm)
+
+    def _poisson_picture_v_from_probs(self, tm_start):
         pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
         S = self.minusCntVecMx / self.min_p + self.totalCntVec
         S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
@@ -816,9 +881,10 @@ class LogLFunction(ObjectiveFunction):
             assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
             v = _np.concatenate((v, _np.sqrt(forceVec)))
 
-        self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)  #TODO: handle dummy profiler generation in simple_init??
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
+
 
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -1272,3 +1338,36 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
     #return the number of leading-dim indicies we filled in
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
+
+
+class LogLWildcardFunction(ObjectiveFunction):
+
+    def __init__(self, logl_objective_fn, base_pt, wildcard):
+        from .. import tools as _tools
+
+        self.logl_objfn = logl_objective_fn
+        self.basept = base_pt
+        self.wildcard_budget = wildcard        
+
+        self.fn = self.logl_wildcard
+        self.jfn = None  # no jacobian yet
+
+        #calling fn(...) initializes the members of self.logl_objfn
+        logl_at_base = self.logl_objfn.fn(base_pt)
+        self.probs = self.logl_objfn.probs.copy()
+
+    def logl_wildcard(self, Wvec):
+        tm = _time.time()
+        self.wildcard_budget.from_vector(Wvec)
+        self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
+                                          self.logl_objfn.circuitsToUse, self.logl_objfn.lookup)
+
+        #DEBUG!!!
+        #if _np.linalg.norm(self.logl_objfn.probs - self.logl_objfn.freqs) > 1e-6:
+        #    import bpdb; bpdb.set_trace()
+        #    self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
+        #                                      self.logl_objfn.circuitsToUse, self.logl_objfn.lookup)
+
+        return self.logl_objfn._poisson_picture_v_from_probs(tm)
+        #return self.logl_objfn.v_from_probs_fn(tm)
+

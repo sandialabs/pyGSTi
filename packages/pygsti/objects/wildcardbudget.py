@@ -198,17 +198,18 @@ class WildcardBudget(object):
         def chk_sum(alpha,beta):
             return alpha * sum(fvec[A]) + beta * sum(fvec[B]) + sum(fvec[C])
 
-        #Special case where f_k=0 - then don't bother wasting any TVD on
-        # these since the corresponding p_k doesn't enter the likelihood.
-        # => treat these components as if f_k == q_k (ratio = 1)
+        #Special case where f_k=0, since ratio is ill-defined. One might think
+        # we shouldn't don't bother wasting any TVD on these since the corresponding
+        # p_k doesn't enter the likelihood. ( => treat these components as if f_k == q_k (ratio = 1))
+        # BUT they *do* enter in poisson-picture logl... so set freqs very small so ratio is large (and probably not chosen)
         zero_inds = _np.where(freqs == 0.0)[0]
         if len(zero_inds) > 0:
             freqs = freqs.copy()  # copy for now instead of doing something more clever
-            freqs[zero_inds] = probs_in[zero_inds]
+            freqs[zero_inds] = 1e-8
+            #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
         for i, circ in enumerate(circuits):
             elInds = elIndices[i]
-            #outLbls = outcomes_lookup[i] # needed?
             qvec = probs_in[elInds]
             fvec = freqs[elInds]
             W = self.circuit_budget(circ)
@@ -318,7 +319,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
     the parameters corresponding to each primitive operation in the circuit.
     """
 
-    def __init__(self, primitiveOpLabels, start_budget=0.01):
+    def __init__(self, primitiveOpLabels, add_spam=True, start_budget=0.01):
         """
         Create a new PrimitiveOpsWildcardBudget.
 
@@ -330,13 +331,23 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             layers) that will appear in circuits.  Each one of these operations
             will be assigned it's own independent element in the wilcard-vector.
 
-        start_budget : float
+        add_spam : bool, optional
+            Whether an additional "SPAM" budget should be included, which is
+            simply a uniform budget added to each circuit.
+
+        start_budget : float, optional
             A rough initial value to set all the parameters to.  Some slight
             offset "noise" is also applied to better seed optimization of these
             parameters later on - this just gives a rough order of magnitude.
         """
         self.primOpLookup = {lbl: i for i, lbl in enumerate(primitiveOpLabels)}
         nPrimOps = len(self.primOpLookup)
+        if add_spam:
+            nPrimOps += 1
+            self.spam_index = nPrimOps-1  #last element is SPAM
+        else:
+            self.spam_index = None
+
         Wvec = _np.array([start_budget] * nPrimOps) + start_budget / 10.0 * \
             _np.arange(nPrimOps)  # 2nd term to slightly offset initial values
         super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
@@ -355,7 +366,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         float
         """
         Wvec = self.wildcard_vector
-        budget = 0
+        budget = 0 if (self.spam_index is None) else abs(Wvec[self.spam_index])
         for layer in circuit:
             for component in layer.components:
                 budget += abs(Wvec[self.primOpLookup[component]])
@@ -380,4 +391,5 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     def __str__(self):
         wildcardDict = {lbl: abs(self.wildcard_vector[index]) for lbl, index in self.primOpLookup.items()}
+        if self.spam_index is not None: wildcardDict['SPAM'] = self.wildcard_vector[self.spam_index]
         return "Wildcard budget: " + str(wildcardDict)
