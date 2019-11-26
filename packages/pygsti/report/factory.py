@@ -1112,8 +1112,7 @@ def create_standard_report(results, filename, title="auto",
            "scaling", switchBd.gssFinal, eff_ds, None,
            submatrices=switchBd.scaledSubMxsDict, comm=comm, bgcolor=bgcolor)
 
-    addqty(1, 'unmodeledErrorBudgetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, None,
-           display=('unmodeled',), wildcard=switchBd.wildcardBudget)
+    addqty(1, 'unmodeledErrorBudgetTable', ws.WildcardBudgetTable, switchBd.wildcardBudget)
 
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)

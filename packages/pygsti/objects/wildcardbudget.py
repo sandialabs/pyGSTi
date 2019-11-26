@@ -83,6 +83,17 @@ class WildcardBudget(object):
         """
         raise NotImplementedError("Derived classes must implement `circuit_budget`")
 
+    def get_descriptive_dict(self):
+        """
+        Return the contents of this budget in a dictionary containing
+        (description, value) pairs for each element name.
+
+        Returns
+        -------
+        dict
+        """
+        raise NotImplementedError("Derived classes must implement `to_descriptive_dict`")
+
     #def compute_circuit_wildcard_budget(c, Wvec):
     #    #raise NotImplementedError("TODO!!!")
     #    #for now, assume Wvec is a length-1 vector
@@ -372,6 +383,22 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
                 budget += abs(Wvec[self.primOpLookup[component]])
         return budget
 
+    def get_descriptive_dict(self):
+        """
+        Return the contents of this budget in a dictionary containing
+        (description, value) pairs for each element name.
+
+        Returns
+        -------
+        dict
+        """
+        wildcardDict = {}
+        for lbl, index in self.primOpLookup.items():
+            wildcardDict[lbl] = ('budget per each instance %s' % lbl, abs(self.wildcard_vector[index]))
+        if self.spam_index is not None:
+            wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', abs(self.wildcard_vector[self.spam_index]))
+        return wildcardDict
+
     def get_op_budget(self, op_label):
         """
         Retrieve the budget amount correponding to primitive op `op_label`.
@@ -391,5 +418,5 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     def __str__(self):
         wildcardDict = {lbl: abs(self.wildcard_vector[index]) for lbl, index in self.primOpLookup.items()}
-        if self.spam_index is not None: wildcardDict['SPAM'] = self.wildcard_vector[self.spam_index]
+        if self.spam_index is not None: wildcardDict['SPAM'] = abs(self.wildcard_vector[self.spam_index])
         return "Wildcard budget: " + str(wildcardDict)

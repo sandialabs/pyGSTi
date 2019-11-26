@@ -2687,6 +2687,38 @@ class ProfilerTable(WorkspaceTable):
         table.finish()
         return table
 
+class WildcardBudgetTable(WorkspaceTable):
+    """ Table of wildcard budget information """
+
+    def __init__(self, ws, budget):
+        """
+        Create a table of wildcard budget information.
+
+        Parameters
+        ----------
+        budget : WildcardBudget
+            The wildcard budget object to extract timings from.
+
+        sortBy : {"time", "name"}
+            What the timer values should be sorted by.
+        """
+        super(WildcardBudgetTable, self).__init__(ws, self._create, budget)
+
+    def _create(self, budget):
+
+        colHeadings = ('Element', 'Description', 'Budget')
+        formatters = ('Bold', 'Bold', 'Bold')
+
+        #custom latex header for maximum width imposed on 2nd col
+        table = _ReportTable(colHeadings, formatters)
+
+        if budget is not None:
+            for nm, (desc, val) in budget.get_descriptive_dict().items():
+                table.addrow((nm, desc, val), (None, None, None))
+
+        table.finish()
+        return table
+
 
 class ExampleTable(WorkspaceTable):
     """ Table used just as an example of what tables can do/look like for use
