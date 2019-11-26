@@ -1452,7 +1452,8 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     twoDeltaLogL_terms = fitQty
                     twoDeltaLogL = sum(twoDeltaLogL_terms)
 
-                    budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels(), add_spam=True)
+                    budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels(), add_spam=True,
+                                                              start_budget=0.0)
 
                     if twoDeltaLogL <= twoDeltaLogL_threshold \
                        and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
@@ -1487,7 +1488,6 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                         nIters = 0
                         Wvec_init = budget.to_vector()
-                        Wvec_init[:] = 0.0; budget.from_vector(Wvec_init)
                         print("INITIAL Wildcard budget = ",str(budget))
 
                         # Find a value of eta that is small enough that the "first terms" are 0.

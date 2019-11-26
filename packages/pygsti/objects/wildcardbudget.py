@@ -330,7 +330,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
     the parameters corresponding to each primitive operation in the circuit.
     """
 
-    def __init__(self, primitiveOpLabels, add_spam=True, start_budget=0.01):
+    def __init__(self, primitiveOpLabels, add_spam=True, start_budget=0.0):
         """
         Create a new PrimitiveOpsWildcardBudget.
 
@@ -347,9 +347,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             simply a uniform budget added to each circuit.
 
         start_budget : float, optional
-            A rough initial value to set all the parameters to.  Some slight
-            offset "noise" is also applied to better seed optimization of these
-            parameters later on - this just gives a rough order of magnitude.
+            An initial value to set all the parameters to.
         """
         self.primOpLookup = {lbl: i for i, lbl in enumerate(primitiveOpLabels)}
         nPrimOps = len(self.primOpLookup)
@@ -359,8 +357,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         else:
             self.spam_index = None
 
-        Wvec = _np.array([start_budget] * nPrimOps) + start_budget / 10.0 * \
-            _np.arange(nPrimOps)  # 2nd term to slightly offset initial values
+        Wvec = _np.array([start_budget] * nPrimOps)
         super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
 
     def circuit_budget(self, circuit):
