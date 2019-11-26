@@ -1442,7 +1442,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     nDataParams = ds.get_degrees_of_freedom(circuitsToUse)  # number of independent parameters
                     # in dataset (max. model # of params)
                     nModelParams = mdl.num_params()  # just use total number of params
-                    percentile = 0.05; nBoxes = evTree.num_final_elements()
+                    percentile = 0.05; nBoxes = len(circuitsToUse)
                     twoDeltaLogL_threshold = _chi2.ppf(1 - percentile, nDataParams - nModelParams)
                     redbox_threshold = _chi2.ppf(1 - percentile / nBoxes, 1)
                     eta = 10.0  # some default starting value - this *shouldn't* really matter
@@ -1473,7 +1473,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                         for i in range(nCircuits):
                             dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
                         print("INITIAL 2DLogL (before any wildcard) = ",sum(2*dlogl_terms), max(2*dlogl_terms))
-                        print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold)
+                        print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold, nBoxes)
 
                         def _wildcard_objective_firstTerms(Wv):
                             dlogl_elements = loglWCFn.fn(Wv)**2  # b/c loglWCFn gives sqrt of terms (for use in leastsq optimizer)
@@ -1487,6 +1487,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                         nIters = 0
                         Wvec_init = budget.to_vector()
+                        Wvec_init[:] = 0.0; budget.from_vector(Wvec_init)
                         print("INITIAL Wildcard budget = ",str(budget))
 
                         # Find a value of eta that is small enough that the "first terms" are 0.
@@ -1505,7 +1506,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                             def callbackF(Wv):
                                 a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
-                                print('wildcard progress: misfit + L1_regularization = %g + %g = %g' % (a,b,a+b),Wv)
+                                print('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g' % (a,b,a+b),Wv)
                             soln = _spo.minimize(_wildcard_objective, Wvec_init,
                                                  method='L-BFGS-B', callback=callbackF, tol=1e-6)
                             Wvec = soln.x
