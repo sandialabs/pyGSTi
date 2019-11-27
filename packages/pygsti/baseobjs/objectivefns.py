@@ -14,6 +14,7 @@ import numpy as _np
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import optimize as _opt
+from ..tools import listtools as _lt
 
 
 class ObjectiveFunction(object):
@@ -95,10 +96,11 @@ class Chi2Function(ObjectiveFunction):
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
 
         if self.printer.verbosity < 4:  # Fast versions of functions
-            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:
+            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0 and mdl.get_simtype() != "termgap":
                 # Fast un-regularized version
                 self.fn = self.simple_chi2
                 self.jfn = self.simple_jac
+
             elif regularizeFactor != 0:
                 # Fast regularized version
                 assert(cptp_penalty_factor == 0), "Cannot have regularizeFactor and cptp_penalty_factor != 0"
@@ -106,12 +108,20 @@ class Chi2Function(ObjectiveFunction):
                 self.fn = self.regularized_chi2
                 self.jfn = self.regularized_jac
 
+            elif mdl.get_simtype() == "termgap":
+                assert(cptp_penalty_factor == 0), "Cannot have termgap_pentalty_factor and cptp_penalty_factor != 0"
+                assert(spam_penalty_factor == 0), "Cannot have termgap_pentalty_factor and spam_penalty_factor != 0"
+                self.fn = self.termgap_chi2
+                self.jfn = self.simple_jac
+
             else:  # cptp_pentalty_factor != 0 and/or spam_pentalty_factor != 0
                 assert(regularizeFactor == 0), "Cannot have regularizeFactor and other penalty factors > 0"
                 self.fn = self.penalized_chi2
                 self.jfn = self.penalized_jac
 
         else:  # Verbose (DEBUG) version of objective_func
+            if mdl.get_simtype() == "termgap":
+                raise NotImplementedError("Still need to add termgap support to verbose chi2!")
             self.fn = self.verbose_chi2
             self.jfn = self.verbose_jac
 
@@ -125,28 +135,30 @@ class Chi2Function(ObjectiveFunction):
         dw[_np.logical_or(p < self.minProbClipForWeighting, p > (1 - self.minProbClipForWeighting))] = 0.0
         return dw
 
-    def update_v_for_omitted_probs(self, v):
+    def update_v_for_omitted_probs(self, v, probs):
         # if i-th circuit has omitted probs, have sqrt( N*(p_i-f_i)^2/p_i + sum_k(N*p_k) )
         # so we need to take sqrt( v_i^2 + N*sum_k(p_k) )
-        omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.lookup[i]])
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
                                          for i in self.indicesOfCircuitsWithOmittedData])
         clipped_oprobs = _np.clip(omitted_probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
         v[self.firsts] = _np.sqrt(v[self.firsts]**2 + self.N[self.firsts] * omitted_probs**2 / clipped_oprobs)
 
-    def update_dprobs_for_omitted_probs(self, dprobs, weights):
+    def update_dprobs_for_omitted_probs(self, dprobs, probs, weights, dprobs_omitted_rowsum):
         # with omitted terms, new_obj = sqrt( obj^2 + corr ) where corr = N*omitted_p^2/clipped_omitted_p
         # so then d(new_obj) = 1/(2*new_obj) *( 2*obj*dobj + dcorr )*domitted_p where dcorr = N when not clipped
         #    and 2*N*omitted_p/clip_bound * domitted_p when clipped
-        v = (self.probs - self.f) * weights
-        omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.lookup[i]])
+        v = (probs - self.f) * weights
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
                                          for i in self.indicesOfCircuitsWithOmittedData])
         clipped_oprobs = _np.clip(omitted_probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
         dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, self.N[self.firsts],
                                           2 * self.N[self.firsts] * omitted_probs / clipped_oprobs)
         fullv = _np.sqrt(v[self.firsts]**2 + self.N[self.firsts] * omitted_probs**2 / clipped_oprobs)
+        # avoid NaNs when both fullv and v[firsts] are zero - result should be *zero* in this case
+        fullv[v[self.firsts] == 0.0] = 1.0
         dprobs[self.firsts, :] = (0.5 / fullv[:, None]) * (
             2 * v[self.firsts, None] * dprobs[self.firsts, :]
-            - dprobs_factor_omitted[:, None] * self.dprobs_omitted_rowsum)
+            - dprobs_factor_omitted[:, None] * dprobs_omitted_rowsum)
 
     #Objective Function
 
@@ -157,7 +169,48 @@ class Chi2Function(ObjectiveFunction):
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
 
         if self.firsts is not None:
-            self.update_v_for_omitted_probs(v)
+            self.update_v_for_omitted_probs(v, self.probs)
+
+        self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+        assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
+        return v
+
+    def termgap_chi2(self, vectorGS, oob_check=False):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+
+        if oob_check:
+            #DEBUGGING HACK TODO REMOVE - make sure computed probs like in expected range
+            #achieved_sopm, max_sopm = self.mdl._fwdsim().bulk_get_achieved_and_max_sopm(self.evTree, self.comm, memLimit=None)
+            #gaps = max_sopm - achieved_sopm
+            #mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
+            #db_probs = _np.zeros(self.probs.shape, 'd')
+            #mdl_fullsim.from_vector(vectorGS)
+            #mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
+            #for i,(fullsim_prob, approx_prob, errorbar) in enumerate(zip(db_probs, self.probs, gaps)):
+            #    if not (approx_prob - errorbar < fullsim_prob < approx_prob + errorbar):
+            #        print("Failed: %g < %g < %g" % (approx_prob - errorbar, fullsim_prob, approx_prob + errorbar))
+            #        #import bpdb; bpdb.set_trace()
+            #        assert(False),"STOP"
+            #heur_scale = self.probs / achieved_sopm
+            ##heur_scale = 1.0 / max_sopm
+            #print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" %
+            #      (max(gaps), _np.mean(gaps),
+            #       max(_np.abs(db_probs - self.probs)), _np.mean(gaps * heur_scale),
+            #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps),
+            #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps * heur_scale),
+            #      ))
+            #allowable_mean_gap = 0.01  # need to plumb to Model or fwd sim...
+            #END DEBUGGING
+
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
+                raise ValueError("Out of bounds!")  # signals LM optimizer
+
+        v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+
+        if self.firsts is not None:
+            self.update_v_for_omitted_probs(v, self.probs)
 
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
@@ -171,7 +224,7 @@ class Chi2Function(ObjectiveFunction):
         v = (self.probs - self.f) * weights  # dim KM (K = nSpamLabels, M = nCircuits)
 
         if self.firsts is not None:
-            self.update_v_for_omitted_probs(v)
+            self.update_v_for_omitted_probs(v, self.probs)
 
         gsVecNorm = self.regularizeFactor * _np.array([max(0, absx - 1.0) for absx in map(abs, vectorGS)], 'd')
         self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
@@ -185,7 +238,7 @@ class Chi2Function(ObjectiveFunction):
         v = (self.probs - self.f) * weights  # dims K x M (K = nSpamLabels, M = nCircuits)
 
         if self.firsts is not None:
-            self.update_v_for_omitted_probs(v)
+            self.update_v_for_omitted_probs(v, self.probs)
 
         if self.cptp_penalty_factor > 0:
             cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
@@ -206,7 +259,7 @@ class Chi2Function(ObjectiveFunction):
 
         v = (self.probs - self.f) * weights
         if self.firsts is not None:
-            self.update_v_for_omitted_probs(v)
+            self.update_v_for_omitted_probs(v, self.probs)
 
         chisq = _np.sum(v * v)
 
@@ -249,6 +302,25 @@ class Chi2Function(ObjectiveFunction):
                                   prMxToFill=self.probs, clipTo=self.probClipInterval,
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        #DEBUG TODO REMOVE - test dprobs to make sure they look right.
+        #EPS = 1e-7
+        #db_probs = _np.empty(self.probs.shape, 'd')
+        #db_probs2 = _np.empty(self.probs.shape, 'd')
+        #db_dprobs = _np.empty(dprobs.shape, 'd')
+        #self.mdl.bulk_fill_probs(db_probs, self.evTree, self.probClipInterval, self.check, self.comm)
+        #for i in range(self.vec_gs_len):
+        #    vectorGS_eps = vectorGS.copy()
+        #    vectorGS_eps[i] += EPS
+        #    self.mdl.from_vector(vectorGS_eps)
+        #    self.mdl.bulk_fill_probs(db_probs2, self.evTree, self.probClipInterval, self.check, self.comm)
+        #    db_dprobs[:,i] = (db_probs2 - db_probs) / EPS
+        #if _np.linalg.norm(dprobs - db_dprobs)/dprobs.size > 1e-6:
+        #    #assert(False), "STOP: %g" % (_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
+        #    print("DB: dprobs per el mismatch = ",_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
+        #self.mdl.from_vector(vectorGS)
+        #dprobs[:,:] = db_dprobs[:,:]
+
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
@@ -260,7 +332,7 @@ class Chi2Function(ObjectiveFunction):
         # with a different shape (jac.shape == [KM,vec_gs_len])
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
             v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
@@ -288,7 +360,7 @@ class Chi2Function(ObjectiveFunction):
         # Note: this also computes jac[0:KM,:]
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         gsVecGrad = _np.diag([(self.regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0)
                               for x in vectorGS])  # (N,N)
@@ -320,7 +392,7 @@ class Chi2Function(ObjectiveFunction):
         # Note: this also computes jac[0:KM,:]
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         off = 0
         if self.cptp_penalty_factor > 0:
@@ -357,7 +429,7 @@ class Chi2Function(ObjectiveFunction):
         dprobs *= dPr_prefactor[:, None]  # (KM,N) * (KM,1) = (KM,N)  (N = dim of vectorized model)
 
         if self.firsts is not None:
-            self.update_dprobs_for_omitted_probs(dprobs, weights)
+            self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         if self.regularizeFactor != 0:
             gsVecGrad = _np.diag([(self.regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
@@ -575,10 +647,70 @@ class TimeDependentChi2Function(ObjectiveFunction):
 # See LikelihoodFunction.py for details on patching
 class LogLFunction(ObjectiveFunction):
 
+    @classmethod
+    def simple_init(cls, model, dataset, circuit_list=None,
+                    minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
+                    poissonPicture=True, check=False, opLabelAliases=None,
+                    evaltree_cache=None, comm=None, wildcard=None):
+        """
+        Create a log-likelihood objective function using a simpler set of arguments.
+        """
+        
+        if circuit_list is None:
+            circuit_list = list(dataset.keys())
+    
+        if evaltree_cache and 'evTree' in evaltree_cache:
+            evalTree = evaltree_cache['evTree']
+            lookup = evaltree_cache['lookup']
+            outcomes_lookup = evaltree_cache['outcomes_lookup']
+            #tree_circuit_list = evalTree.generate_circuit_list()
+            # Note: this is != circuit_list, as the tree hold *simplified* circuits
+        else:
+            #OLD: evalTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuit_list, dataset=dataset)
+            evalTree, _, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
+                                                            circuit_list, comm, dataset=dataset)
+    
+            #Fill cache dict if one was given
+            if evaltree_cache is not None:
+                evaltree_cache['evTree'] = evalTree
+                evaltree_cache['lookup'] = lookup
+                evaltree_cache['outcomes_lookup'] = outcomes_lookup
+    
+        nEls = evalTree.num_final_elements()        
+        if evaltree_cache and 'cntVecMx' in evaltree_cache:
+            countVecMx = evaltree_cache['cntVecMx']
+            totalCntVec = evaltree_cache['totalCntVec']
+        else:
+            if opLabelAliases is not None:
+                ds_circuit_list = _lt.find_replace_tuple_list(
+                    circuit_list, opLabelAliases)
+            else:
+                ds_circuit_list = circuit_list
+            
+            countVecMx = _np.empty(nEls, 'd')
+            totalCntVec = _np.empty(nEls, 'd')
+            for (i, opStr) in enumerate(ds_circuit_list):
+                cnts = dataset[opStr].counts
+                totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+                countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
+    
+            #could add to cache, but we don't have option of circuitWeights
+            # here yet, so let's be conservative and not do this:
+            #if evaltree_cache is not None:
+            #    evaltree_cache['cntVecMx'] = countVecMx
+            #    evaltree_cache['totalCntVec'] = totalCntVec
+
+        return cls(model, evalTree, lookup, circuit_list, opLabelAliases, cptp_penalty_factor=0,
+                   spam_penalty_factor=0, cntVecMx=countVecMx, totalCntVec=totalCntVec, minProbClip=minProbClip,
+                   radius=radius, probClipInterval=probClipInterval, wrtBlkSize=None, gthrMem=None,
+                   forcefn_grad=None, poissonPicture=poissonPicture, shiftFctr=100, check=False,
+                   comm=comm, profiler=None, verbosity=0)
+
+    
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                 spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius, probClipInterval, wrtBlkSize,
-                 gthrMem, forcefn_grad, poissonPicture, shiftFctr=100,
-                 check=False, comm=None, profiler=None, verbosity=0):
+                 spam_penalty_factor, cntVecMx, totalCntVec, minProbClip,
+                 radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
+                 shiftFctr=100, check=False, comm=None, profiler=None, verbosity=0):
         from .. import tools as _tools
 
         self.mdl = mdl
@@ -661,20 +793,32 @@ class LogLFunction(ObjectiveFunction):
             #index to jacobian row of first forcing term
 
         if poissonPicture:
-            self.fn = self.poisson_picture_logl
-            self.jfn = self.poisson_picture_jacobian
+            if mdl.get_simtype() == "termgap":
+                assert(cptp_penalty_factor == 0), "Cannot have cptp_penalty_factor != 0 when using the termgap simtype"
+                assert(spam_penalty_factor == 0), "Cannot have spam_penalty_factor != 0 when using the termgap simtype"
+                assert(self.forcefn_grad is None), "Cannot use force functions when using the termgap simtype"
+                self.fn = self.termgap_poisson_picture_logl
+                self.jfn = self.poisson_picture_jacobian  # same jacobian as normal case
+                self.v_from_probs_fn = None
+            else:
+                self.fn = self.poisson_picture_logl
+                self.jfn = self.poisson_picture_jacobian
+                self.v_from_probs_fn = self._poisson_picture_v_from_probs
         else:
             self.fn = None
             self.jfn = None
 
             raise NotImplementedError(("Non-poisson-picture optimization must be done with something other than a "
                                        "least-squares optimizer and isn't implemented yet."))
-
+        
     def poisson_picture_logl(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
                                  self.check, self.comm)
+        return self._poisson_picture_v_from_probs(tm)
+
+    def _poisson_picture_v_from_probs(self, tm_start):
         pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
         S = self.minusCntVecMx / self.min_p + self.totalCntVec
         S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
@@ -734,13 +878,14 @@ class LogLFunction(ObjectiveFunction):
         v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
 
         if self.forcefn_grad is not None:
-            forceVec = self.forceShift - _np.dot(self.forcefn_grad, vectorGS)
+            forceVec = self.forceShift - _np.dot(self.forcefn_grad, self.mdl.to_vector())
             assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
             v = _np.concatenate((v, _np.sqrt(forceVec)))
 
-        self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)  #TODO: handle dummy profiler generation in simple_init??
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
+
 
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -829,6 +974,67 @@ class LogLFunction(ObjectiveFunction):
                                       tol=1e-3, eps=1e-6, errType='abs')
         self.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
+
+    def _termgap_v2_from_probs(self, probs, S, S2):
+        pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
+        v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs) + self.totalCntVec * \
+            pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+        v = _np.maximum(v, 0)
+
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(probs < self.min_p, v + S * (probs - self.min_p) + S2 * (probs - self.min_p)**2, v)
+        v = _np.where(self.minusCntVecMx == 0,
+                      self.totalCntVec * _np.where(probs >= self.a,
+                                                   probs,
+                                                   (-1.0 / (3 * self.a**2)) * probs**3 + probs**2 / self.a
+                                                   + self.a / 3.0),
+                      v)
+        # special handling for f == 0 terms
+        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+
+        if self.firsts is not None:
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
+                                             for i in self.indicesOfCircuitsWithOmittedData])
+            v[self.firsts] += self.totalCntVec[self.firsts] * \
+                _np.where(omitted_probs >= self.a, omitted_probs,
+                          (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
+
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        return v
+
+    def termgap_poisson_picture_logl(self, vectorGS, oob_check=False):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
+                                 self.check, self.comm)
+
+        if oob_check:
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
+                raise ValueError("Out of bounds!")  # signals LM optimizer
+
+        S = self.minusCntVecMx / self.min_p + self.totalCntVec
+        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
+        v2 = self._termgap_v2_from_probs(self.probs, S, S2)
+        v = _np.sqrt(v2)
+
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        if self.cptp_penalty_factor != 0:
+            cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
+        else: cpPenaltyVec = []
+
+        if self.spam_penalty_factor != 0:
+            spamPenaltyVec = _spam_penalty(self.mdl, self.spam_penalty_factor, self.opBasis)
+        else: spamPenaltyVec = []
+
+        v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
+
+        if self.forcefn_grad is not None:
+            forceVec = self.forceShift - _np.dot(self.forcefn_grad, vectorGS)
+            assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
+            v = _np.concatenate((v, _np.sqrt(forceVec)))
+
+        self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
+        return v  # Note: no test for whether probs is in [0,1] so no guarantee that
 
 
 class TimeDependentLogLFunction(ObjectiveFunction):
@@ -1082,7 +1288,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
         # denMx = sum( spamvec[i] * Bmx[i] )
 
-        #contract to get (note contract along both mx indices b/c treat like a mx basis):
+        #contract to get (note contrnact along both mx indices b/c treat like a mx basis):
         # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
         # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
         #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
@@ -1127,8 +1333,43 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
             spamPenaltyVecGradToFill[i, :] = 0.0
             spamPenaltyVecGradToFill[i, effectvec.gpindices] = v.real
+            i += 1
 
             sgnE = dVdp = v = None  # free mem
 
     #return the number of leading-dim indicies we filled in
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
+
+
+class LogLWildcardFunction(ObjectiveFunction):
+
+    def __init__(self, logl_objective_fn, base_pt, wildcard):
+        from .. import tools as _tools
+
+        self.logl_objfn = logl_objective_fn
+        self.basept = base_pt
+        self.wildcard_budget = wildcard
+        self.wildcard_budget_precomp = wildcard.get_precomp_for_circuits(self.logl_objfn.circuitsToUse)
+
+        self.fn = self.logl_wildcard
+        self.jfn = None  # no jacobian yet
+
+        #calling fn(...) initializes the members of self.logl_objfn
+        logl_at_base = self.logl_objfn.fn(base_pt)
+        self.probs = self.logl_objfn.probs.copy()
+
+    def logl_wildcard(self, Wvec):
+        tm = _time.time()
+        self.wildcard_budget.from_vector(Wvec)
+        self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
+                                          self.logl_objfn.circuitsToUse, self.logl_objfn.lookup, self.wildcard_budget_precomp)
+
+        #DEBUG!!!
+        #if _np.linalg.norm(self.logl_objfn.probs - self.logl_objfn.freqs) > 1e-6:
+        #    import bpdb; bpdb.set_trace()
+        #    self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
+        #                                      self.logl_objfn.circuitsToUse, self.logl_objfn.lookup)
+
+        return self.logl_objfn._poisson_picture_v_from_probs(tm)
+        #return self.logl_objfn.v_from_probs_fn(tm)
+

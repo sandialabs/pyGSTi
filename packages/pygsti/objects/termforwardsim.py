@@ -24,6 +24,9 @@ from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label
 from .termevaltree import TermEvalTree as _TermEvalTree
+from .termevaltree import TermPathSet as _TermPathSet
+from .termevaltree import UnsplitTreeTermPathSet as _UnsplitTreeTermPathSet
+from .termevaltree import SplitTreeTermPathSet as _SplitTreeTermPathSet
 from .forwardsim import ForwardSimulator
 from .polynomial import Polynomial as _Polynomial
 from . import replib
@@ -72,10 +75,13 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None,
-                 min_term_mag=None, opt_mode=False, cache=None):
+    def __init__(self, dim, simplified_op_server, paramvec,  # below here are simtype-specific args
+                 mode, max_order, desired_perr=None, allowed_perr=None,
+                 min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
+                 max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
         """
         Construct a new TermForwardSimulator object.
+        TODO: fix this docstring (and maybe other fwdsim __init__ functions?
 
         Parameters
         ----------
@@ -99,6 +105,20 @@ class TermForwardSimulator(ForwardSimulator):
             The maximum order of error-rate terms to include in probability
             computations.
 
+        pathmag_gap : float
+            TODO: docstring
+
+        max_paths_per_outcome : int, optional
+            The maximum number of paths that are allowed to be traversed when
+            computing any single circuit outcome probability.
+
+        gap_inflation_factor : float, optional
+            A multiplicative factor typically > 1 that multiplies `pathmag_gap`
+            to creat a new "inflated gap".  If an achieved sum-of-path-magnitudes
+            is more than this inflated-gap below the maximum for a circuit,
+            computation of the circuit outcome's probability will result in an
+            error being raised.
+
         cache : dict, optional
             A dictionary of pre-computed compact polynomial objects.  Keys are
             `(max_order, rholabel, elabel, circuit)` tuples, where
@@ -114,11 +134,17 @@ class TermForwardSimulator(ForwardSimulator):
         #    would require pLeft*pRight => |pLeft|^2
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
         self.mode = mode
-        self.max_order = max_order  # only used in "taylor-order" mode
-        self.pathmagnitude_gap = pathmag_gap  # only used in "pruned" mode
-        self.min_term_mag = min_term_mag  # only used in "pruned" mode
-        self.opt_mode = opt_mode
+        self.max_order = max_order
         self.cache = cache
+
+        # only used in "pruned" mode:
+        # used when generating a list of paths - try to get gaps to be this (*no* heuristic)
+        self.desired_pathmagnitude_gap = desired_perr
+        self.allowed_perr = allowed_perr  # used to abort optimizations when errors in probs are too high
+        self.perr_heuristic = perr_heuristic  # method used to compute expected errors in probs (often heuristic)
+        self.min_term_mag = min_term_mag  # minimum abs(term coeff) to consider
+        self.max_paths_per_outcome = max_paths_per_outcome
+
         self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
@@ -132,6 +158,11 @@ class TermForwardSimulator(ForwardSimulator):
         self.times_debug = {'tstartup': 0.0, 'total': 0.0,
                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0}
+
+        # not used except by _do_term_runopt in core.py -- maybe these should move to advancedoptions?
+        self.max_term_stages = max_term_stages
+        self.path_fraction_threshold = path_fraction_threshold
+        self.oob_check_interval = oob_check_interval
 
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
@@ -185,130 +216,256 @@ class TermForwardSimulator(ForwardSimulator):
                 rho = f.acton(rho)  # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
-    def prs_directly(self, rholabel, elabels, circuit_list, comm=None, memLimit=None, resetWts=True, repcache=None):
+    def prs_directly(self, evalTree, comm=None, memLimit=None, resetWts=True, repcache=None):
 
-        #Like get_p_polys but no caching, and this is very slow...
-        prs = _np.empty((len(elabels), len(circuit_list)), 'd')  # [ list() for i in range(len(elabels)) ]
+        prs = _np.empty(evalTree.num_final_elements(), 'd')
         #print("Computing prs directly for %d circuits" % len(circuit_list))
         if repcache is None: repcache = {}  # new repcache...
-        for i, circuit in enumerate(circuit_list):
+        k = 0   # *linear* evaluation order so we know final indices are just running
+        for i in evalTree.get_evaluation_order():
+            circuit = evalTree[i]
             #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
             assert(self.evotype == "svterm")  # for now, just do SV case
             fastmode = False  # start with slow mode
             wtTol = 0.1
-            prs[:, i] = replib.SV_prs_directly(self, rholabel, elabels, circuit,
-                                               repcache, comm, memLimit, fastmode, wtTol, resetWts, self.times_debug)
+            rholabel = circuit[0]
+            opStr = circuit[1:]
+            elabels = evalTree.simplified_circuit_elabels[i]
+            prs[k:k + len(elabels)] = replib.SV_prs_directly(self, rholabel, elabels, opStr,
+                                                             repcache, comm, memLimit, fastmode, wtTol, resetWts,
+                                                             self.times_debug)
+            k += len(elabels)
         #print("PRS = ",prs)
         return prs
 
+    def dprs_directly(self, evalTree, wrtSlice, comm=None, memLimit=None, resetWts=True, repcache=None):
+        #Finite difference derivatives (SLOW!)
+
+        if wrtSlice is None:
+            wrt_indices = list(range(self.Np))
+        elif isinstance(wrtSlice, slice):
+            wrt_indices = _slct.indices(wrtSlice)
+        else:
+            wrt_indices = wrtSlice
+
+        eps = 1e-6  # HARDCODED
+        probs = self.prs_directly(evalTree, comm, memLimit, resetWts, repcache)
+        dprobs = _np.empty((evalTree.num_final_elements(), len(wrt_indices)), 'd')
+        orig_vec = self.to_vector().copy()
+        iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
+        for i in range(self.Np):
+            #print("direct dprobs cache %d of %d" % (i,self.Np))
+            if i in iParamToFinal:  # LATER: add MPI support?
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.from_vector(vec, close=True)
+                dprobs[:, iFinal] = (self.prs_directly(evalTree,
+                                                       comm=None,
+                                                       memLimit=None,
+                                                       resetWts=False,
+                                                       repcache=repcache) - probs) / eps
+        self.from_vector(orig_vec, close=True)
+        return dprobs
+
+    #TODO REMOVE - UNNEEDED NOW - except maybe for helping w/docstrings
+    # def OLD_prs_as_pruned_polyreps(self,
+    #                            rholabel,
+    #                            elabels,
+    #                            circuit,
+    #                            repcache,
+    #                            opcache,
+    #                            circuitsetup_cache,
+    #                            comm=None,
+    #                            memLimit=None,
+    #                            pathmagnitude_gap=0.0,
+    #                            min_term_mag=0.01,
+    #                            max_paths=500,
+    #                            current_threshold=None,
+    #                            compute_polyreps=True):
+    #     """
+    #     Computes polynomial-representations of the probabilities for multiple
+    #     spam-tuples of `circuit`, sharing the same state preparation (so with
+    #     different POVM effects).  Employs a truncated or pruned path-integral
+    #     approach, as opposed to just including everything up to some Taylor
+    #     order as in :method:`prs_as_polys`.
+    #
+    #     Parameters
+    #     ----------
+    #     rho_label : Label
+    #         The state preparation label.
+    #
+    #     elabels : list
+    #         A list of :class:`Label` objects giving the *simplified* effect labels.
+    #
+    #     circuit : Circuit or tuple
+    #         A tuple-like object of *simplified* gates (e.g. may include
+    #         instrument elements like 'Imyinst_0')
+    #
+    #     repcache, opcache : dict, optional
+    #         Dictionaries used to cache operator representations and
+    #         operators themselves (respectively) to speed up future calls
+    #         to this function that would use the same set of operations.
+    #
+    #     comm : mpi4py.MPI.Comm, optional
+    #         When not None, an MPI communicator for distributing the computation
+    #         across multiple processors.
+    #
+    #     memLimit : int, optional
+    #         A memory limit in bytes to impose on the computation.
+    #
+    #     pathmagnitude_gap : float, optional
+    #         The amount less than the perfect sum-of-path-magnitudes that
+    #         is desired.  This sets the target sum-of-path-magnitudes for each
+    #         circuit -- the threshold that determines how many paths are added.
+    #
+    #     min_term_mag : float, optional
+    #         A technical parameter to the path pruning algorithm; this value
+    #         sets a threshold for how small a term magnitude (one factor in
+    #         a path magnitude) must be before it is removed from consideration
+    #         entirely (to limit the number of even *potential* paths).  Terms
+    #         with a magnitude lower than this values are neglected.
+    #
+    #     current_threshold : float, optional
+    #         A more sophisticated aspect of the term-based calculation is that
+    #         path polynomials should not be re-computed when we've already
+    #         computed them up to a more stringent threshold than we currently
+    #         need them.  This can happen, for instance, if in iteration 5 we
+    #         compute all paths with magnitudes < 0.1 and now, in iteration 6,
+    #         we need all paths w/mags < 0.08.  Since we've already computed more
+    #         paths than what we need previously, we shouldn't recompute them now.
+    #         This argument tells this function that, before any paths are computed,
+    #         if it is determined that the threshold is less than this value, the
+    #         function should exit immediately and return an empty list of
+    #         polynomial reps.
+    #
+    #     Returns
+    #     -------
+    #     polyreps : list
+    #         A list of PolynomialRep objects.
+    #     npaths : int
+    #         The number of paths computed.
+    #     threshold : float
+    #         The path-magnitude threshold used.
+    #     target_sopm : float
+    #         The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
+    #         less than the perfect "all-paths" sum.
+    #     achieved_sopm : float
+    #         The achieved sum-of-path-magnitudes.  Ideally this would equal
+    #         `target_sopm`.
+    #     """
+    #     #Cache hold *compact* polys now: see prs_as_compact_polys
+    #     #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+    #     #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+    #     #    return [ self.cache[ck] for ck in cache_keys ]
+    #
+    #     fastmode = True
+    #     if repcache is None: repcache = {}
+    #     if current_threshold is None: current_threshold = -1.0  # use negatives to signify "None" in C
+    #     circuitsetup_cache = {}
+    #
+    #     if self.evotype == "svterm":
+    #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+    #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
+    #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+    #                                           current_threshold, compute_polyreps)
+    #         # sopm = "sum of path magnitudes"
+    #     else:  # "cterm" (stabilizer-based term evolution)
+    #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+    #             replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
+    #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+    #                                           current_threshold, compute_polyreps)
+    #
+    #     if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
+    #         prps = None
+    #     else:
+    #         prps = poly_reps
+    #
+    #     return prps, npaths, threshold, target_sopm, achieved_sopm
+
     def prs_as_pruned_polyreps(self,
+                               threshold,
                                rholabel,
                                elabels,
                                circuit,
                                repcache,
                                opcache,
+                               circuitsetup_cache,
                                comm=None,
                                memLimit=None,
-                               pathmagnitude_gap=0.0,
-                               min_term_mag=0.01,
-                               current_threshold=None):
+                               mode="normal"):
         """
-        Computes polynomial-representations of the probabilities for multiple
-        spam-tuples of `circuit`, sharing the same state preparation (so with
-        different POVM effects).  Employs a truncated or pruned path-integral
-        approach, as opposed to just including everything up to some Taylor
-        order as in :method:`prs_as_polys`.
-
-        Parameters
-        ----------
-        rho_label : Label
-            The state preparation label.
-
-        elabels : list
-            A list of :class:`Label` objects giving the *simplified* effect labels.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        repcache, opcache : dict, optional
-            Dictionaries used to cache operator representations and
-            operators themselves (respectively) to speed up future calls
-            to this function that would use the same set of operations.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        memLimit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        pathmagnitude_gap : float, optional
-            The amount less than the perfect sum-of-path-magnitudes that
-            is desired.  This sets the target sum-of-path-magnitudes for each
-            circuit -- the threshold that determines how many paths are added.
-
-        min_term_mag : float, optional
-            A technical parameter to the path pruning algorithm; this value
-            sets a threshold for how small a term magnitude (one factor in
-            a path magnitude) must be before it is removed from consideration
-            entirely (to limit the number of even *potential* paths).  Terms
-            with a magnitude lower than this values are neglected.
-
-        current_threshold : float, optional
-            A more sophisticated aspect of the term-based calculation is that
-            path polynomials should not be re-computed when we've already
-            computed them up to a more stringent threshold than we currently
-            need them.  This can happen, for instance, if in iteration 5 we
-            compute all paths with magnitudes < 0.1 and now, in iteration 6,
-            we need all paths w/mags < 0.08.  Since we've already computed more
-            paths than what we need previously, we shouldn't recompute them now.
-            This argument tells this function that, before any paths are computed,
-            if it is determined that the threshold is less than this value, the
-            function should exit immediately and return an empty list of
-            polynomial reps.
-
-        Returns
-        -------
-        polyreps : list
-            A list of PolynomialRep objects.
-        npaths : int
-            The number of paths computed.
-        threshold : float
-            The path-magnitude threshold used.
-        target_sopm : float
-            The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
-            less than the perfect "all-paths" sum.
-        achieved_sopm : float
-            The achieved sum-of-path-magnitudes.  Ideally this would equal
-            `target_sopm`.
+        TODO: docstring - see OLD version
         """
         #Cache hold *compact* polys now: see prs_as_compact_polys
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
 
-        fastmode = True
+        if mode == "normal":
+            fastmode = 1
+        elif mode == "achieved-sopm":
+            fastmode = 2
+        else:
+            raise ValueError("Invalid mode argument: %s" % mode)
+
         if repcache is None: repcache = {}
-        if current_threshold is None: current_threshold = -1.0  # use negatives to signify "None" in C
+        circuitsetup_cache = {}
 
         if self.evotype == "svterm":
-            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag,
-                                              current_threshold)
+            poly_reps = replib.SV_compute_pruned_path_polys_given_threshold(
+                threshold, self, rholabel, elabels, circuit, repcache,
+                opcache, circuitsetup_cache, comm, memLimit, fastmode)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag)
+            raise NotImplementedError("Just need to mimic SV version")
 
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
         else:
             prps = poly_reps
 
-        return prps, npaths, threshold, target_sopm, achieved_sopm
+        return prps
+
+    def compute_pruned_pathmag_threshold(self,
+                                         rholabel,
+                                         elabels,
+                                         circuit,
+                                         repcache,
+                                         opcache,
+                                         circuitsetup_cache,
+                                         comm=None,
+                                         memLimit=None,
+                                         threshold_guess=None):
+        """
+        TODO: docstring - see OLD version
+        """
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
+
+        if repcache is None: repcache = {}
+        if threshold_guess is None: threshold_guess = -1.0  # use negatives to signify "None" in C
+        circuitsetup_cache = {}
+
+        if self.evotype == "svterm":
+            npaths, threshold, target_sopm, achieved_sopm = \
+                replib.SV_find_best_pathmagnitude_threshold(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                                                            comm, memLimit, self.desired_pathmagnitude_gap, self.min_term_mag,
+                                                            self.max_paths_per_outcome, threshold_guess)
+            # sopm = "sum of path magnitudes"
+        else:  # "cterm" (stabilizer-based term evolution)
+            raise NotImplementedError("Just need to mimic SV version")
+
+        return npaths, threshold, target_sopm, achieved_sopm
+
+    def circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache,
+                                      opcache, threshold):
+        if self.evotype == "svterm":
+            return replib.SV_circuit_achieved_and_max_sopm(
+                self, rholabel, elabels, circuit, repcache, opcache, threshold, self.min_term_mag)
+        else:
+            raise NotImplementedError("TODO mimic SV case")
 
     # LATER? , resetWts=True, repcache=None):
     def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
@@ -422,7 +579,7 @@ class TermForwardSimulator(ForwardSimulator):
             return [self.cache[ck] for ck in cache_keys]
 
         raw_prps = self.prs_as_polys(rholabel, elabels, circuit, comm, memLimit)
-        prps = [poly.compact(force_complex=True) for poly in raw_prps]
+        prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
         # create compact polys w/*complex* coeffs always since we're likely
         # going to concatenate a bunch of them.
 
@@ -600,6 +757,8 @@ class TermForwardSimulator(ForwardSimulator):
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
 
+        TODO: docstring opcache
+
         numSubtreeComms : int
             The number of processor groups that will be assigned to
             subtrees of the created tree.  This aids in the tree construction
@@ -677,6 +836,251 @@ class TermForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
+    def _fill_probs_block(self, mxToFill, dest_indices, evalTree, comm=None, memLimit=None):
+        nEls = evalTree.num_final_elements()
+        if self.mode == "direct":
+            probs = self.prs_directly(evalTree, comm, memLimit)  # could make into a fill_routine?
+        else:  # "pruned" or "taylor order"
+            polys = evalTree.merged_compact_polys
+            probs = _bulk_eval_compact_polys(
+                polys[0], polys[1], self.paramvec, (nEls,))  # shape (nElements,) -- could make this a *fill*
+        _fas(mxToFill, [dest_indices], probs)
+
+    def _fill_dprobs_block(self, mxToFill, dest_indices, dest_param_indices, evalTree, param_slice, comm=None, memLimit=None):
+        if param_slice is None: param_slice = slice(0, self.Np)
+        if dest_param_indices is None: dest_param_indices = slice(0, _slct.length(param_slice))
+
+        if self.mode == "direct":
+            dprobs = self.dprs_directly(evalTree, param_slice, comm, memLimit)
+        else:  # "pruned" or "taylor order"
+            # evaluate derivative of polys
+            nEls = evalTree.num_final_elements()
+            polys = evalTree.merged_compact_polys
+            wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
+            dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
+            dprobs = _bulk_eval_compact_polys(dpolys[0], dpolys[1], self.paramvec, (nEls, len(wrtInds)))
+        _fas(mxToFill, [dest_indices, dest_param_indices], dprobs)
+
+    def _fill_hprobs_block(self, mxToFill, dest_indices, dest_param_indices1,
+                           dest_param_indices2, evalTree, param_slice1, param_slice2,
+                           comm=None, memLimit=None):
+        if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.Np)
+        if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.Np)
+        if dest_param_indices1 is None: dest_param_indices1 = slice(0, _slct.length(param_slice1))
+        if dest_param_indices2 is None: dest_param_indices2 = slice(0, _slct.length(param_slice2))
+
+        if self.mode == "direct":
+            raise NotImplementedError("hprobs does not support direct path-integral evaluation yet")
+            # hprobs = self.hprs_directly(evalTree, ...)
+        else:  # "pruned" or "taylor order"
+            # evaluate derivative of polys
+            nEls = evalTree.num_final_elements()
+            polys = evalTree.merged_compact_polys
+            wrtInds1 = _np.ascontiguousarray(_slct.indices(param_slice1), _np.int64)
+            wrtInds2 = _np.ascontiguousarray(_slct.indices(param_slice2), _np.int64)
+            dpolys = _compact_deriv(polys[0], polys[1], wrtInds1)
+            hpolys = _compact_deriv(dpolys[0], dpolys[1], wrtInds2)
+            hprobs = _bulk_eval_compact_polys(hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
+        _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
+
+    def bulk_test_if_paths_are_sufficient(self, evalTree, probs, comm, memLimit, printer):
+        """TODO: docstring
+           returns nFailures, failed_circuits """
+        if self.mode != "pruned":
+            return True  # no "failures" for non-pruned-path mode
+
+        # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector()) # done in bulk_get_achieved_and_max_sopm
+        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
+        gaps = max_sopm - achieved_sopm  # a strict bound on the error in each outcome probability, but often pessimistic
+        # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        assert(_np.all(gaps >= -1e-6))
+        gaps = _np.clip(gaps, 0, None)
+
+        if self.perr_heuristic == "none":
+            nFailures = _np.count_nonzero(gaps > self.allowed_perr)
+            if nFailures > 0:
+                printer.log("Paths are insufficient! (%d failures using strict error bound of %g)"
+                            % (nFailures, self.allowed_perr))
+                return False
+        elif self.perr_heuristic == "scaled":
+            scale = probs / achieved_sopm
+            nFailures = _np.count_nonzero(gaps * scale > self.allowed_perr)
+            if nFailures > 0:
+                printer.log("Paths are insufficient! (%d failures using %s heuristic with error bound of %g)"
+                            % (nFailures, self.perr_heuristic, self.allowed_perr))
+                return False
+        elif self.perr_heuristic == "meanscaled":
+            scale = probs / achieved_sopm
+            bFailed = _np.mean(gaps * scale) > self.allowed_perr
+            if bFailed:
+                printer.log("Paths are insufficient! (Using %s heuristic with error bound of %g)"
+                            % (self.perr_heuristic, self.allowed_perr))
+                return False
+        else:
+            raise ValueError("Unknown probability-error heuristic name: %s" % self.perr_heuristic)
+
+        return True
+
+    def bulk_get_achieved_and_max_sopm(self, evalTree, comm=None, memLimit=None):
+        """TODO: docstring """
+
+        assert(self.mode == "pruned")
+        max_sopm = _np.empty(evalTree.num_final_elements(), 'd')
+        achieved_sopm = _np.empty(evalTree.num_final_elements(), 'd')
+
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
+            maxx, achieved = evalSubTree.get_achieved_and_max_sopm(self)
+
+            _fas(max_sopm, [felInds], maxx)
+            _fas(achieved_sopm, [felInds], achieved)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             max_sopm, [], 0, comm)
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             achieved_sopm, [], 0, comm)
+
+        return max_sopm, achieved_sopm
+
+    def bulk_get_sopm_gaps(self, evalTree, comm=None, memLimit=None):
+        """TODO: docstring  """
+        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
+        gaps = max_sopm - achieved_sopm
+        # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        assert(_np.all(gaps >= -1e-6))
+        gaps = _np.clip(gaps, 0, None)
+
+        return gaps
+
+    def bulk_get_sopm_gaps_jacobian(self, evalTree, comm=None, memLimit=None):
+        """TODO: docstring """
+
+        assert(self.mode == "pruned")
+        termgap_penalty_jac = _np.empty((evalTree.num_final_elements(), self.Np), 'd')
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            felInds = evalSubTree.final_element_indices(evalTree)
+
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
+            #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
+            gap_jacs = evalSubTree.get_sopm_gaps_jacobian(self)
+            #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
+            _fas(termgap_penalty_jac, [felInds], gap_jacs)
+
+        #collect/gather results
+        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             termgap_penalty_jac, [], 0, comm)
+
+        return termgap_penalty_jac
+
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=0):
+        """
+        TODO: docstring
+        """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        local_subtree_pathsets = []  # call this list of TermPathSets for each subtree a "pathset" too
+
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            if self.mode == "pruned":
+                subPathSet = evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit,
+                                                                exit_after_this_many_failures)
+            else:
+                subPathSet = _UnsplitTreeTermPathSet(evalSubTree, None, None, None, 0, 0, 0)
+            local_subtree_pathsets.append(subPathSet)
+
+        return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def select_paths_set(self, pathSet, comm=None, memLimit=None):
+        """
+        TODO: docstring
+        """
+        evalTree = pathSet.tree
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        for iSubTree, subtree_pathset in zip(mySubTreeIndices, pathSet.local_subtree_pathsets):
+            evalSubTree = subtrees[iSubTree]
+
+            if self.mode == "pruned":
+                evalSubTree.select_paths_set(self, subtree_pathset, mySubComm, memLimit)
+                #This computes (&caches) polys for this path set as well
+            else:
+                evalSubTree.cache_p_polys(self, mySubComm)
+
+    def get_current_pathset(self, evalTree, comm):
+        """ TODO: docstring """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
+        return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
+        """
+        Performs initial computation, such as computing probability polynomials,
+        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        the creation of an evaluation tree, but is separated from it because this
+        "preparation" may use `comm` to distribute a computationally intensive task.
+
+        Parameters
+        ----------
+        evalTree : EvalTree
+            The evaluation tree used to define a list of circuits and hold (cache)
+            any computed quantities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed over
+           subtrees of `evalTree` (if it is split).
+
+        memLimit : TODO: docstring
+        """
+        subtrees = evalTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+        #eval on each local subtree
+        nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
+        #all_failed_circuits = []
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+
+            if self.mode == "pruned":
+                #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
+                #                                           self.min_term_mag, self.max_paths_per_outcome)
+                pathset = evalSubTree.find_minimal_paths_set(
+                    self, mySubComm, memLimit, exit_after_this_many_failures=0)  # pruning_thresholds_and_highmag_terms
+                # this sets these as internal cached qtys
+                evalSubTree.select_paths_set(self, pathset, mySubComm, memLimit)
+            else:
+                evalSubTree.cache_p_polys(self, mySubComm)
+                pathset = _TermPathSet(evalSubTree, 0, 0, 0)
+
+            nTotFailed += pathset.num_failures
+
+        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
+        #assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
+        if nTotFailed > 0:
+            _warnings.warn(
+                "Unable to find a path set that achieves the desired pathmagnitude gap (%d circuits failed)" % nTotFailed)
+
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
         """
@@ -726,50 +1130,13 @@ class TermForwardSimulator(ForwardSimulator):
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-        #print("DB: bulk_fill_probs called!!!!!!!!!")
-        #print("Paramvec = ",self.paramvec)
-        #print("Paramvec max = ",max(_np.abs(self.paramvec)))
-        #for lbl in ("Gii","Gix","Gxi","Giy","Gyi"): #model.get_primitive_op_labels()
-        #for lbl in ("Gi","Gx","Gy"):
-        #    coeffs = self.sos.get_operation(lbl).get_errgen_coeffs()[0] # e.g. key ('H', 0), val=-0.1
-        #    top_coeffs = sorted(list(coeffs.items()), key=lambda x: x[1], reverse=True)[0:10]
-        #    print("%s coeffs = \n" % lbl,"\n".join(["%s: %.5f" % (k,v) for k,v in top_coeffs]))
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            nStrs = evalSubTree.num_final_strings()
-            # TODO: check that permute is correct here...
-            if self.cache is None: circuit_list = evalSubTree.generate_circuit_list(permute=False)
 
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                if self.mode == "direct":
-                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
-                elif self.mode == "pruned":
-                    polys = evalSubTree.get_p_pruned_polys(self,
-                                                           rholabel,
-                                                           elabels,
-                                                           mySubComm,
-                                                           None,
-                                                           self.pathmagnitude_gap,
-                                                           self.min_term_mag,
-                                                           recalc_threshold=not self.opt_mode)
-                else:  # self.mode == "taylor-order"
-                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm)  # computes polys if necessary
-
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    #use cached data to final values
-                    if self.mode == "direct":
-                        prCache = probs[i]
-                    else:
-                        prCache = _bulk_eval_compact_polys(
-                            polys[i][0], polys[i][1], self.paramvec, (nStrs,))  # ( nCircuits,)
-                    ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits,)
-                    _fas(mxToFill, [fInds], ps[gInds], add=sumInto)
-
-            self._fill_result_tuple_collectrho((mxToFill,), evalSubTree,
-                                               slice(None), slice(None), calc_and_fill)
+            felInds = evalSubTree.final_element_indices(evalTree)
+            self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
         #collect/gather results
         subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
@@ -873,103 +1240,16 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            nStrs = evalSubTree.num_final_strings()
-            # TODO: check that permute is correct here...
-            if self.cache is None: circuit_list = evalSubTree.generate_circuit_list(permute=False)
+            #nEls = evalSubTree.num_final_elements()
 
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice = slice(None)
-            fillComm = mySubComm  # comm used by calc_and_fill
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-                tm = _time.time()
-
-                if self.mode == "direct":
-                    repcache = {}  # new repcache for storing term reps that don't change (just their coeffs do)
-                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None,
-                                              memLimit=None, resetWts=True, repcache=repcache)
-
-                if prMxToFill is not None:
-                    if self.mode == "taylor-order":
-                        polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
-                    elif self.mode == "pruned":
-                        polys = evalSubTree.get_p_pruned_polys(self,
-                                                               rholabel,
-                                                               elabels,
-                                                               fillComm,
-                                                               None,
-                                                               self.pathmagnitude_gap,
-                                                               self.min_term_mag,
-                                                               recalc_threshold=True)
-
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        if self.mode == "direct":
-                            prCache = probs[i]
-                        else:
-                            prCache = _bulk_eval_compact_polys(
-                                polys[i][0], polys[i][1], self.paramvec, (nStrs,))  # ( nCircuits,)
-                        ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits,)
-                        _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
-
-                #Fill cache info
-                if self.mode == "direct":
-                    #Finite difference derivatives (SLOW!)
-                    eps = 1e-6
-                    dprobs = _np.empty((len(elabels), len(circuit_list), self.Np), 'd')
-                    orig_vec = self.to_vector().copy()
-                    for i in range(self.Np):
-                        #print("direct dprobs cache %d of %d" % (i,self.Np))
-                        #if i in iParamToFinal: #LATER: add MPI support?
-                        #    iFinal = iParamToFinal[i]
-                        if True:
-                            iFinal = i
-                            vec = orig_vec.copy(); vec[i] += eps
-                            self.from_vector(vec)
-                            dprobs[:, :, iFinal] = (self.prs_directly(rholabel,
-                                                                      elabels,
-                                                                      circuit_list,
-                                                                      comm=None,
-                                                                      memLimit=None,
-                                                                      resetWts=False,
-                                                                      repcache=repcache) - probs) / eps
-                    self.from_vector(orig_vec)
-                elif self.mode == "pruned":
-                    #Take derivative here
-                    slcInds = _slct.indices(paramSlice if (paramSlice is not None) else slice(0, self.Np))
-                    slcInds = _np.ascontiguousarray(slcInds, _np.int64)  # for Cython arg mapping
-                    dpolys = [_compact_deriv(polys[i][0], polys[i][1], slcInds) for i in range(len(elabels))]
-                else:  # self.mode == "taylor-order"
-                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
-                nP = self.Np if (paramSlice is None or paramSlice.start is None) else _slct.length(paramSlice)
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    if self.mode == 'direct':
-                        dprCache = dprobs[i]  # shape (nAllEvalTreeCircuits, nDerivCols)
-                    else:
-                        # TODO: maybe for "pruned" case we can just eval derivs of `polys` instead of computing
-                        # derivative polynomials...
-                        dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs, nP))
-                    dps = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, nDerivCols)
-                    _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)
-                profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
+            if prMxToFill is not None:
+                self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-            else:
-                blkSize = None  # wrtFilter dictates block
+            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, mySubComm)
 
             if blkSize is None:
-                #Fill derivative cache info
-                paramSlice = wrtSlice  # specifies which deriv cols calc_and_fill computes
-
-                #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho((prMxToFill, mxToFill), evalSubTree,
-                                                   slice(None), slice(None), calc_and_fill)
+                self._fill_dprobs_block(mxToFill, felInds, None, evalSubTree, wrtSlice, mySubComm, memLimit=None)
                 profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
@@ -985,13 +1265,11 @@ class TermForwardSimulator(ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than derivative columns(%d)!" % self.Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-                fillComm = blkComm  # comm used by calc_and_fill
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_result_tuple_collectrho(
-                        (mxToFill,), evalSubTree,
-                        blocks[iBlk], slice(None), calc_and_fill)
+                    self._fill_dprobs_block(mxToFill, felInds, paramSlice, evalSubTree, paramSlice,
+                                            blkComm, memLimit=None)
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
@@ -1121,82 +1399,34 @@ class TermForwardSimulator(ForwardSimulator):
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
+        if self.mode == "direct":
+            raise NotImplementedError("hprobs does not support direct path-integral evaluation")
+
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
-            fillComm = mySubComm
-            nStrs = evalSubTree.num_final_strings()
 
-            #Free memory from previous subtree iteration before computing caches
-            paramSlice1 = slice(None)
-            paramSlice2 = slice(None)
-
-            def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
-                """ Compute and fill result quantities for given arguments """
-
-                if prMxToFill is not None:
-                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        prCache = _bulk_eval_compact_polys(
-                            polys[i][0], polys[i][1], self.paramvec, (nStrs,))  # ( nCircuits,)
-                        ps = evalSubTree.final_view(prCache, axis=0)  # ( nCircuits,)
-                        _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
-
-                nP1 = self.Np if (paramSlice1 is None or paramSlice1.start is None) else _slct.length(paramSlice1)
-                nP2 = self.Np if (paramSlice2 is None or paramSlice2.start is None) else _slct.length(paramSlice2)
-
-                if deriv1MxToFill is not None:
-                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice1, fillComm)
-                    for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                        dprCache = _bulk_eval_compact_polys(
-                            dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs, nP1))  # ( nCircuits, nDerivCols)
-                        dps1 = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, nDerivCols)
-                        _fas(deriv1MxToFill, [fInds, pslc1], dps1[gInds], add=sumInto)
-
-                if deriv2MxToFill is not None:
-                    if deriv1MxToFill is not None and paramSlice1 == paramSlice2:
-                        dps2 = dps1
-                        for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                            _fas(deriv2MxToFill, [fInds, pslc2], dps2[gInds], add=sumInto)
-                    else:
-                        dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice2, fillComm)
-                        for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                            dprCache = _bulk_eval_compact_polys(
-                                dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs, nP2))  # ( nCircuits, nDerivCols)
-                            dps2 = evalSubTree.final_view(dprCache, axis=0)  # ( nCircuits, nDerivCols)
-                            _fas(deriv2MxToFill, [fInds, pslc2], dps2[gInds], add=sumInto)
-
-                #Fill cache info
-                hpolys = evalSubTree.get_hp_polys(self, rholabel, elabels, paramSlice1, paramSlice2, fillComm)
-                for i, (fInds, gInds) in enumerate(zip(fIndsList, gIndsList)):
-                    # ( nCircuits, nDerivCols1, nDerivCols2)
-                    hprCache = _bulk_eval_compact_polys(hpolys[i][0], hpolys[i][1], self.paramvec, (nStrs, nP1, nP2))
-                    hps = evalSubTree.final_view(hprCache, axis=0)  # ( nCircuits, nDerivCols1, nDerivCols2)
-                    _fas(mxToFill, [fInds, pslc1, pslc2], hps[gInds], add=sumInto)
+            if prMxToFill is not None:
+                self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter1 is None and wrtFilter2 is None:
-                blkSize1 = wrtBlockSize1  # could be None
-                blkSize2 = wrtBlockSize2  # could be None
-                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.Np / mySubComm.Get_size()
-                    blkSize1 = comm_blkSize if (blkSize1 is None) \
-                        else min(comm_blkSize, blkSize1)  # override with smaller comm_blkSize
-                    blkSize2 = comm_blkSize if (blkSize2 is None) \
-                        else min(comm_blkSize, blkSize2)  # override with smaller comm_blkSize
-            else:
-                blkSize1 = blkSize2 = None  # wrtFilter1 & wrtFilter2 dictates block
+            blkSize1 = self._setParamBlockSize(wrtFilter1, wrtBlockSize1, mySubComm)
+            blkSize2 = self._setParamBlockSize(wrtFilter2, wrtBlockSize2, mySubComm)
 
             if blkSize1 is None and blkSize2 is None:
-                #Fill hessian cache info
-                paramSlice1 = wrtSlice1  # specifies which deriv cols calc_and_fill computes
-                paramSlice2 = wrtSlice2  # specifies which deriv cols calc_and_fill computes
 
-                #Compute all requested derivative columns at once
-                self._fill_result_tuple_collectrho(
-                    (prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
-                    evalSubTree, slice(None), slice(None), calc_and_fill)
+                if deriv1MxToFill is not None:
+                    self._fill_dprobs_block(deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1,
+                                            mySubComm, memLimit=None)
+                if deriv2MxToFill is not None:
+                    if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
+                        deriv2MxToFill[felInds, :] = deriv1MxToFill[felInds, :]
+                    else:
+                        self._fill_dprobs_block(deriv2MxToFill, felInds, None, evalSubTree, wrtSlice2,
+                                                mySubComm, memLimit=None)
+                self.fill_hprobs_block(mxToFill, felInds, None, None, evalTree,
+                                       wrtSlice1, wrtSlice2, mySubComm, memLimit=None)
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrtFilter1 is None and wrtFilter2 is None)  # cannot specify both wrtFilter and blkSize
@@ -1217,16 +1447,21 @@ class TermForwardSimulator(ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than hessian elements(%d)!" % (self.Np**2)
                                    + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
-                fillComm = blk2Comm  # comm used by calc_and_fill
+
+                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                # will always be the same whenever they're desired (they'll both cover the entire range of params)
+                derivMxToFill = deriv1MxToFill if (deriv1MxToFill is not None) else deriv2MxToFill  # first non-None
 
                 for iBlk1 in myBlk1Indices:
                     paramSlice1 = blocks1[iBlk1]
+                    if derivMxToFill is not None:
+                        self._fill_dprobs_block(derivMxToFill, felInds, paramSlice1, evalSubTree, paramSlice1,
+                                                blk1Comm, memLimit=None)
 
                     for iBlk2 in myBlk2Indices:
                         paramSlice2 = blocks2[iBlk2]
-                        self._fill_result_tuple_collectrho
-                        ((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
-                         evalSubTree, blocks1[iBlk1], blocks2[iBlk2], calc_and_fill)
+                        self.fill_hprobs_block(mxToFill, felInds, paramSlice1, paramSlice2, evalTree,
+                                               paramSlice1, paramSlice2, blk2Comm, memLimit=None)
 
                     #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
                     _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds, blocks1[iBlk1]],

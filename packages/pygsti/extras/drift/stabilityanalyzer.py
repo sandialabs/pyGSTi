@@ -242,6 +242,7 @@ class StabilityAnalyzer(object):
     in pyGSTi.
 
     """
+
     def __init__(self, ds, transform='auto', marginalize='auto', mergeoutcomes=None, constnumtimes='auto',
                  ids=False):
         """
@@ -801,7 +802,6 @@ class StabilityAnalyzer(object):
         return tuple(averageaxes), tuple(indices)
 
     def get_spectrum(self, dictlabel=None, returnfrequencies=True, checklevel=2):
-
         """
         Returns a power spectrum.
 

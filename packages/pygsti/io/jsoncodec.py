@@ -88,6 +88,15 @@ def encode_obj(py_obj, binary):
             state = py_obj.__getstate__()
         elif hasattr(py_obj, '__dict__'):
             state = py_obj.__dict__  # take __dict__ as state
+        elif class_hasattr(py_obj, '__reduce__'):
+            red = py_obj.__reduce__()  # returns class, construtor_args, state
+            if red[0] is not py_obj.__class__:
+                state = None  # weird reducing can happen, for instance, for namedtuples - just punt
+            else:
+                init_args = red[1] if len(red) > 1 else []
+                state = red[2] if len(red) > 2 else {}
+                if state is None: state = {}
+                state.update({'__init_args__': init_args})
         else:
             state = None
 

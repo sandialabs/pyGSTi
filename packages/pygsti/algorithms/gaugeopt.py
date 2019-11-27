@@ -273,7 +273,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         #                            max_nfev=maxfev, ftol=tol)
         #solnX = minSol.x
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
-        solnX, converged, msg = _opt.custom_leastsq(
+        solnX, converged, msg, _, _ = _opt.custom_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=comm,
@@ -412,8 +412,8 @@ def _create_objective_fn(model, targetModel, itemWeights=None,
                 # d(op_term) = S_inv * (-dS * S_inv * G * S + G * dS) = S_inv * (-dS * G' + G * dS)
                 #   Note: (S_inv * G * S) is G' (transformed G)
                 wt = itemWeights.get(lbl, opWeight)
-                left = -1 * _np.dot(dS, mdl_post.operations[lbl])  # shape (n,d1,d2)
-                right = _np.swapaxes(_np.dot(G, dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
+                left = -1 * _np.dot(dS, mdl_post.operations[lbl].todense())  # shape (n,d1,d2)
+                right = _np.swapaxes(_np.dot(G.todense(), dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
                 result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                 result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                 my_jacMx[start:start + d**2] = wt * result
@@ -425,8 +425,8 @@ def _create_objective_fn(model, targetModel, itemWeights=None,
                 wt = itemWeights.get(ilbl, opWeight)
                 for lbl, G in Inst.items():
                     # same calculation as for operation terms
-                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl])  # shape (n,d1,d2)
-                    right = _np.swapaxes(_np.dot(G, dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
+                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].todense())  # shape (n,d1,d2)
+                    right = _np.swapaxes(_np.dot(G.todense(), dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
                     result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                     result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                     my_jacMx[start:start + d**2] = wt * result

@@ -26,6 +26,7 @@ from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
 from ..tools import compattools as _compat
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..baseobjs import objectivefns as _objfns
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -183,7 +184,7 @@ def do_model_test(modelFilenameOrObj,
     if 'onBadFit' not in advancedOptions:
         advancedOptions['onBadFit'] = []  # empty list => 'do nothing'
 
-    return _post_opt_processing('do_model_test', ds, target_model, the_model,
+    return _package_into_results('do_model_test', ds, target_model, the_model,
                                 lsgstLists, parameters, None, mdl_lsgst_list,
                                 gaugeOptParams, advancedOptions, comm, memLimit,
                                 output_pkl, verbosity, profiler)
@@ -350,13 +351,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         and values include:
         - objective = {'chi2', 'logl'}
         - opLabels = list of strings
-        - gsWeights = dict or None
+        - circuitWeights = dict or None
         - starting point = "LGST" (default) or  "target" or Model
         - depolarizeStart = float (default == 0)
         - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
-        - tolerance = float or dict w/'relx','relf','f','jac' keys
+        - tolerance = float or dict w/'relx','relf','f','jac','maxdx' keys
         - maxIterations = int
         - fdIterations = int
         - minProbClip = float
@@ -689,13 +690,14 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         startModel=mdl_start,
         circuitSetsToUseInEstimation=rawLists,
         tol=advancedOptions.get('tolerance', 1e-6),
+        extra_lm_opts=advancedOptions.get('extra_lm_opts', None),
         cptp_penalty_factor=advancedOptions.get('cptpPenaltyFactor', 0),
         spam_penalty_factor=advancedOptions.get('spamPenaltyFactor', 0),
         maxiter=advancedOptions.get('maxIterations', 100000),
         fditer=advancedOptions.get('fdIterations', default_fditer),
         probClipInterval=advancedOptions.get('probClipInterval', (-1e6, 1e6)),
         returnAll=True,
-        circuitWeightsDict=advancedOptions.get('gsWeights', None),
+        circuitWeightsDict=advancedOptions.get('circuitWeights', None),
         opLabelAliases=aliases,
         verbosity=printer,
         memLimit=memLimit,
@@ -720,6 +722,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE', False)
         args['onlyPerformMLE'] = advancedOptions.get('onlyPerformMLE', False)
         mdl_lsgst_list = _alg.do_iterative_mlgst(**args)
+        
     elif objective == "lgst":
         assert(startingPt == "LGST"), "Can only set objective=\"lgst\" for parameterizations compatible with LGST"
         assert(len(lsgstLists) == 1), "Can only set objective=\"lgst\" with number if lists/max-lengths == 1"
@@ -745,7 +748,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
     parameters['probClipInterval'] = \
         advancedOptions.get('probClipInterval', (-1e6, 1e6))
     parameters['radius'] = advancedOptions.get('radius', 1e-4)
-    parameters['weights'] = advancedOptions.get('gsWeights', None)
+    parameters['weights'] = advancedOptions.get('circuitWeights', None)
     parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor', 0)
     parameters['spamPenaltyFactor'] = advancedOptions.get('spamPenaltyFactor', 0)
     parameters['distributeMethod'] = advancedOptions.get('distributeMethod', 'default')
@@ -762,7 +765,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
     parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
     parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
-    return _post_opt_processing('do_long_sequence_gst', ds, target_model, mdl_start,
+    return _package_into_results('do_long_sequence_gst', ds, target_model, mdl_start,
                                 lsgstLists, parameters, args, mdl_lsgst_list,
                                 gaugeOptParams, advancedOptions, comm, memLimit,
                                 output_pkl, printer, profiler, args['evaltree_cache'])
@@ -1080,8 +1083,15 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                 if isinstance(gg, _objs.TrivialGaugeGroup):
                     #just do a single-stage "trivial" gauge opts using default group
                     gaugeOptSuite_dict['single'] = {'verbosity': printer}
+
                     if "unreliable2Q" in gaugeOptSuites and target_model.dim == 16:
-                        gaugeOptSuite_dict['single-2QUR'] = {'verbosity': printer}
+                        if advancedOptions is not None:
+                            # 'unreliableOps' can only be specified in 'all' options
+                            advanced = advancedOptions.get('all', {})
+                        else: advanced = {}
+                        unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+                        if any([gl in target_model.operations.keys() for gl in unreliableOps]):
+                            gaugeOptSuite_dict['single-2QUR'] = {'verbosity': printer}
 
                 elif gg is not None:
 
@@ -1131,6 +1141,11 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
                             stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
                             gaugeOptSuite_dict['single-2QUR'] = stages_2QUR  # add additional gauge opt
+                        else:
+                            _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
+                                            " gate names in advancedOptions['all']['unreliableOps'], i.e., %s,"
+                                            " are present in the target model.  Omitting 'single-2QUR' gauge opt.")
+                                           % (", ".join(unreliableOps)))
 
             elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
 
@@ -1270,10 +1285,10 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
     return lsgstLists
 
 
-def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
-                         parameters, opt_args, mdl_lsgst_list, gaugeOptParams,
-                         advancedOptions, comm, memLimit, output_pkl, verbosity,
-                         profiler, evaltree_cache=None):
+def _package_into_results(callerName, ds, target_model, mdl_start, lsgstLists,
+                          parameters, opt_args, mdl_lsgst_list, gaugeOptParams,
+                          advancedOptions, comm, memLimit, output_pkl, verbosity,
+                          profiler, evaltree_cache=None):
     """
     Performs all of the post-optimization processing common to
     do_long_sequence_gst and do_model_evaluation.
@@ -1306,303 +1321,19 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
     #add estimate to Results
     estlbl = advancedOptions.get('estimateLabel', 'default')
     ret.add_estimate(target_model, mdl_start, mdl_lsgst_list, parameters, estlbl)
+    profiler.add_time('%s: results initialization' % callerName, tRef); tRef = _time.time()
 
     #Do final gauge optimization to *final* iteration result only
     if gaugeOptParams:
-        gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
-        if "targetModel" not in gaugeOptParams:
-            gaugeOptParams["targetModel"] = target_model
-
-        # somewhat redundant given add_gaugeoptimized behavior - but
-        #  if not here won't do parallel gaugeopt_to_target below
-        if "comm" not in gaugeOptParams:
-            gaugeOptParams["comm"] = comm
-
-        gaugeOptParams['returnAll'] = True  # so we get gaugeEl to save
-        gaugeOptParams['model'] = mdl_lsgst_list[-1]  # starting model
-
-        if isinstance(gaugeOptParams['model'], _objs.ExplicitOpModel):
-            #only explicit models can be gauge optimized
-            _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
-        else:
-            #but still fill in results for other models (?)
-            gaugeEl, go_gs_final = None, gaugeOptParams['model'].copy()
-
-        gaugeOptParams['_gaugeGroupEl'] = gaugeEl  # store gaugeopt el
-        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                 None, comm, printer - 1)
-        tNxt = _time.time()
-        profiler.add_time('%s: gauge optimization' % callerName, tRef); tRef = tNxt
+        add_gauge_opt(ret.estimates[estlbl], gaugeOptParams, target_model,
+                      mdl_lsgst_list[-1], comm, printer - 1)
+        profiler.add_time('%s: gauge optimization' % callerName, tRef)
 
     #Perform extra analysis if a bad fit was obtained
-    validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-    rawLists = [l.allstrs if isinstance(l, validStructTypes) else l
-                for l in lsgstLists]
-    objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
-    if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) > badFitThreshold:
-        onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-
-        if len(onBadFit) > 0 and parameters.get('weights', None) is None:
-
-            # Get by-sequence goodness of fit
-            if objective == "chi2":
-                fitQty = _tools.chi2_terms(mdl_lsgst_list[-1], ds, rawLists[-1],
-                                           advancedOptions.get('minProbClipForWeighting', 1e-4),
-                                           advancedOptions.get('probClipInterval', (-1e6, 1e6)),
-                                           False, False, memLimit,
-                                           advancedOptions.get('opLabelAliases', None),
-                                           evaltree_cache=evaltree_cache, comm=comm)
-            else:  # "logl" or "lgst"
-                maxLogL = _tools.logl_max_terms(mdl_lsgst_list[-1], ds, rawLists[-1],
-                                                opLabelAliases=advancedOptions.get(
-                                                    'opLabelAliases', None),
-                                                evaltree_cache=evaltree_cache)
-
-                logL = _tools.logl_terms(mdl_lsgst_list[-1], ds, rawLists[-1],
-                                         advancedOptions.get('minProbClip', 1e-4),
-                                         advancedOptions.get('probClipInterval', (-1e6, 1e6)),
-                                         advancedOptions.get('radius', 1e-4),
-                                         opLabelAliases=advancedOptions.get('opLabelAliases', None),
-                                         evaltree_cache=evaltree_cache, comm=comm)
-                fitQty = 2 * (maxLogL - logL)
-
-            #Note: fitQty[iCircuit] gives fit quantity for a single gate
-            # string, aggregated over outcomes.
-            expected = (len(ds.get_outcome_labels()) - 1)  # == "k"
-            dof_per_box = expected; nboxes = len(rawLists[-1])
-            pc = 0.95  # hardcoded confidence level for now -- make into advanced option w/default
-
-            for scale_typ in onBadFit:
-                gsWeights = {}; wildcardBudget = None
-                if scale_typ in ("robust", "Robust"):
-                    # Robust scaling V1: drastically scale down weights of especially bad sequences
-                    threshold = _np.ceil(_chi2.ppf(1 - pc / nboxes, dof_per_box))
-                    for i, opstr in enumerate(rawLists[-1]):
-                        if fitQty[i] > threshold:
-                            gsWeights[opstr] = expected / fitQty[i]  # scaling factor
-                    reopt = bool(scale_typ == "Robust")
-
-                elif scale_typ in ("robust+", "Robust+"):
-                    # Robust scaling V2: V1 + rescale to desired chi2 distribution without reordering
-                    threshold = _np.ceil(_chi2.ppf(1 - pc / nboxes, dof_per_box))
-                    scaled_fitQty = fitQty.copy()
-                    for i, opstr in enumerate(rawLists[-1]):
-                        if fitQty[i] > threshold:
-                            gsWeights[opstr] = expected / fitQty[i]  # scaling factor
-                            scaled_fitQty[i] = expected  # (fitQty[i]*gsWeights[opstr])
-
-                    N = len(fitQty)
-                    percentiles = [_chi2.ppf((i + 1) / (N + 1), dof_per_box) for i in range(N)]
-                    for iBin, i in enumerate(_np.argsort(scaled_fitQty)):
-                        opstr = rawLists[-1][i]
-                        fit, expected = scaled_fitQty[i], percentiles[iBin]
-                        if fit > expected:
-                            if opstr in gsWeights: gsWeights[opstr] *= expected / fit
-                            else: gsWeights[opstr] = expected / fit
-
-                    reopt = bool(scale_typ == "Robust+")
-
-                elif scale_typ == "wildcard":
-                    # Find wildcard budget - maybe need addtional user-defined params re: how to parameterize wildcard
-                    # budget?
-                    # output -> wildcard vector W_vec
-                    printer.log("******************* Adding Wildcard Budget **************************")
-
-                    # Approach: we create an objective function that, for a given Wvec, computes:
-                    # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1                                     # noqa
-                    # and minimize this for different eta (binary search) to find that largest eta for which the
-                    # first two terms is are zero.  This Wvec is our keeper.
-
-                    if evaltree_cache and 'evTree' in evaltree_cache \
-                            and 'wrtBlkSize' in evaltree_cache:
-                        #use cache dictionary to speed multiple calls which use
-                        # the same model, operation sequences, comm, memlim, etc.
-                        evTree = evaltree_cache['evTree']
-                    else:
-                        raise NotImplementedError(
-                            "Need to have a valid evaltree at this point - creating one is not implemented!")
-
-                    mdl = mdl_lsgst_list[-1]
-                    circuitsToUse = rawLists[-1]
-                    nDataParams = ds.get_degrees_of_freedom(circuitsToUse)  # number of independent parameters
-                    # in dataset (max. model # of params)
-                    nModelParams = mdl.num_params()  # just use total number of params
-                    percentile = 0.05; nBoxes = evTree.num_final_elements()
-                    twoDeltaLogL_threshold = _chi2.ppf(1 - percentile, nDataParams - nModelParams)
-                    redbox_threshold = _chi2.ppf(1 - percentile / nBoxes, 1)
-                    eta = 1000.0  # some default starting value - this *shouldn't* really matter
-                    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
-
-                    assert(objective == "logl"), "Can only use wildcard scaling with 'logl' objective!"
-                    twoDeltaLogL_terms = fitQty
-                    twoDeltaLogL = sum(twoDeltaLogL_terms)
-
-                    budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels())
-
-                    if twoDeltaLogL <= twoDeltaLogL_threshold \
-                       and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
-                        printer.log("No need to add budget!")
-                        Wvec = _np.zeros(len(mdl.get_primitive_op_labels()), 'd')
-                    else:
-                        pci = advancedOptions.get('probClipInterval', (-1e6, 1e6))
-                        min_p = advancedOptions.get('minProbClip', 1e-4)
-                        a = advancedOptions.get('radius', 1e-4)
-
-                        def _wildcard_objective_firstTerms(Wv):
-                            budget.from_vector(Wv)
-                            twoDLogL_terms = _tools.two_delta_logl_terms(mdl, ds, circuitsToUse, min_p, pci, a,
-                                                                         poissonPicture=True,
-                                                                         evaltree_cache=evaltree_cache, wildcard=budget)
-                            twoDLogL = sum(twoDLogL_terms)
-                            return max(0, twoDLogL - twoDeltaLogL_threshold) \
-                                + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
-
-                        def _wildcard_objective(Wv):
-                            return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
-
-                        nIters = 0; eta_lower_bound = eta_upper_bound = None
-                        Wvec_init = budget.to_vector()
-
-                        # Stage 1: make eta large enough that we get a *large* nonzero objective; keep starting with
-                        # same Wvec_init
-                        while nIters < 100:
-                            printer.log("  Finding initial eta: %g" % eta)
-                            soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                                                 method='L-BFGS-B', callback=None, tol=1e-6)
-                            if _wildcard_objective_firstTerms(soln.x) >= 100.0:  # some "high value" here
-                                eta_upper_bound = eta; eta /= 2
-                                break
-                            eta *= 10
-                            nIters += 1
-
-                        # Stage 2: hone in on good eta value, restarting from points where
-                        # we've seen a nonzero objective (we don't trust Wvecs when the objective is 0)
-                        while nIters < 100:
-                            soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                                                 method='L-BFGS-B', callback=None, tol=1e-6)
-                            Wvec = soln.x
-                            # orig_eta = eta
-                            firstTerms = _wildcard_objective_firstTerms(Wvec)
-                            meets_conditions = bool(firstTerms < 1e-4)  # some zero-tolerance here
-                            #print("Value = ",_wildcard_objective_firstTerms(Wvec),_wildcard_objective(Wvec),Wvec)
-                            if meets_conditions:  # try larger eta
-                                eta_lower_bound = eta
-                                if eta_upper_bound is not None:
-                                    eta = (eta_upper_bound + eta_lower_bound) / 2
-                                else: eta *= 2
-                            else:  # nonzero objective => take Wvec as new starting point; try smaller eta
-                                Wvec_init = Wvec
-                                eta_upper_bound = eta
-                                if eta_lower_bound is not None:
-                                    eta = (eta_upper_bound + eta_lower_bound) / 2
-                                else: eta /= 2
-
-                            printer.log("  Interval: eta in [%s,%s]" % (str(eta_upper_bound), str(eta_lower_bound)))
-                            #print("Interval [%s,%s]: eta = %g -> %g  Wvec=%s firstTs=%g" % (
-                            #    str(eta_upper_bound),str(eta_lower_bound),orig_eta,eta,str(Wvec),firstTerms))
-
-                            if eta_upper_bound is not None and eta_lower_bound is not None and \
-                               (eta_upper_bound - eta_lower_bound) / eta_upper_bound < 1e-3:
-                                printer.log("Converged after %d iters!" % nIters)
-                                break
-                            nIters += 1
-
-                    #print("Wildcard budget found for Wvec = ",Wvec)
-                    budget.from_vector(Wvec)
-                    printer.log(str(budget))
-                    wildcardBudget = budget
-                    gsWeights = None
-                    reopt = False
-
-                elif scale_typ == "do nothing":
-                    continue  # go to next on-bad-fit directive
-                else:
-                    raise ValueError("Invalid on-bad-fit directive: %s" % scale_typ)
-
-                tNxt = _time.time()
-                profiler.add_time('%s: robust data scaling init' % callerName, tRef); tRef = tNxt
-
-                scale_params = parameters.copy()
-                scale_params['weights'] = gsWeights
-                scale_params['unmodeled_error'] = wildcardBudget
-
-                if reopt and (opt_args is not None):
-                    #convert weights dict to an array for do_XXX methods below
-                    gsWeightsArray = _np.ones(len(rawLists[-1]), 'd')
-                    gsindx = {opstr: i for i, opstr in enumerate(rawLists[-1])}
-                    for opstr, weight in gsWeights.items():
-                        gsWeightsArray[gsindx[opstr]] = weight
-
-                    reopt_args = dict(dataset=ds,
-                                      startModel=mdl_lsgst_list[-1],
-                                      circuitsToUse=rawLists[-1],
-                                      circuitWeights=gsWeightsArray,
-                                      verbosity=printer - 1)
-                    for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
-                              'probClipInterval', 'check', 'opLabelAliases',
-                              'memLimit', 'comm', 'evaltree_cache', 'distributeMethod', 'profiler'):
-                        reopt_args[x] = opt_args[x]
-
-                    printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
-                    if objective == "chi2":
-                        reopt_args['useFreqWeightedChiSq'] = opt_args['useFreqWeightedChiSq']
-                        reopt_args['minProbClipForWeighting'] = opt_args['minProbClipForWeighting']
-                        reopt_args['check_jacobian'] = opt_args['check_jacobian']
-                        _, mdl_reopt = _alg.do_mc2gst(**reopt_args)
-
-                    elif objective == "logl":
-                        reopt_args['minProbClip'] = opt_args['minProbClip']
-                        reopt_args['radius'] = opt_args['radius']
-                        _, mdl_reopt = _alg.do_mlgst(**reopt_args)
-
-                    else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
-
-                    tNxt = _time.time()
-                    profiler.add_time('%s: robust data scaling re-opt' % callerName, tRef); tRef = tNxt
-
-                    # Re-run final iteration of GST with weights computed above,
-                    # and just keep (?) old estimates of all prior iterations (or use "blank"
-                    # sentinel once this is supported).
-                    ret.add_estimate(target_model, mdl_start, mdl_lsgst_list[0:-1] + [mdl_reopt],
-                                     scale_params, estlbl + "." + scale_typ)
-                else:
-                    ret.add_estimate(target_model, mdl_start, mdl_lsgst_list,
-                                     scale_params, estlbl + "." + scale_typ)
-
-                #Do final gauge optimization to data-scaled estimate also
-                if gaugeOptParams:
-                    if reopt and (opt_args is not None):
-                        gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
-                        if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
-
-                        if "targetModel" not in gaugeOptParams:
-                            gaugeOptParams["targetModel"] = target_model
-                        if "comm" not in gaugeOptParams:
-                            gaugeOptParams["comm"] = comm
-
-                        gaugeOptParams['returnAll'] = True  # so we get gaugeEl to save
-                        gaugeOptParams['model'] = mdl_reopt  # starting model
-
-                        if isinstance(gaugeOptParams['model'], _objs.ExplicitOpModel):
-                            #only explicit models can be gauge optimized
-                            _, gaugeEl, go_gs_reopt = _alg.gaugeopt_to_target(**gaugeOptParams)
-                        else:
-                            gaugeEl, go_gs_reopt = None, gaugeOptParams['model'].copy()
-                        gaugeOptParams['_gaugeGroupEl'] = gaugeEl  # store gaugeopt el
-
-                        tNxt = _time.time()
-                        profiler.add_time('%s: robust data scaling gauge-opt' % callerName, tRef); tRef = tNxt
-
-                        # add new gauge-re-optimized result as above
-                        ret.estimates[estlbl + '.' + scale_typ].add_gaugeoptimized(
-                            gaugeOptParams, go_gs_reopt, None, comm, printer - 1)
-                    else:
-                        # add same gauge-optimized result as above
-                        ret.estimates[estlbl + '.' + scale_typ].add_gaugeoptimized(
-                            gaugeOptParams.copy(), go_gs_final, None, comm, printer - 1)
-
-    profiler.add_time('%s: results initialization' % callerName, tRef)
+    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
+    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, opt_args, evaltree_cache, comm, memLimit, printer - 1)
+    profiler.add_time('%s: add badfit estimates' % callerName, tRef); tRef = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
     #   estimate label's "stdout" meta information
@@ -1618,3 +1349,343 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
             _pickle.dump(ret, output_pkl)
 
     return ret
+
+
+def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
+                  comm=None, verbosity=0):
+    """
+    Add a gauge optimization to an estimate.
+    TODO: docstring - more details
+    """
+    tRef = _time.time()
+    gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
+    if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
+    
+    if "targetModel" not in gaugeOptParams:
+        gaugeOptParams["targetModel"] = target_model
+
+    # somewhat redundant given add_gaugeoptimized behavior - but
+    #  if not here won't do parallel gaugeopt_to_target below
+    if "comm" not in gaugeOptParams:
+        gaugeOptParams["comm"] = comm
+
+    gaugeOptParams['returnAll'] = True  # so we get gaugeEl to save
+    gaugeOptParams['model'] = starting_model
+
+    if isinstance(gaugeOptParams['model'], _objs.ExplicitOpModel):
+        #only explicit models can be gauge optimized
+        _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
+    else:
+        #but still fill in results for other models (?)
+        gaugeEl, go_gs_final = None, gaugeOptParams['model'].copy()
+
+    gaugeOptParams['_gaugeGroupEl'] = gaugeEl  # store gaugeopt el
+    estimate.add_gaugeoptimized(gaugeOptParams, go_gs_final,
+                                None, comm, verbosity)
+
+
+def add_badfit_estimates(results, base_estimate_label="default", estimate_types=('wildcard',),
+                         badFitThreshold=None, opt_args=None, evaltree_cache=None,
+                         comm=None, memLimit=None, verbosity=0):
+    """
+    Add any and all "bad fit" estimates to `results`.
+    TODO: docstring
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    base_estimate = results.estimates[base_estimate_label]
+    lsgstLists = results.circuit_structs['iteration']
+    mdl_lsgst_list = base_estimate.models['iteration estimates']
+    mdl_start = base_estimate.models['seed']
+    target_model = base_estimate.models['target']
+    ds = results.dataset
+    parameters = base_estimate.parameters
+    tRef = _time.time()
+    if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
+
+    if badFitThreshold is not None and \
+       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) <= badFitThreshold:
+        return # fit is good enough - no need to add any estimates
+
+    objective = parameters.get('objective', 'logl')
+    validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+    rawLists = [l.allstrs if isinstance(l, validStructTypes) else l
+                for l in lsgstLists]
+    circuitList = rawLists[-1]  # use final circuit list
+    mdl = mdl_lsgst_list[-1]    # and model
+    
+    assert(parameters.get('weights', None) is None), \
+        "Cannot perform bad-fit scaling when weights are already given!"
+
+    for badfit_typ in estimate_types:
+        new_params = parameters.copy()
+        new_final_model = None
+        
+        if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
+            new_params['weights'] = get_robust_scaling(badfit_typ, mdl, ds, circuitList,
+                                                       parameters, evaltree_cache, comm, memLimit)
+            if badfit_typ in ("Robust","Robust+") and (opt_args is not None):
+                mdl_reopt = reoptimize_with_weights(mdl, ds, circuitList, new_params['weights'],
+                                                    objective, opt_args, printer - 1)
+                new_final_model = mdl_reopt
+                
+        elif badfit_typ == "wildcard":
+            new_params['unmodeled_error'] = get_wildcard_budget(mdl, ds, circuitList, parameters,
+                                                                evaltree_cache, comm, memLimit, printer - 1)
+
+        elif badfit_typ == "do nothing":
+            continue  # go to next on-bad-fit directive
+        
+        else:
+            raise ValueError("Invalid on-bad-fit directive: %s" % badfit_typ)
+
+        # In case we've computed an updated final model, Just keep (?) old estimates of all
+        # prior iterations (or use "blank" sentinel once this is supported).
+        models_by_iter = mdl_lsgst_list[:] if (new_final_model is None) \
+            else mdl_lsgst_list[0:-1] + [new_final_model]
+            
+        results.add_estimate(target_model, mdl_start, models_by_iter,
+                             new_params, base_estimate_label + "." + badfit_typ)                    
+
+        #Add gauge optimizations to the new estimate
+        for gokey, gaugeOptParams in base_estimate.goparameters.items():            
+            if new_final_model is not None:
+                add_gauge_opt(results.estimates[base_estimate_label + '.' + badfit_typ], gaugeOptParams,
+                              target_model, new_final_model, comm, printer - 1)
+            else:
+                # add same gauge-optimized result as above
+                go_gs_final = base_estimate.models[gokey]
+                results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
+                    gaugeOptParams.copy(), go_gs_final, None, comm, printer - 1)
+                
+
+def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
+    # Get by-sequence goodness of fit
+    objective = parameters.get('objective', 'logl')
+    
+    if objective == "chi2":
+        fitQty = _tools.chi2_terms(model, ds, circuitList,
+                                   parameters.get('minProbClipForWeighting', 1e-4),
+                                   parameters.get('probClipInterval', (-1e6, 1e6)),
+                                   False, False, memLimit,
+                                   parameters.get('opLabelAliases', None),
+                                   evaltree_cache=evaltree_cache, comm=comm)
+    else:  # "logl" or "lgst"
+        maxLogL = _tools.logl_max_terms(model, ds, circuitList,
+                                        opLabelAliases=parameters.get(
+                                            'opLabelAliases', None),
+                                        evaltree_cache=evaltree_cache)
+
+        logL = _tools.logl_terms(model, ds, circuitList,
+                                 parameters.get('minProbClip', 1e-4),
+                                 parameters.get('probClipInterval', (-1e6, 1e6)),
+                                 parameters.get('radius', 1e-4),
+                                 opLabelAliases=parameters.get('opLabelAliases', None),
+                                 evaltree_cache=evaltree_cache, comm=comm)
+        fitQty = 2 * (maxLogL - logL)
+    return fitQty
+
+def get_robust_scaling(scale_typ, model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
+    """
+    Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
+    TODO: docstring - more details
+    """
+    
+    fitQty = _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit)
+    #Note: fitQty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
+    
+    expected = (len(ds.get_outcome_labels()) - 1)  # == "k"
+    dof_per_box = expected; nboxes = len(circuitList)
+    pc = 0.05  # hardcoded (1 - confidence level) for now -- make into advanced option w/default
+
+    circuitWeights = {}
+    if scale_typ in ("robust", "Robust"):
+        # Robust scaling V1: drastically scale down weights of especially bad sequences
+        threshold = _np.ceil(_chi2.ppf(1 - pc / nboxes, dof_per_box))
+        for i, opstr in enumerate(circuitList):
+            if fitQty[i] > threshold:
+                circuitWeights[opstr] = expected / fitQty[i]  # scaling factor
+
+    elif scale_typ in ("robust+", "Robust+"):
+        # Robust scaling V2: V1 + rescale to desired chi2 distribution without reordering
+        threshold = _np.ceil(_chi2.ppf(1 - pc / nboxes, dof_per_box))
+        scaled_fitQty = fitQty.copy()
+        for i, opstr in enumerate(circuitList):
+            if fitQty[i] > threshold:
+                circuitWeights[opstr] = expected / fitQty[i]  # scaling factor
+                scaled_fitQty[i] = expected  # (fitQty[i]*circuitWeights[opstr])
+
+        N = len(fitQty)
+        percentiles = [_chi2.ppf((i + 1) / (N + 1), dof_per_box) for i in range(N)]
+        for iBin, i in enumerate(_np.argsort(scaled_fitQty)):
+            opstr = circuitList[i]
+            fit, expected = scaled_fitQty[i], percentiles[iBin]
+            if fit > expected:
+                if opstr in circuitWeights: circuitWeights[opstr] *= expected / fit
+                else: circuitWeights[opstr] = expected / fit
+        
+    return circuitWeights
+
+
+def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, comm, memLimit, verbosity):
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    fitQty = _get_fit_qty(model, ds, circuitsToUse, parameters, evaltree_cache, comm, memLimit)
+
+    printer.log("******************* Adding Wildcard Budget **************************")
+
+    # Approach: we create an objective function that, for a given Wvec, computes:
+    # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1                                     # noqa
+    # and minimize this for different eta (binary search) to find that largest eta for which the
+    # first two terms is are zero.  This Wvec is our keeper.
+    if evaltree_cache and 'evTree' in evaltree_cache:
+        #use cache dictionary to speed multiple calls which use
+        # the same model, operation sequences, comm, memlim, etc.
+        evTree = evaltree_cache['evTree']
+    else:
+        # Note: simplify_circuits doesn't support aliased dataset (yet)
+        dstree = ds if (parameters.get('opLabelAliases', None) is None) else None
+        evTree, _, _, lookup, outcomes_lookup = \
+            model.bulk_evaltree_from_resources(
+                circuitsToUse, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+
+    nDataParams = ds.get_degrees_of_freedom(circuitsToUse)  # number of independent parameters
+    # in dataset (max. model # of params)
+    nModelParams = model.num_params()  # just use total number of params
+    percentile = 0.05; nBoxes = len(circuitsToUse)
+    twoDeltaLogL_threshold = _chi2.ppf(1 - percentile, nDataParams - nModelParams)
+    redbox_threshold = _chi2.ppf(1 - percentile / nBoxes, 1)
+    eta = 10.0  # some default starting value - this *shouldn't* really matter
+    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
+
+    objective = parameters.get('objective', 'logl')
+    assert(objective == "logl"), "Can only use wildcard scaling with 'logl' objective!"
+    twoDeltaLogL_terms = fitQty
+    twoDeltaLogL = sum(twoDeltaLogL_terms)
+
+    budget = _wild.PrimitiveOpsWildcardBudget(model.get_primitive_op_labels(), add_spam=True,
+                                              start_budget=0.0)
+
+    if twoDeltaLogL <= twoDeltaLogL_threshold \
+       and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
+        printer.log("No need to add budget!")
+        Wvec = _np.zeros(len(model.get_primitive_op_labels()), 'd')
+    else:
+        pci = parameters.get('probClipInterval', (-1e6, 1e6))
+        min_p = parameters.get('minProbClip', 1e-4)
+        a = parameters.get('radius', 1e-4)
+
+        loglFn = _objfns.LogLFunction.simple_init(model, ds, circuitsToUse, min_p, pci, a,
+                                                  poissonPicture=True, evaltree_cache=evaltree_cache,
+                                                  comm=comm)
+        loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)
+        nCircuits = len(circuitsToUse)
+        dlogl_terms = _np.empty(nCircuits, 'd')
+        dlogl_elements = loglFn.fn(model.to_vector())**2  # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
+        for i in range(nCircuits):
+            dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
+        print("INITIAL 2DLogL (before any wildcard) = ",sum(2*dlogl_terms), max(2*dlogl_terms))
+        print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold, nBoxes)
+
+        def _wildcard_objective_firstTerms(Wv):
+            dlogl_elements = loglWCFn.fn(Wv)**2  # b/c loglWCFn gives sqrt of terms (for use in leastsq optimizer)
+            for i in range(nCircuits):
+                dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
+
+            twoDLogL_terms = 2*dlogl_terms
+            twoDLogL = sum(twoDLogL_terms)
+            return max(0, twoDLogL - twoDeltaLogL_threshold) \
+                + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
+
+        nIters = 0
+        Wvec_init = budget.to_vector()
+        print("INITIAL Wildcard budget = ",str(budget))
+
+        # Find a value of eta that is small enough that the "first terms" are 0.
+        while nIters < 10:
+            printer.log("  Iter %d: trying eta = %g" % (nIters,eta))
+
+            def _wildcard_objective(Wv):
+                return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
+
+            #TODO REMOVE
+            #import bpdb; bpdb.set_trace()
+            #Wvec_init[:] = 0.0; print("TEST budget 0\n", _wildcard_objective(Wvec_init))
+            #Wvec_init[:] = 1e-5; print("TEST budget 1e-5\n", _wildcard_objective(Wvec_init))
+            #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
+            #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
+
+            if printer.verbosity > 1:
+                printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
+                             " - this *increases* the runtime significantly."), 2)
+                def callbackF(Wv):
+                    a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
+                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a,b,a+b,str(Wv)), 2)
+            else:
+                callbackF = None
+            soln = _spo.minimize(_wildcard_objective, Wvec_init,
+                                 method='Nelder-Mead', callback=callbackF, tol=1e-6)
+            if not soln.success:
+                _warnings.warn("Nelder-Mead optimization failed to converge!")
+            Wvec = soln.x
+            firstTerms = _wildcard_objective_firstTerms(Wvec)
+            #printer.log("  Firstterms value = %g" % firstTerms)
+            meets_conditions = bool(firstTerms < 1e-4)  # some zero-tolerance here
+            if meets_conditions:  # try larger eta
+                break
+            else:  # nonzero objective => take Wvec as new starting point; try smaller eta
+                Wvec_init = Wvec
+                eta /= 10
+
+            printer.log("  Trying eta = %g" % eta)
+            nIters += 1
+
+    #print("Wildcard budget found for Wvec = ",Wvec)
+    budget.from_vector(Wvec)
+    printer.log(str(budget))
+    return budget
+
+
+def reoptimize_with_weights(model, ds, circuitList, circuitWeights, objective, opt_args, verbosity):
+    """
+    TODO: docstring
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    #convert weights dict to an array for do_XXX methods below
+    circuitWeightsArray = _np.ones(len(circuitList), 'd')
+    gsindx = {opstr: i for i, opstr in enumerate(circuitList)}
+    for opstr, weight in circuitWeights.items():
+        circuitWeightsArray[gsindx[opstr]] = weight
+
+    reopt_args = dict(dataset=ds,
+                      startModel=model,
+                      circuitsToUse=circuitList,
+                      circuitWeights=circuitWeightsArray,
+                      verbosity=printer - 1)
+    for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
+              'probClipInterval', 'check', 'opLabelAliases',
+              'memLimit', 'comm', 'evaltree_cache', 'distributeMethod', 'profiler'):
+        reopt_args[x] = opt_args[x]
+
+    printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
+    if objective == "chi2":
+        reopt_args['useFreqWeightedChiSq'] = opt_args['useFreqWeightedChiSq']
+        reopt_args['minProbClipForWeighting'] = opt_args['minProbClipForWeighting']
+        reopt_args['check_jacobian'] = opt_args['check_jacobian']
+        _, mdl_reopt = _alg.do_mc2gst(**reopt_args)
+
+    elif objective == "logl":
+        reopt_args['minProbClip'] = opt_args['minProbClip']
+        reopt_args['radius'] = opt_args['radius']
+        _, mdl_reopt = _alg.do_mlgst(**reopt_args)
+
+    else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
+    
+    return mdl_reopt
+
+

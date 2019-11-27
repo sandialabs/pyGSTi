@@ -252,7 +252,7 @@ def generate_boxplot(subMxs,
                      xlabels, ylabels, inner_xlabels, inner_ylabels,
                      xlabel, ylabel, inner_xlabel, inner_ylabel,
                      colormap, colorbar=False, boxLabels=True, prec=0, hoverInfo=True,
-                     sumUp=False, invert=False, scale=1.0):
+                     sumUp=False, invert=False, scale=1.0, bgcolor='white'):
     """
     A helper function for generating typical nested color box plots used in pyGSTi.
 
@@ -317,6 +317,9 @@ def generate_boxplot(subMxs,
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
 
+    bgcolor : str, optional
+        Background color for this plot.  Can be common color names, e.g.
+        `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
     Returns
     -------
@@ -357,7 +360,7 @@ def generate_boxplot(subMxs,
                                     inner_xlabels, inner_ylabels,
                                     xlabels, ylabels, inner_xlabel, inner_ylabel, xlabel, ylabel,
                                     colormap, colorbar, boxLabels, prec, hoverInfo,
-                                    sumUp, False, scale)
+                                    sumUp, False, scale, bgcolor)
 
     def val_filter(vals):
         """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
@@ -475,7 +478,8 @@ def generate_boxplot(subMxs,
 
         pfig['layout'].update(width=width,
                               height=height,
-                              margin=go_Margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin))
+                              margin=go_Margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
+                              plot_bgcolor=bgcolor)
 
     else:  # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10, 10), 'd'),
@@ -501,7 +505,7 @@ def generate_boxplot(subMxs,
 
 def circuit_color_boxplot(circuit_structure, subMxs, colormap,
                           colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
-                          sumUp=False, invert=False, scale=1.0, addl_hover_subMxs=None):
+                          sumUp=False, invert=False, scale=1.0, bgcolor="white", addl_hover_subMxs=None):
     """
     A wrapper around :func:`generate_boxplot` for creating color box plots
     when the structure of the operation sequences is contained in  a
@@ -549,6 +553,10 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
+
+    bgcolor : str, optional
+        Background color for this plot.  Can be common color names, e.g.
+        `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
     addl_hover_subMxs : dict, optional
         If not None, a dictionary whose values are lists-of-lists in the same
@@ -628,7 +636,7 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
                             g.minor_xvals(), g.minor_yvals(),
                             "L", "germ", "rho", "E<sub>i</sub>", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
-                            sumUp, invert, scale)  # "$\\rho_i$","$\\E_i$"
+                            sumUp, invert, scale, bgcolor)  # "$\\rho_i$","$\\E_i$"
 
 
 def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
@@ -1424,7 +1432,7 @@ class ColorBoxPlot(WorkspacePlot):
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTmodels=None, dscomparator=None, stabilityanalyzer=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
-                 wildcard=None, colorbar=False):
+                 wildcard=None, colorbar=False, bgcolor="white"):
         """
         Create a plot displaying the value of per-circuit quantities.
 
@@ -1527,19 +1535,23 @@ class ColorBoxPlot(WorkspacePlot):
 
         colorbar : bool, optional
             Whether to include a colorbar.
+
+        bgcolor : str, optional
+            Background color for this plot.  Can be common color names, e.g.
+            `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot, self).__init__(ws, self._create, plottype, gss, dataset, model,
                                            prec, sumUp, boxLabels, hoverInfo,
                                            invert, linlg_pcntle, minProbClipForWeighting,
                                            directGSTmodels, dscomparator, stabilityanalyzer,
-                                           submatrices, typ, scale, comm, wildcard, colorbar)
+                                           submatrices, typ, scale, comm, wildcard, colorbar, bgcolor)
 
     def _create(self, plottypes, gss, dataset, model,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTmodels, dscomparator, stabilityanalyzer, submatrices,
-                typ, scale, comm, wildcard, colorbar):
+                typ, scale, comm, wildcard, colorbar, bgcolor):
 
         probs_precomp_dict = None
         fig = None
@@ -1793,7 +1805,7 @@ class ColorBoxPlot(WorkspacePlot):
                 newfig = circuit_color_boxplot(gss, subMxs, colormap,
                                                colorbar, boxLabels, prec,
                                                hoverInfo, sumUp, invert,
-                                               scale, addl_hover_info)
+                                               scale, bgcolor, addl_hover_info)
 
             elif typ == "scatter":
                 newfig = circuit_color_scatterplot(gss, subMxs, colormap,

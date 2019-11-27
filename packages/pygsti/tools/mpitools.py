@@ -797,3 +797,11 @@ def get_comm():
     '''
     from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
     return MPI.COMM_WORLD
+
+
+def sum_across_procs(x, comm):
+    if comm is not None:
+        from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
+        return comm.allreduce(x, MPI.SUM)
+    else:
+        return x

@@ -580,7 +580,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         if global_idle_layer is None:
             self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
         lizardArgs = {'add_idle_noise': self.addIdleNoiseToAllGates,
-                      'errcomp_type': errcomp_type, 'sparse_expm': sparse}
+                      'errcomp_type': errcomp_type, 'dense_rep': not sparse}
         super(CloudNoiseModel, self).__init__(qubit_sslbls, "pp", {}, CloudNoiseLayerLizard,
                                               lizardArgs, sim_type=sim_type, evotype=evotype)
 
@@ -949,7 +949,9 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
     printer.log("*** Creating global idle ***")
 
     termops = []  # gates or error generators to compose
-    ssAllQ = [tuple(['Q%d' % i for i in range(qubitGraph.nqubits)])]
+    qubit_labels = qubitGraph.get_node_names()
+    qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
+    ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
     nQubits = qubitGraph.nqubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -981,7 +983,7 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis)
 
             err_qubit_global_inds = err_qubit_inds
-            fullTermErr = Embedded(ssAllQ, [('Q%d' % i) for i in err_qubit_global_inds], termErr)
+            fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
@@ -994,7 +996,7 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
         errgen = Composed(termops)
         LindbladOp = _op.LindbladDenseOp if sim_type == "matrix" \
             else _op.LindbladOp
-        return LindbladOp(None, errgen, sparse)
+        return LindbladOp(None, errgen, dense_rep=not sparse)
     else: assert(False)
 
 
@@ -1080,7 +1082,9 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
     #  one for each specified error term
 
     loc_noise_termops = []  # list of gates to compose
-    ssAllQ = [tuple(['Q%d' % i for i in range(qubitGraph.nqubits)])]
+    qubit_labels = qubitGraph.get_node_names()
+    qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
+    ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
     for wt, maxHops in weight_maxhops_tuples:
 
@@ -1118,7 +1122,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
             errbasis = _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse)
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
 
-            fullTermErr = Embedded(ssAllQ, ['Q%d' % i for i in err_qubit_global_inds], termErr)
+            fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
@@ -1165,8 +1169,8 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
 
         add_idle_noise = self.model._lizardArgs['add_idle_noise']
         errcomp_type = self.model._lizardArgs['errcomp_type']
-        sparse_expm = self.model._lizardArgs['sparse_expm'] and not dense
-        # can't create LindbladDensOps with sparse_expm=True
+        dense_rep = self.model._lizardArgs['dense_rep'] or dense
+        # can't create dense-rep LindbladOps with dense_rep=False
 
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         Lindblad = _op.LindbladDenseOp if dense else _op.LindbladOp
@@ -1207,9 +1211,9 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
                 if len(errorGens) > 1:
                     error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
                                                evotype=self.model._evotype),
-                                     sparse_expm=sparse_expm)
+                                     dense_rep=dense_rep)
                 else:
-                    error = Lindblad(None, errorGens[0], sparse_expm=sparse_expm)
+                    error = Lindblad(None, errorGens[0], dense_rep=dense_rep)
                 ops_to_compose.append(error)
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerLizard: %s" % errcomp_type)

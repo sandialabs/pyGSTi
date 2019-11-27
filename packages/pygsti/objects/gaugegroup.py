@@ -10,6 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import numpy as _np
+from . import operation as _op
 
 
 class GaugeGroup(object):
@@ -148,6 +149,8 @@ class OpGaugeGroup(GaugeGroup):
             A name for this group - used for reporting what type of
             gauge optimization was performed.
         """
+        if not isinstance(gate, _op.LinearOperator):
+            gate = _op.StaticDenseOp(gate)
         self.gate = gate
         self.element = elementcls
         GaugeGroup.__init__(self, name)
@@ -180,18 +183,20 @@ class OpGaugeGroupElement(GaugeGroupElement):
             The gate to base this element on. It provides both parameterization
             information and the gauge transformation matrix itself.
         """
+        if not isinstance(gate, _op.LinearOperator):
+            gate = _op.StaticDenseOp(gate)
         self.gate = gate
         self._inv_matrix = None
         GaugeGroupElement.__init__(self)
 
     def get_transform_matrix(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix` """
-        return _np.asarray(self.gate)
+        return self.gate.todense()
 
     def get_transform_matrix_inverse(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
         if self._inv_matrix is None:
-            self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
+            self._inv_matrix = _np.linalg.inv(self.gate.todense())
         return self._inv_matrix
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -271,7 +276,7 @@ class TPGaugeGroupElement(OpGaugeGroupElement):
     def get_transform_matrix_inverse(self):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
         if self._inv_matrix is None:
-            self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
+            self._inv_matrix = _np.linalg.inv(self.gate.todense())
             self._inv_matrix[0, :] = 0.0  # ensure invers is *exactly* TP
             self._inv_matrix[0, 0] = 1.0  # as otherwise small variations can get amplified
         return self._inv_matrix

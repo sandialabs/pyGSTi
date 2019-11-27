@@ -368,12 +368,12 @@ class LinlogColormap(Colormap):
         if isinstance(value, _np.ma.MaskedArray) and value.count() == 0:
             # no unmasked elements, in which case a matplotlib bug causes the
             # __call__ below to fail (numpy.bool_ has no attribute '_mask')
-            return_value = _np.ma.array(_np.zeros(value.shape),
-                                        mask=_np.ma.getmask(value))
+            return_value = _np.zeros(value.shape)
+            return_value.flat[:] = _np.nan # fill with NaNs
             # so just create a dummy return value with the correct size
-            # that has all it's entries masked (like value does)
+            # that has all its entries masked (like value does)
             if return_value.shape == (): return return_value.item()
-            else: return return_value.view(_np.ma.MaskedArray)
+            else: return return_value
 
         #deal with numpy bug in handling masked nan values (nan still gives
         # "invalid value" warnings/errors even when masked)
@@ -401,18 +401,19 @@ class LinlogColormap(Colormap):
                 # To avoid the False-branch getting div-by-zero errors, set:
                 log10_norm_trans = 1.0  # because it's never used.
 
+            off = 0.1  # offset to narrow the range of valid values to 0 (white) is never used for data
+            in_0_to_1  =  lin_norm_value / norm_trans  #this is in range [0,1] where lin_norm_value <= norm_trans
             return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
-                                        lin_norm_value / (2 * norm_trans),
+                                        (in_0_to_1 + off)/(1.0+off) * 0.5,  # map = [0,1] -> [off/(1+off), 1] -> [off/(2*(1+off)), 0.5]
                                         (log10_norm_trans
                                          - _np.ma.log10(lin_norm_value))
                                         / (2 * log10_norm_trans) + 0.5)
-            return_value = _np.ma.array(return_value.filled(-1),  # replace masked values with zeros for color mapping
-                                        mask=_np.ma.getmask(return_value))
+            return_value = return_value.filled(_np.nan)  # replace masked values with NaNs for color mapping
 
         if return_value.shape == ():
             return return_value.item()
         else:
-            return return_value.view(_np.ma.MaskedArray)
+            return return_value
 
     def get_matplotlib_norm_and_cmap(self):
         """

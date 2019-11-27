@@ -35,7 +35,7 @@ class Estimate(object):
     """
 
     def __init__(self, parent, targetModel=None, seedModel=None,
-                 modeslByIter=None, parameters=None):
+                 modelsByIter=None, parameters=None):
         """
         Initialize an empty Estimate object.
 
@@ -53,7 +53,7 @@ class Estimate(object):
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        modeslByIter : list of Models
+        modelsByIter : list of Models
             The estimated model at each GST iteration. Typically these are the
             estimated models *before* any gauge optimization is performed.
 
@@ -70,9 +70,9 @@ class Estimate(object):
         #Set models
         if targetModel: self.models['target'] = targetModel
         if seedModel: self.models['seed'] = seedModel
-        if modeslByIter:
-            self.models['iteration estimates'] = modeslByIter
-            self.models['final iteration estimate'] = modeslByIter[-1]
+        if modelsByIter:
+            self.models['iteration estimates'] = modelsByIter
+            self.models['final iteration estimate'] = modelsByIter[-1]
 
         #Set parameters
         if isinstance(parameters, _collections.OrderedDict):
@@ -199,6 +199,9 @@ class Estimate(object):
                     if 'target' in self.models:
                         gop["targetModel"] = self.models['target']
                     else: raise ValueError("Must supply 'targetModel' in 'goparams' argument")
+
+                if "maxiter" not in gop:
+                    gop["maxiter"] = 100
 
                 gop['returnAll'] = True
                 _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)

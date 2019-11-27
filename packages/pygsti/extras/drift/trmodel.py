@@ -31,6 +31,7 @@ class TimeResolvedModel(object):
     used for easy DIY time-resolved tomography on very simple models.
 
     """
+
     def __init__(self, hyperparameters, parameters):
         """
         Initializes a TimResolvedModel object.

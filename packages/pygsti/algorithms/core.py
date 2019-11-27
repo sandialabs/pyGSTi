@@ -626,7 +626,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
         mdl.preps[prepLabel] = _objs.StaticSPAMVec(rhoVec)
     for povmLabel, povm in mdl.povms.items():
         mdl.povms[povmLabel] = _objs.UnconstrainedPOVM(
-            [(lbl, _objs.StaticSPAMVec(E))
+            [(lbl, _objs.StaticSPAMVec(E, typ="effect"))
              for lbl, E in povm.items()])
 
     printer.log("--- eLGST (least squares) ---", 1)
@@ -945,7 +945,7 @@ def do_iterative_exlgst(
 ##################################################################################
 
 def do_mc2gst(dataset, startModel, circuitsToUse,
-              maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
+              maxiter=100000, maxfev=None, fditer=0, tol=1e-6, extra_lm_opts=None,
               cptp_penalty_factor=0, spam_penalty_factor=0,
               minProbClipForWeighting=1e-4,
               probClipInterval=(-1e6, 1e6), useFreqWeightedChiSq=False,
@@ -988,6 +988,9 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
         `'relx'`, `'relf'`, `'f'`, `'jac'`, and `'maxdx'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }` is used.
+
+    extra_lm_opts : dict or None, optional
+        Additional options for the Levenberg-Marquardt algorithm.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -1078,7 +1081,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-    mdl = startModel.copy()
+    mdl = startModel  # .copy()  # to allow caches in startModel to be retained
     if maxfev is None: maxfev = maxiter
 
     #printer.log('', 2)
@@ -1194,53 +1197,90 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         assert(not time_dependent), "Cannot use frequency-weighted chi2 with `time_dependent` == True!"
         objective = _objfns.FreqWeightedChi2Function(
             mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-            spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting, probClipInterval, wrtBlkSize,
-            gthrMem, check, check_jacobian, comm, profiler, printer)
+            spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting,
+            probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
     else:
         if time_dependent:
             objective = _objfns.TimeDependentChi2Function(
                 mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                spam_penalty_factor, dataset, dsCircuitsToUse, minProbClipForWeighting, probClipInterval, wrtBlkSize,
-                gthrMem, check, check_jacobian, comm, profiler, printer)
+                spam_penalty_factor, dataset, dsCircuitsToUse, minProbClipForWeighting,
+                probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
         else:
             objective = _objfns.Chi2Function(
                 mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval, wrtBlkSize,
-                gthrMem, check, check_jacobian, comm, profiler, printer)
+                spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval,
+                wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
+
+    #Get number of maximal-model parameter ("dataset params") if needed for print messages
+    tm = _time.time()
+    if printer.verbosity > 0:
+        # number of independent parameters in dataset (max. model # of params)
+        nDataParams = dataset.get_degrees_of_freedom(
+            dsCircuitsToUse, aggregate_times=not time_dependent)
+    else:
+        nDataParams = 0  # because it's never used
+    profiler.add_time("do_mc2gst: num data params", tm)
+
+    #Step 3: solve least squares minimization problem
+
+    if mdl.simtype in ("termgap", "termorder"):
+        minErrVec = _do_term_runopt(evTree, mdl, objective, "chi2", maxiter, maxfev, tol, fditer,
+                                    extra_lm_opts, comm, printer, profiler, nDataParams, memLimit)
+    else:
+        #Normal case of just a single "sub-iteration"
+        minErrVec, _ = _do_runopt(mdl, objective, "chi2", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                  printer, profiler, nDataParams, memLimit)
+
+    printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
+
+    #if targetModel is not None:
+    #  target_vec = targetModel.to_vector()
+    #  targetErrVec = _objective_func(target_vec)
+    #  return minErrVec, soln_gs, targetErrVec
+    profiler.add_time("do_mc2gst: total time", tStart)
+    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
+    # but maybe best to just remove minErrVec from return value since this isn't very useful
+    # anyway?
+    return minErrVec, mdl
+
+
+def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+               printer, profiler, nDataParams, memLimit, logL_upperbound=None):
+
+    tm = _time.time()
+
+    if extra_lm_opts is None: extra_lm_opts = {}
     objective_func = objective.fn
     jacobian = objective.jfn
 
-    #Step 3: solve least squares minimization problem
-    tm = _time.time()
     x0 = mdl.to_vector()
     if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
     if CUSTOMLM:
-        opt_x, converged, msg = _opt.custom_leastsq(
+        opt_x, converged, msg, mu, nu = _opt.custom_leastsq(
             objective_func, jacobian, x0, f_norm2_tol=tol['f'],
             jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
             max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
-            comm=comm, verbosity=printer - 1, profiler=profiler)
+            comm=comm, verbosity=printer - 1, profiler=profiler, **extra_lm_opts)
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
+        opt_state = (msg, mu, nu)
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
                          maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
+        opt_state = (msg,)
 
     full_minErrVec = objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
     # don't include "extra" regularization terms
     minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
-    soln_gs = mdl.copy()
+    sum_minErrVec = sum(minErrVec**2)  # total chi2 or (upperBoundLogL - logl), depending on objective_name
+
     profiler.add_time("do_mc2gst: leastsq", tm)
 
     tm = _time.time()
 
     if printer.verbosity > 0:
-        nDataParams = dataset.get_degrees_of_freedom(
-            dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
-        # in dataset (max. model # of params)
-
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
         if hasattr(mdl, 'num_elements'):
             memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
@@ -1258,23 +1298,81 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         else:
             nModelParams = mdl.num_params()  # just use total number of params
 
-        totChi2 = sum([x**2 for x in minErrVec])
-        # reject GST model if p-value < threshold (~0.05?)
-        pvalue = 1.0 - _stats.chi2.cdf(totChi2, nDataParams - nModelParams)
-        printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
-                    (totChi2, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
-        printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
+        if objective_name == "chi2":  # could use isinstance(objective, Chi2Function) here?
+            totChi2 = sum_minErrVec
+            # reject GST model if p-value < threshold (~0.05?)
+            pvalue = 1.0 - _stats.chi2.cdf(totChi2, nDataParams - nModelParams)
+            printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
+                        (totChi2, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
+        else:
+            assert(objective_name == "logl")  # assume only options are "chi2" or "logl"
+            # reject GST if p-value < threshold (~0.05?)
+            deltaLogL = sum_minErrVec
 
-    #if targetModel is not None:
-    #  target_vec = targetModel.to_vector()
-    #  targetErrVec = _objective_func(target_vec)
-    #  return minErrVec, soln_gs, targetErrVec
-    profiler.add_time("do_mc2gst: post-opt", tm)  # all in num_nongauge_params
-    profiler.add_time("do_mc2gst: total time", tStart)
-    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
-    # but maybe best to just remove minErrVec from return value since this isn't very useful
-    # anyway?
-    return minErrVec, soln_gs
+            if _np.isfinite(deltaLogL):
+                pvalue = 1.0 - _stats.chi2.cdf(2 * deltaLogL, nDataParams - nModelParams)
+                printer.log("  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound), 1)
+                printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; "
+                            "p-value = %g)" %
+                            (2 * deltaLogL, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
+            else:
+                printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)  # pragma: no cover
+
+    if objective_name == "logl":
+        deltaLogL = sum_minErrVec
+        return (logL_upperbound - deltaLogL), opt_state
+    else:
+        return minErrVec, opt_state
+
+
+def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer,
+                    extra_lm_opts, comm, printer, profiler, nDataParams, memLimit, logL_upperbound=None):
+    """ TODO: docstring """
+
+    fwdsim = mdl._fwdsim()
+
+    #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
+    maxTermStages = fwdsim.max_term_stages
+    pathFractionThreshold = fwdsim.path_fraction_threshold
+    oob_check_interval = fwdsim.oob_check_interval
+
+    #assume a path set has already been chosen, as one should have been chosen
+    # when evTree was created.
+    pathSet = fwdsim.get_current_pathset(evTree, comm)
+    pathFraction = pathSet.get_allowed_path_fraction()
+    printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
+                (pathSet.num_failures, 100 * pathFraction))
+
+    minErrVec = None
+    for sub_iter in range(maxTermStages):
+
+        bFinalIter = (sub_iter == maxTermStages - 1) or (pathFraction > pathFractionThreshold)
+        extra_lm_opts['oob_check_interval'] = oob_check_interval
+        # don't stop early on last iter - do as much as possible.
+        extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"
+        minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                          printer, profiler, nDataParams, memLimit, logL_upperbound)
+
+        if not opt_state[0] == "Objective function out-of-bounds! STOP":
+            if not bFinalIter:
+                printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
+            elif pathFraction > pathFractionThreshold:
+                printer.log("Last term-stage used %.1f%% > %.0f%% of allowed paths, so exiting."
+                            % (100 * pathFraction, 100 * pathFractionThreshold))
+            else:
+                printer.log("Max num of term-stages (%d) reached." % maxTermStages)
+            break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
+
+        else:
+            # Try to get more paths if we can and use those regardless of whether there are failures
+            pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
+            mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
+            pathFraction = pathSet.get_allowed_path_fraction()
+            extra_lm_opts['init_munu'] = (opt_state[1], opt_state[2])
+            printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
+                        (pathSet.num_failures, 100 * pathFraction))
+
+    return minErrVec
 
 
 def do_mc2gst_with_model_selection(
@@ -1498,7 +1596,7 @@ def do_mc2gst_with_model_selection(
 
 
 def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
-                        maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
+                        maxiter=100000, maxfev=None, fditer=0, tol=1e-6, extra_lm_opts=None,
                         cptp_penalty_factor=0, spam_penalty_factor=0,
                         minProbClipForWeighting=1e-4,
                         probClipInterval=(-1e6, 1e6), useFreqWeightedChiSq=False,
@@ -1542,6 +1640,9 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
         `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
+
+    extra_lm_opts : dict or None, optional
+        Additional options for the Levenberg-Marquardt algorithm.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the optimization also contains CPTP penalty
@@ -1680,7 +1781,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
             evt_cache = {}  # get the eval tree that's created so we can reuse it
             minErr, lsgstModel = \
                 do_mc2gst(dataset, lsgstModel, stringsToEstimate,
-                          maxiter, maxfev, num_fd, tol,
+                          maxiter, maxfev, num_fd, tol, extra_lm_opts,
                           cptp_penalty_factor, spam_penalty_factor,
                           minProbClipForWeighting, probClipInterval,
                           useFreqWeightedChiSq, regularizeFactor,
@@ -1890,7 +1991,7 @@ def do_iterative_mc2gst_with_model_selection(
 ##################################################################################
 
 def do_mlgst(dataset, startModel, circuitsToUse,
-             maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
+             maxiter=100000, maxfev=None, fditer=0, tol=1e-6, extra_lm_opts=None,
              cptp_penalty_factor=0, spam_penalty_factor=0,
              minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
@@ -1925,6 +2026,9 @@ def do_mlgst(dataset, startModel, circuitsToUse,
         The tolerance for the logL optimization.  If a dict, allowed keys are
         `'relx'`, `'relf'`, `'f'`, `'jac'`, and `'maxdx'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }` is used.
+
+    extra_lm_opts : dict or None, optional
+        Additional options for the Levenberg-Marquardt algorithm.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -2007,7 +2111,7 @@ def do_mlgst(dataset, startModel, circuitsToUse,
         The model that maximized the log-likelihood.
     """
     return _do_mlgst_base(dataset, startModel, circuitsToUse, maxiter, maxfev,
-                          fditer, tol, cptp_penalty_factor, spam_penalty_factor, minProbClip,
+                          fditer, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
                           check, circuitWeights, opLabelAliases, memLimit,
                           comm, distributeMethod, profiler, evaltree_cache, None,
@@ -2015,7 +2119,7 @@ def do_mlgst(dataset, startModel, circuitsToUse,
 
 
 def _do_mlgst_base(dataset, startModel, circuitsToUse,
-                   maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
+                   maxiter=100000, maxfev=None, fditer=0, tol=1e-6, extra_lm_opts=None,
                    cptp_penalty_factor=0, spam_penalty_factor=0,
                    minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
                    poissonPicture=True, verbosity=0, check=False,
@@ -2053,7 +2157,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-    mdl = startModel.copy()
+    mdl = startModel  # .copy()  # to allow caches in startModel to be retained
 
     if maxfev is None: maxfev = maxiter
 
@@ -2181,92 +2285,43 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         #    return ret1
 
     else:
+        #Create a termgap-penalizable objective function in termgap case
         objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
                                          spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
                                          probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
                                          shiftFctr, check, comm, profiler, printer)
-    objective_func = objective.fn
-    jacobian = objective.jfn
 
     profiler.add_time("do_mlgst: pre-opt", tStart)
 
-    #Run optimization (use leastsq)
+    #Get number of maximal-model parameter ("dataset params") if needed for print messages
     tm = _time.time()
-    x0 = mdl.to_vector()
-    if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
-
-    if CUSTOMLM:
-        opt_x, converged, msg = _opt.custom_leastsq(
-            objective_func, jacobian, x0, f_norm2_tol=tol['f'],
-            jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
-            max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
-            comm=comm, verbosity=printer - 1, profiler=profiler)
-        printer.log("Least squares message = %s" % msg, 2)
-        assert(converged), "Failed to converge: %s" % msg
-    else:
-        opt_x, _, _, msg, flag = \
-            _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relx'], gtol=0,
-                         maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
-        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
-    profiler.add_time("do_mlgst: leastsq", tm)
-
-    tm = _time.time()
-    mdl.from_vector(opt_x)
-    #mdl.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
-
-    full_minErrVec = objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
-    # don't include "extra" penalty terms
-    minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
-    deltaLogL = sum(minErrVec**2)  # upperBoundLogL - logl (a positive number)
-
-    #if constrainType == 'projection':
-    #    if cpPenalty != 0: d,mdl = _contractToCP_direct(mdl,verbosity=0,TPalso=not opt_G0,maxiter=100)
-    #    if spamPenalty != 0: mdl = _contractToValidSPAM(mdl, verbosity=0)
-
     if printer.verbosity > 0:
-        if _np.isfinite(deltaLogL):
-            nDataParams = dataset.get_degrees_of_freedom(
-                dsCircuitsToUse, aggregate_times=not time_dependent)  # number of independent parameters
-            # in dataset (max. model # of params)
+        # number of independent parameters in dataset (max. model # of params)
+        nDataParams = dataset.get_degrees_of_freedom(
+            dsCircuitsToUse, aggregate_times=not time_dependent)
+    else:
+        nDataParams = 0  # because it's never used
 
-            #Don't compute num gauge params if it's expensive (>10% of mem limit)
-            if hasattr(mdl, 'num_elements'):
-                memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
-                    * FLOATSIZE  # see Model._buildup_dPG (this is mem for dPG)
-                if memLimit is None or 0.1 * memLimit < memForNumGaugeParams:
-                    try:
-                        nModelParams = mdl.num_nongauge_params()  # len(x0)
-                    except:  # numpy can throw a LinAlgError
-                        printer.warning("Could not obtain number of *non-gauge* parameters - "
-                                        "using total params instead")
-                        nModelParams = mdl.num_params()
-                else:
-                    printer.log("Finding num_nongauge_params is too expensive: using total params.")
-                    nModelParams = mdl.num_params()  # just use total number of params
-            else:
-                nModelParams = mdl.num_params()  # just use total number of params
+    profiler.add_time("do_mlgst: num data params", tm)
 
-            # reject GST if p-value < threshold (~0.05?)
-            pvalue = 1.0 - _stats.chi2.cdf(2 * deltaLogL, nDataParams - nModelParams)
+    if mdl.simtype in ("termgap", "termorder"):
+        delta_logl = _do_term_runopt(evTree, mdl, objective, "logl", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                     printer, profiler, nDataParams, memLimit, logL_upperbound)  # updates mdl
+    else:
+        #Normal case of just a single "sub-iteration"
+        #Run optimization (use leastsq)
+        delta_logl, _ = _do_runopt(mdl, objective, "logl", maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
+                                   printer, profiler, nDataParams, memLimit, logL_upperbound)  # updates mdl
 
-            printer.log("  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound), 1)
-            printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; "
-                        "p-value = %g)" %
-                        (2 * deltaLogL, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
-            printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
-
-            #print " DEBUG LOGL = ", _tools.logl(mdl, dataset, circuitsToUse),
-            #  " DELTA = ",(logL_upperbound-_tools.logl(mdl, dataset, circuitsToUse))
-        else:
-            printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)  # pragma: no cover
+    printer.log("  Completed in %.1fs" % (_time.time() - tStart), 1)
 
     profiler.add_time("do_mlgst: post-opt", tm)
     profiler.add_time("do_mlgst: total time", tStart)
-    return (logL_upperbound - deltaLogL), mdl
+    return delta_logl, mdl
 
 
 def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
-                       maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
+                       maxiter=100000, maxfev=None, fditer=0, tol=1e-6, extra_lm_opts=None,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
                        minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
                        poissonPicture=True, returnMaxLogL=False, returnAll=False,
@@ -2310,6 +2365,9 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         The tolerance for the logL optimization.  If a dict, allowed keys are
         `'relx'`, `'relf'`, `'f'`, `'jac'`, and `'maxdx'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }` is used.
+
+    extra_lm_opts : dict or None, optional
+        Additional options for the Levenberg-Marquardt algorithm.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -2446,6 +2504,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
             printer.show_progress(i, nIters, verboseMessages=extraMessages,
                                   prefix="--- Iterative MLGST:",
                                   suffix=" %d operation sequences ---" % len(stringsToEstimate))
+            #print("DB: OPCACHE len = ",len(mleModel._opcache))
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
@@ -2464,16 +2523,16 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
             evt_cache = {}  # get the eval tree that's created so we can reuse it
             if not onlyPerformMLE:
                 _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
-                                        maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
-                                        spam_penalty_factor, minProbClip, probClipInterval,
-                                        useFreqWeightedChiSq, 0, printer - 1, check,
+                                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                                        spam_penalty_factor, minProbClip,
+                                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
                                         check, circuitWeights, opLabelAliases,
                                         memLimit, comm, distributeMethod, profiler, evt_cache,
                                         time_dependent)
 
             if alwaysPerformMLE:
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
-                                       maxiter, maxfev, num_fd, tol,
+                                       maxiter, maxfev, num_fd, tol, extra_lm_opts,
                                        cptp_penalty_factor, spam_penalty_factor,
                                        minProbClip, probClipInterval, radius,
                                        poissonPicture, printer - 1, check, circuitWeights,
@@ -2504,7 +2563,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                 mleModel.basis = startModel.basis
 
                 maxLogL_p, mleModel_p = do_mlgst(
-                    dataset, mleModel, stringsToEstimate, maxiter, maxfev, 0, tol,
+                    dataset, mleModel, stringsToEstimate, maxiter, maxfev, 0, tol, extra_lm_opts,
                     cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
                     poissonPicture, printer - 1, check, circuitWeights, opLabelAliases,
                     memLimit, comm, distributeMethod, profiler, evt_cache, time_dependent)
