@@ -1348,7 +1348,8 @@ class LogLWildcardFunction(ObjectiveFunction):
 
         self.logl_objfn = logl_objective_fn
         self.basept = base_pt
-        self.wildcard_budget = wildcard        
+        self.wildcard_budget = wildcard
+        self.wildcard_budget_precomp = wildcard.get_precomp_for_circuits(self.logl_objfn.circuitsToUse)
 
         self.fn = self.logl_wildcard
         self.jfn = None  # no jacobian yet
@@ -1361,7 +1362,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         tm = _time.time()
         self.wildcard_budget.from_vector(Wvec)
         self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
-                                          self.logl_objfn.circuitsToUse, self.logl_objfn.lookup)
+                                          self.logl_objfn.circuitsToUse, self.logl_objfn.lookup, self.wildcard_budget_precomp)
 
         #DEBUG!!!
         #if _np.linalg.norm(self.logl_objfn.probs - self.logl_objfn.freqs) > 1e-6:

@@ -1425,12 +1425,12 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
                                                        parameters, evaltree_cache, comm, memLimit)
             if badfit_typ in ("Robust","Robust+") and (opt_args is not None):
                 mdl_reopt = reoptimize_with_weights(mdl, ds, circuitList, new_params['weights'],
-                                                    objective, opt_args, printer)
+                                                    objective, opt_args, printer - 1)
                 new_final_model = mdl_reopt
                 
         elif badfit_typ == "wildcard":
             new_params['unmodeled_error'] = get_wildcard_budget(mdl, ds, circuitList, parameters,
-                                                                evaltree_cache, comm, memLimit, printer)
+                                                                evaltree_cache, comm, memLimit, printer - 1)
 
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
@@ -1450,7 +1450,7 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
         for gokey, gaugeOptParams in base_estimate.goparameters.items():            
             if new_final_model is not None:
                 add_gauge_opt(results.estimates[base_estimate_label + '.' + badfit_typ], gaugeOptParams,
-                              target_model, new_final_model, comm, printer)
+                              target_model, new_final_model, comm, printer - 1)
             else:
                 # add same gauge-optimized result as above
                 go_gs_final = base_estimate.models[gokey]
@@ -1619,9 +1619,14 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
             #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
             #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
 
-            def callbackF(Wv):
-                a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
-                print('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g' % (a,b,a+b),Wv)
+            if printer.verbosity > 1:
+                printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
+                             " - this *increases* the runtime significantly."), 2)
+                def callbackF(Wv):
+                    a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
+                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a,b,a+b,str(Wv)), 2)
+            else:
+                callbackF = None
             soln = _spo.minimize(_wildcard_objective, Wvec_init,
                                  method='Nelder-Mead', callback=callbackF, tol=1e-6)
             if not soln.success:
