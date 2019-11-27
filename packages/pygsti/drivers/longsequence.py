@@ -1623,7 +1623,9 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
                 a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
                 print('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g' % (a,b,a+b),Wv)
             soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                                 method='L-BFGS-B', callback=callbackF, tol=1e-6)
+                                 method='Nelder-Mead', callback=callbackF, tol=1e-6)
+            if not soln.success:
+                _warnings.warn("Nelder-Mead optimization failed to converge!")
             Wvec = soln.x
             firstTerms = _wildcard_objective_firstTerms(Wvec)
             #printer.log("  Firstterms value = %g" % firstTerms)
