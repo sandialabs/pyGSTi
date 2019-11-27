@@ -401,9 +401,10 @@ class LinlogColormap(Colormap):
                 # To avoid the False-branch getting div-by-zero errors, set:
                 log10_norm_trans = 1.0  # because it's never used.
 
-            off = 0.06  # offset to narrow the range of valid values to 0 (white) is never used for data
+            off = 0.1  # offset to narrow the range of valid values to 0 (white) is never used for data
+            in_0_to_1  =  lin_norm_value / norm_trans  #this is in range [0,1] where lin_norm_value <= norm_trans
             return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
-                                        (lin_norm_value + off) / (2 * (norm_trans + off)),
+                                        (in_0_to_1 + off)/(1.0+off) * 0.5,  # map = [0,1] -> [off/(1+off), 1] -> [off/(2*(1+off)), 0.5]
                                         (log10_norm_trans
                                          - _np.ma.log10(lin_norm_value))
                                         / (2 * log10_norm_trans) + 0.5)
