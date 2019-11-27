@@ -186,7 +186,8 @@ class OplessModel(_Model):
 
     def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit, "default", [], dataset)
+        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit, "default",
+                                                                                [], dataset)
         vp = _np.empty(evalTree.num_final_elements(), 'd')
         self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
 
@@ -200,7 +201,9 @@ class OplessModel(_Model):
 
     def bulk_dprobs(self, circuit_list, returnPr=False, clipTo=None,
                     check=False, comm=None, wrtBlockSize=None, dataset=None):
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit, "default", [], dataset)
+        memLimit = None
+        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit,
+                                                                                "default", [], dataset)
         nElements = evalTree.num_final_elements()
         nDerivCols = self.num_params()
 
@@ -209,7 +212,7 @@ class OplessModel(_Model):
 
         self.bulk_fill_dprobs(vdp, evalTree,
                               vp, clipTo, check, comm,
-                              wrtFilter, wrtBlockSize)
+                              None, wrtBlockSize)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(evalTree):

@@ -15,8 +15,8 @@ import time as _time
 from ...tools import symplectic as _symp
 from ...baseobjs.label import Label as _Lbl
 from ... import objects as _obj
-#from . import sample as _samp
-#from . import results as _res
+from . import sample as _samp
+from . import results as _res
 
 
 def random_paulierror_in_chp(q):

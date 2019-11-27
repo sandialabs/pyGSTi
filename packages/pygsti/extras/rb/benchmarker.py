@@ -234,7 +234,7 @@ class Benchmarker(object):
                 else:
                     def rescale_function(data, width):
                         return data
-            elif rescale == 'none':
+            elif rescaler == 'none':
                 
                 def rescale_function(data, width):
                     return data
