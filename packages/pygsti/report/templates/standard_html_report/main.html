@@ -5,13 +5,13 @@
    >{{ display }}</a>
 {% endmacro %}
 
-{% macro cdn_jslib(local_filename, cdn_url, integrity=None) %}
+{% macro cdn_jslib(local_filename, cdn_url, libobj, integrity=None) %}
 <script src="{{ cdn_url }}" crossorigin="anonymous"
         {% if integrity is not none %}
         integrity="{{ integrity }}"
         {% endif %}
-        onerror="jsFallbackFromCDN('{{ local_filename }}')"
         ></script>
+<script>jsFallbackFromCDN('{{ libobj }}', '{{ local_filename }}');</script>
 {% endmacro %}
 
 {% macro embed_jslib(local_filename) %}
@@ -40,23 +40,25 @@
         <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
 
         <script>
-            function jsFallbackFromCDN(localFilename) {
-                console.log(`***Failed to load ${localFilename} from CDN. Falling back to local offline version.***`);
-                var script = document.createElement('script');
-                script.src = `./offline/${localFilename}`;
-                document.head.appendChild(script);
+          function jsFallbackFromCDN(libname_to_check, localFilename) {
+              var parts = libname_to_check.split('.')
+              if (((parts.length == 1) && (typeof window[parts[0]] == "undefined")) ||
+                  ((parts.length == 2) && (typeof window[parts[0]][parts[1]] == "undefined"))) {
+                  console.log(`***Failed to load ${localFilename} from CDN. Falling back to local offline version.***`);
+                  document.write(unescape(`%3Cscript src="./offline/${localFilename}" type="text/javascript"%3E%3C/script%3E`));
+              }
             }
         </script>
-
-        {{ cdn_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js",
+        
+        {{ cdn_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js", "jQuery",
         integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=") }}
 
-        {{ cdn_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js",
+        {{ cdn_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jQuery.ui",
         integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=") }}
 
-        {{ cdn_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js") }}
-        {{ cdn_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js") }}
-        {{ cdn_jslib("auto-render.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js") }}
+        {{ cdn_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js", "Plotly") }}
+        {{ cdn_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js", "katex") }}
+        {{ cdn_jslib("auto-render.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js", "renderMathInElement") }}
         {{ embed_jslib("pygsti_plotly_ex.js") }}
         {{ embed_jslib("pygsti_dashboard.js") }}
 
