@@ -1,0 +1,13 @@
+<h1>Idle Tomography</h1>
+
+<p>This tab tells you about Idle Tomography results.  Idle tomography is a lightweight form of tomography that characterizes small, low-weight errors on an idle gate (one that is supposed to perform the identity operation).  This tab is a work in progress, and is apt to change significantly in the future.</p>
+
+<figure id="itdIntrinsicErrorsTable" class='tbl'>
+	<figcaption><span class="captiontitle">Intrinsic error rates.</span> <span class="captiondetail">This figure shows all the intrinsic error rates obtained by idle tomography, organized by which qubits are involved and what the (nontrivial) Pauli elements are on those qubits.</span></figcaption>
+	{{ idtIntrinsicErrorsTable|render }}
+</figure>
+
+<figure id="idtObservedRatesTable" class='tbl'>
+	<figcaption><span class="captiontitle">Observed rates.</span> <span class="captiondetail">This figure shows traces of the largest observed-data rates and fits.</span></figcaption>
+	{{ idtObservedRatesTable|render }}
+</figure>

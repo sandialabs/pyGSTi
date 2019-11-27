@@ -15,7 +15,6 @@ jupyter_notebooks/Examples/example_files
 test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
-**offline/
 **tutorial_files
 *.lprof
 *.cache

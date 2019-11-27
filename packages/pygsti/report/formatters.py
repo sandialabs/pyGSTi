@@ -193,7 +193,8 @@ def html_figure(fig, specs):
                                  resizable="handlers only",
                                  click_to_display=specs['click_to_display'],
                                  link_to=specs['link_to'],
-                                 autosize=specs['autosize'])
+                                 autosize=specs['autosize'],
+                                 output_dir=specs['output_dir'])
     render_out = fig.value.render("html")
     return render_out  # a dictionary with 'html' and 'js' keys
 

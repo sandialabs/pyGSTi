@@ -81,6 +81,7 @@ extras = {
     'evolutionary optimization algorithm': ['deap'],
     'pickling report tables': ['pandas'],
     'generating PDFs of report figures': ['matplotlib'],
+    'generating html reports': ['jinja2'],
     'generating report notebooks': [
         'ipython',
         'notebook'

@@ -1,0 +1,22 @@
+<h1>System and pyGSTi parameters</h1>
+<p>This tab contains a raw dump of system information and various pyGSTi parameters.  Its purpose is to stamp this report with parameters that indicate how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  However, if the core GST computation was done on a different computer, then the software information contained here will be less useful (it describes the environment in which the report was generated, not the one in which the estimate was generated).</p>
+
+<figure id="metadataTable" class='tbl'>
+    <figcaption><span class="captiontitle">Listing of GST parameters and meta-data.</span> <span class="captiondetail"> These parameters and related metadata describe how the GST computation that produced this report was performed.</span></figcaption>
+    {{ metadataTable|render }}
+</figure>
+
+<figure id="profilerTable" class='tbl'>
+    <figcaption><span class="captiontitle">Profiler timing.</span> <span class="captiondetail"> Timing information from pyGSTi's built-in lightweight profiler (if it was enabled).</span></figcaption>
+    {{ profilerTable|render }}
+</figure>
+
+<figure id="stdoutBlock" class='txtblk'>
+	<figcaption><span class="captiontitle">Standard output.</span> <span class="captiondetail"> The standard output text, along with warnings and errors, that was collected (recorded) when GST was run to create the results reported here.</span></figcaption>
+    {{ stdoutBlock|render }}
+</figure>
+
+<figure id="softwareEnvTable" class='tbl'>
+	<figcaption><span class="captiontitle">Listing of the software environment.</span> <span class="captiondetail"> This table describes the software environment of the machine used to generate this report.  It may not describe the machine used to perform the core GST gate set estimation.</span></figcaption>
+    {{ softwareEnvTable|render }}
+</figure>

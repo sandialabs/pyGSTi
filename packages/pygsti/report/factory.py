@@ -254,7 +254,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         ["Dataset", "Estimate", "Gauge-Opt", "max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
         ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
-        show=[multidataset, multiest, multiGO, False]  # "global" switches only + gauge-opt (OK if doesn't apply)
+        show=[multidataset, multiest, multiGO, False],  # "global" switches only + gauge-opt (OK if doesn't apply)
+        within_report=True
     )
 
     switchBd.add("ds", (0,))
@@ -536,7 +537,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     if len(dataset_labels) > 1:  # multidataset
         metric_switchBd = ws.Switchboard(
             ["Metric", "Operation"], [metric_names, op_labels],
-            ["dropdown", "dropdown"], [0, 0], show=[True, True])
+            ["dropdown", "dropdown"], [0, 0], show=[True, True],
+            within_report=True)
         metric_switchBd.add("opLabel", (1,))
         metric_switchBd.add("metric", (0,))
         metric_switchBd.add("cmpTableTitle", (0, 1))
@@ -548,7 +550,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     else:
         metric_switchBd = ws.Switchboard(
             ["Metric"], [metric_names],
-            ["dropdown"], [0], show=[True])
+            ["dropdown"], [0], show=[True],
+            within_report=True)
         metric_switchBd.add("metric", (0,))
         metric_switchBd.add("cmpTableTitle", (0,))
         metric_switchBd.cmpTableTitle[:] = metric_names
@@ -753,7 +756,7 @@ def create_standard_report(results, filename, title="auto",
     idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
     bgcolor = advancedOptions.get('colorboxplot_bgcolor', 'white')
 
-    if filename and filename.endswith(".pdf"):
+    if filename.endswith(".pdf"):
         fmt = "latex"
     else:
         fmt = "html"
@@ -1128,7 +1131,8 @@ def create_standard_report(results, filename, title="auto",
             dscmp_switchBd = ws.Switchboard(
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons", "buttons"], [0, 1]
+                ["buttons", "buttons"], [0, 1],
+                within_report=True
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))
@@ -1197,11 +1201,20 @@ def create_standard_report(results, filename, title="auto",
             printer.log("*** Merging into template file ***")
 
             if fmt == "html":
-                templateDir = "standard_html_report"
-                _merge.merge_html_template_dir(
-                    qtys, templateDir, filename, auto_open, precision, link_to,
-                    connected=connected, toggles=toggles, renderMath=renderMath,
-                    resizable=resizable, autosize=autosize, verbosity=printer)
+                if filename.endswith(".html"):
+                    _merge.merge_jinja_template(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
+                else:
+                    _merge.merge_jinja_template_dir(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
 
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"
@@ -1714,7 +1727,8 @@ def create_nqnoise_report(results, filename, title="auto",
             dscmp_switchBd = ws.Switchboard(
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons", "buttons"], [0, 1]
+                ["buttons", "buttons"], [0, 1],
+                within_report=True
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))
@@ -1779,11 +1793,20 @@ def create_nqnoise_report(results, filename, title="auto",
             printer.log("*** Merging into template file ***")
 
             if fmt == "html":
-                templateDir = "standard_html_report"
-                _merge.merge_html_template_dir(
-                    qtys, templateDir, filename, auto_open, precision, link_to,
-                    connected=connected, toggles=toggles, renderMath=renderMath,
-                    resizable=resizable, autosize=autosize, verbosity=printer)
+                if filename.endswith(".html"):
+                    _merge.merge_jinja_template(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
+                else:
+                    _merge.merge_jinja_template_dir(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
 
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"
