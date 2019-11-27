@@ -12,6 +12,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from .. import tools as _tools
 
+#pos = lambda x: x**2
+pos = abs
 
 class WildcardBudget(object):
     """
@@ -374,10 +376,10 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         float
         """
         Wvec = self.wildcard_vector
-        budget = 0 if (self.spam_index is None) else abs(Wvec[self.spam_index])
+        budget = 0 if (self.spam_index is None) else pos(Wvec[self.spam_index])
         for layer in circuit:
             for component in layer.components:
-                budget += abs(Wvec[self.primOpLookup[component]])
+                budget += pos(Wvec[self.primOpLookup[component]])
         return budget
 
     def get_descriptive_dict(self):
@@ -391,9 +393,9 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         """
         wildcardDict = {}
         for lbl, index in self.primOpLookup.items():
-            wildcardDict[lbl] = ('budget per each instance %s' % lbl, abs(self.wildcard_vector[index]))
+            wildcardDict[lbl] = ('budget per each instance %s' % lbl, pos(self.wildcard_vector[index]))
         if self.spam_index is not None:
-            wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', abs(self.wildcard_vector[self.spam_index]))
+            wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
         return wildcardDict
 
     def get_op_budget(self, op_label):
@@ -411,9 +413,9 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         -------
         float
         """
-        return abs(self.wildcard_vector[self.primOpLookup[op_label]])
+        return pos(self.wildcard_vector[self.primOpLookup[op_label]])
 
     def __str__(self):
-        wildcardDict = {lbl: abs(self.wildcard_vector[index]) for lbl, index in self.primOpLookup.items()}
-        if self.spam_index is not None: wildcardDict['SPAM'] = abs(self.wildcard_vector[self.spam_index])
+        wildcardDict = {lbl: pos(self.wildcard_vector[index]) for lbl, index in self.primOpLookup.items()}
+        if self.spam_index is not None: wildcardDict['SPAM'] = pos(self.wildcard_vector[self.spam_index])
         return "Wildcard budget: " + str(wildcardDict)
