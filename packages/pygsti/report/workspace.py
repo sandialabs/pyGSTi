@@ -31,17 +31,23 @@ from . import merge_helpers as _merge
 
 from pprint import pprint as _pprint
 
-try:
-    from IPython.core.display import display as _display
-    from IPython.core.display import HTML as _HTML
-    #from IPython.display import clear_output as _clear_output
-    in_ipython_notebook = True
-except ImportError:
-    in_ipython_notebook = False
-
-
-
 _PYGSTI_WORKSPACE_INITIALIZED = False
+
+
+def in_ipython_notebook():
+    """Returns true if called from within an IPython/jupyter notebook"""
+    try:
+        # 'ZMQInteractiveShell' in a notebook, 'TerminalInteractiveShell' in IPython REPL, and fails elsewhere.
+        shell = get_ipython().__class__.__name__
+        return shell == 'ZMQInteractiveShell'
+    except NameError:
+        return False
+
+
+def display_ipynb(content):
+    """Render HTML content to an IPython notebook cell display"""
+    from IPython.core.display import display, HTML
+    display(HTML(content))
 
 
 def enable_plotly_pickling():
@@ -375,7 +381,7 @@ class Workspace(object):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `init_notebook_mode` from inside an IPython Notebook.')
 
         global _PYGSTI_WORKSPACE_INITIALIZED
@@ -537,7 +543,7 @@ class Workspace(object):
             "      }); });\n"
             "</script>\n")
 
-        _display(_HTML(script))  # single call to display keeps things simple
+        display_ipynb(script)  # single call to display keeps things simple
 
         _PYGSTI_WORKSPACE_INITIALIZED = True
 
@@ -1046,10 +1052,10 @@ class Switchboard(_collections.OrderedDict):
             switch_js.append(js)
 
         html = "\n".join(switch_html)
-        if not self.within_report:  #run JS as soon as the document is ready
+        if not self.within_report:  # run JS as soon as the document is ready
             js = "$(document).ready(function() {\n" + \
                 "\n".join(switch_js) + "\n});"
-        else:  #in a report, where we have a 'loadable' parent and might not want to load right away
+        else:  # in a report, where we have a 'loadable' parent and might not want to load right away
             js = "$(document).ready(function() {\n" + \
                  "$('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID + \
                 "\n".join(switch_js) + "\n}); });"
@@ -1121,7 +1127,7 @@ class Switchboard(_collections.OrderedDict):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         #if self.widget is None:
@@ -1134,7 +1140,7 @@ class Switchboard(_collections.OrderedDict):
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
         #self.widget.value = content
-        _display(_HTML(content))  # self.widget)
+        display_ipynb(content)  # self.widget)
 
     def view(self, switches="all", idsuffix="auto"):
         """
@@ -1250,14 +1256,14 @@ class SwitchboardView(object):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
-        _display(_HTML(content))
+        display_ipynb(content)
 
 
 class SwitchValue(object):
@@ -1528,7 +1534,7 @@ class WorkspaceOutput(object):
         """
         Display this object within an iPython notebook.
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         self.set_render_options(global_requirejs=True,
@@ -1538,7 +1544,7 @@ class WorkspaceOutput(object):
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
 
-        _display(_HTML(content))
+        display_ipynb(content)
 
     def saveas(self, filename, index=None, verbosity=0):
         """
@@ -1587,12 +1593,12 @@ class WorkspaceOutput(object):
         ret += '  $(document).ready(function() {\n'
         if within_report:
             ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
-            
+
         ret += content
-        
+
         if within_report:
             ret += "  });"  # end load_loadable_item handler
-            
+
         ret += '}); //end on-ready or on-load handler\n'
 
         if global_requirejs:
@@ -1661,7 +1667,7 @@ class WorkspaceOutput(object):
         """
 
         within_report = self.options.get('within_report', False)
-        
+
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
         if div_css_classes is not None:
@@ -1733,7 +1739,7 @@ class WorkspaceOutput(object):
         handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
         handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
         handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-        
+
         handler_js += "}\n"  # end <ID>_onchange function
 
         #build change event listener javascript
@@ -2136,7 +2142,7 @@ class WorkspaceTable(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
-            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html", 
+            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
