@@ -392,7 +392,7 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
         # Assume path after ~ is relative to root packaged template directory
         relpath = templateDir[1:]
         loader = jinja2.PackageLoader('pygsti', _os.path.join('report/templates',relpath))
-        
+
     else:
         # Use path as is.
         loader = jinja2.FileSystemLoader(templateDir)
@@ -423,7 +423,7 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
     def static_jsref(library_local):
         # XXX equivalent to static_jslib right now, but external libraries should later be bundled separately
         return static_jslib(library_local)
-    
+
     @jinja_global
     def static_jslib(library_local, online_url=None, library_obj=None, integrity=None, crossorigin=None):
         libpath = static_path / library_local
@@ -452,7 +452,7 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
                        '    document.write(unescape(\'%3Cscript src="{localsrc}" type="text/javascript"%3E%3C/script%3E\'));\n'
                        '}}</script>').format(src=online_url, libobj=library_obj, localsrc=libpath)
             return ret
-        
+
     @jinja_global
     def static_css(library_local, online_url=None):
         libpath = static_path / library_local
@@ -470,7 +470,7 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
                    '<link rel="stylesheet" href="{localsrc}">\n').format(src=online_url, localsrc=libpath)
             return ret
 
-    
+
     @jinja_filter
     @jinja2.evalcontextfilter
     def render(eval_ctx, value):
@@ -480,12 +480,12 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
     return env
 
 
-def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='main.html', 
+def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='main.html',
                          auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
                          renderMath=True, resizable=True, autosize='none', verbosity=0):
     """
     Renders `qtys` and merges them into a single HTML file `outputFilename`.
-    This functions parameters are the same as those of :func:`merge_jinja_template_dir.
+    This functions parameters are the same as those of :func:`merge_jinja_template_dir`.
 
     Returns
     -------
@@ -493,17 +493,16 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     """
 
     assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
-    outputDir = _os.path.dirname(outputFilename)
-    out_path = Path(outputDir).absolute()
+    out_file = Path(outputFilename).absolute()
+    out_path = out_file.parent
     static_path = out_path / 'offline'
 
     #Copy offline directory into position
     if not connected:
-        rsync_offline_dir(outputDir)
+        rsync_offline_dir(str(out_path))
 
     if link_to is not None:
-        base,_ = _os.path.splitext(_os.path.basename(outputFilename))
-        figDir = out_path / (base + '.figures')
+        figDir = out_path / (out_file.stem + '.figures')
         figDir.mkdir(exist_ok=True)
     else:
         figDir = None
@@ -533,7 +532,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
         outfile.write(template.render(render_params))
 
 
-def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html', 
+def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html',
                              auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
                              renderMath=True, resizable=True, autosize='none', verbosity=0):
     """
