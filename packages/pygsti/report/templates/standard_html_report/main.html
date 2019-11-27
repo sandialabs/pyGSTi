@@ -5,6 +5,30 @@
    >{{ display }}</a>
 {% endmacro %}
 
+{% macro cdn_jslib(local_filename, cdn_url, integrity=None) %}
+<script src="{{ cdn_url }}" crossorigin="anonymous"
+        {% if integrity is not none %}
+        integrity="{{ integrity }}"
+        {% endif %}
+        onerror="jsFallbackFromCDN('{{ local_filename }}')"
+        ></script>
+{% endmacro %}
+
+{% macro embed_jslib(local_filename) %}
+<!-- INSERTED {{ local_filename }} -->
+<script type="text/javascript">{{ offline_file(local_filename) }}</script>
+{% endmacro %}
+
+{% macro cdn_stylesheet(local_filename, cdn_url) %}
+<link rel="stylesheet" href="{{ cdn_url }}">
+<link rel="stylesheet" href="{{ static_ref(local_filename) }}">
+{% endmacro %}
+
+{% macro embed_stylesheet(local_filename) %}
+<!-- INSERTED {{ local_filename }} -->
+<style>{{ offline_file(local_filename) }}</style>
+{% endmacro %}
+
 <!doctype html>
 <html>
     <head>
@@ -15,24 +39,33 @@
         <link rel="icon" type="image/png" sizes="32x32" href="{{ static_ref('images/favicon-32x32.png') }}">
         <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
 
-        {{ static_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js", "jQuery",
-        "sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=", "anonymous") | safe }}
+        <script>
+            function jsFallbackFromCDN(localFilename) {
+                console.log(`***Failed to load ${localFilename} from CDN. Falling back to local offline version.***`);
+                var script = document.createElement('script');
+                script.src = `./offline/${localFilename}`;
+                document.head.appendChild(script);
+            }
+        </script>
 
-        {{ static_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jQuery.ui",
-                        "sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=", "anonymous") | safe }}
+        {{ cdn_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js",
+        integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=") }}
 
-        {{ static_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js", "Plotly") | safe }}
-        {{ static_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js", "katex") | safe }}
-        {{ static_jslib("auto-render.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js", "renderMathInElement") | safe }}
-        {{ static_jsref("pygsti_plotly_ex.js") | safe }}
-        {{ static_jsref("pygsti_dashboard.js") | safe }}
+        {{ cdn_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js",
+        integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=") }}
 
-        {{ static_css("smoothness-jquery-ui.css", "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css") | safe }}
-        {{ static_css("katex.css", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css") | safe }}
-        {{ static_css("pygsti_dataviz.css", "") | safe }}
-        {{ static_css("pygsti_dashboard.css", "") | safe }}
-        {{ static_css("pygsti_fonts.css", "") | safe }}
-        
+        {{ cdn_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js") }}
+        {{ cdn_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js") }}
+        {{ cdn_jslib("auto-render.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js") }}
+        {{ embed_jslib("pygsti_plotly_ex.js") }}
+        {{ embed_jslib("pygsti_dashboard.js") }}
+
+        {{ cdn_stylesheet("smoothness-jquery-ui.css", "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css") }}
+        {{ cdn_stylesheet("katex.css", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css") }}
+        {{ embed_stylesheet("pygsti_dataviz.css") }}
+        {{ embed_stylesheet("pygsti_dashboard.css") }}
+        {{ embed_stylesheet("pygsti_fonts.css") }}
+
     </head>
 
     <body>
