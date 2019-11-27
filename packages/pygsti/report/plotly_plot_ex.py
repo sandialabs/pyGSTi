@@ -10,8 +10,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import os as _os
-from plotly import __version__ as _plotly_version
-from plotly import tools as _plotlytools
 #from plotly.offline.offline import get_plotlyjs
 #from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
 #from pkg_resources import resource_string
@@ -78,6 +76,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         With 'html' and 'js' keys separately specifying the HTML and javascript
         needed to embed the plot.
     """
+    from plotly import __version__ as _plotly_version
+    from plotly import tools as _plotlytools
 
     #Processing to enable automatic-resizing & aspect ratio locking
     fig = _plotlytools.return_figure_from_figure_or_data(
