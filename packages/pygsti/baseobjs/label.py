@@ -358,7 +358,7 @@ class LabelTup(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTup, (self[0], self[1:]), None)
+        return (LabelTup, (self[:], self.time), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
@@ -496,7 +496,7 @@ class LabelStr(Label, strlittype):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelStr, (strlittype(self),), None)
+        return (LabelStr, (strlittype(self), self.time), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
@@ -664,7 +664,7 @@ class LabelTupTup(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTupTup, (self[:],), None)
+        return (LabelTupTup, (self[:], self.time), None)
 
     def __contains__(self, x):
         # "recursive" contains checks component containers
@@ -896,7 +896,7 @@ class CircuitLabel(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (CircuitLabel, (self[0], self[3:], self[1], self[2]), None)
+        return (CircuitLabel, (self[0], self[3:], self[1], self[2], self.time), None)
 
     def __contains__(self, x):
         # "recursive" contains checks component containers
@@ -1135,7 +1135,7 @@ class LabelTupWithArgs(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTupWithArgs, (self.name, self.sslbls, self.time, self.args), None)
+        return (LabelTupWithArgs, (self[:], self.time), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
@@ -1327,7 +1327,7 @@ class LabelTupTupWithArgs(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTupTupWithArgs, (self.components, self.time, self.args), None)
+        return (LabelTupTupWithArgs, (self[:], self.time), None)
 
     def __contains__(self, x):
         # "recursive" contains checks component containers
