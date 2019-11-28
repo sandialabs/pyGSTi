@@ -18,6 +18,7 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
 from ..tools import compattools as _compat
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
+from .circuit import Circuit as _Circuit
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -523,8 +524,11 @@ class Estimate(object):
                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
-        ds_allstrs = _tools.find_replace_tuple_list(
-            gss.allstrs, gss.aliases)
+        if len(gss.allstrs) > 0 and isinstance(gss.allstrs[0], _Circuit):
+            allstrs_as_tups = [s.tup for s in gss.allstrs]
+        else:
+            allstrs_as_tups = gss.allstrs
+        ds_allstrs = _tools.find_replace_tuple_list(allstrs_as_tups, gss.aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
         k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean

@@ -1,4 +1,4 @@
-""" Randomized Benchmarking Sub-package """
+""" Functions for interfacing pyGSTi with IBM Q Tenerife (ibmqx4) """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,11 +9,21 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import group
-from . import theory
-from . import sample
-from . import io
-from . import dataset
-from .benchmarker import Benchmarker
-from . import simulate
-from . import analysis
+# import numpy as _np
+# from ...objects import processorspec as _pspec
+# from .ibmq_ourense import *
+
+qubits = ['Q' + str(x) for x in range(5)]
+
+twoQgate = 'Gcnot'
+
+edgelist = [('Q1', 'Q0'),
+            ('Q0', 'Q1'),
+            ('Q2', 'Q1'),
+            ('Q1', 'Q2'),
+            ('Q1', 'Q3'),
+            ('Q3', 'Q1'),
+            ('Q3', 'Q4'),
+            ('Q4', 'Q3')]
+
+spec_format = 'ibmq_v2019'

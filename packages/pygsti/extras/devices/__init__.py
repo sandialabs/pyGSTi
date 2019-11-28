@@ -1,4 +1,4 @@
-""" Randomized Benchmarking Sub-package """
+""" Exteneral Device Specifications Sub-package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,11 +9,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import group
-from . import theory
-from . import sample
-from . import io
-from . import dataset
-from .benchmarker import Benchmarker
-from . import simulate
-from . import analysis
+from .devcore import *
+from . import ibmq_melbourne
+from . import ibmq_ourense
+from . import ibmq_rueschlikon
+from . import ibmq_tenerife
+from . import ibmq_vigo
+from . import ibmq_yorktown
+from . import rigetti_agave
+from . import rigetti_aspen4
+from . import rigetti_aspen6
