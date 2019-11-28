@@ -517,7 +517,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
 
 
 def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
-                                      dataset_labels, est_labels):
+                                      dataset_labels, est_labels=None):
     op_labels = None
     for results in results_dict.values():
         for est in results.estimates.values():
@@ -960,6 +960,10 @@ def create_standard_report(results, filename, title="auto",
         addqty(4, 'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
                gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
+
+    grmetric_switchBd = _create_single_metric_switchboard(ws, {}, False, [])
+    qtys['metricSwitchboard_gr'] = grmetric_switchBd
+    addqty(4, 'bestGIMetricTable', ws.GaugeRobustMetricTable, gsFinal, gsTgt, grmetric_switchBd.metric, cri(1))
 
     if len(idt_results_dict) > 0:
         #Plots & tables for idle tomography tab

@@ -559,8 +559,7 @@ class GaugeRobustModelTable(WorkspaceTable):
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
-            used to display error intervals for the *final*
-            element of `models`.
+            used to display error intervals.
 
         Returns
         -------
@@ -649,6 +648,120 @@ class GaugeRobustModelTable(WorkspaceTable):
         table.finish()
         return table
 
+
+class GaugeRobustMetricTable(WorkspaceTable):
+    """ Create a table showing a standard metric in a gauge-robust way. """
+
+    def __init__(self, ws, model, target_model, metric,
+                 confidenceRegionInfo=None):
+        """
+        Create a table showing a standard metric in a gauge-robust way.
+
+        Parameters
+        ----------
+        model : Model
+            The Model to display.
+
+        target_model : Model
+            The (usually ideal) reference model to compute gauge-invariant
+            quantities with respect to.
+
+        metric : str
+            The abbreviation for the metric to use.  Allowed values are:
+
+            - "inf" :     entanglement infidelity
+            - "agi" :     average gate infidelity
+            - "trace" :   1/2 trace distance
+            - "diamond" : 1/2 diamond norm distance
+            - "nuinf" :   non-unitary entanglement infidelity
+            - "nuagi" :   non-unitary entanglement infidelity
+            - "evinf" :     eigenvalue entanglement infidelity
+            - "evagi" :     eigenvalue average gate infidelity
+            - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+            - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+            - "evdiamond" : eigenvalue 1/2 diamond norm distance
+            - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+            - "frob" :    frobenius distance
+
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(GaugeRobustMetricTable, self).__init__(ws, self._create, model, target_model,
+                                                     metric, confidenceRegionInfo)
+
+    def _create(self, model, target_model, metric, confidenceRegionInfo):
+
+        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        opLabels = model.get_primitive_op_labels()
+
+        colHeadings = [''] + ['%s' % lbl for lbl in opLabels]
+        formatters = [None] * len(colHeadings)
+        confidenceRegionInfo = None  # Don't deal with CIs yet...
+
+        # Table will essentially be a matrix whose diagonal elements are
+        # --> metric(GateA_in_As_best_gauge, TargetA)
+        #     where a "best gauge" of a gate is one where it is co-diagonal with its target (same evecs can diag both).
+        # Off-diagonal elements are given by:
+        # --> min( metric(TargetA_in_Bs_best_gauge, TargetA), metric(TargetB_in_As_best_gauge, TargetB) )
+        #
+        # Thus, the diagonal elements tell us how much worse a (target) gate gets when just it's eigenvalues are
+        # replaced with those of the actual estimated gate, and the off-diagonal elements tell us the least amount of
+        # damage that must be done to a pair of (target) gates when just changing their eigenvectors to be consistent
+        # with the actual estimated gates.
+
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+
+        orig_model = model.copy()
+        orig_model.set_all_parameterizations("full")  # so we can freely gauge transform this
+        orig_target = target_model.copy()
+        orig_target.set_all_parameterizations("full")  # so we can freely gauge transform this
+
+        mdl_in_best_gauge = []
+        target_mdl_in_best_gauge = []
+        for lbl in opLabels:
+            gate_mx = orig_model.operations[lbl].todense()
+            target_gate_mx = target_model.operations[lbl].todense()
+            Ugauge = _tools.get_a_best_case_gauge_transform(gate_mx, target_gate_mx)
+            Ugg = _objs.FullGaugeGroupElement(_np.linalg.inv(Ugauge))  # transforms gates as Ugauge * gate * Ugauge_inv
+
+            mdl = orig_model.copy()
+            mdl.transform(Ugg)
+            mdl_in_best_gauge.append(mdl)
+
+            target_mdl = orig_model.copy()
+            target_mdl.transform(Ugg)
+            target_mdl_in_best_gauge.append(target_mdl)
+
+        #FUTURE: instruments too?
+        for i, lbl in enumerate(opLabels):
+            row_data = [lbl]
+            row_formatters = [None]
+            basis = model.basis
+
+            for j, lbl2 in enumerate(opLabels):
+                if i > j:  # leave lower diagonal blank
+                    el = _objs.reportableqty.ReportableQty(_np.nan)
+                elif i == j:  # diagonal element
+                    el = _reportables.evaluate_opfn_by_name(
+                        metric, mdl_in_best_gauge[i], target_model, lbl, confidenceRegionInfo)
+                else:  # off-diagonal element
+                    el1 = _reportables.evaluate_opfn_by_name(
+                        metric, target_mdl_in_best_gauge[i], target_model, lbl2, confidenceRegionInfo)
+                    el2 = _reportables.evaluate_opfn_by_name(
+                        metric, target_mdl_in_best_gauge[j], target_model, lbl, confidenceRegionInfo)
+                    el = _objs.reportableqty.minimum(el1, el2)
+                row_data.append(el)
+                row_formatters.append('Normal')
+
+            table.addrow(row_data, row_formatters)
+
+        table.finish()
+        return table
 
 
 class ModelVsTargetTable(WorkspaceTable):
@@ -1373,7 +1486,7 @@ class NQubitErrgenTable(WorkspaceTable):
                         hamCoeffs_fig = _wp.MatrixPlot(
                             self.ws, hamCoeffs, m, M, xlabels, ylabels,
                             boxLabels=True, prec="compacthp")
-                        row_data.append(hamCoeffs_fig)  # HERE
+                        row_data.append(hamCoeffs_fig)
                         row_formatters.append('Figure')
                     else:
                         row_data.append(hamCoeffs)
