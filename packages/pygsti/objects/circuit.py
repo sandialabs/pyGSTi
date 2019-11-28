@@ -808,7 +808,10 @@ class Circuit(object):
             lbls_sslbls = None if (lbls.sslbls is None) else set(lbls.sslbls)
         else:
             if isinstance(lbls, Circuit):
-                lbls = lbls.tup  # circuit layer labels as a tuple
+                assert(set(lbls.line_labels).issubset(self.line_labels)), \
+                    "Assigned circuit has lines (%s) not contained in this circuit (%s)!" \
+                    % (str(lbls.line_labels), str(self.line_labels))
+                lbls = lbls.layertup  # circuit layer labels as a tuple
             assert(isinstance(lbls, (tuple, list))), \
                 ("When assigning to a layer range (even w/len=1) `lbls` "
                  "must be  a *list or tuple* of label-like items")
