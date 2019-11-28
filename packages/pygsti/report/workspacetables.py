@@ -535,8 +535,8 @@ class ChoiTable(WorkspaceTable):
         table.finish()
         return table
 
-class GaugeInvModelTable(WorkspaceTable):
-    """ Create a table showing a model in a gauge-invariant (or close to it) representation. """
+class GaugeRobustModelTable(WorkspaceTable):
+    """ Create a table showing a model in a gauge-robust representation. """
 
     def __init__(self, ws, model, target_model, display_as="boxes",
                  confidenceRegionInfo=None):
@@ -566,8 +566,8 @@ class GaugeInvModelTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GaugeInvModelTable, self).__init__(ws, self._create, model, target_model,
-                                                 display_as, confidenceRegionInfo)
+        super(GaugeRobustModelTable, self).__init__(ws, self._create, model, target_model,
+                                                    display_as, confidenceRegionInfo)
 
     def _create(self, model, target_model, display_as, confidenceRegionInfo):
 
