@@ -24,7 +24,6 @@ from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 
-
 #Internally:
 # when static: a tuple of Label objects labelling each top-level circuit layer
 # when editable: a list of lists, one per top-level layer, holding just
@@ -44,6 +43,54 @@ from ..tools import slicetools as _slct
 # c.insert(2, (Label('Gx','Q0'), Label('Gy','Q1')) ) # inserts a layer
 # c[:,'Q0'] = ('Gx','Gy','','Gx') # assigns the Q0 line
 # c[1:3,'Q0'] = ('Gx','Gy') # assigns to a part of the Q0 line
+
+def _np_to_quil_def_str(name, input_array):
+    """
+    Write a DEFGATE block for RQC quil for an arbitrary one- or two-qubit unitary gate.
+    (quil/pyquil currently does not offer support for arbitrary n-qubit gates for
+    n>2.)
+    
+    Parameters
+    ----------
+    name : str
+        The name of the gate (e.g., 'Gc0' for the 0th Clifford gate)
+    
+    input_array : array_like
+        The representation of the gate as a unitary map.  
+        E.g., for name = 'Gc0',input_array = np.array([[1,0],[0,1]])
+    
+    Returns
+    -------
+    output : str
+        A block of quil code (as a string) that should be included before circuit
+        declaration in any quil circuit that uses the specified gate.
+    """
+    output = 'DEFGATE {}:\n'.format(name)
+    for line in input_array:
+        output += '    '
+        output += ', '.join(map(_num_to_rqc_str,line))
+        output += '\n'
+    return output
+    
+def _num_to_rqc_str(num):
+    """Convert float to string to be included in RQC quil DEFGATE block
+    (as written by _np_to_quil_def_str)."""
+    num = _np.complex(_np.real_if_close(num))
+    if _np.imag(num) == 0:
+        output = str(_np.real(num))
+        return output
+    else:
+        real_part = _np.real(num)
+        imag_part = _np.imag(num)
+        if imag_part < 0:
+            sgn = '-'
+            imag_part = imag_part*-1
+        elif imag_part > 0:
+            sgn = '+'
+        else:
+            assert False
+        return '{}{}{}i'.format(real_part,sgn,imag_part)
+
 
 def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_return_list=True):
     """ Convert lbl into nested lists of *simple* labels """
@@ -120,6 +167,14 @@ class Circuit(object):
     called so that the Circuit can be properly hashed as needed.
     """
     default_expand_subcircuits = True
+
+    @classmethod
+    def fromtup(cls, tup):
+        if '@' in tup:
+            k = tup.index('@')
+            return cls(tup[0:k], tup[k+1:])
+        else:
+            return cls(tup)
 
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
                  stringrep=None, name='', check=True, expand_subcircuits="default"):
@@ -354,7 +409,7 @@ class Circuit(object):
                                  str(removed_not_idling))
             else:
                 self.delete_lines(tuple(removed_not_idling))
-        self._line_labels = value
+        self._line_labels = tuple(value)
 
     @property
     def name(self):
@@ -366,12 +421,20 @@ class Circuit(object):
     #    return self._reps
 
     @property
-    def tup(self):
-        """ This Circuit as a standard Python tuple of layer Labels."""
+    def layertup(self):
+        """ This Circuit's layers as a standard Python tuple of layer Labels."""
         if self._static:
             return self._labels
         else:
             return tuple([toLabel(layer_lbl) for layer_lbl in self._labels])
+
+    @property
+    def tup(self):
+        """ This Circuit as a standard Python tuple of layer Labels and line labels."""
+        if self._line_labels in (('*',),()): #No line labels
+            return self.layertup
+        else:
+            return self.layertup + ('@',) + self._line_labels
 
     @property
     def str(self):
@@ -417,7 +480,11 @@ class Circuit(object):
                             " mode in order to hash it.  You should call"
                             " circuit.done_editing() beforehand."))
             self.done_editing()
-        return hash(self._labels)  # just hash the tuple of labels
+        return hash(self.tup)
+        #if self._line_labels in (('*',),()): #No line labels
+        #    return hash(self._labels)
+        #else:
+        #    return hash(self._labels + ('@',) + self._line_labels)
 
     def __len__(self):
         return len(self._labels)
@@ -447,7 +514,7 @@ class Circuit(object):
         new_line_labels = self.line_labels + added_labels
         if new_line_labels != ('*',):
             s += "@(" + ','.join(map(str, new_line_labels)) + ")"  # matches to _opSeqToStr in circuit.py!
-        return Circuit(self.tup + x.tup, new_line_labels,
+        return Circuit(self.layertup + x.layertup, new_line_labels,
                        None, editable, s, check=False)
 
     def repeat(self, ntimes, expand="default"):
@@ -464,7 +531,7 @@ class Circuit(object):
             return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
         else:
             # just adds parens to string rep & copies
-            return Circuit(self.tup * ntimes, self.line_labels, None, not self._static, s, check=False)
+            return Circuit(self.layertup * ntimes, self.line_labels, None, not self._static, s, check=False)
 
     def __mul__(self, x):
         return self.repeat(x)
@@ -474,8 +541,10 @@ class Circuit(object):
 
     def __eq__(self, x):
         if x is None: return False
-        xtup = x.tup if isinstance(x, Circuit) else tuple(x)
-        return self.tup == xtup  # better than x.tup since x can be a tuple
+        if isinstance(x, Circuit):
+            return self.tup == x.tup
+        else:
+            return self.tup == tuple(x)
 
     def __lt__(self, x):
         return self.tup.__lt__(tuple(x))
@@ -508,7 +577,7 @@ class Circuit(object):
         Circuit
         """
         if editable == "auto": editable = not self._static
-        return Circuit(self.tup, self.line_labels, None, editable, self._str, check=False)
+        return Circuit(self.layertup, self.line_labels, None, editable, self._str, check=False)
 
     def clear(self):
         """
@@ -739,7 +808,10 @@ class Circuit(object):
             lbls_sslbls = None if (lbls.sslbls is None) else set(lbls.sslbls)
         else:
             if isinstance(lbls, Circuit):
-                lbls = lbls.tup  # circuit layer labels as a tuple
+                assert(set(lbls.line_labels).issubset(self.line_labels)), \
+                    "Assigned circuit has lines (%s) not contained in this circuit (%s)!" \
+                    % (str(lbls.line_labels), str(self.line_labels))
+                lbls = lbls.layertup  # circuit layer labels as a tuple
             assert(isinstance(lbls, (tuple, list))), \
                 ("When assigning to a layer range (even w/len=1) `lbls` "
                  "must be  a *list or tuple* of label-like items")
@@ -892,7 +964,7 @@ class Circuit(object):
         -------
         None
         """
-        if isinstance(lbls, Circuit): lbls = lbls.tup
+        if isinstance(lbls, Circuit): lbls = tuple(lbls)
         # lbls is expected to be a list/tuple of Label-like items, one per inserted layer
         lbls = tuple(map(toLabel, lbls))
         numLayersToInsert = len(lbls)
@@ -1171,7 +1243,7 @@ class Circuit(object):
         for opLabel in opLabels:
             translateDict[opLabel] = c
             c = chr(ord(c) + 1)
-        return "".join([translateDict[opLabel] for opLabel in self.tup])
+        return "".join([translateDict[opLabel] for opLabel in self.layertup])
 
     @classmethod
     def from_pythonstr(cls, pythonString, opLabels):
@@ -1217,7 +1289,7 @@ class Circuit(object):
         Circuit
         """
         serial_lbls = []
-        for lbl in self.tup:
+        for lbl in self.layertup:
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             for c in lbl.components:
@@ -1257,7 +1329,7 @@ class Circuit(object):
         """
         parallel_lbls = []
         first_free = {'*': 0}
-        for lbl in self.tup:
+        for lbl in self.layertup:
             if can_break_labels:  # then process label components individually
                 for c in lbl.components:
                     if c.sslbls is None:  # ~= acts on *all* sslbls
@@ -1838,7 +1910,7 @@ class Circuit(object):
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func, self.line_labels))
-        return Circuit([l.map_state_space_labels(mapper_func) for l in self.tup],
+        return Circuit([l.map_state_space_labels(mapper_func) for l in self.layertup],
                        mapped_line_labels, None, not self._static)
 
     def reorder_lines(self, order):
@@ -2321,6 +2393,18 @@ class Circuit(object):
         else:
             return sum([_Label(layer_lbl).depth() for layer_lbl in self._labels])
 
+    def width(self):
+        """
+        The circuit width. This is the number of qubits on which the circuit
+        acts. This includes qubits that only idle, but are included as part 
+        of the circuit according to self.line_labels.
+
+        Returns
+        -------
+        int
+        """
+        return len(self.line_labels)
+
     def size(self):
         """
         Returns the circuit size, which is the sum of the sizes of all the
@@ -2649,7 +2733,8 @@ class Circuit(object):
                         qubit_conversion=None,
                         readout_conversion=None,
                         block_between_layers=True,
-                        block_idles=True):  # TODO
+                        block_idles=True,
+                        gate_declarations=None):  # TODO
         """
         Converts this circuit to a quil string.
 
@@ -2681,6 +2766,10 @@ class Circuit(object):
             circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
             (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
             that qubit has Rigetti label 2.)
+        
+        gate_declarations : dict, optional
+            If not None, a dictionary that provides unitary maps for particular gates that
+            are not already in the quil syntax.
 
         Returns
         -------
@@ -2711,6 +2800,11 @@ class Circuit(object):
 
         # Init the quil string.
         quil = ''
+
+        if gate_declarations is not None:
+            for gate_lbl in gate_declarations.keys():
+                quil += _np_to_quil_def_str(gate_lbl,gate_declarations[gate_lbl])
+
         depth = self.num_layers()
 
 #        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))

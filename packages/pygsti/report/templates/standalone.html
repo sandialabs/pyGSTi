@@ -1,21 +1,29 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>%(title)s</title>
+    <title>{{ title }}</title>
     <meta charset="UTF-8" />
 
-    %(favicon)s
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ static_ref('images/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ static_ref('images/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
+
+    {{ static_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js", "jQuery",
+    "sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=", "anonymous") | safe }}
     
-    %(jqueryLIB)s
-    %(jqueryUILIB)s
-    %(plotlyLIB)s
-    %(plotlyexLIB)s
-    <!-- XXX(dashboardLIB)s -->
-    %(katexLIB)s
-    <!-- XXX(mathjaxLIB)s -->
+    {{ static_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jQuery.ui",
+    "sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=", "anonymous") | safe }}
 
-    %(CSS)s
-
+    {{ static_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js", "Plotly") | safe }}
+    {{ static_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js", "katex") | safe }}
+    {{ static_jsref("pygsti_plotly_ex.js") | safe }}
+    
+    {{ static_css("smoothness-jquery-ui.css", "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css") | safe }}
+    {{ static_css("katex.css", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css") | safe }}
+    {{ static_css("pygsti_dataviz.css", "") | safe }}
+    {{ static_css("pygsti_dashboard.css", "") | safe }}
+    {{ static_css("pygsti_fonts.css", "") | safe }}
+    
     <script>
       window.plotman = new PlotManager();
     </script>
@@ -25,7 +33,7 @@
   <body>
 
     <div>
-      %(singleItem)s
+      {{ singleItem|render }}
     </div>
     
   </body>

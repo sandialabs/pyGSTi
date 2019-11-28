@@ -232,7 +232,7 @@ class Results(object):
             value = dict.__getitem__(self.estimates, old_name)
             dict.__setitem__(self.estimates, new_name, value)
 
-    def add_estimate(self, targetModel, seedModel, modeslByIter,
+    def add_estimate(self, targetModel, seedModel, modelsByIter,
                      parameters, estimate_key='default'):
         """
         Add a set of `Model` estimates to this `Results` object.
@@ -247,7 +247,7 @@ class Results(object):
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        modeslByIter : list of Models
+        modelsByIter : list of Models
             The estimated model at each GST iteration. Typically these are the
             estimated models *before* any gauge optimization is performed.
 
@@ -270,7 +270,7 @@ class Results(object):
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
-        la, lb = len(self.circuit_structs['iteration']), len(modeslByIter)
+        la, lb = len(self.circuit_structs['iteration']), len(modelsByIter)
         assert(la == lb), "Number of iterations (%d) must equal %d!" % (lb, la)
 
         if estimate_key in self.estimates:
@@ -279,7 +279,7 @@ class Results(object):
                            + " want to do this.")
 
         self.estimates[estimate_key] = _Estimate(self, targetModel, seedModel,
-                                                 modeslByIter, parameters)
+                                                 modelsByIter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \

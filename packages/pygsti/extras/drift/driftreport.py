@@ -691,11 +691,20 @@ def create_drift_report(results, gss, filename, title="auto",
             printer.log("*** Merging into template file ***")
 
             if fmt == "html":
-                templateDir = "drift_html_report"
-                _merge.merge_html_template_dir(
-                    qtys, templateDir, filename, auto_open, precision, link_to,
-                    connected=connected, toggles=toggles, renderMath=renderMath,
-                    resizable=resizable, autosize=autosize, verbosity=printer)
+                if filename.endswith(".html"):
+                    _merge.merge_jinja_template(
+                        qtys, filename, templateDir='~drift_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
+                else:
+                    _merge.merge_jinja_template_dir(
+                        qtys, filename, templateDir='~drift_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
 
             elif fmt == "latex":
                 raise NotImplementedError("No PDF version of this report is available yet.")

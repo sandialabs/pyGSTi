@@ -254,7 +254,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         ["Dataset", "Estimate", "Gauge-Opt", "max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
         ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
-        show=[multidataset, multiest, multiGO, False]  # "global" switches only + gauge-opt (OK if doesn't apply)
+        show=[multidataset, multiest, multiGO, False],  # "global" switches only + gauge-opt (OK if doesn't apply)
+        within_report=True
     )
 
     switchBd.add("ds", (0,))
@@ -391,6 +392,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.gsGIRepEP[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
+                switchBd.gsGIRepEP[d, i] = None
+            except AssertionError:  # if target is badly off, this can fail with an imaginary part assertion
                 switchBd.gsGIRepEP[d, i] = None
 
             switchBd.gsFinal[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
@@ -534,7 +537,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     if len(dataset_labels) > 1:  # multidataset
         metric_switchBd = ws.Switchboard(
             ["Metric", "Operation"], [metric_names, op_labels],
-            ["dropdown", "dropdown"], [0, 0], show=[True, True])
+            ["dropdown", "dropdown"], [0, 0], show=[True, True],
+            within_report=True)
         metric_switchBd.add("opLabel", (1,))
         metric_switchBd.add("metric", (0,))
         metric_switchBd.add("cmpTableTitle", (0, 1))
@@ -546,7 +550,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     else:
         metric_switchBd = ws.Switchboard(
             ["Metric"], [metric_names],
-            ["dropdown"], [0], show=[True])
+            ["dropdown"], [0], show=[True],
+            within_report=True)
         metric_switchBd.add("metric", (0,))
         metric_switchBd.add("cmpTableTitle", (0,))
         metric_switchBd.cmpTableTitle[:] = metric_names
@@ -720,6 +725,9 @@ def create_standard_report(results, filename, title="auto",
         - idt_idle_oplabel : Label, optional
             The label identifying the idle gate (for use with idle tomography).
 
+        - colorboxplot_bgcolor : str, optional
+            Background color for the color box plots in this report.  Can be common
+            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -746,8 +754,9 @@ def create_standard_report(results, filename, title="auto",
     ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
     idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
     idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    bgcolor = advancedOptions.get('colorboxplot_bgcolor', 'white')
 
-    if filename and filename.endswith(".pdf"):
+    if filename.endswith(".pdf"):
         fmt = "latex"
     else:
         fmt = "html"
@@ -1014,19 +1023,19 @@ def create_standard_report(results, filename, title="auto",
     addqty(1, 'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
+           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
     addqty(1, 'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
-           'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
+           'tvd', gss, modvi_ds, gsL_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
     addqty(1, 'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm)
+           minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm, bgcolor=bgcolor)
     #TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
@@ -1035,7 +1044,7 @@ def create_standard_report(results, filename, title="auto",
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi,
-           typ="histogram", comm=comm)  # TODO: L-switchboard on summary page?
+           typ="histogram", comm=comm, bgcolor=bgcolor)  # TODO: L-switchboard on summary page?
 
     if combine_robust:
 
@@ -1057,19 +1066,19 @@ def create_standard_report(results, filename, title="auto",
         addqty(1, 'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, comm=comm)
+               minProbClipForWeighting=switchBd.mpc, comm=comm, bgcolor=bgcolor)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
             click_to_display=False, valign='bottom')
 
         addqty(1, 'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm)
+               minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm, bgcolor=bgcolor)
 
         addqty(A, 'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm)
+               minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm, bgcolor=bgcolor)
 
         #Plots for unmodeled error tab
         addqty(4, 'progressTable_ume', ws.FitComparisonTable,
@@ -1085,7 +1094,7 @@ def create_standard_report(results, filename, title="auto",
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, comm=comm,
-               wildcard=switchBd.wildcardBudget)
+               wildcard=switchBd.wildcardBudget, bgcolor=bgcolor)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_ume'].set_render_options(
             click_to_display=False, valign='bottom')
 
@@ -1093,22 +1102,21 @@ def create_standard_report(results, filename, title="auto",
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm,
-               wildcard=switchBd.wildcardBudget)
+               wildcard=switchBd.wildcardBudget, bgcolor=bgcolor)
 
         addqty(A, 'bestEstimateColorHistogram_ume', ws.ColorBoxPlot,
                switchBd.objective, gss, modvi_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm,
-               wildcard=switchBd.wildcardBudget)
+               wildcard=switchBd.wildcardBudget, bgcolor=bgcolor)
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1, 'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict, comm=comm)
+           submatrices=switchBd.scaledSubMxsDict, comm=comm, bgcolor=bgcolor)
 
-    addqty(1, 'unmodeledErrorBudgetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, None,
-           display=('unmodeled',), wildcard=switchBd.wildcardBudget)
+    addqty(1, 'unmodeledErrorBudgetTable', ws.WildcardBudgetTable, switchBd.wildcardBudget)
 
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
@@ -1124,7 +1132,8 @@ def create_standard_report(results, filename, title="auto",
             dscmp_switchBd = ws.Switchboard(
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons", "buttons"], [0, 1]
+                ["buttons", "buttons"], [0, 1],
+                within_report=True
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))
@@ -1178,9 +1187,9 @@ def create_standard_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm, bgcolor=bgcolor)
             addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm, bgcolor=bgcolor)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False  # not comparable!
@@ -1193,11 +1202,20 @@ def create_standard_report(results, filename, title="auto",
             printer.log("*** Merging into template file ***")
 
             if fmt == "html":
-                templateDir = "standard_html_report"
-                _merge.merge_html_template_dir(
-                    qtys, templateDir, filename, auto_open, precision, link_to,
-                    connected=connected, toggles=toggles, renderMath=renderMath,
-                    resizable=resizable, autosize=autosize, verbosity=printer)
+                if filename.endswith(".html"):
+                    _merge.merge_jinja_template(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
+                else:
+                    _merge.merge_jinja_template_dir(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
 
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"
@@ -1345,6 +1363,10 @@ def create_nqnoise_report(results, filename, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
+        - colorboxplot_bgcolor : str, optional
+            Background color for the color box plots in this report.  Can be common
+            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
+
     verbosity : int, optional
        How much detail to send to stdout.
 
@@ -1370,6 +1392,7 @@ def create_nqnoise_report(results, filename, title="auto",
     ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
     idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
     idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    bgcolor = advancedOptions.get('colorboxplot_bgcolor', 'white')
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -1629,12 +1652,12 @@ def create_nqnoise_report(results, filename, title="auto",
     addqty(1, 'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
+           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
     addqty(1, 'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
-           'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
+           'tvd', gss, modvi_ds, gsL_modvi, comm=comm, bgcolor=bgcolor)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
         click_to_display=False, valign='bottom')
 
@@ -1642,7 +1665,7 @@ def create_nqnoise_report(results, filename, title="auto",
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi,
-           typ="scatter", comm=comm)  # TODO: L-switchboard on modvi overview page?
+           typ="scatter", comm=comm, bgcolor=bgcolor)  # TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
@@ -1650,7 +1673,7 @@ def create_nqnoise_report(results, filename, title="auto",
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi,
-           typ="histogram", comm=comm)  # TODO: L-switchboard on summary page?
+           typ="histogram", comm=comm, bgcolor=bgcolor)  # TODO: L-switchboard on summary page?
 
     if combine_robust:
         # model-violation (using _modvi variables) plots show pre-scaling
@@ -1669,7 +1692,7 @@ def create_nqnoise_report(results, filename, title="auto",
         addqty(1, 'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, comm=comm)
+               minProbClipForWeighting=switchBd.mpc, comm=comm, bgcolor=bgcolor)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
             click_to_display=False, valign='bottom')
 
@@ -1677,19 +1700,19 @@ def create_nqnoise_report(results, filename, title="auto",
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc,
-               typ="scatter", comm=comm)
+               typ="scatter", comm=comm, bgcolor=bgcolor)
 
         addqty(A, 'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc,
-               typ="histogram", comm=comm)
+               typ="histogram", comm=comm, bgcolor=bgcolor)
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1, 'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict, comm=comm)
+           submatrices=switchBd.scaledSubMxsDict, comm=comm, bgcolor=bgcolor)
 
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
@@ -1705,7 +1728,8 @@ def create_nqnoise_report(results, filename, title="auto",
             dscmp_switchBd = ws.Switchboard(
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons", "buttons"], [0, 1]
+                ["buttons", "buttons"], [0, 1],
+                within_report=True
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))
@@ -1755,9 +1779,9 @@ def create_nqnoise_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm, bgcolor=bgcolor)
             addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm, bgcolor=bgcolor)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False  # not comparable!
@@ -1770,11 +1794,20 @@ def create_nqnoise_report(results, filename, title="auto",
             printer.log("*** Merging into template file ***")
 
             if fmt == "html":
-                templateDir = "standard_html_report"
-                _merge.merge_html_template_dir(
-                    qtys, templateDir, filename, auto_open, precision, link_to,
-                    connected=connected, toggles=toggles, renderMath=renderMath,
-                    resizable=resizable, autosize=autosize, verbosity=printer)
+                if filename.endswith(".html"):
+                    _merge.merge_jinja_template(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
+                else:
+                    _merge.merge_jinja_template_dir(
+                        qtys, filename, templateDir='~standard_html_report',
+                        auto_open=auto_open, precision=precision, link_to=link_to,
+                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        resizable=resizable, autosize=autosize, verbosity=printer
+                    )
 
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"

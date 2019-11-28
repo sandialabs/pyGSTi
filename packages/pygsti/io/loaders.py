@@ -16,7 +16,7 @@ from .. import objects as _objs
 
 
 def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 recordZeroCnts=True, verbosity=1):
+                 recordZeroCnts=True, ignoreZeroCountLines=True, verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -46,6 +46,10 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         (using `cache==True`) this argument is ignored: the presence of zero-
         counts is dictated by the value of `recordZeroCnts` when the cache file
         was created.
+
+    ignoreZeroCountLines : bool, optional
+        Whether circuits for which there are no counts should be ignored
+        (i.e. omitted from the DataSet) or not.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -84,7 +88,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
                                        collisionAction=collisionAction,
-                                       recordZeroCnts=recordZeroCnts)
+                                       recordZeroCnts=recordZeroCnts,
+                                       ignoreZeroCountLines=ignoreZeroCountLines)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -94,7 +99,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
                                        collisionAction=collisionAction,
-                                       recordZeroCnts=recordZeroCnts)
+                                       recordZeroCnts=recordZeroCnts,
+                                       ignoreZeroCountLines=ignoreZeroCountLines)
         return ds
 
 
