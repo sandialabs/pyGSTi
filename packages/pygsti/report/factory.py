@@ -1,5 +1,4 @@
 """ Report generation functions. """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -1916,7 +1915,6 @@ def create_report_notebook(results, filename, title="auto",
         title=title, date=_time.strftime("%B %d, %Y")))
 
     nb.add_code("""\
-        from __future__ import print_function
         import pickle
         import pygsti""")
 

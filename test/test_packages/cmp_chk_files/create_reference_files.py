@@ -1,4 +1,3 @@
-from __future__ import print_function
 import pygsti
 from pygsti.construction import std1Q_XYI
 import pickle, os

@@ -1,5 +1,4 @@
 """ Defines the ReportText class """
-from __future__ import division, print_function, absolute_import, unicode_literals
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

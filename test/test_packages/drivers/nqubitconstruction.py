@@ -1,4 +1,3 @@
-from __future__ import print_function
 import collections as _collections
 import itertools as _itertools
 import numpy as _np

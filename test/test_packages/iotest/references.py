@@ -1,5 +1,4 @@
 """IO test reference generation"""
-from __future__ import unicode_literals
 import functools
 
 from pygsti.construction import std1Q_XYI as std

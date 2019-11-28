@@ -1,4 +1,3 @@
-from __future__ import print_function
 from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import numpy as np

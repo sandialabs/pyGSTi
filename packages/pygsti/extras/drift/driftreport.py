@@ -7,7 +7,6 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 """ Drift reporting and plotting functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 
 import time as _time
 import numpy as _np

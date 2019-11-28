@@ -1,4 +1,3 @@
-from __future__ import print_function
 
 from ..testutils import BaseTestCase, temp_files, compare_files
 import unittest

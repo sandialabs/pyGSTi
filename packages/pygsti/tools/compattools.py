@@ -1,5 +1,4 @@
 """ Functions for Python2 / Python3 compatibility """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,14 +12,6 @@ import numbers as _numbers
 from contextlib import contextmanager as _contextmanager
 import uuid as _uuid
 
-#Define basestring in python3 so unicode
-# strings can be tested for in python2 using
-# python2's built-in basestring type.
-# When removing __future__ imports, remove
-# this and change basestring => str below.
-try: basestring
-except NameError: basestring = str
-
 
 def isint(x):
     """ Return whether `x` has an integer type """
@@ -29,7 +20,7 @@ def isint(x):
 
 def isstr(x):
     """ Return whether `x` has a string type """
-    return isinstance(x, basestring)
+    return isinstance(x, str)
 
 
 def _numpy14einsumfix():

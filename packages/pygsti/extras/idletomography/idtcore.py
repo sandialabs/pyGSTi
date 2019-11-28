@@ -7,7 +7,6 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 """ Core Idle Tomography routines """
-from __future__ import division, print_function, absolute_import, unicode_literals
 
 import numpy as _np
 import itertools as _itertools
