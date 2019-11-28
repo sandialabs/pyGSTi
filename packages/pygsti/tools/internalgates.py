@@ -290,16 +290,16 @@ def get_standard_gatenames_quil_conversions():
     std_gatenames_to_quil['Gcphase'] = 'CZ'
     std_gatenames_to_quil['Gcnot'] = 'CNOT'
 
-    std_gatenames_to_quil['Gc0'] =  'Gc0'
-    std_gatenames_to_quil['Gc1'] =  'Gc1'
-    std_gatenames_to_quil['Gc2'] =  'Gc2'
-    std_gatenames_to_quil['Gc3'] =  'Gc3'
-    std_gatenames_to_quil['Gc4'] =  'Gc4'
-    std_gatenames_to_quil['Gc5'] =  'Gc5'
-    std_gatenames_to_quil['Gc6'] =  'Gc6'
-    std_gatenames_to_quil['Gc7'] =  'Gc7'
-    std_gatenames_to_quil['Gc8'] =  'Gc8'
-    std_gatenames_to_quil['Gc9'] =  'Gc9'
+    std_gatenames_to_quil['Gc0'] = 'Gc0'
+    std_gatenames_to_quil['Gc1'] = 'Gc1'
+    std_gatenames_to_quil['Gc2'] = 'Gc2'
+    std_gatenames_to_quil['Gc3'] = 'Gc3'
+    std_gatenames_to_quil['Gc4'] = 'Gc4'
+    std_gatenames_to_quil['Gc5'] = 'Gc5'
+    std_gatenames_to_quil['Gc6'] = 'Gc6'
+    std_gatenames_to_quil['Gc7'] = 'Gc7'
+    std_gatenames_to_quil['Gc8'] = 'Gc8'
+    std_gatenames_to_quil['Gc9'] = 'Gc9'
     std_gatenames_to_quil['Gc10'] = 'Gc10'
     std_gatenames_to_quil['Gc11'] = 'Gc11'
     std_gatenames_to_quil['Gc12'] = 'Gc12'
@@ -314,7 +314,6 @@ def get_standard_gatenames_quil_conversions():
     std_gatenames_to_quil['Gc21'] = 'Gc21'
     std_gatenames_to_quil['Gc22'] = 'Gc22'
     std_gatenames_to_quil['Gc23'] = 'Gc23'
-
 
     return std_gatenames_to_quil
 

@@ -41,7 +41,6 @@ ppstring  :: pstring [ povm ]
 """
 
 
-
 import warnings as _warnings
 from ply import lex, yacc
 from .label import Label as _Label
@@ -376,7 +375,7 @@ class CircuitParser(object):
             labels = tuple(map(process, labels.split(',')))
         else:
             labels = None
-    
+
         self._lexer.input(code)
         result = self._parser.parse(lexer=self._lexer)
         return result, labels
@@ -394,7 +393,7 @@ class SimpleCircuitParser(object):
 
     def _fast_parse(self, code, create_subcircuits=True, integerize_sslbls=True):
         return _fast_parse_circuit(code, create_subcircuits, integerize_sslbls)
-    
+
     def _slow_parse(self, code, create_subcircuits=True, integerize_sslbls=True):
 
         if not self.warned:
@@ -410,87 +409,87 @@ class SimpleCircuitParser(object):
             labels = tuple(map(process, labels.split(',')))
         else:
             labels = None
-    
+
         result = []
-        code = code.replace('*','')
+        code = code.replace('*', '')
         i = 0; end = len(code); segment = 0
-        
+
         while(True):
             if i == end: break
-            lbls_list,i,segment = self.get_next_lbls(code, i, end, create_subcircuits, integerize_sslbls, segment)
+            lbls_list, i, segment = self.get_next_lbls(code, i, end, create_subcircuits, integerize_sslbls, segment)
             result.extend(lbls_list)
-    
+
         return result, labels
-    
+
     def get_next_lbls(self, s, start, end, create_subcircuits, integerize_sslbls, segment):
-    
+
         if s[start] == "(":
-            i = start+1
+            i = start + 1
             lbls_list = []
             while i < end and s[i] != ")":
-                lbls,i,segment = self.get_next_lbls(s,i,end, create_subcircuits, integerize_sslbls, segment)
+                lbls, i, segment = self.get_next_lbls(s, i, end, create_subcircuits, integerize_sslbls, segment)
                 lbls_list.extend(lbls)
             if i == end: raise ValueError("mismatched parenthesis")
             i += 1
-            exponent, i = self.parse_exponent(s,i,end)
-    
+            exponent, i = self.parse_exponent(s, i, end)
+
             if create_subcircuits:
-                if len(lbls_list) == 0: # special case of {}^power => remain empty
+                if len(lbls_list) == 0:  # special case of {}^power => remain empty
                     return [], i, segment
                 else:
                     tmp = _lbl.Label(lbls_list)  # just for total sslbs - should probably do something faster
                     return [_lbl.CircuitLabel('', lbls_list, tmp.sslbls, exponent)], i, segment
             else:
                 return lbls_list * exponent, i, segment
-    
-        elif s[start] == "[":  #layer
-            i = start+1
+
+        elif s[start] == "[":  # layer
+            i = start + 1
             lbls_list = []
             while i < end and s[i] != "]":
                 #lbls,i,segment = self.get_next_simple_lbl(s,i,end, integerize_sslbls, segment)  #ONLY SIMPLE LABELS in [] (no parens)
-                lbls,i,segment = self.get_next_lbls(s,i,end, create_subcircuits, integerize_sslbls, segment)
+                lbls, i, segment = self.get_next_lbls(s, i, end, create_subcircuits, integerize_sslbls, segment)
                 lbls_list.extend(lbls)
             if i == end: raise ValueError("mismatched parenthesis")
             i += 1
-            exponent, i = self.parse_exponent(s,i,end)
+            exponent, i = self.parse_exponent(s, i, end)
 
             if len(lbls_list) == 0:
-                to_exponentiate = _lbl.LabelTupTup( () )
+                to_exponentiate = _lbl.LabelTupTup(())
             elif len(lbls_list) > 1:
                 time = max([l.time for l in lbls_list])
-                to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list), time) #create a layer label - a label of the labels within square brackets
+                # create a layer label - a label of the labels within square brackets
+                to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list), time)
             else:
                 to_exponentiate = lbls_list[0]
             return [to_exponentiate] * exponent, i, segment
-            
+
         else:
-            lbls,i,segment = self.get_next_simple_lbl(s,start,end, integerize_sslbls, segment)
-            exponent, i = self.parse_exponent(s,i,end)
-            return lbls*exponent, i, segment
-    
-    
+            lbls, i, segment = self.get_next_simple_lbl(s, start, end, integerize_sslbls, segment)
+            exponent, i = self.parse_exponent(s, i, end)
+            return lbls * exponent, i, segment
+
     def get_next_simple_lbl(self, s, start, end, integerize_sslbls, segment):
         i = start
         c = s[i]
-        if segment == 0 and s[i:i+3] == 'rho':
+        if segment == 0 and s[i:i + 3] == 'rho':
             i += 3; segment = 1
         elif segment <= 1:
             if (c == 'G' or c == 'I'):
                 i += 1; segment = 1
             elif c == 'M':
-                i += 1; segment = 2 #marks end - no more labels allowed
+                i += 1; segment = 2  # marks end - no more labels allowed
             elif c == '{':
                 i += 1
                 if i < end and s[i] == '}':
                     i += 1
                     return [], i, segment
                 else:
-                    raise ValueError("Invalid '{' at: %s..." % s[i-1:i+4])
+                    raise ValueError("Invalid '{' at: %s..." % s[i - 1:i + 4])
             else:
-                raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
+                raise ValueError("Invalid prefix at: %s..." % s[i:i + 5])
         else:
-            raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
-            
+            raise ValueError("Invalid prefix at: %s..." % s[i:i + 5])
+
         #z = re.match("([a-z0-9_]+)((?:;[a-zQ0-9_\./]+)*)((?::[a-zQ0-9_]+)*)(![0-9\.]+)?", s[i:end])
         tup = []
         while i < end:
@@ -500,7 +499,7 @@ class SimpleCircuitParser(object):
             else:
                 break
         name = s[start:i]; last = i
-        
+
         args = []
         while i < end and s[i] == ';':
             i += 1
@@ -512,8 +511,7 @@ class SimpleCircuitParser(object):
                 else:
                     break
             args.append(s[last:i]); last = i
-            
-    
+
         sslbls = []
         while i < end and s[i] == ':':
             i += 1
@@ -532,7 +530,7 @@ class SimpleCircuitParser(object):
                 sslbls.append(val); last = i
             else:
                 sslbls.append(s[last:i]); last = i
-    
+
         if i < end and s[i] == '!':
             i += 1
             last = i
@@ -545,7 +543,7 @@ class SimpleCircuitParser(object):
             time = float(s[last:i])
         else:
             time = 0.0
-    
+
         if len(args) == 0:
             if len(sslbls) == 0:
                 return [_lbl.LabelStr(name, time)], i, segment
@@ -553,7 +551,7 @@ class SimpleCircuitParser(object):
                 return [_lbl.LabelTup((name,) + tuple(sslbls), time)], i, segment
         else:
             return [_lbl.LabelTupWithArgs((name, 2 + len(args)) + tuple(args) + tuple(sslbls), time)], i, segment
-    
+
     def parse_exponent(self, s, i, end):
         #z = re.match("\^([0-9]+)", s[i:end])
         exponent = 1

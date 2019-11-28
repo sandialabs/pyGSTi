@@ -12,49 +12,49 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ...objects import processorspec as _pspec
 
-qubits = ['Q'+str(x) for x in [0,1,2,3,4,5,6,7]] + ['Q'+str(x) for x in [10,11,12,13,14,15,16,17]]
+qubits = ['Q' + str(x) for x in [0, 1, 2, 3, 4, 5, 6, 7]] + ['Q' + str(x) for x in [10, 11, 12, 13, 14, 15, 16, 17]]
 
 twoQgate = 'Gcphase'
 
-edgelist = [#  Ring 1
-            ('Q0', 'Q1'),
-            ('Q1', 'Q0'),
-            ('Q1', 'Q2'),
-            ('Q2', 'Q1'),
-            ('Q2', 'Q3'),
-            ('Q3', 'Q2'),
-            ('Q3', 'Q4'),
-            ('Q4', 'Q3'),
-            ('Q4', 'Q5'),
-            ('Q5', 'Q4'),
-            ('Q5', 'Q6'),
-            ('Q6', 'Q5'),
-            ('Q6', 'Q7'),
-            ('Q7', 'Q6'),
-            ('Q0', 'Q7'),
-            ('Q7', 'Q0'),
-            # Ring 2
-            ('Q10', 'Q11'),
-            ('Q11', 'Q10'),
-            ('Q11', 'Q12'),
-            ('Q12', 'Q11'),
-            ('Q12', 'Q13'),
-            ('Q13', 'Q12'),
-            ('Q13', 'Q14'),
-            ('Q14', 'Q13'),
-            ('Q14', 'Q15'),
-            ('Q15', 'Q14'),
-            ('Q15', 'Q16'),
-            ('Q16', 'Q15'),
-            ('Q16', 'Q17'),
-            ('Q17', 'Q16'),
-            ('Q10', 'Q17'),
-            ('Q17', 'Q10'),
-            # Connection
-            ('Q1', 'Q16'),
-            ('Q16', 'Q1'),
-            ('Q2', 'Q15'),
-            ('Q15', 'Q2')]
+edgelist = [  # Ring 1
+    ('Q0', 'Q1'),
+    ('Q1', 'Q0'),
+    ('Q1', 'Q2'),
+    ('Q2', 'Q1'),
+    ('Q2', 'Q3'),
+    ('Q3', 'Q2'),
+    ('Q3', 'Q4'),
+    ('Q4', 'Q3'),
+    ('Q4', 'Q5'),
+    ('Q5', 'Q4'),
+    ('Q5', 'Q6'),
+    ('Q6', 'Q5'),
+    ('Q6', 'Q7'),
+    ('Q7', 'Q6'),
+    ('Q0', 'Q7'),
+    ('Q7', 'Q0'),
+    # Ring 2
+    ('Q10', 'Q11'),
+    ('Q11', 'Q10'),
+    ('Q11', 'Q12'),
+    ('Q12', 'Q11'),
+    ('Q12', 'Q13'),
+    ('Q13', 'Q12'),
+    ('Q13', 'Q14'),
+    ('Q14', 'Q13'),
+    ('Q14', 'Q15'),
+    ('Q15', 'Q14'),
+    ('Q15', 'Q16'),
+    ('Q16', 'Q15'),
+    ('Q16', 'Q17'),
+    ('Q17', 'Q16'),
+    ('Q10', 'Q17'),
+    ('Q17', 'Q10'),
+    # Connection
+    ('Q1', 'Q16'),
+    ('Q16', 'Q1'),
+    ('Q2', 'Q15'),
+    ('Q15', 'Q2')]
 
 spec_format = 'rigetti'
 
@@ -70,7 +70,7 @@ spec_format = 'rigetti'
 #     else:
 #         raise ValueError("Unknown version!")
 
-# def make_processor_spec(one_q_gate_names, version, construct_clifford_compilations = {'paulieq' : ('1Qcliffords',), 
+# def make_processor_spec(one_q_gate_names, version, construct_clifford_compilations = {'paulieq' : ('1Qcliffords',),
 #                         'absolute': ('paulis','1Qcliffords')}, verbosity=0):
 
 #     gate_names = ['Gcphase'] + one_q_gate_names
@@ -84,7 +84,7 @@ spec_format = 'rigetti'
 #         raise ValueError("Unknown version!")
 
 #     qubit_labels = qubits(version)
-                  
+
 #     cphase_edge_list = get_twoQgate_edgelist(version)
 #     availability = {'Gcphase':cphase_edge_list}
 #     pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
@@ -139,7 +139,7 @@ spec_format = 'rigetti'
 #                      # partial connection
 #                      ('Q2','Q15'),
 #                      ]
-                        
+
 #     elif version == 6:
 #         edge_list = [('Q10','Q11'),
 #                      ('Q11','Q12'),
@@ -150,57 +150,57 @@ spec_format = 'rigetti'
 #                      ('Q16','Q17'),
 #                      ('Q10','Q17'),
 #                      ]
-    
+
 #     else:
 #         raise ValueError("Unknown version!")
 
-#     if subset is None:    
+#     if subset is None:
 #         return edge_list
-    
+
 #     else:
 #         subset_edge_list = []
 #         for edge in edge_list:
 #             if edge[0] in subset and edge[1] in subset:
 #                 subset_edge_list.append(edge)
-        
+
 #         return subset_edge_list
-    
+
 # def get_splitting(version, n):
 #     """
-#     Splits the qubits into 16/n dijoint sets each consisting of n 
+#     Splits the qubits into 16/n dijoint sets each consisting of n
 #     connected qubits, with set starting at qubit Q+str(startnode)
 #     """
 #     if version == 4:
 #         if n == 2:
-#             qubit_sets = [('Q0','Q1'),('Q2','Q3'),('Q4','Q5'),('Q6','Q7'),('Q10','Q11'),('Q12','Q13'),('Q14','Q15'),('Q16','Q17')]  
+#             qubit_sets = [('Q0','Q1'),('Q2','Q3'),('Q4','Q5'),('Q6','Q7'),('Q10','Q11'),('Q12','Q13'),('Q14','Q15'),('Q16','Q17')]
 #         elif n == 4:
-#             qubit_sets = [('Q0','Q1','Q2','Q3'),('Q4','Q5','Q6','Q7'),('Q10','Q11','Q12','Q13'),('Q14','Q15','Q16','Q17')]                  
+#             qubit_sets = [('Q0','Q1','Q2','Q3'),('Q4','Q5','Q6','Q7'),('Q10','Q11','Q12','Q13'),('Q14','Q15','Q16','Q17')]
 #         elif n == 8:
-#             qubit_sets = [('Q0','Q1','Q2','Q3','Q4','Q5','Q6','Q7'),('Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17')]    
+#             qubit_sets = [('Q0','Q1','Q2','Q3','Q4','Q5','Q6','Q7'),('Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17')]
 #         elif n == 16:
-#             qubit_sets = [('Q0','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17')]    
+#             qubit_sets = [('Q0','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17')]
 #         else:
 #             raise ValueError("This value is not allowed!")
-            
+
 #     elif version == 6:
 #         if n == 2:
-#             qubit_sets = [('Q10','Q11'),('Q12','Q13'),('Q14','Q15'),('Q16','Q17')]  
+#             qubit_sets = [('Q10','Q11'),('Q12','Q13'),('Q14','Q15'),('Q16','Q17')]
 #         elif n == 4:
-#             qubit_sets = [('Q10','Q11','Q12','Q13'),('Q14','Q15','Q16','Q17')]                  
+#             qubit_sets = [('Q10','Q11','Q12','Q13'),('Q14','Q15','Q16','Q17')]
 #         elif n == 8:
-#             qubit_sets = [('Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17')]    
+#             qubit_sets = [('Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17')]
 #         else:
-#             raise ValueError("This value is not allowed!") 
-            
+#             raise ValueError("This value is not allowed!")
+
 #     else:
 #         raise ValueError("Unknown version!")
-    
+
 #     return qubit_sets
 
 # def get_all_connected_sets(version, n):
 #     """
 
-#     """ 
+#     """
 
 #     pspec = make_processor_spec(['Gxpi2', 'Gxmpi2', 'Gxpi','Gzpi2', 'Gzmpi2', 'Gzpi', 'Gypi'], version,
 #                                  construct_clifford_compilations = {})
@@ -212,13 +212,13 @@ spec_format = 'rigetti'
 
 #     # if version == 4:
 #     #     assert(n == 2), "Only implemented for n = 2"
-#     #     if n == 2: 
+#     #     if n == 2:
 #     #         qubit_sets = get_twoQgate_edgelist(version)
 
 #     # elif version == 6:
-#     #     if n < 8: qubit_sets = [tuple(['Q1'+str((q + i) % 8) for i in range(n)]) for q in range(8)]                  
-#     #     if n == 8: qubit_sets = [tuple(['Q1'+str(i) for i in range(8)])] 
+#     #     if n < 8: qubit_sets = [tuple(['Q1'+str((q + i) % 8) for i in range(n)]) for q in range(8)]
+#     #     if n == 8: qubit_sets = [tuple(['Q1'+str(i) for i in range(8)])]
 #     # else:
 #     #     raise ValueError("Unknown version!")
 
-#     return connectedqubits  
+#     return connectedqubits

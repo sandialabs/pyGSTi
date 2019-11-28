@@ -125,7 +125,7 @@ class StdInputParser(object):
         # get counts from end of s
         parts = s.split()
         circuitStr = parts[0]
-        
+
         counts = []
         if expectedCounts == -1:  # then we expect to be given <outcomeLabel>:<count> items
             if len(parts) < 2 or parts[1] == "BAD":
@@ -134,14 +134,14 @@ class StdInputParser(object):
                 for p in parts[1:]:
                     t = p.split(':')
                     counts.append((tuple(t[0:-1]), float(t[-1])))
-                    
+
         else:  # data is in columns as given by header
             for p in parts[1:]:
-                if p in ('--','BAD'):
+                if p in ('--', 'BAD'):
                     counts.append(p)
                 else:
                     counts.append(float(p))
-        
+
             if len(counts) > expectedCounts >= 0:
                 counts = counts[0:expectedCounts]
 
@@ -360,7 +360,7 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                bBad = ('BAD' in valueList)  #supresses warnings
+                bBad = ('BAD' in valueList)  # supresses warnings
                 countDict = _objs.labeldicts.OutcomeLabelDict()
                 self._fillDataCountDict(countDict, fillInfo, valueList)
                 if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
@@ -379,9 +379,9 @@ class StdInputParser(object):
                                         line_labels=circuitLbls, expand_subcircuits=False, check=False)  # , lookup=lookupDict)
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts,
-                                       update_ol=False) #for performance - to this once at the end.
+                                       update_ol=False)  # for performance - to this once at the end.
 
-        dataset.update_ol() #because we set update_ol=False above, we need to do this
+        dataset.update_ol()  # because we set update_ol=False above, we need to do this
         if warnings:
             _warnings.warn('\n'.join(warnings))  # to be displayed at end, after potential progress updates
 
@@ -422,7 +422,7 @@ class StdInputParser(object):
 
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
         if 'BAD' in colValues:
-            return  #indicates entire row is known to be bad (no counts)
+            return  # indicates entire row is known to be bad (no counts)
 
         #Note: can use setitem_unsafe here because countDict is a OutcomeLabelDict and
         # by construction (see str_to_outcome in _extractLabelsFromColLabels) the
@@ -582,7 +582,7 @@ class StdInputParser(object):
                 opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
                                       check=False, expand_subcircuits=False)  # , lookup=lookupDict)
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
-                bBad = ('BAD' in valueList)  #supresses warnings
+                bBad = ('BAD' in valueList)  # supresses warnings
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
 
                 bSkip = False
@@ -599,13 +599,15 @@ class StdInputParser(object):
 
                 if not bSkip:
                     for dsLabel, countDict in dsCountDicts.items():
-                        datasets[dsLabel].add_count_dict(opStr, countDict, recordZeroCnts=recordZeroCnts, update_ol=False)
+                        datasets[dsLabel].add_count_dict(
+                            opStr, countDict, recordZeroCnts=recordZeroCnts, update_ol=False)
                         mds.add_auxiliary_info(opStr, commentDict)
 
         for dsLabel, ds in datasets.items():
-            ds.update_ol() #because we set update_ol=False above, we need to do this
+            ds.update_ol()  # because we set update_ol=False above, we need to do this
             ds.done_adding_data()
-            mds.add_dataset(dsLabel, ds, update_auxinfo=False) #auxinfo already added, and ds shouldn't have any anyway
+            # auxinfo already added, and ds shouldn't have any anyway
+            mds.add_dataset(dsLabel, ds, update_auxinfo=False)
         return mds
 
     #Note: outcome labels must not contain spaces since we use spaces to separate

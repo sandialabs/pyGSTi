@@ -199,8 +199,8 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
                                                  for ol in outcomeLabels])
     # parser = _stdinput.StdInputParser()
 
-    strip_occurence_tags = any([ ca == "keepseparate" for ca in multidataset.collisionActions.values()])
-    datasets = [ multidataset[dsl] for dsl in dsLabels ]
+    strip_occurence_tags = any([ca == "keepseparate" for ca in multidataset.collisionActions.values()])
+    datasets = [multidataset[dsl] for dsl in dsLabels]
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
@@ -213,7 +213,6 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
             if multidataset.auxInfo[circuit]:
                 output.write(" # %s" % str(repr(multidataset.auxInfo[circuit])))
             output.write('\n')  # finish the line
-
 
 
 def write_circuit_list(filename, circuit_list, header=None):

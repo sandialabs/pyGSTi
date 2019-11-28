@@ -384,9 +384,9 @@ class DataSetRow(object):
                     raise KeyError("%s is not an index, timestamp, or outcome label!"
                                    % str(indexOrOutcomeLabel))
                 return self._get_single_count(outcome_label)
-            
+
             else:
-                #Compute and cache *all* of the counts, since there aren't so many of them.        
+                #Compute and cache *all* of the counts, since there aren't so many of them.
                 try:
                     return self.counts[indexOrOutcomeLabel]
                 except KeyError:
@@ -429,7 +429,7 @@ class DataSetRow(object):
         if timestamp is not None:
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
-        
+
         if self.reps is None:
             i = self.dataset.olIndex[outcome_label]
             return float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
@@ -773,7 +773,7 @@ class DataSet(object):
             tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                  for ol in outcomeLabels]  # strings -> tuple outcome labels
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
-            self.olIndex_max = len(tup_outcomeLabels)-1
+            self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
             self.olIndex = _OrderedDict()  # OK, as outcome labels are added as they appear
             self.olIndex_max = -1
@@ -1166,7 +1166,7 @@ class DataSet(object):
 
         update_ol : bool, optional
             This argument is for internal use only and should be left as True.
-        
+
 
         Returns
         -------
@@ -1270,7 +1270,6 @@ class DataSet(object):
             #strings -> tuple outcome labels
             tup_outcomeLabelList = [_ld.OutcomeLabelDict.to_outcome(ol)
                                     for ol in outcomeLabelList]
-
 
         #Add any new outcome labels
         added = False

@@ -25,11 +25,14 @@ import copy as _copy
 import itertools as _itertools
 
 # todo : update this to be derived from a dictionary.
+
+
 class BenchmarkSpec(object):
     """
     Intended to encapsulate the specification of a benchmarking experiment (including randomized benchmarking), so that,
     alongside a ProcessorSpec, the circuit sampling (and perhaps the exact circuits sampled) is entirely specified.
     """
+
     def __init__(self, btype, structure, sampler, samplerargs, depths=None, numcircuits=None, circuits=None,
                  subtype={}):
         """
@@ -128,7 +131,8 @@ class BenchmarkSpec(object):
                     if not isinstance(co2Qgatesublist[0], list):
                         co2Qgatesublist = [co2Qgatesublist, ]
 
-                    mean_num2Qgates_in_layers.append(_np.mean([len(co2Qgatechoice) for co2Qgatechoice in co2Qgatesublist]))
+                    mean_num2Qgates_in_layers.append(
+                        _np.mean([len(co2Qgatechoice) for co2Qgatechoice in co2Qgatesublist]))
 
                 # If it's an empty list, then there's 0 2-qubit gates in it.
                 else:
@@ -141,7 +145,8 @@ class BenchmarkSpec(object):
                 assert(self.samplerargs['co2Qgatesprob'] == 'uniform')
                 num_twoQgates_perlayer = _np.mean(mean_num2Qgates_in_layers)
             else:
-                num_twoQgates_perlayer = _np.sum(_np.array(self.samplerargs['co2Qgatesprob']) * mean_num2Qgates_in_layers)
+                num_twoQgates_perlayer = _np.sum(
+                    _np.array(self.samplerargs['co2Qgatesprob']) * mean_num2Qgates_in_layers)
 
             return num_twoQgates_perlayer
 
@@ -380,6 +385,7 @@ def circuit_layer_by_edgegrab(pspec, subsetQs=None, meantwoQgates=1, modelname='
         sampled_layer.append(gate)
 
     return sampled_layer
+
 
 def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates='all',
                                   twoQgates='all', modelname='clifford'):
@@ -1174,7 +1180,7 @@ def simultaneous_random_circuits_experiment(pspec, depths, circuits_per_length, 
     for lnum, l in enumerate(depths):
         if verbosity > 0:
             print('- Sampling {} circuits at length {} ({} of {} depths)'.format(circuits_per_length, l,
-                                                                                  lnum + 1, len(depths)))
+                                                                                 lnum + 1, len(depths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             circuit, idealout = simultaneous_random_circuit(pspec, l, structure=structure, sampler=sampler,
@@ -1716,7 +1722,7 @@ def direct_rb_experiment(pspec, depths, circuits_per_length, subsetQs=None, samp
     for lnum, l in enumerate(depths):
         if verbosity > 0:
             print('- Sampling {} circuits at DRB length {} ({} of {} depths)'.format(circuits_per_length, l,
-                                                                                      lnum + 1, len(depths)))
+                                                                                     lnum + 1, len(depths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             circuit, idealout = direct_rb_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs,
@@ -2189,7 +2195,7 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
     for lnum, l in enumerate(depths):
         if verbosity > 0:
             print('- Sampling {} circuits at DRB length {} ({} of {} depths)'.format(circuits_per_length, l,
-                                                                                      lnum + 1, len(depths)))
+                                                                                     lnum + 1, len(depths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             circuit, idealout = simultaneous_direct_rb_circuit(pspec, l, structure=structure, sampler=sampler,
@@ -2506,7 +2512,7 @@ def clifford_rb_experiment(pspec, depths, circuits_per_length, subsetQs=None, ra
     for lnum, l in enumerate(depths):
         if verbosity > 0:
             print('- Sampling {} circuits at CRB length {} ({} of {} depths)'.format(circuits_per_length, l,
-                                                                                      lnum + 1, len(depths)))
+                                                                                     lnum + 1, len(depths)))
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             c, iout = clifford_rb_circuit(pspec, l, subsetQs=subsetQs, randomizeout=randomizeout,
@@ -3095,14 +3101,14 @@ def random_germ(pspec, depths, interactingQs_density, subsetQs):
     width = len(qubits)
 
     germcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
-    
+
 #     germlength = {}
 #     for q in qubits:
 #         glp = 0
 #         while _np.random.binomial(1, 0.2) == 1:
 #             glp += 1
 #         germlength[q] = 2 ** glp
-            
+
 #     circleng = max(list(germlength.values()))
 #     #print(circleng)
 #     subgerm = {}
@@ -3140,7 +3146,7 @@ def random_germ(pspec, depths, interactingQs_density, subsetQs):
     #     #int(_np.ceil(_np.log2(1 / (len(qubits) * interactingQs_density * 0.5))))
     # else:
     #     mingermlengthpower = 0
-    
+
     # gcirclenpower = max(gcirclenpower, mingermlengthpower)
     # print(mingermlengthpower, gcirclenpower)
 
@@ -3170,9 +3176,9 @@ def random_germ(pspec, depths, interactingQs_density, subsetQs):
         germcircuit.insert_layer(layer, 0)
 
     #tempgermcircuit = germcircuit.copy()
-    
+
     if interactingQs_density > 0:
-    
+
         assert(germ_depth * width * interactingQs_density >= 2)
         #while len(germcircuit) * len(qubits) * interactingQs_density * 0.5 < 1:
         #
@@ -3207,7 +3213,7 @@ def random_germ(pspec, depths, interactingQs_density, subsetQs):
 
         #print(edgelistdict)
         for i in range(num2Qtoadd):
-            
+
             # OLD VERSION
             # #print(i)
             # depthposition = list(edgelistdict.keys())[_np.random.randint(0, len(edgelistdict))]
@@ -3251,7 +3257,7 @@ def random_germpower_circuits(pspec, depths, interactingQs_density, subsetQs, fi
         qubits = list(subsetQs[:])  # copy this list
 
     width = len(qubits)
-        
+
     if fixed_versus_depth:
         germcircuit = random_germ(pspec, depths, interactingQs_density, subsetQs)
     else:
@@ -3271,33 +3277,33 @@ def random_germpower_circuits(pspec, depths, interactingQs_density, subsetQs, fi
 
         while len(fullcircuit) > length:
             fullcircuit.delete_layers(len(fullcircuit) - 1)
-            
+
         circs.append(fullcircuit)
         #germpowers.append(gdepth)
 
-    aux = {#'germ_powers': germpowers,
-           #'subgerm_depth': subgerm_depth,
-           #'max_subgerm_depth': max_subgerm_depth
-           }
+    aux = {  # 'germ_powers': germpowers,
+        #'subgerm_depth': subgerm_depth,
+        #'max_subgerm_depth': max_subgerm_depth
+    }
 
     if fixed_versus_depth:
         aux['germ'] = germcircuit
     else:
         aux['germ'] = germcircuits
-        
+
     return circs, aux
 
 
-def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford=True, paulirandomize=True, 
-                                     interactingQs_density=1/8, fixed_versus_depth=False):
+def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford=True, paulirandomize=True,
+                                     interactingQs_density=1 / 8, fixed_versus_depth=False):
     """
     length : consistent with RB length.
     """
     from pygsti.tools import symplectic as _symp
-    
+
     import numpy as _np
     #assert(length % 2 == 0), "The mirror rb length `length` must be even!"
-    
+
     if subsetQs is not None:
         assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "If not None, `subsetQs` must be a list!"
         subsetQs = list(subsetQs)
@@ -3313,10 +3319,9 @@ def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford
     circuits, aux = random_germpower_circuits(pspec, depths, interactingQs_density=interactingQs_density,
                                               subsetQs=subsetQs, fixed_versus_depth=fixed_versus_depth)
 
-    
     if paulirandomize:
         pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
-        
+
     if localclifford:
         # Sample a compiled 1Q Cliffords layer
         oneQclifford_circuit_out = oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
@@ -3329,7 +3334,7 @@ def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford
 
     circlist = []
     outlist = []
-    
+
     for circuit in circuits:
         circuit = circuit.copy(editable=True)
         circuit_inv = circuit.copy(editable=True)
@@ -3339,14 +3344,14 @@ def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford
         if paulirandomize:
             # If .....
             if not fixed_versus_depth:
-                pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)             
+                pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
 
             circuit.append_circuit(pauli_circuit)
             circuit.append_circuit(circuit_inv)
 
         # If we start with a random layer of 1-qubit Cliffords, we sample this here.
         if localclifford:
-            # If .....            
+            # If .....
             if not fixed_versus_depth:
                 # Sample a compiled 1Q Cliffords layer
                 oneQclifford_circuit_out = oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
@@ -3381,7 +3386,7 @@ def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford
                 assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
             idealout.append(int(measurement_out[1]))
         idealout = tuple(idealout)
-        
+
         outlist.append(idealout)
 
     #return circuit, idealout
@@ -3389,7 +3394,7 @@ def random_germpower_mirror_circuits(pspec, depths, subsetQs=None, localclifford
 
 
 def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_length, subsetQs=None, sampler='edgegrab',
-                                               samplerargs = [1/4], localclifford=True, paulirandomize=True,
+                                               samplerargs=[1 / 4], localclifford=True, paulirandomize=True,
                                                fixed_versus_depth=False, descriptor=''):
 
     assert(sampler == 'edgegrab'), "The germ must be selected with edgegrab sampling!"
@@ -3417,10 +3422,9 @@ def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_lengt
     aux = {}
     for j in range(circuits_per_length):
         circlist[j], outlist[j], aux[j] = random_germpower_mirror_circuits(pspec, depths, subsetQs=subsetQs,
-                                        localclifford=localclifford, paulirandomize=paulirandomize,
-                                       interactingQs_density=samplerargs[0], fixed_versus_depth=fixed_versus_depth)
+                                                                           localclifford=localclifford, paulirandomize=paulirandomize,
+                                                                           interactingQs_density=samplerargs[0], fixed_versus_depth=fixed_versus_depth)
 
-        
     #print(aux[0])
     #for l in depths:
     for lind in range(len(depths)):
@@ -3428,8 +3432,8 @@ def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_lengt
             #c, iout = random_germpower_mirror_circuit(pspec, l, subsetQs=subsetQs,
             #                            localclifford=localclifford, paulirandomize=paulirandomize,
             #                           interactingQs_density=samplerargs[0])
-#             experiment_dict['circuits'][l, j] = c
-#             experiment_dict['target'][l, j] = iout
+            #             experiment_dict['circuits'][l, j] = c
+            #             experiment_dict['target'][l, j] = iout
             experiment_dict['circuits'][depths[lind], j] = circlist[j][lind]
             experiment_dict['target'][depths[lind], j] = outlist[j][lind]
             if fixed_versus_depth:

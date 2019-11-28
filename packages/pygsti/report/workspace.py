@@ -40,7 +40,6 @@ except ImportError:
     in_ipython_notebook = False
 
 
-
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
 
@@ -1048,10 +1047,10 @@ class Switchboard(_collections.OrderedDict):
             switch_js.append(js)
 
         html = "\n".join(switch_html)
-        if not self.within_report:  #run JS as soon as the document is ready
+        if not self.within_report:  # run JS as soon as the document is ready
             js = "$(document).ready(function() {\n" + \
                 "\n".join(switch_js) + "\n});"
-        else:  #in a report, where we have a 'loadable' parent and might not want to load right away
+        else:  # in a report, where we have a 'loadable' parent and might not want to load right away
             js = "$(document).ready(function() {\n" + \
                  "$('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID + \
                 "\n".join(switch_js) + "\n}); });"
@@ -1589,12 +1588,12 @@ class WorkspaceOutput(object):
         ret += '  $(document).ready(function() {\n'
         if within_report:
             ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
-            
+
         ret += content
-        
+
         if within_report:
             ret += "  });"  # end load_loadable_item handler
-            
+
         ret += '}); //end on-ready or on-load handler\n'
 
         if global_requirejs:
@@ -1663,7 +1662,7 @@ class WorkspaceOutput(object):
         """
 
         within_report = self.options.get('within_report', False)
-        
+
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
         if div_css_classes is not None:
@@ -1735,7 +1734,7 @@ class WorkspaceOutput(object):
         handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
         handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
         handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-        
+
         handler_js += "}\n"  # end <ID>_onchange function
 
         #build change event listener javascript
@@ -1929,7 +1928,8 @@ class WorkspaceTable(WorkspaceOutput):
                                               output_dir=output_dir)
 
                 if switched_item_mode == 'separate files':
-                    raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                    raise NotImplementedError(
+                        'separate-files mode is no longer supported (or needed) for the html render type')
                 else:
                     #otherwise just add plot handers (table_dict['js']) to divJS for later
                     divJS.append(table_dict['js'])
@@ -1945,7 +1945,8 @@ class WorkspaceTable(WorkspaceOutput):
                 # creates JS for everything: plot creation, switchboard init, autosize
 
             elif switched_item_mode == 'separate files':
-                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                raise NotImplementedError(
+                    'separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2138,8 +2139,8 @@ class WorkspaceTable(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
-            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html", 
-                                       verbosity=verbosity)
+            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
+                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
             self.switchboards = saved_switchboards
@@ -2375,7 +2376,8 @@ class WorkspacePlot(WorkspaceOutput):
                     js = self._form_plot_js(plotID, '\n'.join(divJS), base['js'])
 
             elif switched_item_mode == 'separate files':
-                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                raise NotImplementedError(
+                    'separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2508,7 +2510,7 @@ class WorkspacePlot(WorkspaceOutput):
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
-                                       verbosity=verbosity)
+                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
             self.switchboards = saved_switchboards
@@ -2645,7 +2647,8 @@ class WorkspaceText(WorkspaceOutput):
                     text_dict = text.render("html", textDivID)
 
                 if switched_item_mode == 'separate files':
-                    raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                    raise NotImplementedError(
+                        'separate-files mode is no longer supported (or needed) for the html render type')
                 #else: divJS is unused
 
                 divHTML.append(text_dict['html'])
@@ -2659,7 +2662,8 @@ class WorkspaceText(WorkspaceOutput):
                 # creates JS for everything: plot creation, switchboard init, autosize
 
             elif switched_item_mode == 'separate files':
-                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                raise NotImplementedError(
+                    'separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2819,7 +2823,7 @@ class WorkspaceText(WorkspaceOutput):
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
-                                       verbosity=verbosity)
+                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
             self.switchboards = saved_switchboards

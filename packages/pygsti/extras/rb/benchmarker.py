@@ -26,6 +26,7 @@ class Benchmarker(object):
     todo
 
     """
+
     def __init__(self, specs, ds=None, summary_data=None, predicted_summary_data=None,
                  dstype='standard', success_outcome='success', success_key='target',
                  dscomparator=None):
@@ -90,7 +91,7 @@ class Benchmarker(object):
             self.global_summary_data = summary_data['global'].copy()
             self.aux = summary_data.get('aux', {}).copy()
             if self.multids is None:
-                arbqubits =  self._specs[0].get_structure()[0]
+                arbqubits = self._specs[0].get_structure()[0]
                 arbkey = list(self.pass_summary_data[0][arbqubits].keys())[0]
                 arbdepth = list(self.pass_summary_data[0][arbqubits][arbkey].keys())[0]
                 self.numpasses = len(self.pass_summary_data[0][arbqubits][arbkey][arbdepth])
@@ -100,10 +101,9 @@ class Benchmarker(object):
         else:
             self.predicted_summary_data = predicted_summary_data.copy()
 
-    def select_volumetric_benchmark_regions(self, depths, boundary, widths='all', datatype='success_probabilities', 
-                                            statistic='mean', merit = 'aboveboundary', specs=None, aggregate=True,
+    def select_volumetric_benchmark_regions(self, depths, boundary, widths='all', datatype='success_probabilities',
+                                            statistic='mean', merit='aboveboundary', specs=None, aggregate=True,
                                             passnum=None, rescaler='auto'):
-
 
         # Selected regions encodes the selected regions, but in the slighty obtuse format of a dictionary of spec
         # indices and a list of tuples of qubit regions. (so, e.g., if 1- and 2-qubit circuit are run in parallel
@@ -118,7 +118,7 @@ class Benchmarker(object):
         specsbywidth = {}
         for ind, structure in specs.items():
             for qs in structure:
-                w = len(qs) 
+                w = len(qs)
                 if widths == 'all' or w in widths:
                     if w not in specsbywidth.keys():
                         specsbywidth[w] = []
@@ -128,11 +128,11 @@ class Benchmarker(object):
             assert(passnum is not None), "Must specify the passnumber data to use for selection if not aggregating!"
 
         for w, specsforw in specsbywidth.items():
-            
+
             if len(specsforw) == 1:  # There's no decision to make: only one benchmark of one region of the size w.
                 (ind, qs) = specsforw[0]
                 if ind not in selected_regions:
-                    selected_regions[ind] = [qs,]
+                    selected_regions[ind] = [qs, ]
                 else:
                     selected_regions[ind].append(qs)
 
@@ -141,20 +141,20 @@ class Benchmarker(object):
                 best_boundary_index = 0
                 best_vb_at_best_boundary_index = None
                 for (ind, qs) in specsforw:
-                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w,], datatype=datatype, statistic=statistic, 
-                                                           specs={ind: [qs,]},  aggregate=aggregate,  rescaler=rescaler)['data']
+                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype, statistic=statistic,
+                                                                specs={ind: [qs, ]}, aggregate=aggregate, rescaler=rescaler)['data']
                     # Only looking at 1 width, so drop the width key, and keep only the depths with data
-                    if not aggregate: 
-                        vbdata = {d:vbdata[d][w][passnum] for d in vbdata.keys() if w in vbdata[d].keys()}
+                    if not aggregate:
+                        vbdata = {d: vbdata[d][w][passnum] for d in vbdata.keys() if w in vbdata[d].keys()}
                     else:
-                        vbdata = {d:vbdata[d][w] for d in vbdata.keys() if w in vbdata[d].keys()}
-                    
+                        vbdata = {d: vbdata[d][w] for d in vbdata.keys() if w in vbdata[d].keys()}
+
                     # We calcluate the depth index of the largest depth at which the data is above/below the boundary, ignoring
                     # cases where there's data missing at some depths as long as we're still above/below the boundard at a larger depth.
                     if merit == 'aboveboundary':
-                        x =  [vbdata[d] > boundary if d in vbdata.keys() else None for d in depths]
+                        x = [vbdata[d] > boundary if d in vbdata.keys() else None for d in depths]
                     if merit == 'belowboundary':
-                        x =  [vbdata[d] < boundary if d in vbdata.keys() else None for d in depths]
+                        x = [vbdata[d] < boundary if d in vbdata.keys() else None for d in depths]
                     try:
                         x = x[:x.index(False)]
                     except:
@@ -191,16 +191,15 @@ class Benchmarker(object):
                 else:
                     selected_regions[ind].append(qs)
 
-        return selected_regions     
+        return selected_regions
 
-    def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities', 
-                                      statistic='mean', specs=None,  aggregate=True,  rescaler='auto'):
+    def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities',
+                                      statistic='mean', specs=None, aggregate=True, rescaler='auto'):
 
         # maxmax : max over all depths/widths larger or equal
         # minmin : min over all deoths/widths smaller or equal.
-        
-        assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin'))
 
+        assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin'))
 
         if isinstance(widths, str):
             assert(widths == 'all')
@@ -218,7 +217,8 @@ class Benchmarker(object):
                     if w not in width_to_spec:
                         width_to_spec[w] = (i, qs)
                     else:
-                        raise ValueError("There are multiple qubit subsets of size {} benchmarked! Cannot have specs as None!".format(w))
+                        raise ValueError(("There are multiple qubit subsets of size {} benchmarked! "
+                                          "Cannot have specs as None!").format(w))
 
         if widths == 'all':
             widths = list(width_to_spec.keys())
@@ -228,14 +228,14 @@ class Benchmarker(object):
 
         if isinstance(rescaler, str):
             if rescaler == 'auto':
-                if datatype == 'success_probabilities': 
+                if datatype == 'success_probabilities':
                     def rescale_function(data, width):
                         return list((_np.array(data) - 1 / 2**width) / (1 - 1 / 2**width))
                 else:
                     def rescale_function(data, width):
                         return data
             elif rescaler == 'none':
-                
+
                 def rescale_function(data, width):
                     return data
 
@@ -250,10 +250,10 @@ class Benchmarker(object):
         # else:
         #     predvb = None
 
-        qs = self._specs[0].get_structure()[0]  # An arbitrary key 
+        qs = self._specs[0].get_structure()[0]  # An arbitrary key
         if datatype in self.pass_summary_data[0][qs].keys():
             datadict = self.pass_summary_data
-            globaldata = False 
+            globaldata = False
         elif datatype in self.global_summary_data[0][qs].keys():
             datadict = self.global_summary_data
             globaldata = True
@@ -283,9 +283,9 @@ class Benchmarker(object):
                 preddata = {pkey: self.predicted_summary_data[pkey][i][qs][datatype] for pkey in pkeys}
             for d in depths:
                 if d in data.keys():
-                    
+
                     dline = data[d]
- 
+
                     if globaldata:
 
                         failcount = _np.sum(_np.isnan(dline))
@@ -296,23 +296,30 @@ class Benchmarker(object):
                         else:
                             if not _np.isnan(rescale_function(dline, w)).all():
                                 if statistic == 'max' or statistic == 'maxmax':
-                                    vb[d][w] = _np.nanmax(rescale_function(dline,w))
+                                    vb[d][w] = _np.nanmax(rescale_function(dline, w))
                                 elif statistic == 'mean':
-                                    vb[d][w] = _np.nanmean(rescale_function(dline,w))
+                                    vb[d][w] = _np.nanmean(rescale_function(dline, w))
                                 elif statistic == 'min' or statistic == 'minmin':
-                                    vb[d][w] = _np.nanmin(rescale_function(dline,w))
+                                    vb[d][w] = _np.nanmin(rescale_function(dline, w))
                             else:
                                 vb[d][w] = _np.nan
 
                     else:
-                        failline = [(len(dpass) - _np.sum(_np.isnan(dpass)), _np.sum(_np.isnan(dpass))) for dpass in dline]
+                        failline = [(len(dpass) - _np.sum(_np.isnan(dpass)), _np.sum(_np.isnan(dpass)))
+                                    for dpass in dline]
 
                         if statistic == 'max' or statistic == 'maxmax':
-                            vbdataline = [_np.nanmax(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
+                            vbdataline = [_np.nanmax(rescale_function(dpass, w))
+                                          if not _np.isnan(rescale_function(dpass, w)).all() else _np.nan
+                                          for dpass in dline]
                         elif statistic == 'mean':
-                            vbdataline = [_np.nanmean(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
+                            vbdataline = [_np.nanmean(rescale_function(dpass, w))
+                                          if not _np.isnan(rescale_function(dpass, w)).all() else _np.nan
+                                          for dpass in dline]
                         elif statistic == 'min' or statistic == 'minmin':
-                            vbdataline = [_np.nanmin(rescale_function(dpass,w)) if not _np.isnan(rescale_function(dpass,w)).all() else _np.nan for dpass in dline]
+                            vbdataline = [_np.nanmin(rescale_function(dpass, w))
+                                          if not _np.isnan(rescale_function(dpass, w)).all() else _np.nan
+                                          for dpass in dline]
                         elif statistic == 'dist':
                             vbdataline = [rescale_function(dpass, w) for dpass in dline]
 
@@ -353,36 +360,33 @@ class Benchmarker(object):
                                 predictedvb[pkey][d][w] = _np.max(rescale_function(pdline[pkey], w))
                             if statistic == 'mean':
                                 predictedvb[pkey][d][w] = _np.mean(rescale_function(pdline[pkey], w))
-                            if statistic == 'min'  or statistic == 'minmin':
+                            if statistic == 'min' or statistic == 'minmin':
                                 predictedvb[pkey][d][w] = _np.min(rescale_function(pdline[pkey], w))
-
 
         if statistic == 'minmin' or statistic == 'maxmax':
             if aggregate:
                 for d in vb.keys():
-                    for w in vb[d].keys():       
+                    for w in vb[d].keys():
                         for d2 in vb.keys():
                             for w2 in vb[d2].keys():
-                                if statistic == 'minmin' and d2 <= d and w2 <= w and vb[d2][w2] <  vb[d][w]:
-                                        vb[d][w] = vb[d2][w2]
-                                if statistic == 'maxmax' and d2 >= d and w2 >= w and vb[d2][w2] >  vb[d][w]:
-                                        vb[d][w] = vb[d2][w2]
+                                if statistic == 'minmin' and d2 <= d and w2 <= w and vb[d2][w2] < vb[d][w]:
+                                    vb[d][w] = vb[d2][w2]
+                                if statistic == 'maxmax' and d2 >= d and w2 >= w and vb[d2][w2] > vb[d][w]:
+                                    vb[d][w] = vb[d2][w2]
             else:
                 for i in range(self.numpasses):
                     for d in vb[i].keys():
-                        for w in vb[i][d].keys():       
+                        for w in vb[i][d].keys():
                             for d2 in vb[i].keys():
                                 for w2 in vb[i][d2].keys():
-                                    if statistic == 'minmin' and d2 <= d and w2 <= w and vb[i][d2][w2] <  vb[i][d][w]:
-                                            vb[i][d][w] = vb[i][d2][w2]
-                                    if statistic == 'maxmax' and d2 >= d and w2 >= w and vb[i][d2][w2] >  vb[i][d][w]:
-                                            vb[i][d][w] = vb[i][d2][w2]
-
+                                    if statistic == 'minmin' and d2 <= d and w2 <= w and vb[i][d2][w2] < vb[i][d][w]:
+                                        vb[i][d][w] = vb[i][d2][w2]
+                                    if statistic == 'maxmax' and d2 >= d and w2 >= w and vb[i][d2][w2] > vb[i][d][w]:
+                                        vb[i][d][w] = vb[i][d2][w2]
 
         out = {'data': vb, 'fails': fails, 'predictions': predictedvb}
-        
+
         return out
-       
 
     def get_flattened_data(self, specs=None, aggregate=True):
 
@@ -395,10 +399,12 @@ class Benchmarker(object):
         if aggregate:
             flattened_data = {dtype: [] for dtype in self.pass_summary_data[0][qubits].keys()}
         else:
-            flattened_data = {dtype: [[] for i in range(self.numpasses)] for dtype in self.pass_summary_data[0][qubits].keys()}
+            flattened_data = {dtype: [[] for i in range(self.numpasses)]
+                              for dtype in self.pass_summary_data[0][qubits].keys()}
         flattened_data.update({dtype: [] for dtype in self.global_summary_data[0][qubits].keys()})
         flattened_data.update({dtype: [] for dtype in self.aux[0][qubits].keys()})
-        flattened_data.update({'predictions':{pkey: {'success_probabilities': []} for pkey in self.predicted_summary_data.keys()}})
+        flattened_data.update({'predictions': {pkey: {'success_probabilities': []}
+                                               for pkey in self.predicted_summary_data.keys()}})
 
         for specind, structure in specs.items():
             for qubits in structure:
@@ -431,16 +437,19 @@ class Benchmarker(object):
                         for depth, dataline in self.predicted_summary_data[pkey][specind][qubits]['success_probabilities'].items():
                             flattened_data['predictions'][pkey]['success_probabilities'] += dataline
                     else:
-                        for (depth, dataline1), dataline2 in zip(self.predicted_summary_data[pkey][specind][qubits]['success_counts'].items(), 
-                                                               self.predicted_summary_data[pkey][specind][qubits]['total_counts'].values()):
-                            flattened_data['predictions'][pkey]['success_probabilities'] += list(_np.array(dataline1) / _np.array(dataline2))
+                        for (depth, dataline1), dataline2 in zip(self.predicted_summary_data[pkey][specind][qubits]['success_counts'].items(),
+                                                                 self.predicted_summary_data[pkey][specind][qubits]['total_counts'].values()):
+                            flattened_data['predictions'][pkey]['success_probabilities'] += list(
+                                _np.array(dataline1) / _np.array(dataline2))
 
         #  Only do this if we've not already stored the success probabilities in the benchamrker.
         if ('success_counts' in flattened_data) and ('total_counts' in flattened_data) and ('success_probabilities' not in flattened_data):
             if aggregate:
-                flattened_data['success_probabilities'] = [sc / tc if tc > 0 else _np.nan for sc, tc in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
+                flattened_data['success_probabilities'] = [sc / tc if tc > 0 else _np.nan for sc,
+                                                           tc in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
             else:
-                flattened_data['success_probabilities'] = [[sc / tc if tc > 0 else _np.nan for sc, tc in zip(scpass, tcpass)] for scpass, tcpass in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
+                flattened_data['success_probabilities'] = [[sc / tc if tc > 0 else _np.nan for sc, tc in zip(
+                    scpass, tcpass)] for scpass, tcpass in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
 
         return flattened_data
 
@@ -489,7 +498,7 @@ class Benchmarker(object):
 
     # def get_all_data(self):
 
-    #     for circ 
+    #     for circ
 
     def get_summary_data(self, datatype, specindex, qubits=None):
 
@@ -506,7 +515,6 @@ class Benchmarker(object):
     #def getauxillary_data(self, datatype, specindex, qubits=None):
 
     #def get_predicted_summary_data(self, prediction, datatype, specindex, qubits=None):
-
 
     def create_summary_data(self, predictions={}, verbosity=2, auxtypes=[]):
         """
@@ -531,7 +539,8 @@ class Benchmarker(object):
                 predds = predictions[pkey]
                 preddskey = pkey
             else:
-                assert(isinstance(predictions[pkey], _oplessmodel.SuccessFailModel)), "If not a DataSet must be an ErrorRatesModel!"
+                assert(isinstance(predictions[pkey], _oplessmodel.SuccessFailModel)
+                       ), "If not a DataSet must be an ErrorRatesModel!"
 
         datatypes = ['success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities']
         if self.dscomparator is not None:
@@ -556,7 +565,7 @@ class Benchmarker(object):
                 if tc == 0:
                     return _np.nan
                 else:
-                    return sc / tc 
+                    return sc / tc
             else:
                 raise ValueError("Unknown data type!")
 
@@ -565,8 +574,9 @@ class Benchmarker(object):
         for ds_ind in self.multids[useds].keys():
 
             if verbosity > 0:
-                print(" - Processing data from pass {} of {}. Percent complete:".format(ds_ind + 1, len(self.multids[useds])))
-   
+                print(" - Processing data from pass {} of {}. Percent complete:".format(ds_ind +
+                                                                                        1, len(self.multids[useds])))
+
             #circuits = {}
             numcircuits = len(self.multids[useds][ds_ind].keys())
             percent = 0
@@ -618,7 +628,8 @@ class Benchmarker(object):
                     if specind not in summarydata.keys():
 
                         assert(ds_ind == 0)
-                        summarydata[specind] = {qubits: {datatype: {} for datatype in datatypes} for qubits in structure}
+                        summarydata[specind] = {qubits: {datatype: {}
+                                                         for datatype in datatypes} for qubits in structure}
                         aux[specind] = {qubits: {auxtype: {} for auxtype in auxtypes} for qubits in structure}
 
                         # Only do predictions on the first pass dataset.
@@ -626,11 +637,14 @@ class Benchmarker(object):
                             predsummarydata[pkey][specind] = {}
                             for pkey in predictions.keys():
                                 if pkey == preddskey:
-                                    predsummarydata[pkey][specind] = {qubits: {datatype: {} for datatype in datatypes} for qubits in structure}
+                                    predsummarydata[pkey][specind] = {qubits: {datatype: {}
+                                                                               for datatype in datatypes} for qubits in structure}
                                 else:
-                                    predsummarydata[pkey][specind] = {qubits: {'success_probabilities': {}} for qubits in structure}
+                                    predsummarydata[pkey][specind] = {
+                                        qubits: {'success_probabilities': {}} for qubits in structure}
 
-                        globalsummarydata[specind] = {qubits: {datatype: {} for datatype in stabdatatypes} for qubits in structure}
+                        globalsummarydata[specind] = {qubits: {datatype: {}
+                                                               for datatype in stabdatatypes} for qubits in structure}
 
                     # If we've not yet encountered this depth, we create the list where the data for that depth
                     # is stored.
@@ -692,7 +706,8 @@ class Benchmarker(object):
                                         trimmedcirc = circ
 
                                     predsp = predmodel.probs(trimmedcirc)[('success',)]
-                                    predsummarydata[pkey][specind][qubits]['success_probabilities'][depth].append(predsp)
+                                    predsummarydata[pkey][specind][qubits]['success_probabilities'][depth].append(
+                                        predsp)
 
                             for datatype in stabdatatypes:
                                 if datatype == 'tvds':
@@ -849,7 +864,7 @@ class Benchmarker(object):
     #                         if addaux:
     #                             aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
     #                             aux[specind][qubits]['depth'][length].append(circ.depth())
-    #                             aux[specind][qubits]['target'][length].append(target)                            
+    #                             aux[specind][qubits]['target'][length].append(target)
     #                         if storecircuits and qubits_ind == 0:
     #                             circuits[specind][length].append(circ)
     #                         for pkey, predmodel in predictions.items():
@@ -866,7 +881,7 @@ class Benchmarker(object):
 
     #         elif preddskey is not None:
     #             assert(False), "This part of the code needs fixing for multi-pass data!"
-                
+
     #         #     for i, ((circ, dsrow), (auxcirc, auxdict), (pcirc, pdsrow)) in enumerate(zip(self.ds.items(), self.ds.auxInfo.items(), predds.items())):
 
     #         #         assert(circ == auxcirc)
@@ -970,7 +985,6 @@ class Benchmarker(object):
     #         #                         predsp = predmodel.success_prob(trimmedcirc)
     #         #                         predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
 
-
     #         # if error_rates_model is not None:
     #         #     ermtype = error_rates_model.get_model_type()
     #         #     self.predicted_summary_data[ermtype] = {}
@@ -1004,7 +1018,7 @@ class Benchmarker(object):
 
     #                 if qubits not in self._summary_data[specind].keys():
     #                     self._summary_data[specind][qubits] = {}
-                    
+
     #                 self._summary_data[specind][qubits][ds_ind] = _dataset.RBSummaryDataset(len(qubits), success_counts=summarydata[specind][qubits]['success_counts'],
     #                                             total_counts=summarydata[specind][qubits]['total_counts'],
     #                                             hamming_distance_counts=summarydata[specind][qubits]['hamming_distance_counts'],
@@ -1014,14 +1028,14 @@ class Benchmarker(object):
     #                     if pkey != preddskey:
     #                         self.predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_probabilities'],
     #                                                 total_counts=None, hamming_distance_counts=None, finitecounts=False, aux=aux[specind][qubits])
-    #                     else:    
+    #                     else:
     #                         self.predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_counts'],
     #                                                 total_counts=predsummarydata[pkey][specind][qubits]['total_counts'],
     #                                                 hamming_distance_counts=predsummarydata[pkey][specind][qubits]['hamming_distance_counts'],
     #                                                 aux=aux[specind][qubits])
 
         #else:
-            #    raise ValueError("Input `method` must be 'fast' or 'simple'!")
+        #    raise ValueError("Input `method` must be 'fast' or 'simple'!")
 
     def analyze(self, specindices=None, analysis='adjusted', bootstraps=200, verbosity=1):
         """
@@ -1045,9 +1059,11 @@ class Benchmarker(object):
                 if verbosity > 1:
                     print('   - Running analysis for qubits {} ({} of {})'.format(key, j, len(rbdatadict)))
                 if analysis == 'all' or analysis == 'raw':
-                    self._rbresults['raw'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='raw')
+                    self._rbresults['raw'][i][key] = _analysis.std_practice_analysis(
+                        rbdata, bootstrap_samples=bootstraps, datatype='raw')
                 if (analysis == 'all' and rbdata.datatype == 'hamming_distance_counts') or analysis == 'adjusted':
-                    self._rbresults['adjusted'][i][key] = _analysis.std_practice_analysis(rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
+                    self._rbresults['adjusted'][i][key] = _analysis.std_practice_analysis(
+                        rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
 
     def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, sampler=None,
                            twoQgateprob=None, prefilter=None, benchmarktype=None):
@@ -1124,7 +1140,7 @@ class Benchmarker(object):
         #     #else:
         #     #self._rbresults[i] = {}
         #     #for key in rbdata.items():
-        #     self._adjusted_rbresults[i] = rb.analysis.std_practice_analysis(rbdata, bootstrap_samples=0, 
+        #     self._adjusted_rbresults[i] = rb.analysis.std_practice_analysis(rbdata, bootstrap_samples=0,
         #                                                                     asymptote=1/4**rbdata.number_of_qubits)
 
 

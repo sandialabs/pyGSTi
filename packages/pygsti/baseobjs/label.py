@@ -724,7 +724,7 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None): #Note: may need default args for all but 1st for pickling!
+    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None):  # Note: may need default args for all but 1st for pickling!
         """
         Creates a new Model-item label, which defines a set of other labels
         as a sub-circuit and allows that sub-circuit to be repeated some integer
@@ -1006,12 +1006,12 @@ class LabelTupWithArgs(Label, tuple):
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
 
         return cls.__new__(cls, tup, time)
-    
+
     def __new__(cls, tup, time=0.0):
         ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
         ret.time = time
         return ret
-    
+
     @property
     def name(self):
         return self[0]

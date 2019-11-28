@@ -35,6 +35,7 @@ import numpy as _np
 def get_device_specs(devname):
     return _get_dev_specs(devname)
 
+
 def _get_dev_specs(devname):
 
     if devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
@@ -53,6 +54,7 @@ def _get_dev_specs(devname):
         raise ValueError("This device name is not known!")
 
     return dev
+
 
 def get_edgelist(device):
 
@@ -177,7 +179,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
             except:
                 oneQgates_to_native[oneQgate] = 'u3'
                 nativekey = 'u3'
-            assert(nativekey in ('id', 'u1', 'u2', 'u3')), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
+            assert(nativekey in ('id', 'u1', 'u2', 'u3')
+                   ), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
             if nativekey not in oneQgatekeys:
                 oneQgatekeys.append(nativekey)
 
@@ -225,7 +228,7 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
 
             # The qubits the qubit is on.
             qslist = qs.split('-')
-            # Converts to our gate name convention. Do both orderings of the qubits as symmetric and we 
+            # Converts to our gate name convention. Do both orderings of the qubits as symmetric and we
             # are not necessarily consistent with Rigetti's ordering in the cal dict.
             gatename1 = twoQgate + ':Q' + qslist[0] + ':Q' + qslist[1]
             gatename2 = twoQgate + ':Q' + qslist[1] + ':Q' + qslist[0]
@@ -331,8 +334,8 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
                                         })
         return povm
 
-    tempdict  =  create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native=oneQgates_to_native,
-                                          calformat=calformat,  model_type='dict')
+    tempdict = create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native=oneQgates_to_native,
+                                        calformat=calformat, model_type='dict')
 
     error_rates = tempdict['error_rates']
     alias_dict = tempdict['alias_dict']

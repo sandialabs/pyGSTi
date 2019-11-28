@@ -655,10 +655,10 @@ class LogLFunction(ObjectiveFunction):
         """
         Create a log-likelihood objective function using a simpler set of arguments.
         """
-        
+
         if circuit_list is None:
             circuit_list = list(dataset.keys())
-    
+
         if evaltree_cache and 'evTree' in evaltree_cache:
             evalTree = evaltree_cache['evTree']
             lookup = evaltree_cache['lookup']
@@ -668,15 +668,15 @@ class LogLFunction(ObjectiveFunction):
         else:
             #OLD: evalTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuit_list, dataset=dataset)
             evalTree, _, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
-                                                            circuit_list, comm, dataset=dataset)
-    
+                circuit_list, comm, dataset=dataset)
+
             #Fill cache dict if one was given
             if evaltree_cache is not None:
                 evaltree_cache['evTree'] = evalTree
                 evaltree_cache['lookup'] = lookup
                 evaltree_cache['outcomes_lookup'] = outcomes_lookup
-    
-        nEls = evalTree.num_final_elements()        
+
+        nEls = evalTree.num_final_elements()
         if evaltree_cache and 'cntVecMx' in evaltree_cache:
             countVecMx = evaltree_cache['cntVecMx']
             totalCntVec = evaltree_cache['totalCntVec']
@@ -686,14 +686,14 @@ class LogLFunction(ObjectiveFunction):
                     circuit_list, opLabelAliases)
             else:
                 ds_circuit_list = circuit_list
-            
+
             countVecMx = _np.empty(nEls, 'd')
             totalCntVec = _np.empty(nEls, 'd')
             for (i, opStr) in enumerate(ds_circuit_list):
                 cnts = dataset[opStr].counts
                 totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
                 countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
-    
+
             #could add to cache, but we don't have option of circuitWeights
             # here yet, so let's be conservative and not do this:
             #if evaltree_cache is not None:
@@ -706,7 +706,6 @@ class LogLFunction(ObjectiveFunction):
                    forcefn_grad=None, poissonPicture=poissonPicture, shiftFctr=100, check=False,
                    comm=comm, profiler=None, verbosity=0)
 
-    
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
                  spam_penalty_factor, cntVecMx, totalCntVec, minProbClip,
                  radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
@@ -810,7 +809,7 @@ class LogLFunction(ObjectiveFunction):
 
             raise NotImplementedError(("Non-poisson-picture optimization must be done with something other than a "
                                        "least-squares optimizer and isn't implemented yet."))
-        
+
     def poisson_picture_logl(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
@@ -882,10 +881,10 @@ class LogLFunction(ObjectiveFunction):
             assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
             v = _np.concatenate((v, _np.sqrt(forceVec)))
 
-        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)  #TODO: handle dummy profiler generation in simple_init??
+        # TODO: handle dummy profiler generation in simple_init??
+        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
-
 
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -1372,4 +1371,3 @@ class LogLWildcardFunction(ObjectiveFunction):
 
         return self.logl_objfn._poisson_picture_v_from_probs(tm)
         #return self.logl_objfn.v_from_probs_fn(tm)
-

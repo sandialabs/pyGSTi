@@ -26,13 +26,13 @@ def random_paulierror_in_chp(q):
     i = _np.random.randint(0, 3)
 
     if i == 0:
-        return ('p ' + str(q) + '\n')*2
+        return ('p ' + str(q) + '\n') * 2
 
     elif i == 1:
-        return 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+        return 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n') * 2 + 'h ' + str(q) + '\n'
 
     else:
-        return ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+        return ('p ' + str(q) + '\n') * 2 + 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n') * 2 + 'h ' + str(q) + '\n'
 
 
 def random_pauli_in_chp(q):
@@ -45,13 +45,13 @@ def random_pauli_in_chp(q):
         return ''
 
     elif i == 1:
-        return ('p ' + str(q) + '\n')*2
+        return ('p ' + str(q) + '\n') * 2
 
     elif i == 2:
-        return 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+        return 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n') * 2 + 'h ' + str(q) + '\n'
 
     else:
-        return ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+        return ('p ' + str(q) + '\n') * 2 + 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n') * 2 + 'h ' + str(q) + '\n'
 
 
 def stdgate_to_chp(gate, chpqubits):
@@ -176,7 +176,7 @@ def stdgate_to_chp(gate, chpqubits):
         s += 'h ' + str(qubits[0]) + '\n'
         return s
 
-    elif name == 'Gc11': 
+    elif name == 'Gc11':
         s = 'p ' + str(qubits[0]) + '\n'
         s += 'p ' + str(qubits[0]) + '\n'
         s += 'h ' + str(qubits[0]) + '\n'
@@ -279,6 +279,7 @@ class IndDepolErrorModel(object):
     todo
 
     """
+
     def __init__(self, gate_errors, readout_errors):
         """
         todo
@@ -309,7 +310,7 @@ class IndDepolErrorModel(object):
 
 def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_to_chp=None,
                                           auxInfolist=None, collisionAction='keepseparate',
-                                          outdir='', perge_chp_files=True, returnds=True, 
+                                          outdir='', perge_chp_files=True, returnds=True,
                                           verbosity=1):
     """
     todo.
@@ -349,13 +350,12 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
                     percentdone += 1
                     print("  - Simulation {} percent complete.".format(percentdone))
 
-        
         # Todo : this is a temp hack to get around a bug in Circuit.
         if circuit[-1].name[0] == '#':
             circuit = circuit.copy(editable=True)
             circuit.delete_layers(-1)
             circuit.delete_lines('*')
-        
+
         n = circuit.number_of_lines()
         depth = circuit.depth()
 
