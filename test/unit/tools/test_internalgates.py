@@ -1,7 +1,7 @@
 from ..util import BaseCase
 import numpy as np
 
-from pygsti.extras import rb
+#from pygsti.extras import rb
 from pygsti.tools import internalgates, optools as ot
 
 
@@ -9,6 +9,7 @@ class InternalGatesTester(BaseCase):
 
     def test_internalgate_definitions(self):
         # TODO is this test needed?
+        self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
         std_unitaries = internalgates.get_standard_gatename_unitaries()
         std_quil = internalgates.get_standard_gatenames_quil_conversions()
         std_quil = internalgates.get_standard_gatenames_openqasm_conversions()

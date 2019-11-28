@@ -101,11 +101,10 @@ class DataSetTester(BaseCase):
 class DefaultDataSetInstance(object):
     def setUp(self):
         super(DefaultDataSetInstance, self).setUp()
-        self.ds = DataSet(outcomeLabels=['0', '1'])
+        self.ds = DataSet(outcomeLabels=['0', '1'], collisionAction='aggregate') # adds counts at next available integer timestep
         self.ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         self.ds.add_count_dict(('Gy', 'Gy'), {'1': 90})
-        self.ds.add_count_dict(('Gy', 'Gy'), ld.OutcomeLabelDict([('0', 10), ('1', 90)]),
-                               overwriteExisting=False)  # adds counts at next available integer timestep
+        self.ds.add_count_dict(('Gy', 'Gy'), ld.OutcomeLabelDict([('0', 10), ('1', 90)]))  
 
     def test_construction(self):
         self.assertEqual(self.ds[('Gx',)]['0'], 10)

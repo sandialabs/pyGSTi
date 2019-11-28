@@ -53,13 +53,15 @@ class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
         ds.add_count_dict(('Gxi',), {'00': 55, '10': 45})
         ds.add_count_dict(('Gyi',), {'00': 40, '10': 60})
 
+        from pygsti.objects import Circuit as C
         ds2 = ds.copy()
         newmod = nc.stdmodule_to_smqmodule(self.std)
         newmod.upgrade_dataset(ds2)
-        self.assertEqual(ds2[(('Gx', 0),)].counts, {('00',): 55, ('10',): 45})
-        self.assertEqual(ds2[(('Gy', 0),)].counts, {('00',): 40, ('10',): 60})
-        self.assertEqual(ds2[(('Gx', 1),)].counts, {('00',): 90, ('10',): 10})
-        self.assertEqual(ds2[(('Gy', 1),)].counts, {('00',): 80, ('10',): 20})
+        qlbls = (0, 1)  # qubit labels
+        self.assertEqual(ds2[C((('Gx', 0),), qlbls)].counts, {('00',): 55, ('10',): 45})
+        self.assertEqual(ds2[C((('Gy', 0),), qlbls)].counts, {('00',): 40, ('10',): 60})
+        self.assertEqual(ds2[C((('Gx', 1),), qlbls)].counts, {('00',): 90, ('10',): 10})
+        self.assertEqual(ds2[C((('Gy', 1),), qlbls)].counts, {('00',): 80, ('10',): 20})
 
 
 class NQNoiseConstructionTester(BaseCase):

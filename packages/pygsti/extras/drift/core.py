@@ -10,7 +10,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 from . import stabilityanalyzer as _sa
-from .. import rb as _rb
 
 import numpy as _np
 import warnings as _warnings
