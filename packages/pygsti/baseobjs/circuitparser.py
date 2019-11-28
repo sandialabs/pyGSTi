@@ -447,7 +447,8 @@ class SimpleCircuitParser(object):
             i = start+1
             lbls_list = []
             while i < end and s[i] != "]":
-                lbls,i,segment = self.get_next_simple_lbl(s,i,end, integerize_sslbls, segment)
+                #lbls,i,segment = self.get_next_simple_lbl(s,i,end, integerize_sslbls, segment)  #ONLY SIMPLE LABELS in [] (no parens)
+                lbls,i,segment = self.get_next_lbls(s,i,end, create_subcircuits, integerize_sslbls, segment)
                 lbls_list.extend(lbls)
             if i == end: raise ValueError("mismatched parenthesis")
             i += 1
