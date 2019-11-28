@@ -1,6 +1,7 @@
 import copy
+import unittest
 
-from ..util import BaseCase, unittest
+from ..util import BaseCase
 
 from pygsti.baseobjs.label import Label, CircuitLabel
 from pygsti.tools import symplectic

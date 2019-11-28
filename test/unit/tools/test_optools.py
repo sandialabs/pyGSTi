@@ -1,8 +1,9 @@
 import functools
 import numpy as np
 import scipy
+from unittest import mock
 
-from ..util import BaseCase, mock, needs_cvxpy
+from ..util import BaseCase, needs_cvxpy
 
 from pygsti.construction import std2Q_XXYYII
 import pygsti.tools.optools as ot

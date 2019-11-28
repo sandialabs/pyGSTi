@@ -101,22 +101,18 @@ extras = {
         'flake8'
     ],
     'testing': [
-        'backports.tempfile;python_version<"3.2"',
         'coverage',
         'cvxopt',
         'cvxpy',
         'cython',
         'matplotlib',
-        'mock;python_version<"3.3"',
         'mpi4py',
         'msgpack',
         'nose',
         'nose-timer',
         'pandas',
-        'pathlib2;python_version<"3.4"',
         'psutil',
         'rednose',
-        'unittest2;python_version<"3.2"',
         'zmq'
     ]
 }

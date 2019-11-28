@@ -1,11 +1,10 @@
-from __future__ import unicode_literals
-
 import pickle
 import sys
 from io import StringIO
 from contextlib import contextmanager
+from unittest import mock
 
-from ..util import BaseCase, mock
+from ..util import BaseCase
 
 from pygsti.baseobjs import verbosityprinter as vbp
 

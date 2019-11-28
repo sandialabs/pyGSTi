@@ -1,6 +1,7 @@
 import numpy as np
+from unittest import mock
 
-from ..util import BaseCase, mock
+from ..util import BaseCase
 from . import fixtures as pkg
 
 from pygsti.construction import std1Q_XYI as std

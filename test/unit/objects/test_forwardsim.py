@@ -1,6 +1,7 @@
 import numpy as np
+from unittest import mock
 
-from ..util import BaseCase, mock
+from ..util import BaseCase
 
 import pygsti.construction as pc
 from pygsti.objects import ExplicitOpModel, Label as L

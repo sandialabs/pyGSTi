@@ -1,5 +1,7 @@
 """ Unit tests covering pygsti.baseobjs.parameterized """
-from ..util import BaseCase, mock
+from unittest import mock
+
+from ..util import BaseCase
 
 from pygsti.baseobjs.parameterized import parameterized
 
