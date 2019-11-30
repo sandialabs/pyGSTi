@@ -769,6 +769,16 @@ class GaugeRobustMetricTable(WorkspaceTable):
                     el2 = _reportables.evaluate_opfn_by_name(
                         metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidenceRegionInfo)
                     el = _objs.reportableqty.minimum(el1, el2)
+
+                    #DEBUGGING infidelity - which doesn't behave well all the time, as min(.) will pick a "bad" negative infidelity value?
+                    #el1.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl], target_mdl_in_best_gauge[j][lbl], 'pp') # DEBUG
+                    #el2.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl2], target_mdl_in_best_gauge[j][lbl2], 'pp') # DEBUG
+                    #print("OFF DIAG: (%s)\n" % lbl, target_mdl_in_best_gauge[i][lbl],"\n", target_mdl_in_best_gauge[j][lbl])
+                    #print("OFF DIAG2 (%s): \n" % lbl2, target_mdl_in_best_gauge[i][lbl2],"\n", target_mdl_in_best_gauge[j][lbl2])
+                    #print("VALS = ",el1.value, el2.value, _np.linalg.norm(target_mdl_in_best_gauge[i][lbl] - target_mdl_in_best_gauge[j][lbl]),
+                    #      _np.linalg.norm(target_mdl_in_best_gauge[i][lbl2] - target_mdl_in_best_gauge[j][lbl2]))
+                    ##import bpdb; bpdb.set_trace()
+
                 row_data.append(el)
                 row_formatters.append('Normal')
 
