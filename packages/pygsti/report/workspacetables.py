@@ -20,6 +20,7 @@ from . import reportables as _reportables
 from .reportables import evaluate as _ev
 from ..baseobjs import Label as _Lbl
 from ..baseobjs import DirectSumBasis as _DirectSumBasis
+from ..algorithms import gaugeopt as _gopt
 
 from .table import ReportTable as _ReportTable
 
@@ -731,17 +732,20 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
             mdl = orig_model.copy()
             mdl.transform(Ugg)
+            _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target,
+                                                        itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
+                                                        returnAll=True)  # ADDITIONAL GOPT
             mdl_in_best_gauge.append(mdl)
 
-            target_mdl = orig_model.copy()
+            target_mdl = orig_target.copy()
             target_mdl.transform(Ugg)
+            target_mdl.transform(Ugg_addl)  # ADDITIONAL GOPT
             target_mdl_in_best_gauge.append(target_mdl)
 
         #FUTURE: instruments too?
         for i, lbl in enumerate(opLabels):
             row_data = [lbl]
             row_formatters = [None]
-            basis = model.basis
 
             for j, lbl2 in enumerate(opLabels):
                 if i > j:  # leave lower diagonal blank
@@ -751,9 +755,9 @@ class GaugeRobustMetricTable(WorkspaceTable):
                         metric, mdl_in_best_gauge[i], target_model, lbl, confidenceRegionInfo)
                 else:  # off-diagonal element
                     el1 = _reportables.evaluate_opfn_by_name(
-                        metric, target_mdl_in_best_gauge[i], target_model, lbl2, confidenceRegionInfo)
+                        metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2, confidenceRegionInfo)
                     el2 = _reportables.evaluate_opfn_by_name(
-                        metric, target_mdl_in_best_gauge[j], target_model, lbl, confidenceRegionInfo)
+                        metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidenceRegionInfo)
                     el = _objs.reportableqty.minimum(el1, el2)
                 row_data.append(el)
                 row_formatters.append('Normal')
