@@ -536,6 +536,7 @@ class ChoiTable(WorkspaceTable):
         table.finish()
         return table
 
+
 class GaugeRobustModelTable(WorkspaceTable):
     """ Create a table showing a model in a gauge-robust representation. """
 
@@ -574,7 +575,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.get_primitive_op_labels()  # use labels of 1st model
 
-        colHeadings = ['Gate', 'M'] + ['FinvF(%s)' % lbl for lbl in opLabels]
+        colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % lbl for lbl in opLabels]
         formatters = [None] * len(colHeadings)
         confidenceRegionInfo = None #Don't deal with CIs yet...
 
@@ -602,13 +603,22 @@ class GaugeRobustModelTable(WorkspaceTable):
             return F,M,Finv
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+        I = _np.identity(model.dim, 'd')
 
+        M = 0.0  # max abs for colorscale
         op_decomps = {}
         for gl in opLabels:
             op_decomps[gl] = get_gig_decomp(model.operations[gl].todense(),
                                             target_model.operations[gl].todense())
-        #FUTURE: instruments too?
+            M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
 
+        for i, lbl in enumerate(opLabels):
+            for j, lbl2 in enumerate(opLabels):
+                if i == j: continue
+                val = _np.dot(op_decomps[lbl][2], op_decomps[lbl2][0]) - I  # value plotted below
+                M = max(M, max(_np.abs(val).flat))  # update max
+
+        #FUTURE: instruments too?
         for i,lbl in enumerate(opLabels):
             row_data = [lbl]
             row_formatters = [None]
@@ -617,10 +627,10 @@ class GaugeRobustModelTable(WorkspaceTable):
 
             #Print "M" matrix
             if display_as == "numbers":
-                row_data.append(Mi)
+                row_data.append(Mi - I)
                 row_formatters.append('Brackets')
             elif display_as == "boxes":
-                fig = _wp.GateMatrixPlot(self.ws, Mi, colorbar=False)
+                fig = _wp.GateMatrixPlot(self.ws, Mi - I, -M, M, colorbar=False)
                 row_data.append(fig)
                 row_formatters.append('Figure')
             else:
@@ -628,17 +638,17 @@ class GaugeRobustModelTable(WorkspaceTable):
 
             for j,lbl2 in enumerate(opLabels):
                 if i == j:
-                    row_data.append("I")
+                    row_data.append("0")
                     row_formatters.append(None)
                 else:
                     val = _np.dot(Finvi, op_decomps[lbl2][0])
 
                     #Print "Finv*F" matrix
                     if display_as == "numbers":
-                        row_data.append(val)
+                        row_data.append(val - I)
                         row_formatters.append('Brackets')
                     elif display_as == "boxes":
-                        fig = _wp.GateMatrixPlot(self.ws, val, colorbar=False)
+                        fig = _wp.GateMatrixPlot(self.ws, val - I, -M, M, colorbar=False)
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
