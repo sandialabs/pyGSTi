@@ -9,13 +9,447 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import os as _os
 import numpy as _np
+import time as _time
 from ...tools import symplectic as _symp
 from ...baseobjs.label import Label as _Lbl
+from ... import objects as _obj
 from . import sample as _samp
 from . import results as _res
 
-# todo : update the docstring to explain reduced error models.
+
+def random_paulierror_in_chp(q):
+    """
+    todo.
+    """
+    i = _np.random.randint(0, 3)
+
+    if i == 0:
+        return ('p ' + str(q) + '\n')*2
+
+    elif i == 1:
+        return 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+
+    else:
+        return ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+
+
+def random_pauli_in_chp(q):
+    """
+    todo.
+    """
+    i = _np.random.randint(0, 4)
+
+    if i == 0:
+        return ''
+
+    elif i == 1:
+        return ('p ' + str(q) + '\n')*2
+
+    elif i == 2:
+        return 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+
+    else:
+        return ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n' + ('p ' + str(q) + '\n')*2 + 'h ' + str(q) + '\n'
+
+
+def stdgate_to_chp(gate, chpqubits):
+    """
+    todo
+    Converts any of the standard Clifford gates to a chp string.
+    """
+    gatestr = str(gate).split(':')
+    name = gatestr[0]
+    qubits = [chpqubits[q] for q in gatestr[1:]]
+
+    if name == 'Gi':
+        return ''
+
+    elif name == 'Gxpi':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += ('p ' + str(qubits[0]) + '\n') * 2
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gypi':
+        s = ('p ' + str(qubits[0]) + '\n') * 2
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += ('p ' + str(qubits[0]) + '\n') * 2
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gzpi':
+        return ('p ' + str(qubits[0]) + '\n') * 2
+
+    elif name == 'Gxpi2':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gxmpi2':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += ('p ' + str(qubits[0]) + '\n') * 3
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gzpi2' or name == 'Gp':
+        return 'p ' + str(qubits[0]) + '\n'
+
+    elif name == 'Gzmpi2' or name == 'Gpdag':
+        return ('p ' + str(qubits[0]) + '\n') * 3
+
+    elif name == 'Gh':
+        return ('h ' + str(qubits[0]) + '\n')
+
+    elif name == 'Gc0':
+        return ''
+
+    elif name == 'Gc1':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc2':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc3':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc4':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc5':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc6':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc7':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc8':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc9':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc10':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc11': 
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc12':
+        s = 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc13':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc14':
+        s = 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc15':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc16':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc17':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc18':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc19':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc20':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc21':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc22':
+        s = 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'h ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gc23':
+        s = 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        s += 'p ' + str(qubits[0]) + '\n'
+        return s
+
+    elif name == 'Gcnot':
+        return 'c ' + str(qubits[0]) + ' ' + str(qubits[1]) + '\n'
+
+    elif name == 'Gcphase':
+        s = 'h ' + str(qubits[1]) + '\n'
+        s += 'c ' + str(qubits[0]) + ' ' + str(qubits[1]) + '\n'
+        s = 'h ' + str(qubits[1]) + '\n'
+        return s
+
+    else:
+        raise ValueError("{} is an unknown gate! You must make your own `gateinchp` function!".format(gate))
+
+
+class IndDepolErrorModel(object):
+    """
+    todo
+
+    """
+    def __init__(self, gate_errors, readout_errors):
+        """
+        todo
+
+        """
+        self.gate_errors = gate_errors
+        self.readout_errors = readout_errors
+
+    def layer_uniform_pauli_probability(self, layer, qubitorder):
+        """
+        todo.
+
+        """
+        if len(layer) > 0:
+            return 1 - _np.prod([1 - _np.array([4 * self.gate_errors[gate].get(q, 0) / 3
+                                                for q in qubitorder]) for gate in layer], axis=0)
+        else:
+            return _np.zeros(len(qubitorder), float)
+
+    def readout_uniform_pauli_probability(self, qubitorder):
+        """
+        todo
+
+        """
+        return 1 - _np.prod([1 - _np.array([4 * self.readout_errors[q1].get(q2, 0) / 3
+                                            for q2 in qubitorder]) for q1 in qubitorder], axis=0)
+
+
+def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_to_chp=None,
+                                          auxInfolist=None, collisionAction='keepseparate',
+                                          outdir='', perge_chp_files=True, returnds=True, 
+                                          verbosity=1):
+    """
+    todo.
+
+    """
+    if returnds:
+        ds = _obj.DataSet(collisionAction=collisionAction)
+    else:
+        ds = []
+    assert(_os.path.isfile("chp")), "This simulator uses the chp.c code.\n" + \
+        "It must be compiled to an executable called `chp` and situated in this folder!"
+
+    try:
+        _os.mkdir(outdir)
+        if perge_chp_files:
+            perge_dir = True
+        else:
+            perge_dir = False
+    except:
+        perge_dir = False
+        pass
+
+    time0 = _time.time()
+
+    if gate_to_chp is None: gate_to_chp = stdgate_to_chp
+
+    percentdone = 0
+    for cind, circuit in enumerate(circuitlist):
+        print(cind)
+        time1 = _time.time()
+
+        if verbosity > 0:
+            if verbosity > 1:
+                print("{0:.2f}".format(cind / len(circuitlist)), end=' ')
+            else:
+                if int(_np.floor(cind / len(circuitlist))) > percentdone:
+                    percentdone += 1
+                    print("  - Simulation {} percent complete.".format(percentdone))
+
+        
+        # Todo : this is a temp hack to get around a bug in Circuit.
+        if circuit[-1].name[0] == '#':
+            circuit = circuit.copy(editable=True)
+            circuit.delete_layers(-1)
+            circuit.delete_lines('*')
+        
+        n = circuit.number_of_lines()
+        depth = circuit.depth()
+
+        # Set up the CHP qubit labels: could be different CHP labels for each circuit.
+        aschpq = {label: str(i) for i, label in enumerate(circuit.line_labels)}
+
+        # A list containing the CHP string for each error-free circuit layer.
+        perfect_chpstrings = [''.join([gate_to_chp(gate, aschpq) for gate in circuit.get_layer(i)])
+                              for i in range(depth)]
+
+        # Find the probability of error in each circuit layer.
+        errorprobs = [errormodel.layer_uniform_pauli_probability(circuit.get_layer(lind), circuit.line_labels)
+                      for lind in range(circuit.depth())]
+        # Add measurement error at the end
+        errorprobs.append(errormodel.readout_uniform_pauli_probability(circuit.line_labels))
+
+        time2 = _time.time()
+
+        for sample in range(shots):
+
+            # Sample errors for the circuit. Note that if 1 then a uniformly random Pauli is sampled, so
+            # there is a 1/4 chance of no error even if this is 1. This is correct.
+            #print(errorprobs)
+            haserror = [_np.random.binomial(1, ep) for ep in errorprobs]
+            #for lind in range(depth):
+            #    print('-', lind)
+            #    print(haserror[lind])
+            #    print([random_pauli_in_chp(q) for q in range(n) if haserror[lind][q] == 1])
+            # Construct the CHP string for each error layer.
+            error_chpstrings = [''.join([''] + [random_pauli_in_chp(q) for q in range(n) if haserror[lind][q] == 1])
+                                for lind in range(depth)]
+
+            # Interleave the perfect and error CHP strings and then join.
+            chpstring = '#\n' + ''.join([val for pair in zip(perfect_chpstrings, error_chpstrings) for val in pair])
+
+            # Add the readout error
+            chpstring += ''.join([''] + [random_pauli_in_chp(q) for q in range(n) if haserror[depth][q] == 1])
+
+            # Add a measurement on all the qubits.
+            chpstring += '\n'.join(['m ' + aschpq[q] for q in circuit.line_labels]) + '\n'
+            #print(chpstring)
+            with open(outdir + "/circuit-{}-instance-{}.chp".format(cind, sample), 'w') as f:
+                f.write(chpstring)
+
+            # Run CHP on this file.
+            _os.system("./chp " + outdir + "/circuit-{}-instance-{}.chp > ".format(cind, sample)
+                       + outdir + "/circuit-{}-instance-{}-out.txt".format(cind, sample))
+
+        countdict = {}
+        for sample in range(shots):
+
+            with open(outdir + "/circuit-{}-instance-{}-out.txt".format(cind, sample), 'r') as f:
+                #print(cind,sample)
+                outasdict = {}
+                for i, line in enumerate(f):
+                    if i > 3:
+                        line = line.strip(' \n')
+                        line = line.split(' ')
+                        # todo : this assumes definite outcome circuits, so fix that
+                        # by instead counting forward from the start of the line.
+                        outasdict[circuit.line_labels[int(line[-2][:-1])]] = line[-1]
+
+                #print(outasdict)
+                bitstring = ''.join([outasdict[q] for q in circuit.line_labels])
+
+            if perge_chp_files:
+                _os.system("rm " + outdir + "/circuit-{}-instance-{}.chp".format(cind, sample))
+                _os.system("rm " + outdir + "/circuit-{}-instance-{}-out.txt".format(cind, sample))
+
+            try:
+                countdict[bitstring] += 1
+            except:
+                countdict[bitstring] = 1
+
+            if auxInfolist is not None:
+                aux = auxInfolist[cind]
+            else:
+                aux = None
+
+        if returnds:
+            ds.add_count_dict(circuit, countdict, recordZeroCnts=False, aux=aux)
+        else:
+            ds.append(countdict)
+
+        time3 = _time.time()
+
+        if verbosity > 1:
+            print("({0:.2f}, {1:.2f})".format(time2 - time1, time3 - time2), end=', ')
+    print("Total time: {0:.2f})".format(time3 - time0))
+
+    if perge_dir:
+        _os.system("rmdir " + outdir)
+
+    return ds
 
 
 def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, errormodel, counts,

@@ -208,7 +208,7 @@ figure > div.pygsti-wsoutput-group {
 
 .containerAmidstResize {
     background-image: url('https://raw.githubusercontent.com/pyGSTio/pyGSTi/gh-pages/pyGSTi_icon.png'),
-    url('images/pyGSTi_icon.png');
+    url('offline/images/pyGSTi_icon.png');
     background-size: 50% 50%;
     background-position: center, center;
     background-repeat: no-repeat;
@@ -220,7 +220,7 @@ figure > div.pygsti-wsoutput-group {
 
 .pygBackground {
     background-image: url('https://raw.githubusercontent.com/pyGSTio/pyGSTi/gh-pages/pyGSTi_icon.png'),
-    url('images/pyGSTi_icon.png');
+    url('offline/images/pyGSTi_icon.png');
     background-size: 50% 50%;
     background-position: center, center;
     background-repeat: no-repeat;

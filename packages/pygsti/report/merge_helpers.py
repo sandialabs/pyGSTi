@@ -18,6 +18,8 @@ import webbrowser as _webbrowser
 import re as _re
 import subprocess as _subprocess
 
+from pathlib import Path
+
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -138,7 +140,7 @@ def rsync_offline_dir(outputDir):
     """
     destDir = _os.path.join(outputDir, "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                               "templates", "offline")
+                               "templates", "offline")  # TODO package resources?
     if not _os.path.exists(destDir):
         _shutil.copytree(offlineDir, destDir)
 
@@ -259,125 +261,34 @@ def makeEmptyDir(dirname):
     return dirname
 
 
-def fill_std_qtys(qtys, connected, renderMath, CSSnames):
+def _render_as_html(value, render_options, link_to):
+    """Render an object as HTML.
+
+    See
+    ---
+    :func:`render_as_html`
     """
-    A helper to other merge functions, fills `qtys` dictionary with a standard
-    set of values used within HTML templates.
-    """
-    #Add favicon
-    if 'favicon' not in qtys:
-        if connected:
-            favpath = "https://raw.githubusercontent.com/pyGSTio/pyGSTi/gh-pages"
-        else:
-            favpath = "offline/images"
+    if isinstance(value, str):
+        html = value
+    else:
+        if hasattr(value, 'set_render_options'):
+            value.set_render_options(**render_options)
 
-        qtys['favicon'] = (
-            '<link rel="icon" type="image/png" sizes="16x16" href="{fp}/favicon-16x16.png">\n'
-            '<link rel="icon" type="image/png" sizes="32x32" href="{fp}/favicon-32x32.png">\n'
-            '<link rel="icon" type="image/png" sizes="96x96" href="{fp}/favicon-96x96.png">\n'
-        ).format(fp=favpath)
+            out = value.render('html')
+            if link_to:
+                value.set_render_options(leave_includes_src=('tex' in link_to),
+                                         render_includes=('pdf' in link_to),
+                                         switched_item_mode='separate files')
+                if 'tex' in link_to or 'pdf' in link_to: value.render('latex')
+                if 'pkl' in link_to: value.render('python')
 
-    #Add inline or CDN javascript
-    if 'jqueryLIB' not in qtys:
-        qtys['jqueryLIB'] = insert_resource(
-            connected, "https://code.jquery.com/jquery-3.2.1.min.js", "jquery-3.2.1.min.js",
-            "sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=",
-            "anonymous")
+        else:  # switchboards usually
+            out = value.render('html')
 
-    if 'jqueryUILIB' not in qtys:
-        qtys['jqueryUILIB'] = insert_resource(
-            connected, "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jquery-ui.min.js",
-            "sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=",
-            "anonymous")
+        # Note: out is a dictionary of rendered portions
+        html = "<script>%(js)s</script>%(html)s" % out
 
-        qtys['jqueryUILIB'] += insert_resource(
-            connected, "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css",
-            "smoothness-jquery-ui.css")
-
-    if 'plotlyLIB' not in qtys:
-        qtys['plotlyLIB'] = insert_resource(
-            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-latest.min.js")
-
-    #if 'mathjaxLIB' not in qtys:
-    #    assert(connected),"MathJax cannot be used unless connected=True."
-    #    src = insert_resource(
-    #        connected, "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML",
-    #        None)
-    #
-    #    #this *might* need to go at the very top of the HTML page to work
-    #    qtys['mathjaxLIB'] = ('<script>'
-    #         'var waitForPlotly = setInterval( function() {'
-    #         '    if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){'
-    #         '            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });'
-    #         '            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);'
-    #         '            clearInterval(waitForPlotly);'
-    #         '    }}, 250 );'
-    #         '</script>')
-    #
-    #    qtys['mathjaxLIB'] += '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
-    #                         'tex2jax: {inlineMath: [["$","$"] ]} ' + \
-    #                         '}); </script>' + src + \
-    #                         '<style type="text/css"> ' + \
-    #                         '.MathJax_MathML {text-indent: 0;} ' + \
-    #                         '</style>'
-    #    # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
-
-    if 'masonryLIB' not in qtys:
-        qtys['masonryLIB'] = insert_resource(
-            connected, "https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js",
-            "masonry.pkgd.min.js")
-
-    if 'katexLIB' not in qtys:
-        qtys['katexLIB'] = insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
-            "katex.css")
-
-        qtys['katexLIB'] += insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
-            "katex.min.js")
-
-        qtys['katexLIB'] += insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
-            "auto-render.min.js")
-
-        if renderMath:
-            qtys['katexLIB'] += (
-                '\n<script>'
-                'document.addEventListener("DOMContentLoaded", function() {'
-                '  $("#status").show();\n'
-                '  $("#status").text("Rendering body math");\n'
-                '  $(".math").each(function() {\n'
-                '    console.log("Rendering KateX");\n'
-                '    var texTxt = $(this).text();\n'
-                '    el = $(this).get(0);\n'
-                '    if(el.tagName == "DIV"){\n'
-                '       addDisp = "\\displaystyle";\n'
-                '    } else {\n'
-                '    addDisp = "";\n'
-                '    }\n'
-                '    try {\n'
-                '      katex.render(addDisp+texTxt, el);\n'
-                '    }\n'
-                '    catch(err) {\n'
-                '      $(this).html("<span class=\'err\'>"+err);\n'
-                '    }\n'
-                '  });\n'
-                '});\n'
-                '</script>')
-
-    if 'plotlyexLIB' not in qtys:
-        qtys['plotlyexLIB'] = insert_resource(
-            connected, None, "pygsti_plotly_ex.js")
-
-    if 'dashboardLIB' not in qtys:
-        qtys['dashboardLIB'] = insert_resource(
-            connected, None, "pygsti_dashboard.js")
-
-    #Add inline CSS
-    if 'CSS' not in qtys:
-        qtys['CSS'] = "\n".join([insert_resource(
-            connected, None, cssFile)
-            for cssFile in CSSnames])
+    return html
 
 
 def render_as_html(qtys, render_options, link_to, verbosity):
@@ -412,27 +323,10 @@ def render_as_html(qtys, render_options, link_to, verbosity):
     printer = _VerbosityPrinter.build_printer(verbosity)
 
     #render quantities as HTML
-    qtys_html = _collections.defaultdict(lambda x=0: "OMITTED")
+    qtys_html = _collections.defaultdict(lambda: "OMITTED")
     for key, val in qtys.items():
-        if _compat.isstr(val):
-            qtys_html[key] = val
-        else:
-            with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
-                if hasattr(val, 'set_render_options'):
-                    val.set_render_options(**render_options)
-
-                    out = val.render("html")
-                    if link_to:
-                        val.set_render_options(leave_includes_src=('tex' in link_to),
-                                               render_includes=('pdf' in link_to))
-                        if 'tex' in link_to or 'pdf' in link_to: val.render("latex")
-                        if 'pkl' in link_to: val.render("python")
-
-                else:  # switchboards usually
-                    out = val.render("html")
-
-                # Note: out is a dictionary of rendered portions
-                qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
+        with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
+            qtys[key] = _render_as_html(val, render_options, link_to)
 
     return qtys_html
 
@@ -482,25 +376,137 @@ def render_as_latex(qtys, render_options, verbosity):
     return qtys_latex
 
 
-def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
-                        precision=None, link_to=None, connected=False, toggles=None,
-                        renderMath=True, resizable=True, autosize='none', verbosity=0,
-                        CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
-                                  "pygsti_fonts.css")):
+def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=None):
+    """Build a jinja2 environment for generating pyGSTi reports"""
+    try:
+        import jinja2  # import locally since we don't want to require jinja to import pygsti
+    except ImportError:
+        raise ImportError(("The 'jinja2' optional package is required to create pyGSTi "
+                           "reports, and appears to be missing.  Try 'pip install jinja2'."))
+
+    # Indirect access to offline template elements at generation time
+    offline_loader = jinja2.PackageLoader('pygsti', 'report/templates/offline/')
+
+    if templateDir is None:
+        # Use root packaged templates directory by default
+        loader = jinja2.PackageLoader('pygsti', 'report/templates/')
+
+    elif templateDir.startswith('~'):
+        # Assume path after ~ is relative to root packaged template directory
+        relpath = templateDir[1:]
+        loader = jinja2.PackageLoader('pygsti', _os.path.join('report/templates',relpath))
+
+    else:
+        # Use path as is.
+        loader = jinja2.FileSystemLoader(templateDir)
+
+    # Construct jinja2 environment
+    env = jinja2.Environment(
+        loader=loader,
+        autoescape=jinja2.select_autoescape(['html', 'xml'])
+    )
+
+    # jinja environment globals
+    def jinja_global(fn):
+        """Helper decorator for defining functions with global jinja visibility"""
+        env.globals[fn.__name__] = fn
+        return fn
+
+    def jinja_filter(fn):
+        """Helper decorator for defining jinja filters"""
+        env.filters[fn.__name__] = fn
+        return fn
+
+    @jinja_global
+    def static_ref(path):
+        """Render an href to a static resource"""
+        return static_path / path
+
+    @jinja_global
+    def offline_file(filename):
+        """Embed an offline file's contents directly in the document, in a script tag."""
+        # XXX we gotta find a better way, this is so wild dude
+        contents = offline_loader.get_source(env, filename)[0]
+        return jinja2.Markup(contents)
+
+    @jinja_filter
+    @jinja2.evalcontextfilter
+    def render(eval_ctx, value):
+        html = _render_as_html(value, render_options or {}, link_to)
+        return jinja2.Markup(html) if eval_ctx.autoescape else html
+
+    return env
+
+
+def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='main.html',
+                         auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
+                         renderMath=True, resizable=True, autosize='none', verbosity=0):
     """
-    Renders `qtys` and merges them into `templateFilename`, saving the output as
-    `outputFilename`.
+    Renders `qtys` and merges them into a single HTML file `outputFilename`.
+    This functions parameters are the same as those of :func:`merge_jinja_template_dir`.
+
+    Returns
+    -------
+    None
+    """
+
+    assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
+    out_file = Path(outputFilename).absolute()
+    out_path = out_file.parent
+    static_path = out_path / 'offline'
+
+    #Copy offline directory into position
+    if not connected:
+        rsync_offline_dir(str(out_path))
+
+    if link_to is not None:
+        figDir = out_path / (out_file.stem + '.figures')
+        figDir.mkdir(exist_ok=True)
+    else:
+        figDir = None
+
+    env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
+                          render_options=dict(switched_item_mode="inline",
+                                              global_requirejs=False,
+                                              within_report=True,
+                                              resizable=resizable, autosize=autosize,
+                                              output_dir=figDir, link_to=link_to,
+                                              precision=precision),
+                          link_to=link_to
+    )
+
+    # Template rendering parameters are the given qtys plus a 'config' dict
+    render_params = {
+        **qtys,
+        'config': {
+            **(toggles or {})
+            # TODO whatever should be in config namespace
+        }
+    }
+
+    # Render main page template to output path
+    template = env.get_template(templateName)
+    with open(outputFilename, 'w') as outfile:
+        outfile.write(template.render(render_params))
+
+
+def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html',
+                             auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
+                             renderMath=True, resizable=True, autosize='none', verbosity=0):
+    """
+    Renders `qtys` and merges them into the HTML files under `templateDir`,
+    saving the output under `outputDir`.
 
     Parameters
     ----------
     qtys : dict
         A dictionary of workspace quantities (switchboards and outputs).
 
-    templateFilename : str
-        The template filename, relative to pyGSTi's `templates` directory.
+    outputDir : str
+        The merged-output directory..
 
-    outputFilename : str
-        The merged-output filename.
+    templateDir : str, optional
+        The template filename, relative to pyGSTi's `templates` directory.
 
     auto_open : bool, optional
         Whether the output file should be automatically opened in a web browser.
@@ -540,129 +546,49 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
     verbosity : int, optional
         Amount of detail to print to stdout.
 
-    CSSnames : list or tuple, optional
-        A list or tuple of the CSS files (relative to pyGSTi's
-        `templates/offline` folder) to insert as resources into
-        the template.
-
     Returns
     -------
     None
     """
-    printer = _VerbosityPrinter.build_printer(verbosity)
 
-    assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
-    outputDir = _os.path.dirname(outputFilename)
-
-    fig_dir = outputFilename + ".files"
-    if not _os.path.isdir(fig_dir):
-        _os.mkdir(fig_dir)
+    # Create output directory if it does not already exist
+    out_path = Path(outputDir).absolute()
+    out_path.mkdir(parents=True, exist_ok=True)
+    static_path = out_path / 'offline'
 
     #Copy offline directory into position
     if not connected:
         rsync_offline_dir(outputDir)
 
-    fill_std_qtys(qtys, connected, renderMath, CSSnames)
+    if link_to is not None:
+        figDir = out_path / 'figures'
+        figDir.mkdir(exist_ok=True)
+    else:
+        figDir = None
 
-    #render quantities as HTML
-    qtys_html = render_as_html(qtys, dict(switched_item_mode="inline",
-                                          global_requirejs=False,
-                                          resizable=resizable, autosize=autosize,
-                                          output_dir=fig_dir, link_to=link_to,
-                                          precision=precision), link_to, printer)
+    env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
+                          render_options=dict(switched_item_mode="inline",
+                                              global_requirejs=False,
+                                              within_report=True,
+                                              resizable=resizable, autosize=autosize,
+                                              output_dir=figDir, link_to=link_to,
+                                              precision=precision),
+                          link_to=link_to
+    )
 
-    fullTemplateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                         "templates", templateFilename)
-    template = read_and_preprocess_template(fullTemplateFilename, toggles)
+    # Template rendering parameters are the given qtys plus a 'config' dict
+    render_params = {
+        **qtys,
+        'config': {
+            **(toggles or {})
+            # TODO whatever should be in config namespace
+        }
+    }
 
-    #Do actual fill -- everything needs to be unicode at this point.
-    filled_template = template % qtys_html
-    #.format_map(qtys_html) #need python 3.2+
-
-    if _sys.version_info <= (3, 0):  # Python2: need to re-encode for write(...)
-        filled_template = filled_template.encode('utf-8')
-
-    with open(outputFilename, 'w') as outputfile:
-        outputfile.write(filled_template)
-
-    printer.log("Output written to %s" % outputFilename)
-
-    if auto_open:
-        url = 'file://' + _os.path.abspath(outputFilename)
-        printer.log("Opening %s..." % outputFilename)
-        _webbrowser.open(url)
-
-
-def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
-                            precision=None, link_to=None, connected=False, toggles=None,
-                            renderMath=True, resizable=True, autosize='none', verbosity=0,
-                            CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
-                                      "pygsti_fonts.css")):
-    """
-    Renders `qtys` and merges them into the HTML files under `templateDir`,
-    saving the output under `outputDir`.  This functions parameters are the
-    same as those of :func:`merge_html_template_dir.
-
-    Returns
-    -------
-    None
-    """
-    printer = _VerbosityPrinter.build_printer(verbosity)
-
-    #Create directories if needed; otherwise clear it
-    figDir = makeEmptyDir(_os.path.join(outputDir, 'figures'))
-    tabDir = makeEmptyDir(_os.path.join(outputDir, 'tabs'))
-
-    #FIX
-    ##clear offline dir if it exists
-    #offlineDir = _os.path.join(outputDir, 'offline')
-    #if _os.path.isdir(offlineDir):
-    #    _clearDir(offlineDir)
-    #    _os.rmdir(offlineDir) #otherwise rsync doesn't work (?)
-
-    #Copy offline directory into position
-    if not connected:
-        rsync_offline_dir(outputDir)
-
-    fill_std_qtys(qtys, connected, renderMath, CSSnames)
-
-    #render quantities as HTML
-    qtys_html = render_as_html(qtys, dict(switched_item_mode="separate files",
-                                          global_requirejs=False,
-                                          resizable=resizable, autosize=autosize,
-                                          output_dir=figDir, link_to=link_to,
-                                          precision=precision), link_to, printer)
-
-    #Insert qtys into template file(s)
-    baseTemplateDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "templates", templateDir)
-    templateFilenames = [fn for fn in _os.listdir(baseTemplateDir) if fn.endswith(".html")]
-    outputFilenames = []
-    for fn in templateFilenames:
-        outfn = _os.path.join(outputDir, fn) if (fn == 'main.html') else \
-            _os.path.join(tabDir, fn)
-        outputFilenames.append(outfn)
-
-    for templateFilename, outputName in zip(templateFilenames, outputFilenames):
-        templateFilename = _os.path.join(baseTemplateDir, templateFilename)
-        template = read_and_preprocess_template(templateFilename, toggles)
-
-        #Do actual fill -- everything needs to be unicode at this point.
-        filled_template = template % qtys_html
-        #.format_map(qtys_html) #need python 3.2+
-
-        if _sys.version_info <= (3, 0):  # Python2: need to re-encode for write(...)
-            filled_template = filled_template.encode('utf-8')
-
-        with open(outputName, 'w') as outputfile:
-            outputfile.write(filled_template)
-
-    printer.log("Output written to %s directory" % outputDir)
-
-    if auto_open:
-        outputFilename = _os.path.join(outputDir, 'main.html')
-        url = 'file://' + _os.path.abspath(outputFilename)
-        printer.log("Opening %s..." % outputFilename)
-        _webbrowser.open(url)
+    # Render main page template to output path
+    template = env.get_template(templateName)
+    with open(out_path / templateName, 'w') as outfile:
+        outfile.write(template.render(render_params))
 
 
 def process_call(call):

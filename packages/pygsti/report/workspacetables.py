@@ -20,6 +20,7 @@ from . import reportables as _reportables
 from .reportables import evaluate as _ev
 from ..baseobjs import Label as _Lbl
 from ..baseobjs import DirectSumBasis as _DirectSumBasis
+from ..algorithms import gaugeopt as _gopt
 
 from .table import ReportTable as _ReportTable
 
@@ -343,7 +344,6 @@ class GatesTable(WorkspaceTable):
                 label_op_tups.append( (il + "." + comp_lbl, tup_of_ops) )
         
         for lbl, per_model_ops in label_op_tups:
-            #Note: currently, we don't use confidence region...
             row_data = [lbl]
             row_formatters = [None]
 
@@ -533,6 +533,257 @@ class ChoiTable(WorkspaceTable):
                         row_formatters.append('Figure')
 
             table.addrow(row_data, row_formatters)
+        table.finish()
+        return table
+
+
+class GaugeRobustModelTable(WorkspaceTable):
+    """ Create a table showing a model in a gauge-robust representation. """
+
+    def __init__(self, ws, model, target_model, display_as="boxes",
+                 confidenceRegionInfo=None):
+        """
+        Create a table showing a gauge-invariant representation of a model.
+
+        Parameters
+        ----------
+        model : Model
+            The Model to display.
+
+        target_model : Model
+            The (usually ideal) reference model to compute gauge-invariant
+            quantities with respect to.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the operation matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored
+            boxes (space-conserving and better for large matrices).
+
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(GaugeRobustModelTable, self).__init__(ws, self._create, model, target_model,
+                                                    display_as, confidenceRegionInfo)
+
+    def _create(self, model, target_model, display_as, confidenceRegionInfo):
+
+        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        opLabels = model.get_primitive_op_labels()  # use labels of 1st model
+
+        colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % lbl for lbl in opLabels]
+        formatters = [None] * len(colHeadings)
+        confidenceRegionInfo = None #Don't deal with CIs yet...
+
+        def get_gig_decomp(mx, tmx):  #"Gauge invariant gateset" decomposition
+            G0, G = tmx, mx
+            ev0, U0 = _tools.sorted_eig(G0)
+            ev, U = _tools.sorted_eig(G)
+            U0inv = _np.linalg.inv(U0)
+            Uinv = _np.linalg.inv(U)
+
+            kite = _tools.get_kite(ev0)
+            
+            F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite) # Uinv * F * U0 is block diag
+            Finv = _np.linalg.inv(F)
+            # if G0 = U0 * E0 * U0inv then
+            # Uinv * F * G0 * Finv * U = D * E0 * Dinv = E0 b/c D is block diagonal w/E0's degenercies
+            # so F * G0 * Finv = U * E0 * Uinv = Gp ==> Finv * G * F = M * G0
+            M = _np.dot(Finv, _np.dot(G, _np.dot(F, _np.linalg.inv(G0))))
+            assert(_np.linalg.norm(M.imag) < 1e-8)
+            
+            M0 = _np.dot(U0inv, _np.dot(M, U0)) # M in G0's eigenbasis
+            assert(_np.linalg.norm(_tools.project_onto_antikite(M0,kite)) < 1e-8)  # should be block diagonal
+            assert(_np.allclose(G, _np.dot(F,_np.dot(M, _np.dot(G0,Finv))))) # this is desired decomp
+            assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everthing should be real
+            return F,M,Finv
+
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+        I = _np.identity(model.dim, 'd')
+
+        M = 0.0  # max abs for colorscale
+        op_decomps = {}
+        for gl in opLabels:
+            op_decomps[gl] = get_gig_decomp(model.operations[gl].todense(),
+                                            target_model.operations[gl].todense())
+            M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
+
+        for i, lbl in enumerate(opLabels):
+            for j, lbl2 in enumerate(opLabels):
+                if i == j: continue
+                val = _np.dot(op_decomps[lbl][2], op_decomps[lbl2][0]) - I  # value plotted below
+                M = max(M, max(_np.abs(val).flat))  # update max
+
+        #FUTURE: instruments too?
+        for i,lbl in enumerate(opLabels):
+            row_data = [lbl]
+            row_formatters = [None]
+            basis = model.basis
+            Fi,Mi,Finvi = op_decomps[lbl]
+
+            #Print "M" matrix
+            if display_as == "numbers":
+                row_data.append(Mi - I)
+                row_formatters.append('Brackets')
+            elif display_as == "boxes":
+                fig = _wp.GateMatrixPlot(self.ws, Mi - I, -M, M, colorbar=False)
+                row_data.append(fig)
+                row_formatters.append('Figure')
+            else:
+                raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
+            for j,lbl2 in enumerate(opLabels):
+                if i == j:
+                    row_data.append("0")
+                    row_formatters.append(None)
+                else:
+                    val = _np.dot(Finvi, op_decomps[lbl2][0])
+
+                    #Print "Finv*F" matrix
+                    if display_as == "numbers":
+                        row_data.append(val - I)
+                        row_formatters.append('Brackets')
+                    elif display_as == "boxes":
+                        fig = _wp.GateMatrixPlot(self.ws, val - I, -M, M, colorbar=False)
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
+                    else:
+                        raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
+            table.addrow(row_data, row_formatters)
+
+        table.finish()
+        return table
+
+
+class GaugeRobustMetricTable(WorkspaceTable):
+    """ Create a table showing a standard metric in a gauge-robust way. """
+
+    def __init__(self, ws, model, target_model, metric,
+                 confidenceRegionInfo=None):
+        """
+        Create a table showing a standard metric in a gauge-robust way.
+
+        Parameters
+        ----------
+        model : Model
+            The Model to display.
+
+        target_model : Model
+            The (usually ideal) reference model to compute gauge-invariant
+            quantities with respect to.
+
+        metric : str
+            The abbreviation for the metric to use.  Allowed values are:
+
+            - "inf" :     entanglement infidelity
+            - "agi" :     average gate infidelity
+            - "trace" :   1/2 trace distance
+            - "diamond" : 1/2 diamond norm distance
+            - "nuinf" :   non-unitary entanglement infidelity
+            - "nuagi" :   non-unitary entanglement infidelity
+            - "evinf" :     eigenvalue entanglement infidelity
+            - "evagi" :     eigenvalue average gate infidelity
+            - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+            - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+            - "evdiamond" : eigenvalue 1/2 diamond norm distance
+            - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+            - "frob" :    frobenius distance
+
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(GaugeRobustMetricTable, self).__init__(ws, self._create, model, target_model,
+                                                     metric, confidenceRegionInfo)
+
+    def _create(self, model, target_model, metric, confidenceRegionInfo):
+
+        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        opLabels = model.get_primitive_op_labels()
+
+        colHeadings = [''] + ['%s' % lbl for lbl in opLabels]
+        formatters = [None] * len(colHeadings)
+        confidenceRegionInfo = None  # Don't deal with CIs yet...
+
+        # Table will essentially be a matrix whose diagonal elements are
+        # --> metric(GateA_in_As_best_gauge, TargetA)
+        #     where a "best gauge" of a gate is one where it is co-diagonal with its target (same evecs can diag both).
+        # Off-diagonal elements are given by:
+        # --> min( metric(TargetA_in_Bs_best_gauge, TargetA), metric(TargetB_in_As_best_gauge, TargetB) )
+        #
+        # Thus, the diagonal elements tell us how much worse a (target) gate gets when just it's eigenvalues are
+        # replaced with those of the actual estimated gate, and the off-diagonal elements tell us the least amount of
+        # damage that must be done to a pair of (target) gates when just changing their eigenvectors to be consistent
+        # with the actual estimated gates.
+
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+
+        orig_model = model.copy()
+        orig_model.set_all_parameterizations("full")  # so we can freely gauge transform this
+        orig_target = target_model.copy()
+        orig_target.set_all_parameterizations("full")  # so we can freely gauge transform this
+
+        mdl_in_best_gauge = []
+        target_mdl_in_best_gauge = []
+        for lbl in opLabels:
+            gate_mx = orig_model.operations[lbl].todense()
+            target_gate_mx = target_model.operations[lbl].todense()
+            Ugauge = _tools.get_a_best_case_gauge_transform(gate_mx, target_gate_mx)
+            Ugg = _objs.FullGaugeGroupElement(_np.linalg.inv(Ugauge))  # transforms gates as Ugauge * gate * Ugauge_inv
+
+            mdl = orig_model.copy()
+            mdl.transform(Ugg)
+            _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target,
+                                                        itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
+                                                        returnAll=True)  # ADDITIONAL GOPT
+            mdl_in_best_gauge.append(mdl)
+
+            target_mdl = orig_target.copy()
+            target_mdl.transform(Ugg)
+            target_mdl.transform(Ugg_addl)  # ADDITIONAL GOPT
+            target_mdl_in_best_gauge.append(target_mdl)
+
+        #FUTURE: instruments too?
+        for i, lbl in enumerate(opLabels):
+            row_data = [lbl]
+            row_formatters = [None]
+
+            for j, lbl2 in enumerate(opLabels):
+                if i > j:  # leave lower diagonal blank
+                    el = _objs.reportableqty.ReportableQty(_np.nan)
+                elif i == j:  # diagonal element
+                    el = _reportables.evaluate_opfn_by_name(
+                        metric, mdl_in_best_gauge[i], target_model, lbl, confidenceRegionInfo)
+                else:  # off-diagonal element
+                    el1 = _reportables.evaluate_opfn_by_name(
+                        metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2, confidenceRegionInfo)
+                    el2 = _reportables.evaluate_opfn_by_name(
+                        metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidenceRegionInfo)
+                    el = _objs.reportableqty.minimum(el1, el2)
+
+                    #DEBUGGING infidelity - which doesn't behave well all the time, as min(.) will pick a "bad" negative infidelity value?
+                    #el1.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl], target_mdl_in_best_gauge[j][lbl], 'pp') # DEBUG
+                    #el2.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl2], target_mdl_in_best_gauge[j][lbl2], 'pp') # DEBUG
+                    #print("OFF DIAG: (%s)\n" % lbl, target_mdl_in_best_gauge[i][lbl],"\n", target_mdl_in_best_gauge[j][lbl])
+                    #print("OFF DIAG2 (%s): \n" % lbl2, target_mdl_in_best_gauge[i][lbl2],"\n", target_mdl_in_best_gauge[j][lbl2])
+                    #print("VALS = ",el1.value, el2.value, _np.linalg.norm(target_mdl_in_best_gauge[i][lbl] - target_mdl_in_best_gauge[j][lbl]),
+                    #      _np.linalg.norm(target_mdl_in_best_gauge[i][lbl2] - target_mdl_in_best_gauge[j][lbl2]))
+                    ##import bpdb; bpdb.set_trace()
+
+                row_data.append(el)
+                row_formatters.append('Normal')
+
+            table.addrow(row_data, row_formatters)
+
         table.finish()
         return table
 
@@ -1259,7 +1510,7 @@ class NQubitErrgenTable(WorkspaceTable):
                         hamCoeffs_fig = _wp.MatrixPlot(
                             self.ws, hamCoeffs, m, M, xlabels, ylabels,
                             boxLabels=True, prec="compacthp")
-                        row_data.append(hamCoeffs_fig)  # HERE
+                        row_data.append(hamCoeffs_fig)
                         row_formatters.append('Figure')
                     else:
                         row_data.append(hamCoeffs)
@@ -2683,6 +2934,38 @@ class ProfilerTable(WorkspaceTable):
 
             for nm in timerNames:
                 table.addrow((nm, profiler.timers[nm]), (None, None))
+
+        table.finish()
+        return table
+
+class WildcardBudgetTable(WorkspaceTable):
+    """ Table of wildcard budget information """
+
+    def __init__(self, ws, budget):
+        """
+        Create a table of wildcard budget information.
+
+        Parameters
+        ----------
+        budget : WildcardBudget
+            The wildcard budget object to extract timings from.
+
+        sortBy : {"time", "name"}
+            What the timer values should be sorted by.
+        """
+        super(WildcardBudgetTable, self).__init__(ws, self._create, budget)
+
+    def _create(self, budget):
+
+        colHeadings = ('Element', 'Description', 'Budget')
+        formatters = ('Bold', 'Bold', 'Bold')
+
+        #custom latex header for maximum width imposed on 2nd col
+        table = _ReportTable(colHeadings, formatters)
+
+        if budget is not None:
+            for nm, (desc, val) in budget.get_descriptive_dict().items():
+                table.addrow((nm, desc, val), (None, None, None))
 
         table.finish()
         return table

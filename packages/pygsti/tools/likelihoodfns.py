@@ -163,8 +163,11 @@ def logl_terms(model, dataset, circuit_list=None,
     nEls = evalTree.num_final_elements()
     probs = _np.zeros(nEls, 'd')  # _np.empty( nEls, 'd' ) - .zeros b/c of caching
 
-    ds_circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    if opLabelAliases:
+        ds_circuit_list = _lt.find_replace_tuple_list(
+            circuit_list, opLabelAliases)
+    else:
+        ds_circuit_list = circuit_list
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
@@ -1169,25 +1172,20 @@ def logl_max_terms(model, dataset, circuit_list=None,
         evalTree = evaltree_cache['evTree']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
-
-        #construct raw_dict & nEls from tree (holds keys & vals separately)
-        #tree_circuit_list = evalTree.generate_circuit_list()
-        # Note: this is != circuit_list, as the tree hold *simplified* circuits
-        #raw_dict = _OrderedDict(list(zip(circuit_list,
-        #                                 evalTree.simplified_circuit_spamTuples)))
         nEls = evalTree.num_final_elements()
     else:
         if circuit_list is None:
             circuit_list = list(dataset.keys())
 
-        raw_dict, lookup, outcomes_lookup, nEls = \
+        _, lookup, outcomes_lookup, nEls = \
             smart(model.simplify_circuits, circuit_list, dataset)
         #Note: we don't actually need an evaltree, so we
         # won't make one here and so won't fill an empty
         # evaltree_cache.
 
-    circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    if opLabelAliases is not None:
+        circuit_list = _lt.find_replace_tuple_list(
+            circuit_list, opLabelAliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']

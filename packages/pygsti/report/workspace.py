@@ -30,7 +30,16 @@ from . import plotly_plot_ex as _plotly_ex
 from . import merge_helpers as _merge
 
 from pprint import pprint as _pprint
-#from IPython.display import clear_output as _clear_output
+
+try:
+    from IPython.core.display import display as _display
+    from IPython.core.display import HTML as _HTML
+    #from IPython.display import clear_output as _clear_output
+    in_ipython_notebook = True
+except ImportError:
+    in_ipython_notebook = False
+
+
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
@@ -287,6 +296,8 @@ class Workspace(object):
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
         self.ErrgenTable = makefactory(_wt.ErrgenTable)
         self.GaugeRobustErrgenTable = makefactory(_wt.GaugeRobustErrgenTable)
+        self.GaugeRobustModelTable = makefactory(_wt.GaugeRobustModelTable)
+        self.GaugeRobustMetricTable = makefactory(_wt.GaugeRobustMetricTable)
         self.NQubitErrgenTable = makefactory(_wt.NQubitErrgenTable)
         self.StandardErrgenTable = makefactory(_wt.StandardErrgenTable)
 
@@ -298,6 +309,7 @@ class Workspace(object):
 
         # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
+        self.WildcardBudgetTable = makefactory(_wt.WildcardBudgetTable)
 
         #Specifically designed for reports
         self.BlankTable = makefactory(_wt.BlankTable)
@@ -365,11 +377,8 @@ class Workspace(object):
         -------
         None
         """
-        try:
-            from IPython.core.display import display as _display
-            from IPython.core.display import HTML as _HTML
-        except ImportError:
-            raise ImportError('Only run `init_notebook_mode` from inside an IPython Notebook.')
+        if not in_ipython_notebook:
+            raise ValueError('Only run `init_notebook_mode` from inside an IPython Notebook.')
 
         global _PYGSTI_WORKSPACE_INITIALIZED
 
@@ -688,7 +697,7 @@ class Switchboard(_collections.OrderedDict):
     """
 
     def __init__(self, ws, switches, positions, types, initial_pos=None,
-                 descriptions=None, show="all", ID=None):
+                 descriptions=None, show="all", ID=None, within_report=False):
         """
         Create a new Switchboard.
 
@@ -740,6 +749,7 @@ class Switchboard(_collections.OrderedDict):
         self.switchIDs = ["switchbd%s_%d" % (self.ID, i)
                           for i in range(len(switches))]
         self.positionLabels = positions
+        self.within_report = within_report
         if initial_pos is None:
             self.initialPositions = _np.array([0] * len(switches), _np.int64)
         else:
@@ -1038,8 +1048,13 @@ class Switchboard(_collections.OrderedDict):
             switch_js.append(js)
 
         html = "\n".join(switch_html)
-        js = "$(document).ready(function() {\n" +\
-             "\n".join(switch_js) + "\n});"
+        if not self.within_report:  #run JS as soon as the document is ready
+            js = "$(document).ready(function() {\n" + \
+                "\n".join(switch_js) + "\n});"
+        else:  #in a report, where we have a 'loadable' parent and might not want to load right away
+            js = "$(document).ready(function() {\n" + \
+                 "$('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID + \
+                "\n".join(switch_js) + "\n}); });"
 
         return {'html': html, 'js': js}
 
@@ -1108,8 +1123,8 @@ class Switchboard(_collections.OrderedDict):
         -------
         None
         """
-        from IPython.display import display as _display
-        from IPython.display import HTML as _HTML
+        if not in_ipython_notebook:
+            raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         #if self.widget is None:
         #    self.widget = _widgets.HTMLMath(value="?",
@@ -1237,8 +1252,8 @@ class SwitchboardView(object):
         -------
         None
         """
-        from IPython.display import display as _display
-        from IPython.display import HTML as _HTML
+        if not in_ipython_notebook:
+            raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         out = self.render("html")
         content = "<script>\n" + \
@@ -1334,6 +1349,7 @@ class WorkspaceOutput(object):
 
         #HTML specific
         'global_requirejs': False,
+        'within_report': False,
         'click_to_display': False,
         'render_math': True,
         'resizable': True,
@@ -1514,10 +1530,11 @@ class WorkspaceOutput(object):
         """
         Display this object within an iPython notebook.
         """
-        from IPython.display import display as _display
-        from IPython.display import HTML as _HTML
+        if not in_ipython_notebook:
+            raise ValueError('Only run `display` from inside an IPython Notebook.')
 
-        self.set_render_options(global_requirejs=True)  # b/c jupyter uses require.js
+        self.set_render_options(global_requirejs=True,
+                                output_dir=None)  # b/c jupyter uses require.js
         out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
@@ -1561,16 +1578,24 @@ class WorkspaceOutput(object):
         """ Cached-computation using self.ws's smart cache """
         return self.ws.smartCache.cached_compute(fn, args, kwargs)[1]
 
-    def _create_onready_handler(self, content):
+    def _create_onready_handler(self, content, ID):
         global_requirejs = self.options.get('global_requirejs', False)
+        within_report = self.options.get('within_report', False)
         ret = ""
 
         if global_requirejs:
             ret += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
 
         ret += '  $(document).ready(function() {\n'
+        if within_report:
+            ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
+            
         ret += content
-        ret += '}); //end on-ready handler\n'
+        
+        if within_report:
+            ret += "  });"  # end load_loadable_item handler
+            
+        ret += '}); //end on-ready or on-load handler\n'
 
         if global_requirejs:
             ret += '}); //end require block\n'
@@ -1579,7 +1604,7 @@ class WorkspaceOutput(object):
 
     def _render_html(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
                      switchboards, switchIndices, div_css_classes=None,
-                     link_to=None, lod_files=False, output_dir=None):
+                     link_to=None, link_to_files_dir=None):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
@@ -1626,12 +1651,9 @@ class WorkspaceOutput(object):
             include links to Latex, PDF, and Python pickle files,
             respectively.
 
-        lod_files : bool, optional
-            If True, each element of `div_htmls` is used to create a separate
-            "load-on-demand" html file that is loaded and inserted into the
-            main html document the first time it is needed.  If False, then
-            the elements of `div_htmls` are joined together and placed
-            directly into the main document.
+        link_to_files_dir : str, optional
+            The directory to place linked-to files in. Only used when
+            `link_to` is not None.
 
         Returns
         -------
@@ -1640,6 +1662,8 @@ class WorkspaceOutput(object):
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
 
+        within_report = self.options.get('within_report', False)
+        
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
         if div_css_classes is not None:
@@ -1658,24 +1682,10 @@ class WorkspaceOutput(object):
             div_contents.append(("{script}{html}".format(
                 script=scriptJS, html=divHTML)))
 
-        if lod_files:
-            #Create empty divs
-            html += "\n".join(["<div class='%s' id='%s'></div>\n" %
-                               (cls, divID) for divID in div_ids])
-
-            #build a list of filenames based on the divIDs
-            div_filenames = [(divID + ".html") for divID in div_ids]
-
-            #Create separate files with div contents
-            for divContent, divFilenm in zip(div_contents, div_filenames):
-                with open(_os.path.join(output_dir, divFilenm), 'w') as f:
-                    f.write(divContent)
-        else:
-            #Inline div contents
-            html += "\n".join(["<div class='%s' id='%s'>\n%s\n</div>\n" %
-                               (cls, divID, divContent) for divID, divContent
-                               in zip(div_ids, div_contents)])
-
+        #Inline div contents
+        html += "\n".join(["<div class='%s' id='%s'>\n%s\n</div>\n" %
+                           (cls, divID, divContent) for divID, divContent
+                           in zip(div_ids, div_contents)])
         html += "\n</div>\n"  # ends pygsti-wsoutput-group div
 
         #build javascript to map switch positions to div_ids
@@ -1721,38 +1731,11 @@ class WorkspaceOutput(object):
         handler_js += "  divToShow = $( '#' + idToShow );\n"
 
         #Javascript to switch to a new div
-        if lod_files:
-            handler_js += "  if( divToShow.children().length == 0 ) {\n"
-            handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
-            handler_js += "        divToShow = $( '#' + idToShow );\n"
-            handler_js += "        divToShow.show();\n"
-            handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
-            if link_to and ('tex' in link_to):
-                handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-                handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
-            if link_to and ('pdf' in link_to):
-                handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-                handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-            if link_to and ('pkl' in link_to):
-                handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-                handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
-            handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-            handler_js += "    });\n"  # end load-complete handler
-            handler_js += "  }\n"
-            handler_js += "  else {\n"
-            handler_js += "    divToShow.show();\n"
-            handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
-            handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-            handler_js += "  }\n"
-            #Note: caption resizing also occurs after table & plot creation within
-            # pygsti_plotly_ex.js trigger_* functions.
-        else:
-            handler_js += "  divToShow.show();\n"
-            handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
-            handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+        handler_js += "  divToShow.show();\n"
+        handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
+        handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
+        handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+        
         handler_js += "}\n"  # end <ID>_onchange function
 
         #build change event listener javascript
@@ -1779,22 +1762,24 @@ class WorkspaceOutput(object):
         js += "};\n"  # end of connect function
 
         #on-ready handler starts trying to connect to switches
+        # - note this is already in a 'load_loadable_item' handler, so no need for that here
         js += "$(document).ready(function() {\n"
         js += "  connect_%s_to_switches();\n" % ID
 
-        if not lod_files:
+        if link_to:
             # Add download links for all divs at once since they're all ready
-            if link_to and ('tex' in link_to):
+            rel_figure_dir = _os.path.basename(link_to_files_dir)
+            if 'tex' in link_to:
                 for div_id in div_ids:
-                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                    js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
-            if link_to and ('pdf' in link_to):
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
+                    js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n" % div_id
+            if 'pdf' in link_to:
                 for div_id in div_ids:
-                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                    js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-            if link_to and ('pkl' in link_to):
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
+                    js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n" % div_id
+            if 'pkl' in link_to:
                 for div_id in div_ids:
-                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
                     js += "%s.pkl\" target=\"_blank\">&#9660;PKL</a>');\n" % div_id
 
         js += "});\n\n"  # end on-ready handler
@@ -1940,12 +1925,11 @@ class WorkspaceTable(WorkspaceOutput):
                                               sciprecision=precDict['sci'],
                                               resizable=resizable, autosize=(autosize == "continual"),
                                               click_to_display=self.options['click_to_display'],
-                                              link_to=self.options['link_to'])
+                                              link_to=self.options['link_to'],
+                                              output_dir=output_dir)
 
                 if switched_item_mode == 'separate files':
-                    # form entire table init JS as _render_html will put this in a separate file
-                    divJS.append(self._form_table_js(
-                        tableDivID, table_dict['html'], table_dict['js'], None))
+                    raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
                 else:
                     #otherwise just add plot handers (table_dict['js']) to divJS for later
                     divJS.append(table_dict['js'])
@@ -1956,16 +1940,12 @@ class WorkspaceTable(WorkspaceOutput):
             if switched_item_mode == 'inline':
                 base = self._render_html(tableID, divHTML, None, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, None,
-                                         self.options.get('link_to', None))  # no JS yet...
+                                         self.options.get('link_to', None), output_dir)  # no JS yet...
                 js = self._form_table_js(tableID, base['html'], '\n'.join(divJS), base['js'])
                 # creates JS for everything: plot creation, switchboard init, autosize
 
             elif switched_item_mode == 'separate files':
-                assert(output_dir), "Cannot render 'html' in separate files without a valid 'output_dir' render option"
-                base = self._render_html(tableID, divHTML, divJS, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices, None,
-                                         self.options.get('link_to', None), True, output_dir)
-                js = self._form_table_js(tableID, None, None, base['js'])  # just switchboard init & autosize
+                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2158,7 +2138,7 @@ class WorkspaceTable(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
-            _merge.merge_html_template(qtys, "standalone.html", filename,
+            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html", 
                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
@@ -2257,7 +2237,7 @@ class WorkspaceTable(WorkspaceOutput):
             #Note: this MUST be below plot handler init, when it triggers plot creation
             content += init_table_js
 
-        return self._create_onready_handler(content)
+        return self._create_onready_handler(content, tableID)
 
 
 class WorkspacePlot(WorkspaceOutput):
@@ -2373,7 +2353,8 @@ class WorkspacePlot(WorkspaceOutput):
                         fig.plotlyfig, show_link=False, resizable=resizable,
                         lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
-                        link_to=self.options['link_to'], link_to_id=plotDivID)
+                        link_to=self.options['link_to'], link_to_id=plotDivID,
+                        rel_figure_dir=_os.path.basename(output_dir) if (output_dir is not None) else None)
 
                 if switched_item_mode == 'separate files':
                     assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file
@@ -2394,14 +2375,7 @@ class WorkspacePlot(WorkspaceOutput):
                     js = self._form_plot_js(plotID, '\n'.join(divJS), base['js'])
 
             elif switched_item_mode == 'separate files':
-                assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file
-                assert('output_dir' in self.options and self.options['output_dir']), \
-                    "Cannot render 'html' in separate files without a valid 'output_dir' render option"
-                base = self._render_html(plotID, divHTML, divJS, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices, [relwrap_cls],
-                                         None, True, self.options['output_dir'])
-                # Don't link_to b/c plots will all have download buttons
-                js = self._form_plot_js(plotID, None, base['js'])
+                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2533,7 +2507,7 @@ class WorkspacePlot(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
-            _merge.merge_html_template(qtys, "standalone.html", filename,
+            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
@@ -2596,7 +2570,7 @@ class WorkspacePlot(WorkspaceOutput):
             content += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
                 plotID=plotID, initautosize=str(autosize in ("initial", "continual")).lower())
 
-        return self._create_onready_handler(content)
+        return self._create_onready_handler(content, plotID)
 
 
 class WorkspaceText(WorkspaceOutput):
@@ -2671,9 +2645,7 @@ class WorkspaceText(WorkspaceOutput):
                     text_dict = text.render("html", textDivID)
 
                 if switched_item_mode == 'separate files':
-                    # form entire text init JS as _render_html will put this in a separate file
-                    divJS.append(self._form_text_js(
-                        textDivID, text_dict['html'], None))
+                    raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
                 #else: divJS is unused
 
                 divHTML.append(text_dict['html'])
@@ -2682,16 +2654,12 @@ class WorkspaceText(WorkspaceOutput):
             if switched_item_mode == 'inline':
                 base = self._render_html(textID, divHTML, None, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, None,
-                                         self.options.get('link_to', None))  # no JS yet...
+                                         self.options.get('link_to', None), output_dir)  # no JS yet...
                 js = self._form_text_js(textID, base['html'], base['js'])
                 # creates JS for everything: plot creation, switchboard init, autosize
 
             elif switched_item_mode == 'separate files':
-                assert(output_dir), "Cannot render 'html' in separate files without a valid 'output_dir' render option"
-                base = self._render_html(textID, divHTML, divJS, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices, None,
-                                         self.options.get('link_to', None), True, output_dir)
-                js = self._form_text_js(textID, None, base['js'])  # just switchboard init & autosize
+                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2850,7 +2818,7 @@ class WorkspaceText(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
-            _merge.merge_html_template(qtys, "standalone.html", filename,
+            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
@@ -2918,7 +2886,7 @@ class WorkspaceText(WorkspaceOutput):
                 'el = $("#{textid}");\n'
                 'if(el.hasClass("pygsti-wsoutput-group")) {{\n'
                 '  el.children("div.single_switched_value").each( function(i,el){{\n'
-                '    CollapsibleLists.applyTo( el.find("ul").first()[0] );\n'
+                '    CollapsibleLists.applyTo( $(el).find("ul").first()[0] );\n'
                 '  }});\n'
                 '}} else if(el.hasClass("single_switched_value")){{\n'
                 '  CollapsibleLists.applyTo(el[0]);\n'
@@ -2942,4 +2910,4 @@ class WorkspaceText(WorkspaceOutput):
         else:
             content += init_text_js
 
-        return self._create_onready_handler(content)
+        return self._create_onready_handler(content, textID)

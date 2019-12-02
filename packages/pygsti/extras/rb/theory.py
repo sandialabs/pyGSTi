@@ -858,7 +858,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None
     delta_avg = _np.mean(delta)
     return delta_avg
 
-# Future : put these back in.
+# Future : perhaps put these back in.
 #def Magesan_theory_predicted_decay(mdl, target_model, mlist, success_outcomelabel=('0',),
 #                                   norm='1to1', order='zeroth', return_all = False):
 #

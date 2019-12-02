@@ -126,16 +126,18 @@ def write_dataset(filename, dataset, circuit_list=None,
     with open(filename, 'w') as output:
         output.write(headerString)
         for circuit in circuit_list:  # circuit should be a Circuit object here
-            dataRow = dataset[circuit.tup]
+            dataRow = dataset[circuit]
             counts = dataRow.counts
+            circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
+                if dataset.collisionAction == "keepseparate" else circuit
 
             if fixedColumnMode:
                 #output '--' for outcome labels that aren't present in this row
-                output.write(circuit.str + "  "
+                output.write(circuit_to_write.str + "  "
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
                                           for ol in outcomeLabels]))
             else:  # use expanded label:count format
-                output.write(circuit.str + "  "
+                output.write(circuit_to_write.str + "  "
                              + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
                                           for ol in outcomeLabels if ol in counts]))
 
@@ -197,13 +199,21 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
                                                  for ol in outcomeLabels])
     # parser = _stdinput.StdInputParser()
 
+    strip_occurence_tags = any([ ca == "keepseparate" for ca in multidataset.collisionActions.values()])
+    datasets = [ multidataset[dsl] for dsl in dsLabels ]
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
-            opstr = circuit.tup  # circuit tuple
-            cnts = [multidataset[dsl][opstr].counts.get(ol, '--') for dsl in dsLabels for ol in outcomeLabels]
+            circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
+                if strip_occurence_tags else circuit
+            cnts = [ds[circuit].counts.get(ol, '--') for ds in datasets for ol in outcomeLabels]
             output.write(circuit.str + "  " + "  ".join([(("%g" % cnt) if (cnt != '--') else cnt)
                                                          for cnt in cnts]) + '\n')
+            #write aux info
+            if multidataset.auxInfo[circuit]:
+                output.write(" # %s" % str(repr(multidataset.auxInfo[circuit])))
+            output.write('\n')  # finish the line
+
 
 
 def write_circuit_list(filename, circuit_list, header=None):
