@@ -892,14 +892,6 @@ class TermForwardSimulator(ForwardSimulator):
         # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector()) # done in bulk_get_achieved_and_max_sopm
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
         gaps = max_sopm - achieved_sopm  # a strict bound on the error in each outcome probability, but often pessimistic
-
-        #DEBUG BEGIN
-        #xx = _np.argmin(gaps)
-        #print("MINGAP = ", min(gaps), max_sopm[xx], achieved_sopm[xx])
-        #if min(gaps) < 0:
-        #    import bpdb; bpdb.set_trace()
-        #DEBUG END
-
         assert(_np.all(gaps >= 0))
 
         if self.perr_heuristic == "none":

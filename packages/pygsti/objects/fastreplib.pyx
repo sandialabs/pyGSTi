@@ -3039,14 +3039,7 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel.pyterm_references:
-            #if termrep.compact_coeff is None:
-            #    termrep.compact_coeff = termrep.coeff.compact_complex() # v,c
-            alt_compact_coeff = termrep.coeff.compact_complex()  #DEBUG...
             coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
-            coeff_array2 = _fastopcalc.fast_bulk_eval_compact_polys_complex(alt_compact_coeff[0], alt_compact_coeff[1],paramvec,(1,))
-            if abs(coeff_array[0] - coeff_array2) > 1e-7:
-                print("DIFF!! ",coeff_array[0], coeff_array2)
-                print(termrep.compact_coeff, alt_compact_coeff)
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
@@ -3834,24 +3827,6 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
     foat_indices_per_op[N+1] = &cscel.E_foat_indices
     # --------------------------------------------
 
-    #DEBUG - getting negative gaps - TODO REMOVE
-    #for i in range(1,N):
-    #    sum_of_mags = 0
-    #    nTerms = deref(factor_lists[i]).size(); vals = []
-    #    for k in range(nTerms):
-    #        vals.append(deref(factor_lists[i])[k]._magnitude)
-    #        sum_of_mags += deref(factor_lists[i])[k]._magnitude
-    #    glbl = circuit[i-1]
-    #    op = opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl)
-    #    ttm = op.get_total_term_magnitude()
-    #    if sum_of_mags > ttm:
-    #        print("ERROR IN getting max and achieved for: ", circuit, " glbl=",glbl)
-    #        print("sum, ttm = ",sum_of_mags, ttm)
-    #        print("Type = ",type(op)," nterms=",nTerms, "etype=",type(op.errorgen))
-    #        print("Vals = ",vals)
-    #        import bpdb; bpdb.set_trace()
-    #END DEBUG
-
     # Specific path magnitude summing (and we count paths, even though this isn't needed)
     cdef INT NO_LIMIT = 1000000000
     cdef vector[double] mags = vector[double](numEs)
@@ -3876,11 +3851,6 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
     for i in range(numEs):
         achieved_sopm[i] = mags[i]
         max_sopm[i] = max_sum_of_pathmags[i]
-
-        if achieved_sopm[i] > max_sopm[i]:
-            print("ERR IN getting max and achieved for: ", circuit)
-            print("achieved, max = ",achieved_sopm[i], max_sopm[i])
-            
         
     return achieved_sopm, max_sopm
 
