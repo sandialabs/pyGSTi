@@ -41,8 +41,9 @@ cdef double LARGE = 1000000000
 # path get included in the selected set of paths.
 
 cdef double SMALL = 1e-5
-# a small number which is used as a path weight when the
-# true path magnitude is zero.
+# a number which is used in place of zero within the
+# product of term magnitudes to keep a running path
+# magnitude from being zero (and losing memory of terms).
 
 
 #Use 64-bit integers
@@ -3591,11 +3592,6 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
 
         logmag = current_logmag + (deref(oprep_lists[i])[b[i]]._logmagnitude - deref(oprep_lists[i])[b[i]-1]._logmagnitude)
         if logmag >= log_thres:
-            #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
-            #if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
-            #    mag = 0
-            #else:
-            #    mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
             numerator = deref(oprep_lists[i])[b[i]]._magnitude
             denom = deref(oprep_lists[i])[b[i]-1]._magnitude
             nzeros = current_nzeros
@@ -3603,14 +3599,12 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
                 denom = SMALL; nzeros -= 1
             if numerator == 0:
                 numerator = SMALL; nzeros += 1
-            mag = current_mag * (numerator / denom)  # magnitude up to (i-1)th op
+            mag = current_mag * (numerator / denom)
             
             ## fn_visitpath(b, mag, i) ##            
             if nzeros == 0:
                 pathmags[E_indices[b[n-1]]] += mag
             nPaths[E_indices[b[n-1]]] += 1
-            #if E_indices[b[n-1]] == 0:  # TODO REMOVE
-            #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[b[i]-1]._magnitude, incd, i, "*1"
             if nPaths[E_indices[b[n-1]]] == max_npaths: return True
             #print("Adding ",b)
             ## --------------------------
@@ -3630,10 +3624,6 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
             for j in deref(foat_indices_per_op[i]):
                 if j >= orig_bi:
                     b[i] = j
-                    #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
-                    #mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
-                    #    current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
-                    
                     nzeros = current_nzeros
                     numerator = deref(oprep_lists[i])[b[i]]._magnitude
                     denom = deref(oprep_lists[i])[orig_bi-1]._magnitude
