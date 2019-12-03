@@ -3142,7 +3142,7 @@ class CompressedCircuit(object):
         if not isinstance(circuit, Circuit):
             raise ValueError("CompressedCircuits can only be created from existing Circuit objects")
         self._tup = CompressedCircuit.compress_op_label_tuple(
-            circuit.tup, minLenToCompress, maxPeriodToLookFor)
+            circuit.layertup, minLenToCompress, maxPeriodToLookFor)
         self._str = circuit.str
         self._line_labels = circuit.line_labels
 
