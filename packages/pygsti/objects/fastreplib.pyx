@@ -40,7 +40,7 @@ cdef double LARGE = 1000000000
 # a very high term weight which won't help (at all) a
 # path get included in the selected set of paths.
 
-cdef double SMALL = 1e-10
+cdef double SMALL = 1e-5
 # a small number which is used as a path weight when the
 # true path magnitude is zero.
 
