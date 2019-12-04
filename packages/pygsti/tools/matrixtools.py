@@ -607,8 +607,8 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
     if mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
             raise ValueError("Cannot construct a real log: unpaired negative"
-                             + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices]
-                             + "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
+                             + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
+                             #+ "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
         elif actionIfImaginary == "warn":
             _warnings.warn("Cannot construct a real log: unpaired negative"
                            + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
@@ -782,7 +782,8 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
     pairs : list
         Only returned when `return_pairs == True`, a list of 2-tuple pairs of
         indices `(ix,iy)` giving the indices into `a` and `b` respectively of
-        each matched pair.
+        each matched pair.  The first (ix) indices will be in continuous 
+        ascending order starting at zero.
     """
     assert(len(a) == len(b))
     if metricfn is None:
@@ -877,7 +878,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
                     if i in pair: break  # ok, we've already found v's pair
                 else:
                     for j, v2 in enumerate(ar[i + 1:], start=i + 1):
-                        if _np.isclose(_np.conj(v), v2):
+                        if _np.isclose(_np.conj(v), v2) and all([(j not in cpair) for cpair in conj_inds]):
                             conj_inds.append((i, j)); break
                     else:
                         raise ValueError("No conjugate pair found for %s" % str(v))
@@ -1649,8 +1650,10 @@ def find_zero_communtant_connection(U, Uinv, U0, U0inv, kite):
     #3.  Redefine R = X.R.
     #4.  GOTO 1.
     
+    # G0 = U0 * diag * U0inv, G = U * diag * Uinv
     D = project_onto_kite(_np.dot(Uinv,U0), kite)
     R = _np.dot(U, _np.dot(D,U0inv)) #Include D so R is as close to identity as possible
+    assert(_np.linalg.norm(R.imag) < 1e-8)
 
     def project_onto_commutant(x):
         a = _np.dot(U0inv, _np.dot(x, U0))

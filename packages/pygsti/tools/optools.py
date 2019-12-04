@@ -2727,7 +2727,7 @@ def project_model(model, targetModel,
     return ret_gs, ret_Nps
 
 
-def get_a_best_case_gauge_transform(gate_mx, target_gate_mx):
+def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, returnAll=False):
     """
     Returns a gauge transformation that maps `gate_mx` into a matrix that is
     co-diagonal with `target_gate_mx`, i.e. they share a common set of eigenvectors.
@@ -2743,6 +2743,11 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx):
     gate_mx, target_gate_mx : numpy.ndarray
         The gate and target-gate matrices.
 
+    returnAll : bool, optional
+        If true, also return the matrices of eigenvectors
+        for `Ugate` for gate_mx and `Utgt` for target_gate_mx such
+        that `U = dot(Utgt, inv(Ugate))` is real.
+
     Returns
     -------
     U : numpy.ndarray
@@ -2750,6 +2755,9 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx):
         then `epgate` (which has the same eigenalues as `gate_mx`, can be
         diagonalized with a set of eigenvectors that also diagonalize
         `target_gate_mx`.  Furthermore, `U` is real.
+
+    Ugate, Utgt : numpy.ndarray
+        only if `returnAll == True`.  See above.
     """
 
     # A complication that must be dealt with is that
@@ -2762,8 +2770,175 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx):
     #    the eigenspace of `tgt_gate` corresponding to the matched eigenvalue.
     #    (treat conj-pair eigenvalues of `gate` together).
 
+    # we want a matrix that gauge-transforms gate_mx into a matrix as
+    # close to target_gate_mx as possible, i.e. that puts gate_mx's
+    # eigenvalues in the eigenspaces of target_gate_mx.  This is done
+    # by Ubest = _np.dot(Utgt, inv(Uop)), but there are often degrees
+    # of freedom in Uop because of its degeneracies.  Also, we want Ubest
+    # to be *real*, so we need to ensure the conjugacy structure of Utgt
+    # and Uop match...
+
+    assert(_np.linalg.norm(gate_mx.imag) < 1e-8)
+    assert(_np.linalg.norm(target_gate_mx.imag) < 1e-8)
+
+    if True:  #NEW approach that gives sorted eigenvectors
+        def get_eigenspace_pairs(mx, TOL=1e-6):
+            evals, U = _np.linalg.eig(mx)  # so mx = U * evals * Uinv
+            espace_pairs = {}; conj_pair_indices = []
+     
+            #Pass 1: real evals and positive-imaginary-element-of-conjugate pair evals
+            #  (these are the representatives of "eigenspace pairs")
+            for i,ev in enumerate(evals):
+                if ev.imag < -TOL: 
+                    conj_pair_indices.append(i); continue # save for pass2
+     
+                #see if ev is already in espace_pairs
+                for k,v in espace_pairs.items():
+                    if abs(k-ev) < TOL:
+                        espace_pairs[k]['indices'].append(i)
+                        espace_pairs[k]['conj_pair_indices'].append(None)
+                        #espace_pairs[k]['evecs'].append(U[:,i])
+                        break
+                else:
+                    espace_pairs[ev] = { 'indices': [i], 'conj_pair_indices': [ None ] }
+            
+            #Pass 2: negative-imaginary-part elements of evals that occur in conjugate pairs
+            for i in conj_pair_indices:
+                ev_pos = _np.conjugate(evals[i])
+                for k,v in espace_pairs.items():  # ev_pos *should* be in espace_pairs
+                    if abs(k-ev_pos) < TOL:
+                        #found the correct eigenspace-pair to add this eval & evec to,
+                        # now figure our where to put this index based on conjugacy relationships,
+                        # i.e. U[:,esp['indices'][i]] is always conjugate to U[:,esp['conj_pair_indices'][i]]
+                        for jj,j in enumerate(espace_pairs[k]['indices']):
+                            if espace_pairs[k]['conj_pair_indices'][jj] is None:  #an empty slot
+                                espace_pairs[k]['conj_pair_indices'][jj] = i
+                                U[:,i] = U[:,j].conj()
+                                break
+                        else:
+                            raise ValueError("Nowhere to place a conjugate eigenvector %d-dim eigenbasis for %s!"
+                                             % (len(espace_pairs[k]['indices']), str(k)))
+
+                        #for jj,j in enumerate(espace_pairs[k]['indices']):
+                        #    if _np.allclose(U[:,j], U[:,i].conj()):
+                        #        espace_pairs[k]['conj_pair_indices'][jj] = i  # place 'i' in appropriate place
+                        #        break
+                        #else:
+                        #    #We might get here in degenerate cases where the eigenbases that numpy picks for a +1j,
+                        #    # space, for instance, don't occur in conjugate pairs with the -1j space.  We could,
+                        #    # instead of throwing an error here, just assign (by fiat!) the eigenvector U[:,i] to
+                        #    # be one of the unclaimed U[:,j] conjugate (maybe the one with the most overlap?).
+                        #    raise ValueError("Expected an eigenvector conjugate to U[:,%d] in the %d-dim eigenbasis for %s!"
+                        #                     % (i, len(espace_pairs[k]['indices']), str(k)))
+                        break
+                else:
+                    raise ValueError("Expected to find %s as an espace-pair representative in %s"
+                                     % (str(ev_pos), str(espace_pairs.keys())))
+
+            if not (_np.allclose(mx, _np.dot(U, _np.dot(_np.diag(evals), _np.linalg.inv(U))))):
+                import bpdb; bpdb.set_trace()
+            return evals, U, espace_pairs
+ 
+        def standard_diag(mx, TOL=1e-6):
+            evals, U, espairs = get_eigenspace_pairs(mx)
+            std_evals = []
+            std_evecs = []
+            sorted_rep_evals = sorted(list(espairs.keys()), key=lambda x: (x.real, x.imag))
+            for ev in sorted_rep_evals:  #iterate in sorted order just for definitiveness
+                info = espairs[ev]
+                dim = len(info['indices']) # dimension of this eigenspace (and it's pair, if there is one)
+
+                #Ensure real eigenvalue blocks should have real eigenvectors
+                if abs(ev.imag) < TOL:
+                    #find linear combinations of the eigenvectors that are real
+                    Usub = U[:,info['indices']]
+                    if _np.linalg.norm(Usub.imag) > TOL:
+                        # Im part of Usub * combo = Usub.real*combo.imag + Usub.imag*combo.real
+                        combo_real_imag = _mt.nullspace(_np.concatenate((Usub.imag,Usub.real),axis=1))
+                        combos = combo_real_imag[0:dim,:] + 1j*combo_real_imag[dim:,:]
+                        if combos.shape[1] != dim:
+                            raise ValueError(("Can only find %d (< %d) *real* linear combinations of"
+                                              " vectors in eigenspace for %s!") % (combos.shape[1],dim,str(ev)))
+                        U[:,info['indices']] = _np.dot(Usub, combos)
+                        assert(_np.linalg.norm(U[:,info['indices']].imag) < TOL)
+                    
+                    ## dim=2 case of finding conjugate pairs
+                    #for i in info['indices']:
+                    #    if _np.linalg.norm(U[:,i].imag) > TOL:  #find conjugate pair to combine with this one
+                    #        for j in info['indices']:
+                    #            if _np.allclose(U[:,i],U[:,j].conj()):
+                    #                u,w = U[:,i].copy(), U[:,j].copy()
+                    #                U[:,i] = u+v
+                    #                U[:,j] = 1j*(u-v)
+                    #                assert(_np.linalg.norm(U[:,i].imag) < TOL and _np.linalg.norm(U[:,j].imag) < TOL)
+                    #                break
+                    #        else:
+                    #            import bpdb; bpdb.set_trace()
+                    #            raise ValueError("No conjugate pair for U[:,%d] in %d-dimensional eigenspace for %s!" % (i,dim,str(ev)))
+
+                    #Add real eigenvalues and vectors
+                    std_evals.extend([ev]*dim)
+                    std_evecs.extend([ U[:,i] for i in info['indices'] ])
+
+                else:  #complex eigenvalue case - should have conjugate pair info
+                    #Ensure blocks for conjugate-pairs of eigenvalues follow one after another and
+                    # corresponding eigenvectors (e.g. the first of each block) are conjugate pairs
+                    # (this is already done in the eigenspace construction)
+                    assert(len(info['conj_pair_indices']) == dim)
+                    std_evals.extend([ev]*dim)
+                    std_evals.extend([_np.conjugate(ev)]*dim)
+                    std_evecs.extend([ U[:,i] for i in info['indices'] ])
+                    std_evecs.extend([ U[:,i] for i in info['conj_pair_indices'] ])
+
+            return _np.array(std_evals), _np.array(std_evecs).T
+
+        #Create "gate_tilde" which has the eigenvectors of gate_mx around the matched eigenvalues of target_gate_mx
+        # Doing this essentially decouples the problem of eigenvalue matching from the rest of the task -
+        # after gate_tilde is created, it and target_gate_mx have exactly the *same* eigenvalues.
+        evals_tgt, Utgt = _np.linalg.eig(target_gate_mx)
+        evals_gate, Uop = _np.linalg.eig(gate_mx)
+        pairs = _mt.minweight_match_realmxeigs(evals_gate, evals_tgt)
+        replace_evals = _np.array([evals_tgt[j] for _,j in pairs])
+        gate_tilde = _np.dot(Uop, _np.dot(_np.diag(replace_evals), _np.linalg.inv(Uop)))
+
+        #Create "standard diagonalizations" of gate_tilde and target_gate_mx, which give
+        # sort the eigenvalues and ensure eigenvectors occur in *corresponding* conjugate pairs
+        # (e.g. even when evals +1j and -1j have multiplicity 4, the first 4-D eigenspace, the 
+        evals_tgt, Utgt = standard_diag(target_gate_mx)
+        evals_tilde, Uop = standard_diag(gate_tilde)
+        assert(_np.allclose(evals_tgt, evals_tilde))
+
+        #Update Utgt so that Utgt * inv_Uop is close to the identity
+        kite = _mt.get_kite(evals_tgt)  # evals are grouped by standard_diag, so this works
+        D_prior_to_proj = _np.dot(_np.linalg.inv(Utgt),Uop)
+        #print("D prior to projection to ",kite," kite:"); _mt.print_mx(D_prior_to_proj)
+        D = _mt.project_onto_kite(D_prior_to_proj, kite)
+        start = 0
+        for i,k in enumerate(kite):
+            slc = slice(start, start+k)
+            dstart = start + k
+            for kk in kite[i+1:]:
+                if k == kk and _np.isclose(evals_tgt[start], evals_tgt[dstart].conj()): # conjugate block!
+                    dslc = slice(dstart, dstart+kk)
+                    D[dslc,dslc] = D[slc,slc].conj()  # enforce block conjugacy needed to retain Uproj conjugacy structure
+                    break
+                dstart += kk
+            start += k
+        Utgt = _np.dot(Utgt, D)  # update Utgt
+
+        Utrans = _np.dot(Utgt, _np.linalg.inv(Uop))
+        assert(_np.linalg.norm(_np.imag(Utrans)) < 1e-7)
+        Utrans = Utrans.real #_np.real_if_close(Utrans, tol=1000)
+
+        if returnAll:
+            return Utrans, Uop, Utgt, evals_tgt
+        else:
+            return Utrans
+        
+
     evals_tgt, Utgt = _np.linalg.eig(target_gate_mx)
     evals_gate, Uop = _np.linalg.eig(gate_mx)
+
     #_, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
     pairs = _mt.minweight_match_realmxeigs(evals_tgt, evals_gate)
 
@@ -2777,32 +2952,36 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx):
                 break
         else:
             eigenspace[i] = [Utgt[:, i]]  # new list = new eigenspace
-
+    
     #Project each eigenvector (col of Uop) onto space of cols
     evectors = {}  # key = index of gate eigenval, val = assoc. (projected) eigenvec
     for ipair, (i, j) in enumerate(pairs):
+        #print("processing pair (i,j) = ",i,j)
         if j in evectors: continue  # we already processed this one!
-
+    
         # non-orthog projection:
         # v = E * coeffs s.t. |E*coeffs-v|^2 is minimal  (E is not square so can't invert)
         # --> E.dag * v = E.dag * E * coeffs
         # --> inv(E.dag * E) * E.dag * v = coeffs
-        # E*coeffs = E * inv(E.dag * E) * E.dag * v
-
+        # E*coeffs = E * inv(E.dag * E) * E.dag * v    
         E = _np.array(eigenspace[i]).T; Edag = E.T.conjugate()
         coeffs = _np.dot(_np.dot(_np.linalg.inv(_np.dot(Edag, E)), Edag), Uop[:, j])
         evectors[j] = _np.dot(E, coeffs)
-
+    
         #check for conjugate pair
+        #DB: print("Looking for conjugate:")
         for i2, j2 in pairs[ipair + 1:]:
-            if abs(evals_gate[j].imag) > 1e-6 and _np.isclose(evals_gate[j], _np.conjugate(evals_gate[j2])):
+            if abs(evals_gate[j].imag) > 1e-6 and _np.isclose(evals_gate[j], _np.conjugate(evals_gate[j2])) \
+               and _np.allclose(Uop[:,j],Uop[:,j2].conj()):
+                #DB: print("Found conjugate at j = ",j2)
                 evectors[j2] = _np.conjugate(evectors[j])
                 # x = _np.linalg.solve(_np.dot(Edag, E), _np.dot(Edag, evectors[j2]))
                 #assert(_np.isclose(_np.linalg.norm(x),_np.linalg.norm(coeffs))) ??
                 #check that this vector is in the span of eigenspace[i2]?
-
+    
     #build new "Utgt" using specially chosen linear combos of degenerate-eigenvecs
     Uproj = _np.array([evectors[i] for i in range(Utgt.shape[1])]).T
+    assert(_np.allclose( _np.dot(Uproj, _np.dot(_np.diag(evals_tgt), _np.linalg.inv(Uproj))), target_gate_mx))
 
     #This is how you get the eigenspace-projected gate:
     #  epgate = _np.dot(Uproj, _np.dot(_np.diag(evals_gate), Uproj_inv))
@@ -2813,12 +2992,16 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx):
     # so  epgate = (Uproj Uop_inv) G (Uproj Uop_inv)_inv => (Uproj Uop_inv) is
     # a "best_gauge_transform" for G, i.e. it makes G codiagonal with G_tgt
     Ubest = _np.dot(Uproj, _np.linalg.inv(Uop))
-    Ubest = _np.real_if_close(Ubest, tol=1000)
-
     assert(_np.linalg.norm(_np.imag(Ubest)) < 1e-7)
     # this should never happen & indicates an uncaught failure in
     # minweight_match_realmxeigs(...)
-    return Ubest
+
+    Ubest = Ubest.real
+
+    if returnAll:
+        return Ubest, Uop, Uproj, evals_tgt
+    else:
+        return Ubest
 
 
 def project_to_target_eigenspace(model, targetModel, EPS=1e-6):
