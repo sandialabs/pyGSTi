@@ -90,7 +90,9 @@ class WildcardBudget(object):
         """
         TODO: docstring
         """
-        circuit_budgets = [self.circuit_budget(circ) for circ in circuits]
+        # XXX is this supposed to do something?
+        # circuit_budgets = [self.circuit_budget(circ) for circ in circuits]
+        pass
 
     def get_descriptive_dict(self):
         """
@@ -174,7 +176,8 @@ class WildcardBudget(object):
 
         #For these helper functions, see Robin's notes
         def computeTVD(A, B, alpha, beta, q, f):
-            # TVD = 0.5 * (qA - alpha*SA + beta*SB - qB)  - difference between p=[alpha|beta]*f and q (no contrib from set C)
+            # TVD = 0.5 * (qA - alpha*SA + beta*SB - qB)  - difference between p=[alpha|beta]*f and q
+            # (no contrib from set C)
             ret = 0.5 * (sum(q[A] - alpha * f[A]) + sum(beta * f[B] - q[B]))
             return ret
 
@@ -242,7 +245,8 @@ class WildcardBudget(object):
         #Special case where f_k=0, since ratio is ill-defined. One might think
         # we shouldn't don't bother wasting any TVD on these since the corresponding
         # p_k doesn't enter the likelihood. ( => treat these components as if f_k == q_k (ratio = 1))
-        # BUT they *do* enter in poisson-picture logl... so set freqs very small so ratio is large (and probably not chosen)
+        # BUT they *do* enter in poisson-picture logl...
+        # so set freqs very small so ratio is large (and probably not chosen)
         zero_inds = _np.where(freqs == 0.0)[0]
         if len(zero_inds) > 0:
             freqs = freqs.copy()  # copy for now instead of doing something more clever
@@ -393,7 +397,8 @@ class WildcardBudget(object):
         #Special case where f_k=0, since ratio is ill-defined. One might think
         # we shouldn't don't bother wasting any TVD on these since the corresponding
         # p_k doesn't enter the likelihood. ( => treat these components as if f_k == q_k (ratio = 1))
-        # BUT they *do* enter in poisson-picture logl... so set freqs very small so ratio is large (and probably not chosen)
+        # BUT they *do* enter in poisson-picture logl...
+        # so set freqs very small so ratio is large (and probably not chosen)
         MIN_FREQ = 1e-8
         MIN_FREQ_OVER_2 = MIN_FREQ / 2
         zero_inds = _np.where(freqs == 0.0)[0]
@@ -431,7 +436,7 @@ class WildcardBudget(object):
 
             #Note: need special case for fvec == 0
             ratio_vec = qvec / fvec
-            remaining_indices = list(range(len(ratio_vec)))
+            # remaining_indices = list(range(len(ratio_vec)))
             sorted_indices_and_ratios = sorted(
                 [(kx, rx) for kx, rx in enumerate(ratio_vec)], key=lambda x: abs(1.0 - x[1]))
             nMovedToC = 0

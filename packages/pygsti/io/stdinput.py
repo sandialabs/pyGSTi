@@ -376,7 +376,7 @@ class StdInputParser(object):
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                 circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
-                                        line_labels=circuitLbls, expand_subcircuits=False, check=False)  # , lookup=lookupDict)
+                                        line_labels=circuitLbls, expand_subcircuits=False, check=False)
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts,
                                        update_ol=False)  # for performance - to this once at the end.

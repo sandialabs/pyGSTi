@@ -365,8 +365,8 @@ class TermForwardSimulator(ForwardSimulator):
     #
     #     if self.evotype == "svterm":
     #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-    #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
-    #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+    #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+    #                                           comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag, max_paths,
     #                                           current_threshold, compute_polyreps)
     #         # sopm = "sum of path magnitudes"
     #     else:  # "cterm" (stabilizer-based term evolution)
@@ -450,9 +450,11 @@ class TermForwardSimulator(ForwardSimulator):
 
         if self.evotype == "svterm":
             npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SV_find_best_pathmagnitude_threshold(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                                                            comm, memLimit, self.desired_pathmagnitude_gap, self.min_term_mag,
-                                                            self.max_paths_per_outcome, threshold_guess)
+                replib.SV_find_best_pathmagnitude_threshold(
+                    self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                    comm, memLimit, self.desired_pathmagnitude_gap, self.min_term_mag,
+                    self.max_paths_per_outcome, threshold_guess
+                )
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             raise NotImplementedError("Just need to mimic SV version")
@@ -846,7 +848,8 @@ class TermForwardSimulator(ForwardSimulator):
                 polys[0], polys[1], self.paramvec, (nEls,))  # shape (nElements,) -- could make this a *fill*
         _fas(mxToFill, [dest_indices], probs)
 
-    def _fill_dprobs_block(self, mxToFill, dest_indices, dest_param_indices, evalTree, param_slice, comm=None, memLimit=None):
+    def _fill_dprobs_block(self, mxToFill, dest_indices, dest_param_indices, evalTree, param_slice, comm=None,
+                           memLimit=None):
         if param_slice is None: param_slice = slice(0, self.Np)
         if dest_param_indices is None: dest_param_indices = slice(0, _slct.length(param_slice))
 
@@ -889,9 +892,11 @@ class TermForwardSimulator(ForwardSimulator):
         if self.mode != "pruned":
             return True  # no "failures" for non-pruned-path mode
 
-        # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector()) # done in bulk_get_achieved_and_max_sopm
+        # # done in bulk_get_achieved_and_max_sopm
+        # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector())
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
-        gaps = max_sopm - achieved_sopm  # a strict bound on the error in each outcome probability, but often pessimistic
+        # a strict bound on the error in each outcome probability, but often pessimistic
+        gaps = max_sopm - achieved_sopm
         assert(_np.all(gaps >= 0))
 
         if self.perr_heuristic == "none":
@@ -975,7 +980,8 @@ class TermForwardSimulator(ForwardSimulator):
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
             gap_jacs = evalSubTree.get_sopm_gaps_jacobian(self)
-            #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap would be clipped to 0
+            # # set deriv to zero where gap would be clipped to 0
+            #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0
             _fas(termgap_penalty_jac, [felInds], gap_jacs)
 
         #collect/gather results
@@ -1076,8 +1082,8 @@ class TermForwardSimulator(ForwardSimulator):
         nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
         #assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
         if nTotFailed > 0:
-            _warnings.warn(
-                "Unable to find a path set that achieves the desired pathmagnitude gap (%d circuits failed)" % nTotFailed)
+            _warnings.warn(("Unable to find a path set that achieves the desired "
+                            "pathmagnitude gap (%d circuits failed)") % nTotFailed)
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):

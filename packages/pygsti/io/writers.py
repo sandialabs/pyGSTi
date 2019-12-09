@@ -199,13 +199,13 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
                                                  for ol in outcomeLabels])
     # parser = _stdinput.StdInputParser()
 
-    strip_occurence_tags = any([ca == "keepseparate" for ca in multidataset.collisionActions.values()])
+    # strip_occurence_tags = any([ca == "keepseparate" for ca in multidataset.collisionActions.values()])
     datasets = [multidataset[dsl] for dsl in dsLabels]
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
-            circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
-                if strip_occurence_tags else circuit
+            # circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
+            #     if strip_occurence_tags else circuit
             cnts = [ds[circuit].counts.get(ol, '--') for ds in datasets for ol in outcomeLabels]
             output.write(circuit.str + "  " + "  ".join([(("%g" % cnt) if (cnt != '--') else cnt)
                                                          for cnt in cnts]) + '\n')

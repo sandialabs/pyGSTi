@@ -261,7 +261,7 @@ class OplessModel(_Model):
             dps = _bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (evalTree.num_final_elements(), Np))
             mxToFill[:, :] = dps
         else:
-            eps = 1e-6
+            # eps = 1e-6
             for i, c in enumerate(evalTree):
                 cache = evalTree.cache[i] if evalTree.cache else None
                 probs0 = self.probs(c, clipTo, cache)
@@ -389,7 +389,7 @@ class SuccessFailModel(OplessModel):
                 polys.append(probs['fail'])
             compact_polys = compact_poly_list(polys)
             cache = compact_polys
-        elif self.use_cache == True:
+        elif self.use_cache is True:
             cache = [self._circuit_cache(circuit) for circuit in circuit_list]
         else:
             cache = None
@@ -433,12 +433,15 @@ class ErrorRatesModel(SuccessFailModel):
         self._gate_error_rate_indices = {k: i for i, k in enumerate(gate_error_rate_keys)}
         self._readout_error_rate_indices = {k: i + len(gate_error_rate_keys)
                                             for i, k in enumerate(readout_error_rate_keys)}
-        self._paramvec = _np.concatenate((_np.array([_np.sqrt(error_rates['gates'][k]) for k in gate_error_rate_keys], 'd'),
-                                          _np.array([_np.sqrt(error_rates['readout'][k]) for k in readout_error_rate_keys], 'd')))
+        self._paramvec = _np.concatenate(
+            (_np.array([_np.sqrt(error_rates['gates'][k]) for k in gate_error_rate_keys], 'd'),
+             _np.array([_np.sqrt(error_rates['readout'][k]) for k in readout_error_rate_keys], 'd'))
+        )
 
     def __str__(self):
         s = "Error Rates model with error rates: \n" + \
-            "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._gate_error_rate_indices.items()]) + "\n" + \
+            "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._gate_error_rate_indices.items()]) + \
+            "\n" + \
             "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._readout_error_rate_indices.items()])
         return s
 
@@ -518,7 +521,8 @@ class TwirledLayersModel(ErrorRatesModel):
         lambda_all_layers = 1.0
         for inds_to_mult in inds_to_mult_by_layer[:-1]:
             lambda_all_layers *= 1 - alpha * (1 - prod(sp[inds_to_mult]))
-        #lambda_all_layers = prod([(1 - alpha * (1 - prod(sp[inds_to_mult]))) for inds_to_mult in inds_to_mult_by_layer[:-1]])
+        # lambda_all_layers = prod([(1 - alpha * (1 - prod(sp[inds_to_mult])))
+        #                           for inds_to_mult in inds_to_mult_by_layer[:-1]])
 
         # The readout success probability.
         successprob_readout = prod(sp[inds_to_mult_by_layer[-1]])
@@ -534,7 +538,8 @@ class TwirledLayersModel(ErrorRatesModel):
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        # p = product_layers( 1 - alpha * (1 - prod_[inds4layer](1- param)) ) * (prod_[inds4LASTlayer](1 - param) - 1/2**width)
+        # p = product_layers(1 - alpha * (1 - prod_[inds4layer](1 - param))) * \
+        #     (prod_[inds4LASTlayer](1 - param) - 1 / 2**width)
         # Note: indices cannot be repeated in a layer, i.e. either a given index appears one or zero times in inds4layer
 
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = cache
@@ -553,7 +558,8 @@ class TwirledLayersModel(ErrorRatesModel):
         #All layers except last
         for i, inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
             lambda_all_but_current_layer = lambda_all_layers / lambda_per_layer[i]
-            for ind in inds_to_mult:  # for each such ind, when we take deriv wrt this index, we need to differentiate this layer, etc.
+            # for each such ind, when we take deriv wrt this index, we need to differentiate this layer, etc.
+            for ind in inds_to_mult:
                 deriv[ind] += lambda_all_but_current_layer * alpha * \
                     (prod(sp[inds_to_mult]) / sp[ind]) * -1.0  # what if sp[ind] == 0?
 
@@ -635,7 +641,9 @@ class TwirledGatesModel(ErrorRatesModel):
 
         # The success probability of the circuit.
         #successprob_circuit = lambda_all_layers * (successprob_readout - one_over_2_width) + one_over_2_width
-        return (deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv) * dpvec_dparams  # product rule
+
+        # product rule
+        return (deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv) * dpvec_dparams
 
 
 class AnyErrorCausesFailureModel(ErrorRatesModel):
@@ -748,7 +756,8 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
             deriv[i] = n * successprob_all_ops / sp[i] * -1.0
 
         # The circuit succeeds if all ops succeed, and has a random outcome otherwise.
-        #successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width = const + (1-1/2**width)*successprobs_all_ops
+        # successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width
+        # = const + (1-1/2**width)*successprobs_all_ops
         deriv *= (1.0 - one_over_2_width)
         return deriv * dpvec_dparams
 
