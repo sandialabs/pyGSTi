@@ -16,14 +16,6 @@ import os
 import inspect
 debug_record = {}
 
-try: basestring  # noqa: F821
-except NameError: basestring = str
-
-
-def isstr(x):  # Duplicates isstr from compattools! (b/c can't import!)
-    """ Return whether `x` has a string type """
-    return isinstance(x, basestring)
-
 
 class Label(object):
     """
@@ -73,7 +65,7 @@ class Label(object):
         if isinstance(name, Label) and stateSpaceLabels is None:
             return name  # Note: Labels are immutable, so no need to copy
 
-        if not isstr(name) and stateSpaceLabels is None \
+        if not isinstance(name, str) and stateSpaceLabels is None \
            and isinstance(name, (tuple, list)):
 
             #We're being asked to initialize from a non-string with no
@@ -109,7 +101,7 @@ class Label(object):
                         next_is_time = False
                         time = x; continue
 
-                    if isstr(x):
+                    if isinstance(x, str):
                         if x.startswith(';'):
                             assert(args is None), "Cannot supply args in tuple when `args` is given!"
                             if x == ';':
@@ -198,13 +190,13 @@ class LabelTup(Label, tuple):
         """
 
         #Type checking
-        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
         assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if not isinstance(stateSpaceLabels, (tuple, list)):
             stateSpaceLabels = (stateSpaceLabels,)
         for ssl in stateSpaceLabels:
-            assert(isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
+            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
 
         #Try to convert integer-strings to ints (for parsing from files...)
@@ -327,7 +319,7 @@ class LabelTup(Label, tuple):
         return "Label[" + str(self) + "]"
 
     def __add__(self, s):
-        if isstr(s):
+        if isinstance(s, str):
             return LabelTup(self.name + s, self.sslbls)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -338,7 +330,7 @@ class LabelTup(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -407,7 +399,7 @@ class LabelStr(Label, strlittype):
         """
 
         #Type checking
-        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         return cls.__new__(cls, name, time)
 
@@ -471,7 +463,7 @@ class LabelStr(Label, strlittype):
         return "Label{" + strlittype(self) + "}"
 
     def __add__(self, s):
-        if isstr(s):
+        if isinstance(s, str):
             return LabelStr(self.name + strlittype(s))
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -644,7 +636,7 @@ class LabelTupTup(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -758,7 +750,7 @@ class CircuitLabel(Label, tuple):
             The time at which this label occurs (can be relative or absolute)
         """
         #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
-        assert(isinstance(reps, _numbers.Integral) and isstr(name)
+        assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tupOfLayers))  # Note: tup can also be a Label obj
         # creates a CircuitLabel object using tuple's __new__
@@ -876,7 +868,7 @@ class CircuitLabel(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -980,12 +972,12 @@ class LabelTupWithArgs(Label, tuple):
             A list of "arguments" for this label.
         """
         #Type checking
-        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
         assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
         if not isinstance(stateSpaceLabels, (tuple, list)):
             stateSpaceLabels = (stateSpaceLabels,)
         for ssl in stateSpaceLabels:
-            assert(isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
+            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
@@ -1005,12 +997,12 @@ class LabelTupWithArgs(Label, tuple):
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
 
         return cls.__new__(cls, tup, time)
-    
+
     def __new__(cls, tup, time=0.0):
         ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
         ret.time = time
         return ret
-    
+
     @property
     def name(self):
         return self[0]
@@ -1104,7 +1096,7 @@ class LabelTupWithArgs(Label, tuple):
         return "Label[" + str(self) + "]"
 
     def __add__(self, s):
-        if isstr(s):
+        if isinstance(s, str):
             return LabelTupWithArgs(self.name + s, self.sslbls, self.time, self.args)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -1115,7 +1107,7 @@ class LabelTupWithArgs(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -1307,7 +1299,7 @@ class LabelTupTupWithArgs(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
