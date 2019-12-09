@@ -18,11 +18,6 @@ def isint(x):
     return isinstance(x, _numbers.Integral)
 
 
-def isstr(x):
-    """ Return whether `x` has a string type """
-    return isinstance(x, str)
-
-
 def _numpy14einsumfix():
     """ str(.) on first arg of einsum skirts a bug in Numpy 14.0 """
     import numpy as _np
@@ -31,22 +26,6 @@ def _numpy14einsumfix():
             return _np.orig_einsum(str(s), *args, **kwargs)
         _np.orig_einsum = _np.einsum
         _np.einsum = fixed_einsum
-
-#Worse way to do this
-#import sys as _sys
-#
-#if _sys.version_info > (3, 0): # Python3?
-#    longT = int      # define long and unicode
-#    unicodeT = str   #  types to mimic Python2
-#else:
-#    longT = long
-#    unicodeT = unicode
-#
-#def isint(x):
-#    return isinstance(x,(int,longT))
-#
-#def isstr(x):
-#    return isinstance(x,(str,unicodeT))
 
 
 @_contextmanager

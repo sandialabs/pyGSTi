@@ -13,7 +13,6 @@ latex.py has for latex conversion.
 
 import numpy as _np
 import cmath
-from ..tools import compattools as _compat
 
 '''
 table() and cell() functions are used by table.py in table creation
@@ -240,7 +239,7 @@ def value(el, specs, mathmode=False):
             if s.endswith("."): s = s[:-1]
         return s
 
-    if _compat.isstr(el):
+    if isinstance(el, str):
         return el
     if type(el) in (int, _np.int64):
         return "%d" % el

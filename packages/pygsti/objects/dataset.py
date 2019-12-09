@@ -2151,7 +2151,7 @@ class DataSet(object):
                     'comment': self.comment}  # Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
 
-        bOpen = _compat.isstr(fileOrFilename)
+        bOpen = isinstance(fileOrFilename, str)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
@@ -2188,7 +2188,7 @@ class DataSet(object):
         -------
         None
         """
-        bOpen = _compat.isstr(fileOrFilename)
+        bOpen = isinstance(fileOrFilename, str)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
@@ -2287,8 +2287,8 @@ class DataSet(object):
         """
         mapdict = {}
         for old, new in old_to_new_dict.items():
-            if _compat.isstr(old): old = (old,)
-            if _compat.isstr(new): new = (new,)
+            if isinstance(old, str): old = (old,)
+            if isinstance(new, str): new = (new,)
             mapdict[old] = new
 
         new_olIndex = _OrderedDict()

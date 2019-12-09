@@ -13,7 +13,6 @@ from . import probtrajectory as _ptraj
 
 from ... import objects as _obj
 from ...construction import datasetconstruction as _dsconst
-from ...tools import compattools as _compat
 
 import numpy as _np
 import copy as _copy
@@ -351,7 +350,7 @@ class StabilityAnalyzer(object):
         self.transform = transform
 
         # Check that we have valid and consistent `marginalize` and `mergeoutcomes`, and write thems into object
-        if _compat.isstr(marginalize):
+        if isinstance(marginalize, str):
             assert(marginalize == 'auto'), "`marignalize` must be a boolean or 'auto'!"
             if mergeoutcomes is not None:
                 marginalize = False  # A mergOutcomesDictDict means we can't marginalize as well.
@@ -516,7 +515,7 @@ class StabilityAnalyzer(object):
         None
 
         """
-        if _compat.isstr(frequencies):
+        if isinstance(frequencies, str):
             assert(frequencies == 'auto')
             frequencies, freqpointers = _sig.get_auto_frequencies(self.data, self.transform)
         self._frequencies = frequencies
@@ -1023,7 +1022,7 @@ class StabilityAnalyzer(object):
         if default or (self._def_detection is None):
             self._def_detection = saveas
 
-        if _compat.isstr(freqstest):
+        if isinstance(freqstest, str):
             assert(freqstest == 'all')
         self._freqstest[saveas] = freqstest
 
@@ -1038,7 +1037,7 @@ class StabilityAnalyzer(object):
         # Populates the unspecfied parts of the inclass_correction with auto values, and checks the result is valid.
         inclass_correction = populate_inclass_correction(inclass_correction)
 
-        if _compat.isstr(betweenclass_weighting):
+        if isinstance(betweenclass_weighting, str):
             assert(betweenclass_weighting == 'auto'), "If a string, betweenclass_weighting must be a string!"
             betweenclass_weighting = get_auto_betweenclass_weighting(tests)
 
@@ -1376,7 +1375,7 @@ class StabilityAnalyzer(object):
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
 
-        if _compat.isstr(fromtests):
+        if isinstance(fromtests, str):
             assert(fromtests == 'auto')
             validtests = get_valid_tests()
             fromtests = []

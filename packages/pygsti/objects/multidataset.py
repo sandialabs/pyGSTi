@@ -14,8 +14,6 @@ import copy as _copy
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
 
-from ..tools import compattools as _compat
-
 from .dataset import DataSet as _DataSet
 from . import circuit as _cir
 from . import labeldicts as _ld
@@ -698,4 +696,3 @@ class MultiDataSet(object):
         """
         self.auxInfo[circuit].clear()  # needed? (could just update?)
         self.auxInfo[circuit].update(aux)
-

@@ -24,7 +24,6 @@ from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
-from ..tools import compattools as _compat
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import symplectic as _symp

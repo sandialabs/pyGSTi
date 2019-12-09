@@ -19,7 +19,6 @@ from .chi2fns import *
 from .basistools import *
 from .optools import *
 from .slicetools import *
-from .compattools import *
 from .legacytools import *
 from .mpitools import parallel_apply, get_comm
 from .symplectic import *

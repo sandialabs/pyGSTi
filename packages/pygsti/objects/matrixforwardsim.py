@@ -17,7 +17,6 @@ import collections as _collections
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
-from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label

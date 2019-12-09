@@ -16,7 +16,6 @@ import warnings as _warnings
 from . import spamvec as _sv
 from . import operation as _op
 from . import modelmember as _gm
-from ..tools import compattools as _compat
 from ..baseobjs import Label as _Label
 
 
@@ -100,7 +99,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
-        if _compat.isstr(flags):  # for backward compatibility
+        if isinstance(flags, str):  # for backward compatibility
             flags = {'cast_to_type': ("operation" if flags == "gate" else flags)}
 
         # Note: we *don't* want to be calling parent's "rebuild" function here,
@@ -322,7 +321,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
         Converts string outcomes like "0" to proper outcome tuples, like ("0",)
         (also converts non-tuples to tuples, e.g. `["0","1"]` to `("0","1")` )
         """
-        return (val,) if _compat.isstr(val) else tuple(val)
+        return (val,) if isinstance(val, str) else tuple(val)
 
     def __init__(self, items=[]):
         """
@@ -350,7 +349,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
         """
         Sets item without checking that the key is a properly formatted outcome tuple.
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
-        just a string. 
+        just a string.
         """
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
@@ -447,7 +446,7 @@ class StateSpaceLabels(object):
 
         def isLabel(x):
             """ Return whether x is a valid space-label """
-            return _compat.isstr(x) or isinstance(x, _numbers.Integral)
+            return isinstance(x, str) or isinstance(x, _numbers.Integral)
 
         if isLabel(labelList):
             labelList = [(labelList,)]
@@ -476,7 +475,7 @@ class StateSpaceLabels(object):
         if types is None:  # use defaults
             for tpbLabels in self.labels:  # loop over tensor-prod-blocks
                 for lbl in tpbLabels:
-                    self.labeltypes[lbl] = 'C' if (_compat.isstr(lbl) and lbl.startswith('C')) else 'Q'  # default
+                    self.labeltypes[lbl] = 'C' if (isinstance(lbl, str) and lbl.startswith('C')) else 'Q'  # default
         else:
             for tpbLabels, tpbTypes in zip(self.labels, types):
                 for lbl, typ in zip(tpbLabels, tpbTypes):

@@ -10,7 +10,6 @@
 
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
-from ...tools import compattools as _compat
 
 
 def p_to_r(p, d, rtype='EI'):
@@ -111,7 +110,7 @@ def marginalized_success_counts(dsrow, circ, target, qubits):
     else:
         # The rows of the circuit that we are interested in
         indices = [circ.line_labels.index(q) for q in qubits]
-        # The ordering of this must be the same as what we compare it to. 
+        # The ordering of this must be the same as what we compare it to.
         margtarget = ''.join([target[i] for i in indices])
 
         if qubits == circ.line_labels:
@@ -241,7 +240,7 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
     lengths = RBSdataset.lengths
     n = RBSdataset.number_of_qubits
 
-    if _compat.isstr(asymptote):
+    if isinstance(asymptote, str):
         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"
         if datatype == 'raw':
             asymptote = 1 / 2**n

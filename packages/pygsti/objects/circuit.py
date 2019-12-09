@@ -251,7 +251,7 @@ class Circuit(object):
             set `expand_subcircuits=False`.
         """
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
-        if _compat.isstr(layer_labels):
+        if isinstance(layer_labels, str):
             cparser = _CircuitParser(); cparser.lookup = None
             layer_labels, chk_labels = cparser.parse(layer_labels)
             if chk_labels is not None:

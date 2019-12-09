@@ -13,7 +13,6 @@ import numpy as _np
 import numpy.random as _rndm
 
 from ..tools import listtools as _lt
-from ..tools import compattools as _compat
 from ..objects import circuit as _cir
 from ..objects import Model as _Model
 from ..baseobjs import Label as _Lbl
@@ -96,7 +95,7 @@ def create_circuit_list(*args, **kwargs):
                 opStr = result
             elif isinstance(result, list) or isinstance(result, tuple):
                 opStr = _cir.Circuit(result)
-            elif _compat.isstr(result):
+            elif isinstance(result, str):
                 opStr = _cir.Circuit(None, stringrep=result)
             lst.append(opStr)
 
@@ -550,7 +549,7 @@ def circuit_list(listOfOpLabelTuplesOrStrings, line_labels="auto"):
             ret.append(x)
         elif isinstance(x, tuple) or isinstance(x, list):
             ret.append(_cir.Circuit(x, line_labels))
-        elif _compat.isstr(x):
+        elif isinstance(x, str):
             ret.append(_cir.Circuit(None, line_labels, stringrep=x))
         else:
             raise ValueError("Cannot convert type %s into a Circuit" % str(type(x)))

@@ -17,7 +17,6 @@ import operator as _operator
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
-from ..tools import compattools as _compat
 from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler

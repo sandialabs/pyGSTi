@@ -18,7 +18,6 @@ from . import python
 import numpy as _np
 import functools
 from .. import objects as _objs
-from ..tools import compattools as _compat
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 
@@ -72,7 +71,7 @@ def item_type(x):
         return 'value'
     elif type(x) in (list, tuple):
         return 'list'
-    elif _compat.isstr(x):
+    elif isinstance(x, str):
         return 'escaped'
     else:
         return 'raw'

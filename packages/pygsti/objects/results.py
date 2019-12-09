@@ -14,7 +14,6 @@ import warnings as _warnings
 import copy as _copy
 
 from .. import tools as _tools
-from ..tools import compattools as _compat
 from .circuitstructure import LsGermsStructure as _LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from .estimate import Estimate as _Estimate
@@ -386,7 +385,7 @@ class Results(object):
         view.circuit_lists = self.circuit_lists
         view.circuit_structs = self.circuit_structs
 
-        if _compat.isstr(estimate_keys):
+        if isinstance(estimate_keys, str):
             estimate_keys = [estimate_keys]
         for ky in estimate_keys:
             if ky in self.estimates:

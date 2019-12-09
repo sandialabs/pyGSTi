@@ -11,7 +11,6 @@
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
-from ..tools import compattools as _compat
 from scipy.sparse.csgraph import floyd_warshall as _fw
 
 
@@ -685,7 +684,7 @@ class QubitGraph(object):
         """
         if relative_nodelabel in self.get_node_names():
             return relative_nodelabel  # relative_nodelabel is a valid absolute node label
-        elif _compat.isstr(relative_nodelabel) and relative_nodelabel.startswith("@"):
+        elif isinstance(relative_nodelabel, str) and relative_nodelabel.startswith("@"):
             # @<target_index> or @<target_index>+<direction>
             parts = relative_nodelabel.split('+')
             target_index = int(parts[0][1:])  # we know parts[0] starts with @ and rest should be an int index

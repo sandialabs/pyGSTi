@@ -19,7 +19,6 @@ import subprocess as _subprocess
 
 from pathlib import Path
 
-from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
@@ -361,7 +360,7 @@ def render_as_latex(qtys, render_options, verbosity):
     for key, val in qtys.items():
         if isinstance(val, _Switchboard):
             continue  # silently don't render switchboards in latex
-        if _compat.isstr(val):
+        if isinstance(val, str):
             qtys_latex[key] = val
         else:
             printer.log("Rendering %s" % key, 3)

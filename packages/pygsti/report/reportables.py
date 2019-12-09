@@ -1318,7 +1318,7 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
     ReportableQty
     """
     gl = opLabelOrString
-    b = bool(isinstance(gl, _Lbl) or _tools.isstr(gl))  # whether this is a operation label or a string
+    b = bool(isinstance(gl, _Lbl) or isinstance(gl, str))  # whether this is a operation label or a string
 
     if name == "inf":
         fn = Entanglement_infidelity if b else \

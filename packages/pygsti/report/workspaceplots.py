@@ -999,7 +999,7 @@ def opmatrix_color_boxplot(opMatrix, m, M, mxBasis=None, mxBasisY=None,
     plotly.Figure
     """
 
-    if _tools.isstr(mxBasis):
+    if isinstance(mxBasis, str):
         if mxBasisY is None:
             mxBasisY = _objs.BuiltinBasis(mxBasis, opMatrix.shape[0])
         mxBasis = _objs.BuiltinBasis(mxBasis, opMatrix.shape[1])
@@ -1007,7 +1007,7 @@ def opmatrix_color_boxplot(opMatrix, m, M, mxBasis=None, mxBasisY=None,
         if mxBasisY is None and opMatrix.shape[0] == opMatrix.shape[1]:
             mxBasisY = mxBasis  # can use mxBasis, whatever it is
 
-    if _tools.isstr(mxBasisY):
+    if isinstance(mxBasisY, str):
         mxBasisY = _objs.BuiltinBasis(mxBasisY, opMatrix.shape[0])
 
     if mxBasis is not None:
@@ -1575,7 +1575,7 @@ class ColorBoxPlot(WorkspacePlot):
 
         # End "Additional sub-matrix" functions
 
-        if _tools.isstr(plottypes):
+        if isinstance(plottypes, str):
             plottypes = [plottypes]
 
         plottypes_that_need_precomp = ('chi2', 'logl', 'tvd')
@@ -1926,7 +1926,7 @@ def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
 
 
 def _outcome_to_str(x):  # same function as in writers.py
-    if _tools.isstr(x): return x
+    if isinstance(x, str): return x
     else: return ":".join([str(i) for i in x])
 
 

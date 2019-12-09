@@ -23,7 +23,6 @@ from .. import objects as _objs
 from .. import io as _io
 from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
-from ..tools import compattools as _compat
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import objectivefns as _objfns
 
@@ -721,7 +720,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE', False)
         args['onlyPerformMLE'] = advancedOptions.get('onlyPerformMLE', False)
         mdl_lsgst_list = _alg.do_iterative_mlgst(**args)
-        
+
     elif objective == "lgst":
         assert(startingPt == "LGST"), "Can only set objective=\"lgst\" for parameterizations compatible with LGST"
         assert(len(lsgstLists) == 1), "Can only set objective=\"lgst\" with number if lists/max-lengths == 1"
@@ -992,7 +991,7 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
-        if _compat.isstr(output_pkl):
+        if isinstance(output_pkl, str):
             with open(output_pkl, 'wb') as pklfile:
                 _pickle.dump(ret, pklfile)
         else:
@@ -1069,7 +1068,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
 
     else:
         gaugeOptSuite_dict = _collections.OrderedDict()
-        if _compat.isstr(gaugeOptSuite):
+        if isinstance(gaugeOptSuite, str):
             gaugeOptSuites = [gaugeOptSuite]
         else:
             gaugeOptSuites = gaugeOptSuite[:]  # assumes gaugeOptSuite is a list/tuple of strs
@@ -1198,7 +1197,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
 def _load_model(modelFilenameOrObj):
-    if _compat.isstr(modelFilenameOrObj):
+    if isinstance(modelFilenameOrObj, str):
         return _io.load_model(modelFilenameOrObj)
     else:
         return modelFilenameOrObj  # assume a Model object
@@ -1208,19 +1207,19 @@ def _load_fiducials_and_germs(prepStrsListOrFilename,
                               effectStrsListOrFilename,
                               germsListOrFilename):
 
-    if _compat.isstr(prepStrsListOrFilename):
+    if isinstance(prepStrsListOrFilename, str):
         prepStrs = _io.load_circuit_list(prepStrsListOrFilename)
     else: prepStrs = prepStrsListOrFilename
 
     if effectStrsListOrFilename is None:
         effectStrs = prepStrs  # use same strings for effectStrs if effectStrsListOrFilename is None
     else:
-        if _compat.isstr(effectStrsListOrFilename):
+        if isinstance(effectStrsListOrFilename, str):
             effectStrs = _io.load_circuit_list(effectStrsListOrFilename)
         else: effectStrs = effectStrsListOrFilename
 
     #Get/load germs
-    if _compat.isstr(germsListOrFilename):
+    if isinstance(germsListOrFilename, str):
         germs = _io.load_circuit_list(germsListOrFilename)
     else: germs = germsListOrFilename
 
@@ -1230,7 +1229,7 @@ def _load_fiducials_and_germs(prepStrsListOrFilename,
 def _load_dataset(dataFilenameOrSet, comm, verbosity):
     """Loads a DataSet from the dataFilenameOrSet argument of functions in this module."""
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    if _compat.isstr(dataFilenameOrSet):
+    if isinstance(dataFilenameOrSet, str):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
                 with open(dataFilenameOrSet, 'rb') as pklfile:
@@ -1341,7 +1340,7 @@ def _package_into_results(callerName, ds, target_model, mdl_start, lsgstLists,
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
-        if _compat.isstr(output_pkl):
+        if isinstance(output_pkl, str):
             with open(output_pkl, 'wb') as pklfile:
                 _pickle.dump(ret, pklfile)
         else:
@@ -1359,7 +1358,7 @@ def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
     tRef = _time.time()
     gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
     if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
-    
+
     if "targetModel" not in gaugeOptParams:
         gaugeOptParams["targetModel"] = target_model
 
@@ -1411,14 +1410,14 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
                 for l in lsgstLists]
     circuitList = rawLists[-1]  # use final circuit list
     mdl = mdl_lsgst_list[-1]    # and model
-    
+
     assert(parameters.get('weights', None) is None), \
         "Cannot perform bad-fit scaling when weights are already given!"
 
     for badfit_typ in estimate_types:
         new_params = parameters.copy()
         new_final_model = None
-        
+
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
             new_params['weights'] = get_robust_scaling(badfit_typ, mdl, ds, circuitList,
                                                        parameters, evaltree_cache, comm, memLimit)
@@ -1426,14 +1425,14 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
                 mdl_reopt = reoptimize_with_weights(mdl, ds, circuitList, new_params['weights'],
                                                     objective, opt_args, printer - 1)
                 new_final_model = mdl_reopt
-                
+
         elif badfit_typ == "wildcard":
             new_params['unmodeled_error'] = get_wildcard_budget(mdl, ds, circuitList, parameters,
                                                                 evaltree_cache, comm, memLimit, printer - 1)
 
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
-        
+
         else:
             raise ValueError("Invalid on-bad-fit directive: %s" % badfit_typ)
 
@@ -1441,12 +1440,12 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
         # prior iterations (or use "blank" sentinel once this is supported).
         models_by_iter = mdl_lsgst_list[:] if (new_final_model is None) \
             else mdl_lsgst_list[0:-1] + [new_final_model]
-            
+
         results.add_estimate(target_model, mdl_start, models_by_iter,
-                             new_params, base_estimate_label + "." + badfit_typ)                    
+                             new_params, base_estimate_label + "." + badfit_typ)
 
         #Add gauge optimizations to the new estimate
-        for gokey, gaugeOptParams in base_estimate.goparameters.items():            
+        for gokey, gaugeOptParams in base_estimate.goparameters.items():
             if new_final_model is not None:
                 add_gauge_opt(results.estimates[base_estimate_label + '.' + badfit_typ], gaugeOptParams,
                               target_model, new_final_model, comm, printer - 1)
@@ -1455,12 +1454,12 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
                 go_gs_final = base_estimate.models[gokey]
                 results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
                     gaugeOptParams.copy(), go_gs_final, None, comm, printer - 1)
-                
+
 
 def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
     # Get by-sequence goodness of fit
     objective = parameters.get('objective', 'logl')
-    
+
     if objective == "chi2":
         fitQty = _tools.chi2_terms(model, ds, circuitList,
                                    parameters.get('minProbClipForWeighting', 1e-4),
@@ -1488,10 +1487,10 @@ def get_robust_scaling(scale_typ, model, ds, circuitList, parameters, evaltree_c
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
     TODO: docstring - more details
     """
-    
+
     fitQty = _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit)
     #Note: fitQty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
-    
+
     expected = (len(ds.get_outcome_labels()) - 1)  # == "k"
     dof_per_box = expected; nboxes = len(circuitList)
     pc = 0.05  # hardcoded (1 - confidence level) for now -- make into advanced option w/default
@@ -1521,7 +1520,7 @@ def get_robust_scaling(scale_typ, model, ds, circuitList, parameters, evaltree_c
             if fit > expected:
                 if opstr in circuitWeights: circuitWeights[opstr] *= expected / fit
                 else: circuitWeights[opstr] = expected / fit
-        
+
     return circuitWeights
 
 
@@ -1684,7 +1683,5 @@ def reoptimize_with_weights(model, ds, circuitList, circuitWeights, objective, o
         _, mdl_reopt = _alg.do_mlgst(**reopt_args)
 
     else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
-    
+
     return mdl_reopt
-
-

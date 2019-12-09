@@ -13,7 +13,6 @@ import numpy.linalg as _nla
 import collections as _collections
 import itertools as _itertools
 
-from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt

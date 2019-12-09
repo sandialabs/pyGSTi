@@ -17,7 +17,6 @@ import itertools as _itertools
 from ..objects import dataset as _ds
 from ..objects import labeldicts as _ld
 from ..baseobjs import label as _lbl
-from ..tools import compattools as _compat
 from . import circuitconstruction as _gstrc
 
 from pprint import pprint
@@ -392,7 +391,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     """
     merge_dict = _collections.defaultdict(list)
     for ol in outcome_labels:
-        if _compat.isstr(ol):
+        if isinstance(ol, str):
             reduced = ''.join([ol[i] for i in indices_to_keep])
         else:
             assert(len(ol) == 1)  # should be a 1-tuple

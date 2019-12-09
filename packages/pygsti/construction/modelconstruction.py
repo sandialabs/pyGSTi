@@ -18,7 +18,6 @@ import warnings as _warnings
 
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
-from ..tools import compattools as _compat
 from ..tools import internalgates as _itgs
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
@@ -522,7 +521,7 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         else:
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
-    if _compat.isstr(povmLabels):
+    if isinstance(povmLabels, str):
         povmLabels = [povmLabels]
         effectLabels = [effectLabels]
         effectExpressions = [effectExpressions]
