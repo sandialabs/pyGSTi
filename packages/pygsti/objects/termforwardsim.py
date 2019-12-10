@@ -890,9 +890,7 @@ class TermForwardSimulator(ForwardSimulator):
         # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector()) # done in bulk_get_achieved_and_max_sopm
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
         gaps = max_sopm - achieved_sopm  # a strict bound on the error in each outcome probability, but often pessimistic
-        # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
-        assert(_np.all(gaps >= -1e-6))
-        gaps = _np.clip(gaps, 0, None)
+        assert(_np.all(gaps >= 0))
 
         if self.perr_heuristic == "none":
             nFailures = _np.count_nonzero(gaps > self.allowed_perr)

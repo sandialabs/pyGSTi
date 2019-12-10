@@ -1139,8 +1139,9 @@ General_decomposition = _modf.modelfn_factory(general_decomposition)
 def average_gateset_infidelity(modelA, modelB):
     """ Average model infidelity """
     # B is target model usually but must be "modelB" b/c of decorator coding...
-    from ..extras.rb import theory as _rbtheory
-    return _rbtheory.gateset_infidelity(modelA, modelB)
+    #TEMPORARILY disabled b/c RB analysis is broken
+    #from ..extras.rb import theory as _rbtheory
+    return -1.0  # _rbtheory.gateset_infidelity(modelA, modelB)
 
 
 Average_gateset_infidelity = _modf.modelfn_factory(average_gateset_infidelity)
@@ -1151,8 +1152,9 @@ def predicted_rb_number(modelA, modelB):
     """
     Prediction of RB number based on estimated (A) and target (B) models
     """
-    from ..extras.rb import theory as _rbtheory
-    return _rbtheory.predicted_RB_number(modelA, modelB)
+    #TEMPORARILY disabled b/c RB analysis is broken
+    #from ..extras.rb import theory as _rbtheory
+    return -1.0  # _rbtheory.predicted_RB_number(modelA, modelB)
 
 
 Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)

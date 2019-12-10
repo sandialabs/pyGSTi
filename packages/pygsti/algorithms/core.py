@@ -630,9 +630,10 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
 
     printer.log("--- eLGST (least squares) ---", 1)
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUseInEstimation) > 0 and isinstance(circuitsToUseInEstimation[0], _objs.Circuit):
-        circuitsToUseInEstimation = [opstr.tup for opstr in circuitsToUseInEstimation]
+    #if len(circuitsToUseInEstimation) > 0 and isinstance(circuitsToUseInEstimation[0], _objs.Circuit):
+    #    circuitsToUseInEstimation = [opstr.tup for opstr in circuitsToUseInEstimation]
 
     #Setup and solve a least-squares problem where each element of each
     # (lgst_estimated_process - process_estimate_using_current_model)  difference is a least-squares
@@ -902,13 +903,14 @@ def do_iterative_exlgst(
 #          'warn'   - skip string, print a warning to stdout, and proceed
 #          'ignore' - skip string silently and proceed
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation) > 0 and \
-       len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
-        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
-    else:
-        circuitLists = circuitSetsToUseInEstimation
+    #if len(circuitSetsToUseInEstimation) > 0 and \
+    #   len(circuitSetsToUseInEstimation[0]) > 0 and \
+    #   isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+    #    circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
+    #else:
+    circuitLists = circuitSetsToUseInEstimation
 
     #Run extended eLGST iteratively on given sets of estimatable strings
     elgstModels = []; minErrs = []  # for returnAll == True case
@@ -1093,10 +1095,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUse) > 0 and \
-            isinstance(circuitsToUse[0], _objs.Circuit):
-        circuitsToUse = [opstr.tup for opstr in circuitsToUse]
+    #if len(circuitsToUse) > 0 and \
+    #        isinstance(circuitsToUse[0], _objs.Circuit):
+    #    circuitsToUse = [opstr.tup for opstr in circuitsToUse]
 
     #Memory allocation
     ns = int(round(_np.sqrt(mdl.dim)))  # estimate avg number of spamtuples per string
@@ -1145,8 +1148,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     profiler.add_time("do_mc2gst: pre-opt treegen", tStart)
 
     #Expand operation label aliases used in DataSet lookups
-    dsCircuitsToUse = _tools.find_replace_tuple_list(
-        circuitsToUse, opLabelAliases)
+    if opLabelAliases is not None:
+        dsCircuitsToUse = _tools.find_replace_tuple_list(
+            circuitsToUse, opLabelAliases)
+    else:
+        dsCircuitsToUse = circuitsToUse
 
     #  Allocate peristent memory
     #  (must be AFTER possible operation sequence permutation by
@@ -1495,9 +1501,10 @@ def do_mc2gst_with_model_selection(
     #printer.log('', 2)
     printer.log("--- Minimum Chi^2 GST with model selection (starting dim = %d) ---" % dim, 1)
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0], _objs.Circuit):
-        circuitsToUse = [opstr.tup for opstr in circuitsToUse]
+    #if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0], _objs.Circuit):
+    #    circuitsToUse = [opstr.tup for opstr in circuitsToUse]
 
     minErr, mdl = do_mc2gst(dataset, startModel, circuitsToUse, maxiter,
                             maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
@@ -1745,13 +1752,14 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation) > 0 and \
-       len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
-        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
-    else:
-        circuitLists = circuitSetsToUseInEstimation
+    #if len(circuitSetsToUseInEstimation) > 0 and \
+    #   len(circuitSetsToUseInEstimation[0]) > 0 and \
+    #   isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+    #    circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
+    #else:
+    circuitLists = circuitSetsToUseInEstimation
 
     #Run MC2GST iteratively on given sets of estimatable strings
     lsgstModels = []; minErrs = []  # for returnAll == True case
@@ -1939,13 +1947,14 @@ def do_iterative_mc2gst_with_model_selection(
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation) > 0 and \
-       len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
-        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
-    else:
-        circuitLists = circuitSetsToUseInEstimation
+    #if len(circuitSetsToUseInEstimation) > 0 and \
+    #   len(circuitSetsToUseInEstimation[0]) > 0 and \
+    #   isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+    #    circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
+    #else:
+    circuitLists = circuitSetsToUseInEstimation
 
     #Run MC2GST iteratively on given sets of estimatable strings
     lsgstModels = []; minErrs = []  # for returnAll == True case
@@ -2226,8 +2235,11 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
     #Expand operation label aliases used in DataSet lookups
-    dsCircuitsToUse = _tools.find_replace_tuple_list(
-        circuitsToUse, opLabelAliases)
+    if opLabelAliases is not None:
+        dsCircuitsToUse = _tools.find_replace_tuple_list(
+            circuitsToUse, opLabelAliases)
+    else:
+        dsCircuitsToUse = circuitsToUse
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         cntVecMx = evaltree_cache['cntVecMx']
@@ -2482,13 +2494,14 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
 
+    #TODO REMOVE - now Circuits are tuples + linelabels, so we need the entire object
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
-    if len(circuitSetsToUseInEstimation) > 0 and \
-       len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
-        circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
-    else:
-        circuitLists = circuitSetsToUseInEstimation
+    #if len(circuitSetsToUseInEstimation) > 0 and \
+    #   len(circuitSetsToUseInEstimation[0]) > 0 and \
+    #   isinstance(circuitSetsToUseInEstimation[0][0], _objs.Circuit):
+    #    circuitLists = [[opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation]
+    #else:
+    circuitLists = circuitSetsToUseInEstimation
 
     #Run extended MLGST iteratively on given sets of estimatable strings
     mleModels = []; maxLogLs = []  # for returnAll == True case

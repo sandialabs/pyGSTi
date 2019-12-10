@@ -606,8 +606,8 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
     if mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
             raise ValueError("Cannot construct a real log: unpaired negative"
-                             + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices]
-                             + "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
+                             + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
+                             #+ "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
         elif actionIfImaginary == "warn":
             _warnings.warn("Cannot construct a real log: unpaired negative"
                            + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
@@ -781,7 +781,8 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
     pairs : list
         Only returned when `return_pairs == True`, a list of 2-tuple pairs of
         indices `(ix,iy)` giving the indices into `a` and `b` respectively of
-        each matched pair.
+        each matched pair.  The first (ix) indices will be in continuous 
+        ascending order starting at zero.
     """
     assert(len(a) == len(b))
     if metricfn is None:
@@ -876,7 +877,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
                     if i in pair: break  # ok, we've already found v's pair
                 else:
                     for j, v2 in enumerate(ar[i + 1:], start=i + 1):
-                        if _np.isclose(_np.conj(v), v2):
+                        if _np.isclose(_np.conj(v), v2) and all([(j not in cpair) for cpair in conj_inds]):
                             conj_inds.append((i, j)); break
                     else:
                         raise ValueError("No conjugate pair found for %s" % str(v))
@@ -1605,3 +1606,114 @@ def to_unitary(scaled_unitary):
     assert(_np.allclose(scaled_identity / (scale**2), _np.identity(scaled_identity.shape[0], 'd'))), \
         "Given `scaled_unitary` does not appear to be a scaled unitary matrix!"
     return scale, (scaled_unitary / scale)
+
+
+def sorted_eig(mx):
+    """
+    TODO: docstring
+    Like numpy.eig, but returns the eigenvalues and vectors sorted by eigenvalue,
+    where sorting is done according to (real_part, imaginary_part) tuple.
+    """
+    ev, U = _np.linalg.eig(mx)
+    sorted_evals = sorted(list(enumerate(ev)), key=lambda x: (x[1].real,x[1].imag) )
+    sorted_ev = ev.copy()
+    sorted_U = U.copy()
+    for idest,(isrc,_) in enumerate(sorted_evals):
+        sorted_ev[idest] = ev[isrc]
+        sorted_U[:,idest] = U[:,isrc]
+    return sorted_ev, sorted_U
+
+def get_kite(evals):
+    """ TODO: docstring.  Assumes evals are sorted """
+    kite = []
+    blk = 0; last_ev = evals[0]
+    for ev in evals:    
+        if _np.isclose(ev, last_ev):
+            blk += 1
+        else:
+            kite.append(blk)
+            blk = 1; last_ev = ev
+    kite.append(blk)
+    return kite
+
+def find_zero_communtant_connection(U, Uinv, U0, U0inv, kite):
+    """
+    Find a matrix `R` such that Uinv R U0 is diagonal (so G = R G0 Rinv if
+    G and G0 share the same eigenvalues and have eigenvectors U and U0 respectively)
+    AND log(R) has no (zero) projection onto the commutant of G0 = U0 diag(evals) U0inv.
+    """
+    
+    #0.  Let R be a matrix that maps G0 -> Gp, where Gp has evecs of G and evals of G0.
+    #1.  Does R vanish on the commutant of G0?  If so, we’re done.
+    #2.  Define x = PROJ_COMMUTANT[ log(R) ], and X = exp(-x).
+    #3.  Redefine R = X.R.
+    #4.  GOTO 1.
+    
+    # G0 = U0 * diag * U0inv, G = U * diag * Uinv
+    D = project_onto_kite(_np.dot(Uinv,U0), kite)
+    R = _np.dot(U, _np.dot(D,U0inv)) #Include D so R is as close to identity as possible
+    assert(_np.linalg.norm(R.imag) < 1e-8)
+
+    def project_onto_commutant(x):
+        a = _np.dot(U0inv, _np.dot(x, U0))
+        a = project_onto_kite(a, kite)
+        return _np.dot(U0, _np.dot(a, U0inv))
+    
+    iter = 0; lastR = R
+    while iter < 100:
+        #Starting condition = Uinv * R * U0 is diagonal, so
+        # G' = R G0 Rinv where G' has the same spectrum as G0 but different eigenvecs (U vs U0)
+        assert(_np.linalg.norm(R.imag) < 1e-8)
+        test = _np.dot(Uinv, _np.dot(R, U0))
+        assert(_np.linalg.norm(project_onto_antikite(test, kite)) < 1e-8)
+    
+        r = real_matrix_log(R)
+        assert(_np.linalg.norm(r.imag) < 1e-8), "log of real matrix should be real!"
+        r_on_comm = project_onto_commutant(r)
+        assert(_np.linalg.norm(r_on_comm.imag) < 1e-8), "projection to commutant should not make complex!"
+        
+        oncomm_norm = _np.linalg.norm(r_on_comm)
+        #print("Iter %d: onkite-norm = %g  lastdiff = %g" % (iter, oncomm_norm, _np.linalg.norm(R-lastR)))
+        if oncomm_norm < 1e-12 or (iter > 0 and _np.linalg.norm(R-lastR) < 1e-8):  #if r has desired form or we didn't really update R
+            break #STOP - converged!
+
+        X = _spl.expm(-r_on_comm)
+        assert(_np.linalg.norm(X.imag) < 1e-8)
+        
+        lastR = R
+        R = _np.dot(R, X)
+        iter += 1 
+
+    assert(_np.linalg.norm(R.imag) < 1e-8), "R should always be real!"
+    return R.real
+
+def project_onto_kite(mx, kite):
+    """
+    Project `mx` onto `kite`, so `mx` is zero everywhere except on the kite.
+    """
+    #Kite is a list of block sizes, such that sum(kite) == dimension of `mx`
+    mx = mx.copy()
+    dim = mx.shape[0]
+    assert(dim == mx.shape[1]), "`mx` must be square!"
+    k0 = 0
+    for k in kite:
+        mx[k0:k0+k, k0+k:] = 0
+        mx[k0+k:, k0:k0+k] = 0
+        k0 += k
+    assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
+    return mx
+
+def project_onto_antikite(mx, kite):
+    """
+    Project `mx` onto the complement of `kite`, so `mx` is zero everywhere *on* the kite.
+    """
+    #Kite is a list of block sizes, such that sum(kite) == dimension of `mx`
+    mx = mx.copy()
+    dim = mx.shape[0]
+    assert(dim == mx.shape[1]), "`mx` must be square!"
+    k0 = 0
+    for k in kite:
+        mx[k0:k0+k, k0:k0+k] = 0
+        k0 += k
+    assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
+    return mx

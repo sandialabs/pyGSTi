@@ -554,6 +554,7 @@ class HasPolyCoefficient(object):
             "Coefficient (type %s) must implements `map_indices_inplace`" % str(type(self.coeff))
         #self.coeff.map_indices_inplace(mapfn)
         self._rep.coeff.map_indices_inplace(mapfn)
+        raise NotImplementedError("Need to add compact_complex() update as mapvec version does now")
 
     def mapvec_indices_inplace(self, mapvec):
         """
@@ -574,7 +575,7 @@ class HasPolyCoefficient(object):
         None
         """
         #self.coeff.mapvec_indices_inplace(mapvec)
-        self._rep.coeff.mapvec_indices_inplace(mapvec)
+        self._rep.mapvec_indices_inplace(mapvec)
 
 
 class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):

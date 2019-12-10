@@ -443,7 +443,7 @@ class OpModel(Model):
             c = _termfwdsim.TermForwardSimulator
             if sim_type == "termorder":
                 assert(all([k in ('max_order', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
-                kwargs['mode'] = "taylor_order"
+                kwargs['mode'] = "taylor-order"
                 if 'max_order' not in kwargs: kwargs['max_order'] = 1
                 if 'cache' not in kwargs: kwargs['cache'] = None  # Needed?
 

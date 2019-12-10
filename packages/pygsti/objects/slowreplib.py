@@ -30,6 +30,11 @@ LARGE = 1000000000
 # a very high term weight which won't help (at all) a
 # path get included in the selected set of paths.
 
+SMALL = 1e-5
+# a number which is used in place of zero within the
+# product of term magnitudes to keep a running path
+# magnitude from being zero (and losing memory of terms).
+
 
 # DEBUG!!!
 DEBUG_FCOUNT = 0
@@ -2902,7 +2907,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     #    if debug > 1: print("BEGIN TRAVERSAL")
     #    accepted_bs_and_mags = {}
 
-    def traverse_tree(root, incd, log_thres, current_mag, current_logmag, order):
+    def traverse_tree(root, incd, log_thres, current_mag, current_logmag, order, current_nzeros):
         """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
         b = root
         #print("BEGIN: ",root)
@@ -2922,13 +2927,20 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
             logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i] - 1].logmagnitude)
             #print("Trying: ",b)
             if logmag >= log_thres:  # or sub_order == 0:
-                if oprep_lists[i][b[i] - 1].magnitude == 0:
-                    mag = 0
-                else:
-                    mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i] - 1].magnitude)
+                numerator = oprep_lists[i][b[i]].magnitude
+                denom = oprep_lists[i][b[i] - 1].magnitude
+                nzeros = current_nzeros
 
-                if fn_visitpath(b, mag, i): return True  # fn_visitpath can signal early return
-                if traverse_tree(b, i, log_thres, mag, logmag, sub_order):  # add any allowed paths beneath this one
+                if denom == 0:
+                    denom = SMALL; nzeros -= 1
+                if numerator == 0:
+                    numerator = SMALL; nzeros += 1
+
+                mag = current_mag * (numerator / denom)
+                actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
+
+                if fn_visitpath(b, actual_mag, i): return True  # fn_visitpath can signal early return
+                if traverse_tree(b, i, log_thres, mag, logmag, sub_order, nzeros):  # add any allowed paths beneath this one
                     return True
             elif sub_order <= 1:
                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -2940,10 +2952,16 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 for j in foat_indices_per_op[i]:
                     if j >= orig_bi:
                         b[i] = j
-                        mag = 0 if oprep_lists[i][orig_bi - 1].magnitude == 0 else \
-                            current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][orig_bi - 1].magnitude)
+                        nzeros = current_nzeros
+                        numerator = oprep_lists[i][b[i]].magnitude
+                        denom = oprep_lists[i][orig_bi - 1].magnitude
+                        if denom == 0: denom = SMALL
 
-                        if fn_visitpath(b, mag, i): return True
+                        #if numerator == 0: nzeros += 1  # not needed b/c we just leave numerator = 0
+                        mag = current_mag * (numerator / denom)  # OK if mag == 0 as it's not passed to any recursive calls
+                        actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
+
+                        if fn_visitpath(b, actual_mag, i): return True
 
                         if i != n - 1:
                             # if we're not incrementing (from a zero-order term) the final index, then we
@@ -2951,9 +2969,11 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                             orig_bn = b[n - 1]
                             for k in range(1, num_elabels):
                                 b[n - 1] = k
-                                mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude
-                                              / oprep_lists[i][orig_bn].magnitude)
-                                if fn_visitpath(b, mag2, n - 1): return True
+                                numerator = oprep_lists[n - 1][b[n - 1]].magnitude
+                                denom = oprep_lists[i][orig_bn].magnitude
+                                if denom == 0: denom = SMALL
+                                mag2 = mag * (numerator / denom)  # zero if either numerator == 0 or mag == 0 from above.
+                                if fn_visitpath(b, mag2 if (nzeros == 0) else 0.0, n - 1): return True
 
                             b[n - 1] = orig_bn
 
@@ -2965,7 +2985,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 
     current_mag = 1.0; current_logmag = 0.0
     fn_visitpath(b, current_mag, 0)  # visit root (all 0s) path
-    traverse_tree(b, 0, log_thres, current_mag, current_logmag, 0)
+    traverse_tree(b, 0, log_thres, current_mag, current_logmag, 0, 0)
 
     return
 

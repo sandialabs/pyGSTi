@@ -14,6 +14,22 @@ import numpy as _np
 from ..baseobjs.label import Label as _Label
 
 
+def minimum(qty1, qty2):
+    """ Returns a ReportableQty that is the minimum of `qty1` and `qty2`."""
+    if qty1.value <= qty2.value:
+        return qty1
+    else:
+        return qty2
+
+
+def maximum(qty1, qty2):
+    """ Returns a ReportableQty that is the maximum of `qty1` and `qty2`."""
+    if qty1.value >= qty2.value:
+        return qty1
+    else:
+        return qty2
+
+
 class ReportableQty(object):
     """
     Encapsulates a computed quantity and possibly its error bars,
