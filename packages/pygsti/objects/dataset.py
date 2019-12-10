@@ -20,7 +20,6 @@ import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 import bisect as _bisect
-import sys as _sys
 
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
@@ -383,9 +382,9 @@ class DataSetRow(object):
                     raise KeyError("%s is not an index, timestamp, or outcome label!"
                                    % str(indexOrOutcomeLabel))
                 return self._get_single_count(outcome_label)
-            
+
             else:
-                #Compute and cache *all* of the counts, since there aren't so many of them.        
+                #Compute and cache *all* of the counts, since there aren't so many of them.
                 try:
                     return self.counts[indexOrOutcomeLabel]
                 except KeyError:
@@ -428,7 +427,7 @@ class DataSetRow(object):
         if timestamp is not None:
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
-        
+
         if self.reps is None:
             i = self.dataset.olIndex[outcome_label]
             return float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
@@ -1165,7 +1164,7 @@ class DataSet(object):
 
         update_ol : bool, optional
             This argument is for internal use only and should be left as True.
-        
+
 
         Returns
         -------
@@ -2207,13 +2206,6 @@ class DataSet(object):
             state_dict['cirIndexVals'] = state_dict['gsIndexVals']
             del state_dict['gsIndexKeys']
             del state_dict['gsIndexVals']
-
-            if _sys.version_info < (3, 0):  # for backward compatibility, needed for Python2 only
-                # where GateStrings don't get up-converted to Circuits b/c __new__ isn't called
-                new_aux_info = _DefaultDict(dict)
-                for gstr, val in state_dict['auxInfo'].items():
-                    new_aux_info[_cir.Circuit(gstr._tup, stringrep=gstr._str)] = val
-                state_dict['auxInfo'] = new_aux_info
 
         def expand(x):  # to be backward compatible
             """ Expand a compressed circuit """

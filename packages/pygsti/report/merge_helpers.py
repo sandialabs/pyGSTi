@@ -10,7 +10,6 @@
 
 import collections as _collections
 import os as _os
-import sys as _sys
 import shutil as _shutil
 import webbrowser as _webbrowser
 
@@ -689,11 +688,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
     template = _re.sub(r"\\putfield\{\{([^}]+)\}\}\{\{[^}]*\}\}", "{\\1}", template)
 
     # Replace str.format fields with values and write to output file
-    if _sys.version_info > (3, 0):
-        filled_template = template.format_map(qtys_latex)  # need python 3.2+
-    else:
-        filled_template = template.format(**qtys_latex)  # no nice defaultdict behavior
-        filled_template = filled_template.encode('utf-8')  # Python2: need to re-encode for write(...)
+    filled_template = template.format_map(qtys_latex)
 
     with open(outputFilename, 'w') as outputfile:
         outputfile.write(filled_template)

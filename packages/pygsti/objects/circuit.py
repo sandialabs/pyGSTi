@@ -11,7 +11,6 @@
 import numbers as _numbers
 import numpy as _np
 import copy as _copy
-import sys as _sys
 import itertools as _itertools
 import warnings as _warnings
 
@@ -48,16 +47,16 @@ def _np_to_quil_def_str(name, input_array):
     Write a DEFGATE block for RQC quil for an arbitrary one- or two-qubit unitary gate.
     (quil/pyquil currently does not offer support for arbitrary n-qubit gates for
     n>2.)
-    
+
     Parameters
     ----------
     name : str
         The name of the gate (e.g., 'Gc0' for the 0th Clifford gate)
-    
+
     input_array : array_like
-        The representation of the gate as a unitary map.  
+        The representation of the gate as a unitary map.
         E.g., for name = 'Gc0',input_array = np.array([[1,0],[0,1]])
-    
+
     Returns
     -------
     output : str
@@ -70,7 +69,7 @@ def _np_to_quil_def_str(name, input_array):
         output += ', '.join(map(_num_to_rqc_str,line))
         output += '\n'
     return output
-    
+
 def _num_to_rqc_str(num):
     """Convert float to string to be included in RQC quil DEFGATE block
     (as written by _np_to_quil_def_str)."""
@@ -2395,7 +2394,7 @@ class Circuit(object):
     def width(self):
         """
         The circuit width. This is the number of qubits on which the circuit
-        acts. This includes qubits that only idle, but are included as part 
+        acts. This includes qubits that only idle, but are included as part
         of the circuit according to self.line_labels.
 
         Returns
@@ -2568,8 +2567,8 @@ class Circuit(object):
         if self.number_of_lines() == 0: return ''
 
         s = ''
-        Ctxt = 'C'  # if _sys.version_info <= (3, 0) else '\u25CF' # No unicode in
-        Ttxt = 'T'  # if _sys.version_info <= (3, 0) else '\u2295' #  Python 2
+        Ctxt = 'C'
+        Ttxt = 'T'
         identityName = 'I'  # can be anything that isn't used in circuit
 
         def abbrev(lbl, k):  # assumes a simple label w/ name & qubits
@@ -2765,7 +2764,7 @@ class Circuit(object):
             circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
             (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
             that qubit has Rigetti label 2.)
-        
+
         gate_declarations : dict, optional
             If not None, a dictionary that provides unitary maps for particular gates that
             are not already in the quil syntax.

@@ -16,7 +16,6 @@ import numpy as _np
 #import uuid        as _uuid
 import random as _random
 import inspect as _inspect
-import sys as _sys
 import pickle as _pickle
 
 import subprocess as _subprocess
@@ -80,19 +79,6 @@ def enable_plotly_pickling():
             plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
             del plotlyDictClass.__setattr__
         plotlyDictClass.__setitem__ = setitem
-
-        #Extra Python2 code b/c of Python2.7 pickling issues
-        def getstate(self):
-            to_pkl = self.__dict__.copy(); del to_pkl['_parent']
-            return to_pkl
-
-        def doreduce(self):
-            return (plotly.graph_objs.graph_objs.Figure,
-                    (), self.__dict__)
-
-        if _sys.version_info < (3, 0):
-            plotly.graph_objs.graph_objs.Figure.__reduce__ = doreduce
-            plotlyDictClass.__getstate__ = getstate
 
 
 def disable_plotly_pickling():
@@ -219,8 +205,7 @@ class Workspace(object):
         self.smartCache = state_dict['smartCache']
 
     def _makefactory(self, cls, autodisplay):  # , printer=_objs.VerbosityPrinter(1)):
-        PY3 = bool(_sys.version_info > (3, 0))
-
+        # XXX this indirection is so wild -- can we please rewrite directly?
         #Manipulate argument list of cls.__init__
         argspec = _inspect.getargspec(cls.__init__)
         argnames = argspec[0]
@@ -248,10 +233,7 @@ class Workspace(object):
 
         #print("FACTORY FN DEF = \n",new_func)
         exec_globals = {'cls': cls, 'self': self}
-        if PY3:
-            exec(factory_func_def, exec_globals)  # Python 3
-        else:
-            exec("""exec factory_func_def in exec_globals""")  # Python 2
+        exec(factory_func_def, exec_globals)
         factoryfn = exec_globals['factoryfn']
 
         #Copy cls.__init__ info over to factory function
@@ -259,10 +241,7 @@ class Workspace(object):
         factoryfn.__doc__ = cls.__init__.__doc__
         factoryfn.__module__ = cls.__init__.__module__
         factoryfn.__dict__ = cls.__init__.__dict__
-        if PY3:
-            factoryfn.__defaults__ = cls.__init__.__defaults__
-        else:
-            factoryfn.func_defaults = cls.__init__.func_defaults
+        factoryfn.__defaults__ = cls.__init__.__defaults__
 
         return factoryfn
 
@@ -1586,12 +1565,12 @@ class WorkspaceOutput(object):
         ret += '  $(document).ready(function() {\n'
         if within_report:
             ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
-            
+
         ret += content
-        
+
         if within_report:
             ret += "  });"  # end load_loadable_item handler
-            
+
         ret += '}); //end on-ready or on-load handler\n'
 
         if global_requirejs:
@@ -1660,7 +1639,7 @@ class WorkspaceOutput(object):
         """
 
         within_report = self.options.get('within_report', False)
-        
+
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
         if div_css_classes is not None:
@@ -1732,7 +1711,7 @@ class WorkspaceOutput(object):
         handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
         handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
         handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-        
+
         handler_js += "}\n"  # end <ID>_onchange function
 
         #build change event listener javascript
@@ -2135,7 +2114,7 @@ class WorkspaceTable(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
-            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html", 
+            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap

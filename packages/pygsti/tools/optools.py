@@ -235,15 +235,7 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
 
     #currently cvxpy is only needed for this function, so don't import until here
 
-    import sys as _sys
-    if _sys.version_info < (3, 0):
-        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
-        import pickle as _pickle
-        p = _pickle.Pickler.dispatch.copy()
-        import cvxpy as _cvxpy
-        _pickle.Pickler.dispatch = p
-    else:  # no need to do this in python3
-        import cvxpy as _cvxpy
+    import cvxpy as _cvxpy
 
     #Check if using version < 1.0
     old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))

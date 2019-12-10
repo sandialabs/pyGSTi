@@ -10,7 +10,6 @@
 
 import hashlib as _hashlib
 import functools as _functools
-import sys as _sys
 import numpy as _np
 import inspect as _inspect
 import pickle as _pickle
@@ -405,12 +404,6 @@ def digest(obj, custom_digests=None):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
     if custom_digests is None:
         custom_digests = []
-    #if _sys.version_info > (3, 0): # Python3?
-    #    longT = int      # define long and unicode
-    #    unicodeT = str   #  types to mimic Python2
-    #else:
-    #    longT = long
-    #    unicodeT = unicode
 
     # a function to recursively serialize 'v' into an md5 object
     def add(md5, v):

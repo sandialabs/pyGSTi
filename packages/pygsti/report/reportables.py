@@ -26,15 +26,7 @@ from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import modelfunction as _modf
 
 try:
-    import sys as _sys
-    if _sys.version_info < (3, 0):
-        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
-        import pickle as _pickle
-        p = _pickle.Pickler.dispatch.copy()
-        import cvxpy as _cvxpy
-        _pickle.Pickler.dispatch = p
-    else:
-        import cvxpy as _cvxpy
+    import cvxpy as _cvxpy
 except ImportError:
     _cvxpy = None
 

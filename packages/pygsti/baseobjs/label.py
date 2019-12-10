@@ -9,7 +9,6 @@
 #***************************************************************************************************
 
 import numbers as _numbers
-import sys as _sys
 import itertools as _itertools
 
 import os
@@ -370,12 +369,7 @@ class LabelTup(Label, tuple):
     # native tuple.__hash__ directly == speed boost
 
 
-# We want LabelStr to act like the string literal type (not
-# 'str' when we import unicode_literals above)
-strlittype = str if _sys.version_info >= (3, 0) else unicode  # (a *native* python type)  # noqa: F821
-
-
-class LabelStr(Label, strlittype):
+class LabelStr(Label, str):
     """
     A Label for the special case when only a name is present (no
     state-space-labels).  We create this as a separate class
@@ -404,13 +398,13 @@ class LabelStr(Label, strlittype):
         return cls.__new__(cls, name, time)
 
     def __new__(cls, name, time=0.0):
-        ret = strlittype.__new__(cls, name)
+        ret = str.__new__(cls, name)
         ret.time = time
         return ret
 
     @property
     def name(self):
-        return strlittype(self[:])
+        return str(self[:])
 
     @property
     def sslbls(self):
@@ -460,11 +454,11 @@ class LabelStr(Label, strlittype):
         return s
 
     def __repr__(self):
-        return "Label{" + strlittype(self) + "}"
+        return "Label{" + str(self) + "}"
 
     def __add__(self, s):
         if isinstance(s, str):
-            return LabelStr(self.name + strlittype(s))
+            return LabelStr(self.name + str(s))
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
@@ -473,13 +467,13 @@ class LabelStr(Label, strlittype):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        return strlittype.__eq__(self, other)
+        return str.__eq__(self, other)
 
     def __lt__(self, x):
-        return strlittype.__lt__(self, strlittype(x))
+        return str.__lt__(self, str(x))
 
     def __gt__(self, x):
-        return strlittype.__gt__(self, strlittype(x))
+        return str.__gt__(self, str(x))
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
@@ -487,13 +481,13 @@ class LabelStr(Label, strlittype):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelStr, (strlittype(self), self.time), None)
+        return (LabelStr, (str(self), self.time), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
             faster serialization.
         """
-        return strlittype(self)
+        return str(self)
 
     def replacename(self, oldname, newname):
         """ Returns a label with `oldname` replaced by `newname`."""
@@ -504,7 +498,7 @@ class LabelStr(Label, strlittype):
             circuit perspective) label or not """
         return True
 
-    __hash__ = strlittype.__hash__  # this is why we derive from tuple - using the
+    __hash__ = str.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
 
