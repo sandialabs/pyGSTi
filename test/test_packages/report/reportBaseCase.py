@@ -52,8 +52,8 @@ class ReportBaseCase(BaseTestCase):
             ds2.save(compare_files + "/reportgen2.dataset")
 
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s")
-        cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset%s")
+        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
+        cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.do_lgst(cls.ds, std.fiducials, std.fiducials, targetModel, svdTruncateTo=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, targetModel, {'gates': 1.0, 'spam': 0.0})
