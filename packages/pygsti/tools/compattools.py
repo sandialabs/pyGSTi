@@ -1,4 +1,4 @@
-""" Functions for Python2 / Python3 compatibility """
+""" Tools for general compatibility. """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,7 +14,13 @@ import uuid as _uuid
 
 
 def isint(x):
-    """ Return whether `x` has an integer type """
+    """ Return whether `x` has an integer type.
+
+    `numbers.Integral` is the ABC to which most integral types are
+    registered, including `int` and all `numpy.int` variants. This
+    function should be used in place of `isinstance(x, int)` or
+    similar.
+    """
     return isinstance(x, _numbers.Integral)
 
 
@@ -32,8 +38,8 @@ def _numpy14einsumfix():
 def patched_UUID():
     """Monkeypatch the uuid module with a fake SafeUUID
 
-    This is a workaround for unpickling objects pickled in later python
-    versions.
+    `uuid.SafeUUID` is new in Python 3.7. This is a workaround to
+    allow unpickling objects from >= 3.7 in < 3.7.
 
     TODO: objects should be serialized correctly and this should be deprecated.
     """
