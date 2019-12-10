@@ -1,7 +1,8 @@
 import functools
 import numpy as np
+from pathlib import Path
 
-from . import IOBase, with_temp_path, with_temp_file, Path
+from . import IOBase, with_temp_path, with_temp_file
 
 from pygsti.construction import std1Q_XYI as std
 from pygsti.objects import Circuit, CircuitLabel

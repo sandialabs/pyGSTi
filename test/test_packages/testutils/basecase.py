@@ -29,7 +29,7 @@ class BaseTestCase(unittest.TestCase):
             cls.versionsuffix = "" #Python 2
         except NameError:
             cls.versionsuffix = "v3" #Python 3
-    
+
     def setUp(self):
         # move working directories
         try:
@@ -37,7 +37,7 @@ class BaseTestCase(unittest.TestCase):
         except OSError as e:
             #print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
             raise e
-        
+
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py
         # However, the result is the same..
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
@@ -66,7 +66,7 @@ class BaseTestCase(unittest.TestCase):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0, places=places )
 
     def assertArraysEqual(self,a,b,places=7):
-        self.assertTrue(np.array_equal(a,b)) 
+        self.assertTrue(np.array_equal(a,b))
 
     def assertWarns(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:
@@ -74,9 +74,6 @@ class BaseTestCase(unittest.TestCase):
             result = callable(*args, **kwds)
             self.assertTrue(len(warning_list) > 0)
         return result
-
-    def isPython2(self):
-        return sys.version_info[0] == 2
 
     def assertSingleElemArrayAlmostEqual(self, a, b):
         # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)

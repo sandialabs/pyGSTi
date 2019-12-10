@@ -136,10 +136,6 @@ Gx^4 0.2 100
                                                         nSamples=1000, sampleError='none')
         ds_round = pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                           nSamples=1000, sampleError='round')
-        ds_binom = pygsti.construction.generate_fake_data(depol_gateset, circuits, nSamples=1000,
-                                                          sampleError='binomial', seed=100)
-        ds_multi = pygsti.construction.generate_fake_data(depol_gateset, circuits,
-                                                          nSamples=1000, sampleError='multinomial', seed=100)
         ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
                                                              nSamples=None, sampleError='none')
 
@@ -147,8 +143,6 @@ Gx^4 0.2 100
         if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  circuits)
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, circuits)
-            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_binom.txt", ds_binom, circuits)
-            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_multi.txt", ds_multi, circuits)
 
         bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
@@ -164,12 +158,6 @@ Gx^4 0.2 100
 
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_round.txt")
         self.assertEqualDatasets(ds_round, saved_ds)
-
-        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_binom.txt")
-        if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_binom, saved_ds)
-
-        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_multi.txt")
-        if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
 
     def test_multi_dataset(self):

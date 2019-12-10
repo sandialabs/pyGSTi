@@ -5,31 +5,8 @@ import functools
 import types
 from contextlib import contextmanager
 
-# Underlying modules should import these generic names rather than importing the modules directly:
-
-# `pathlib' is standard as of 3.4, but has been backported as pathlib2
-try:
-    from pathlib import Path
-except ImportError:
-    from pathlib2 import Path
-
-# `mock' was refactored into unittest in 3.3
-try:
-    from unittest import mock
-except ImportError:
-    import mock
-
-# `tempfile.TemporaryDirectory' is new as of 3.2
-try:
-    from tempfile import TemporaryDirectory
-except ImportError:
-    from backports.tempfile import TemporaryDirectory
-
-# using `unittest.TestCase' features new as of 3.2
-if sys.version_info < (3, 2):
-    import unittest2 as unittest
-else:
-    import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from ..testutils.basecase import temp_files, BaseTestCase
 

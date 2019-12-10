@@ -28,11 +28,6 @@ def needs_matplotlib(fn):
     return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
 
 
-def needs_python3(fn):
-    """Shortcut decorator for skipping tests of features not supported in Python 2"""
-    return unittest.skipIf(sys.version_info < (3, 0), "feature not supported in Python 2")(fn)
-
-
 def with_temp_path(fn):
     """Decorator version of ``BaseCase.temp_path``"""
     @functools.wraps(fn)

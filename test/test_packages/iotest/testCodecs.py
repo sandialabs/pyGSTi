@@ -4,7 +4,8 @@ mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
 
 import unittest
-import os,sys
+import os
+import sys
 import numpy as np
 import pickle
 import collections
@@ -21,6 +22,8 @@ class ObjDerivedFromStdType(list):
     def __init__(self,listInit):
         self.extra = "Hello"
         super(ObjDerivedFromStdType,self).__init__(listInit)
+
+
 testObj = ObjDerivedFromStdType( (1,2,3) )
 testObj.__class__.__module__ = "pygsti.objects" # make object look like a pygsti-native object so it gets special serialization treatment.
 sys.modules['pygsti.objects'].ObjDerivedFromStdType = ObjDerivedFromStdType
@@ -31,21 +34,21 @@ class CodecsTestCase(BaseTestCase):
         std.target_model()._check_paramvec()
         super(CodecsTestCase, self).setUp()
         self.model = std.target_model()
-        
+
         self.germs = pygsti.construction.circuit_list( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
         self.opLabels = list(self.model.operations.keys())
-        
+
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
-        
+
         self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()
         self.ds = pygsti.construction.generate_fake_data(
             self.datagen_gateset, self.lsgstStrings[-1],
             nSamples=1000,sampleError='binomial', seed=100)
-        
+
         #Make an model with instruments
         E = self.datagen_gateset.povms['Mdefault']['0']
         Erem = self.datagen_gateset.povms['Mdefault']['1']
@@ -54,23 +57,23 @@ class CodecsTestCase(BaseTestCase):
         self.mdl_withInst = self.datagen_gateset.copy()
         self.mdl_withInst.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.mdl_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-        
+
         self.results = self.runSilent(pygsti.do_long_sequence_gst,
                                      self.ds, std.target_model(), self.fiducials, self.fiducials,
                                      self.germs, self.maxLens)
-        
+
         #make a confidence region factory
         estLbl = "default"
         crfact = self.results.estimates[estLbl].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
-        
+
         #create a Workspace object
-        self.ws = pygsti.report.create_standard_report(self.results, None, 
+        self.ws = pygsti.report.create_standard_report(self.results, None,
                                                        title="GST Codec TEST Report",
                                                        confidenceLevel=95)
         std.target_model()._check_paramvec()
-        
+
         #create miscellaneous other objects
         self.miscObjects = []
         self.miscObjects.append( pygsti.objects.labeldicts.OutcomeLabelDict(
@@ -78,9 +81,9 @@ class CodecsTestCase(BaseTestCase):
 
 
 class TestCodecs(CodecsTestCase):
-    
+
     def test_json(self):
-        
+
         #basic types
         s = json.dumps(range(10))
         x = json.loads(s)
@@ -90,7 +93,7 @@ class TestCodecs(CodecsTestCase):
         x = json.loads(s)
         s = json.dumps( testObj )
         x = json.loads(s)
-        
+
         #string list
         s = json.dumps(self.lsgstStrings)
         x = json.loads(s)
@@ -124,13 +127,13 @@ class TestCodecs(CodecsTestCase):
             json.dump(self.results, f)
         print("mdl_target2 = ",id(std.target_model()))
         print("rho0 parent2 = ",id(std.target_model().preps['rho0'].parent))
-        std.target_model()._check_paramvec()            
+        std.target_model()._check_paramvec()
         with open(temp_files + "/results.json",'r') as f:
             x = json.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
         self.assertEqual(list(x.estimates['default'].confidence_region_factories.keys()),
                          list(self.results.estimates['default'].confidence_region_factories.keys()))
-        
+
         # Workspace
         s = json.dumps(self.ws)
         x = json.loads(s)
@@ -199,7 +202,7 @@ class TestCodecs(CodecsTestCase):
 
 
     def test_pickle(self):
-        
+
         #basic types
         s = pickle.dumps(range(10))
         x = pickle.loads(s)
@@ -209,7 +212,7 @@ class TestCodecs(CodecsTestCase):
         x = pickle.loads(s)
         s = pickle.dumps( testObj ) #b/c we've messed with its __module__ this won't work...
         x = pickle.loads(s)
-        
+
         #string list
         s = pickle.dumps(self.lsgstStrings)
         x = pickle.loads(s)
@@ -256,7 +259,7 @@ class TestCodecs(CodecsTestCase):
     def test_std_decode(self):
         # test decode_std_base function since it isn't easily reached/covered:
         binary = False
-        
+
         mock_json_obj = {'__tuple__': True}
         with self.assertRaises(AssertionError):
             pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
@@ -297,7 +300,7 @@ class TestCodecs(CodecsTestCase):
         with self.assertRaises(AssertionError):
             pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
 
-    
+
     def test_helpers(self):
         pygsti.io.jsoncodec.tostr("Hi")
         pygsti.io.jsoncodec.tostr(b"Hi")
@@ -334,14 +337,14 @@ class TestCodecs(CodecsTestCase):
     #    print("x = ",x)
     #
     #    print("-----------------------------")
-    #    
+    #
     #    s = json.dumps(std.prepStrs[2])
     #    print("s = ",s)
     #    x = json.loads(s)
     #    print("x = ",x)
     #    assert(False),"STOP"
-        
-        
+
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

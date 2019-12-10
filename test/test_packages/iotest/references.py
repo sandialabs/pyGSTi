@@ -4,7 +4,8 @@ import functools
 from pygsti.construction import std1Q_XYI as std
 import pygsti
 
-from . import Path, TEMP_FILE_PATH
+from pathlib import Path
+from . import TEMP_FILE_PATH
 
 
 def _write(filename):

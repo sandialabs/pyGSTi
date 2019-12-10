@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 
-from ..util import BaseCase, needs_python3
+from ..util import BaseCase
 
 from pygsti.objects import FullGaugeGroupElement, Basis, ExplicitOpModel, TPPOVM, UnconstrainedPOVM
 import pygsti.construction as pc
@@ -80,7 +80,6 @@ class SpamvecBase(object):
         self.assertArraysAlmostEqual(vec_pickle, self.vec)
         self.assertEqual(type(vec_pickle), type(self.vec))
 
-    @needs_python3
     def test_arithmetic(self):
         result = self.vec + self.vec
         self.assertEqual(type(result), np.ndarray)
