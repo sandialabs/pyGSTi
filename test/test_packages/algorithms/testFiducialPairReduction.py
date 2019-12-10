@@ -1,7 +1,8 @@
-import unittest, os
+import unittest
+import os
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-from ..testutils import compare_files, temp_files
+from ..testutils import compare_files, temp_files, regenerate_references
 
 import numpy as np
 import pickle
@@ -30,10 +31,9 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        nRandom=100, seed=None, verbosity=3,
                        memLimit=None)
 
-        vs = self.versionsuffix
-        cmpFilenm = compare_files + "/IFPR_fidPairs_dict%s.pkl" % vs
-        #Uncomment to SAVE reference fidPairs dictionary
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        cmpFilenm = compare_files + "/IFPR_fidPairs_dict.pkl"
+        # Run to SAVE reference fidPairs dictionary
+        if regenerate_references():
             with open(cmpFilenm,"wb") as pklfile:
                 pickle.dump(fidPairs, pklfile)
 

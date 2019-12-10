@@ -7,7 +7,7 @@ import warnings
 import os
 from pygsti.construction import std1Q_XYI as std
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 class TestDataSetMethods(BaseTestCase):
 
@@ -140,7 +140,7 @@ Gx^4 0.2 100
                                                              nSamples=None, sampleError='none')
 
         # TO SEED SAVED FILE, RUN BELOW LINES:
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  circuits)
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, circuits)
 
@@ -437,20 +437,19 @@ Gy 11001100
 
 
     def test_load_old_dataset(self):
-        vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
         with pygsti.io.enable_old_object_unpickling():
-            with open(compare_files + "/pygsti0.9.6.dataset.pkl.%s" % vs,'rb') as f:
+            with open(compare_files + "/pygsti0.9.6.dataset.pkl", 'rb') as f:
                 ds = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
-        with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
+        with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
             pickle.dump(ds, f)
 
         with pygsti.io.enable_old_object_unpickling("0.9.7"):
-            with open(compare_files + "/pygsti0.9.7.dataset.pkl.%s" % vs,'rb') as f:
+            with open(compare_files + "/pygsti0.9.7.dataset.pkl", 'rb') as f:
                 ds = pickle.load(f)
-        with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
+        with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
             pickle.dump(ds, f)
 
 

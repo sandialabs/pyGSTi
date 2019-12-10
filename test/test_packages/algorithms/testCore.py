@@ -10,9 +10,9 @@ from pygsti.objects import Label as L
 
 import numpy as np
 from scipy import polyfit
-import sys, os
+import sys
 
-from ..testutils import compare_files, temp_files
+from ..testutils import compare_files, temp_files, regenerate_references
 from .basecase import AlgorithmsBase
 
 class TestCoreMethods(AlgorithmsBase):
@@ -30,7 +30,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_model(mdl_lgst,compare_files + "/lgst.model", "Saved LGST Model before gauge optimization")
             pygsti.io.write_model(mdl_lgst_go,compare_files + "/lgst_go.model", "Saved LGST Model after gauge optimization")
             pygsti.io.write_model(mdl_clgst,compare_files + "/clgst.model", "Saved LGST Model after G.O. and CPTP contraction")
@@ -113,7 +113,7 @@ class TestCoreMethods(AlgorithmsBase):
                                                    check_jacobian=True)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_model(mdl_exlgst,compare_files + "/exlgst.model", "Saved Extended-LGST (eLGST) Model")
             pygsti.io.write_model(mdl_exlgst_reg,compare_files + "/exlgst_reg.model", "Saved Extended-LGST (eLGST) Model w/regularization")
 
@@ -152,7 +152,7 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual(mdl_lsgst.frobeniusdist(all_gs_lsgst_tups[-1]),0)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_model(mdl_lsgst,compare_files + "/lsgst.model", "Saved LSGST Model")
             pygsti.io.write_model(mdl_lsgst_reg,compare_files + "/lsgst_reg.model", "Saved LSGST Model w/Regularization")
 
@@ -167,7 +167,7 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual( mdl_lsgst_reg_go.frobeniusdist(mdl_lsgst_reg_compare), 0, places=4)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             mdl_lsgst_go = pygsti.gaugeopt_to_target(mdl_lsgst, self.model, {'spam':1.0})
             pygsti.io.write_model(mdl_lsgst_go,compare_files + "/analysis.model", "Saved LSGST Analysis Model")
             print("DEBUG: analysis.model = "); print(mdl_lgst_go)
@@ -270,7 +270,7 @@ class TestCoreMethods(AlgorithmsBase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_model(mdl_mlegst,compare_files + "/mle_gst.model", "Saved MLE-GST Model")
 
         mdl_mle_compare = pygsti.io.load_model(compare_files + "/mle_gst.model")
@@ -336,7 +336,7 @@ class TestCoreMethods(AlgorithmsBase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_model(mdl_lsgst,compare_files + "/lsgstMS.model", "Saved LSGST Model with model selection")
 
         mdl_lsgst_compare = pygsti.io.load_model(compare_files + "/lsgstMS.model")

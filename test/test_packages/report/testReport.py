@@ -57,7 +57,6 @@ class TestReport(ReportBaseCase):
 
 
     def test_reports_chi2_noCIs(self):
-        vs = self.versionsuffix
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
                                             confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
 
@@ -91,7 +90,6 @@ class TestReport(ReportBaseCase):
 
 
     def test_reports_chi2_wCIs(self):
-        vs = self.versionsuffix
         crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('intrinsic error')
@@ -103,7 +101,6 @@ class TestReport(ReportBaseCase):
 
 
     def test_reports_chi2_nonMarkCIs(self):
-        vs = self.versionsuffix
         crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
@@ -117,8 +114,6 @@ class TestReport(ReportBaseCase):
 
 
     def test_reports_logL_TP_noCIs(self):
-        vs = self.versionsuffix
-
         #Also test adding a model-test estimate to this report
         mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
         results = self.results_logL.copy()
@@ -134,8 +129,6 @@ class TestReport(ReportBaseCase):
 
 
     def test_reports_logL_TP_wCIs(self):
-        vs = self.versionsuffix
-
         #Use propagation method instead of directly computing a factory for the go0 gauge-opt
         crfact = self.results.estimates['default'].add_confidence_region_factory('final iteration estimate', 'final')
         crfact.compute_hessian(comm=None)
@@ -151,8 +144,6 @@ class TestReport(ReportBaseCase):
         #self.checkFile("general_reportD%s.html" % vs)
 
     def test_reports_multiple_ds(self):
-        vs = self.versionsuffix
-
         #Note: this report will have (un-combined) Robust estimates too
         pygsti.report.create_standard_report({"chi2": self.results, "logl": self.results_logL},
                                              temp_files + "/general_reportF",

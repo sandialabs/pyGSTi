@@ -3,9 +3,8 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 from pygsti.construction import std2Q_XYICNOT as std2Q
 from pygsti.objects.mapforwardsim import MapForwardSimulator
-import os
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 class DriversTestCase(BaseTestCase):
 
@@ -23,16 +22,16 @@ class DriversTestCase(BaseTestCase):
             self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         ## RUN BELOW LINES TO GENERATE SAVED DATASETS
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        if regenerate_references():
             datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
             ds = pygsti.construction.generate_fake_data(
                 datagen_gateset, self.lsgstStrings[-1],
                 nSamples=1000,sampleError='binomial', seed=100)
-            ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
+            ds.save(compare_files + "/drivers.dataset")
 
 class TestDriversMethods(DriversTestCase):
     def test_longSequenceGST_fiducialPairReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         maxLens = self.maxLens
 
         #Make list-of-lists of GST operation sequences
@@ -95,7 +94,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_randomReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
         maxLens = self.maxLens
 
@@ -127,7 +126,7 @@ class TestDriversMethods(DriversTestCase):
                                              verbosity=2)
 
     def test_longSequenceGST_CPTP(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
@@ -143,7 +142,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_Sonly(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
         target_model.set_all_parameterizations("S")
@@ -160,7 +159,7 @@ class TestDriversMethods(DriversTestCase):
 
     def test_longSequenceGST_GLND(self):
         #General Lindbladian parameterization (allowed to be non-CPTP)
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
 
@@ -182,7 +181,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_HplusS(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S")
@@ -199,7 +198,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_badfit(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
@@ -213,7 +212,7 @@ class TestDriversMethods(DriversTestCase):
                                              "badfit report", verbosity=2)
 
     def test_stdpracticeGST(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         mdl_guess = std.target_model().depolarize(op_noise=0.01,spam_noise=0.01)
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
@@ -228,7 +227,7 @@ class TestDriversMethods(DriversTestCase):
 
     def test_bootstrap(self):
         """Test bootstrap model generation"""
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         tp_target = std.target_model()
         tp_target.set_all_parameterizations("TP")
         mdl = pygsti.do_lgst(ds, std.fiducials, std.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0)

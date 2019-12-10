@@ -3,11 +3,10 @@ import pygsti
 import numpy as np
 import warnings
 import pickle
-import os
 
 from pygsti.construction import std1Q_XYI as std
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 try:
     from pygsti.objects import fastreplib as replib
@@ -39,10 +38,10 @@ class RepLibTestCase(BaseTestCase):
         dprobs = mdl.bulk_dprobs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
 
         #RUN TO SAVE outputs
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
-            pickle.dump(dprobs, open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'wb'))
+        if regenerate_references():
+            pickle.dump(dprobs, open(compare_files + "/repLib_dprobs.pkl", 'wb'))
 
-        compare = pickle.load(open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'rb'))
+        compare = pickle.load(open(compare_files + "/repLib_dprobs.pkl", 'rb'))
         for opstr in dprobs:
             for outcomeLbl in dprobs[opstr]:
                 self.assertArraysAlmostEqual(dprobs[opstr][outcomeLbl], compare[opstr][outcomeLbl])

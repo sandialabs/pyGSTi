@@ -356,20 +356,19 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_load_old_gateset(self):
-        vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
         with enable_old_object_unpickling(), patched_UUID():
-            with open(compare_files + "/pygsti0.9.6.gateset.pkl.%s" % vs,'rb') as f:
+            with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
-        with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
+        with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
             pickle.dump(mdl, f)
 
         with enable_old_object_unpickling("0.9.7"), patched_UUID():
-            with open(compare_files + "/pygsti0.9.7.gateset.pkl.%s" % vs,'rb') as f:
+            with open(compare_files + "/pygsti0.9.7.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
-        with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
+        with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
             pickle.dump(mdl, f)
 
         #OLD: we don't do this anymore (_calcClass has been removed)
