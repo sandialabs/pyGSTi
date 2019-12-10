@@ -182,6 +182,7 @@ setup(name='pyGSTi',
           'ply'
       ],
       extras_require=extras,
+      python_requires='>=3.5',
       platforms=["any"],
       url='http://www.pygsti.info',
       download_url='https://github.com/pyGSTio/pyGSTi/tarball/master',
