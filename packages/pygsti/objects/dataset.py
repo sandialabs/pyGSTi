@@ -68,7 +68,7 @@ class DataSet_KeyValIterator(object):
     def __iter__(self):
         return self
 
-    def __next__(self):  # Python 3: def __next__(self)
+    def __next__(self):
         return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
@@ -99,7 +99,7 @@ class DataSet_ValIterator(object):
     def __iter__(self):
         return self
 
-    def __next__(self):  # Python 3: def __next__(self)
+    def __next__(self):
         return DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__

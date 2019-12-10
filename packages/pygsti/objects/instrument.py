@@ -164,10 +164,6 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         dict_to_pickle = self.__dict__.copy()
         dict_to_pickle['_parent'] = None
 
-        #Python 2.7: remove elements of __dict__ that get initialized by OrderedDict impl
-        if '_OrderedDict__root' in dict_to_pickle: del dict_to_pickle['_OrderedDict__root']
-        if '_OrderedDict__map' in dict_to_pickle: del dict_to_pickle['_OrderedDict__map']
-
         #Note: must *copy* elements for pickling/copying
         return (Instrument, (None, [(key, gate.copy()) for key, gate in self.items()]), dict_to_pickle)
 

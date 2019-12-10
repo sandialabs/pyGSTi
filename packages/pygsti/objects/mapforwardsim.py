@@ -26,7 +26,7 @@ from . import replib
 
 _dummy_profiler = _DummyProfiler()
 
-# FUTURE: use enum (make sure it's supported in Python2.7?)
+# FUTURE: use enum
 SUPEROP = 0
 UNITARY = 1
 CLIFFORD = 2
