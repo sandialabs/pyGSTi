@@ -13,9 +13,6 @@ from . import matrixmod2 as _mtx
 
 import numpy as _np
 import copy as _copy
-import sys
-if sys.version_info >= (3,):
-    long = int
 
 
 def symplectic_form(n, convention='standard'):
@@ -1636,7 +1633,7 @@ def numberofcliffords(n):
        The cardinality of the n-qubit Clifford group.
 
     """
-    return (long(4)**long(n)) * numberofsymplectic(n)
+    return (4**int(n)) * numberofsymplectic(n)
 
 
 def numberofsymplectic(n):
@@ -1647,7 +1644,7 @@ def numberofsymplectic(n):
     John A. Smolin.
 
     """
-    x = long(1)
+    x = 1
     for j in range(1, n + 1):
         x = x * numberofcosets(j)
 
@@ -1661,7 +1658,7 @@ def numberofcosets(n):
     select an arbitrary Clifford group element" by Robert Koenig and
     John A. Smolin.
     """
-    x = long(2)**long(2 * n - 1) * ((long(2)**long(2 * n)) - long(1))
+    x = 2**int(2 * n - 1) * ((2**int(2 * n)) - 1)
     return x
 
 
@@ -1895,7 +1892,7 @@ def get_symplectic_label(gn, n=None):
         bb[j - 1] = tw[j]
     zv = bitstring_to_int(v, nn) - 1
     zw = bitstring_to_int(bb, nn - 1)
-    cvw = zw * ((long(2)**long(2 * n)) - 1) + zv
+    cvw = zw * ((2**int(2 * n)) - 1) + zv
 
     #step 5
     if n == 1:
@@ -1948,7 +1945,7 @@ def random_symplectic_index(n):
         index = cardinality
         while index >= cardinality:
 
-            temp = long(0)
+            temp = 0
             for i in range(0, n):
                 add = zeros_string(m)
                 sample = _np.random.randint(10**digits2)
@@ -1957,9 +1954,9 @@ def random_symplectic_index(n):
                 add += str(sample)
                 for j in range(i + 1, n):
                     add += zeros_string(digits2)
-                temp += long(add)
+                temp += int(add)
 
             add = str(_np.random.randint(10**m)) + zeros_string(n * digits2)
-            index = long(add) + temp
+            index = int(add) + temp
 
     return index
