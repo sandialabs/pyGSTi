@@ -705,6 +705,9 @@ def create_standard_report(results, filename, title="auto",
             i.e. just upon first rendering (`"initial"`) -- or whenever
             the browser window is resized (`"continual"`).
 
+        - embed_figures: bool, optional
+            Whether figures should be embedded in the generated report.
+
         - combine_robust : bool, optional
             Whether robust estimates should automatically be combined with
             their non-robust counterpart when displayed in reports. (default
@@ -750,6 +753,7 @@ def create_standard_report(results, filename, title="auto",
     connected = advancedOptions.get('connected', False)
     resizable = advancedOptions.get('resizable', True)
     autosize = advancedOptions.get('autosize', 'initial')
+    embed_figures = advancedOptions.get('embed_figures', True)
     combine_robust = advancedOptions.get('combine_robust', True)
     ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
     idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
@@ -1218,7 +1222,8 @@ def create_standard_report(results, filename, title="auto",
                         qtys, filename, templateDir='~standard_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
                         connected=connected, toggles=toggles, renderMath=renderMath,
-                        resizable=resizable, autosize=autosize, verbosity=printer
+                        resizable=resizable, autosize=autosize,
+                        embed_figures=embed_figures, verbosity=printer
                     )
 
             elif fmt == "latex":
