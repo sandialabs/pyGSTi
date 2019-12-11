@@ -724,7 +724,8 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None):  # Note: may need default args for all but 1st for pickling!
+    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None):
+        # Note: may need default args for all but 1st for pickling!
         """
         Creates a new Model-item label, which defines a set of other labels
         as a sub-circuit and allows that sub-circuit to be repeated some integer

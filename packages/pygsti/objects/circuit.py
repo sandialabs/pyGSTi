@@ -2888,7 +2888,9 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, num_qubits=None, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None,
+                            gatename_conversion=None, qubit_conversion=None,
+                            block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 

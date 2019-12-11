@@ -1357,7 +1357,6 @@ def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
     Add a gauge optimization to an estimate.
     TODO: docstring - more details
     """
-    tRef = _time.time()
     gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
     if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
 
@@ -1399,7 +1398,6 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
     target_model = base_estimate.models['target']
     ds = results.dataset
     parameters = base_estimate.parameters
-    tRef = _time.time()
     if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
 
     if badFitThreshold is not None and \

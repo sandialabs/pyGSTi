@@ -79,15 +79,10 @@ class BenchmarkSpec(object):
         depths = list(self.circuits.keys())
         depths.sort()
         if self.depths is not None:
-            assert(depths == self.depths), "There are already a set of depths specified, and the circuits do not match them!"
+            assert(depths == self.depths), \
+                "There are already a set of depths specified, and the circuits do not match them!"
         else:
             self.depths = depths
-
-        numcircuits = [self.circuits[l] for l in self.depths]
-        # if self.numcircuits is not None:
-        #     assert(self.numcircuits == numcircuits)
-        # else:
-        #     self.numcircuits == numcircuits
 
     def discard_circuits(self):
 
@@ -3192,7 +3187,6 @@ def random_germ(pspec, depths, interactingQs_density, subsetQs):
         for l in range(len(germcircuit)):
 
             # Prep the sampling variables.
-            sampled_layer = []
             edgelist = pspec.qubitgraph.edges()
             edgelist = [e for e in edgelist if all([q in qubits for q in e])]
             selectededges = []
@@ -3255,8 +3249,6 @@ def random_germpower_circuits(pspec, depths, interactingQs_density, subsetQs, fi
         qubits = list(pspec.qubit_labels[:])  # copy this list
     else:
         qubits = list(subsetQs[:])  # copy this list
-
-    width = len(qubits)
 
     if fixed_versus_depth:
         germcircuit = random_germ(pspec, depths, interactingQs_density, subsetQs)
@@ -3422,8 +3414,10 @@ def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_lengt
     aux = {}
     for j in range(circuits_per_length):
         circlist[j], outlist[j], aux[j] = random_germpower_mirror_circuits(pspec, depths, subsetQs=subsetQs,
-                                                                           localclifford=localclifford, paulirandomize=paulirandomize,
-                                                                           interactingQs_density=samplerargs[0], fixed_versus_depth=fixed_versus_depth)
+                                                                           localclifford=localclifford,
+                                                                           paulirandomize=paulirandomize,
+                                                                           interactingQs_density=samplerargs[0],
+                                                                           fixed_versus_depth=fixed_versus_depth)
 
     #print(aux[0])
     #for l in depths:

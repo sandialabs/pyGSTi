@@ -141,7 +141,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
 
     if calformat == 'ibmq-v2018':
 
-        assert(oneQgates_to_native == {}), "There is only a single one-qubit gate error rate for this calibration data format!"
+        assert(oneQgates_to_native == {}), \
+            "There is only a single one-qubit gate error rate for this calibration data format!"
         # This goes through the multi-qubit gates and records their error rates
         for dct in caldata['multiQubitGates']:
 

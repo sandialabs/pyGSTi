@@ -2952,7 +2952,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
 
                 if fn_visitpath(b, actual_mag, i): return True  # fn_visitpath can signal early return
-                if traverse_tree(b, i, log_thres, mag, logmag, sub_order, nzeros):  # add any allowed paths beneath this one
+                if traverse_tree(b, i, log_thres, mag, logmag, sub_order, nzeros):
+                    # add any allowed paths beneath this one
                     return True
             elif sub_order <= 1:
                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -2970,7 +2971,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                         if denom == 0: denom = SMALL
 
                         #if numerator == 0: nzeros += 1  # not needed b/c we just leave numerator = 0
-                        mag = current_mag * (numerator / denom)  # OK if mag == 0 as it's not passed to any recursive calls
+                        # OK if mag == 0 as it's not passed to any recursive calls
+                        mag = current_mag * (numerator / denom)
                         actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
 
                         if fn_visitpath(b, actual_mag, i): return True
@@ -2984,7 +2986,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                                 numerator = oprep_lists[n - 1][b[n - 1]].magnitude
                                 denom = oprep_lists[i][orig_bn].magnitude
                                 if denom == 0: denom = SMALL
-                                mag2 = mag * (numerator / denom)  # zero if either numerator == 0 or mag == 0 from above.
+                                # zero if either numerator == 0 or mag == 0 from above.
+                                mag2 = mag * (numerator / denom)
                                 if fn_visitpath(b, mag2 if (nzeros == 0) else 0.0, n - 1): return True
 
                             b[n - 1] = orig_bn

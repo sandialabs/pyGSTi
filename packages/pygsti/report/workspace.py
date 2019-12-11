@@ -1661,8 +1661,6 @@ class WorkspaceOutput(object):
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
 
-        within_report = self.options.get('within_report', False)
-
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
         if div_css_classes is not None:
@@ -2635,7 +2633,6 @@ class WorkspaceText(WorkspaceOutput):
 
             divHTML = []
             divIDs = []
-            divJS = []
 
             for i, text in enumerate(self.texts):
                 textDivID = textID + "_%d" % i

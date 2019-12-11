@@ -139,7 +139,8 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
         globaldict['dscomparator']['aggregate_nsigma_threshold'] = benchmarker.dscomparator.aggregate_nsigma_threshold
         globaldict['dscomparator']['aggregate_pVal'] = benchmarker.dscomparator.aggregate_pVal
         globaldict['dscomparator']['aggregate_pVal_threshold'] = benchmarker.dscomparator.aggregate_pVal_threshold
-        globaldict['dscomparator']['inconsistent_datasets_detected'] = benchmarker.dscomparator.inconsistent_datasets_detected
+        globaldict['dscomparator']['inconsistent_datasets_detected'] = \
+            benchmarker.dscomparator.inconsistent_datasets_detected
         globaldict['dscomparator']['number_of_significant_sequences'] = int(
             benchmarker.dscomparator.number_of_significant_sequences)
         globaldict['dscomparator']['significance'] = benchmarker.dscomparator.significance
@@ -190,30 +191,6 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
 
 
 def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtypes=[], verbosity=1):
-
-    # try:
-    #     _os.makedirs(outfolder)
-    #     if verbosity > 0:
-    #         print(" - Created `" + outfolder + "` folder to store the summary data files.")
-    # except:
-    #     if verbosity > 0:
-    #         print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
-
-    # if len(predictions) > 0:
-
-    #     for pkey in predictions.keys():
-    #         if pkey not in predictions_outfolder.keys():
-    #             predictions_outfolder[pkey] = 'predictions/' + pkey + '/summarydata'
-
-    #     for folder in predictions_outfolder.values():
-    #         try:
-    #             _os.makedirs(folder)
-    #             if verbosity > 0:
-    #                 print(" - Created `" + folder + "` folder to store the predicted summary data files.")
-    #         except:
-    #             if verbosity > 0:
-    #                 print(" - `" + folder + "` folder already exists. Will write predictions data into that folder.")
-
     benchmarker = load_data_into_benchmarker(dsfilenames, verbosity=verbosity)
     if test_stability:
         if verbosity > 0:
@@ -226,35 +203,6 @@ def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtype
 
     return benchmarker
 
-    # with open(outfolder + '/readme.txt', 'w') as f:
-    #     f.write('# This folder contains RB summary data\n')
-    #     f.write('# The RB specifications (read in as RBSpec objects) are in files RBSpec*.txt where * is an integer\n')
-    #     f.write('# The summary data for the RB specification in RBSpec*.txt is stored in rbsummary_data*-#.txt where # is an integer running from 0 to the number of different qubits sets that simul., independent RB was performed on.\n')
-
-    # for i, spec in enumerate(benchmarker._specs):
-    #     structure = spec.get_structure()
-    #     if storecircuits:
-    #         circuitsfilename = outfolder + '/circuits{}.txt'.format(i)
-    #     else:
-    #         circuitsfilename = None
-    #     write_rb_spec_to_file(spec, outfolder + '/rbspec' + str(i) + '.txt', circuitsfilename=circuitsfilename, warning=0)
-    #     for pfolder in predictions_outfolder.values():
-    #         write_rb_spec_to_file(spec, pfolder + '/rbspec' + str(i) + '.txt', warning=0)
-
-    #     for j, qubits in enumerate(structure):
-    #         if len(benchmarker.multids) == 1:
-    #             write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][0], outfolder + '/rbsummarydata' + str(i) + '-'
-    #                                             + str(j) + '.txt')
-    #         else:
-    #             for key in benchmarker.multids.keys():
-    #                 write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][key], outfolder + '/rbsummarydata' + str(i) + '-'
-    #                                                 + str(j) + '-' + str(key) + '.txt')
-    #         for pkey, pfolder in predictions_outfolder.items():
-    #             write_rb_summary_data_to_file(benchmarker.predicted_summary_data[pkey][i][qubits],
-    #                                           pfolder + '/rbsummarydata' + str(i) + '-' + str(j) + '.txt')
-
-    # return
-
 # Todo : just make this and create_benchmarker a single function? This import has been superceded
 # by load_benchmarker
 
@@ -265,10 +213,7 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
     todo
 
     """
-    if len(predicted_summarydatasets_folders) == 0:
-        predictions = False
     if len(predicted_summarydatasets_folders) > 0:
-        predictions = True
         assert(summarydatasets_folder is not None)
         #if len(predicted_summarydatasets_folders) > 1:
         #    raise NotImplementedError("This is not yet supported!")
@@ -286,8 +231,11 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
 
             if dsfn[-4:] == '.txt':
                 print(dsfn)
-                mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn, collisionAction='keepseparate',
-                                                           recordZeroCnts=False, ignoreZeroCountLines=False, verbosity=verbosity))
+                mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn,
+                                                           collisionAction='keepseparate',
+                                                           recordZeroCnts=False,
+                                                           ignoreZeroCountLines=False,
+                                                           verbosity=verbosity))
 
             elif dsfn[-4:] == '.pkl':
 

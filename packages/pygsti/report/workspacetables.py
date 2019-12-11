@@ -580,33 +580,33 @@ class GaugeRobustModelTable(WorkspaceTable):
 
         colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % lbl for lbl in opLabels]
         formatters = [None] * len(colHeadings)
-        confidenceRegionInfo = None #Don't deal with CIs yet...
+        confidenceRegionInfo = None  # Don't deal with CIs yet...
 
-        def get_gig_decomp(mx, tmx):  #"Gauge invariant gateset" decomposition
+        def get_gig_decomp(mx, tmx):  # "Gauge invariant gateset" decomposition
             G0, G = tmx, mx
             #ev0, U0 = _tools.sorted_eig(G0)
             #ev, U = _tools.sorted_eig(G)
             #U0inv = _np.linalg.inv(U0)
             #Uinv = _np.linalg.inv(U)
-            
+
             _, U, U0, ev0 = _tools.get_a_best_case_gauge_transform(G, G0, returnAll=True)
             U0inv = _np.linalg.inv(U0)
             Uinv = _np.linalg.inv(U)
-            kite = _tools.get_kite(ev0)            
+            kite = _tools.get_kite(ev0)
 
-            F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite) # Uinv * F * U0 is block diag
+            F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite)  # Uinv * F * U0 is block diag
             Finv = _np.linalg.inv(F)
             # if G0 = U0 * E0 * U0inv then
             # Uinv * F * G0 * Finv * U = D * E0 * Dinv = E0 b/c D is block diagonal w/E0's degenercies
             # so F * G0 * Finv = U * E0 * Uinv = Gp ==> Finv * G * F = M * G0
             M = _np.dot(Finv, _np.dot(G, _np.dot(F, _np.linalg.inv(G0))))
             assert(_np.linalg.norm(M.imag) < 1e-8)
-            
-            M0 = _np.dot(U0inv, _np.dot(M, U0)) # M in G0's eigenbasis
-            assert(_np.linalg.norm(_tools.project_onto_antikite(M0,kite)) < 1e-8)  # should be block diagonal
-            assert(_np.allclose(G, _np.dot(F,_np.dot(M, _np.dot(G0,Finv))))) # this is desired decomp
+
+            M0 = _np.dot(U0inv, _np.dot(M, U0))  # M in G0's eigenbasis
+            assert(_np.linalg.norm(_tools.project_onto_antikite(M0, kite)) < 1e-8)  # should be block diagonal
+            assert(_np.allclose(G, _np.dot(F, _np.dot(M, _np.dot(G0, Finv)))))  # this is desired decomp
             assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everthing should be real
-            return F,M,Finv
+            return F, M, Finv
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
         I = _np.identity(model.dim, 'd')
@@ -619,8 +619,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                                                 target_model.operations[gl].todense())
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
-                _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl,str(e)))
-
+                _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
 
         for i, lbl in enumerate(opLabels):
             if lbl not in op_decomps: continue
@@ -631,12 +630,11 @@ class GaugeRobustModelTable(WorkspaceTable):
                 M = max(M, max(_np.abs(val).flat))  # update max
 
         #FUTURE: instruments too?
-        for i,lbl in enumerate(opLabels):
+        for i, lbl in enumerate(opLabels):
             row_data = [lbl]
             row_formatters = [None]
-            basis = model.basis
             if lbl in op_decomps:
-                Fi,Mi,Finvi = op_decomps[lbl]
+                Fi, Mi, Finvi = op_decomps[lbl]
 
                 #Print "M" matrix
                 if display_as == "numbers":
@@ -649,11 +647,10 @@ class GaugeRobustModelTable(WorkspaceTable):
                 else:
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
             else:
-                row_data.append( _objs.reportableqty.ReportableQty(_np.nan) )
+                row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
                 row_formatters.append('Normal')
-                
 
-            for j,lbl2 in enumerate(opLabels):
+            for j, lbl2 in enumerate(opLabels):
                 if i == j:
                     row_data.append("0")
                     row_formatters.append(None)
@@ -671,7 +668,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                     else:
                         raise ValueError("Invalid 'display_as' argument: %s" % display_as)
                 else:
-                    row_data.append( _objs.reportableqty.ReportableQty(_np.nan) )
+                    row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
                     row_formatters.append('Normal')
 
             table.addrow(row_data, row_formatters)
@@ -784,28 +781,22 @@ class GaugeRobustMetricTable(WorkspaceTable):
                     try:
                         el = _reportables.evaluate_opfn_by_name(
                             metric, mdl_in_best_gauge[i], target_model, lbl, confidenceRegionInfo)
-                    except Exception as e:
-                        _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric,lbl))
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
                         el = _objs.reportableqty.ReportableQty(_np.nan)
                 else:  # off-diagonal element
                     try:
                         el1 = _reportables.evaluate_opfn_by_name(
-                            metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2, confidenceRegionInfo)
+                            metric, target_mdl_in_best_gauge[i],
+                            target_mdl_in_best_gauge[j], lbl2,
+                            confidenceRegionInfo)
                         el2 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidenceRegionInfo)
                         el = _objs.reportableqty.minimum(el1, el2)
-                    except Exception as e:
-                        _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" % (metric,lbl,lbl2))
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
+                                       (metric, lbl, lbl2))
                         el = _objs.reportableqty.ReportableQty(_np.nan)
-
-                    #DEBUGGING infidelity - which doesn't behave well all the time, as min(.) will pick a "bad" negative infidelity value?
-                    #el1.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl], target_mdl_in_best_gauge[j][lbl], 'pp') # DEBUG
-                    #el2.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl2], target_mdl_in_best_gauge[j][lbl2], 'pp') # DEBUG
-                    #print("OFF DIAG: (%s)\n" % lbl, target_mdl_in_best_gauge[i][lbl],"\n", target_mdl_in_best_gauge[j][lbl])
-                    #print("OFF DIAG2 (%s): \n" % lbl2, target_mdl_in_best_gauge[i][lbl2],"\n", target_mdl_in_best_gauge[j][lbl2])
-                    #print("VALS = ",el1.value, el2.value, _np.linalg.norm(target_mdl_in_best_gauge[i][lbl] - target_mdl_in_best_gauge[j][lbl]),
-                    #      _np.linalg.norm(target_mdl_in_best_gauge[i][lbl2] - target_mdl_in_best_gauge[j][lbl2]))
-                    ##import bpdb; bpdb.set_trace()
 
                 row_data.append(el)
                 row_formatters.append('Normal')

@@ -1356,8 +1356,8 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
         extra_lm_opts['oob_check_interval'] = oob_check_interval
         # don't stop early on last iter - do as much as possible.
         extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"
-        minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-                                          printer, profiler, nDataParams, memLimit, logL_upperbound)
+        minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts,
+                                          comm, printer, profiler, nDataParams, memLimit, logL_upperbound)
 
         if not opt_state[0] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:

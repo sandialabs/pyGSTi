@@ -137,20 +137,21 @@ class Benchmarker(object):
                     selected_regions[ind].append(qs)
 
             else:  # There's data for more than one region (and/or multiple benchmarks of a single region) of size w
-                boundard_index = {}
                 best_boundary_index = 0
                 best_vb_at_best_boundary_index = None
                 for (ind, qs) in specsforw:
-                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype, statistic=statistic,
-                                                                specs={ind: [qs, ]}, aggregate=aggregate, rescaler=rescaler)['data']
+                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype,
+                                                                statistic=statistic, specs={ind: [qs, ]},
+                                                                aggregate=aggregate, rescaler=rescaler)['data']
                     # Only looking at 1 width, so drop the width key, and keep only the depths with data
                     if not aggregate:
                         vbdata = {d: vbdata[d][w][passnum] for d in vbdata.keys() if w in vbdata[d].keys()}
                     else:
                         vbdata = {d: vbdata[d][w] for d in vbdata.keys() if w in vbdata[d].keys()}
 
-                    # We calcluate the depth index of the largest depth at which the data is above/below the boundary, ignoring
-                    # cases where there's data missing at some depths as long as we're still above/below the boundard at a larger depth.
+                    # We calcluate the depth index of the largest depth at which the data is above/below the boundary,
+                    # ignoring cases where there's data missing at some depths as long as we're still above/below the
+                    # boundard at a larger depth.
                     if merit == 'aboveboundary':
                         x = [vbdata[d] > boundary if d in vbdata.keys() else None for d in depths]
                     if merit == 'belowboundary':
@@ -172,14 +173,17 @@ class Benchmarker(object):
                         selected_region_at_w = (ind, qs)
                         best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
                     elif boundary_index == best_boundary_index:
-                        if best_vb_at_best_boundary_index is None:  # On first run through we automatically select that region
+                        if best_vb_at_best_boundary_index is None:
+                            # On first run through we automatically select that region
                             selected_region_at_w = (ind, qs)
                             best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
                         else:
-                            if merit == 'aboveboundary' and vbdata[depths[boundary_index]] > best_vb_at_best_boundary_index:
+                            if merit == 'aboveboundary' \
+                               and vbdata[depths[boundary_index]] > best_vb_at_best_boundary_index:
                                 selected_region_at_w = (ind, qs)
                                 best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
-                            if merit == 'belowboundary' and vbdata[depths[boundary_index]] < best_vb_at_best_boundary_index:
+                            if merit == 'belowboundary' \
+                               and vbdata[depths[boundary_index]] < best_vb_at_best_boundary_index:
                                 selected_region_at_w = (ind, qs)
                                 best_vb_at_best_boundary_index = vbdata[depths[boundary_index]]
                     else:
@@ -350,7 +354,8 @@ class Benchmarker(object):
                                 else:
                                     vb[d][w] = _np.nan
 
-                    # Repeat the process for the predictions, but with simpler code as don't have to deal with passes or NaNs.
+                    # Repeat the process for the predictions, but with simpler code as don't have to
+                    # deal with passes or NaNs.
                     if dopredictions:
                         pdline = {pkey: preddata[pkey][d] for pkey in pkeys}
                         for pkey in pkeys:
@@ -433,29 +438,34 @@ class Benchmarker(object):
                     for depth, dataline in data.items():
                         flattened_data[dtype] += dataline
                 for pkey in self.predicted_summary_data.keys():
-                    if 'success_probabilities' in self.predicted_summary_data[pkey][specind][qubits].keys():
-                        for depth, dataline in self.predicted_summary_data[pkey][specind][qubits]['success_probabilities'].items():
+                    data = self.predicted_summary_data[pkey][specind][qubits]
+                    if 'success_probabilities' in data.keys():
+                        for depth, dataline in data['success_probabilities'].items():
                             flattened_data['predictions'][pkey]['success_probabilities'] += dataline
                     else:
-                        for (depth, dataline1), dataline2 in zip(self.predicted_summary_data[pkey][specind][qubits]['success_counts'].items(),
-                                                                 self.predicted_summary_data[pkey][specind][qubits]['total_counts'].values()):
+                        for (depth, dataline1), dataline2 in zip(data['success_counts'].items(),
+                                                                 data['total_counts'].values()):
                             flattened_data['predictions'][pkey]['success_probabilities'] += list(
                                 _np.array(dataline1) / _np.array(dataline2))
 
         #  Only do this if we've not already stored the success probabilities in the benchamrker.
-        if ('success_counts' in flattened_data) and ('total_counts' in flattened_data) and ('success_probabilities' not in flattened_data):
+        if ('success_counts' in flattened_data) and ('total_counts' in flattened_data) \
+           and ('success_probabilities' not in flattened_data):
             if aggregate:
                 flattened_data['success_probabilities'] = [sc / tc if tc > 0 else _np.nan for sc,
-                                                           tc in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
+                                                           tc in zip(flattened_data['success_counts'],
+                                                                     flattened_data['total_counts'])]
             else:
                 flattened_data['success_probabilities'] = [[sc / tc if tc > 0 else _np.nan for sc, tc in zip(
-                    scpass, tcpass)] for scpass, tcpass in zip(flattened_data['success_counts'], flattened_data['total_counts'])]
+                    scpass, tcpass)] for scpass, tcpass in zip(flattened_data['success_counts'],
+                                                               flattened_data['total_counts'])]
 
         return flattened_data
 
     def test_pass_stability(self, formatdata=False, verbosity=1):
 
-        assert(self.multids is not None), "Can only run the stability analysis if a MultiDataSet is contained in this Benchmarker!"
+        assert(self.multids is not None), \
+            "Can only run the stability analysis if a MultiDataSet is contained in this Benchmarker!"
 
         if not formatdata:
             assert('success-fail' in self.multids.keys()), "Must have generated/imported a success-fail format DataSet!"
@@ -574,8 +584,8 @@ class Benchmarker(object):
         for ds_ind in self.multids[useds].keys():
 
             if verbosity > 0:
-                print(" - Processing data from pass {} of {}. Percent complete:".format(ds_ind +
-                                                                                        1, len(self.multids[useds])))
+                print(" - Processing data from pass {} of {}. Percent complete:".format(ds_ind + 1,
+                                                                                        len(self.multids[useds])))
 
             #circuits = {}
             numcircuits = len(self.multids[useds][ds_ind].keys())
@@ -637,8 +647,8 @@ class Benchmarker(object):
                             predsummarydata[pkey][specind] = {}
                             for pkey in predictions.keys():
                                 if pkey == preddskey:
-                                    predsummarydata[pkey][specind] = {qubits: {datatype: {}
-                                                                               for datatype in datatypes} for qubits in structure}
+                                    predsummarydata[pkey][specind] = {qubits: {datatype: {} for datatype in datatypes}
+                                                                      for qubits in structure}
                                 else:
                                     predsummarydata[pkey][specind] = {
                                         qubits: {'success_probabilities': {}} for qubits in structure}
@@ -728,314 +738,6 @@ class Benchmarker(object):
         self.pass_summary_data = summarydata
         self.global_summary_data = globalsummarydata
         self.aux = aux
-
-    # def create_summary_data(self, datatype='adjusted', addaux=True, storecircuits=False, predictions={}, verbosity=2):
-    #     """
-
-    #     """
-    #     # if method == 'simple':
-    #     #     if specindices is None:
-    #     #         specindices = range(len(self._specs))
-
-    #     #     for specind in specindices:
-    #     #         spec = self._specs[specind]
-
-    #     #         if specind not in self._summary_data.keys():
-
-    #     #             if verbosity > 0:
-    #     #                 print(" - Creating summary data {} of {} ...".format(specind + 1, len(specindices)), end='')
-    #     #             if verbosity > 1: print("")
-
-    #     #             if addaux:
-    #     #                 raise NotImplementedError("The slow version of this function does"
-    #     #                                           + "not allow adding aux currently!")
-    #     #             if storecircuits:
-    #     #                 raise NotImplementedError("The slow version of this function does"
-    #     #                                           + "not allow storing the circuits!")
-
-    #     #             if len(predictions) > 0:
-    #     #                 raise NotImplementedError("The slow version of this function does"
-    #     #                                           + "not allow error rate predictions!")
-
-    #     #             self._summary_data[specind] = _dataset.create_summary_datasets(self.ds, spec, datatype=datatype,
-    #     #                                                                            verbosity=verbosity)
-
-    #     #             if verbosity == 1: print("complete.")
-
-    #     #         else:
-    #     #             if verbosity > 0:
-    #     #                 print(" - Summary data already extant for {} of {}".format(specind + 1, len(specindices)))
-
-    #     #elif method == 'fast':
-    #     #    assert(specindices is None), "The 'fast' method cannot format a subset of the data!"
-
-    #     predsummarydata = {}
-    #     predds = None
-    #     preddskey = None
-    #     for pkey in predictions.keys():
-    #         predsummarydata[pkey] = {}
-    #         if isinstance(predictions[pkey], _stdds.DataSet):
-    #             assert(predds is None), "Can't have two DataSet predictions!"
-    #             predds = predictions[pkey]
-    #             preddskey = pkey
-    #         else:
-    #             assert(isinstance(predictions[pkey], _erm.ErrorRatesModel)), "If not a DataSet must be an ErrorRatesModel!"
-
-    #     for ds_ind in self.multids.keys():
-
-    #         summarydata = {}
-    #         aux = {}
-    #         circuits = {}
-    #         numcircuits = len(self.multids[ds_ind].keys())
-    #         percent = 0
-
-    #         if preddskey is None:
-    #             for i, ((circ, dsrow), (auxcirc, auxdict)) in enumerate(zip(self.multids[ds_ind].items(), self.multids.auxInfo.items())):
-
-    #                 assert(circ == auxcirc)
-    #                 #print(i, end=',')
-    #                 if verbosity > 0:
-    #                     if _np.floor(100 * i / numcircuits) >= percent:
-    #                         percent += 1
-    #                         print("{} percent complete".format(percent))
-
-    #                 # specindices = self.ds.auxInfo[circ]['specindices']
-    #                 # length = self.ds.auxInfo[circ]['length']
-    #                 # target = self.ds.auxInfo[circ]['target']
-    #                 speckeys = auxdict['spec']
-    #                 length = auxdict['length']
-    #                 target = auxdict['target']
-    #                 if isinstance(speckeys, str):
-    #                     speckeys = [speckeys]
-
-    #                 for speckey in speckeys:
-    #                     specind = self._speckeys.index(speckey)
-    #                     spec = self._specs[specind]
-    #                     structure = spec.get_structure()
-
-    #                     if specind not in summarydata.keys():
-
-    #                         summarydata[specind] = {}
-    #                         aux[specind] = {}
-    #                         if storecircuits:
-    #                             circuits[specind] = {}
-    #                         else:
-    #                             circuits[specind] = None
-
-    #                         for pkey in predictions.keys():
-    #                             predsummarydata[pkey][specind] = {}
-
-    #                         for qubits in structure:
-    #                             summarydata[specind][qubits] = {}
-    #                             summarydata[specind][qubits]['success_counts'] = {}
-    #                             summarydata[specind][qubits]['total_counts'] = {}
-    #                             summarydata[specind][qubits]['hamming_distance_counts'] = {}
-    #                             aux[specind][qubits] = {}
-    #                             if addaux:
-    #                                 aux[specind][qubits]['twoQgate_count'] = {}
-    #                                 aux[specind][qubits]['depth'] = {}
-    #                                 aux[specind][qubits]['target'] = {}
-    #                             for pkey in predictions.keys():
-    #                                 predsummarydata[pkey][specind][qubits] = {}
-    #                                 predsummarydata[pkey][specind][qubits]['success_probabilities'] = {}
-
-    #                     for qubits in structure:
-    #                         if length not in summarydata[specind][qubits]['success_counts'].keys():
-    #                             summarydata[specind][qubits]['success_counts'][length] = []
-    #                             summarydata[specind][qubits]['total_counts'][length] = []
-    #                             summarydata[specind][qubits]['hamming_distance_counts'][length] = []
-    #                             if addaux:
-    #                                 aux[specind][qubits]['twoQgate_count'][length] = []
-    #                                 aux[specind][qubits]['depth'][length] = []
-    #                                 aux[specind][qubits]['target'][length] = []
-    #                             if storecircuits:
-    #                                 circuits[specind][length] = []
-    #                             for pkey in predictions.keys():
-    #                                 predsummarydata[pkey][specind][qubits]['success_probabilities'][length] = []
-
-    #                     #dsrow = self.ds[circ]
-    #                     for qubits_ind, qubits in enumerate(structure):
-    #                         if datatype == 'raw':
-    #                             summarydata[specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
-    #                             summarydata[specind][qubits]['total_counts'][length].append(dsrow.total)
-    #                         elif datatype == 'adjusted':
-    #                             summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
-
-    #                         if addaux:
-    #                             aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
-    #                             aux[specind][qubits]['depth'][length].append(circ.depth())
-    #                             aux[specind][qubits]['target'][length].append(target)
-    #                         if storecircuits and qubits_ind == 0:
-    #                             circuits[specind][length].append(circ)
-    #                         for pkey, predmodel in predictions.items():
-    #                             if pkey != preddskey:
-    #                                 if set(circ.line_labels) != set(qubits):
-    #                                     trimmedcirc = circ.copy(editable=True)
-    #                                     for q in circ.line_labels:
-    #                                         if q not in qubits:
-    #                                             trimmedcirc.delete_lines(q)
-    #                                 else:
-    #                                     trimmedcirc = circ
-    #                                 predsp = predmodel.success_prob(trimmedcirc)
-    #                                 predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
-
-    #         elif preddskey is not None:
-    #             assert(False), "This part of the code needs fixing for multi-pass data!"
-
-    #         #     for i, ((circ, dsrow), (auxcirc, auxdict), (pcirc, pdsrow)) in enumerate(zip(self.ds.items(), self.ds.auxInfo.items(), predds.items())):
-
-    #         #         assert(circ == auxcirc)
-    #         #         if not circ == pcirc:
-    #         #             pdsrow = predds[circ]
-    #         #             print("Predicted DataSet is ordered differently to the main DataSet! Reverting to potentially slow dictionary hashing!")
-    #         #         #print(i, end=',')
-    #         #         if verbosity > 0:
-    #         #             if _np.floor(100 * i / numcircuits) >= percent:
-    #         #                 percent += 1
-    #         #                 print("{} percent complete".format(percent))
-
-    #         #         # specindices = self.ds.auxInfo[circ]['specindices']
-    #         #         # length = self.ds.auxInfo[circ]['length']
-    #         #         # target = self.ds.auxInfo[circ]['target']
-    #         #         specindices = auxdict['specindices']
-    #         #         length = auxdict['length']
-    #         #         target = auxdict['target']
-
-    #         #         for specind in specindices:
-    #         #             spec = self._specs[specind]
-    #         #             structure = spec.get_structure()
-
-    #         #             if specind not in summarydata.keys():
-
-    #         #                 summarydata[specind] = {}
-    #         #                 aux[specind] = {}
-    #         #                 if storecircuits:
-    #         #                     circuits[specind] = {}
-    #         #                 else:
-    #         #                     circuits[specind] = None
-
-    #         #                 for pkey in predictions.keys():
-    #         #                     predsummarydata[pkey][specind] = {}
-
-    #         #                 for qubits in structure:
-    #         #                     summarydata[specind][qubits] = {}
-    #         #                     summarydata[specind][qubits]['success_counts'] = {}
-    #         #                     summarydata[specind][qubits]['total_counts'] = {}
-    #         #                     summarydata[specind][qubits]['hamming_distance_counts'] = {}
-    #         #                     aux[specind][qubits] = {}
-    #         #                     if addaux:
-    #         #                         aux[specind][qubits]['twoQgate_count'] = {}
-    #         #                         aux[specind][qubits]['depth'] = {}
-    #         #                         aux[specind][qubits]['target'] = {}
-
-    #         #                     for pkey in predictions.keys():
-    #         #                         predsummarydata[pkey][specind][qubits] = {}
-    #         #                         if pkey != preddskey:
-    #         #                             predsummarydata[pkey][specind][qubits]['success_probabilities'] = {}
-    #         #                         else:
-    #         #                             predsummarydata[pkey][specind][qubits]['success_counts'] = {}
-    #         #                             predsummarydata[pkey][specind][qubits]['total_counts'] = {}
-    #         #                             predsummarydata[pkey][specind][qubits]['hamming_distance_counts'] = {}
-
-    #         #             for qubits in structure:
-    #         #                 if length not in summarydata[specind][qubits]['success_counts'].keys():
-    #         #                     summarydata[specind][qubits]['success_counts'][length] = []
-    #         #                     summarydata[specind][qubits]['total_counts'][length] = []
-    #         #                     summarydata[specind][qubits]['hamming_distance_counts'][length] = []
-    #         #                     if addaux:
-    #         #                         aux[specind][qubits]['twoQgate_count'][length] = []
-    #         #                         aux[specind][qubits]['depth'][length] = []
-    #         #                         aux[specind][qubits]['target'][length] = []
-    #         #                     if storecircuits:
-    #         #                         circuit[specind][length] = []
-    #         #                     for pkey in predictions.keys():
-    #         #                         if pkey != preddskey:
-    #         #                             predsummarydata[pkey][specind][qubits]['success_probabilities'][length] = []
-    #         #                         else:
-    #         #                             predsummarydata[pkey][specind][qubits]['success_counts'][length] = []
-    #         #                             predsummarydata[pkey][specind][qubits]['total_counts'][length] = []
-    #         #                             predsummarydata[pkey][specind][qubits]['hamming_distance_counts'][length] = []
-
-    #         #             #dsrow = self.ds[circ]
-    #         #             for qubits_ind, qubits in enumerate(structure):
-    #         #                 if datatype == 'raw':
-    #         #                     summarydata[specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
-    #         #                     summarydata[specind][qubits]['total_counts'][length].append(dsrow.total)
-    #         #                     predsummarydata[preddskey][specind][qubits]['success_counts'][length].append(_analysis.marginalized_success_counts(pdsrow, circ, target, qubits))
-    #         #                     predsummarydata[preddskey][specind][qubits]['total_counts'][length].append(pdsrow.total)
-    #         #                 elif datatype == 'adjusted':
-    #         #                     summarydata[specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
-    #         #                     predsummarydata[preddskey][specind][qubits]['hamming_distance_counts'][length].append(_analysis.marginalized_hamming_distance_counts(pdsrow, circ, target, qubits))
-
-    #         #                 if addaux:
-    #         #                     aux[specind][qubits]['twoQgate_count'][length].append(circ.twoQgate_count())
-    #         #                     aux[specind][qubits]['depth'][length].append(circ.depth())
-    #         #                     aux[specind][qubits]['target'][length].append(target)
-    #         #                 if storecircuits and qubits_ind == 0:
-    #         #                     circuit[specind][length].append(circ)
-    #         #                 for pkey, predmodel in predictions.items():
-    #         #                     if pkey != preddskey:
-    #         #                         if set(circ.line_labels) != set(qubits):
-    #         #                             trimmedcirc = circ.copy(editable=True)
-    #         #                             for q in circ.line_labels:
-    #         #                                 if q not in qubits:
-    #         #                                     trimmedcirc.delete_lines(q)
-    #         #                         else:
-    #         #                             trimmedcirc = circ
-    #         #                         predsp = predmodel.success_prob(trimmedcirc)
-    #         #                         predsummarydata[pkey][specind][qubits]['success_probabilities'][length].append(predsp)
-
-    #         # if error_rates_model is not None:
-    #         #     ermtype = error_rates_model.get_model_type()
-    #         #     self.predicted_summary_data[ermtype] = {}
-
-    #         print(summarydata.keys())
-
-    #         for pkey in predictions.keys():
-    #             self.predicted_summary_data[pkey] = {}
-
-    #         for specind in summarydata.keys():
-    #             spec = self._specs[specind]
-    #             if storecircuits:
-    #                 spec.add_circuits(circuits[specind])
-    #             structure = spec.get_structure()
-    #             if specind not in self._summary_data.keys():
-    #                 self._summary_data[specind] = {}
-    #             for pkey in predictions.keys():
-    #                 self.predicted_summary_data[pkey][specind] = {}
-    #             for qubits in structure:
-    #                 if datatype == 'raw':
-    #                     summarydata[specind][qubits]['hamming_distance_counts'] = None
-    #                 elif datatype == 'adjusted':
-    #                     summarydata[specind][qubits]['success_counts'] = None
-    #                     summarydata[specind][qubits]['total_counts'] = None
-    #                 if preddskey is not None:
-    #                     if datatype == 'raw':
-    #                         predsummarydata[preddskey][specind][qubits]['hamming_distance_counts'] = None
-    #                     elif datatype == 'adjusted':
-    #                         predsummarydata[preddskey][specind][qubits]['success_counts'] = None
-    #                         predsummarydata[preddskey][specind][qubits]['total_counts'] = None
-
-    #                 if qubits not in self._summary_data[specind].keys():
-    #                     self._summary_data[specind][qubits] = {}
-
-    #                 self._summary_data[specind][qubits][ds_ind] = _dataset.RBSummaryDataset(len(qubits), success_counts=summarydata[specind][qubits]['success_counts'],
-    #                                             total_counts=summarydata[specind][qubits]['total_counts'],
-    #                                             hamming_distance_counts=summarydata[specind][qubits]['hamming_distance_counts'],
-    #                                             aux=aux[specind][qubits])
-
-    #                 for pkey in predictions.keys():
-    #                     if pkey != preddskey:
-    #                         self.predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_probabilities'],
-    #                                                 total_counts=None, hamming_distance_counts=None, finitecounts=False, aux=aux[specind][qubits])
-    #                     else:
-    #                         self.predicted_summary_data[pkey][specind][qubits] = _dataset.RBSummaryDataset(len(qubits), success_counts=predsummarydata[pkey][specind][qubits]['success_counts'],
-    #                                                 total_counts=predsummarydata[pkey][specind][qubits]['total_counts'],
-    #                                                 hamming_distance_counts=predsummarydata[pkey][specind][qubits]['hamming_distance_counts'],
-    #                                                 aux=aux[specind][qubits])
-
-        #else:
-        #    raise ValueError("Input `method` must be 'fast' or 'simple'!")
 
     def analyze(self, specindices=None, analysis='adjusted', bootstraps=200, verbosity=1):
         """

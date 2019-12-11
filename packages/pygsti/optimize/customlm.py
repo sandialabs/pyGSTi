@@ -292,7 +292,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 else:
                     add_to_diag = mu * _np.clip(undamped_JTJ_diag.copy(), damping_clip[0], damping_clip[1])
                     JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                    # augment normal equations - without clipping this is just *= (1.0 + mu), if entirely clipped this would be += CLIP*mu
+                    # augment normal equations - without clipping this is just *= (1.0 + mu), if entirely clipped this
+                    # would be += CLIP*mu
                 #print("DB: Post-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
@@ -376,8 +377,9 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         msg = "Objective function out-of-bounds! STOP"
                                         converged = True; break
                                     else:  # reset to last know in-bounds point and not do oob check every step
-                                        printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last "
-                                                     "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                        printer.log(
+                                            ("** Hit out-of-bounds with check interval=%d, reverting to last "
+                                             "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                         oob_check_interval = 1
                                         x[:] = best_x[:]
                                         mu, nu, norm_f, f = best_x_state
@@ -401,34 +403,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         if not _np.isfinite(norm_new_f):  # avoid infinite loop...
                             msg = "Infinite norm of objective function!"; break
 
-                        #DEBUG: print out predictions TODO REMOVE
-                        #def debug_regen_dx(mu_loc, max_diag=1e10):
-                        #    add_to_diag = _np.clip(undamped_JTJ_diag.copy(), 1.0, max_diag) # allow for X orders of magnitude
-                        #    add_to_diag *= mu_loc
-                        #    JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                        #    return _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
-                        #def print_predictions(_dx, mu_loc, max_diag=1e10):
-                        #    loc_new_f = obj_fn(x + _dx)
-                        #    loc_norm_new_f = _np.dot(loc_new_f, loc_new_f)
-                        #    prediction1 = norm_f + _np.dot(2*JTf,_dx)
-                        #    Jdx = _np.dot(Jac,_dx)
-                        #    pred_f = f + Jdx
-                        #    prediction2 = _np.dot(pred_f,pred_f)
-                        #    prediction3 = prediction1 + _np.dot(Jdx,Jdx)
-                        #    loc_norm_dx = _np.sqrt(_np.dot(_dx,_dx))
-                        #    print("Candidate (max_diag=%g, mu=%g) |dx| = " % (max_diag,mu_loc),loc_norm_dx, " => ",loc_norm_new_f, \
-                        #          "(predicted: ",prediction1, prediction2, prediction3, ")")
-                        #
-                        #print("Undamped JTJ diag els in [%g,%g]" % (_np.min(undamped_JTJ_diag), _np.max(undamped_JTJ_diag)))
-                        #print_predictions(dx, mu)
-                        ##print_predictions(debug_regen_dx(mu/10), mu/10)
-                        ##print_predictions(debug_regen_dx(mu/100), mu/100)
-                        ##print_predictions(debug_regen_dx(mu/1000), mu/1000)
-                        #
-                        #print_predictions(debug_regen_dx(mu*1e2, 1e8), mu*1e2, 1e8)
-                        #print_predictions(debug_regen_dx(mu*1e4, 1e6), mu*1e4, 1e6)
-                        #print_predictions(debug_regen_dx(mu*1e6, 1e4), mu*1e6, 1e4)
-
                         dL = _np.dot(dx, mu * dx - JTf)  # expected decrease in ||F||^2 from linear model
                         dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
@@ -450,14 +424,16 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
                             accel_ratio = 0.0
 
-                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
+                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol \
+                           and dF / dL < 2.0 and accel_ratio <= alpha:
                             if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
                                 msg = "Both actual and predicted relative reductions in the" + \
                                     " sum of squares are at most %g" % rel_ftol
                                 converged = True; break
                             else:
-                                printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
-                                             "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                printer.log(("** Converged with out-of-bounds with check interval=%d, "
+                                             "reverting to last know in-bounds point and setting "
+                                             "interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
                                 mu, nu, norm_f, f = best_x_state
@@ -602,7 +578,8 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
                 test_prediction2 = _np.dot(tp2_f, tp2_f)
                 cmp_dx = dx  # -JTf
                 print(" -> Adjusting index ", ii, ":", x[ii], "+", test_dx[ii], " => ", last_normf, "(cmp w/dx: ",
-                      cmp_dx[ii], test_prediction, test_prediction2, ") ", "YES" if test_dx[ii] * cmp_dx[ii] > 0 else "NO")
+                      cmp_dx[ii], test_prediction, test_prediction2, ") ",
+                      "YES" if test_dx[ii] * cmp_dx[ii] > 0 else "NO")
 
         if _np.linalg.norm(test_dx) > 0 and last_normf < cmp_normf:
             print("FOUND HACK dx w/norm = ", _np.linalg.norm(test_dx))
@@ -619,8 +596,9 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
         op2_f = f + Jdx
         orig_prediction2 = _np.dot(op2_f, op2_f)
         # main objective = fT*f = norm_f
-        # at new x => (f+J*dx)T * (f+J*dx) = norm_f + JdxT*f + fT*Jdx = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
-        #                                                             = norm_f + 2*dxT*(JT*f)
+        # at new x => (f+J*dx)T * (f+J*dx) = norm_f + JdxT*f + fT*Jdx
+        #                                  = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
+        #                                  = norm_f + 2*dxT*(JT*f)
         # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (JTJ) * dx
         orig_prediction3 = orig_prediction + _np.dot(Jdx, Jdx)
         norm_dx = _np.linalg.norm(dx)
