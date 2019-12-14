@@ -18,22 +18,7 @@ import scipy.sparse as _sps
 from collections import namedtuple as _namedtuple
 import functools as _functools
 
-from .parameterized import parameterized as _parameterized
 from .opttools import cache_by_hashed_args
-
-#OLD TODO REMOVE
-#DefaultBasisInfo = _namedtuple('BuiltinBasisInfo', ['constructor', 'longname', 'real', 'sizesfn', 'labeler'])
-#@_parameterized # this decorator takes additional arguments (other than just f)
-#def basis_constructor(f, name, longname, sizesfn, real=True):
-#    """ This decorator saves f to a dictionary for constructing default bases,
-#        as well as enabling caching on the basis creation function: (Important
-#        to CP/TP cases of gauge opt) """
-#    @cache_by_hashed_args
-#    @_functools.wraps(f)
-#    def _cached(*args, **kwargs):
-#        return f(*args, **kwargs)
-#    _basisConstructorDict[name] = DefaultBasisInfo(_cached, longname, real, sizesfn)
-#    return _cached
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)

@@ -11,8 +11,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import warnings as _warnings
 
-from ..baseobjs import parameterized
-
 
 def warn_deprecated(name, replacement=None):
     """
@@ -33,8 +31,7 @@ def warn_deprecated(name, replacement=None):
     _warnings.warn(message)
 
 
-@parameterized
-def deprecated_fn(fn, replacement=None):
+def deprecated_fn(replacement=None):
     """
     Decorator for deprecating a function.
 
@@ -46,7 +43,9 @@ def deprecated_fn(fn, replacement=None):
     replacement : str, optional
         the name of the function that should replace it.
     """
-    def _inner(*args, **kwargs):
-        warn_deprecated(fn.__name__, replacement)
-        return fn(*args, **kwargs)
-    return _inner
+    def decorator(fn):
+        def _inner(*args, **kwargs):
+            warn_deprecated(fn.__name__, replacement)
+            return fn(*args, **kwargs)
+        return _inner
+    return decorator
