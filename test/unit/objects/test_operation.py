@@ -6,7 +6,7 @@ from ..util import BaseCase, needs_cvxpy, needs_python3
 
 from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, \
     ExplicitOpModel, Basis, FullSPAMVec, TPInstrument
-from pygsti.baseobjs import basisconstructors as bc
+from pygsti.tools import basisconstructors as bc
 import pygsti.construction as pc
 import pygsti.objects.operation as op
 

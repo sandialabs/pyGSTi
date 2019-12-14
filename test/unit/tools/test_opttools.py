@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from ..util import BaseCase, mock
 
-from pygsti.baseobjs import opttools as opt
+from pygsti.tools import opttools as opt
 
 
 class CacheByHashedArgsTester(BaseCase):

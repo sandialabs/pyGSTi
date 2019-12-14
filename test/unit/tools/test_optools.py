@@ -7,7 +7,7 @@ from ..util import BaseCase, mock, needs_cvxpy
 from pygsti.construction import std2Q_XXYYII
 import pygsti.tools.optools as ot
 import pygsti.tools.basistools as bt
-from pygsti.baseobjs.basis import Basis, basis_matrices
+from pygsti.objects.basis import Basis
 
 
 def fake_minimize(fn):
@@ -26,7 +26,8 @@ def fake_minimize(fn):
 class OpToolsTester(BaseCase):
     def test_unitary_to_pauligate(self):
         theta = np.pi
-        ex = 1j * theta * bt.sigmax / 2
+        sigmax = np.array([[0, 1], [1, 0]])
+        ex = 1j * theta * sigmax / 2
         U = scipy.linalg.expm(ex)
         # U is 2x2 unitary matrix operating on single qubit in [0,1] basis (X(pi) rotation)
 
@@ -178,7 +179,7 @@ class ErrorGenTester(BaseCase):
                                        normalize=True, return_generators=True,
                                        other_mode="diagonal", sparse=False)
 
-        basisMxs = basis_matrices('gm', 16, sparse=False)
+        basisMxs = bt.basis_matrices('gm', 16, sparse=False)
         ot.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis,
                                        normalize=True, return_generators=False,
                                        other_mode="all", sparse=False)

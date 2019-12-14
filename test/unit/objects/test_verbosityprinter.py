@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 from ..util import BaseCase, mock
 
-from pygsti.baseobjs import verbosityprinter as vbp
+from pygsti.objects import verbosityprinter as vbp
 
 warn_message = 'This might go badly'
 error_message = 'Something terrible happened'

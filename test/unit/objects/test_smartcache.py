@@ -2,7 +2,7 @@ from ..util import BaseCase
 import pygsti
 import pickle
 import time
-from pygsti.baseobjs import smartcache as sc
+from pygsti.objects import smartcache as sc
 
 
 @sc.smart_cached

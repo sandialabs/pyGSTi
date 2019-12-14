@@ -4,7 +4,7 @@ from ..util import BaseCase
 
 from pygsti.objects import Circuit
 from pygsti.io import jsoncodec
-from pygsti.baseobjs.label import Label as L
+from pygsti.objects.label import Label as L
 
 
 def test_label_methods():

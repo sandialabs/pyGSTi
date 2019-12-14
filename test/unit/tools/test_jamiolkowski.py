@@ -6,8 +6,7 @@ from ..util import BaseCase
 
 from pygsti.construction import std1Q_XYI as std1Q, build_operation
 import pygsti.tools.basistools as bt
-from pygsti.objects import ExplicitOpModel
-from pygsti.baseobjs import Basis
+from pygsti.objects import ExplicitOpModel, Basis
 
 from pygsti.tools import jamiolkowski as j
 
