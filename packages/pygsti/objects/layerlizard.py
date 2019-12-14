@@ -43,7 +43,7 @@ from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 from ..baseobjs.label import CircuitLabel as _CircuitLabel

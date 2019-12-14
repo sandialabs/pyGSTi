@@ -45,7 +45,7 @@ from . import explicitcalc as _explicitcalc
 from . import simplifierhelper as _sh
 from . import layerlizard as _ll
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 

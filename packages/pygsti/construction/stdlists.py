@@ -16,7 +16,7 @@ from ..tools import listtools as _lt
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import Model as _Model
 from ..objects import Circuit as _Circuit
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 
 

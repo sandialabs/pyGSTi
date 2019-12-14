@@ -17,7 +17,7 @@ import warnings as _warnings
 import zipfile as _zipfile
 import numpy as _np
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
 from ..tools import timed_block as _timed_block
 

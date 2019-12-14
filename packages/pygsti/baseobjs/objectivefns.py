@@ -12,7 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import time as _time
 import numpy as _np
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import optimize as _opt
 from ..tools import listtools as _lt
 

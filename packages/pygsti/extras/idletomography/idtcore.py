@@ -18,7 +18,7 @@ import warnings as _warnings
 from ... import construction as _cnst
 from ... import objects as _objs
 from ... import tools as _tools
-from ...baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 from . import pauliobjs as _pobjs
 from . import idttools as _idttools

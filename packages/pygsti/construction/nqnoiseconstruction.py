@@ -35,7 +35,7 @@ from ..objects import labeldicts as _ld
 from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl

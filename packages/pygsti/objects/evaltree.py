@@ -13,7 +13,7 @@ import collections as _collections
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 import numpy as _np
 import warnings as _warnings

@@ -100,8 +100,8 @@ from .operation import compose, optimize_operation, finite_difference_deriv_wrt_
 
 #Important Base Objects
 from .smartcache import SmartCache
-from ..baseobjs import VerbosityPrinter, \
-    Profiler, \
+from .verbosityprinter import VerbosityPrinter
+from ..baseobjs import Profiler, \
     Basis, \
     BuiltinBasis, \
     ExplicitBasis, \

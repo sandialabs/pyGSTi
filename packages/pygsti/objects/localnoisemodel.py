@@ -28,7 +28,7 @@ from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl
 from ..baseobjs import CircuitLabel as _CircuitLabel
