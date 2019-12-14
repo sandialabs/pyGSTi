@@ -33,7 +33,7 @@ from ..tools import lindbladtools as _lbt
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from . import stabilizer as _stabilizer
-from ..baseobjs import ProtectedArray as _ProtectedArray
+from .protectedarray import ProtectedArray as _ProtectedArray
 from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, EmbeddedBasis as _EmbeddedBasis, \
     ExplicitBasis as _ExplicitBasis, basis_matrices as _basis_matrices
 
