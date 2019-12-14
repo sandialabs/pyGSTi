@@ -404,7 +404,7 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
     if dimOrBlockDims is None:
         return mx
     blkBasis = DirectSumBasis([BuiltinBasis('std', d**2) for d in dimOrBlockDims])
-    simpleBasis = BuiltingBasis('std', sum(dimOrBlockDims)**2)
+    simpleBasis = BuiltinBasis('std', sum(dimOrBlockDims)**2)
 
     if resize == 'expand':
         a = blkBasis
