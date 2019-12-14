@@ -189,7 +189,7 @@ class CircuitParser(object):
             self._lookup = lookup
             self._lexer = lex.lex(object=lexer_object if lexer_object else CircuitLexer())
             self._parser = yacc.yacc(module=self, start="ppstring", debug=False,
-                                     tabmodule='pygsti.baseobjs.parsetab_string')
+                                     tabmodule='pygsti.io.parsetab_string')
             self.parse = self.ply_parse
         else:
             self._parser = SimpleCircuitParser()
