@@ -19,7 +19,7 @@ import warnings as _warnings
 from . import labeldicts as _ld
 from ..baseobjs import Label as _Label
 from ..baseobjs.label import CircuitLabel as _CircuitLabel
-from ..baseobjs import CircuitParser as _CircuitParser
+from ..io import CircuitParser as _CircuitParser
 from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 from ..tools import slicetools as _slct

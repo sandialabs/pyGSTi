@@ -22,7 +22,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import objects as _objs
 from .. import tools as _tools
 
-from ..baseobjs import CircuitParser as _CircuitParser
+from . import CircuitParser as _CircuitParser
 
 
 def get_display_progress_fn(showProgress):

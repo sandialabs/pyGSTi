@@ -11,6 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 #Import the most important/useful routines of each module into
 # the package namespace
+from .circuitparser import CircuitParser
 from .loaders import *
 from .writers import *
 from .stdinput import *

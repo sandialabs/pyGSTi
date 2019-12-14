@@ -39,7 +39,7 @@ from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl
-from ..baseobjs import CircuitParser as _CircuitParser
+from ..io import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
 from .modelconstruction import basis_build_vector as _basis_build_vector

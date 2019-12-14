@@ -43,9 +43,9 @@ ppstring  :: pstring [ povm ]
 
 import warnings as _warnings
 from ply import lex, yacc
-from .label import Label as _Label
-from .label import CircuitLabel as _CircuitLabel
-from . import label as _lbl
+from ..baseobjs.label import Label as _Label
+from ..baseobjs.label import CircuitLabel as _CircuitLabel
+from ..baseobjs import label as _lbl
 
 try:
     from .fastcircuitparser import fast_parse_circuit as _fast_parse_circuit
