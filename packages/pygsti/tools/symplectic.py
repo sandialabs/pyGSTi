@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from ..baseobjs import Label as _Label
-from ..baseobjs import smart_cached
+from ..objects.smartcache import smart_cached
 from . import matrixmod2 as _mtx
 
 import numpy as _np

@@ -99,9 +99,9 @@ from .results import Results
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 
 #Important Base Objects
+from .smartcache import SmartCache
 from ..baseobjs import VerbosityPrinter, \
     Profiler, \
-    SmartCache, \
     Basis, \
     BuiltinBasis, \
     ExplicitBasis, \

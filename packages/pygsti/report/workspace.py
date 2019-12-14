@@ -24,7 +24,7 @@ import subprocess as _subprocess
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from ..baseobjs import CustomDigestError as _CustomDigestError
+from ..objects.smartcache import CustomDigestError as _CustomDigestError
 
 from . import plotly_plot_ex as _plotly_ex
 from . import merge_helpers as _merge

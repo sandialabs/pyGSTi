@@ -12,7 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy.stats import chi2 as _chi2
 
-from ..baseobjs import smart_cached
+from ..objects.smartcache import smart_cached
 
 
 @smart_cached
