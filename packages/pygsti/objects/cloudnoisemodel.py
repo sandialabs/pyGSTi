@@ -33,7 +33,7 @@ from ..objects.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _Exp
 from ..baseobjs import Label as _Lbl
 from ..baseobjs import CircuitLabel as _CircuitLabel
 
-from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 
 def _iter_basis_inds(weight):

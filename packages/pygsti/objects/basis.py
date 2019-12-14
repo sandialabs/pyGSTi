@@ -26,8 +26,8 @@ import scipy.sparse.linalg as _spsl
 
 import math
 
-from ..baseobjs.basisconstructors import _basisConstructorDict
-from ..baseobjs.basisconstructors import cache_by_hashed_args
+from ..tools.basisconstructors import _basisConstructorDict
+from ..baseobjs.opttools import cache_by_hashed_args
 
 #Helper functions
 try: basestring
@@ -1357,83 +1357,3 @@ class EmbeddedBasis(LazyBasis):
         if builtinBasisName is None:
             builtinBasisName = self.embedded_basis.name  # default
         return BuiltinBasis(builtinBasisName, self.elsize, sparse=self.sparse)
-
-
-def basis_matrices(nameOrBasis, dim, sparse=False):
-    '''
-    Get the elements of the specifed basis-type which
-    spans the density-matrix space given by dim.
-
-    Parameters
-    ----------
-    name : {'std', 'gm', 'pp', 'qt'} or Basis
-        The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp), and Qutrit (qt).  If a Basis object, then
-        the basis matrices are contained therein, and its dimension is checked to
-        match dim.
-
-    dim : int
-        The dimension of the density-matrix space.
-
-    sparse : bool, optional
-        Whether any built matrices should be SciPy CSR sparse matrices
-        or dense numpy arrays (the default).
-
-    Returns
-    -------
-    list
-        A list of N numpy arrays each of shape (dmDim, dmDim),
-        where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
-        and N is the dimension of the density-matrix space,
-        equal to sum( block_dim_i^2 ).
-    '''
-    return Basis.cast(nameOrBasis, dim, sparse).elements
-
-
-def basis_longname(basis):
-    """
-    Get the "long name" for a particular basis,
-    which is typically used in reports, etc.
-
-    Parameters
-    ----------
-    basis : string or Basis object
-
-    Returns
-    -------
-    string
-    """
-    if isinstance(basis, Basis):
-        return basis.longname
-    return _basisConstructorDict[basis].longname
-
-
-def basis_element_labels(basis, dim):
-    """
-    Returns a list of short labels corresponding to to the
-    elements of the described basis.  These labels are
-    typically used to label the rows/columns of a box-plot
-    of a matrix in the basis.
-
-    Parameters
-    ----------
-    basis : {'std', 'gm', 'pp', 'qt'}
-        Which basis the model is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp) and Qutrit (qt).  If the basis is
-        not known, then an empty list is returned.
-
-    dimOrBlockDims : int or list, optional
-        Dimension of basis matrices.  If a list of integers,
-        then gives the dimensions of the terms in a
-        direct-sum decomposition of the density
-        matrix space acted on by the basis.
-
-    Returns
-    -------
-    list of strings
-        A list of length dim, whose elements label the basis
-        elements.
-    """
-    return Basis.cast(basis, dim).labels

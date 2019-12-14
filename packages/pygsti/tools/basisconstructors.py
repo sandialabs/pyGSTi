@@ -18,8 +18,6 @@ import scipy.sparse as _sps
 from collections import namedtuple as _namedtuple
 import functools as _functools
 
-from .opttools import cache_by_hashed_args
-
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
 id2x2 = _np.array([[1, 0], [0, 1]])
@@ -52,7 +50,7 @@ def _check_dim(dim):
         raise ValueError(("You have requested to build a basis with %d x %d matrices."
                           " This is pretty big and so we're throwing this error because"
                           " there's a good chance you didn't mean to to this.  If you "
-                          " really want to, increase `pygsti.baseobjs.basisconstructors.MAX_BASIS_MATRIX_DIM`"
+                          " really want to, increase `pygsti.tools.basisconstructors.MAX_BASIS_MATRIX_DIM`"
                           " (currently == %d) to something greater than %d and rerun this.")
                          % (dim, dim, MAX_BASIS_MATRIX_DIM, dim))
 

@@ -21,6 +21,7 @@ from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import compattools as _compat
 from ..tools import internalgates as _itgs
+from ..tools.basisconstructors import sigmax, sigmay, sigmaz
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
@@ -303,9 +304,9 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             label = to_label(args[1])
             assert(sslbls.labeldims[label] == 4), "%s gate must act on qubits!" % opName
 
-            if opName == 'X': ex = -1j * theta * _bt.sigmax / 2
-            elif opName == 'Y': ex = -1j * theta * _bt.sigmay / 2
-            elif opName == 'Z': ex = -1j * theta * _bt.sigmaz / 2
+            if opName == 'X': ex = -1j * theta * sigmax / 2
+            elif opName == 'Y': ex = -1j * theta * sigmay / 2
+            elif opName == 'Z': ex = -1j * theta * sigmaz / 2
 
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
@@ -323,7 +324,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             label = to_label(args[4])
             assert(sslbls.labeldims[label] == 4), "%s gate must act on qubits!" % opName
 
-            ex = -1j * theta * (sxCoeff * _bt.sigmax / 2. + syCoeff * _bt.sigmay / 2. + szCoeff * _bt.sigmaz / 2.)
+            ex = -1j * theta * (sxCoeff * sigmax / 2. + syCoeff * sigmay / 2. + szCoeff * sigmaz / 2.)
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
@@ -338,9 +339,9 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                 theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
                 label1 = to_label(args[1]); label2 = to_label(args[2])
 
-                if opName == 'CX': ex = -1j * theta * _bt.sigmax / 2
-                elif opName == 'CY': ex = -1j * theta * _bt.sigmay / 2
-                elif opName == 'CZ': ex = -1j * theta * _bt.sigmaz / 2
+                if opName == 'CX': ex = -1j * theta * sigmax / 2
+                elif opName == 'CY': ex = -1j * theta * sigmay / 2
+                elif opName == 'CZ': ex = -1j * theta * sigmaz / 2
                 Utarget = _spl.expm(ex)  # 2x2 unitary matrix operating on target qubit
 
             else:  # opName in ('CNOT','CPHASE')
@@ -370,7 +371,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
             i1 = int(args[1])  # row/column index of a single *state* within the density matrix
             i2 = int(args[2])  # row/column index of a single *state* within the density matrix
-            ex = -1j * theta * _bt.sigmax / 2
+            ex = -1j * theta * sigmax / 2
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on the i1-th and i2-th states of the state space basis
 
             opDim = basis.dim

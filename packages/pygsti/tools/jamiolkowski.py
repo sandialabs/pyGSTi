@@ -10,7 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import numpy as _np
-from ..objects.basis import basis_matrices as _basis_matrices, Basis as _Basis
+from ..objects.basis import Basis as _Basis
 from . import basistools as _bt
 from . import matrixtools as _mt
 
@@ -161,7 +161,7 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='pp', opMxBasis='pp'):
     dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    BVec = _basis_matrices(choiMxBasis.simple_equivalent(), N)
+    BVec = _bt.basis_matrices(choiMxBasis.simple_equivalent(), N)
     assert(len(BVec) == N)  # make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
