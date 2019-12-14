@@ -15,7 +15,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 
-from ..tools import basistools as _bt
+from ..tools import basisconstructors as _bc
 from ..tools import matrixtools as _mt
 from . import spamvec as _sv
 
@@ -495,7 +495,7 @@ class ExplicitOpModel_Calc(object):
         dPG = _np.empty((nElements, nParams + dim**2), 'd')
         for i in range(dim):      # always range over all rows: this is the
             for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _bt.mut(i, j, dim)
+                unitMx = _bc.mut(i, j, dim)
                 for lbl, rhoVec in self_preps.items():
                     gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl, EVec in self_effects.items():
