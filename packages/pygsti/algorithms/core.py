@@ -19,10 +19,9 @@ import time as _time
 from .. import optimize as _opt
 from .. import tools as _tools
 from .. import objects as _objs
-from .. import baseobjs as _baseobjs
 from .. import construction as _pc
 from ..baseobjs import objectivefns as _objfns
-from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..objects.profiler import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 
 
@@ -1117,7 +1116,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     #Create evaluation tree (split into subtrees if needed)
     tm = _time.time()
     if (memLimit is not None):
-        curMem = _baseobjs.profiler._get_max_mem_usage(comm)
+        curMem = _objs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1 * (memLimit - persistentMem))
         mlim = memLimit - persistentMem - gthrMem - curMem
         printer.log("Memory limit = %.2fGB" % (memLimit * C))
@@ -2204,7 +2203,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     #Get evaluation tree (split into subtrees if needed)
     if (memLimit is not None):
-        curMem = _baseobjs.profiler._get_max_mem_usage(comm)
+        curMem = _objs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1 * (memLimit - persistentMem))
         mlim = memLimit - persistentMem - gthrMem - curMem
         assert mlim > 0, 'Not enough memory, exiting..'

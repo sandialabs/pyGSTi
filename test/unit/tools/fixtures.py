@@ -10,7 +10,7 @@ ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
 ns.maxLengthList = [0, 1, 2, 4, 8]
-ns.CM = pygsti.baseobjs.profiler._get_mem_usage()
+ns.CM = pygsti.objects.profiler._get_mem_usage()
 
 
 @ns.memo

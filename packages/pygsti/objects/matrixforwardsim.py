@@ -20,7 +20,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
-from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .forwardsim import ForwardSimulator
