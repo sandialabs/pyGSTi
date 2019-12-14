@@ -26,6 +26,4 @@ from .mpitools import parallel_apply, get_comm
 from .symplectic import *
 from .matrixmod2 import *
 from .hypothesis import *
-#Special case: opttool need to reside in baseobjs,
-# but they're still "tools"
-from ..baseobjs.opttools import *
+from .opttools import *

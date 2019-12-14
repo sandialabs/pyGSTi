@@ -19,7 +19,7 @@ import pickle as _pickle
 
 from collections import Counter, defaultdict
 
-from ..baseobjs.opttools import timed_block as _timed_block
+from ..tools.opttools import timed_block as _timed_block
 
 DIGEST_TIMES = defaultdict(list)
 

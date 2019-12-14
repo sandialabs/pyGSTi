@@ -27,7 +27,7 @@ import scipy.sparse.linalg as _spsl
 import math
 
 from ..tools.basisconstructors import _basisConstructorDict
-from ..baseobjs.opttools import cache_by_hashed_args
+from ..tools.opttools import cache_by_hashed_args
 
 #Helper functions
 try: basestring
