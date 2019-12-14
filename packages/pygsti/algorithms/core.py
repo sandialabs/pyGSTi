@@ -20,7 +20,7 @@ from .. import optimize as _opt
 from .. import tools as _tools
 from .. import objects as _objs
 from .. import construction as _pc
-from ..baseobjs import objectivefns as _objfns
+from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 

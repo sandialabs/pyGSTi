@@ -26,7 +26,7 @@ from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
 from ..tools import compattools as _compat
 from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..baseobjs import objectivefns as _objfns
+from ..objects import objectivefns as _objfns
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
