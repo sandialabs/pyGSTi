@@ -142,7 +142,7 @@ setup(name='pyGSTi',
       packages=[
           'pygsti',
           'pygsti.algorithms',
-          'pygsti.baseobjs',
+          'pygsti',
           'pygsti.construction',
           'pygsti.drivers',
           'pygsti.extras',
