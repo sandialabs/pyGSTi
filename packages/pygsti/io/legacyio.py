@@ -16,7 +16,6 @@ from types import ModuleType as _ModuleType
 from contextlib import contextmanager as _contextmanager
 
 from .. import objects as _objs
-from .. import baseobjs as _baseobjs
 from ..objects import circuit as _circuit
 
 
@@ -216,7 +215,6 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         dim = _ModuleType("dim")
         dim.Dim = dummy_Dim
         _sys.modules['pygsti.baseobjs.dim'] = dim
-        #OLD: _baseobjs.dim.Dim.__setstate__ = Dim_setstate
 
         #_objs.basis.saved_Basis = _objs.basis.Basis
         #_objs.basis.Basis = dummy_Basis
@@ -265,7 +263,6 @@ def enable_old_object_unpickling(old_version="0.9.6"):
 
         delattr(_objs.Circuit, '__setstate__')
         delattr(_objs.LindbladDenseOp, '__setstate__')
-        #delattr(_baseobjs.Dim,'__setstate__')
         delattr(_objs.modelmember.ModelMember, '__setstate__')
 
     if old_version <= totup("0.9.7.1"):
