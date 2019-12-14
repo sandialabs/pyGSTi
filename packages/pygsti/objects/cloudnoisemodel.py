@@ -28,9 +28,9 @@ from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
-from ..objects.label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
+from .label import Label as _Lbl, CircuitLabel as _CircuitLabel
 
 from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 

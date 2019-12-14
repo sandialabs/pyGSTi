@@ -19,7 +19,7 @@ from .localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
-from ..objects.label import Label as _Label
+from .label import Label as _Label
 from ..tools import optools as _gt
 from ..tools import internalgates as _itgs
 from ..tools import symplectic as _symp

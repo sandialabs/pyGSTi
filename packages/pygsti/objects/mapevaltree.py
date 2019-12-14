@@ -13,7 +13,7 @@ import numpy as _np
 import collections as _collections
 import copy as _copy
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from .evaltree import EvalTree
 

@@ -19,8 +19,8 @@ from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
 from ..tools import symplectic as _symp
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects.label import Label as _Label
+from .profiler import DummyProfiler as _DummyProfiler
+from .label import Label as _Label
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .forwardsim import ForwardSimulator
 from . import replib

@@ -20,7 +20,7 @@ import itertools as _itertools
 from .basistools import change_basis
 
 try:
-    from ..tools import fastcalc as _fastcalc
+    from . import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
 

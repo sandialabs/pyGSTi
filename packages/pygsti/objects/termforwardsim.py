@@ -21,8 +21,8 @@ from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects.label import Label as _Label
+from .profiler import DummyProfiler as _DummyProfiler
+from .label import Label as _Label
 from .termevaltree import TermEvalTree as _TermEvalTree
 from .termevaltree import TermPathSet as _TermPathSet
 from .termevaltree import UnsplitTreeTermPathSet as _UnsplitTreeTermPathSet

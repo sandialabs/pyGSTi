@@ -42,9 +42,9 @@ from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import Basis as _Basis
-from ..objects.label import Label as _Label
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .basis import Basis as _Basis
+from .label import Label as _Label
 
 
 class SimplifierHelper(object):

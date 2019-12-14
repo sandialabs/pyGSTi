@@ -12,7 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import copy as _copy
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from ..tools import mpitools as _mpit
 from .evaltree import EvalTree

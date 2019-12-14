@@ -18,7 +18,7 @@ from .. import optimize as _opt
 from .. import tools as _tools
 
 from .explicitcalc import P_RANK_TOL
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
 #Connection with Robin's notes:

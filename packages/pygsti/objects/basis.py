@@ -140,7 +140,7 @@ class Basis(object):
         Basis
         """
         #print("DB: CAST = ",nameOrBasisOrMatrices,dim)
-        from ..objects.labeldicts import StateSpaceLabels as _SSLs
+        from .labeldicts import StateSpaceLabels as _SSLs
         if nameOrBasisOrMatrices is None:  # special case of empty basis
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)  # empty basis
         elif isinstance(nameOrBasisOrMatrices, Basis):
@@ -1282,8 +1282,8 @@ class EmbeddedBasis(LazyBasis):
         """ Take a dense or sparse basis matrix and embed it. """
         #LAZY building of elements (in case we never need them)
         if self.elndim == 2:  # then use EmbeddedOp to do matrix
-            from ..objects.operation import StaticDenseOp
-            from ..objects.operation import EmbeddedOp
+            from .operation import StaticDenseOp
+            from .operation import EmbeddedOp
             sslbls = self.state_space_labels.copy()
             sslbls.reduce_dims_densitymx_to_state()  # because we're working with basis matrices not gates
 

@@ -18,7 +18,7 @@ from . import spamvec as _sv
 from . import operation as _op
 from . import modelmember as _gm
 from ..tools import compattools as _compat
-from ..objects.label import Label as _Label
+from .label import Label as _Label
 
 
 class PrefixOrderedDict(_collections.OrderedDict):
