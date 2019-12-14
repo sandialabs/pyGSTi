@@ -10,8 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import numpy as _np
-from ..baseobjs.basis import basis_matrices as _basis_matrices
-from ..baseobjs.basis import Basis as _Basis
+from ..objects.basis import basis_matrices as _basis_matrices, Basis as _Basis
 from . import basistools as _bt
 from . import matrixtools as _mt
 

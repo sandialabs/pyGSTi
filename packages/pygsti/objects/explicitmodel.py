@@ -46,8 +46,8 @@ from . import simplifierhelper as _sh
 from . import layerlizard as _ll
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import BuiltinBasis as _BuiltinBasis
-from ..baseobjs import DirectSumBasis as _DirectSumBasis
+from ..objects.basis import BuiltinBasis as _BuiltinBasis
+from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..baseobjs import Label as _Label
 
 

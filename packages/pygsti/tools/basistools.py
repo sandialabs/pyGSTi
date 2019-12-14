@@ -17,12 +17,13 @@ import collections as _collections
 
 import numpy as _np
 
-from ..baseobjs import Basis, BuiltinBasis, DirectSumBasis
+from ..objects.basis import Basis, BuiltinBasis, DirectSumBasis
 
 ## Import base-object routines, which can act as "tools" too
 ## (note these are *not* imported by baseobjs.__init__.py)
 from ..baseobjs.basisconstructors import *
-from ..baseobjs.basis import basis_matrices, basis_longname, basis_element_labels
+# TODO refactor into this module
+from ..objects.basis import basis_matrices, basis_longname, basis_element_labels
 
 
 def is_sparse_basis(nameOrBasis):

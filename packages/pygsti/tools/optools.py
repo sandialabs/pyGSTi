@@ -21,10 +21,8 @@ from . import matrixtools as _mt
 from . import lindbladtools as _lt
 from . import compattools as _compat
 from . import basistools as _bt
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import ExplicitBasis as _ExplicitBasis
-from ..baseobjs import DirectSumBasis as _DirectSumBasis
-from ..baseobjs.basis import basis_matrices as _basis_matrices
+from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis, \
+    basis_matrices as _basis_matrices
 
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero

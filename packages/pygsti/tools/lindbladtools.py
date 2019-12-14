@@ -11,7 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.sparse as _sps
-from ..baseobjs.basis import basis_matrices
+from ..objects.basis import basis_matrices
 from . import matrixtools as _mt
 
 

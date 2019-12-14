@@ -31,9 +31,9 @@ from ..objects import labeldicts as _ld
 from ..objects import qubitgraph as _qubitgraph
 from ..objects.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..baseobjs import label as _label
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import DirectSumBasis as _DirectSumBasis
-from ..baseobjs import BuiltinBasis as _BuiltinBasis
+from ..objects.basis import Basis as _Basis
+from ..objects.basis import DirectSumBasis as _DirectSumBasis
+from ..objects.basis import BuiltinBasis as _BuiltinBasis
 
 
 #############################################
@@ -94,7 +94,7 @@ def basis_build_vector(vecExpr, basis):
     #                break
     #            vecIndex += 1
     #    start += blockDim
-    #from ..baseobjs import BuiltinBasis
+    #from ..objects.basis import BuiltinBasis
     #hackstd = BuiltinBasis('std',opDim)
     #return _bt.change_basis(vecInReducedStdBasis, hackstd, basis)
 

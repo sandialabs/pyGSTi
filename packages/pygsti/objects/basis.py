@@ -26,8 +26,8 @@ import scipy.sparse.linalg as _spsl
 
 import math
 
-from .basisconstructors import _basisConstructorDict
-from .basisconstructors import cache_by_hashed_args
+from ..baseobjs.basisconstructors import _basisConstructorDict
+from ..baseobjs.basisconstructors import cache_by_hashed_args
 
 #Helper functions
 try: basestring

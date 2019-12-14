@@ -28,7 +28,7 @@ from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
-from ..baseobjs import Basis as _Basis
+from ..objects.basis import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from . import modelmember as _modelmember
 

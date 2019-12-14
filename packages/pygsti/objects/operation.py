@@ -34,11 +34,8 @@ from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from . import stabilizer as _stabilizer
 from ..baseobjs import ProtectedArray as _ProtectedArray
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import BuiltinBasis as _BuiltinBasis
-from ..baseobjs import EmbeddedBasis as _EmbeddedBasis
-from ..baseobjs import ExplicitBasis as _ExplicitBasis
-from ..baseobjs.basis import basis_matrices as _basis_matrices
+from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, EmbeddedBasis as _EmbeddedBasis, \
+    ExplicitBasis as _ExplicitBasis, basis_matrices as _basis_matrices
 
 from . import term as _term
 from .polynomial import Polynomial as _Polynomial

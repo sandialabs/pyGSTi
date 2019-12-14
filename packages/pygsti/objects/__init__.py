@@ -102,10 +102,5 @@ from .operation import compose, optimize_operation, finite_difference_deriv_wrt_
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
-from ..baseobjs import Basis, \
-    BuiltinBasis, \
-    ExplicitBasis, \
-    TensorProdBasis, \
-    DirectSumBasis, \
-    Label, \
-    CircuitLabel
+from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
+from ..baseobjs import Label, CircuitLabel
