@@ -21,7 +21,7 @@ from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
 from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..baseobjs import Label as _Label
+from ..objects.label import Label as _Label
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .forwardsim import ForwardSimulator
 _dummy_profiler = _DummyProfiler()

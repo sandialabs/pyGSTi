@@ -45,8 +45,7 @@ from . import explicitcalc as _explicitcalc
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import Basis as _Basis
-from ..baseobjs import Label as _Label
-from ..baseobjs.label import CircuitLabel as _CircuitLabel
+from ..objects.label import Label as _Label, CircuitLabel as _CircuitLabel
 
 
 class LayerLizard(object):

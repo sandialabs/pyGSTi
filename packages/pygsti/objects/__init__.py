@@ -103,4 +103,4 @@ from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
 from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
-from ..baseobjs import Label, CircuitLabel
+from .label import Label, CircuitLabel

@@ -13,4 +13,3 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # the package namespace
 
 from .exceptions import *
-from .label import Label, CircuitLabel

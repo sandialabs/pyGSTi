@@ -43,9 +43,7 @@ ppstring  :: pstring [ povm ]
 
 import warnings as _warnings
 from ply import lex, yacc
-from ..baseobjs.label import Label as _Label
-from ..baseobjs.label import CircuitLabel as _CircuitLabel
-from ..baseobjs import label as _lbl
+from ..objects import label as _lbl
 
 try:
     from .fastcircuitparser import fast_parse_circuit as _fast_parse_circuit
@@ -100,7 +98,7 @@ class CircuitLexer:
         if len(sslbls) == 0:
             sslbls = None
 
-        return _Label(nm, sslbls, time, args)
+        return _lbl.Label(nm, sslbls, time, args)
 
     @staticmethod
     def t_GATE(t):
@@ -244,14 +242,14 @@ class CircuitParser(object):
     @staticmethod
     def p_layerable_subcircuit(p):
         '''layerable : subcircuit '''
-        plbl = _Label((p[1],))  # just for total sslbls
-        p[0] = _CircuitLabel('', p[1], plbl.sslbls, 1),
+        plbl = _lbl.Label((p[1],))  # just for total sslbls
+        p[0] = _lbl.CircuitLabel('', p[1], plbl.sslbls, 1),
 
     @staticmethod
     def p_layerable_subcircuit_expop(p):
         '''layerable : subcircuit EXPOP INTEGER'''
-        plbl = _Label(p[1])  # just for total sslbls
-        p[0] = _CircuitLabel('', p[1], plbl.sslbls, p[3]),
+        plbl = _lbl.Label(p[1])  # just for total sslbls
+        p[0] = _lbl.CircuitLabel('', p[1], plbl.sslbls, p[3]),
 
     @staticmethod
     def p_layer_layerable(p):
@@ -298,9 +296,9 @@ class CircuitParser(object):
     @staticmethod
     def p_expdstr_expop(p):
         '''expdstr : expable EXPOP INTEGER'''
-        plbl = _Label(p[1])  # just for total sslbls
+        plbl = _lbl.Label(p[1])  # just for total sslbls
         if len(p[1]) > 0:
-            p[0] = _CircuitLabel('', p[1], plbl.sslbls, p[3]),
+            p[0] = _lbl.CircuitLabel('', p[1], plbl.sslbls, p[3]),
         else:
             p[0] = ()  # special case of {}^power => remain empty
         #OLD (before subcircuits) p[0] = p[1] * p[3]  # tuple repetition

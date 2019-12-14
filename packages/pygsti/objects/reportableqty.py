@@ -12,7 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from copy import deepcopy as _deepcopy
 import numpy as _np
 
-from ..baseobjs.label import Label as _Label
+from ..objects.label import Label as _Label
 
 
 def minimum(qty1, qty2):

@@ -43,9 +43,8 @@ from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import Basis as _Basis
-from ..objects.basis import BuiltinBasis as _BuiltinBasis
-from ..baseobjs import Label as _Label
+from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from ..objects.label import Label as _Label
 
 
 class Model(object):

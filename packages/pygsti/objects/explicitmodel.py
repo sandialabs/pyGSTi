@@ -46,9 +46,8 @@ from . import simplifierhelper as _sh
 from . import layerlizard as _ll
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import BuiltinBasis as _BuiltinBasis
-from ..objects.basis import DirectSumBasis as _DirectSumBasis
-from ..baseobjs import Label as _Label
+from ..objects.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from ..objects.label import Label as _Label
 
 
 class ExplicitOpModel(_mdl.OpModel):

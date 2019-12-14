@@ -44,7 +44,7 @@ from . import explicitcalc as _explicitcalc
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import Basis as _Basis
-from ..baseobjs import Label as _Label
+from ..objects.label import Label as _Label
 
 
 class SimplifierHelper(object):

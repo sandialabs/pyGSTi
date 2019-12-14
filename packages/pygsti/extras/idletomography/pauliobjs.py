@@ -11,7 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from ... import objects as _objs
-from ...baseobjs.label import Label as _Lbl
+from ...objects.label import Label as _Lbl
 
 #Helper function
 

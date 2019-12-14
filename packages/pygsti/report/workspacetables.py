@@ -18,7 +18,7 @@ from .. import tools as _tools
 from .. import objects as _objs
 from . import reportables as _reportables
 from .reportables import evaluate as _ev
-from ..baseobjs import Label as _Lbl
+from ..objects.label import Label as _Lbl
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..algorithms import gaugeopt as _gopt
 

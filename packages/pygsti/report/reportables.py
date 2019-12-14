@@ -20,9 +20,8 @@ import warnings as _warnings
 
 from .. import tools as _tools
 from .. import algorithms as _alg
-from ..objects.basis import Basis as _Basis
-from ..objects.basis import DirectSumBasis as _DirectSumBasis
-from ..baseobjs import Label as _Lbl
+from ..objects.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
+from ..objects.label import Label as _Lbl
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import modelfunction as _modf
 

@@ -30,8 +30,7 @@ from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
-from ..baseobjs import Label as _Lbl
-from ..baseobjs import CircuitLabel as _CircuitLabel
+from ..objects.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 
 from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 

@@ -31,7 +31,7 @@ from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
 from ..objects import qubitgraph as _qubitgraph
 from ..objects.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
-from ..baseobjs import label as _label
+from ..objects import label as _label
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects.basis import BuiltinBasis as _BuiltinBasis
