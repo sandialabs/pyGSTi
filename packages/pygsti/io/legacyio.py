@@ -244,6 +244,15 @@ def enable_old_object_unpickling(old_version="0.9.6"):
 
         _objs.spamvec.SPAMVec.__setstate__ = SPAMVec_setstate
 
+        # Compatibility with refactored `baseobjs` API
+        _sys.modules['pygsti.baseobjs.smartcache'] = _objs.smartcache
+        _sys.modules['pygsti.baseobjs.verbosityprinter'] = _objs.verbosityprinter
+        _sys.modules['pygsti.baseobjs.profiler'] = _objs.profiler
+        _sys.modules['pygsti.baseobjs.protectedarray'] = _objs.protectedarray
+        _sys.modules['pygsti.baseobjs.objectivefns'] = _objs.objectivefns
+        _sys.modules['pygsti.baseobjs.basis'] = _objs.basis
+        _sys.modules['pygsti.baseobjs.label'] = _objs.label
+
     yield  # body of context-manager block
 
     if old_version <= totup("0.9.6"):
@@ -278,3 +287,11 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     if old_version < totup("0.9.9"):
         if hasattr(_objs.spamvec.SPAMVec, '__setstate__'):  # b/c above block may have already deleted this
             delattr(_objs.spamvec.SPAMVec, '__setstate__')
+
+        del _sys.modules['pygsti.baseobjs.smartcache']
+        del _sys.modules['pygsti.baseobjs.verbosityprinter']
+        del _sys.modules['pygsti.baseobjs.profiler']
+        del _sys.modules['pygsti.baseobjs.protectedarray']
+        del _sys.modules['pygsti.baseobjs.objectivefns']
+        del _sys.modules['pygsti.baseobjs.basis']
+        del _sys.modules['pygsti.baseobjs.label']
