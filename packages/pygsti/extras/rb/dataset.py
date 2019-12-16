@@ -66,7 +66,8 @@ def create_summary_datasets(ds, spec, datatype='adjusted', verbosity=1):
                     success_counts[qubits][m].append(_analysis.marginalized_success_counts(dsrow, circ, target, qubits))
                     total_counts[qubits][m].append(dsrow.total)
                 elif datatype == 'adjusted':
-                    hamming_distance_counts[qubits][m].append(_analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
+                    hamming_distance_counts[qubits][m].append(
+                        _analysis.marginalized_hamming_distance_counts(dsrow, circ, target, qubits))
 
     summary_data = {}
     for qubits in structure:
@@ -91,8 +92,6 @@ class RBSummaryDataset(object):
 
     def __init__(self, number_of_qubits, success_counts=None, total_counts=None, hamming_distance_counts=None,
                  aux={}, finitecounts=True, descriptor=''):
-
-
         """
         # todo : update.
 

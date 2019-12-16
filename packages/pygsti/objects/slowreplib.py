@@ -2068,7 +2068,8 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     res.scale((pLeft * pRight))
                     final_factor_indx = fi[-1]
                     Ei = Einds[final_factor_indx]  # final "factor" index == E-vector index
-                    #print("DB: pr_as_poly    ", fi, " coeffs=",[f.coeff for f in factors]," pLeft=",pLeft," pRight=",pRight, "res=",res)
+                    # print("DB: pr_as_poly    ", fi, " coeffs=", [f.coeff for f in factors],
+                    #       " pLeft=", pLeft, " pRight=", pRight, "res=", res)
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei] += res  # add_inplace?
                     #print("DB pr_as_poly   running prps[",Ei,"] =",prps[Ei])
@@ -2108,16 +2109,20 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
-def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
-                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
-                                              pathmagnitude_gap, min_term_mag, max_paths, threshold_guess)
+def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                                         comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                                         max_paths=500, threshold_guess=0.0):
+    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                                              comm, memLimit, pathmagnitude_gap, min_term_mag, max_paths,
+                                              threshold_guess)
 
 
-def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm=None, memLimit=None,
-                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
-                                              pathmagnitude_gap, min_term_mag, max_paths, threshold_guess)
+def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                                         comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                                         max_paths=500, threshold_guess=0.0):
+    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+                                              comm, memLimit, pathmagnitude_gap, min_term_mag, max_paths,
+                                              threshold_guess)
 
 
 def SV_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
@@ -2202,8 +2207,8 @@ global_cnt = 0
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 
 
-def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm, memLimit,
-                                       pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
+def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm,
+                                       memLimit, pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -2282,8 +2287,8 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
             calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, calc.Np)
-    rho_term_reps, op_term_reps, E_term_reps, rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[
-        circuit]
+    rho_term_reps, op_term_reps, E_term_reps, \
+        rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
     factor_lists = [rho_term_reps] + \
         [op_term_reps[glbl] for glbl in circuit] + \
@@ -2298,14 +2303,16 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
-        initial_threshold=threshold_guess, min_threshold=pathmagnitude_gap / (3.0 * max_paths), max_npaths=max_paths)  # 3.0 is just heuristic
+        initial_threshold=threshold_guess, min_threshold=pathmagnitude_gap / (3.0 * max_paths),  # 3.0 is just heuristic
+        max_npaths=max_paths)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
     # TODO REMOVE
     #print("Threshold = ", threshold, " Paths=", npaths)
     #REMOVE (and global_cnt definition above)
     #global global_cnt
-    #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
+    # print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags,
+    #       "cnt = ", global_cnt)  # , " time=%.3fs" % (_time.time()-t0))
     #global_cnt += 1
 
     # #DEBUG TODO REMOVE
@@ -2381,8 +2388,8 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
             calc, rholabel, elabels, circuit, repcache, opcache, calc.min_term_mag, calc.Np)
-    rho_term_reps, op_term_reps, E_term_reps, rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[
-        circuit]
+    rho_term_reps, op_term_reps, E_term_reps, \
+        rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
     factor_lists = [rho_term_reps] + \
         [op_term_reps[glbl] for glbl in circuit] + \
@@ -2566,7 +2573,8 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
-                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None, compute_polyreps=True):
+                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None,
+                         compute_polyreps=True):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -2699,13 +2707,16 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, foat_indices_per_op,
-        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / (3.0 * max_paths), max_npaths=max_paths)  # 3.0 is just heuristic
+        initial_threshold=current_threshold,
+        min_threshold=pathmagnitude_gap / (3.0 * max_paths),  # 3.0 is just heuristic
+        max_npaths=max_paths)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
     #print("Threshold = ", threshold, " Paths=", npaths)
     #REMOVE (and global_cnt definition above)
     #global global_cnt
-    #print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags, "cnt = ",global_cnt) #, " time=%.3fs" % (_time.time()-t0))
+    # print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags,
+    #       "cnt = ", global_cnt)  # , " time=%.3fs" % (_time.time()-t0))
     #global_cnt += 1
 
     # no polyreps needed, e.g. just keep existing (cached) polys
@@ -2940,7 +2951,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
 
                 if fn_visitpath(b, actual_mag, i): return True  # fn_visitpath can signal early return
-                if traverse_tree(b, i, log_thres, mag, logmag, sub_order, nzeros):  # add any allowed paths beneath this one
+                if traverse_tree(b, i, log_thres, mag, logmag, sub_order, nzeros):
+                    # add any allowed paths beneath this one
                     return True
             elif sub_order <= 1:
                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -2958,7 +2970,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                         if denom == 0: denom = SMALL
 
                         #if numerator == 0: nzeros += 1  # not needed b/c we just leave numerator = 0
-                        mag = current_mag * (numerator / denom)  # OK if mag == 0 as it's not passed to any recursive calls
+                        # OK if mag == 0 as it's not passed to any recursive calls
+                        mag = current_mag * (numerator / denom)
                         actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
 
                         if fn_visitpath(b, actual_mag, i): return True
@@ -2972,7 +2985,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                                 numerator = oprep_lists[n - 1][b[n - 1]].magnitude
                                 denom = oprep_lists[i][orig_bn].magnitude
                                 if denom == 0: denom = SMALL
-                                mag2 = mag * (numerator / denom)  # zero if either numerator == 0 or mag == 0 from above.
+                                # zero if either numerator == 0 or mag == 0 from above.
+                                mag2 = mag * (numerator / denom)
                                 if fn_visitpath(b, mag2 if (nzeros == 0) else 0.0, n - 1): return True
 
                             b[n - 1] = orig_bn
@@ -3035,7 +3049,8 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 #
 #                 if logmag > log_thres_high:
 #                     if fn_visitpath(b, mag, i): return True  # fn_visitpath can signal early return
-#                 if traverse_tree(b, i, log_thres_high, log_thres_low, mag, logmag, sub_order):  # add any allowed paths beneath this one
+#                 if traverse_tree(b, i, log_thres_high, log_thres_low, mag, logmag, sub_order):
+#                     # add any allowed paths beneath this one
 #                     return True
 #             elif sub_order <= 1 and high_threshold >= 1.0:
 #                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -3198,7 +3213,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
 
     #Run path traversal once more to count final number of paths
 
-    def count_path_nomax(b, mg, incd):  # never returns True - we want to check *threshold* alone selects correct # of paths
+    def count_path_nomax(b, mg, incd):
+        # never returns True - we want to check *threshold* alone selects correct # of paths
         mag[E_indices[b[-1]]] += mg
         nPaths[E_indices[b[-1]]] += 1
 

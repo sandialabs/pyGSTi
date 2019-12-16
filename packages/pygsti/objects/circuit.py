@@ -42,6 +42,7 @@ from ..tools import slicetools as _slct
 # c[:,'Q0'] = ('Gx','Gy','','Gx') # assigns the Q0 line
 # c[1:3,'Q0'] = ('Gx','Gy') # assigns to a part of the Q0 line
 
+
 def _np_to_quil_def_str(name, input_array):
     """
     Write a DEFGATE block for RQC quil for an arbitrary one- or two-qubit unitary gate.
@@ -66,9 +67,10 @@ def _np_to_quil_def_str(name, input_array):
     output = 'DEFGATE {}:\n'.format(name)
     for line in input_array:
         output += '    '
-        output += ', '.join(map(_num_to_rqc_str,line))
+        output += ', '.join(map(_num_to_rqc_str, line))
         output += '\n'
     return output
+
 
 def _num_to_rqc_str(num):
     """Convert float to string to be included in RQC quil DEFGATE block
@@ -82,12 +84,12 @@ def _num_to_rqc_str(num):
         imag_part = _np.imag(num)
         if imag_part < 0:
             sgn = '-'
-            imag_part = imag_part*-1
+            imag_part = imag_part * -1
         elif imag_part > 0:
             sgn = '+'
         else:
             assert False
-        return '{}{}{}i'.format(real_part,sgn,imag_part)
+        return '{}{}{}i'.format(real_part, sgn, imag_part)
 
 
 def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_return_list=True):
@@ -170,7 +172,7 @@ class Circuit(object):
     def fromtup(cls, tup):
         if '@' in tup:
             k = tup.index('@')
-            return cls(tup[0:k], tup[k+1:])
+            return cls(tup[0:k], tup[k + 1:])
         else:
             return cls(tup)
 
@@ -429,7 +431,7 @@ class Circuit(object):
     @property
     def tup(self):
         """ This Circuit as a standard Python tuple of layer Labels and line labels."""
-        if self._line_labels in (('*',),()): #No line labels
+        if self._line_labels in (('*',), ()):  # No line labels
             return self.layertup
         else:
             return self.layertup + ('@',) + self._line_labels
@@ -2801,7 +2803,7 @@ class Circuit(object):
 
         if gate_declarations is not None:
             for gate_lbl in gate_declarations.keys():
-                quil += _np_to_quil_def_str(gate_lbl,gate_declarations[gate_lbl])
+                quil += _np_to_quil_def_str(gate_lbl, gate_declarations[gate_lbl])
 
         depth = self.num_layers()
 
@@ -2884,7 +2886,9 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, num_qubits=None, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None,
+                            gatename_conversion=None, qubit_conversion=None,
+                            block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 

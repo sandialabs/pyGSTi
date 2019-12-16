@@ -69,10 +69,10 @@ class MultiDataSet_ValIterator(object):
             repData = None
 
         ds = _DataSet(oliData, timeData, repData,
-                        circuitIndices=self.multidataset.cirIndex,
-                        outcomeLabelIndices=self.multidataset.olIndex,
-                        collisionAction=self.multidataset.collisionActions[datasetName],
-                        bStatic=True, auxInfo=None)
+                      circuitIndices=self.multidataset.cirIndex,
+                      outcomeLabelIndices=self.multidataset.olIndex,
+                      collisionAction=self.multidataset.collisionActions[datasetName],
+                      bStatic=True, auxInfo=None)
         ds.auxInfo = self.multidataset.auxInfo  # avoids shallow-copying dict
         return ds
 
@@ -368,7 +368,7 @@ class MultiDataSet(object):
         ds = _DataSet(agg_oli, agg_time, agg_rep,
                       circuitIndices=gstrSlices,
                       outcomeLabelIndices=self.olIndex, bStatic=True,
-                      auxInfo = None) #leave collisionAction as default "aggregate"
+                      auxInfo=None)  # leave collisionAction as default "aggregate"
         ds.auxInfo = self.auxInfo  # avoids shallow-copying dict
         return ds
 
@@ -429,7 +429,7 @@ class MultiDataSet(object):
         if len(self.oliDict) == 0:
             # this is the first added DataSet, so we can just overwrite
             # cirIndex even if it isn't None.
-            self.cirIndex = dataset.cirIndex.copy()  #copy b/c we may modify our cirIndex later
+            self.cirIndex = dataset.cirIndex.copy()  # copy b/c we may modify our cirIndex later
 
             #And then add data:
             self.oliDict[datasetName] = ds_oliData
@@ -521,7 +521,7 @@ class MultiDataSet(object):
             if len(self.auxInfo) == 0:
                 self.auxInfo.update(dataset.auxInfo)
             else:
-                for circuit,aux in dataset.auxInfo.items():
+                for circuit, aux in dataset.auxInfo.items():
                     self.auxInfo[circuit].update(aux)
 
     def __str__(self):
@@ -571,7 +571,6 @@ class MultiDataSet(object):
             self.auxInfo = _DefaultDict(dict, self.auxInfo)
             # some types of serialization (e.g. JSON) just save a *normal* dict
             # so promote to a defaultdict if needed..
-
 
     def save(self, fileOrFilename):
         """

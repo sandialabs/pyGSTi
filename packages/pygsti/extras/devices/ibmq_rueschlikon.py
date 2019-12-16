@@ -12,28 +12,28 @@ qubits = ['Q' + str(x) for x in range(16)]
 
 twoQgate = 'Gcnot'
 
-edgelist = [('Q1','Q0'),
-            ('Q1','Q2'),
-            ('Q2','Q3'),
-            ('Q3','Q4'),
-            ('Q3','Q14'),
-            ('Q5','Q4'),
-            ('Q6','Q5'),
-            ('Q6','Q7'),
-            ('Q6','Q11'),
-            ('Q7','Q10'),
-            ('Q8','Q7'),
-            ('Q9','Q8'),
-            ('Q9','Q10'),
-            ('Q11','Q10'),
-            ('Q12','Q5'),
-            ('Q12','Q11'),
-            ('Q12','Q13'),
-            ('Q13','Q4'),
-            ('Q13','Q14'),
-            ('Q15','Q0'),
-            ('Q15','Q2'),
-            ('Q15','Q14')]
+edgelist = [('Q1', 'Q0'),
+            ('Q1', 'Q2'),
+            ('Q2', 'Q3'),
+            ('Q3', 'Q4'),
+            ('Q3', 'Q14'),
+            ('Q5', 'Q4'),
+            ('Q6', 'Q5'),
+            ('Q6', 'Q7'),
+            ('Q6', 'Q11'),
+            ('Q7', 'Q10'),
+            ('Q8', 'Q7'),
+            ('Q9', 'Q8'),
+            ('Q9', 'Q10'),
+            ('Q11', 'Q10'),
+            ('Q12', 'Q5'),
+            ('Q12', 'Q11'),
+            ('Q12', 'Q13'),
+            ('Q13', 'Q4'),
+            ('Q13', 'Q14'),
+            ('Q15', 'Q0'),
+            ('Q15', 'Q2'),
+            ('Q15', 'Q14')]
 
 spec_format = 'ibmq_v2018'
 
@@ -88,23 +88,23 @@ spec_format = 'ibmq_v2018'
 #                         ('Q15','Q0'),
 #                         ('Q15','Q2'),
 #                         ('Q15','Q14')]
-    
-#     if subset is None:    
+
+#     if subset is None:
 #         return cnot_edge_list
-    
+
 #     else:
 #         subset_cnot_edge_list = []
 #         for cnot_edge in cnot_edge_list:
 #             if cnot_edge[0] in subset and cnot_edge[1] in subset:
 #                 subset_cnot_edge_list.append(cnot_edge)
-        
+
 #         return subset_cnot_edge_list
-    
+
 # def get_horizontal_splitting(n):
 #     """
 #     Splits the qubits into 16/n sets each consisting of n qubits,
 #     with the splitting "horizontal" and symmetric around the centre.
-#     """   
+#     """
 #     if n == 2:
 #         qubit_sets = [['Q0','Q1'],
 #                       ['Q2','Q15'],
@@ -113,20 +113,20 @@ spec_format = 'ibmq_v2018'
 #                       ['Q5','Q12'],
 #                       ['Q6','Q11'],
 #                       ['Q7','Q10'],
-#                       ['Q8','Q9']]  
+#                       ['Q8','Q9']]
 #     elif n == 4:
 #         qubit_sets = [['Q0','Q1','Q2','Q15'],
 #                       ['Q3','Q4','Q13','Q14'],
 #                       ['Q5','Q6','Q11','Q12'],
-#                       ['Q7','Q8','Q9','Q10']]          
+#                       ['Q7','Q8','Q9','Q10']]
 #     elif n == 8:
 #         qubit_sets = [['Q0','Q1','Q2','Q3','Q4','Q13','Q14','Q15'],
-#                       ['Q5','Q6','Q7','Q8','Q9','Q10','Q11','Q12']]          
+#                       ['Q5','Q6','Q7','Q8','Q9','Q10','Q11','Q12']]
 #     elif n == 16:
 #         qubit_sets = [['Q0','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8',
-#                        'Q9','Q10','Q11','Q12','Q13','Q14','Q15']] 
+#                        'Q9','Q10','Q11','Q12','Q13','Q14','Q15']]
 #     else:
 #         raise ValueError("This value is not allowed!")
-#         return 
-    
+#         return
+
 #     return qubit_sets

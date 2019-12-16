@@ -584,6 +584,7 @@ class SimpleRBResults(object):
     An object to contain the results of an RB analysis.
 
     """
+
     def __init__(self, data, rtype, fits):
         """
         Initialize an RBResults object.

@@ -391,7 +391,7 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
     elif templateDir.startswith('~'):
         # Assume path after ~ is relative to root packaged template directory
         relpath = templateDir[1:]
-        loader = jinja2.PackageLoader('pygsti', _os.path.join('report/templates',relpath))
+        loader = jinja2.PackageLoader('pygsti', _os.path.join('report/templates', relpath))
 
     else:
         # Use path as is.
@@ -470,7 +470,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
                                               output_dir=figDir, link_to=link_to,
                                               precision=precision),
                           link_to=link_to
-    )
+                          )
 
     # Template rendering parameters are the given qtys plus a 'config' dict
     render_params = {
@@ -571,7 +571,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
                                               output_dir=figDir, link_to=link_to,
                                               precision=precision),
                           link_to=link_to
-    )
+                          )
 
     # Template rendering parameters are the given qtys plus a 'config' dict
     render_params = {

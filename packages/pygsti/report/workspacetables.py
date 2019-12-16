@@ -312,7 +312,7 @@ class GatesTable(WorkspaceTable):
             models = [models]
 
         opLabels = models[0].get_primitive_op_labels()  # use labels of 1st model
-        instLabels = list(models[0].instruments.keys()) # requires an explicit model!
+        instLabels = list(models[0].instruments.keys())  # requires an explicit model!
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
@@ -335,18 +335,20 @@ class GatesTable(WorkspaceTable):
         #Create list of labels and gate-like objects, allowing instruments to be included:
         label_op_tups = []
         for gl in opLabels:
-            tup_of_ops = tuple([model.operations[gl] for model in models]) #may want to gracefully handle index error here?
-            label_op_tups.append( (gl, tup_of_ops) )
+            # may want to gracefully handle index error here?
+            tup_of_ops = tuple([model.operations[gl] for model in models])
+            label_op_tups.append((gl, tup_of_ops))
         for il in instLabels:
             for comp_lbl in models[0].instruments[il].keys():
-                tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]) #may want to gracefully handle index error here?
-                label_op_tups.append( (il + "." + comp_lbl, tup_of_ops) )
-        
+                tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]
+                                   )  # may want to gracefully handle index error here?
+                label_op_tups.append((il + "." + comp_lbl, tup_of_ops))
+
         for lbl, per_model_ops in label_op_tups:
             row_data = [lbl]
             row_formatters = [None]
 
-            for model,op in zip(models,per_model_ops):
+            for model, op in zip(models, per_model_ops):
                 basis = model.basis
 
                 if display_as == "numbers":
@@ -363,7 +365,8 @@ class GatesTable(WorkspaceTable):
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
             if confidenceRegionInfo is not None:
-                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:, None] #TODO: won't work for instruments
+                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(
+                    lbl)[:, None]  # TODO: won't work for instruments
                 if isinstance(per_model_ops[-1], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].get_dimension()
@@ -576,33 +579,33 @@ class GaugeRobustModelTable(WorkspaceTable):
 
         colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % lbl for lbl in opLabels]
         formatters = [None] * len(colHeadings)
-        confidenceRegionInfo = None #Don't deal with CIs yet...
+        confidenceRegionInfo = None  # Don't deal with CIs yet...
 
-        def get_gig_decomp(mx, tmx):  #"Gauge invariant gateset" decomposition
+        def get_gig_decomp(mx, tmx):  # "Gauge invariant gateset" decomposition
             G0, G = tmx, mx
             #ev0, U0 = _tools.sorted_eig(G0)
             #ev, U = _tools.sorted_eig(G)
             #U0inv = _np.linalg.inv(U0)
             #Uinv = _np.linalg.inv(U)
-            
+
             _, U, U0, ev0 = _tools.get_a_best_case_gauge_transform(G, G0, returnAll=True)
             U0inv = _np.linalg.inv(U0)
             Uinv = _np.linalg.inv(U)
-            kite = _tools.get_kite(ev0)            
+            kite = _tools.get_kite(ev0)
 
-            F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite) # Uinv * F * U0 is block diag
+            F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite)  # Uinv * F * U0 is block diag
             Finv = _np.linalg.inv(F)
             # if G0 = U0 * E0 * U0inv then
             # Uinv * F * G0 * Finv * U = D * E0 * Dinv = E0 b/c D is block diagonal w/E0's degenercies
             # so F * G0 * Finv = U * E0 * Uinv = Gp ==> Finv * G * F = M * G0
             M = _np.dot(Finv, _np.dot(G, _np.dot(F, _np.linalg.inv(G0))))
             assert(_np.linalg.norm(M.imag) < 1e-8)
-            
-            M0 = _np.dot(U0inv, _np.dot(M, U0)) # M in G0's eigenbasis
-            assert(_np.linalg.norm(_tools.project_onto_antikite(M0,kite)) < 1e-8)  # should be block diagonal
-            assert(_np.allclose(G, _np.dot(F,_np.dot(M, _np.dot(G0,Finv))))) # this is desired decomp
+
+            M0 = _np.dot(U0inv, _np.dot(M, U0))  # M in G0's eigenbasis
+            assert(_np.linalg.norm(_tools.project_onto_antikite(M0, kite)) < 1e-8)  # should be block diagonal
+            assert(_np.allclose(G, _np.dot(F, _np.dot(M, _np.dot(G0, Finv)))))  # this is desired decomp
             assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everthing should be real
-            return F,M,Finv
+            return F, M, Finv
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
         I = _np.identity(model.dim, 'd')
@@ -615,8 +618,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                                                 target_model.operations[gl].todense())
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
-                _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl,str(e)))
-
+                _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
 
         for i, lbl in enumerate(opLabels):
             if lbl not in op_decomps: continue
@@ -627,12 +629,11 @@ class GaugeRobustModelTable(WorkspaceTable):
                 M = max(M, max(_np.abs(val).flat))  # update max
 
         #FUTURE: instruments too?
-        for i,lbl in enumerate(opLabels):
+        for i, lbl in enumerate(opLabels):
             row_data = [lbl]
             row_formatters = [None]
-            basis = model.basis
             if lbl in op_decomps:
-                Fi,Mi,Finvi = op_decomps[lbl]
+                Fi, Mi, Finvi = op_decomps[lbl]
 
                 #Print "M" matrix
                 if display_as == "numbers":
@@ -645,11 +646,10 @@ class GaugeRobustModelTable(WorkspaceTable):
                 else:
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
             else:
-                row_data.append( _objs.reportableqty.ReportableQty(_np.nan) )
+                row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
                 row_formatters.append('Normal')
-                
 
-            for j,lbl2 in enumerate(opLabels):
+            for j, lbl2 in enumerate(opLabels):
                 if i == j:
                     row_data.append("0")
                     row_formatters.append(None)
@@ -667,7 +667,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                     else:
                         raise ValueError("Invalid 'display_as' argument: %s" % display_as)
                 else:
-                    row_data.append( _objs.reportableqty.ReportableQty(_np.nan) )
+                    row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
                     row_formatters.append('Normal')
 
             table.addrow(row_data, row_formatters)
@@ -780,28 +780,22 @@ class GaugeRobustMetricTable(WorkspaceTable):
                     try:
                         el = _reportables.evaluate_opfn_by_name(
                             metric, mdl_in_best_gauge[i], target_model, lbl, confidenceRegionInfo)
-                    except Exception as e:
-                        _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric,lbl))
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
                         el = _objs.reportableqty.ReportableQty(_np.nan)
                 else:  # off-diagonal element
                     try:
                         el1 = _reportables.evaluate_opfn_by_name(
-                            metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2, confidenceRegionInfo)
+                            metric, target_mdl_in_best_gauge[i],
+                            target_mdl_in_best_gauge[j], lbl2,
+                            confidenceRegionInfo)
                         el2 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidenceRegionInfo)
                         el = _objs.reportableqty.minimum(el1, el2)
-                    except Exception as e:
-                        _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" % (metric,lbl,lbl2))
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
+                                       (metric, lbl, lbl2))
                         el = _objs.reportableqty.ReportableQty(_np.nan)
-
-                    #DEBUGGING infidelity - which doesn't behave well all the time, as min(.) will pick a "bad" negative infidelity value?
-                    #el1.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl], target_mdl_in_best_gauge[j][lbl], 'pp') # DEBUG
-                    #el2.value = _tools.entanglement_infidelity(target_mdl_in_best_gauge[i][lbl2], target_mdl_in_best_gauge[j][lbl2], 'pp') # DEBUG
-                    #print("OFF DIAG: (%s)\n" % lbl, target_mdl_in_best_gauge[i][lbl],"\n", target_mdl_in_best_gauge[j][lbl])
-                    #print("OFF DIAG2 (%s): \n" % lbl2, target_mdl_in_best_gauge[i][lbl2],"\n", target_mdl_in_best_gauge[j][lbl2])
-                    #print("VALS = ",el1.value, el2.value, _np.linalg.norm(target_mdl_in_best_gauge[i][lbl] - target_mdl_in_best_gauge[j][lbl]),
-                    #      _np.linalg.norm(target_mdl_in_best_gauge[i][lbl2] - target_mdl_in_best_gauge[j][lbl2]))
-                    ##import bpdb; bpdb.set_trace()
 
                 row_data.append(el)
                 row_formatters.append('Normal')
@@ -933,7 +927,7 @@ class GatesVsTargetTable(WorkspaceTable):
                 display, virtual_ops, wildcard):
 
         opLabels = model.get_primitive_op_labels()  # operation labels
-        instLabels = list(model.instruments.keys()) # requires an explicit model!
+        instLabels = list(model.instruments.keys())  # requires an explicit model!
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
@@ -987,33 +981,33 @@ class GatesVsTargetTable(WorkspaceTable):
             inst = model.instruments[il]
             tinst = targetModel.instruments[il]
             basis = model.basis
-            
+
             #Note: could move this to a reportables function in future for easier
             # confidence region support - for now, no CI support:
             for disp in display:
                 if disp == "inf":
-                    sqrt_component_fidelities = [ _np.sqrt(_reportables.entanglement_fidelity(inst[l],tinst[l],basis))
-                                                    for l in inst.keys() ]
+                    sqrt_component_fidelities = [_np.sqrt(_reportables.entanglement_fidelity(inst[l], tinst[l], basis))
+                                                 for l in inst.keys()]
                     qty = 1 - sum(sqrt_component_fidelities)**2
                     row_data.append(_objs.reportableqty.ReportableQty(qty))
-                    
+
                 elif disp == "diamond":
                     nComps = len(inst.keys())
-                    tpbasis = _DirectSumBasis([basis]*nComps)
-                    composite_op = _np.zeros( (inst.dim*nComps, inst.dim*nComps), 'd')
-                    composite_top = _np.zeros( (inst.dim*nComps, inst.dim*nComps), 'd')
-                    for i,clbl in enumerate(inst.keys()):
-                        a,b = i*inst.dim, (i+1)*inst.dim
-                        composite_op[a:b,a:b] = inst[clbl].todense()
-                        composite_top[a:b,a:b] = tinst[clbl].todense()
+                    tpbasis = _DirectSumBasis([basis] * nComps)
+                    composite_op = _np.zeros((inst.dim * nComps, inst.dim * nComps), 'd')
+                    composite_top = _np.zeros((inst.dim * nComps, inst.dim * nComps), 'd')
+                    for i, clbl in enumerate(inst.keys()):
+                        a, b = i * inst.dim, (i + 1) * inst.dim
+                        composite_op[a:b, a:b] = inst[clbl].todense()
+                        composite_top[a:b, a:b] = tinst[clbl].todense()
                         qty = _reportables.half_diamond_norm(composite_op, composite_top, tpbasis)
                     row_data.append(_objs.reportableqty.ReportableQty(qty))
 
                 else:
                     row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
-                    
+
             table.addrow(row_data, formatters)
-        
+
         table.finish()
         return table
 
@@ -2109,22 +2103,22 @@ class GateEigenvalueTable(WorkspaceTable):
             table.addrow(row_data, row_formatters)
 
         #Iterate over instruments
-        for il,inst in model.instruments.items():
+        for il, inst in model.instruments.items():
             tinst = targetModel.instruments[il]
             for comp_lbl, comp in inst.items():
                 tcomp = tinst[comp_lbl]
 
                 row_data = [il + "." + comp_lbl]
                 row_formatters = [None]
-    
+
                 #FUTURE: use reportables to get instrument eigenvalues
                 evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.todense()))
                 evals = evals.reshape(evals.size, 1)
-    
+
                 if targetModel is not None:
                     target_evals = _np.linalg.eigvals(tcomp.todense())  # no error bars
                     #Note: no support for relative eigenvalues of instruments (yet)
-    
+
                     # permute target eigenvalues according to min-weight matching
                     _, pairs = _tools.minweight_match(evals.get_value(), target_evals, lambda x, y: abs(x - y))
                     matched_target_evals = target_evals.copy()
@@ -2134,41 +2128,41 @@ class GateEigenvalueTable(WorkspaceTable):
                     target_evals = target_evals.reshape(evals.value.shape)
                     # b/c evals have shape (x,1) and targets (x,),
                     # which causes problems when we try to subtract them
-    
+
                 for disp in display:
                     if disp == "evals":
                         row_data.append(evals)
                         row_formatters.append('Normal')
-    
+
                     elif disp == "target" and targetModel is not None:
                         row_data.append(target_evals)
                         row_formatters.append('Normal')
-    
+
                     elif disp == "rel" and targetModel is not None:
                         row_data.append(_np.nan)
                         row_formatters.append('Normal')
-    
+
                     elif disp == "log-evals":
                         logevals = evals.log()
                         row_data.append(logevals.real())
                         row_data.append(logevals.imag() / _np.pi)
                         row_formatters.append('Normal')
                         row_formatters.append('Pi')
-    
+
                     elif disp == "log-rel":
                         row_data.append(_np.nan)
                         row_formatters.append('Normal')
-    
+
                     elif disp == "absdiff-evals":
                         absdiff_evals = evals.absdiff(target_evals)
                         row_data.append(absdiff_evals)
                         row_formatters.append('Vec')
-    
+
                     elif disp == "infdiff-evals":
                         infdiff_evals = evals.infidelity_diff(target_evals)
                         row_data.append(infdiff_evals)
                         row_formatters.append('Vec')
-    
+
                     elif disp == "absdiff-log-evals":
                         log_evals = evals.log()
                         re_diff, im_diff = log_evals.absdiff(_np.log(target_evals.astype(complex)), separate_re_im=True)
@@ -2176,15 +2170,15 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_data.append((im_diff / _np.pi).mod(2.0))
                         row_formatters.append('Vec')
                         row_formatters.append('Pi')
-    
+
                     elif disp == "evdm":
                         row_data.append(_np.nan)
                         row_formatters.append('Normal')
-    
+
                     elif disp == "evinf":
                         row_data.append(_np.nan)
                         row_formatters.append('Normal')
-    
+
                     elif disp == "polar":
                         evals_val = evals.get_value()
                         if targetModel is None:
@@ -2196,12 +2190,12 @@ class GateEigenvalueTable(WorkspaceTable):
                                 ["black", "blue"], ["target", "gate"], centerText=str(gl))
                         row_data.append(fig)
                         row_formatters.append('Figure')
-    
+
                     elif disp == "relpolar" and targetModel is not None:
                         row_data.append(_np.nan)
                         row_formatters.append('Normal')
                         row_formatters.append('Figure')
-                        
+
                 table.addrow(row_data, row_formatters)
 
         table.finish()
@@ -2961,6 +2955,7 @@ class ProfilerTable(WorkspaceTable):
 
         table.finish()
         return table
+
 
 class WildcardBudgetTable(WorkspaceTable):
     """ Table of wildcard budget information """

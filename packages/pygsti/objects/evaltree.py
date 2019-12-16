@@ -670,7 +670,7 @@ class EvalTree(list):
         # for circuit k.
 
         old_finalStringToElsMap = []; i = 0
-        for k, Xs in enumerate(simplified_circuit_Xs):  
+        for k, Xs in enumerate(simplified_circuit_Xs):
             old_finalStringToElsMap.append(list(range(i, i + len(Xs))))
             i += len(Xs)
 

@@ -545,13 +545,10 @@ class SPAMVec(_modelmember.ModelMember):
                         if mag >= min_term_mag:
                             terms.append((taylor_order, t.copy_with_magnitude(mag)))
 
-                #OLD:
-                #for t in terms_at_order:
-                #    if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                #        terms.append((taylor_order, t))
             else:
-                terms.extend([(taylor_order, t)
-                              for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)])
+                terms.extend([(taylor_order, t) for t in
+                              self.get_taylor_order_terms_above_mag(taylor_order,
+                                                                    max_poly_vars, min_term_mag)])
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break

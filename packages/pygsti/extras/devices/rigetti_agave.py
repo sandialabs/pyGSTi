@@ -11,27 +11,27 @@
 # import numpy as _np
 # from ...objects import processorspec as _pspec
 
-qubits = ['Q'+str(x) for x in range(8)]
+qubits = ['Q' + str(x) for x in range(8)]
 
 twoQgate = 'Gcphase'
 
-edgelist = [('Q0','Q1'),
-			('Q1','Q0'),
-            ('Q1','Q2'),
-            ('Q2','Q1'),
-            ('Q2','Q3'),
-            ('Q3','Q2'),
-            ('Q3','Q4'),
-            ('Q4','Q3'),
-            ('Q4','Q5'),
-            ('Q5','Q4'),
-            ('Q5','Q6'),
-            ('Q6','Q5'),
-            ('Q6','Q7'),
-            ('Q7','Q6'),
-            ('Q7','Q0'),
-            ('Q0','Q7'),
-             ]
+edgelist = [('Q0', 'Q1'),
+            ('Q1', 'Q0'),
+            ('Q1', 'Q2'),
+            ('Q2', 'Q1'),
+            ('Q2', 'Q3'),
+            ('Q3', 'Q2'),
+            ('Q3', 'Q4'),
+            ('Q4', 'Q3'),
+            ('Q4', 'Q5'),
+            ('Q5', 'Q4'),
+            ('Q5', 'Q6'),
+            ('Q6', 'Q5'),
+            ('Q6', 'Q7'),
+            ('Q7', 'Q6'),
+            ('Q7', 'Q0'),
+            ('Q0', 'Q7'),
+            ]
 
 spec_format = 'rigetti'
 
@@ -39,7 +39,7 @@ spec_format = 'rigetti'
 
 #     return ['Q'+str(x) for x in range(8)]
 
-# def make_processor_spec(one_q_gate_names, construct_clifford_compilations = {'paulieq' : ('1Qcliffords',), 
+# def make_processor_spec(one_q_gate_names, construct_clifford_compilations = {'paulieq' : ('1Qcliffords',),
 #                         'absolute': ('paulis','1Qcliffords')}, verbosity=0):
 #     total_qubits = 8
 #     gate_names = ['Gcphase'] + one_q_gate_names
@@ -66,32 +66,32 @@ spec_format = 'rigetti'
 #                  ('Q6','Q7'),
 #                  ('Q7','Q0'),
 #                  ]
-    
-#     if subset is None:    
+
+#     if subset is None:
 #         return edge_list
-    
+
 #     else:
 #         subset_edge_list = []
 #         for edge in edge_list:
 #             if edge[0] in subset and edge[1] in subset:
 #                 subset_edge_list.append(edge)
-        
+
 #         return subset_edge_list
-    
+
 # def get_splitting(n,startnode=0):
 #     """
-#     Splits the qubits into 8/n dijoint sets each consisting of n 
+#     Splits the qubits into 8/n dijoint sets each consisting of n
 #     connected qubits, with set starting at qubit Q+str(startnode)
 #     """
 #     if n == 2:
-#         qubit_sets = [('Q'+str((startnode+i) % 8),'Q'+str((startnode+i+1) % 8)) for i in [0,2,4,6]] 
+#         qubit_sets = [('Q'+str((startnode+i) % 8),'Q'+str((startnode+i+1) % 8)) for i in [0,2,4,6]]
 #     elif n == 4:
-#         qubit_sets = [tuple(['Q'+str((startnode+q) % 8) for q in range(4)]), 
-#                       tuple(['Q'+str((startnode+4+q) % 8) for q in range(4)])]                  
+#         qubit_sets = [tuple(['Q'+str((startnode+q) % 8) for q in range(4)]),
+#                       tuple(['Q'+str((startnode+4+q) % 8) for q in range(4)])]
 #     elif n == 8:
-#         qubit_sets = [tuple(['Q'+str(i) for i in range(8)])] 
+#         qubit_sets = [tuple(['Q'+str(i) for i in range(8)])]
 #     else:
 #         raise ValueError("This value is not allowed!")
-#         return 
-    
+#         return
+
 #     return qubit_sets

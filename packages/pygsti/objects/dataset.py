@@ -771,7 +771,7 @@ class DataSet(object):
             tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                  for ol in outcomeLabels]  # strings -> tuple outcome labels
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
-            self.olIndex_max = len(tup_outcomeLabels)-1
+            self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
             self.olIndex = _OrderedDict()  # OK, as outcome labels are added as they appear
             self.olIndex_max = -1
@@ -1268,7 +1268,6 @@ class DataSet(object):
             #strings -> tuple outcome labels
             tup_outcomeLabelList = [_ld.OutcomeLabelDict.to_outcome(ol)
                                     for ol in outcomeLabelList]
-
 
         #Add any new outcome labels
         added = False

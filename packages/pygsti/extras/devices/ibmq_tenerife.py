@@ -16,11 +16,11 @@ qubits = ['Q' + str(x) for x in range(5)]
 twoQgate = 'Gcnot'
 
 edgelist = [('Q1', 'Q0'),
-              ('Q2', 'Q1'),
-              ('Q2', 'Q0'),
-              ('Q3', 'Q2'),
-              ('Q3', 'Q4'),
-              ('Q4', 'Q2')]
+            ('Q2', 'Q1'),
+            ('Q2', 'Q0'),
+            ('Q3', 'Q2'),
+            ('Q3', 'Q4'),
+            ('Q4', 'Q2')]
 
 
 spec_format = 'ibmq_v2019'

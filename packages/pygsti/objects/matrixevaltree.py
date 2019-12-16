@@ -790,7 +790,6 @@ class MatrixEvalTree(EvalTree):
         return updated_elIndices
 
 
-
 def _compute_spamtuple_indices(simplified_circuit_spamTuples,
                                subtreeFinalElsToParentFinalElsMap=None):
     """

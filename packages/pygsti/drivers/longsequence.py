@@ -183,9 +183,9 @@ def do_model_test(modelFilenameOrObj,
         advancedOptions['onBadFit'] = []  # empty list => 'do nothing'
 
     return _package_into_results('do_model_test', ds, target_model, the_model,
-                                lsgstLists, parameters, None, mdl_lsgst_list,
-                                gaugeOptParams, advancedOptions, comm, memLimit,
-                                output_pkl, verbosity, profiler)
+                                 lsgstLists, parameters, None, mdl_lsgst_list,
+                                 gaugeOptParams, advancedOptions, comm, memLimit,
+                                 output_pkl, verbosity, profiler)
 
 
 def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -764,9 +764,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
     parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
     return _package_into_results('do_long_sequence_gst', ds, target_model, mdl_start,
-                                lsgstLists, parameters, args, mdl_lsgst_list,
-                                gaugeOptParams, advancedOptions, comm, memLimit,
-                                output_pkl, printer, profiler, args['evaltree_cache'])
+                                 lsgstLists, parameters, args, mdl_lsgst_list,
+                                 gaugeOptParams, advancedOptions, comm, memLimit,
+                                 output_pkl, printer, profiler, args['evaltree_cache'])
 
 
 def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -1355,7 +1355,6 @@ def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
     Add a gauge optimization to an estimate.
     TODO: docstring - more details
     """
-    tRef = _time.time()
     gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
     if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
 
@@ -1397,12 +1396,11 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
     target_model = base_estimate.models['target']
     ds = results.dataset
     parameters = base_estimate.parameters
-    tRef = _time.time()
     if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
 
     if badFitThreshold is not None and \
        base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) <= badFitThreshold:
-        return # fit is good enough - no need to add any estimates
+        return  # fit is good enough - no need to add any estimates
 
     objective = parameters.get('objective', 'logl')
     validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
@@ -1421,7 +1419,7 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
             new_params['weights'] = get_robust_scaling(badfit_typ, mdl, ds, circuitList,
                                                        parameters, evaltree_cache, comm, memLimit)
-            if badfit_typ in ("Robust","Robust+") and (opt_args is not None):
+            if badfit_typ in ("Robust", "Robust+") and (opt_args is not None):
                 mdl_reopt = reoptimize_with_weights(mdl, ds, circuitList, new_params['weights'],
                                                     objective, opt_args, printer - 1)
                 new_final_model = mdl_reopt
@@ -1481,6 +1479,7 @@ def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLi
                                  evaltree_cache=evaltree_cache, comm=comm)
         fitQty = 2 * (maxLogL - logL)
     return fitQty
+
 
 def get_robust_scaling(scale_typ, model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
     """
@@ -1583,10 +1582,11 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
         loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)
         nCircuits = len(circuitsToUse)
         dlogl_terms = _np.empty(nCircuits, 'd')
-        dlogl_elements = loglFn.fn(model.to_vector())**2  # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
+        # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
+        dlogl_elements = loglFn.fn(model.to_vector())**2
         for i in range(nCircuits):
             dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
-        print("INITIAL 2DLogL (before any wildcard) = ",sum(2*dlogl_terms), max(2*dlogl_terms))
+        print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
         print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold, nBoxes)
 
         def _wildcard_objective_firstTerms(Wv):
@@ -1594,18 +1594,18 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
             for i in range(nCircuits):
                 dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
 
-            twoDLogL_terms = 2*dlogl_terms
+            twoDLogL_terms = 2 * dlogl_terms
             twoDLogL = sum(twoDLogL_terms)
             return max(0, twoDLogL - twoDeltaLogL_threshold) \
                 + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
 
         nIters = 0
         Wvec_init = budget.to_vector()
-        print("INITIAL Wildcard budget = ",str(budget))
+        print("INITIAL Wildcard budget = ", str(budget))
 
         # Find a value of eta that is small enough that the "first terms" are 0.
         while nIters < 10:
-            printer.log("  Iter %d: trying eta = %g" % (nIters,eta))
+            printer.log("  Iter %d: trying eta = %g" % (nIters, eta))
 
             def _wildcard_objective(Wv):
                 return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
@@ -1620,9 +1620,10 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
             if printer.verbosity > 1:
                 printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
                              " - this *increases* the runtime significantly."), 2)
+
                 def callbackF(Wv):
                     a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
-                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a,b,a+b,str(Wv)), 2)
+                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(Wv)), 2)
             else:
                 callbackF = None
             soln = _spo.minimize(_wildcard_objective, Wvec_init,
