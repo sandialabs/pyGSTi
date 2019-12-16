@@ -1,5 +1,4 @@
 """ Defines the Results class."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -15,7 +14,6 @@ import warnings as _warnings
 import copy as _copy
 
 from .. import tools as _tools
-from ..tools import compattools as _compat
 from .circuitstructure import LsGermsStructure as _LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from .estimate import Estimate as _Estimate
@@ -198,39 +196,11 @@ class Results(object):
         if old_name not in self.estimates:
             raise KeyError("%s does not name an existing estimate" % old_name)
 
-        if hasattr(self.estimates, "move_to_end"):
-            #Python3: use move_to_end method of OrderedDict to restore ordering:
-            ordered_keys = list(self.estimates.keys())
-            self.estimates[new_name] = self.estimates[old_name]  # at end
-            del self.estimates[old_name]
-            keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
-            for key in keys_to_move: self.estimates.move_to_end(key)
-
-        else:
-            #Python2.7: Manipulate internals of OrderedDict to change a key while preserving order
-            PREV = 0; NEXT = 1  # ~enumerated
-
-            #Unneeded, since root will be manipulated by link_prev or link_next below if needed
-            #root = self.estimates._OrderedDict__root # [prev,next,value] element - the
-            #  # root of the OrdereDict's circularly-linked list whose next member points
-            #  # to the first element of the list.
-            #first = root[NEXT] # first [prev,next,val] element of circularly linked list.
-
-            old_element = self.estimates._OrderedDict__map[old_name]
-            link_prev, link_next, _ = old_element  # ('_' == old_name)
-            new_element = [link_prev, link_next, new_name]
-
-            #Replace element in circularly linked list (w/"root" sentinel element)
-            link_prev[NEXT] = new_element
-            link_next[PREV] = new_element
-
-            #Replace element in map
-            del self.estimates._OrderedDict__map[old_name]
-            self.estimates._OrderedDict__map[new_name] = new_element
-
-            #Replace values in underlying dict
-            value = dict.__getitem__(self.estimates, old_name)
-            dict.__setitem__(self.estimates, new_name, value)
+        ordered_keys = list(self.estimates.keys())
+        self.estimates[new_name] = self.estimates[old_name]  # at end
+        del self.estimates[old_name]
+        keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
+        for key in keys_to_move: self.estimates.move_to_end(key)
 
     def add_estimate(self, targetModel, seedModel, modelsByIter,
                      parameters, estimate_key='default'):
@@ -387,7 +357,7 @@ class Results(object):
         view.circuit_lists = self.circuit_lists
         view.circuit_structs = self.circuit_structs
 
-        if _compat.isstr(estimate_keys):
+        if isinstance(estimate_keys, str):
             estimate_keys = [estimate_keys]
         for ky in estimate_keys:
             if ky in self.estimates:

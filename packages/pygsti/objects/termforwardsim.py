@@ -1,5 +1,4 @@
 """ Defines the TermForwardSimulator calculator class"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -18,7 +17,6 @@ import operator as _operator
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
-from ..tools import compattools as _compat
 from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler

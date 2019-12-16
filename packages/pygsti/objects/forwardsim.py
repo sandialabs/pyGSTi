@@ -1,5 +1,4 @@
 """ Defines the ForwardSimulator calculator class"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,7 +13,6 @@ import numpy.linalg as _nla
 import collections as _collections
 import itertools as _itertools
 
-from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt

@@ -1,5 +1,4 @@
 """ Functions for analyzing RB data"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,7 +10,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
-from ...tools import compattools as _compat
 
 
 def p_to_r(p, d, rtype='EI'):
@@ -242,7 +240,7 @@ def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, a
     lengths = RBSdataset.lengths
     n = RBSdataset.number_of_qubits
 
-    if _compat.isstr(asymptote):
+    if isinstance(asymptote, str):
         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"
         if datatype == 'raw':
             asymptote = 1 / 2**n

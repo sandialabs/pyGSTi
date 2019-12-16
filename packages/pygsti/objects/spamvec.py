@@ -2,7 +2,6 @@
 Defines classes with represent SPAM operations, along with supporting
 functionality.
 """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -2639,11 +2638,11 @@ class LindbladSPAMVec(SPAMVec):
         sparse = None
         if ham_basis is not None:
             if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
-            elif not _compat.isstr(ham_basis) and len(ham_basis) > 0:
+            elif not isinstance(ham_basis, str) and len(ham_basis) > 0:
                 sparse = _sps.issparse(ham_basis[0])
         if sparse is None and nonham_basis is not None:
             if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
-            elif not _compat.isstr(nonham_basis) and len(nonham_basis) > 0:
+            elif not isinstance(nonham_basis, str) and len(nonham_basis) > 0:
                 sparse = _sps.issparse(nonham_basis[0])
         if sparse is None: sparse = False  # the default
 

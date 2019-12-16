@@ -7,32 +7,10 @@ import types
 from contextlib import contextmanager
 import os
 import warnings
-
-# Test modules should import these generic names rather than importing the modules directly:
-
-# `pathlib' is standard as of 3.4, but has been backported as pathlib2
-try:
-    from pathlib import Path
-except ImportError:
-    from pathlib2 import Path
-
-# `mock' was refactored into unittest in 3.3
-try:
-    from unittest import mock
-except ImportError:
-    import mock
-
-# `tempfile.TemporaryDirectory' is new as of 3.2
-try:
-    from tempfile import TemporaryDirectory
-except ImportError:
-    from backports.tempfile import TemporaryDirectory
-
-# using `unittest.TestCase' features new as of 3.2
-if sys.version_info < (3, 2):
-    import unittest2 as unittest
-else:
-    import unittest
+from pathlib import Path
+from unittest import mock
+from tempfile import TemporaryDirectory
+import unittest
 
 
 def needs_cvxpy(fn):
@@ -48,11 +26,6 @@ def needs_deap(fn):
 def needs_matplotlib(fn):
     """Shortcut decorator for skipping tests that require matplotlib"""
     return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
-
-
-def needs_python3(fn):
-    """Shortcut decorator for skipping tests of features not supported in Python 2"""
-    return unittest.skipIf(sys.version_info < (3, 0), "feature not supported in Python 2")(fn)
 
 
 def with_temp_path(fn):

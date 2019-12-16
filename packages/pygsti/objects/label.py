@@ -1,5 +1,4 @@
 """ Defines the Label class """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -10,20 +9,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #***************************************************************************************************
 
 import numbers as _numbers
-import sys as _sys
 import itertools as _itertools
 
 import os
 import inspect
 debug_record = {}
-
-try: basestring  # noqa: F821
-except NameError: basestring = str
-
-
-def isstr(x):  # Duplicates isstr from compattools! (b/c can't import!)
-    """ Return whether `x` has a string type """
-    return isinstance(x, basestring)
 
 
 class Label(object):
@@ -74,7 +64,7 @@ class Label(object):
         if isinstance(name, Label) and stateSpaceLabels is None:
             return name  # Note: Labels are immutable, so no need to copy
 
-        if not isstr(name) and stateSpaceLabels is None \
+        if not isinstance(name, str) and stateSpaceLabels is None \
            and isinstance(name, (tuple, list)):
 
             #We're being asked to initialize from a non-string with no
@@ -110,7 +100,7 @@ class Label(object):
                         next_is_time = False
                         time = x; continue
 
-                    if isstr(x):
+                    if isinstance(x, str):
                         if x.startswith(';'):
                             assert(args is None), "Cannot supply args in tuple when `args` is given!"
                             if x == ';':
@@ -199,13 +189,13 @@ class LabelTup(Label, tuple):
         """
 
         #Type checking
-        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
         assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if not isinstance(stateSpaceLabels, (tuple, list)):
             stateSpaceLabels = (stateSpaceLabels,)
         for ssl in stateSpaceLabels:
-            assert(isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
+            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
 
         #Try to convert integer-strings to ints (for parsing from files...)
@@ -328,7 +318,7 @@ class LabelTup(Label, tuple):
         return "Label[" + str(self) + "]"
 
     def __add__(self, s):
-        if isstr(s):
+        if isinstance(s, str):
             return LabelTup(self.name + s, self.sslbls)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -339,7 +329,7 @@ class LabelTup(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -379,12 +369,7 @@ class LabelTup(Label, tuple):
     # native tuple.__hash__ directly == speed boost
 
 
-# We want LabelStr to act like the string literal type (not
-# 'str' when we import unicode_literals above)
-strlittype = str if _sys.version_info >= (3, 0) else unicode  # (a *native* python type)  # noqa: F821
-
-
-class LabelStr(Label, strlittype):
+class LabelStr(Label, str):
     """
     A Label for the special case when only a name is present (no
     state-space-labels).  We create this as a separate class
@@ -408,18 +393,18 @@ class LabelStr(Label, strlittype):
         """
 
         #Type checking
-        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         return cls.__new__(cls, name, time)
 
     def __new__(cls, name, time=0.0):
-        ret = strlittype.__new__(cls, name)
+        ret = str.__new__(cls, name)
         ret.time = time
         return ret
 
     @property
     def name(self):
-        return strlittype(self[:])
+        return str(self[:])
 
     @property
     def sslbls(self):
@@ -469,11 +454,11 @@ class LabelStr(Label, strlittype):
         return s
 
     def __repr__(self):
-        return "Label{" + strlittype(self) + "}"
+        return "Label{" + str(self) + "}"
 
     def __add__(self, s):
-        if isstr(s):
-            return LabelStr(self.name + strlittype(s))
+        if isinstance(s, str):
+            return LabelStr(self.name + str(s))
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
@@ -482,13 +467,13 @@ class LabelStr(Label, strlittype):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        return strlittype.__eq__(self, other)
+        return str.__eq__(self, other)
 
     def __lt__(self, x):
-        return strlittype.__lt__(self, strlittype(x))
+        return str.__lt__(self, str(x))
 
     def __gt__(self, x):
-        return strlittype.__gt__(self, strlittype(x))
+        return str.__gt__(self, str(x))
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
@@ -496,13 +481,13 @@ class LabelStr(Label, strlittype):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelStr, (strlittype(self), self.time), None)
+        return (LabelStr, (str(self), self.time), None)
 
     def tonative(self):
         """ Returns this label as native python types.  Useful for
             faster serialization.
         """
-        return strlittype(self)
+        return str(self)
 
     def replacename(self, oldname, newname):
         """ Returns a label with `oldname` replaced by `newname`."""
@@ -513,7 +498,7 @@ class LabelStr(Label, strlittype):
             circuit perspective) label or not """
         return True
 
-    __hash__ = strlittype.__hash__  # this is why we derive from tuple - using the
+    __hash__ = str.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
 
@@ -645,7 +630,7 @@ class LabelTupTup(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -760,7 +745,7 @@ class CircuitLabel(Label, tuple):
             The time at which this label occurs (can be relative or absolute)
         """
         #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
-        assert(isinstance(reps, _numbers.Integral) and isstr(name)
+        assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tupOfLayers))  # Note: tup can also be a Label obj
         # creates a CircuitLabel object using tuple's __new__
@@ -878,7 +863,7 @@ class CircuitLabel(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -982,12 +967,12 @@ class LabelTupWithArgs(Label, tuple):
             A list of "arguments" for this label.
         """
         #Type checking
-        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
         assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
         if not isinstance(stateSpaceLabels, (tuple, list)):
             stateSpaceLabels = (stateSpaceLabels,)
         for ssl in stateSpaceLabels:
-            assert(isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
+            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
@@ -1106,7 +1091,7 @@ class LabelTupWithArgs(Label, tuple):
         return "Label[" + str(self) + "]"
 
     def __add__(self, s):
-        if isstr(s):
+        if isinstance(s, str):
             return LabelTupWithArgs(self.name + s, self.sslbls, self.time, self.args)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -1117,7 +1102,7 @@ class LabelTupWithArgs(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 
@@ -1309,7 +1294,7 @@ class LabelTupTupWithArgs(Label, tuple):
         are equal.
         """
         #Unnecessary now that we have a separate LabelStr
-        #if isstr(other):
+        #if isinstance(other, str):
         #    if self.sslbls: return False # tests for None and len > 0
         #    return self.name == other
 

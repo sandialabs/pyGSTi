@@ -5,7 +5,7 @@ import pygsti
 
 class LogLTestCase(BaseTestCase):
     def test_memory(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
 
         with self.assertRaises(MemoryError):
@@ -43,7 +43,7 @@ class LogLTestCase(BaseTestCase):
     def test_hessian_mpi(self):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
-        ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         L = pygsti.logl_hessian(model, ds,
                                 probClipInterval=(-1e6,1e6), memLimit=25000000,

@@ -1,5 +1,4 @@
 """ Defines classes which represent gates, as well as supporting functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,7 +23,6 @@ from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from ..tools import internalgates as _itgs
 from ..tools import mpitools as _mpit
-from ..tools import compattools as _compat
 from ..objects import model as _mdl
 from ..objects import operation as _op
 from ..objects import opfactory as _opfactory
@@ -563,7 +561,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
     cparser = _CircuitParser()
     cparser.lookup = None  # lookup - functionality removed as it wasn't used
     for k, v in orig_error_rates.items():
-        if _compat.isstr(k) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
+        if isinstance(k, str) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
             lbls, _ = cparser.parse(k)
             assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
             assert(all([sslbl in qubitGraph.get_node_names() for sslbl in lbls[0].sslbls])), \
@@ -659,7 +657,7 @@ def build_cloud_crosstalk_model(nQubits, gate_names, error_rates, nonstd_gate_un
             if isinstance(errs, dict):  # either for creating a stencil or an error
                 for nm, val in errs.items():
                     #REMOVE print("DB: Processing: ",nm, val)
-                    if _compat.isstr(nm): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
+                    if isinstance(nm, str): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
                     err_typ, basisEls = nm[0], nm[1:]
                     sslbls = None
                     local_nm = [err_typ]

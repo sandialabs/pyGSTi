@@ -2,7 +2,6 @@
 Routines for converting python objects to HTML.  Parallel rountines as
 latex.py has for latex conversion.
 """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,7 +13,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import cmath
-from ..tools import compattools as _compat
 
 '''
 table() and cell() functions are used by table.py in table creation
@@ -241,7 +239,7 @@ def value(el, specs, mathmode=False):
             if s.endswith("."): s = s[:-1]
         return s
 
-    if _compat.isstr(el):
+    if isinstance(el, str):
         return el
     if type(el) in (int, _np.int64):
         return "%d" % el

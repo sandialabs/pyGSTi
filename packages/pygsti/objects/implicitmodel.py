@@ -1,5 +1,4 @@
 """ Defines the ImplicitOpModel class and supporting functionality."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,7 +23,6 @@ from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
-from ..tools import compattools as _compat
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import symplectic as _symp

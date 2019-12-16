@@ -1,5 +1,4 @@
 """ Plotly-to-Matplotlib conversion functions. """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,7 +13,6 @@ import gc as _gc
 from .. import objects as _objs
 
 from .plothelpers import _eformat
-from ..tools import compattools as _compat
 
 try:
     import matplotlib as _matplotlib
@@ -115,7 +113,7 @@ def mpl_besttxtcolor(x, cmap, norm):
 
 def mpl_process_lbl(lbl, math=False):
     """ Process a (plotly-compatible) text label `lbl` to matplotlb text."""
-    if not _compat.isstr(lbl):
+    if not isinstance(lbl, str):
         lbl = str(lbl)  # just force as a string
     math = math or ('<sup>' in lbl) or ('<sub>' in lbl) or \
         ('_' in lbl) or ('|' in lbl) or (len(lbl) == 1)
@@ -146,7 +144,6 @@ def mpl_process_lbls(lblList):
 
 def mpl_color(plotly_color):
     """ Convert a plotly color name to a matplotlib compatible one. """
-    #_compat.isstr
     plotly_color = plotly_color.strip()  # remove any whitespace
     if plotly_color.startswith('#'):
         return plotly_color  # matplotlib understands "#FF0013"
@@ -441,7 +438,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
             marker = get(traceDict, 'marker', None)
             if marker and ('color' in marker):
-                if _compat.isstr(marker['color']):
+                if isinstance(marker['color'], str):
                     color = mpl_color(marker['color'])
                 elif isinstance(marker['color'], list):
                     color = [mpl_color(c) for c in marker['color']]  # b/c axes.bar can take a list of colors
@@ -462,7 +459,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         elif typ == "histogram":
             #histnorm = get(traceDict,'histnorm',None)
             marker = get(traceDict, 'marker', None)
-            color = mpl_color(marker['color'] if marker and _compat.isstr(marker['color']) else "gray")
+            color = mpl_color(marker['color'] if marker and isinstance(marker['color'], str) else "gray")
             xbins = traceDict['xbins']
             histdata = traceDict['x']
 

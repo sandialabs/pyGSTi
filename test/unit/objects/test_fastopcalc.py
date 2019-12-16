@@ -1,6 +1,7 @@
 import numpy as np
+import unittest
 
-from ..util import BaseCase, unittest
+from ..util import BaseCase
 
 from pygsti.objects.polynomial import Polynomial
 

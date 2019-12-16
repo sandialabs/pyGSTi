@@ -1,5 +1,4 @@
 """ Defines classes which represent gates, as well as supporting functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,7 +26,6 @@ from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
-from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
 from ..tools import lindbladtools as _lbt
 from . import gaugegroup as _gaugegroup
@@ -6213,7 +6211,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         #                   # have dense versions of these)
 
         embedded_matrix_basis = errgen_to_embed.matrix_basis
-        if _compat.isstr(embedded_matrix_basis):
+        if isinstance(embedded_matrix_basis, str):
             self.matrix_basis = embedded_matrix_basis
         else:  # assume a Basis object
             my_basis_dim = self.state_space_labels.dim
@@ -6572,11 +6570,11 @@ class LindbladErrorgen(LinearOperator):
         sparse = None
         if ham_basis is not None:
             if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
-            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
+            elif isinstance(ham_basis, str): sparse = _sps.issparse(errgen)
             elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
         if sparse is None and nonham_basis is not None:
             if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
-            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
+            elif isinstance(nonham_basis, str): sparse = _sps.issparse(errgen)
             elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
         if sparse is None: sparse = False  # the default
 

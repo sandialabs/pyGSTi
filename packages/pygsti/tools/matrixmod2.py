@@ -9,7 +9,6 @@
 
 # Contains general matrix utilities. Some, but not all, of these tools are specific to
 # matrices over the ints modulo 2.
-from __future__ import division, print_function, absolute_import, unicode_literals
 
 import numpy as _np
 

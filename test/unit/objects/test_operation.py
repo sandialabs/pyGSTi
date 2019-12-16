@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 import scipy.sparse as sps
 
-from ..util import BaseCase, needs_cvxpy, needs_python3
+from ..util import BaseCase, needs_cvxpy
 
 from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, \
     ExplicitOpModel, Basis, FullSPAMVec, TPInstrument
@@ -90,7 +90,6 @@ class DenseOpBase(OpBase):
         with self.assertRaises((ValueError, AssertionError)):
             self.gate.set_value(np.zeros((1, 1), 'd'))  # bad size
 
-    @needs_python3
     def test_arithmetic(self):
         result = self.gate + self.gate
         self.assertEqual(type(result), np.ndarray)

@@ -1,11 +1,11 @@
-from __future__ import print_function, unicode_literals
 
 import logging
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
 
 import unittest
-import os,sys
+import os
+import sys
 import numpy as np
 import pickle
 import collections
@@ -23,6 +23,8 @@ class ObjDerivedFromStdType(list):
     def __init__(self,listInit):
         self.extra = "Hello"
         super(ObjDerivedFromStdType,self).__init__(listInit)
+
+
 testObj = ObjDerivedFromStdType( (1,2,3) )
 testObj.__class__.__module__ = "pygsti.objects" # make object look like a pygsti-native object so it gets special serialization treatment.
 sys.modules['pygsti.objects'].ObjDerivedFromStdType = ObjDerivedFromStdType

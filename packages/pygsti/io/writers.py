@@ -1,5 +1,4 @@
 """ Functions for writing GST objects to text files."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -63,7 +62,7 @@ def write_empty_dataset(filename, circuit_list,
 
 
 def _outcome_to_str(x):
-    if _tools.isstr(x): return x
+    if isinstance(x, str): return x
     else: return ":".join([str(i) for i in x])
 
 
@@ -102,7 +101,7 @@ def write_dataset(filename, dataset, circuit_list=None,
         circuit_list = list(dataset.keys())
 
     if outcomeLabelOrder is not None:  # convert to tuples if needed
-        outcomeLabelOrder = [(ol,) if _tools.isstr(ol) else ol
+        outcomeLabelOrder = [(ol,) if isinstance(ol, str) else ol
                              for ol in outcomeLabelOrder]
 
     outcomeLabels = dataset.get_outcome_labels()
@@ -175,7 +174,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
         circuit_list = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
 
     if outcomeLabelOrder is not None:  # convert to tuples if needed
-        outcomeLabelOrder = [(ol,) if _tools.isstr(ol) else ol
+        outcomeLabelOrder = [(ol,) if isinstance(ol, str) else ol
                              for ol in outcomeLabelOrder]
 
     outcomeLabels = multidataset.get_outcome_labels()

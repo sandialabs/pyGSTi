@@ -1,5 +1,4 @@
 """Helper functions for creating HTML documents by "merging" with a template"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,7 +10,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import collections as _collections
 import os as _os
-import sys as _sys
 import shutil as _shutil
 import webbrowser as _webbrowser
 
@@ -20,7 +18,6 @@ import subprocess as _subprocess
 
 from pathlib import Path
 
-from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
@@ -362,7 +359,7 @@ def render_as_latex(qtys, render_options, verbosity):
     for key, val in qtys.items():
         if isinstance(val, _Switchboard):
             continue  # silently don't render switchboards in latex
-        if _compat.isstr(val):
+        if isinstance(val, str):
             qtys_latex[key] = val
         else:
             printer.log("Rendering %s" % key, 3)
@@ -691,11 +688,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
     template = _re.sub(r"\\putfield\{\{([^}]+)\}\}\{\{[^}]*\}\}", "{\\1}", template)
 
     # Replace str.format fields with values and write to output file
-    if _sys.version_info > (3, 0):
-        filled_template = template.format_map(qtys_latex)  # need python 3.2+
-    else:
-        filled_template = template.format(**qtys_latex)  # no nice defaultdict behavior
-        filled_template = filled_template.encode('utf-8')  # Python2: need to re-encode for write(...)
+    filled_template = template.format_map(qtys_latex)
 
     with open(outputFilename, 'w') as outputfile:
         outputfile.write(filled_template)

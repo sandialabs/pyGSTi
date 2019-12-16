@@ -1,5 +1,4 @@
 """Functions for the construction of new models."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -19,7 +18,6 @@ import warnings as _warnings
 
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
-from ..tools import compattools as _compat
 from ..tools import internalgates as _itgs
 from ..tools.basisconstructors import sigmax, sigmay, sigmaz
 from ..objects import operation as _op
@@ -524,7 +522,7 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         else:
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
-    if _compat.isstr(povmLabels):
+    if isinstance(povmLabels, str):
         povmLabels = [povmLabels]
         effectLabels = [effectLabels]
         effectExpressions = [effectExpressions]

@@ -1,5 +1,4 @@
 """ pyGSTi Tools Python Package """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -20,7 +19,6 @@ from .chi2fns import *
 from .basistools import *
 from .optools import *
 from .slicetools import *
-from .compattools import *
 from .legacytools import *
 from .mpitools import parallel_apply, get_comm
 from .symplectic import *

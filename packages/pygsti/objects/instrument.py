@@ -1,5 +1,4 @@
 """Defines the Instrument class"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -164,10 +163,6 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         #need to *not* pickle parent, as __reduce__ bypasses ModelMember.__getstate__
         dict_to_pickle = self.__dict__.copy()
         dict_to_pickle['_parent'] = None
-
-        #Python 2.7: remove elements of __dict__ that get initialized by OrderedDict impl
-        if '_OrderedDict__root' in dict_to_pickle: del dict_to_pickle['_OrderedDict__root']
-        if '_OrderedDict__map' in dict_to_pickle: del dict_to_pickle['_OrderedDict__map']
 
         #Note: must *copy* elements for pickling/copying
         return (Instrument, (None, [(key, gate.copy()) for key, gate in self.items()]), dict_to_pickle)

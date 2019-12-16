@@ -1,5 +1,6 @@
 import numpy as np
-from ..util import BaseCase, unittest
+import unittest
+from ..util import BaseCase
 
 from pygsti.construction import std1Q_XYI as std
 from pygsti.objects import slowreplib

@@ -1,5 +1,4 @@
 """ Defines the Model class and supporting functionality."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,7 +23,6 @@ from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
-from ..tools import compattools as _compat
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
@@ -1472,7 +1470,7 @@ class OpModel(Model):
             if bNp2Matters:
                 if nprocs > num_params**2:
                     np1 = np2 = max(num_params, 1)
-                    ng = Ng = set_Ng(nprocs / max(num_params**2, 1))  # Note __future__ division
+                    ng = Ng = set_Ng(nprocs / max(num_params**2, 1))  # Note floating-point division
                 elif nprocs > num_params:
                     np1 = max(num_params, 1)
                     np2 = int(_np.ceil(nprocs / max(num_params, 1)))

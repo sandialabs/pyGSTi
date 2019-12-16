@@ -7,7 +7,7 @@ import warnings
 import os
 from pygsti.construction import std1Q_XYI as std
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 class TestDataSetMethods(BaseTestCase):
 
@@ -136,19 +136,13 @@ Gx^4 0.2 100
                                                         nSamples=1000, sampleError='none')
         ds_round = pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                           nSamples=1000, sampleError='round')
-        ds_binom = pygsti.construction.generate_fake_data(depol_gateset, circuits, nSamples=1000,
-                                                          sampleError='binomial', seed=100)
-        ds_multi = pygsti.construction.generate_fake_data(depol_gateset, circuits,
-                                                          nSamples=1000, sampleError='multinomial', seed=100)
         ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
                                                              nSamples=None, sampleError='none')
 
         # TO SEED SAVED FILE, RUN BELOW LINES:
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if regenerate_references():
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  circuits)
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, circuits)
-            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_binom.txt", ds_binom, circuits)
-            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_multi.txt", ds_multi, circuits)
 
         bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
@@ -164,12 +158,6 @@ Gx^4 0.2 100
 
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_round.txt")
         self.assertEqualDatasets(ds_round, saved_ds)
-
-        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_binom.txt")
-        if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_binom, saved_ds)
-
-        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_multi.txt")
-        if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
 
     def test_multi_dataset(self):
@@ -449,20 +437,19 @@ Gy 11001100
 
 
     def test_load_old_dataset(self):
-        vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
         with pygsti.io.enable_old_object_unpickling():
-            with open(compare_files + "/pygsti0.9.6.dataset.pkl.%s" % vs,'rb') as f:
+            with open(compare_files + "/pygsti0.9.6.dataset.pkl", 'rb') as f:
                 ds = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
-        with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
+        with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
             pickle.dump(ds, f)
 
         with pygsti.io.enable_old_object_unpickling("0.9.7"):
-            with open(compare_files + "/pygsti0.9.7.dataset.pkl.%s" % vs,'rb') as f:
+            with open(compare_files + "/pygsti0.9.7.dataset.pkl", 'rb') as f:
                 ds = pickle.load(f)
-        with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
+        with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
             pickle.dump(ds, f)
 
 

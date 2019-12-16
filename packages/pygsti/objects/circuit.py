@@ -1,5 +1,4 @@
 """ Defines the Circuit class """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -12,7 +11,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numbers as _numbers
 import numpy as _np
 import copy as _copy
-import sys as _sys
 import itertools as _itertools
 import warnings as _warnings
 
@@ -253,7 +251,7 @@ class Circuit(object):
             set `expand_subcircuits=False`.
         """
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
-        if _compat.isstr(layer_labels):
+        if isinstance(layer_labels, str):
             cparser = _CircuitParser(); cparser.lookup = None
             layer_labels, chk_labels = cparser.parse(layer_labels)
             if chk_labels is not None:
@@ -2570,8 +2568,8 @@ class Circuit(object):
         if self.number_of_lines() == 0: return ''
 
         s = ''
-        Ctxt = 'C'  # if _sys.version_info <= (3, 0) else '\u25CF' # No unicode in
-        Ttxt = 'T'  # if _sys.version_info <= (3, 0) else '\u2295' #  Python 2
+        Ctxt = 'C'
+        Ttxt = 'T'
         identityName = 'I'  # can be anything that isn't used in circuit
 
         def abbrev(lbl, k):  # assumes a simple label w/ name & qubits

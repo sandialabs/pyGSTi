@@ -1,5 +1,4 @@
 """ Defines the Basis object and supporting functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -29,16 +28,8 @@ import math
 from ..tools.basisconstructors import _basisConstructorDict
 from ..tools.opttools import cache_by_hashed_args
 
+
 #Helper functions
-try: basestring
-except NameError: basestring = str
-
-
-def _isstr(x):
-    """ Same as compattools.py, but can't import that here """
-    return isinstance(x, basestring)
-
-
 def _sparse_equal(A, B, atol=1e-8):
     """ NOTE: same as matrixtools.sparse_equal - but can't import that here """
     if _np.array_equal(A.shape, B.shape) == 0:
@@ -151,7 +142,7 @@ class Basis(object):
             if sparse is not None:
                 assert(sparse == basis.sparse), "Basis object has unexpected sparsity: %s" % (basis.sparse)
             return basis
-        elif _isstr(nameOrBasisOrMatrices):
+        elif isinstance(nameOrBasisOrMatrices, str):
             name = nameOrBasisOrMatrices
             if isinstance(dim, _SSLs):
                 sslbls = dim
@@ -338,7 +329,7 @@ class Basis(object):
             self.longname, self.dim, self.size, self.elshape, ', '.join(self.labels))
 
     def __getitem__(self, index):
-        if _isstr(index) and self.ellookup is not None:
+        if isinstance(index, str) and self.ellookup is not None:
             return self.ellookup[index]
         return self.elements[index]
 
@@ -786,7 +777,7 @@ class BuiltinBasis(LazyBasis):
     def __eq__(self, other):
         if isinstance(other, BuiltinBasis):  # then can compare quickly
             return (self.name == other.name) and (self.cargs == other.cargs) and (self.sparse == other.sparse)
-        elif _isstr(other):
+        elif isinstance(other, str):
             return self.name == other  # see if other is a string equal to our name
         else:
             return LazyBasis.__eq__(self, other)

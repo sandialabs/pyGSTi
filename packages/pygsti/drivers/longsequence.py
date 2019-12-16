@@ -1,5 +1,4 @@
 """ End-to-end functions for performing long-sequence GST """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,7 +23,6 @@ from .. import objects as _objs
 from .. import io as _io
 from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
-from ..tools import compattools as _compat
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 
@@ -993,7 +991,7 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
-        if _compat.isstr(output_pkl):
+        if isinstance(output_pkl, str):
             with open(output_pkl, 'wb') as pklfile:
                 _pickle.dump(ret, pklfile)
         else:
@@ -1070,7 +1068,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
 
     else:
         gaugeOptSuite_dict = _collections.OrderedDict()
-        if _compat.isstr(gaugeOptSuite):
+        if isinstance(gaugeOptSuite, str):
             gaugeOptSuites = [gaugeOptSuite]
         else:
             gaugeOptSuites = gaugeOptSuite[:]  # assumes gaugeOptSuite is a list/tuple of strs
@@ -1199,7 +1197,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
 def _load_model(modelFilenameOrObj):
-    if _compat.isstr(modelFilenameOrObj):
+    if isinstance(modelFilenameOrObj, str):
         return _io.load_model(modelFilenameOrObj)
     else:
         return modelFilenameOrObj  # assume a Model object
@@ -1209,19 +1207,19 @@ def _load_fiducials_and_germs(prepStrsListOrFilename,
                               effectStrsListOrFilename,
                               germsListOrFilename):
 
-    if _compat.isstr(prepStrsListOrFilename):
+    if isinstance(prepStrsListOrFilename, str):
         prepStrs = _io.load_circuit_list(prepStrsListOrFilename)
     else: prepStrs = prepStrsListOrFilename
 
     if effectStrsListOrFilename is None:
         effectStrs = prepStrs  # use same strings for effectStrs if effectStrsListOrFilename is None
     else:
-        if _compat.isstr(effectStrsListOrFilename):
+        if isinstance(effectStrsListOrFilename, str):
             effectStrs = _io.load_circuit_list(effectStrsListOrFilename)
         else: effectStrs = effectStrsListOrFilename
 
     #Get/load germs
-    if _compat.isstr(germsListOrFilename):
+    if isinstance(germsListOrFilename, str):
         germs = _io.load_circuit_list(germsListOrFilename)
     else: germs = germsListOrFilename
 
@@ -1231,7 +1229,7 @@ def _load_fiducials_and_germs(prepStrsListOrFilename,
 def _load_dataset(dataFilenameOrSet, comm, verbosity):
     """Loads a DataSet from the dataFilenameOrSet argument of functions in this module."""
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    if _compat.isstr(dataFilenameOrSet):
+    if isinstance(dataFilenameOrSet, str):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
                 with open(dataFilenameOrSet, 'rb') as pklfile:
@@ -1342,7 +1340,7 @@ def _package_into_results(callerName, ds, target_model, mdl_start, lsgstLists,
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
-        if _compat.isstr(output_pkl):
+        if isinstance(output_pkl, str):
             with open(output_pkl, 'wb') as pklfile:
                 _pickle.dump(ret, pklfile)
         else:

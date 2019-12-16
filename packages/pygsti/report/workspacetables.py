@@ -1,5 +1,4 @@
 """ Classes corresponding to tables within a Workspace context."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -1984,7 +1983,7 @@ class GateEigenvalueTable(WorkspaceTable):
             #import time as _time #DEBUG
             #tStart = _time.time() #DEBUG
             fn = _reportables.Gate_eigenvalues if \
-                isinstance(gl, _objs.Label) or _tools.isstr(gl) else \
+                isinstance(gl, _objs.Label) or isinstance(gl, str) else \
                 _reportables.Circuit_eigenvalues
             evals = _ev(fn(model, gl), confidenceRegionInfo)
             #tm = _time.time() - tStart #DEBUG
@@ -1998,13 +1997,13 @@ class GateEigenvalueTable(WorkspaceTable):
             if targetModel is not None:
                 #TODO: move this to a reportable qty to get error bars?
 
-                if isinstance(gl, _objs.Label) or _tools.isstr(gl):
+                if isinstance(gl, _objs.Label) or isinstance(gl, str):
                     target_evals = _np.linalg.eigvals(targetModel.operations[gl].todense())  # no error bars
                 else:
                     target_evals = _np.linalg.eigvals(targetModel.product(gl))  # no error bars
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
-                    if isinstance(gl, _objs.Label) or _tools.isstr(gl):
+                    if isinstance(gl, _objs.Label) or isinstance(gl, str):
                         rel_evals = _ev(_reportables.Rel_gate_eigenvalues(model, targetModel, gl), confidenceRegionInfo)
                     else:
                         rel_evals = _ev(_reportables.Rel_circuit_eigenvalues(
@@ -2068,7 +2067,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 elif disp == "evdm":
                     if targetModel is not None:
                         fn = _reportables.Eigenvalue_diamondnorm if \
-                            isinstance(gl, _objs.Label) or _tools.isstr(gl) else \
+                            isinstance(gl, _objs.Label) or isinstance(gl, str) else \
                             _reportables.Circuit_eigenvalue_diamondnorm
                         gidm = _ev(fn(model, targetModel, gl), confidenceRegionInfo)
                         row_data.append(gidm)
@@ -2077,7 +2076,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 elif disp == "evinf":
                     if targetModel is not None:
                         fn = _reportables.Eigenvalue_entanglement_infidelity if \
-                            isinstance(gl, _objs.Label) or _tools.isstr(gl) else \
+                            isinstance(gl, _objs.Label) or isinstance(gl, str) else \
                             _reportables.Circuit_eigenvalue_entanglement_infidelity
                         giinf = _ev(fn(model, targetModel, gl), confidenceRegionInfo)
                         row_data.append(giinf)
@@ -2396,10 +2395,10 @@ class CircuitTable(WorkspaceTable):
         if len(gsLists) == 0:
             gsLists = [[]]
         elif isinstance(gsLists[0], _objs.Circuit) or \
-                (isinstance(gsLists[0], tuple) and _tools.isstr(gsLists[0][0])):
+                (isinstance(gsLists[0], tuple) and isinstance(gsLists[0][0], str)):
             gsLists = [gsLists]
 
-        if _tools.isstr(titles): titles = [titles] * len(gsLists)
+        if isinstance(titles, str): titles = [titles] * len(gsLists)
 
         colHeadings = (('#',) + tuple(titles)) * nCols
         formatters = (('Conversion',) + ('Normal',) * len(titles)) * nCols

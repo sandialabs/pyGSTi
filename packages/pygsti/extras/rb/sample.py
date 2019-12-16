@@ -1,5 +1,4 @@
 """ RB circuit sampling functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -17,7 +16,6 @@ from ... import construction as _cnst
 from ... import objects as _objs
 from ... import io as _io
 from ... import tools as _tools
-from ...tools import compattools as _compat
 from . import group as _rbobjs
 
 import numpy as _np
@@ -658,7 +656,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     """
     assert(modelname == 'clifford'), "This function currently assumes sampling from a Clifford model!"
     # Pick the sector.
-    if _compat.isstr(co2Qgatesprob):
+    if isinstance(co2Qgatesprob, str):
         assert(co2Qgatesprob == 'uniform'), "If `co2Qgatesprob` is a string it must be 'uniform!'"
         twoqubitgates_or_nestedco2Qgates = co2Qgates[_np.random.randint(0, len(co2Qgates))]
     else:
@@ -773,7 +771,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
 
     sampled_layer = []
 
-    if _compat.isstr(pdist): assert(pdist == 'uniform'), "If pdist is not a list or numpy.array it must be 'uniform'"
+    if isinstance(pdist, str): assert(pdist == 'uniform'), "If pdist is not a list or numpy.array it must be 'uniform'"
 
     if oneQgatenames == 'all':
         assert(pdist == 'uniform'), "If `oneQgatenames` = 'all', pdist must be 'uniform'"
@@ -789,7 +787,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
 
     else:
         # A basic check for the validity of pdist.
-        if not _compat.isstr(pdist): assert(len(pdist) == len(oneQgatenames)
+        if not isinstance(pdist, str): assert(len(pdist) == len(oneQgatenames)
                                             ), "The pdist probability distribution is invalid!"
 
         # Find out how many 1-qubit gate names there are
@@ -799,7 +797,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         for i in qubits:
 
             # If 'uniform', then sample according to the uniform dist.
-            if _compat.isstr(pdist): sampled_gatename = oneQgatenames[_np.random.randint(0, num_oneQgatenames)]
+            if isinstance(pdist, str): sampled_gatename = oneQgatenames[_np.random.randint(0, num_oneQgatenames)]
             # If not 'uniform', then sample according to the user-specified dist.
             else:
                 pdist = _np.array(pdist) / sum(pdist)
@@ -877,7 +875,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
         with layers independently sampled using the specified sampling distribution.
     """
-    if _compat.isstr(sampler):
+    if isinstance(sampler, str):
 
         if sampler == 'pairingQs': sampler = circuit_layer_by_pairing_qubits
         elif sampler == 'Qelimination': sampler = circuit_layer_by_Qelimination

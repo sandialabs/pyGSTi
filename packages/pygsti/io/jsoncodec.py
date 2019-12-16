@@ -1,5 +1,4 @@
 """ Defines JSON-format encoding and decoding functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,20 +8,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import sys as _sys
+# XXX this module should certainly be rewritten as a custom `json.JSONEncoder`
+
 import types as _types
 import importlib as _importlib
-import json as _json
+# import json as _json
 import base64 as _base64
 import numpy as _np
 import uuid as _uuid
 import collections as _collections
 import pygsti.objects
-
-if _sys.version_info >= (3, 0):
-    range_type = range
-else:
-    range_type = xrange  # noqa: F821
 
 
 def class_hasattr(instance, attr):
@@ -168,11 +163,8 @@ def encode_std_obj(py_obj, binary):
         return {'__slice__': [encode_obj(py_obj.start, binary),
                               encode_obj(py_obj.stop, binary),
                               encode_obj(py_obj.step, binary)]}
-    elif isinstance(py_obj, range_type):
-        if _sys.version_info >= (3, 0):
-            return {'__range__': (py_obj.start, py_obj.stop, py_obj.step)}
-        else:
-            return {'__list__': list(py_obj)}  # python2 -> serialze ranges as lists
+    elif isinstance(py_obj, range):
+        return {'__range__': (py_obj.start, py_obj.stop, py_obj.step)}
     elif isinstance(py_obj, _collections.OrderedDict):
         return {'__odict__': [(encode_obj(k, binary), encode_obj(v, binary))
                               for k, v in py_obj.items()]}
@@ -190,9 +182,7 @@ def encode_std_obj(py_obj, binary):
         return {'__complex__': data}
     elif not binary and isinstance(py_obj, bytes):
         return {'__bytes__': tostr(_base64.b64encode(py_obj))}
-    elif binary and (isinstance(py_obj, str)
-                     or (_sys.version_info < (3, 0) and isinstance(py_obj, unicode))):  # noqa: F821
-        #Python2 "strings" can also be unicode (but 'unicode' isn't defined in python3!)
+    elif binary and isinstance(py_obj, str):
         return {'__string__': tobin(py_obj)}
 
     #Numpy encoding
@@ -360,10 +350,7 @@ def decode_std_obj(json_obj, binary):
                      decode_obj(v[2], binary))
     elif B('__range__') in json_obj:
         start, stop, step = json_obj[B('__range__')]
-        if _sys.version_info >= (3, 0):
-            return range(start, stop, step)
-        else:
-            return list(xrange(start, stop, step))  # lists in python2  # noqa: F821
+        return range(start, stop, step)
     elif B('__ndict__') in json_obj:
         return dict([(decode_obj(k, binary), decode_obj(v, binary))
                      for k, v in json_obj[B('__ndict__')]])
@@ -410,28 +397,20 @@ def decode_std_obj(json_obj, binary):
 
 def tostr(x):
     """
-    Python 2 & 3 compatible function for converting a value to the native
-    string format.  (In Python 3, bytes need to be decoded.)
+    Convert a value to the native string format.
     """
-    if _sys.version_info >= (3, 0):
-        if isinstance(x, bytes):
-            return x.decode()
-        else:
-            return str(x)
+    if isinstance(x, bytes):
+        return x.decode()
     else:
-        return x
+        return str(x)
 
 
 def tobin(x):
     """
-    Python 2 & 3 compatible function for converting a value to the native
-    binary-string ("bytes") format.  (In Python 3, str needs to be encoded.)
+    Serialize strings to UTF8
     """
-    if _sys.version_info >= (3, 0):
-        if isinstance(x, str):
-            return bytes(x, 'utf-8')
-        else:
-            return x
+    if isinstance(x, str):
+        return bytes(x, 'utf-8')
     else:
         return x
 

@@ -1,5 +1,4 @@
 """ Defines the Estimate class."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,7 +15,6 @@ import copy as _copy
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
-from ..tools import compattools as _compat
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from .circuit import Circuit as _Circuit
 
@@ -563,7 +561,7 @@ class Estimate(object):
 
         if gaugeopt_keys is None:
             gaugeopt_keys = list(self.goparameters.keys())
-        elif _compat.isstr(gaugeopt_keys):
+        elif isinstance(gaugeopt_keys, str):
             gaugeopt_keys = [gaugeopt_keys]
         for go_key in gaugeopt_keys:
             if go_key in self.goparameters:

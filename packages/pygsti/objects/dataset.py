@@ -1,5 +1,4 @@
 """ Defines the DataSet class and supporting classes and functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,7 +20,6 @@ import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 import bisect as _bisect
-import sys as _sys
 
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
@@ -70,7 +68,7 @@ class DataSet_KeyValIterator(object):
     def __iter__(self):
         return self
 
-    def __next__(self):  # Python 3: def __next__(self)
+    def __next__(self):
         return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
@@ -101,7 +99,7 @@ class DataSet_ValIterator(object):
     def __iter__(self):
         return self
 
-    def __next__(self):  # Python 3: def __next__(self)
+    def __next__(self):
         return DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
@@ -2151,7 +2149,7 @@ class DataSet(object):
                     'comment': self.comment}  # Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
 
-        bOpen = _compat.isstr(fileOrFilename)
+        bOpen = isinstance(fileOrFilename, str)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
@@ -2188,7 +2186,7 @@ class DataSet(object):
         -------
         None
         """
-        bOpen = _compat.isstr(fileOrFilename)
+        bOpen = isinstance(fileOrFilename, str)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
@@ -2207,13 +2205,6 @@ class DataSet(object):
             state_dict['cirIndexVals'] = state_dict['gsIndexVals']
             del state_dict['gsIndexKeys']
             del state_dict['gsIndexVals']
-
-            if _sys.version_info < (3, 0):  # for backward compatibility, needed for Python2 only
-                # where GateStrings don't get up-converted to Circuits b/c __new__ isn't called
-                new_aux_info = _DefaultDict(dict)
-                for gstr, val in state_dict['auxInfo'].items():
-                    new_aux_info[_cir.Circuit(gstr._tup, stringrep=gstr._str)] = val
-                state_dict['auxInfo'] = new_aux_info
 
         def expand(x):  # to be backward compatible
             """ Expand a compressed circuit """
@@ -2287,8 +2278,8 @@ class DataSet(object):
         """
         mapdict = {}
         for old, new in old_to_new_dict.items():
-            if _compat.isstr(old): old = (old,)
-            if _compat.isstr(new): new = (new,)
+            if isinstance(old, str): old = (old,)
+            if isinstance(new, str): new = (new,)
             mapdict[old] = new
 
         new_olIndex = _OrderedDict()

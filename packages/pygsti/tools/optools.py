@@ -1,5 +1,4 @@
 """ Utility functions operating on operation matrices """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -19,7 +18,6 @@ import collections as _collections
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
 from . import lindbladtools as _lt
-from . import compattools as _compat
 from . import basistools as _bt
 from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 
@@ -234,15 +232,7 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
 
     #currently cvxpy is only needed for this function, so don't import until here
 
-    import sys as _sys
-    if _sys.version_info < (3, 0):
-        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
-        import pickle as _pickle
-        p = _pickle.Pickler.dispatch.copy()
-        import cvxpy as _cvxpy
-        _pickle.Pickler.dispatch = p
-    else:  # no need to do this in python3
-        import cvxpy as _cvxpy
+    import cvxpy as _cvxpy
 
     #Check if using version < 1.0
     old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
@@ -1753,14 +1743,14 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #  specified basis elements.
     if isinstance(ham_basis, _Basis):
         hamBasisMxs = ham_basis.elements
-    elif _compat.isstr(ham_basis):
+    elif isinstance(ham_basis, str):
         hamBasisMxs = _bt.basis_matrices(ham_basis, d2, sparse=sparse)
     else:
         hamBasisMxs = ham_basis
 
     if isinstance(other_basis, _Basis):
         otherBasisMxs = other_basis.elements
-    elif _compat.isstr(other_basis):
+    elif isinstance(other_basis, str):
         otherBasisMxs = _bt.basis_matrices(other_basis, d2, sparse=sparse)
     else:
         otherBasisMxs = other_basis
@@ -2118,7 +2108,7 @@ def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
     hamBasisLabels = []
     otherBasisLabels = []
     for termLbl, coeff in Ltermdict.items():
-        if _compat.isstr(termLbl): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
+        if isinstance(termLbl, str): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
         termType = termLbl[0]
         if termType == "H":  # Hamiltonian
             assert(len(termLbl) == 2), "Hamiltonian term labels should have form ('H',<basis element label>)"
@@ -2193,7 +2183,7 @@ def lindblad_terms_to_projections(Ltermdict, basis, other_mode="all"):
     hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(ham_basis.labels)}      # -1 to compensate for identity as
     otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(other_basis.labels)}  # first element (not in projections).
     for termLbl, coeff in Ltermdict.items():
-        if _compat.isstr(termLbl): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
+        if isinstance(termLbl, str): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
         termType = termLbl[0]
         if termType == "H":  # Hamiltonian
             k = hamBasisIndices[termLbl[1]]  # index of coefficient in array

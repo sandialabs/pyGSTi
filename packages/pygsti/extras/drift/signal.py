@@ -1,5 +1,4 @@
 """Signal analysis functions for time-series data"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -23,7 +22,6 @@ except: _LombScargle = None
 
 from scipy.stats import chi2 as _chi2
 from ... import objects as _obj
-from ...tools import compattools as _compat
 
 
 def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', transform='dct',
@@ -95,7 +93,7 @@ def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', 
             powers = _np.abs(modes)**2
 
         if returnfrequencies:
-            if _compat.isstr(frequencies):
+            if isinstance(frequencies, str):
 
                 if times is None: freqs = None
                 else: freqs = fourier_frequencies_from_times(times)
@@ -310,7 +308,7 @@ def lsp(x, times, frequencies='auto', null_hypothesis=None, counts=1):
 
     """
     numtimes = len(x)
-    if _compat.isstr(frequencies):
+    if isinstance(frequencies, str):
         freq = frequencies_from_timestep((max(times) - min(times)) / numtimes, numtimes)
     else:
         freq = frequencies

@@ -1,5 +1,4 @@
 """ Defines the MultiDataSet class and supporting classes and functions """
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,8 +13,6 @@ import pickle as _pickle
 import copy as _copy
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
-
-from ..tools import compattools as _compat
 
 from .dataset import DataSet as _DataSet
 from . import circuit as _cir

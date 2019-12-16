@@ -1,4 +1,3 @@
-from __future__ import print_function
 
 #quiet down matplotlib!
 import logging
@@ -15,9 +14,10 @@ from pygsti.construction import std1Q_XY
 from pygsti.objects import Label as L
 from pygsti.io import json
 
-import sys, os
+import sys
+import os
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 #Mimics a function that used to be in pyGSTi, replaced with build_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
@@ -26,7 +26,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       roughNoise=None, sim_type="matrix", parameterization="H+S",
                                       spamtype="lindblad", addIdleNoiseToAllGates=True,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
-                                      
+
     #from pygsti.construction import std1Q_XY # the base model for 1Q gates
     #from pygsti.construction import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
     #
@@ -36,7 +36,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
     #Gy = tgt1Q.operations['Gy']
     #Gcnot = tgt2Q.operations['Gcnot']
     #gatedict = _collections.OrderedDict([('Gx',Gx),('Gy',Gy),('Gcnot',Gcnot)])
-    
+
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
     return pc.build_cloudnoise_model_from_hops_and_weights(
@@ -52,7 +52,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     @classmethod
     def setUpClass(cls):
-        """ 
+        """
         Handle all once-per-class (slow) computation and loading,
          to avoid calling it for each test (like setUp).  Store
          results in class variable for use within setUp.
@@ -70,11 +70,11 @@ class CalcMethods1QTestCase(BaseTestCase):
         cls.listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
             std.target_model(), std.prepStrs, std.effectStrs, std.germs, cls.maxLengths)
 
-        #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        #RUN BELOW FOR DATAGEN (SAVE)
+        if regenerate_references():
             ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
                                                         nSamples=1000, sampleError="multinomial", seed=1234)
-            ds.save(compare_files + "/calcMethods1Q.dataset%s" % cls.versionsuffix)
+            ds.save(compare_files + "/calcMethods1Q.dataset")
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
         #ds_swp = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
@@ -83,7 +83,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #ds_swp.save(compare_files + "/calcMethods1Q.dataset") # run in Python2
         #assert(False),"STOP"
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q.dataset%s" % cls.versionsuffix)
+        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q.dataset")
 
         #Reduced model GST dataset
         cls.nQubits=1 # can't just change this now - see opLabels below
@@ -98,21 +98,21 @@ class CalcMethods1QTestCase(BaseTestCase):
         for i in range(cls.nQubits):
             cls.redmod_fiducials.extend( pygsti.construction.manipulate_circuit_list(
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
-        #print(redmod_fiducials, "Fiducials")     
-        
+        #print(redmod_fiducials, "Fiducials")
+
         cls.redmod_germs = pygsti.construction.circuit_list([ (gl,) for gl in opLabels ])
         cls.redmod_maxLs = [1]
         expList = pygsti.construction.make_lsgst_experiment_list(
             opLabels, cls.redmod_fiducials, cls.redmod_fiducials,
             cls.redmod_germs, cls.redmod_maxLs)
 
-        #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        #RUN BELOW FOR DATAGEN (SAVE)
+        if regenerate_references():
             redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
-            redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset%s" % cls.versionsuffix)
+            redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
 
-        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q_redmod.dataset%s" % cls.versionsuffix)
-        
+        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q_redmod.dataset")
+
         #print(len(expList)," reduced model sequences")
 
         #Random starting points - little kick so we don't get hung up at start
@@ -133,11 +133,11 @@ class CalcMethods1QTestCase(BaseTestCase):
     def assert_outcomes(self, probs, expected):
         for k,v in probs.items():
             self.assertAlmostEqual(v, expected[k])
-        
+
     ## GST using "full" (non-embedded/composed) gates
     # All of these calcs use dense matrices; While sparse operation matrices (as Maps) could be used,
     # they'd need to enter as a sparse basis to a LindbladDenseOp (maybe add this later?)
-    
+
     def test_stdgst_matrix(self):
         # Using matrix-based calculations
         target_model = std.target_model()
@@ -146,7 +146,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=4)
 
-        #CHECK that copy gives identical models - this is checked by other 
+        #CHECK that copy gives identical models - this is checked by other
         # unit tests but here we're using a true "GST model" - so do it again:
         print("CHECK COPY")
         mdl = results.estimates['default'].models['go0']
@@ -154,8 +154,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print(mdl.strdiff(mdl_copy))
         self.assertAlmostEqual( mdl.frobeniusdist(mdl_copy), 0, places=2)
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        #RUN BELOW LINES TO SAVE GATESET (SAVE)
+        if regenerate_references():
             pygsti.io.json.dump(results.estimates['default'].models['go0'],
                                 open(compare_files + "/test1Qcalc_std_exact.model",'w'))
 
@@ -193,29 +193,15 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
-        # This performs a map-based unitary evolution along each path. 
+        # This performs a map-based unitary evolution along each path.
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termorder:1') # this is the default set by set_all_parameterizations above
-        try:
-            results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                                  std.germs, self.maxLengths, verbosity=1)
-        except ValueError as ve:
-            try:
-                basestring  # Only defined in Python 2
-                version = 2
-            except NameError:
-                version = 3
+        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+                                              std.germs, self.maxLengths, verbosity=1)
 
-            if version == 2:
-                #HACK: Python 2.7 gets NaNs which cause a ValueError in scipy's linear solve
-                # This seems related to scipy/numpy and isn't a problem worth debugging - just punt.
-                return
-            else:
-                raise ve
-
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        #RUN BELOW LINES TO SAVE GATESET (SAVE)
+        if regenerate_references():
             pygsti.io.json.dump(results.estimates['default'].models['go0'],
                                 open(compare_files + "/test1Qcalc_std_terms.model",'w'))
 
@@ -245,25 +231,11 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termgap:3:0.05:0.001:1000:True', cache)
-        try:
-            results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                                  std.germs, self.maxLengths, verbosity=3)
-        except ValueError as ve:
-            try:
-                basestring  # Only defined in Python 2
-                version = 2
-            except NameError:
-                version = 3
+        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+                                              std.germs, self.maxLengths, verbosity=3)
 
-            if version == 2:
-                #HACK: Python 2.7 gets NaNs which cause a ValueError in scipy's linear solve
-                # This seems related to scipy/numpy and isn't a problem worth debugging - just punt.
-                return
-            else:
-                raise ve
-
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        #RUN BELOW LINES TO SAVE GATESET (SAVE)
+        if regenerate_references():
             pygsti.io.json.dump(results.estimates['default'].models['go0'],
                                 open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
 
@@ -297,8 +269,8 @@ class CalcMethods1QTestCase(BaseTestCase):
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advancedOptions={'tolerance': 1e-3})
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        #RUN BELOW LINES TO SAVE GATESET (SAVE)
+        if regenerate_references():
             pygsti.io.json.dump(results.estimates['default'].models['go0'],
                                 open(compare_files + "/test1Qcalc_redmod_exact.model",'w'))
 
@@ -392,8 +364,8 @@ class CalcMethods1QTestCase(BaseTestCase):
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advancedOptions={'tolerance': 1e-3})
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        #RUN BELOW LINES TO SAVE GATESET (SAVE)
+        if regenerate_references():
             pygsti.io.json.dump(results.estimates['default'].models['go0'],
                                 open(compare_files + "/test1Qcalc_redmod_terms.model",'w'))
 
@@ -434,7 +406,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
-        
+
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
@@ -513,7 +485,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs2, expected)
 
 
-        
+
     def test_circuitsim_statevec(self):
         # State-vector simulation (of unitary gates)
         # This can be done with matrix- or map-based calculations.
@@ -535,7 +507,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM(
             {'0': pygsti.obj.StaticSPAMVec( [1,0], 'statevec', 'effect'),
              '1': pygsti.obj.StaticSPAMVec( [0,1], 'statevec', 'effect')})
-             
+
         probs1 = mdl.probs(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
         print(probs1)
@@ -561,7 +533,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                      ('100',): 0.0,
                      ('101',): 0.0,
                      ('110',): 0.0,
-                     ('111',): 1.0 } 
+                     ('111',): 1.0 }
         print(probs1)
         print(probs2)
         self.assert_outcomes(probs1, expected)
@@ -599,13 +571,13 @@ class CalcMethods1QTestCase(BaseTestCase):
                                        ('110',): 0.0,
                                        ('111',): 1.0 } )
         self.assert_outcomes(probs2, { ('111',): 1.0 } ) # only returns nonzero outcomes by default
-        
+
 
 
     def test_circuitsim_stabilizer(self):
         # Stabilizer-state simulation (of Clifford gates) using map-based calc
         c0 = pygsti.obj.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
-        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1) 
+        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1)
         c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
@@ -623,7 +595,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs3, {('0',): 1.0,  ('1',): 0.0} )
 
 
-    def test_circuitsim_stabilizer_1Qcheck(self): 
+    def test_circuitsim_stabilizer_1Qcheck(self):
         from pygsti.construction import std1Q_XYI as stdChk
 
         maxLengths = [1,2,4]
@@ -655,10 +627,10 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_circuitsim_cterm(self):
         # Density-matrix simulation (of superoperator gates) using stabilizer-based term calcs
         c0 = pygsti.obj.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
-        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1) 
+        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1)
         c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
-        
+
         mdl = pygsti.construction.build_localnoise_model(
             1, ['Gi','Gx','Gy'], sim_type="termorder:1", parameterization="H+S clifford terms", ensure_composed_gates=False)
 

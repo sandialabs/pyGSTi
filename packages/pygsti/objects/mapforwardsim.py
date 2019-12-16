@@ -1,5 +1,4 @@
 """ Defines the MapForwardSimulator calculator class"""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,7 +15,6 @@ import itertools as _itertools
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
-from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
 from ..tools import symplectic as _symp
 from .profiler import DummyProfiler as _DummyProfiler
@@ -28,7 +26,7 @@ from . import replib
 
 _dummy_profiler = _DummyProfiler()
 
-# FUTURE: use enum (make sure it's supported in Python2.7?)
+# FUTURE: use enum
 SUPEROP = 0
 UNITARY = 1
 CLIFFORD = 2

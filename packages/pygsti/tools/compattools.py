@@ -1,5 +1,4 @@
-""" Functions for Python2 / Python3 compatibility """
-from __future__ import division, print_function, absolute_import, unicode_literals
+""" Tools for general compatibility. """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,23 +12,16 @@ import numbers as _numbers
 from contextlib import contextmanager as _contextmanager
 import uuid as _uuid
 
-#Define basestring in python3 so unicode
-# strings can be tested for in python2 using
-# python2's built-in basestring type.
-# When removing __future__ imports, remove
-# this and change basestring => str below.
-try: basestring
-except NameError: basestring = str
-
 
 def isint(x):
-    """ Return whether `x` has an integer type """
+    """ Return whether `x` has an integer type.
+
+    `numbers.Integral` is the ABC to which most integral types are
+    registered, including `int` and all `numpy.int` variants. This
+    function should be used in place of `isinstance(x, int)` or
+    similar.
+    """
     return isinstance(x, _numbers.Integral)
-
-
-def isstr(x):
-    """ Return whether `x` has a string type """
-    return isinstance(x, basestring)
 
 
 def _numpy14einsumfix():
@@ -41,29 +33,13 @@ def _numpy14einsumfix():
         _np.orig_einsum = _np.einsum
         _np.einsum = fixed_einsum
 
-#Worse way to do this
-#import sys as _sys
-#
-#if _sys.version_info > (3, 0): # Python3?
-#    longT = int      # define long and unicode
-#    unicodeT = str   #  types to mimic Python2
-#else:
-#    longT = long
-#    unicodeT = unicode
-#
-#def isint(x):
-#    return isinstance(x,(int,longT))
-#
-#def isstr(x):
-#    return isinstance(x,(str,unicodeT))
-
 
 @_contextmanager
 def patched_UUID():
     """Monkeypatch the uuid module with a fake SafeUUID
 
-    This is a workaround for unpickling objects pickled in later python
-    versions.
+    `uuid.SafeUUID` is new in Python 3.7. This is a workaround to
+    allow unpickling objects from >= 3.7 in < 3.7.
 
     TODO: objects should be serialized correctly and this should be deprecated.
     """

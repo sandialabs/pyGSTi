@@ -1,5 +1,4 @@
 """ Defines the Workspace class and supporting functionality."""
-from __future__ import division, print_function, absolute_import, unicode_literals
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -17,7 +16,6 @@ import numpy as _np
 #import uuid        as _uuid
 import random as _random
 import inspect as _inspect
-import sys as _sys
 import pickle as _pickle
 
 import subprocess as _subprocess
@@ -31,17 +29,22 @@ from . import merge_helpers as _merge
 
 from pprint import pprint as _pprint
 
-try:
-    from IPython.core.display import display as _display
-    from IPython.core.display import HTML as _HTML
-    #from IPython.display import clear_output as _clear_output
-    in_ipython_notebook = True
-except ImportError:
-    in_ipython_notebook = False
-
-
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
+def in_ipython_notebook():
+    """Returns true if called from within an IPython/jupyter notebook"""
+    try:
+        # 'ZMQInteractiveShell' in a notebook, 'TerminalInteractiveShell' in IPython REPL, and fails elsewhere.
+        shell = get_ipython().__class__.__name__
+        return shell == 'ZMQInteractiveShell'
+    except NameError:
+        return False
+
+
+def display_ipynb(content):
+    """Render HTML content to an IPython notebook cell display"""
+    from IPython.core.display import display, HTML
+    display(HTML(content))
 
 def enable_plotly_pickling():
     """
@@ -80,19 +83,6 @@ def enable_plotly_pickling():
             plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
             del plotlyDictClass.__setattr__
         plotlyDictClass.__setitem__ = setitem
-
-        #Extra Python2 code b/c of Python2.7 pickling issues
-        def getstate(self):
-            to_pkl = self.__dict__.copy(); del to_pkl['_parent']
-            return to_pkl
-
-        def doreduce(self):
-            return (plotly.graph_objs.graph_objs.Figure,
-                    (), self.__dict__)
-
-        if _sys.version_info < (3, 0):
-            plotly.graph_objs.graph_objs.Figure.__reduce__ = doreduce
-            plotlyDictClass.__getstate__ = getstate
 
 
 def disable_plotly_pickling():
@@ -219,8 +209,7 @@ class Workspace(object):
         self.smartCache = state_dict['smartCache']
 
     def _makefactory(self, cls, autodisplay):  # , printer=_objs.VerbosityPrinter(1)):
-        PY3 = bool(_sys.version_info > (3, 0))
-
+        # XXX this indirection is so wild -- can we please rewrite directly?
         #Manipulate argument list of cls.__init__
         argspec = _inspect.getargspec(cls.__init__)
         argnames = argspec[0]
@@ -248,10 +237,7 @@ class Workspace(object):
 
         #print("FACTORY FN DEF = \n",new_func)
         exec_globals = {'cls': cls, 'self': self}
-        if PY3:
-            exec(factory_func_def, exec_globals)  # Python 3
-        else:
-            exec("""exec factory_func_def in exec_globals""")  # Python 2
+        exec(factory_func_def, exec_globals)
         factoryfn = exec_globals['factoryfn']
 
         #Copy cls.__init__ info over to factory function
@@ -259,10 +245,7 @@ class Workspace(object):
         factoryfn.__doc__ = cls.__init__.__doc__
         factoryfn.__module__ = cls.__init__.__module__
         factoryfn.__dict__ = cls.__init__.__dict__
-        if PY3:
-            factoryfn.__defaults__ = cls.__init__.__defaults__
-        else:
-            factoryfn.func_defaults = cls.__init__.func_defaults
+        factoryfn.__defaults__ = cls.__init__.__defaults__
 
         return factoryfn
 
@@ -376,7 +359,7 @@ class Workspace(object):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `init_notebook_mode` from inside an IPython Notebook.')
 
         global _PYGSTI_WORKSPACE_INITIALIZED
@@ -538,7 +521,7 @@ class Workspace(object):
             "      }); });\n"
             "</script>\n")
 
-        _display(_HTML(script))  # single call to display keeps things simple
+        display_ipynb(script)  # single call to display keeps things simple
 
         _PYGSTI_WORKSPACE_INITIALIZED = True
 
@@ -1122,7 +1105,7 @@ class Switchboard(_collections.OrderedDict):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         #if self.widget is None:
@@ -1135,7 +1118,7 @@ class Switchboard(_collections.OrderedDict):
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
         #self.widget.value = content
-        _display(_HTML(content))  # self.widget)
+        display_ipynb(content)  # self.widget)
 
     def view(self, switches="all", idsuffix="auto"):
         """
@@ -1251,14 +1234,14 @@ class SwitchboardView(object):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
-        _display(_HTML(content))
+        display_ipynb(content)
 
 
 class SwitchValue(object):
@@ -1529,7 +1512,7 @@ class WorkspaceOutput(object):
         """
         Display this object within an iPython notebook.
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         self.set_render_options(global_requirejs=True,
@@ -1539,7 +1522,7 @@ class WorkspaceOutput(object):
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
 
-        _display(_HTML(content))
+        display_ipynb(content)
 
     def saveas(self, filename, index=None, verbosity=0):
         """
@@ -1660,6 +1643,8 @@ class WorkspaceOutput(object):
             A dictionary of strings whose keys indicate which portion of
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
+
+        within_report = self.options.get('within_report', False)
 
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
