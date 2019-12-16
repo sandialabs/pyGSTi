@@ -5,8 +5,8 @@ mpl_logger.setLevel(logging.WARNING)
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-from pygsti.baseobjs.basis import Basis
-from pygsti.objects import Label as L
+from pygsti.objects import Label as L, Basis
+from pygsti.objects import profiler
 
 import numpy as np
 from scipy import polyfit
@@ -132,7 +132,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
-        CM = pygsti.baseobjs.profiler._get_mem_usage()
+        CM = profiler._get_mem_usage()
 
         mdl_lsgst = pygsti.do_iterative_mc2gst(ds, mdl_clgst, self.lsgstStrings, verbosity=0,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
@@ -181,7 +181,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         mdl_clgst = mdl_clgst.depolarize(op_noise=0.02, spam_noise=0.02) # just to avoid infinity objective funct & jacs below
-        CM = pygsti.baseobjs.profiler._get_mem_usage()
+        CM = profiler._get_mem_usage()
 
         mdl_single_mlgst = pygsti.do_mlgst(ds, mdl_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                                           probClipInterval=(-1e2,1e2), verbosity=0)

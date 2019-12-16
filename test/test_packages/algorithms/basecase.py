@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-from pygsti.baseobjs import Basis
+from pygsti.objects import Basis
 
 import numpy as np
 from scipy import polyfit
@@ -10,7 +10,7 @@ import sys, os
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 class AlgorithmsBase(BaseTestCase):
-    def setUp(self):        
+    def setUp(self):
         super(AlgorithmsBase, self).setUp()
 
         self.model = std.target_model()
@@ -46,5 +46,5 @@ class AlgorithmsBase(BaseTestCase):
             ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
                                                              nSamples=10000,sampleError='binomial', seed=100)
             ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
-        
+
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
