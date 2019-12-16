@@ -56,20 +56,19 @@ except ImportError:
         return ret
 
 
-
 class OplessModelTree(_EvalTree):
     def __init__(self, circuit_list, lookup, outcome_lookup, cache=None):
         _EvalTree.__init__(self, circuit_list)
         self.element_indices = lookup
         self.outcomes = outcome_lookup
-        self.num_final_strs = len(circuit_list) #circuits
+        self.num_final_strs = len(circuit_list)  # circuits
         max_el_index = -1
         for elIndices in lookup.values():
-            max_i = elIndices.stop-1 if isinstance(elIndices, slice) else max(elIndices)
+            max_i = elIndices.stop - 1 if isinstance(elIndices, slice) else max(elIndices)
             max_el_index = max(max_el_index, max_i)
-        self.num_final_els = max_el_index+1
+        self.num_final_els = max_el_index + 1
         self.cache = cache
-        
+
 
 class OplessModel(_Model):
     """
@@ -91,7 +90,7 @@ class OplessModel(_Model):
             of a from that can be passed to `StateSpaceLabels.__init__`.
         """
         _Model.__init__(self, state_space_labels)
-        
+
         #Setting things the rest of pyGSTi expects but probably shouldn't...
         self.simtype = "opless"
         self.basis = None
@@ -153,19 +152,19 @@ class OplessModel(_Model):
         orig_pvec = self.to_vector()
         Np = self.num_params()
         probs0 = self.probs(circuit, clipTo, None)
-               
-        deriv = { k:_np.empty(Np, 'd') for k in probs0.keys() }
+
+        deriv = {k: _np.empty(Np, 'd') for k in probs0.keys()}
         for i in range(Np):
             p_plus_dp = orig_pvec.copy()
             p_plus_dp[i] += eps
             self.from_vector(p_plus_dp)
             probs1 = self.probs(circuit, clipTo, None)
-            for k,p0 in probs0.items():
+            for k, p0 in probs0.items():
                 deriv[k][i] = (probs1[k] - p0) / eps
         self.from_vector(orig_pvec)
-        
+
         if returnPr:
-            return {k:(p0,deriv[k]) for k in probs0.keys()}
+            return {k: (p0, deriv[k]) for k in probs0.keys()}
         else:
             return deriv
 
@@ -173,9 +172,9 @@ class OplessModel(_Model):
                                      distributeMethod="default", subcalls=[],
                                      dataset=None, verbosity=0):
         #TODO: choose these based on resources, and enable split trees
-        minSubtrees=0
-        numSubtreeComms=1
-        maxTreeSize=None
+        minSubtrees = 0
+        numSubtreeComms = 1
+        maxTreeSize = None
         evTree = self.bulk_evaltree(circuit_list, minSubtrees, maxTreeSize,
                                     numSubtreeComms, dataset, verbosity)
         return evTree, 0, 0, evTree.element_indices, evTree.outcomes
@@ -227,7 +226,7 @@ class OplessModel(_Model):
         return ret
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
-        if False and evalTree.cache: #TEST (disabled)
+        if False and evalTree.cache:  # TEST (disabled)
             cpolys = evalTree.cache
             ps = _bulk_eval_compact_polys(cpolys[0], cpolys[1], self._paramvec, (evalTree.num_final_elements(),))
             assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
@@ -235,12 +234,12 @@ class OplessModel(_Model):
             if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
             mxToFill[:] = ps
         else:
-            for i,c in enumerate(evalTree):
+            for i, c in enumerate(evalTree):
                 cache = evalTree.cache[i] if evalTree.cache else None
-                probs = self.probs(c,clipTo,cache)
+                probs = self.probs(c, clipTo, cache)
                 elInds = _slct.indices(evalTree.element_indices[i]) \
                     if isinstance(evalTree.element_indices[i], slice) else evalTree.element_indices[i]
-                for k,outcome in zip(elInds, evalTree.outcomes[i]):
+                for k, outcome in zip(elInds, evalTree.outcomes[i]):
                     mxToFill[k] = probs[outcome]
 
     def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None, clipTo=None,
@@ -249,8 +248,8 @@ class OplessModel(_Model):
 
         Np = self.num_params()
         p = self.to_vector()
-        
-        if False and evalTree.cache: #TEST (disabled)
+
+        if False and evalTree.cache:  # TEST (disabled)
             cpolys = evalTree.cache
             if prMxToFill is not None:
                 ps = _bulk_eval_compact_polys(cpolys[0], cpolys[1], p, (evalTree.num_final_elements(),))
@@ -260,19 +259,19 @@ class OplessModel(_Model):
                 prMxToFill[:] = ps
             dpolys = _compact_deriv(cpolys[0], cpolys[1], list(range(Np)))
             dps = _bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (evalTree.num_final_elements(), Np))
-            mxToFill[:,:] = dps
+            mxToFill[:, :] = dps
         else:
-            eps = 1e-6
-            for i,c in enumerate(evalTree):
+            # eps = 1e-6
+            for i, c in enumerate(evalTree):
                 cache = evalTree.cache[i] if evalTree.cache else None
-                probs0 = self.probs(c,clipTo,cache)
-                dprobs0 = self.dprobs(c,False,clipTo,cache)
+                probs0 = self.probs(c, clipTo, cache)
+                dprobs0 = self.dprobs(c, False, clipTo, cache)
                 elInds = _slct.indices(evalTree.element_indices[i]) \
                     if isinstance(evalTree.element_indices[i], slice) else evalTree.element_indices[i]
-                for k,outcome in zip(elInds, evalTree.outcomes[i]):
+                for k, outcome in zip(elInds, evalTree.outcomes[i]):
                     if prMxToFill is not None:
                         prMxToFill[k] = probs0[outcome]
-                    mxToFill[k,:] = dprobs0[outcome]
+                    mxToFill[k, :] = dprobs0[outcome]
 
                     #Do this to fill mxToFill instead of calling dprobs above as it's a little faster for finite diff?
                     #for j in range(Np):
@@ -286,7 +285,7 @@ class OplessModel(_Model):
     def __str__(self):
         raise "Derived classes should implement OplessModel.__str__ !!"
 
-    
+
 class SuccessFailModel(OplessModel):
     def __init__(self, state_space_labels, use_cache=False):
         OplessModel.__init__(self, state_space_labels)
@@ -300,7 +299,7 @@ class SuccessFailModel(OplessModel):
 
     def _success_dprob(self, circuit, cache):
         raise NotImplementedError("Derived classes should implement this!")
-        
+
     #FUTURE?: def _fill_circuit_probs(self, array_to_fill, outcomes, circuit, clipTo):
     def probs(self, circuit, clipTo=None, cache=None):
         """
@@ -323,7 +322,7 @@ class SuccessFailModel(OplessModel):
         """
         sp = self._success_prob(circuit, cache)
         if clipTo is not None: sp = _np.clip(sp, clipTo[0], clipTo[1])
-        return _OutcomeLabelDict([('success',sp), ('fail',1-sp)])
+        return _OutcomeLabelDict([('success', sp), ('fail', 1 - sp)])
 
     def dprobs(self, circuit, returnPr=False, clipTo=None, cache=None):
         """
@@ -357,47 +356,49 @@ class SuccessFailModel(OplessModel):
         if returnPr:
             sp = self._success_prob(circuit, cache)
             if clipTo is not None: sp = _np.clip(sp, clipTo[0], clipTo[1])
-            return { ('success',): (sp, dsp), ('fail',): (1-sp, -dsp) }
+            return {('success',): (sp, dsp), ('fail',): (1 - sp, -dsp)}
         else:
-            return { ('success',): dsp, ('fail',): -dsp }
+            return {('success',): dsp, ('fail',): -dsp}
 
     def poly_probs(self, circuit):
-        """ 
+        """
         Same as probs(...) but return polynomials.
         """
         sp = self._success_prob_poly(circuit)
-        return _OutcomeLabelDict([('success',sp), ('fail',_Polynomial({(): 1.0})-sp)])
+        return _OutcomeLabelDict([('success', sp), ('fail', _Polynomial({(): 1.0}) - sp)])
 
     def simplify_circuits(self, circuits, dataset=None):
-        rawdict = None #TODO - is this needed?
-        lookup = { i:slice(2*i,2*i+2,1) for i in range(len(circuits)) }
-        outcome_lookup = { i:(('success',),('fail',)) for i in range(len(circuits)) }
+        rawdict = None  # TODO - is this needed?
+        lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuits))}
+        outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuits))}
 
-        return rawdict, lookup, outcome_lookup, 2*len(circuits)
+        return rawdict, lookup, outcome_lookup, 2 * len(circuits)
 
     def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
                       numSubtreeComms=1, dataset=None, verbosity=0):
-        lookup = { i:slice(2*i,2*i+2,1) for i in range(len(circuit_list)) }
-        outcome_lookup = { i:(('success',),('fail',)) for i in range(len(circuit_list)) }
+        lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuit_list))}
+        outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuit_list))}
 
         if self.use_cache == "poly":
             #Do precomputation here
             polys = []
-            for i,circuit in enumerate(circuit_list):
-                print("Generating probs for circuit %d of %d" % (i+1,len(circuit_list)))
+            for i, circuit in enumerate(circuit_list):
+                print("Generating probs for circuit %d of %d" % (i + 1, len(circuit_list)))
                 probs = self.poly_probs(circuit)
                 polys.append(probs['success'])
                 polys.append(probs['fail'])
             compact_polys = compact_poly_list(polys)
             cache = compact_polys
-        elif self.use_cache == True:
-            cache = [ self._circuit_cache(circuit) for circuit in circuit_list]
+        elif self.use_cache is True:
+            cache = [self._circuit_cache(circuit) for circuit in circuit_list]
         else:
             cache = None
 
         return OplessModelTree(circuit_list, lookup, outcome_lookup, cache)
 
 #TODO: move this to polynomial.py??
+
+
 def compact_poly_list(list_of_polys):
     """Create a single vtape,ctape pair from a list of normal Polynomals """
     tapes = [p.compact() for p in list_of_polys]
@@ -430,13 +431,17 @@ class ErrorRatesModel(SuccessFailModel):
         self._idlename = idlename
         self._alias_dict = alias_dict.copy()
         self._gate_error_rate_indices = {k: i for i, k in enumerate(gate_error_rate_keys)}
-        self._readout_error_rate_indices = {k: i + len(gate_error_rate_keys) for i, k in enumerate(readout_error_rate_keys)}
-        self._paramvec = _np.concatenate((_np.array([_np.sqrt(error_rates['gates'][k]) for k in gate_error_rate_keys], 'd'),
-                                          _np.array([_np.sqrt(error_rates['readout'][k]) for k in readout_error_rate_keys], 'd')))
+        self._readout_error_rate_indices = {k: i + len(gate_error_rate_keys)
+                                            for i, k in enumerate(readout_error_rate_keys)}
+        self._paramvec = _np.concatenate(
+            (_np.array([_np.sqrt(error_rates['gates'][k]) for k in gate_error_rate_keys], 'd'),
+             _np.array([_np.sqrt(error_rates['readout'][k]) for k in readout_error_rate_keys], 'd'))
+        )
 
     def __str__(self):
         s = "Error Rates model with error rates: \n" + \
-            "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._gate_error_rate_indices.items()]) + "\n" + \
+            "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._gate_error_rate_indices.items()]) + \
+            "\n" + \
             "\n".join(["%s = %g" % (k, self._paramvec[i]**2) for k, i in self._readout_error_rate_indices.items()])
         return s
 
@@ -477,8 +482,8 @@ class ErrorRatesModel(SuccessFailModel):
 
         # else:
         layers_with_idles = [circuit.get_layer_with_idles(i, idleGateName=self._idlename) for i in range(depth)]
-        inds_to_mult_by_layer = [ _np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
-                                  for layer in layers_with_idles ]
+        inds_to_mult_by_layer = [_np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
+                                 for layer in layers_with_idles]
 
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]
@@ -490,14 +495,14 @@ class ErrorRatesModel(SuccessFailModel):
 
         return (width, depth, alpha, 1 / 2**width, inds_to_mult_by_layer)
 
-    
+
 class TwirledLayersModel(ErrorRatesModel):
 
     def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _success_prob(self, circuit, cache):
@@ -516,8 +521,9 @@ class TwirledLayersModel(ErrorRatesModel):
         lambda_all_layers = 1.0
         for inds_to_mult in inds_to_mult_by_layer[:-1]:
             lambda_all_layers *= 1 - alpha * (1 - prod(sp[inds_to_mult]))
-        #lambda_all_layers = prod([(1 - alpha * (1 - prod(sp[inds_to_mult]))) for inds_to_mult in inds_to_mult_by_layer[:-1]])
-        
+        # lambda_all_layers = prod([(1 - alpha * (1 - prod(sp[inds_to_mult])))
+        #                           for inds_to_mult in inds_to_mult_by_layer[:-1]])
+
         # The readout success probability.
         successprob_readout = prod(sp[inds_to_mult_by_layer[-1]])
         # THe success probability of the circuit.
@@ -527,12 +533,13 @@ class TwirledLayersModel(ErrorRatesModel):
 
     def _success_dprob(self, circuit, cache):
         pvec = self._paramvec**2
-        dpvec_dparams = 2*self._paramvec
-        
+        dpvec_dparams = 2 * self._paramvec
+
         if cache is None:
             cache = self._circuit_cache(circuit)
 
-        # p = product_layers( 1 - alpha * (1 - prod_[inds4layer](1- param)) ) * (prod_[inds4LASTlayer](1 - param) - 1/2**width)
+        # p = product_layers(1 - alpha * (1 - prod_[inds4layer](1 - param))) * \
+        #     (prod_[inds4LASTlayer](1 - param) - 1 / 2**width)
         # Note: indices cannot be repeated in a layer, i.e. either a given index appears one or zero times in inds4layer
 
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = cache
@@ -540,24 +547,26 @@ class TwirledLayersModel(ErrorRatesModel):
         deriv = _np.zeros(len(pvec), 'd')
 
         nLayers = len(inds_to_mult_by_layer)
-        lambda_per_layer = _np.empty(nLayers,'d')
-        for i,inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
+        lambda_per_layer = _np.empty(nLayers, 'd')
+        for i, inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
             lambda_per_layer[i] = 1 - alpha * (1 - prod(sp[inds_to_mult]))
-            
+
         successprob_readout = prod(sp[inds_to_mult_by_layer[-1]])
-        lambda_per_layer[nLayers-1] = successprob_readout - one_over_2_width
-        lambda_all_layers = prod(lambda_per_layer) # includes readout factor as last layer
+        lambda_per_layer[nLayers - 1] = successprob_readout - one_over_2_width
+        lambda_all_layers = prod(lambda_per_layer)  # includes readout factor as last layer
 
         #All layers except last
-        for i,inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
+        for i, inds_to_mult in enumerate(inds_to_mult_by_layer[:-1]):
             lambda_all_but_current_layer = lambda_all_layers / lambda_per_layer[i]
-            for ind in inds_to_mult: # for each such ind, when we take deriv wrt this index, we need to differentiate this layer, etc.
-                deriv[ind] += lambda_all_but_current_layer * alpha * (prod(sp[inds_to_mult]) / sp[ind]) * -1.0 # what if sp[ind] == 0?
+            # for each such ind, when we take deriv wrt this index, we need to differentiate this layer, etc.
+            for ind in inds_to_mult:
+                deriv[ind] += lambda_all_but_current_layer * alpha * \
+                    (prod(sp[inds_to_mult]) / sp[ind]) * -1.0  # what if sp[ind] == 0?
 
         #Last layer
         lambda_all_but_current_layer = lambda_all_layers / lambda_per_layer[-1]
         for ind in inds_to_mult_by_layer[-1]:
-            deriv[ind] += lambda_all_but_current_layer * (successprob_readout / sp[ind]) * -1.0 # what if sp[ind] == 0?
+            deriv[ind] += lambda_all_but_current_layer * (successprob_readout / sp[ind]) * -1.0  # what if sp[ind] == 0?
 
         return deriv * dpvec_dparams
 
@@ -579,7 +588,7 @@ class TwirledGatesModel(ErrorRatesModel):
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt
-        
+
     def _success_prob(self, circuit, cache):
         """
         todo
@@ -604,14 +613,13 @@ class TwirledGatesModel(ErrorRatesModel):
 
         return successprob_circuit
 
-
     def _success_dprob(self, circuit, cache):
         """
         todo
         """
         pvec = self._paramvec**2
-        dpvec_dparams = 2*self._paramvec
-        
+        dpvec_dparams = 2 * self._paramvec
+
         if cache is None:
             cache = self._circuit_cache(circuit)
 
@@ -622,27 +630,29 @@ class TwirledGatesModel(ErrorRatesModel):
 
         # The depolarizing constant for the full sequence of twirled gates.
         lambda_all_layers = prod(lambda_ops[all_inds_to_mult])
-        for i,n in enumerate(all_inds_to_mult_cnt):
-            deriv[i] = n * lambda_all_layers / lambda_ops[i] * -alpha  #-alpha = d(lambda_ops/dparam)
-            
+        for i, n in enumerate(all_inds_to_mult_cnt):
+            deriv[i] = n * lambda_all_layers / lambda_ops[i] * -alpha  # -alpha = d(lambda_ops/dparam)
+
         # The readout success probability.
         readout_deriv = _np.zeros(len(pvec), 'd')
         successprob_readout = prod(sp[readout_inds_to_mult])
         for ind in readout_inds_to_mult:
-            readout_deriv[ind] = (successprob_readout / sp[ind]) * -1.0 # what if sp[ind] == 0?
-        
+            readout_deriv[ind] = (successprob_readout / sp[ind]) * -1.0  # what if sp[ind] == 0?
+
         # The success probability of the circuit.
         #successprob_circuit = lambda_all_layers * (successprob_readout - one_over_2_width) + one_over_2_width
-        return (deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv) * dpvec_dparams  # product rule
+
+        # product rule
+        return (deriv * (successprob_readout - one_over_2_width) + lambda_all_layers * readout_deriv) * dpvec_dparams
 
 
 class AnyErrorCausesFailureModel(ErrorRatesModel):
 
-    def __init__(self, error_rates, nQubits, state_space_labels=None,  alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -658,7 +668,7 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         todo
         """
         pvec = self._paramvec**2
-                
+
         if cache is None:
             cache = self._circuit_cache(circuit)
 
@@ -671,14 +681,13 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
 
         return successprob_circuit
 
-
     def _success_dprob(self, circuit, cache):
         """
         todo
         """
         pvec = self._paramvec**2
-        dpvec_dparams = 2*self._paramvec
-                
+        dpvec_dparams = 2 * self._paramvec
+
         if cache is None:
             cache = self._circuit_cache(circuit)
 
@@ -686,7 +695,7 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         sp = 1.0 - pvec
         successprob_circuit = prod(sp[all_inds_to_mult])
         deriv = _np.zeros(len(pvec), 'd')
-        for i,n in enumerate(all_inds_to_mult_cnt):
+        for i, n in enumerate(all_inds_to_mult_cnt):
             deriv[i] = n * successprob_circuit / sp[i] * -1.0
 
         return deriv * dpvec_dparams
@@ -698,7 +707,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels, 
+        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -733,8 +742,8 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         todo
         """
         pvec = self._paramvec**2
-        dpvec_dparams = 2*self._paramvec
-        
+        dpvec_dparams = 2 * self._paramvec
+
         if cache is None:
             cache = self._circuit_cache(circuit)
 
@@ -743,11 +752,12 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
 
         successprob_all_ops = prod(sp[all_inds_to_mult])
         deriv = _np.zeros(len(pvec), 'd')
-        for i,n in enumerate(all_inds_to_mult_cnt):
+        for i, n in enumerate(all_inds_to_mult_cnt):
             deriv[i] = n * successprob_all_ops / sp[i] * -1.0
-        
+
         # The circuit succeeds if all ops succeed, and has a random outcome otherwise.
-        #successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width = const + (1-1/2**width)*successprobs_all_ops
+        # successprob_circuit = successprob_all_ops + (1 - successprob_all_ops) / 2**width
+        # = const + (1-1/2**width)*successprobs_all_ops
         deriv *= (1.0 - one_over_2_width)
         return deriv * dpvec_dparams
 

@@ -351,7 +351,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
         """
         Sets item without checking that the key is a properly formatted outcome tuple.
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
-        just a string. 
+        just a string.
         """
         super(OutcomeLabelDict, self).__setitem__(key, val)
 

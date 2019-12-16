@@ -96,7 +96,8 @@ class Chi2Function(ObjectiveFunction):
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
 
         if self.printer.verbosity < 4:  # Fast versions of functions
-            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0 and mdl.get_simtype() != "termgap":
+            if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0 \
+               and mdl.get_simtype() != "termgap":
                 # Fast un-regularized version
                 self.fn = self.simple_chi2
                 self.jfn = self.simple_jac
@@ -181,30 +182,11 @@ class Chi2Function(ObjectiveFunction):
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
 
         if oob_check:
-            #DEBUGGING HACK TODO REMOVE - make sure computed probs like in expected range
-            #achieved_sopm, max_sopm = self.mdl._fwdsim().bulk_get_achieved_and_max_sopm(self.evTree, self.comm, memLimit=None)
-            #gaps = max_sopm - achieved_sopm
-            #mdl_fullsim = self.mdl.fullsim_model #HACK for debugging
-            #db_probs = _np.zeros(self.probs.shape, 'd')
-            #mdl_fullsim.from_vector(vectorGS)
-            #mdl_fullsim.bulk_fill_probs(db_probs, self.mdl.fullsim_evaltree, self.probClipInterval, self.check, self.comm)
-            #for i,(fullsim_prob, approx_prob, errorbar) in enumerate(zip(db_probs, self.probs, gaps)):
-            #    if not (approx_prob - errorbar < fullsim_prob < approx_prob + errorbar):
-            #        print("Failed: %g < %g < %g" % (approx_prob - errorbar, fullsim_prob, approx_prob + errorbar))
-            #        #import bpdb; bpdb.set_trace()
-            #        assert(False),"STOP"
-            #heur_scale = self.probs / achieved_sopm
-            ##heur_scale = 1.0 / max_sopm
-            #print("Termgap MAX = %.5f AVG = %.5f ACTUAL = %.5f SCALED = %.5f FACTORS = %.2f %.2f" %
-            #      (max(gaps), _np.mean(gaps),
-            #       max(_np.abs(db_probs - self.probs)), _np.mean(gaps * heur_scale),
-            #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps),
-            #       max(_np.abs(db_probs - self.probs)) / _np.mean(gaps * heur_scale),
-            #      ))
-            #allowable_mean_gap = 0.01  # need to plumb to Model or fwd sim...
-            #END DEBUGGING
-
-            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree,
+                                                            self.probs,
+                                                            self.comm,
+                                                            memLimit=None,
+                                                            verbosity=1):
                 raise ValueError("Out of bounds!")  # signals LM optimizer
 
         v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
@@ -655,10 +637,10 @@ class LogLFunction(ObjectiveFunction):
         """
         Create a log-likelihood objective function using a simpler set of arguments.
         """
-        
+
         if circuit_list is None:
             circuit_list = list(dataset.keys())
-    
+
         if evaltree_cache and 'evTree' in evaltree_cache:
             evalTree = evaltree_cache['evTree']
             lookup = evaltree_cache['lookup']
@@ -668,15 +650,15 @@ class LogLFunction(ObjectiveFunction):
         else:
             #OLD: evalTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuit_list, dataset=dataset)
             evalTree, _, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
-                                                            circuit_list, comm, dataset=dataset)
-    
+                circuit_list, comm, dataset=dataset)
+
             #Fill cache dict if one was given
             if evaltree_cache is not None:
                 evaltree_cache['evTree'] = evalTree
                 evaltree_cache['lookup'] = lookup
                 evaltree_cache['outcomes_lookup'] = outcomes_lookup
-    
-        nEls = evalTree.num_final_elements()        
+
+        nEls = evalTree.num_final_elements()
         if evaltree_cache and 'cntVecMx' in evaltree_cache:
             countVecMx = evaltree_cache['cntVecMx']
             totalCntVec = evaltree_cache['totalCntVec']
@@ -686,14 +668,14 @@ class LogLFunction(ObjectiveFunction):
                     circuit_list, opLabelAliases)
             else:
                 ds_circuit_list = circuit_list
-            
+
             countVecMx = _np.empty(nEls, 'd')
             totalCntVec = _np.empty(nEls, 'd')
             for (i, opStr) in enumerate(ds_circuit_list):
                 cnts = dataset[opStr].counts
                 totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
                 countVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
-    
+
             #could add to cache, but we don't have option of circuitWeights
             # here yet, so let's be conservative and not do this:
             #if evaltree_cache is not None:
@@ -706,7 +688,6 @@ class LogLFunction(ObjectiveFunction):
                    forcefn_grad=None, poissonPicture=poissonPicture, shiftFctr=100, check=False,
                    comm=comm, profiler=None, verbosity=0)
 
-    
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
                  spam_penalty_factor, cntVecMx, totalCntVec, minProbClip,
                  radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
@@ -810,7 +791,7 @@ class LogLFunction(ObjectiveFunction):
 
             raise NotImplementedError(("Non-poisson-picture optimization must be done with something other than a "
                                        "least-squares optimizer and isn't implemented yet."))
-        
+
     def poisson_picture_logl(self, vectorGS):
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
@@ -882,10 +863,10 @@ class LogLFunction(ObjectiveFunction):
             assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
             v = _np.concatenate((v, _np.sqrt(forceVec)))
 
-        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)  #TODO: handle dummy profiler generation in simple_init??
+        # TODO: handle dummy profiler generation in simple_init??
+        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
-
 
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -1009,7 +990,11 @@ class LogLFunction(ObjectiveFunction):
                                  self.check, self.comm)
 
         if oob_check:
-            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree, self.probs, self.comm, memLimit=None, verbosity=1):
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree,
+                                                            self.probs,
+                                                            self.comm,
+                                                            memLimit=None,
+                                                            verbosity=1):
                 raise ValueError("Out of bounds!")  # signals LM optimizer
 
         S = self.minusCntVecMx / self.min_p + self.totalCntVec
@@ -1355,21 +1340,16 @@ class LogLWildcardFunction(ObjectiveFunction):
         self.jfn = None  # no jacobian yet
 
         #calling fn(...) initializes the members of self.logl_objfn
-        logl_at_base = self.logl_objfn.fn(base_pt)
         self.probs = self.logl_objfn.probs.copy()
 
     def logl_wildcard(self, Wvec):
         tm = _time.time()
         self.wildcard_budget.from_vector(Wvec)
-        self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
-                                          self.logl_objfn.circuitsToUse, self.logl_objfn.lookup, self.wildcard_budget_precomp)
-
-        #DEBUG!!!
-        #if _np.linalg.norm(self.logl_objfn.probs - self.logl_objfn.freqs) > 1e-6:
-        #    import bpdb; bpdb.set_trace()
-        #    self.wildcard_budget.update_probs(self.probs, self.logl_objfn.probs, self.logl_objfn.freqs,
-        #                                      self.logl_objfn.circuitsToUse, self.logl_objfn.lookup)
+        self.wildcard_budget.update_probs(self.probs,
+                                          self.logl_objfn.probs,
+                                          self.logl_objfn.freqs,
+                                          self.logl_objfn.circuitsToUse,
+                                          self.logl_objfn.lookup,
+                                          self.wildcard_budget_precomp)
 
         return self.logl_objfn._poisson_picture_v_from_probs(tm)
-        #return self.logl_objfn.v_from_probs_fn(tm)
-

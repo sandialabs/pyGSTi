@@ -79,10 +79,10 @@ spec_format = 'ibmq-v2019'
 #                       ('Q11','Q3'),
 #                       ('Q4','Q10'),
 #                       ('Q5','Q9')]
-    
-#     if subset is None:    
+
+#     if subset is None:
 #         return cnot_edge_list
-    
+
 #     else:
 #         subset_cnot_edge_list = []
 #         for cnot_edge in cnot_edge_list:

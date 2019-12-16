@@ -33,7 +33,6 @@ from pprint import pprint as _pprint
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
-
 def in_ipython_notebook():
     """Returns true if called from within an IPython/jupyter notebook"""
     try:
@@ -48,7 +47,6 @@ def display_ipynb(content):
     """Render HTML content to an IPython notebook cell display"""
     from IPython.core.display import display, HTML
     display(HTML(content))
-
 
 def enable_plotly_pickling():
     """
@@ -302,6 +300,8 @@ class Workspace(object):
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
         self.ErrgenTable = makefactory(_wt.ErrgenTable)
         self.GaugeRobustErrgenTable = makefactory(_wt.GaugeRobustErrgenTable)
+        self.GaugeRobustModelTable = makefactory(_wt.GaugeRobustModelTable)
+        self.GaugeRobustMetricTable = makefactory(_wt.GaugeRobustMetricTable)
         self.NQubitErrgenTable = makefactory(_wt.NQubitErrgenTable)
         self.StandardErrgenTable = makefactory(_wt.StandardErrgenTable)
 
@@ -1933,7 +1933,8 @@ class WorkspaceTable(WorkspaceOutput):
                                               output_dir=output_dir)
 
                 if switched_item_mode == 'separate files':
-                    raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                    raise NotImplementedError(
+                        'separate-files mode is no longer supported (or needed) for the html render type')
                 else:
                     #otherwise just add plot handers (table_dict['js']) to divJS for later
                     divJS.append(table_dict['js'])
@@ -1949,7 +1950,8 @@ class WorkspaceTable(WorkspaceOutput):
                 # creates JS for everything: plot creation, switchboard init, autosize
 
             elif switched_item_mode == 'separate files':
-                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                raise NotImplementedError(
+                    'separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2143,7 +2145,7 @@ class WorkspaceTable(WorkspaceOutput):
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
-                                       verbosity=verbosity)
+                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
             self.switchboards = saved_switchboards
@@ -2379,7 +2381,8 @@ class WorkspacePlot(WorkspaceOutput):
                     js = self._form_plot_js(plotID, '\n'.join(divJS), base['js'])
 
             elif switched_item_mode == 'separate files':
-                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                raise NotImplementedError(
+                    'separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2512,7 +2515,7 @@ class WorkspacePlot(WorkspaceOutput):
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
-                                       verbosity=verbosity)
+                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
             self.switchboards = saved_switchboards
@@ -2637,7 +2640,6 @@ class WorkspaceText(WorkspaceOutput):
 
             divHTML = []
             divIDs = []
-            divJS = []
 
             for i, text in enumerate(self.texts):
                 textDivID = textID + "_%d" % i
@@ -2649,7 +2651,8 @@ class WorkspaceText(WorkspaceOutput):
                     text_dict = text.render("html", textDivID)
 
                 if switched_item_mode == 'separate files':
-                    raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                    raise NotImplementedError(
+                        'separate-files mode is no longer supported (or needed) for the html render type')
                 #else: divJS is unused
 
                 divHTML.append(text_dict['html'])
@@ -2663,7 +2666,8 @@ class WorkspaceText(WorkspaceOutput):
                 # creates JS for everything: plot creation, switchboard init, autosize
 
             elif switched_item_mode == 'separate files':
-                raise NotImplementedError('separate-files mode is no longer supported (or needed) for the html render type')
+                raise NotImplementedError(
+                    'separate-files mode is no longer supported (or needed) for the html render type')
             else:
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
@@ -2823,7 +2827,7 @@ class WorkspaceText(WorkspaceOutput):
             qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
-                                       verbosity=verbosity)
+                                        verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
             self.switchboards = saved_switchboards

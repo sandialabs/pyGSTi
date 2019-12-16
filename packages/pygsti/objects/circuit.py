@@ -44,21 +44,22 @@ from ..tools import slicetools as _slct
 # c[:,'Q0'] = ('Gx','Gy','','Gx') # assigns the Q0 line
 # c[1:3,'Q0'] = ('Gx','Gy') # assigns to a part of the Q0 line
 
+
 def _np_to_quil_def_str(name, input_array):
     """
     Write a DEFGATE block for RQC quil for an arbitrary one- or two-qubit unitary gate.
     (quil/pyquil currently does not offer support for arbitrary n-qubit gates for
     n>2.)
-    
+
     Parameters
     ----------
     name : str
         The name of the gate (e.g., 'Gc0' for the 0th Clifford gate)
-    
+
     input_array : array_like
-        The representation of the gate as a unitary map.  
+        The representation of the gate as a unitary map.
         E.g., for name = 'Gc0',input_array = np.array([[1,0],[0,1]])
-    
+
     Returns
     -------
     output : str
@@ -68,10 +69,11 @@ def _np_to_quil_def_str(name, input_array):
     output = 'DEFGATE {}:\n'.format(name)
     for line in input_array:
         output += '    '
-        output += ', '.join(map(_num_to_rqc_str,line))
+        output += ', '.join(map(_num_to_rqc_str, line))
         output += '\n'
     return output
-    
+
+
 def _num_to_rqc_str(num):
     """Convert float to string to be included in RQC quil DEFGATE block
     (as written by _np_to_quil_def_str)."""
@@ -84,12 +86,12 @@ def _num_to_rqc_str(num):
         imag_part = _np.imag(num)
         if imag_part < 0:
             sgn = '-'
-            imag_part = imag_part*-1
+            imag_part = imag_part * -1
         elif imag_part > 0:
             sgn = '+'
         else:
             assert False
-        return '{}{}{}i'.format(real_part,sgn,imag_part)
+        return '{}{}{}i'.format(real_part, sgn, imag_part)
 
 
 def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_return_list=True):
@@ -172,7 +174,7 @@ class Circuit(object):
     def fromtup(cls, tup):
         if '@' in tup:
             k = tup.index('@')
-            return cls(tup[0:k], tup[k+1:])
+            return cls(tup[0:k], tup[k + 1:])
         else:
             return cls(tup)
 
@@ -431,7 +433,7 @@ class Circuit(object):
     @property
     def tup(self):
         """ This Circuit as a standard Python tuple of layer Labels and line labels."""
-        if self._line_labels in (('*',),()): #No line labels
+        if self._line_labels in (('*',), ()):  # No line labels
             return self.layertup
         else:
             return self.layertup + ('@',) + self._line_labels
@@ -2396,7 +2398,7 @@ class Circuit(object):
     def width(self):
         """
         The circuit width. This is the number of qubits on which the circuit
-        acts. This includes qubits that only idle, but are included as part 
+        acts. This includes qubits that only idle, but are included as part
         of the circuit according to self.line_labels.
 
         Returns
@@ -2766,7 +2768,7 @@ class Circuit(object):
             circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
             (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
             that qubit has Rigetti label 2.)
-        
+
         gate_declarations : dict, optional
             If not None, a dictionary that provides unitary maps for particular gates that
             are not already in the quil syntax.
@@ -2803,7 +2805,7 @@ class Circuit(object):
 
         if gate_declarations is not None:
             for gate_lbl in gate_declarations.keys():
-                quil += _np_to_quil_def_str(gate_lbl,gate_declarations[gate_lbl])
+                quil += _np_to_quil_def_str(gate_lbl, gate_declarations[gate_lbl])
 
         depth = self.num_layers()
 
@@ -2886,7 +2888,9 @@ class Circuit(object):
 
         return quil
 
-    def convert_to_openqasm(self, num_qubits=None, gatename_conversion=None, qubit_conversion=None, block_between_layers=True):  # TODO
+    def convert_to_openqasm(self, num_qubits=None,
+                            gatename_conversion=None, qubit_conversion=None,
+                            block_between_layers=True):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -3142,7 +3146,7 @@ class CompressedCircuit(object):
         if not isinstance(circuit, Circuit):
             raise ValueError("CompressedCircuits can only be created from existing Circuit objects")
         self._tup = CompressedCircuit.compress_op_label_tuple(
-            circuit.tup, minLenToCompress, maxPeriodToLookFor)
+            circuit.layertup, minLenToCompress, maxPeriodToLookFor)
         self._str = circuit.str
         self._line_labels = circuit.line_labels
 

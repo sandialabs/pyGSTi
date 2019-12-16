@@ -445,14 +445,16 @@ class OpModel(Model):
             c = _termfwdsim.TermForwardSimulator
             if sim_type == "termorder":
                 assert(all([k in ('max_order', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
-                kwargs['mode'] = "taylor_order"
+                kwargs['mode'] = "taylor-order"
                 if 'max_order' not in kwargs: kwargs['max_order'] = 1
                 if 'cache' not in kwargs: kwargs['cache'] = None  # Needed?
 
             else:  # termgap and termdirect
-                assert(all([k in ('desired_perr', 'allowed_perr', 'max_paths_per_outcome', 'max_order',
-                                  'min_term_mag', 'perr_heuristic', 'max_term_stages', 'path_fraction_threshold',
-                                  'oob_check_interval', 'cache') for k in kwargs.keys()])), "Invalid sim_type arguments!"
+                assert(all(
+                    [k in ('desired_perr', 'allowed_perr', 'max_paths_per_outcome', 'max_order',
+                           'min_term_mag', 'perr_heuristic', 'max_term_stages', 'path_fraction_threshold',
+                           'oob_check_interval', 'cache') for k in kwargs.keys()]
+                )), "Invalid sim_type arguments!"
                 kwargs['mode'] = "pruned" if (sim_type == "termgap") else "direct"
                 if 'desired_perr' not in kwargs: kwargs['desired_perr'] = 0.01
                 if 'allowed_perr' not in kwargs: kwargs['allowed_perr'] = 0.1

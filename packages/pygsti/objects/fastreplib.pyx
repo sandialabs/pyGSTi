@@ -40,9 +40,10 @@ cdef double LARGE = 1000000000
 # a very high term weight which won't help (at all) a
 # path get included in the selected set of paths.
 
-cdef double SMALL = 1e-10
-# a small number which is used as a path weight when the
-# true path magnitude is zero.
+cdef double SMALL = 1e-5
+# a number which is used in place of zero within the
+# product of term magnitudes to keep a running path
+# magnitude from being zero (and losing memory of terms).
 
 
 #Use 64-bit integers
@@ -1374,31 +1375,32 @@ cdef class PolyRep:
         return ret
 
     #Get coeffs with tuples of variable indices, not just "ints" - not currently needed
-    #@property
-    #def coeffs(self):
-    #    cdef INT indx, nxt, i;
-    #    cdef INT divisor = self.c_poly._max_num_vars + 1
-    #    ret = {}
-    #    cdef vector[INT].iterator vit
-    #    cdef unordered_map[PolyVarsIndex, complex].iterator it = self.c_poly._coeffs.begin()
-    #    while(it != self.c_poly._coeffs.end()):
-    #        i_tup = []
-    #        i_vec = deref(it).first._parts
-    #    
-    #        # inline: int_to_vinds(indx)
-    #        vit = i_vec.begin()
-    #        while(vit != i_vec.end()):
-    #            indx = deref(vit)
-    #            while indx != 0:
-    #                nxt = indx / divisor
-    #                i = indx - nxt * divisor
-    #                i_tup.append(i-1)
-    #                indx = nxt
-    #                
-    #        ret[tuple(i_tup)] = deref(it).second
-    #        inc(it)
-    #        
-    #    return ret
+    @property
+    def coeffs(self):
+        cdef INT indx, nxt, i;
+        cdef INT divisor = self.c_poly._max_num_vars + 1
+        ret = {}
+        cdef vector[INT].iterator vit
+        cdef unordered_map[PolyVarsIndex, complex].iterator it = self.c_poly._coeffs.begin()
+        while(it != self.c_poly._coeffs.end()):
+            i_tup = []
+            i_vec = deref(it).first._parts
+        
+            # inline: int_to_vinds(indx)
+            vit = i_vec.begin()
+            while(vit != i_vec.end()):
+                indx = deref(vit)
+                while indx != 0:
+                    nxt = indx / divisor
+                    i = indx - nxt * divisor
+                    i_tup.append(i-1)
+                    indx = nxt
+                inc(vit)
+                    
+            ret[tuple(i_tup)] = deref(it).second
+            inc(it)
+            
+        return ret
 
     def compact_complex(self):
         cdef INT i,l, iTerm, nVarIndices=0;
@@ -1662,6 +1664,7 @@ cdef class SVTermRep:
 
     def mapvec_indices_inplace(self, mapvec):
         self.coeff.mapvec_indices_inplace(mapvec)
+        self.compact_coeff = self.coeff.compact_complex()  #b/c indices have been updated!
 
     @property
     def magnitude(self):
@@ -3037,8 +3040,6 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel.pyterm_references:
-            #if termrep.compact_coeff is None:
-            #    termrep.compact_coeff = termrep.coeff.compact_complex() # v,c
             coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
@@ -3567,7 +3568,8 @@ cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_S
 cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_lists,
                       vector[vector_INT_ptr]& foat_indices_per_op, INT num_elabels,
                       vector[INT]& nops, vector[INT]& E_indices, vector[double]& pathmags, vector[INT]& nPaths,
-                      INT incd, double log_thres, double current_mag, double current_logmag, INT order, INT max_npaths):
+                      INT incd, double log_thres, double current_mag, double current_logmag, INT order, INT max_npaths,
+                      INT current_nzeros):
     """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
     cdef INT i, j, k, orig_bi, orig_bn
     cdef INT n = b.size()
@@ -3590,29 +3592,26 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
 
         logmag = current_logmag + (deref(oprep_lists[i])[b[i]]._logmagnitude - deref(oprep_lists[i])[b[i]-1]._logmagnitude)
         if logmag >= log_thres:
-            #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
-            #if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
-            #    mag = 0
-            #else:
-            #    mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
             numerator = deref(oprep_lists[i])[b[i]]._magnitude
             denom = deref(oprep_lists[i])[b[i]-1]._magnitude
-            if numerator == 0: numerator = SMALL
-            if denom == 0: denom = SMALL
+            nzeros = current_nzeros
+            if denom == 0:                 
+                denom = SMALL; nzeros -= 1
+            if numerator == 0:
+                numerator = SMALL; nzeros += 1
             mag = current_mag * (numerator / denom)
-
+            
             ## fn_visitpath(b, mag, i) ##            
-            pathmags[E_indices[b[n-1]]] += mag
+            if nzeros == 0:
+                pathmags[E_indices[b[n-1]]] += mag
             nPaths[E_indices[b[n-1]]] += 1
-            #if E_indices[b[n-1]] == 0:  # TODO REMOVE
-            #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[b[i]-1]._magnitude, incd, i, "*1"
             if nPaths[E_indices[b[n-1]]] == max_npaths: return True
             #print("Adding ",b)
             ## --------------------------
 
             #add any allowed paths beneath this one
             if count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops,
-                           E_indices, pathmags, nPaths, i, log_thres, mag, logmag, sub_order, max_npaths): 
+                           E_indices, pathmags, nPaths, i, log_thres, mag, logmag, sub_order, max_npaths, nzeros): 
                 return True
             
         elif sub_order <= 1:
@@ -3625,18 +3624,16 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
             for j in deref(foat_indices_per_op[i]):
                 if j >= orig_bi:
                     b[i] = j
-                    #OLD: doesn't correctly work when calling sub-function b/c mag can be set == 0 and needs to be "revived"
-                    #mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
-                    #    current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
-                    
+                    nzeros = current_nzeros
                     numerator = deref(oprep_lists[i])[b[i]]._magnitude
                     denom = deref(oprep_lists[i])[orig_bi-1]._magnitude
-                    if numerator == 0: numerator = SMALL
                     if denom == 0: denom = SMALL
-                    mag = current_mag * (numerator / denom)
+                    #if numerator == 0: nzeros += 1  # not needed b/c we just leave numerator = 0
+                    mag = current_mag * (numerator / denom)  # OK if mag == 0 as it's not passed to any recursive calls
 
                     ## fn_visitpath(b, mag, i) ##
-                    pathmags[E_indices[b[n-1]]] += mag
+                    if nzeros == 0:
+                        pathmags[E_indices[b[n-1]]] += mag
                     nPaths[E_indices[b[n-1]]] += 1
                     #if E_indices[b[n-1]] == 0:  # TODO REMOVE
                     #    print nPaths[E_indices[b[n-1]]], mag, pathmags[E_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[orig_bi-1]._magnitude, incd, i, "*2"
@@ -3650,10 +3647,15 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
                         orig_bn = b[n-1]
                         for k in range(1,num_elabels):
                             b[n-1] = k
-                            mag2 = mag * (deref(oprep_lists[n-1])[b[n-1]]._magnitude / deref(oprep_lists[i])[orig_bn]._magnitude)
+                            numerator = deref(oprep_lists[n-1])[b[n-1]]._magnitude
+                            denom = deref(oprep_lists[i])[orig_bn]._magnitude
+                            if denom == 0: denom = SMALL
+
+                            mag2 = mag * (numerator / denom)
 
                             ## fn_visitpath(b, mag2, n-1) ##
-                            pathmags[E_indices[b[n-1]]] += mag2
+                            if nzeros == 0:  # if numerator was zero above, mag2 will be zero, so we still won't add anyting (good)
+                                pathmags[E_indices[b[n-1]]] += mag2
                             nPaths[E_indices[b[n-1]]] += 1
                             #if E_indices[b[n-1]] == 0:  # TODO REMOVE
                             #    print nPaths[E_indices[b[n-1]]], mag2, pathmags[E_indices[b[n-1]]], b, mag, incd, i, " *3"
@@ -3688,7 +3690,7 @@ cdef void count_paths_upto_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lis
     #print("Adding ",b)
     ## -------------------------------
     count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices, pathmags, nPaths,
-                0, log_thres, current_mag, current_logmag, 0, max_npaths)
+                0, log_thres, current_mag, current_logmag, 0, max_npaths, 0)
     return
 
 

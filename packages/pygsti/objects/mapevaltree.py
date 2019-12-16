@@ -704,7 +704,8 @@ class MapEvalTree(EvalTree):
                 [0] + [len(elabelList) for elabelList in subTree.simplified_circuit_elabels])[:-1]
             subTree.elabels, subTree.eLbl_indices_per_circuit, subTree.final_indices_per_circuit = \
                 subTree._build_elabels_lookups()
-            subTree.rholabels = self.rholabels  # don't bother trying to thin this out for now - just take the parent's list
+            # don't bother trying to thin this out for now - just take the parent's list
+            subTree.rholabels = self.rholabels
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             #t2 = _time.time() #REMOVE

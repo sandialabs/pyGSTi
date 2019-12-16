@@ -57,7 +57,7 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
     for i, speckey in enumerate(speckeys):
         specs[speckey] = load_benchmarkspec(directory + '/specs/{}.txt'.format(i))
 
-    summary_data = {'global': {}, 'pass': {}, 'aux':{}}
+    summary_data = {'global': {}, 'pass': {}, 'aux': {}}
     predictionkeys = [pkey.name for pkey in _os.scandir(directory + '/predictions') if pkey.is_dir()]
     predicted_summary_data = {pkey: {} for pkey in predictionkeys}
 
@@ -96,7 +96,8 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
                     psd = _json.load(f)
                     predicted_summary_data[pkey][i][qubits] = {}
                     for dtype, data in psd.items():
-                        predicted_summary_data[pkey][i][qubits][dtype] = {int(key): value for (key, value) in data.items()}
+                        predicted_summary_data[pkey][i][qubits][dtype] = {
+                            int(key): value for (key, value) in data.items()}
 
     benchmarker = _benchmarker.Benchmarker(specs, ds=multidsdict, summary_data=summary_data,
                                            predicted_summary_data=predicted_summary_data,
@@ -138,8 +139,10 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
         globaldict['dscomparator']['aggregate_nsigma_threshold'] = benchmarker.dscomparator.aggregate_nsigma_threshold
         globaldict['dscomparator']['aggregate_pVal'] = benchmarker.dscomparator.aggregate_pVal
         globaldict['dscomparator']['aggregate_pVal_threshold'] = benchmarker.dscomparator.aggregate_pVal_threshold
-        globaldict['dscomparator']['inconsistent_datasets_detected'] = benchmarker.dscomparator.inconsistent_datasets_detected
-        globaldict['dscomparator']['number_of_significant_sequences'] = int(benchmarker.dscomparator.number_of_significant_sequences)
+        globaldict['dscomparator']['inconsistent_datasets_detected'] = \
+            benchmarker.dscomparator.inconsistent_datasets_detected
+        globaldict['dscomparator']['number_of_significant_sequences'] = int(
+            benchmarker.dscomparator.number_of_significant_sequences)
         globaldict['dscomparator']['significance'] = benchmarker.dscomparator.significance
 
     else:
@@ -188,30 +191,6 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
 
 
 def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtypes=[], verbosity=1):
-    
-    # try:
-    #     _os.makedirs(outfolder)
-    #     if verbosity > 0:
-    #         print(" - Created `" + outfolder + "` folder to store the summary data files.")
-    # except:
-    #     if verbosity > 0:
-    #         print(" - `" + outfolder + "` folder already exists. Will write data into that folder.")
-
-    # if len(predictions) > 0:
-
-    #     for pkey in predictions.keys():
-    #         if pkey not in predictions_outfolder.keys():
-    #             predictions_outfolder[pkey] = 'predictions/' + pkey + '/summarydata'
-
-    #     for folder in predictions_outfolder.values():
-    #         try:
-    #             _os.makedirs(folder)
-    #             if verbosity > 0:
-    #                 print(" - Created `" + folder + "` folder to store the predicted summary data files.")
-    #         except:
-    #             if verbosity > 0:
-    #                 print(" - `" + folder + "` folder already exists. Will write predictions data into that folder.")
-
     benchmarker = load_data_into_benchmarker(dsfilenames, verbosity=verbosity)
     if test_stability:
         if verbosity > 0:
@@ -224,47 +203,17 @@ def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtype
 
     return benchmarker
 
-    # with open(outfolder + '/readme.txt', 'w') as f:
-    #     f.write('# This folder contains RB summary data\n')
-    #     f.write('# The RB specifications (read in as RBSpec objects) are in files RBSpec*.txt where * is an integer\n')
-    #     f.write('# The summary data for the RB specification in RBSpec*.txt is stored in rbsummary_data*-#.txt where # is an integer running from 0 to the number of different qubits sets that simul., independent RB was performed on.\n')
-
-    # for i, spec in enumerate(benchmarker._specs):
-    #     structure = spec.get_structure()
-    #     if storecircuits:
-    #         circuitsfilename = outfolder + '/circuits{}.txt'.format(i)
-    #     else: 
-    #         circuitsfilename = None
-    #     write_rb_spec_to_file(spec, outfolder + '/rbspec' + str(i) + '.txt', circuitsfilename=circuitsfilename, warning=0)
-    #     for pfolder in predictions_outfolder.values():
-    #         write_rb_spec_to_file(spec, pfolder + '/rbspec' + str(i) + '.txt', warning=0)
-
-    #     for j, qubits in enumerate(structure):
-    #         if len(benchmarker.multids) == 1:
-    #             write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][0], outfolder + '/rbsummarydata' + str(i) + '-'
-    #                                             + str(j) + '.txt')
-    #         else:
-    #             for key in benchmarker.multids.keys():
-    #                 write_rb_summary_data_to_file(benchmarker._summary_data[i][qubits][key], outfolder + '/rbsummarydata' + str(i) + '-'
-    #                                                 + str(j) + '-' + str(key) + '.txt')
-    #         for pkey, pfolder in predictions_outfolder.items():
-    #             write_rb_summary_data_to_file(benchmarker.predicted_summary_data[pkey][i][qubits],
-    #                                           pfolder + '/rbsummarydata' + str(i) + '-' + str(j) + '.txt')
-
-    # return
-
 # Todo : just make this and create_benchmarker a single function? This import has been superceded
 # by load_benchmarker
+
+
 def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None, summarydatasets_folder=None,
-                predicted_summarydatasets_folders={}, verbosity=1):
+                               predicted_summarydatasets_folders={}, verbosity=1):
     """
     todo
 
     """
-    if len(predicted_summarydatasets_folders) == 0:
-        predictions = False
     if len(predicted_summarydatasets_folders) > 0:
-        predictions = True
         assert(summarydatasets_folder is not None)
         #if len(predicted_summarydatasets_folders) > 1:
         #    raise NotImplementedError("This is not yet supported!")
@@ -282,7 +231,11 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
 
             if dsfn[-4:] == '.txt':
                 print(dsfn)
-                mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn, collisionAction='keepseparate', recordZeroCnts=False, ignoreZeroCountLines=False, verbosity=verbosity))
+                mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn,
+                                                           collisionAction='keepseparate',
+                                                           recordZeroCnts=False,
+                                                           ignoreZeroCountLines=False,
+                                                           verbosity=verbosity))
 
             elif dsfn[-4:] == '.pkl':
 
@@ -295,7 +248,6 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
 
             else:
                 raise ValueError("File must end in .pkl or .txt!")
-
 
         # # If it isn't a string, we assume that `dsfilenames` is a DataSet.
         # else:
@@ -316,9 +268,9 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
             specfns_forcirc = mds.auxInfo[circ]['spec']
             # The RB length for this circuit
             # try:
-                # l = mds.auxInfo[circ]['depth']
+            # l = mds.auxInfo[circ]['depth']
             # except:
-                # l = mds.auxInfo[circ]['length']
+            # l = mds.auxInfo[circ]['length']
             # The target bitstring for this circuit.
             # target = mds.auxInfo[circ]['target']
 
@@ -434,7 +386,8 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
 
             for pkey, predsds_filenames in predsds_filenames_dict.items():
                 for sdsfn, qubits in zip(predsds_filenames, structure):
-                    predicted_summary_data[pkey][i][qubits] = import_rb_summary_data(sdsfn, len(qubits), verbosity=verbosity)
+                    predicted_summary_data[pkey][i][qubits] = import_rb_summary_data(
+                        sdsfn, len(qubits), verbosity=verbosity)
 
         benchmarker = _benchmarker.Benchmarker(rbspecdict, ds=None, summary_data=summary_data,
                                                predicted_summary_data=predicted_summary_data)
@@ -579,7 +532,7 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                     else:
                         assert(datatype == 'success_counts'), "The data format appears to be success counts!"
 
-                elif line[0: numqubits + 2] == ['rblength',] + ['hd{}c'.format(i) for i in range(numqubits + 1)]:
+                elif line[0: numqubits + 2] == ['rblength', ] + ['hd{}c'.format(i) for i in range(numqubits + 1)]:
 
                     auxind = numqubits + 2
                     if datatype == 'auto':
@@ -588,7 +541,7 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                         assert(datatype == 'hamming_distance_counts'), "The data format appears to be Hamming " + \
                             "distance counts!"
 
-                elif line[0: numqubits + 2] == ['rblength',] + ['hd{}p'.format(i) for i in range(numqubits + 1)]:
+                elif line[0: numqubits + 2] == ['rblength', ] + ['hd{}p'.format(i) for i in range(numqubits + 1)]:
 
                     auxind = numqubits + 2
                     if datatype == 'auto':
@@ -703,7 +656,7 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
                         for key in auxlabels:
                             aux[key][l] = []
 
-                    hamming_distance_counts[l].append([float(line[1 + i]) for i in range(0,numqubits + 1)])
+                    hamming_distance_counts[l].append([float(line[1 + i]) for i in range(0, numqubits + 1)])
 
                     if len(aux) > 0:
                         assert(line[numqubits + 2] == '#'), "Auxillary data must be divided from the core data!"
@@ -732,7 +685,7 @@ def import_rb_summary_data(filename, numqubits, datatype='auto', verbosity=1):
 def write_rb_summary_data_to_file(ds, filename):
     """
     todo
-    
+
     """
     numqubits = ds.number_of_qubits
     with open(filename, 'w') as f:
@@ -772,7 +725,7 @@ def write_rb_summary_data_to_file(ds, filename):
                     else:
                         dataline = str(l) + ' ' + str(c)
                 elif ds.datatype == 'hamming_distance_counts':
-                    dataline = str(l) + ''.join([' ' + str(c[i]) for i in range(0,numqubits + 1)])
+                    dataline = str(l) + ''.join([' ' + str(c[i]) for i in range(0, numqubits + 1)])
 
                 if len(auxlabels) > 0:
                     dataline += ' #' + ''.join([' ' + str(ds.aux[key][l][i]) for key in auxlabels])
@@ -785,7 +738,7 @@ def write_rb_summary_data_to_file(ds, filename):
 # # todo update this.
 # def import_rb_summary_data(filenames, numqubits, type='auto', verbosity=1):
 #     """
-#     todo : redo 
+#     todo : redo
 #     Reads in one or more text files of summary RB data into a RBSummaryDataset object. This format
 #     is appropriate for using the RB analysis functions. The datafile(s) should have one of the
 #     following two formats:

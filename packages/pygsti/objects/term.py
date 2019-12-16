@@ -171,8 +171,9 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
 
         #OLD - when we used full objects
         #premultiplied_terms = [ a * factor for factor in terms ]  # terms are expected to have their magnitudes set.
-        #cache[order_to_build] = [ t for t in (compose_terms_with_mag((previous_order_term, a_factor),
-        #                                                             previous_order_term.magnitude * a_factor.magnitude)
+        # cache[order_to_build] = [t for t in (compose_terms_with_mag(
+        #     (previous_order_term, a_factor),
+        #     previous_order_term.magnitude * a_factor.magnitude)
         #                                      for previous_order_term in previous_order_terms
         #                                      for a_factor in premultiplied_terms) if t.magnitude >= min_term_mag ]
 
@@ -195,7 +196,9 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
 
 
 def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
-    """Variant of EmbeddedOp.__init__ used to create embeddedop reps without a corresponding embedded op - for use w/terms where there are just reps """
+    """Variant of EmbeddedOp.__init__ used to create embeddedop reps without a corresponding embedded op.
+    For use w/terms where there are just reps
+    """
 
     opDim = state_space_labels.dim
 
@@ -486,8 +489,10 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
                    for oprep in self._rep.pre_ops]
         post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
                     for oprep in self._rep.post_ops]
-        return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
-                                                  self._rep.pre_state, self._rep.post_state, None, None, pre_ops, post_ops))
+        return self.__class__(self._rep.__class__(
+            self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
+            self._rep.pre_state, self._rep.post_state, None, None, pre_ops, post_ops
+        ))
 
 
 class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
@@ -497,8 +502,10 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
                    for oprep in self._rep.pre_ops]
         post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
                     for oprep in self._rep.post_ops]
-        return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
-                                                  None, None, self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
+        return self.__class__(self._rep.__class__(
+            self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
+            None, None, self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops
+        ))
 
 
 class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
@@ -555,6 +562,7 @@ class HasPolyCoefficient(object):
             "Coefficient (type %s) must implements `map_indices_inplace`" % str(type(self.coeff))
         #self.coeff.map_indices_inplace(mapfn)
         self._rep.coeff.map_indices_inplace(mapfn)
+        raise NotImplementedError("Need to add compact_complex() update as mapvec version does now")
 
     def mapvec_indices_inplace(self, mapvec):
         """
@@ -575,7 +583,7 @@ class HasPolyCoefficient(object):
         None
         """
         #self.coeff.mapvec_indices_inplace(mapvec)
-        self._rep.coeff.mapvec_indices_inplace(mapvec)
+        self._rep.mapvec_indices_inplace(mapvec)
 
 
 class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):

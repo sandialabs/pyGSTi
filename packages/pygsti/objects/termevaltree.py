@@ -449,8 +449,12 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
 
-            achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel, elabels, opstr, self.pathset.highmag_termrep_cache,
-                                                                calc.sos.opcache, current_threshold)
+            achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel,
+                                                                elabels,
+                                                                opstr,
+                                                                self.pathset.highmag_termrep_cache,
+                                                                calc.sos.opcache,
+                                                                current_threshold)
             achieved_sopm.extend(list(achieved))
             max_sopm.extend(list(maxx))
 
@@ -475,7 +479,8 @@ class TermEvalTree(EvalTree):
         k = 0  # current element position for loop below
 
         opcache = calc.sos.opcache
-        for iCircuit in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        # uses *linear* evaluation order so we know final indices are sequential
+        for iCircuit in self.get_evaluation_order():
             circuit = self[iCircuit]
 
             rholabel = circuit[0]
@@ -570,12 +575,15 @@ class TermEvalTree(EvalTree):
         rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
         nC = self.num_final_strings()
         max_npaths = calc.max_paths_per_outcome * self.num_final_elements()
-        print("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g (target=%.4g, #circuits=%d, #failed=%d)" %
+        print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
+               "(target=%.4g, #circuits=%d, #failed=%d)") %
               (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
         print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
               (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
-        return UnsplitTreeTermPathSet(self, thresholds, repcache, circuitsetup_cache, tot_npaths, max_npaths, num_failed)
+        return UnsplitTreeTermPathSet(self, thresholds, repcache,
+                                      circuitsetup_cache, tot_npaths,
+                                      max_npaths, num_failed)
 
     def get_paths_set(self):
         """TODO: docstring """
