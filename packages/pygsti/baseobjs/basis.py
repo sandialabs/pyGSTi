@@ -8,8 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from functools import partial
-from functools import wraps
+from functools import partial, wraps, lru_cache
 from itertools import product, chain
 
 import copy as _copy
@@ -26,7 +25,6 @@ import scipy.sparse.linalg as _spsl
 import math
 
 from .basisconstructors import _basisConstructorDict
-from .basisconstructors import cache_by_hashed_args
 
 
 #Helper functions
@@ -415,7 +413,7 @@ class Basis(object):
         else:
             return _np.dot(self.get_from_std(), from_basis.get_to_std())
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def is_normalized(self):
         '''
         Check if a basis is normalized, meaning that Tr(Bi Bi) = 1.0.
@@ -437,7 +435,7 @@ class Basis(object):
         else:
             raise ValueError("I don't know what normalized means for elndim == %d!" % self.elndim)
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def get_to_std(self):
         '''
         Retrieve the matrix that transforms a vector from this basis to the
@@ -459,7 +457,7 @@ class Basis(object):
             toStd[:, i] = vel
         return toStd
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def get_from_std(self):
         '''
         Retrieve the matrix that transforms vectors from the standard basis
@@ -494,7 +492,7 @@ class Basis(object):
                 Adag = A.transpose().conjugate()  # shape (size, dim)
                 return _np.dot(_inv(_np.dot(Adag, A)), Adag)
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def get_to_element_std(self):
         '''
         Get the matrix that transforms vectors in this basis (with length equal
@@ -517,7 +515,7 @@ class Basis(object):
         assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of get_to_element_std"
         return self.get_to_std()
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def get_from_element_std(self):  # OLD: get_expand_mx(self):
         '''
         Get the matrix that transforms vectors in the "element space" - that
@@ -919,7 +917,7 @@ class DirectSumBasis(LazyBasis):
             self._lazy_build_vector_elements()
         return self._vector_elements
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def get_to_std(self):
         '''
         Retrieve the matrix that transforms a vector from this basis to the
@@ -943,7 +941,7 @@ class DirectSumBasis(LazyBasis):
             toStd[:, i] = vel
         return toStd
 
-    @cache_by_hashed_args
+    @lru_cache(maxsize=128)
     def get_to_element_std(self):
         '''
         Get the matrix that transforms vectors in this basis (with length equal

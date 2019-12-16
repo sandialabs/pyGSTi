@@ -13,30 +13,22 @@ from time import time
 from contextlib import contextmanager
 from collections import defaultdict
 from datetime import datetime
-from functools import wraps
+from functools import lru_cache
+from ..tools.legacytools import deprecated_fn
 import warnings
 
 # note that this decorator ignores **kwargs
 
 
+@deprecated_fn('functools.lru_cache')
 def cache_by_hashed_args(obj):
-    """ Decorator for caching a function values """
-    cache = obj.cache = {}
+    """ Decorator for caching a function values
 
-    @wraps(obj)
-    def _memoizer(*args, **kwargs):
-        if len(kwargs) > 0:
-            #instead of an error, just don't cache in this case
-            warnings.warn('Cannot currently memoize on kwargs')
-            return obj(*args, **kwargs)
-        try:
-            if args not in cache:
-                cache[args] = obj(*args, **kwargs)
-            return cache[args]
-        except TypeError:
-            print('Warning: arguments for cached function could not be cached')
-            return obj(*args, **kwargs)
-    return _memoizer
+    .. deprecated:: v0.9.8.3
+       :func:`cache_by_hashed_args` will be removed in pyGSTi
+       v0.9.9. Use :func:`functools.lru_cache` instead.
+    """
+    return lru_cache(maxsize=128)(obj)
 
 
 @contextmanager
