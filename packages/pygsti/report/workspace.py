@@ -29,17 +29,22 @@ from . import merge_helpers as _merge
 
 from pprint import pprint as _pprint
 
-try:
-    from IPython.core.display import display as _display
-    from IPython.core.display import HTML as _HTML
-    #from IPython.display import clear_output as _clear_output
-    in_ipython_notebook = True
-except ImportError:
-    in_ipython_notebook = False
-
-
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
+def in_ipython_notebook():
+    """Returns true if called from within an IPython/jupyter notebook"""
+    try:
+        # 'ZMQInteractiveShell' in a notebook, 'TerminalInteractiveShell' in IPython REPL, and fails elsewhere.
+        shell = get_ipython().__class__.__name__
+        return shell == 'ZMQInteractiveShell'
+    except NameError:
+        return False
+
+
+def display_ipynb(content):
+    """Render HTML content to an IPython notebook cell display"""
+    from IPython.core.display import display, HTML
+    display(HTML(content))
 
 def enable_plotly_pickling():
     """
@@ -354,7 +359,7 @@ class Workspace(object):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `init_notebook_mode` from inside an IPython Notebook.')
 
         global _PYGSTI_WORKSPACE_INITIALIZED
@@ -516,7 +521,7 @@ class Workspace(object):
             "      }); });\n"
             "</script>\n")
 
-        _display(_HTML(script))  # single call to display keeps things simple
+        display_ipynb(script)  # single call to display keeps things simple
 
         _PYGSTI_WORKSPACE_INITIALIZED = True
 
@@ -1100,7 +1105,7 @@ class Switchboard(_collections.OrderedDict):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         #if self.widget is None:
@@ -1113,7 +1118,7 @@ class Switchboard(_collections.OrderedDict):
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
         #self.widget.value = content
-        _display(_HTML(content))  # self.widget)
+        display_ipynb(content)  # self.widget)
 
     def view(self, switches="all", idsuffix="auto"):
         """
@@ -1229,14 +1234,14 @@ class SwitchboardView(object):
         -------
         None
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
-        _display(_HTML(content))
+        display_ipynb(content)
 
 
 class SwitchValue(object):
@@ -1507,7 +1512,7 @@ class WorkspaceOutput(object):
         """
         Display this object within an iPython notebook.
         """
-        if not in_ipython_notebook:
+        if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         self.set_render_options(global_requirejs=True,
@@ -1517,7 +1522,7 @@ class WorkspaceOutput(object):
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
 
-        _display(_HTML(content))
+        display_ipynb(content)
 
     def saveas(self, filename, index=None, verbosity=0):
         """
@@ -1638,6 +1643,8 @@ class WorkspaceOutput(object):
             A dictionary of strings whose keys indicate which portion of
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
+
+        within_report = self.options.get('within_report', False)
 
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']
