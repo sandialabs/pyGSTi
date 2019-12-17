@@ -71,7 +71,7 @@ jobs:
       install:
         - pip install flake8
       script:
-        - python -m flake8 --statistics $LINTOPTS packages/pygsti
+        - python -m flake8 --statistics $LINTOPTS pygsti
     - <<: *lint-job
       name: "Critical errors"
       env: LINTOPTS="--config=.flake8-critical"

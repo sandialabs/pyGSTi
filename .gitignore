@@ -45,8 +45,8 @@ test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 *.toc
 build/*
 dist/*
-packages/pygsti.egg-info
-packages/pyGSTi.egg-info
+/pygsti.egg-info
+/pyGSTi.egg-info
 parsetab_string.py
 
 
