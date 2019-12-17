@@ -31,6 +31,7 @@ from pprint import pprint as _pprint
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
+
 def in_ipython_notebook():
     """Returns true if called from within an IPython/jupyter notebook"""
     try:
@@ -45,6 +46,7 @@ def display_ipynb(content):
     """Render HTML content to an IPython notebook cell display"""
     from IPython.core.display import display, HTML
     display(HTML(content))
+
 
 def enable_plotly_pickling():
     """
@@ -1644,7 +1646,7 @@ class WorkspaceOutput(object):
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
 
-        within_report = self.options.get('within_report', False)
+        # within_report = self.options.get('within_report', False)
 
         #Build list of CSS classes for the created divs
         classes = ['single_switched_value']

@@ -787,8 +787,8 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
 
     else:
         # A basic check for the validity of pdist.
-        if not isinstance(pdist, str): assert(len(pdist) == len(oneQgatenames)
-                                            ), "The pdist probability distribution is invalid!"
+        if not isinstance(pdist, str):
+            assert(len(pdist) == len(oneQgatenames)), "The pdist probability distribution is invalid!"
 
         # Find out how many 1-qubit gate names there are
         num_oneQgatenames = len(oneQgatenames)
