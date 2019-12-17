@@ -16,7 +16,7 @@ from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from ..tools import symplectic as _symp
 from ..tools import listtools as _lt
-from ..baseobjs import Label as _Label
+from .label import Label as _Label
 from .circuit import Circuit as _Circuit
 from .qubitgraph import QubitGraph as _QubitGraph
 

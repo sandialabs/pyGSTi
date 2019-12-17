@@ -2,53 +2,11 @@ import numpy as np
 
 from ..util import BaseCase
 
-from pygsti.baseobjs import basis
+from pygsti.objects import basis
+import pygsti.tools.basistools as bt
 
 
 class BasisTester(BaseCase):
-    def test_basis_element_labels(self):
-        basisnames = ['gm', 'std', 'pp']
-
-        # One dimensional gm
-        self.assertEqual([''], basis.basis_element_labels('gm', 1))
-
-        # Two dimensional
-        expectedLabels = [
-            ['I', 'X', 'Y', 'Z'],
-            ['(0,0)', '(0,1)', '(1,0)', '(1,1)'],
-            ['I', 'X', 'Y', 'Z']
-        ]
-        labels = [basis.basis_element_labels(basisname, 4) for basisname in basisnames]
-        self.assertEqual(labels, expectedLabels)
-
-        with self.assertRaises(AssertionError):
-            basis.basis_element_labels('asdklfasdf', 4)
-
-        # Non power of two for pp labels:
-        with self.assertRaises(ValueError):
-            label = basis.basis_element_labels('pp', 9)
-            # TODO assert correctness
-
-        # Single list arg for pp labels
-        self.assertEqual(basis.basis_element_labels('pp', 4), ['I', 'X', 'Y', 'Z'])
-
-        # Four dimensional+
-        expectedLabels = [
-            ['I', 'X_{0,1}', 'X_{0,2}', 'X_{0,3}', 'X_{1,2}', 'X_{1,3}', 'X_{2,3}', 'Y_{0,1}', 'Y_{0,2}', 'Y_{0,3}',
-             'Y_{1,2}', 'Y_{1,3}', 'Y_{2,3}', 'Z_{1}', 'Z_{2}', 'Z_{3}'],
-            ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)',
-             '(3,0)', '(3,1)', '(3,2)', '(3,3)'],
-            ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ']
-        ]
-        labels = [basis.basis_element_labels(basisname, 16) for basisname in basisnames]
-        self.assertEqual(expectedLabels, labels)
-
-    def test_basis_longname(self):
-        longnames = {basis.basis_longname(b) for b in {'gm', 'std', 'pp', 'qt'}}
-        self.assertEqual(longnames, {'Gell-Mann basis', 'Matrix-unit basis', 'Pauli-Product basis', 'Qutrit basis'})
-        with self.assertRaises(KeyError):
-            basis.basis_longname('not a basis')
-
     def test_composite_basis(self):
         comp = basis.Basis.cast([('std', 4,), ('std', 1)])
         # TODO assert correctness
@@ -115,14 +73,14 @@ class BasisTester(BaseCase):
         # test a few aspects of a Basis object that other tests miss...
         b = basis.Basis.cast("pp", 4)
         beq = b.simple_equivalent()
-        longnm = basis.basis_longname(b)
-        lbls = basis.basis_element_labels(b, None)
+        longnm = bt.basis_longname(b)
+        lbls = bt.basis_element_labels(b, None)
 
-        raw_mxs = basis.basis_matrices("pp", 4)
+        raw_mxs = bt.basis_matrices("pp", 4)
         # TODO assert correctness for all
 
         with self.assertRaises(AssertionError):
-            basis.basis_matrices("foobar", 4)  # invalid basis name
+            bt.basis_matrices("foobar", 4)  # invalid basis name
 
         print("Dim = ", repr(b.dim))  # calls Dim.__repr__
 
@@ -142,7 +100,7 @@ class BasisTester(BaseCase):
         block_expeq = sparseBlockPP.simple_equivalent()
         # TODO assert correctness
 
-        raw_mxs = basis.basis_matrices("pp", 4, sparse=True)
+        raw_mxs = bt.basis_matrices("pp", 4, sparse=True)
 
         #test equality of bases with other bases and matrices
         self.assertEqual(sparsePP, sparsePP2)

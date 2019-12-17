@@ -15,7 +15,7 @@ import signal as _signal
 #from scipy.optimize import OptimizeResult as _optResult
 
 from ..tools import mpitools as _mpit
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
 _signal.signal(_signal.SIGINT, _signal.default_int_handler)

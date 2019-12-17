@@ -19,10 +19,7 @@ from . import jamiolkowski as _jam
 from . import matrixtools as _mt
 from . import lindbladtools as _lt
 from . import basistools as _bt
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import ExplicitBasis as _ExplicitBasis
-from ..baseobjs import DirectSumBasis as _DirectSumBasis
-from ..baseobjs.basis import basis_matrices as _basis_matrices
+from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -560,7 +557,7 @@ def unitarity(A, mxBasis="gm"):
 
     """
     d = int(round(_np.sqrt(A.shape[0])))
-    basisMxs = _basis_matrices(mxBasis, A.shape[0])
+    basisMxs = _bt.basis_matrices(mxBasis, A.shape[0])
 
     if _np.allclose(basisMxs[0], _np.identity(d, 'd')):
         B = A
@@ -1300,7 +1297,7 @@ def std_error_generators(dim, projection_type, projection_basis):
     d = int(_np.sqrt(d2))
 
     #Get a list of the basis matrices
-    mxs = _basis_matrices(projection_basis, d2)
+    mxs = _bt.basis_matrices(projection_basis, d2)
 
     assert(len(mxs) <= d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
     assert(_np.isclose(d * d, d2))  # d2 must be a perfect square
@@ -1747,14 +1744,14 @@ def lindblad_errgen_projections(errgen, ham_basis,
     if isinstance(ham_basis, _Basis):
         hamBasisMxs = ham_basis.elements
     elif isinstance(ham_basis, str):
-        hamBasisMxs = _basis_matrices(ham_basis, d2, sparse=sparse)
+        hamBasisMxs = _bt.basis_matrices(ham_basis, d2, sparse=sparse)
     else:
         hamBasisMxs = ham_basis
 
     if isinstance(other_basis, _Basis):
         otherBasisMxs = other_basis.elements
     elif isinstance(other_basis, str):
-        otherBasisMxs = _basis_matrices(other_basis, d2, sparse=sparse)
+        otherBasisMxs = _bt.basis_matrices(other_basis, d2, sparse=sparse)
     else:
         otherBasisMxs = other_basis
 
@@ -2545,7 +2542,7 @@ def rotation_gate_mx(r, mxBasis="gm"):
     assert(d**2 == len(r) + 1), "Invalid number of rotation angles"
 
     #get Pauli-product matrices (in std basis)
-    pp = _basis_matrices('pp', d**2)
+    pp = _bt.basis_matrices('pp', d**2)
     assert(len(r) == len(pp[1:]))
 
     #build unitary (in std basis)

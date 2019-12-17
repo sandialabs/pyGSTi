@@ -3,9 +3,8 @@ import unittest
 
 from ..util import BaseCase
 
-from pygsti.baseobjs.label import Label, CircuitLabel
 from pygsti.tools import symplectic
-from pygsti.objects import circuit, ProcessorSpec
+from pygsti.objects import circuit, ProcessorSpec, Label, CircuitLabel
 
 
 class CircuitTester(BaseCase):

@@ -1,4 +1,4 @@
-""" pyGSTi Tools Python Package """
+""" Defines GST exception classes """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,20 +8,12 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
-# the package namespace
-from .jamiolkowski import *
-from .listtools import *
-from .matrixtools import *
-from .lindbladtools import *
-from .likelihoodfns import *
-from .chi2fns import *
-from .basistools import *
-from .optools import *
-from .slicetools import *
-from .legacytools import *
-from .mpitools import parallel_apply, get_comm
-from .symplectic import *
-from .matrixmod2 import *
-from .hypothesis import *
-from .opttools import *
+
+class GSTRuntimeError(Exception):
+    """Gate Set Tomography run-time exception class."""
+    pass
+
+
+class GSTValueError(Exception):
+    """Gate Set Tomography value error exception class."""
+    pass

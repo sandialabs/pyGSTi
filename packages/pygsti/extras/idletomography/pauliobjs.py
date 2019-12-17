@@ -10,7 +10,7 @@
 
 import numpy as _np
 from ... import objects as _objs
-from ...baseobjs.label import Label as _Lbl
+from ...objects.label import Label as _Lbl
 
 #Helper function
 

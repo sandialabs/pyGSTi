@@ -4,7 +4,7 @@ import numpy as np
 
 import pygsti
 from pygsti.extras import rb
-from pygsti.baseobjs import Label
+from pygsti.objects import Label
 
 class RBTestCase(BaseTestCase):
     def test_rb_io_results_and_analysis(self):

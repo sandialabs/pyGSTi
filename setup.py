@@ -42,8 +42,8 @@ try:
             extra_link_args=["-std=c++11"]
         ),
         Extension(
-            "pygsti.baseobjs.fastcircuitparser",
-            sources=["packages/pygsti/baseobjs/fastcircuitparser.pyx"],
+            "pygsti.io.fastcircuitparser",
+            sources=["packages/pygsti/io/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
@@ -138,7 +138,7 @@ setup(name='pyGSTi',
       packages=[
           'pygsti',
           'pygsti.algorithms',
-          'pygsti.baseobjs',
+          'pygsti',
           'pygsti.construction',
           'pygsti.drivers',
           'pygsti.extras',

@@ -18,7 +18,7 @@ from . import modelmember as _gm
 from . import operation as _op
 from . import instrument as _instrument
 from . import povm as _povm
-from ..baseobjs import Label as _Lbl
+from .label import Label as _Lbl
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 

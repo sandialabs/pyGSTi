@@ -32,7 +32,7 @@ cimport cython
 #cdef extern from "Python.h":
 #    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
 
-from . import label as _lbl
+from ..objects import label as _lbl
 
 
 #Use 64-bit integers
@@ -56,7 +56,7 @@ def fast_parse_circuit(unicode code, bool create_subcircuits, bool integerize_ss
     #print "DB -FASTPARSE: ", code
 
     #cdef Py_UCS4* codep = PyUnicode_4BYTE_DATA(<PyObject*>code)
-    
+
     while(True):
         if i == end: break
         #print "TOP at:",code[i:]
@@ -111,7 +111,7 @@ cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool 
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment
-        
+
     else:
         lbls,i,segment = get_next_simple_lbl(s,start,end, integerize_sslbls, segment)
         exponent, i = parse_exponent(s,i,end)
@@ -126,7 +126,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     cdef double time
     cdef bool is_int
     #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
-    
+
     i = start
     c = s[i]
     if segment == 0 and s[i] == u'r':
@@ -156,7 +156,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
             raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
     else:
         raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
-        
+
     #z = re.match("([a-z0-9_]+)((?:;[a-zQ0-9_\./]+)*)((?::[a-zQ0-9_]+)*)(![0-9\.]+)?", s[i:end])
     tup = []
     while i < end:
@@ -166,7 +166,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         else:
             break
     name = s[start:i]; last = i
-    
+
     args = []
     while i < end and s[i] == u';':
         i += 1
@@ -178,7 +178,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
             else:
                 break
         args.append(s[last:i]); last = i
-        
+
 
     sslbls = []
     while i < end and s[i] == u':':

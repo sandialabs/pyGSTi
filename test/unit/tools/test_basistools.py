@@ -7,10 +7,53 @@ from ..util import BaseCase
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lindbladtools
 
-from pygsti.baseobjs import Basis, ExplicitBasis, DirectSumBasis
+from pygsti.objects.basis import Basis, ExplicitBasis, DirectSumBasis
 
 
 class BasisToolsTester(BaseCase):
+    def test_basis_element_labels(self):
+        basisnames = ['gm', 'std', 'pp']
+
+        # One dimensional gm
+        self.assertEqual([''], bt.basis_element_labels('gm', 1))
+
+        # Two dimensional
+        expectedLabels = [
+            ['I', 'X', 'Y', 'Z'],
+            ['(0,0)', '(0,1)', '(1,0)', '(1,1)'],
+            ['I', 'X', 'Y', 'Z']
+        ]
+        labels = [bt.basis_element_labels(basisname, 4) for basisname in basisnames]
+        self.assertEqual(labels, expectedLabels)
+
+        with self.assertRaises(AssertionError):
+            bt.basis_element_labels('asdklfasdf', 4)
+
+        # Non power of two for pp labels:
+        with self.assertRaises(ValueError):
+            label = bt.basis_element_labels('pp', 9)
+            # TODO assert correctness
+
+        # Single list arg for pp labels
+        self.assertEqual(bt.basis_element_labels('pp', 4), ['I', 'X', 'Y', 'Z'])
+
+        # Four dimensional+
+        expectedLabels = [
+            ['I', 'X_{0,1}', 'X_{0,2}', 'X_{0,3}', 'X_{1,2}', 'X_{1,3}', 'X_{2,3}', 'Y_{0,1}', 'Y_{0,2}', 'Y_{0,3}',
+             'Y_{1,2}', 'Y_{1,3}', 'Y_{2,3}', 'Z_{1}', 'Z_{2}', 'Z_{3}'],
+            ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)',
+             '(3,0)', '(3,1)', '(3,2)', '(3,3)'],
+            ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ']
+        ]
+        labels = [bt.basis_element_labels(basisname, 16) for basisname in basisnames]
+        self.assertEqual(expectedLabels, labels)
+
+    def test_basis_longname(self):
+        longnames = {bt.basis_longname(b) for b in {'gm', 'std', 'pp', 'qt'}}
+        self.assertEqual(longnames, {'Gell-Mann basis', 'Matrix-unit basis', 'Pauli-Product basis', 'Qutrit basis'})
+        with self.assertRaises(KeyError):
+            bt.basis_longname('not a basis')
+
     def test_expand_contract(self):
         # matrix that operates on 2x2 density matrices, but only on the 0-th and 3-rd
         # elements which correspond to the diagonals of the 2x2 density matrix.

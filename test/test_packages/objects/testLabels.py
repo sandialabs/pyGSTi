@@ -7,7 +7,8 @@ import os
 
 import pygsti.construction as pc
 from pygsti.io import jsoncodec
-from pygsti.objects import Label as L
+from pygsti.objects import label
+from pygsti.objects.label import Label as L
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -32,7 +33,7 @@ class LabelTestCase(BaseTestCase):
         for l in labels:
             native = l.tonative()
             print(l, " (", type(l), "): native =",native)
-            if isinstance(l, pygsti.baseobjs.label.LabelTupTup):
+            if isinstance(l, label.LabelTupTup):
                 print("  comps: ", ", ".join(["%s (%s)" % (c,str(type(c))) for c in l.components]))
 
             j = jsoncodec.encode_obj(l,False)

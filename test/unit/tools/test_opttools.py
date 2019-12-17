@@ -5,7 +5,7 @@ from unittest import mock
 
 from ..util import BaseCase
 
-from pygsti.baseobjs import opttools as opt
+from pygsti.tools import opttools as opt
 
 
 class TestTimedBlock(BaseCase):

@@ -15,7 +15,6 @@ from types import ModuleType as _ModuleType
 from contextlib import contextmanager as _contextmanager
 
 from .. import objects as _objs
-from .. import baseobjs as _baseobjs
 from ..objects import circuit as _circuit
 
 
@@ -144,7 +143,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     if old_version <= totup("0.9.7.1"):
         class dummy_Basis(object):
             def __new__(cls):
-                replacement_obj = _baseobjs.basis.BuiltinBasis.__new__(_baseobjs.basis.BuiltinBasis)
+                replacement_obj = _objs.basis.BuiltinBasis.__new__(_objs.basis.BuiltinBasis)
                 return replacement_obj
 
             def __setstate__(self, state):
@@ -160,7 +159,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
                 assert(isinstance(dim, _numbers.Integral))
                 sparse = state['sparse'] if ('sparse' in state) else False
                 newBasis = _objs.BuiltinBasis(state['name'], int(dim), sparse)
-                self.__class__ = _baseobjs.basis.BuiltinBasis
+                self.__class__ = _objs.basis.BuiltinBasis
                 self.__dict__.update(newBasis.__dict__)
             else:
                 raise ValueError("Can only load old *builtin* basis objects!")
@@ -215,11 +214,10 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         dim = _ModuleType("dim")
         dim.Dim = dummy_Dim
         _sys.modules['pygsti.baseobjs.dim'] = dim
-        #OLD: _baseobjs.dim.Dim.__setstate__ = Dim_setstate
 
-        #_baseobjs.basis.saved_Basis = _baseobjs.basis.Basis
-        #_baseobjs.basis.Basis = dummy_Basis
-        _baseobjs.basis.Basis.__setstate__ = Basis_setstate
+        #_objs.basis.saved_Basis = _objs.basis.Basis
+        #_objs.basis.Basis = dummy_Basis
+        _objs.basis.Basis.__setstate__ = Basis_setstate
         _objs.circuit.Circuit.__setstate__ = Circuit_setstate
         _objs.labeldicts.StateSpaceLabels.__setstate__ = StateSpaceLabels_setstate
         _objs.circuit.CompressedCircuit.saved_expand = _objs.circuit.CompressedCircuit.expand
@@ -245,6 +243,15 @@ def enable_old_object_unpickling(old_version="0.9.6"):
 
         _objs.spamvec.SPAMVec.__setstate__ = SPAMVec_setstate
 
+        # Compatibility with refactored `baseobjs` API
+        _sys.modules['pygsti.baseobjs.smartcache'] = _objs.smartcache
+        _sys.modules['pygsti.baseobjs.verbosityprinter'] = _objs.verbosityprinter
+        _sys.modules['pygsti.baseobjs.profiler'] = _objs.profiler
+        _sys.modules['pygsti.baseobjs.protectedarray'] = _objs.protectedarray
+        _sys.modules['pygsti.baseobjs.objectivefns'] = _objs.objectivefns
+        _sys.modules['pygsti.baseobjs.basis'] = _objs.basis
+        _sys.modules['pygsti.baseobjs.label'] = _objs.label
+
     yield  # body of context-manager block
 
     if old_version <= totup("0.9.6"):
@@ -264,15 +271,11 @@ def enable_old_object_unpickling(old_version="0.9.6"):
 
         delattr(_objs.Circuit, '__setstate__')
         delattr(_objs.LindbladDenseOp, '__setstate__')
-        #delattr(_baseobjs.Dim,'__setstate__')
         delattr(_objs.modelmember.ModelMember, '__setstate__')
-
-        #_baseobjs.basis.Basis = _baseobjs.basis.saved_Basis
-        #del _sys.modules['pygsti.baseobjs.basis'].saved_Basis
 
     if old_version <= totup("0.9.7.1"):
         del _sys.modules['pygsti.baseobjs.dim']
-        delattr(_baseobjs.Basis, '__setstate__')
+        delattr(_objs.Basis, '__setstate__')
         delattr(_objs.labeldicts.StateSpaceLabels, '__setstate__')
         if hasattr(_objs.Circuit, '__setstate__'):  # b/c above block may have already deleted this
             delattr(_objs.Circuit, '__setstate__')
@@ -283,3 +286,11 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     if old_version < totup("0.9.9"):
         if hasattr(_objs.spamvec.SPAMVec, '__setstate__'):  # b/c above block may have already deleted this
             delattr(_objs.spamvec.SPAMVec, '__setstate__')
+
+        del _sys.modules['pygsti.baseobjs.smartcache']
+        del _sys.modules['pygsti.baseobjs.verbosityprinter']
+        del _sys.modules['pygsti.baseobjs.profiler']
+        del _sys.modules['pygsti.baseobjs.protectedarray']
+        del _sys.modules['pygsti.baseobjs.objectivefns']
+        del _sys.modules['pygsti.baseobjs.basis']
+        del _sys.modules['pygsti.baseobjs.label']

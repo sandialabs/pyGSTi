@@ -14,7 +14,7 @@ import warnings as _warnings
 from .. import tools as _tools
 from .. import objects as _objs
 
-from ..baseobjs import smart_cached
+from ..objects.smartcache import smart_cached
 
 
 def total_count_matrix(gsplaq, dataset):

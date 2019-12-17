@@ -16,7 +16,7 @@ import itertools as _itertools
 
 from ..objects import dataset as _ds
 from ..objects import labeldicts as _ld
-from ..baseobjs import label as _lbl
+from ..objects import label as _lbl
 from . import circuitconstruction as _gstrc
 
 from pprint import pprint

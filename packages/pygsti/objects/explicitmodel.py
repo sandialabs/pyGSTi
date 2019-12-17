@@ -43,10 +43,9 @@ from . import explicitcalc as _explicitcalc
 from . import simplifierhelper as _sh
 from . import layerlizard as _ll
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import BuiltinBasis as _BuiltinBasis
-from ..baseobjs import DirectSumBasis as _DirectSumBasis
-from ..baseobjs import Label as _Label
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from .label import Label as _Label
 
 
 class ExplicitOpModel(_mdl.OpModel):

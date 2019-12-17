@@ -24,7 +24,7 @@ import scipy.sparse.linalg as _spsl
 
 import math
 
-from .basisconstructors import _basisConstructorDict
+from ..tools.basisconstructors import _basisConstructorDict
 
 
 #Helper functions
@@ -129,7 +129,7 @@ class Basis(object):
         Basis
         """
         #print("DB: CAST = ",nameOrBasisOrMatrices,dim)
-        from ..objects.labeldicts import StateSpaceLabels as _SSLs
+        from .labeldicts import StateSpaceLabels as _SSLs
         if nameOrBasisOrMatrices is None:  # special case of empty basis
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)  # empty basis
         elif isinstance(nameOrBasisOrMatrices, Basis):
@@ -1271,8 +1271,8 @@ class EmbeddedBasis(LazyBasis):
         """ Take a dense or sparse basis matrix and embed it. """
         #LAZY building of elements (in case we never need them)
         if self.elndim == 2:  # then use EmbeddedOp to do matrix
-            from ..objects.operation import StaticDenseOp
-            from ..objects.operation import EmbeddedOp
+            from .operation import StaticDenseOp
+            from .operation import EmbeddedOp
             sslbls = self.state_space_labels.copy()
             sslbls.reduce_dims_densitymx_to_state()  # because we're working with basis matrices not gates
 
@@ -1346,83 +1346,3 @@ class EmbeddedBasis(LazyBasis):
         if builtinBasisName is None:
             builtinBasisName = self.embedded_basis.name  # default
         return BuiltinBasis(builtinBasisName, self.elsize, sparse=self.sparse)
-
-
-def basis_matrices(nameOrBasis, dim, sparse=False):
-    '''
-    Get the elements of the specifed basis-type which
-    spans the density-matrix space given by dim.
-
-    Parameters
-    ----------
-    name : {'std', 'gm', 'pp', 'qt'} or Basis
-        The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp), and Qutrit (qt).  If a Basis object, then
-        the basis matrices are contained therein, and its dimension is checked to
-        match dim.
-
-    dim : int
-        The dimension of the density-matrix space.
-
-    sparse : bool, optional
-        Whether any built matrices should be SciPy CSR sparse matrices
-        or dense numpy arrays (the default).
-
-    Returns
-    -------
-    list
-        A list of N numpy arrays each of shape (dmDim, dmDim),
-        where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
-        and N is the dimension of the density-matrix space,
-        equal to sum( block_dim_i^2 ).
-    '''
-    return Basis.cast(nameOrBasis, dim, sparse).elements
-
-
-def basis_longname(basis):
-    """
-    Get the "long name" for a particular basis,
-    which is typically used in reports, etc.
-
-    Parameters
-    ----------
-    basis : string or Basis object
-
-    Returns
-    -------
-    string
-    """
-    if isinstance(basis, Basis):
-        return basis.longname
-    return _basisConstructorDict[basis].longname
-
-
-def basis_element_labels(basis, dim):
-    """
-    Returns a list of short labels corresponding to to the
-    elements of the described basis.  These labels are
-    typically used to label the rows/columns of a box-plot
-    of a matrix in the basis.
-
-    Parameters
-    ----------
-    basis : {'std', 'gm', 'pp', 'qt'}
-        Which basis the model is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp) and Qutrit (qt).  If the basis is
-        not known, then an empty list is returned.
-
-    dimOrBlockDims : int or list, optional
-        Dimension of basis matrices.  If a list of integers,
-        then gives the dimensions of the terms in a
-        direct-sum decomposition of the density
-        matrix space acted on by the basis.
-
-    Returns
-    -------
-    list of strings
-        A list of length dim, whose elements label the basis
-        elements.
-    """
-    return Basis.cast(basis, dim).labels

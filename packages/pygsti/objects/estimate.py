@@ -13,7 +13,7 @@ import collections as _collections
 import warnings as _warnings
 import copy as _copy
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from .circuit import Circuit as _Circuit

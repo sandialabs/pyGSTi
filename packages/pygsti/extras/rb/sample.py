@@ -10,7 +10,7 @@
 
 from ...algorithms import compilers as _cmpl
 from ...objects import circuit as _cir
-from ...baseobjs import label as _lbl
+from ...objects import label as _lbl
 from ...tools import symplectic as _symp
 from ... import construction as _cnst
 from ... import objects as _objs

@@ -40,10 +40,9 @@ from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import BuiltinBasis as _BuiltinBasis
-from ..baseobjs import Label as _Label
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from .label import Label as _Label
 
 
 class Model(object):

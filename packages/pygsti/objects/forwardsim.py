@@ -16,7 +16,7 @@ import itertools as _itertools
 from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
-from ..baseobjs import DummyProfiler as _DummyProfiler
+from .profiler import DummyProfiler as _DummyProfiler
 from . import spamvec as _sv
 from . import operation as _op
 from . import labeldicts as _ld

@@ -10,7 +10,7 @@
 
 import numpy as _np
 import scipy.sparse as _sps
-from ..baseobjs.basis import basis_matrices
+from .basistools import basis_matrices
 from . import matrixtools as _mt
 
 

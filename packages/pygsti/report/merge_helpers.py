@@ -19,7 +19,7 @@ import subprocess as _subprocess
 from pathlib import Path
 
 from ..tools import timed_block as _timed_block
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def read_contents(filename):

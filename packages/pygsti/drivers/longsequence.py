@@ -23,8 +23,8 @@ from .. import objects as _objs
 from .. import io as _io
 from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
-from ..baseobjs import DummyProfiler as _DummyProfiler
-from ..baseobjs import objectivefns as _objfns
+from ..objects.profiler import DummyProfiler as _DummyProfiler
+from ..objects import objectivefns as _objfns
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0

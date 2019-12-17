@@ -12,7 +12,7 @@ import numpy as _np
 import copy as _copy
 
 from ..objects.circuit import Circuit as _Circuit
-from ..baseobjs import Label as _Label
+from ..objects.label import Label as _Label
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 

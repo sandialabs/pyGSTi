@@ -566,7 +566,7 @@ def _cptp_penalty_size(mdl):
     """
     Helper function - *same* as that in core.py.
     """
-    from ..baseobjs.objectivefns import _cptp_penalty_size as _core_cptp_penalty_size
+    from ..objects.objectivefns import _cptp_penalty_size as _core_cptp_penalty_size
     return _core_cptp_penalty_size(mdl)
 
 
@@ -574,7 +574,7 @@ def _spam_penalty_size(mdl):
     """
     Helper function - *same* as that in core.py.
     """
-    from ..baseobjs.objectivefns import _spam_penalty_size as _core_spam_penalty_size
+    from ..objects.objectivefns import _spam_penalty_size as _core_spam_penalty_size
     return _core_spam_penalty_size(mdl)
 
 
@@ -590,7 +590,7 @@ def _cptp_penalty(mdl, prefactor, opBasis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    from ..baseobjs.objectivefns import _cptp_penalty as _core_cptp_penalty
+    from ..objects.objectivefns import _cptp_penalty as _core_cptp_penalty
     return _core_cptp_penalty(mdl, prefactor, opBasis)
 
 
@@ -606,7 +606,7 @@ def _spam_penalty(mdl, prefactor, opBasis):
     numpy array
         a (real) 1D array of length _spam_penalty_size(mdl)
     """
-    from ..baseobjs.objectivefns import _spam_penalty as _core_spam_penalty
+    from ..objects.objectivefns import _spam_penalty as _core_spam_penalty
     return _core_spam_penalty(mdl, prefactor, opBasis)
 
 

@@ -14,11 +14,7 @@ import scipy.linalg as _spl
 from ..tools.optools import unitary_to_pauligate
 
 ## Pauli basis matrices
-sqrt2 = _np.sqrt(2)
-id2x2 = _np.array([[1, 0], [0, 1]])
-sigmax = _np.array([[0, 1], [1, 0]])
-sigmay = _np.array([[0, -1.0j], [1.0j, 0]])
-sigmaz = _np.array([[1, 0], [0, -1]])
+from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 sigmaii = _np.kron(id2x2, id2x2)
 sigmaix = _np.kron(id2x2, sigmax)

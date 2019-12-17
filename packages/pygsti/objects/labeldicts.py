@@ -16,7 +16,7 @@ import warnings as _warnings
 from . import spamvec as _sv
 from . import operation as _op
 from . import modelmember as _gm
-from ..baseobjs import Label as _Label
+from .label import Label as _Label
 
 
 class PrefixOrderedDict(_collections.OrderedDict):

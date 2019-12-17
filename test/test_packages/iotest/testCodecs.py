@@ -14,6 +14,7 @@ import pygsti
 from pygsti.construction import std1Q_XY as std
 import pygsti.io.json as json
 import pygsti.io.msgpack as msgpack
+from pygsti.objects.label import CircuitLabel
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -315,7 +316,7 @@ class TestCodecs(CodecsTestCase):
         ds = pygsti.obj.DataSet(outcomeLabels=('0','1'))
         c0 = pygsti.obj.Circuit(None,stringrep="[Gx:0Gy:1]")
         c = c0**2
-        self.assertTrue(isinstance(c.tup[0], pygsti.baseobjs.CircuitLabel))
+        self.assertTrue(isinstance(c.tup[0], CircuitLabel))
         self.assertEqual(c.str, "([Gx:0Gy:1])^2")
         ds.add_count_dict(c, {'0': 50, '1': 50})
         s = pickle.dumps(ds)

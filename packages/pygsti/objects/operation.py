@@ -31,12 +31,9 @@ from ..tools import lindbladtools as _lbt
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from . import stabilizer as _stabilizer
-from ..baseobjs import ProtectedArray as _ProtectedArray
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import BuiltinBasis as _BuiltinBasis
-from ..baseobjs import EmbeddedBasis as _EmbeddedBasis
-from ..baseobjs import ExplicitBasis as _ExplicitBasis
-from ..baseobjs.basis import basis_matrices as _basis_matrices
+from .protectedarray import ProtectedArray as _ProtectedArray
+from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, EmbeddedBasis as _EmbeddedBasis, \
+    ExplicitBasis as _ExplicitBasis
 
 from . import term as _term
 from .polynomial import Polynomial as _Polynomial
@@ -6800,9 +6797,6 @@ class LindbladErrorgen(LinearOperator):
 
         hamBasisMxs = self.ham_basis.elements
         otherBasisMxs = self.other_basis.elements
-        #OLD: these don't work if basis is empty (dim=0)
-        # OLD REMOVE: _basis_matrices(self.ham_basis, d2, sparse=self.sparse)
-        # OLD REMOVE: _basis_matrices(self.other_basis, d2, sparse=self.sparse)
 
         hamGens, otherGens = _gt.lindblad_error_generators(
             hamBasisMxs, otherBasisMxs, normalize=False,

@@ -16,7 +16,7 @@ import warnings as _warnings
 import zipfile as _zipfile
 import numpy as _np
 
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
 from ..tools import timed_block as _timed_block
 
@@ -31,7 +31,7 @@ from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from . import reportables as _reportables
 from .notebook import Notebook as _Notebook
-from ..baseobjs.label import Label as _Lbl
+from ..objects.label import Label as _Lbl
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]

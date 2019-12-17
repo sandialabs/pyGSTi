@@ -31,6 +31,8 @@ test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 
 # Compiled source #
 ###################
+*.c
+*.cpp
 *.pyc
 *.com
 *.class
@@ -45,11 +47,7 @@ build/*
 dist/*
 packages/pygsti.egg-info
 packages/pyGSTi.egg-info
-packages/pygsti/baseobjs/parsetab_string.py
-packages/pygsti/objects/fastgatecalc.cpp
-packages/pygsti/objects/fastreplib.cpp
-packages/pygsti/objects/fastopcalc.cpp
-packages/pygsti/tools/fastcalc.c
+parsetab_string.py
 
 
 # Packages #

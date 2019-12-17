@@ -2,7 +2,7 @@ import numpy as np
 
 from ..util import BaseCase
 
-import pygsti.baseobjs.protectedarray as pa
+import pygsti.objects.protectedarray as pa
 
 
 class ProtectedArrayTester(BaseCase):
