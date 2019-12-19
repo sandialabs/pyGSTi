@@ -83,45 +83,14 @@ jobs:
 
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects"
-    - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithms"
-    - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithmsb"
-    - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="tools iotest optimize construction extras"
-    - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="report"
-    - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="reportb"
-    - stage: test-extra
-      python: 3.7
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="mpi"
-
+      python: 3.5
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithms algorithmsb"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects"
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="report reportb"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithms"
-    - stage: test-extra
-      python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithmsb"
-    - stage: test-extra
-      python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="tools iotest optimize construction extras"
-    - stage: test-extra
-      python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="report"
-    - stage: test-extra
-      python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="reportb"
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects tools iotest optimize construction extras"
     - stage: test-extra
       python: 3.5
       env: NOSE_WHERE="test/test_packages/" NOSETESTS="mpi"
@@ -149,7 +118,6 @@ jobs:
         - pip install -e .[extension_modules]
       script:
         - echo "Pushing $TRAVIS_TAG to PyPI"
-
 
   allow_failures:
     - stage: lint
