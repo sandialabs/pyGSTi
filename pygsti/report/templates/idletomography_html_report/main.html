@@ -104,6 +104,10 @@
             {% include 'tabs/DataComparison.html' %}
           </div>
           {% endif %}
+
+          {% if not config['embed_figures'] %}
+          {% include 'tabs/AjaxError.html' %}
+          {% endif %}
         </div>
         <div id="status">
           No message
