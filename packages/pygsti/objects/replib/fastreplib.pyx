@@ -32,7 +32,7 @@ from ...tools import mpitools as _mpit
 from ...tools import slicetools as _slct
 from ...tools import optools as _gt
 from ...tools.matrixtools import _fas
-from .. import fastopcalc as _fastopcalc
+from ..opcalc import fastopcalc as _fastopcalc
 from scipy.sparse.linalg import LinearOperator
 
 cdef double LARGE = 1000000000
@@ -3040,7 +3040,7 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel.pyterm_references:
-            coeff_array = _fastopcalc.fast_bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
+            coeff_array = _fastopcalc.bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 

@@ -33,9 +33,11 @@ from . import replib
 #import faulthandler
 #faulthandler.enable()
 
+from .opcalc import compact_deriv as _compact_deriv
+
+# TODO refactor into opcalc
 try:
-    from . import fastopcalc as _fastopcalc
-    from .fastopcalc import fast_compact_deriv as _compact_deriv
+    from .opcalc import fastopcalc as _fastopcalc
 
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         if _np.iscomplexobj(ctape):
@@ -48,8 +50,7 @@ try:
             return _np.real(_fastopcalc.fast_bulk_eval_compact_polys(
                 vtape, ctape, paramvec, dest_shape))
 except ImportError:
-    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
-    from .polynomial import compact_deriv as _compact_deriv
+    from .opcalc.slowopcalc import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
 
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)

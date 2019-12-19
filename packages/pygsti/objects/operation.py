@@ -38,31 +38,10 @@ from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, EmbeddedBasis
 from . import term as _term
 from .polynomial import Polynomial as _Polynomial
 from . import replib
-
-
-#Repeated in spamvec.py - TODO: consolidate
-try:
-    from . import fastopcalc as _fastopcalc
-    from .fastopcalc import fast_compact_deriv as _compact_deriv
-
-    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
-        return _fastopcalc.fast_bulk_eval_compact_polys_complex(
-            vtape, ctape, paramvec, dest_shape)
-
-    def _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_size):
-        return _fastopcalc.fast_abs_sum_bulk_eval_compact_polys_complex(
-            vtape, ctape, paramvec, dest_size)
-
-except ImportError:
-    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
-    from .polynomial import compact_deriv as _compact_deriv
-
-    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
-        return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
-
-    def _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_size):
-        return _np.sum(_np.abs(_bulk_eval_complex_compact_polys(vtape, ctape, paramvec, (dest_size,))))
-
+from . import opcalc
+from .opcalc import compact_deriv as _compact_deriv, \
+    bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex, \
+    abs_sum_bulk_eval_compact_polys_complex as _abs_sum_bulk_eval_compact_polys_complex
 
 TOL = 1e-12
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -616,7 +595,7 @@ class LinearOperator(_modelmember.ModelMember):
             MAX_CACHED_TERM_ORDER = 1
             if taylor_order <= MAX_CACHED_TERM_ORDER:
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
-                coeffs = _bulk_eval_complex_compact_polys(
+                coeffs = _bulk_eval_compact_polys_complex(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
 
@@ -624,7 +603,7 @@ class LinearOperator(_modelmember.ModelMember):
                 # REMOVE later
                 # for t in terms_at_order:
                 #     vt, ct = t._rep.coeff.compact_complex()
-                #     coeff_array = _bulk_eval_complex_compact_polys(vt, ct, self.parent.to_vector(), (1,))
+                #     coeff_array = _bulk_eval_compact_polys_complex(vt, ct, self.parent.to_vector(), (1,))
                 #     if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
                 #         print(coeff_array[0], "vs.", t._rep.magnitude)
                 #         import bpdb; bpdb.set_trace()
@@ -663,7 +642,7 @@ class LinearOperator(_modelmember.ModelMember):
         #    print("Term magnitudes = ", [t[1].magnitude for t in sorted_terms])
         #    egterms = self.errorgen.get_taylor_order_terms(0)
         #    #vtape, ctape = self.errorgen.Lterm_coeffs
-        #    #coeffs = [ abs(x) for x in _bulk_eval_complex_compact_polys(vtape, ctape, self.errorgen.to_vector(),
+        #    #coeffs = [ abs(x) for x in _bulk_eval_compact_polys_complex(vtape, ctape, self.errorgen.to_vector(),
         #    #  (len(self.errorgen.Lterms),)) ]
         #    mags = [ abs(t.evaluate_coeff(self.errorgen.to_vector()).coeff) for t in egterms ]
         #    print("Errorgen ", self.errorgen.__class__.__name__, " term magnitudes (%d): " % len(egterms),
@@ -677,14 +656,14 @@ class LinearOperator(_modelmember.ModelMember):
         """ TODO: docstring """
         v = self.to_vector()
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
-        coeffs = _bulk_eval_complex_compact_polys(
+        coeffs = _bulk_eval_compact_polys_complex(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
 
         #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
         #for t in terms_at_order:
         #    vt,ct = t._rep.coeff.compact_complex()
-        #    coeff_array = _bulk_eval_complex_compact_polys(vt,ct,self.parent.to_vector(),(1,))
+        #    coeff_array = _bulk_eval_compact_polys_complex(vt,ct,self.parent.to_vector(),(1,))
         #    if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
         #        print(coeff_array[0], "vs.", t._rep.magnitude)
         #        import bpdb; bpdb.set_trace()
@@ -3264,7 +3243,7 @@ class LindbladOp(LinearOperator):
         #    vtape = _np.empty(0, _np.int64)
         #    ctape = _np.empty(0, complex)
         #v = self.to_vector()
-        #errgen_coeffs = _bulk_eval_complex_compact_polys(
+        #errgen_coeffs = _bulk_eval_compact_polys_complex(
         #    vtape, ctape, v, (len(errgen_terms),))  # an array of coeffs
         #for coeff, t in zip(errgen_coeffs, errgen_terms):
         #    coeff2 = t.coeff.evaluate(v)
@@ -3291,7 +3270,7 @@ class LindbladOp(LinearOperator):
         #    vtape = _np.empty(0, _np.int64)
         #    ctape = _np.empty(0, complex)
         #v = self.to_vector()
-        #coeffs = _bulk_eval_complex_compact_polys(
+        #coeffs = _bulk_eval_compact_polys_complex(
         #    vtape, ctape, v, (len(loc_terms_chk),))  # an array of coeffs
         #for coeff, t, t2 in zip(coeffs, loc_terms, loc_terms_chk):
         #    coeff2 = t.coeff.evaluate(v)
@@ -3306,7 +3285,7 @@ class LindbladOp(LinearOperator):
         #    #t.set_magnitude(abs(t.coeff.evaluate(egvec)))
 
         #FUTURE:  maybe use bulk eval of compact polys? Something like this:
-        #coeffs = _bulk_eval_complex_compact_polys(
+        #coeffs = _bulk_eval_compact_polys_complex(
         #    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         #for coeff, t in zip(coeffs, terms_at_order):
         #    t.set_magnitude(abs(coeff))
@@ -3322,7 +3301,7 @@ class LindbladOp(LinearOperator):
             # REMOVE later
             # t = term
             # vt, ct = t._rep.coeff.compact_complex()
-            # coeff_array = _bulk_eval_complex_compact_polys(vt, ct, self.parent.to_vector(), (1,))
+            # coeff_array = _bulk_eval_compact_polys_complex(vt, ct, self.parent.to_vector(), (1,))
             # if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
             #     print(coeff_array[0], "vs.", t._rep.magnitude)
             #     import bpdb; bpdb.set_trace()
@@ -7315,22 +7294,7 @@ class LindbladErrorgen(LinearOperator):
         # return (sum of absvals of term coeffs)
         assert(self.Lterms is not None), "Must call `get_taylor_order_terms` before calling get_total_term_magnitude!"
         vtape, ctape = self.Lterm_coeffs
-        return _abs_sum_bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), len(self.Lterms))
-
-        #OLD SLOW
-        # coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
-        #
-        # #DEBUG TODO REMOVE
-        # #coeffs_chk = _np.array([ x.evaluate_coeff(self.to_vector()).coeff for x in self.Lterms])
-        # #assert(_np.allclose(coeffs, coeffs_chk))
-        # #ret = _np.sum(_np.abs(coeffs))
-        # #egterms = self.get_taylor_order_terms(0)
-        # #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
-        # #print("LindbladErrorgen CHECK = ",sum(mags), " vs ", ret)
-        # #assert(sum(mags) <= ret+1e-4)
-        # #print("  DB: LindbladErrorgen coeffs = ",coeffs)
-        #
-        # return _np.sum(_np.abs(coeffs))  # sum([ abs(coeff) for coeff in coeffs])
+        return _abs_sum_bulk_eval_compact_polys_complex(vtape, ctape, self.to_vector(), len(self.Lterms))
 
     def get_total_term_magnitude_deriv(self):
         """
@@ -7348,9 +7312,9 @@ class LindbladErrorgen(LinearOperator):
 
         wrtInds = _np.ascontiguousarray(_np.arange(self.num_params()), _np.int64)  # for Cython arg mapping
         vtape, ctape = self.Lterm_coeffs
-        coeff_values = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        coeff_values = _bulk_eval_compact_polys_complex(vtape, ctape, self.to_vector(), (len(self.Lterms),))
         coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
-        coeff_deriv_vals = _bulk_eval_complex_compact_polys(coeff_deriv_polys[0], coeff_deriv_polys[1],
+        coeff_deriv_vals = _bulk_eval_compact_polys_complex(coeff_deriv_polys[0], coeff_deriv_polys[1],
                                                             self.to_vector(), (len(self.Lterms), len(wrtInds)))
         abs_coeff_values = _np.abs(coeff_values)
         abs_coeff_values[abs_coeff_values < 1e-10] = 1.0  # so ratio is 0 in cases where coeff_value == 0
@@ -7367,7 +7331,7 @@ class LindbladErrorgen(LinearOperator):
         #for i in range(self.num_params()):
         #    v = orig_vec.copy()
         #    v[i] += eps
-        #    new_coeff_values = _bulk_eval_complex_compact_polys(vtape, ctape, v, (len(self.Lterms),))
+        #    new_coeff_values = _bulk_eval_compact_polys_complex(vtape, ctape, v, (len(self.Lterms),))
         #    ret2[i] = ( sum([abs(coeff) for coeff in new_coeff_values]) - f0 ) / eps
 
         #test3 = _np.linalg.norm(ret-ret2)

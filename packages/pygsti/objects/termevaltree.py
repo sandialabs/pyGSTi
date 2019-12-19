@@ -15,29 +15,7 @@ from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from ..tools import mpitools as _mpit
 from .evaltree import EvalTree
-
-try:
-    from .fastopcalc import fast_compact_deriv as _compact_deriv
-    from .fastopcalc import fast_bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
-
-    #DEBUG from .polynomial import compact_deriv as _compact_deriv
-    # from . import fastopcalc
-    # from . import polynomial
-    # def _compact_deriv(vtape, ctape, wrtParams):
-    #     v1,c1 = fastopcalc.fast_compact_deriv(vtape,ctape,wrtParams)
-    #     v2,c2 = polynomial.compact_deriv(vtape,ctape,wrtParams)
-    #     print("SIZES = ",v1.shape, c1.shape, v2.shape, c2.shape)
-    #     assert(_np.linalg.norm(v1-v2) < 1e-6)
-    #     assert(_np.linalg.norm(c1-c2) < 1e-6)
-    #     return v1,c1
-
-except ImportError:
-    from .polynomial import compact_deriv as _compact_deriv
-    from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
-
-    def _bulk_eval_compact_polys_complex(vtape, ctape, paramvec, dest_shape):
-        return _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape, "complex")
-
+from .opcalc import compact_deriv as _compact_deriv, bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
 
 import time as _time  # DEBUG TIMERS
 

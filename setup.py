@@ -23,8 +23,8 @@ try:
             # libraries=['m'] #math lib?
         ),
         Extension(
-            "pygsti.objects.fastopcalc",
-            sources=["packages/pygsti/objects/fastopcalc.pyx"],
+            "pygsti.objects.opcalc.fastopcalc",
+            sources=["packages/pygsti/objects/opcalc/fastopcalc.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"

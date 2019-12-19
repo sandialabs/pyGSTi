@@ -18,24 +18,24 @@ from .circuit import Circuit as _Circuit
 from .polynomial import Polynomial as _Polynomial
 from ..tools import slicetools as _slct
 
+from .opcalc import compact_deriv as _compact_deriv, float_product as prod
+
+# TODO refactor into opcalc
 try:
-    from . import fastopcalc as _fastopcalc
-    from .fastopcalc import fast_compact_deriv as _compact_deriv
-    from .fastopcalc import float_product as prod
+    from .opcalc import fastopcalc as _fastopcalc
 
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         if _np.iscomplexobj(ctape):
-            ret = _fastopcalc.fast_bulk_eval_compact_polys_complex(
+            ret = _fastopcalc.bulk_eval_compact_polys_complex(
                 vtape, ctape, paramvec, dest_shape)
             assert(_np.linalg.norm(_np.imag(ret)) < 1e-6), \
                 "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret))  # DEBUG CHECK
             return _np.real(ret)
         else:
-            return _np.real(_fastopcalc.fast_bulk_eval_compact_polys(
+            return _np.real(_fastopcalc.bulk_eval_compact_polys(
                 vtape, ctape, paramvec, dest_shape))
 except ImportError:
-    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
-    from .polynomial import compact_deriv as _compact_deriv
+    from .opcalc.slowopcalc import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
 
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
@@ -47,12 +47,6 @@ except ImportError:
 
             ret = _np.real(ret)
         return ret  # always return a *real* vector
-
-    def prod(ar):
-        ret = 1.0
-        for x in ar:
-            ret *= x
-        return ret
 
 
 class OplessModelTree(_EvalTree):

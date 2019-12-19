@@ -2100,7 +2100,7 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
 
 
 def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
-    from ..polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
+    from ..opcalc import bulk_eval_compact_polys as _bulk_eval_compact_polys
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps
