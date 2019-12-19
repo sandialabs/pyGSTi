@@ -217,7 +217,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
 
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                nmthreshold, printer, fmt,
-                               combine_robust, idt_results_dict=None):
+                               combine_robust, idt_results_dict=None, embed_figures=True):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -255,7 +255,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
         ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
         show=[multidataset, multiest, multiGO, False],  # "global" switches only + gauge-opt (OK if doesn't apply)
-        within_report=True
+        use_loadable_items=embed_figures
     )
 
     switchBd.add("ds", (0,))
@@ -517,7 +517,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
 
 
 def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
-                                      dataset_labels, est_labels=None):
+                                      dataset_labels, est_labels=None, embed_figures=True):
     op_labels = None
     for results in results_dict.values():
         for est in results.estimates.values():
@@ -538,7 +538,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
         metric_switchBd = ws.Switchboard(
             ["Metric", "Operation"], [metric_names, op_labels],
             ["dropdown", "dropdown"], [0, 0], show=[True, True],
-            within_report=True)
+            use_loadable_items=embed_figures)
         metric_switchBd.add("opLabel", (1,))
         metric_switchBd.add("metric", (0,))
         metric_switchBd.add("cmpTableTitle", (0, 1))
@@ -551,7 +551,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
         metric_switchBd = ws.Switchboard(
             ["Metric"], [metric_names],
             ["dropdown"], [0], show=[True],
-            within_report=True)
+            use_loadable_items=embed_figures)
         metric_switchBd.add("metric", (0,))
         metric_switchBd.add("cmpTableTitle", (0,))
         metric_switchBd.cmpTableTitle[:] = metric_names
@@ -830,7 +830,7 @@ def create_standard_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
         _create_master_switchboard(ws, results_dict, confidenceLevel,
                                    nmthreshold, printer, fmt,
-                                   combine_robust, idt_results_dict)
+                                   combine_robust, idt_results_dict, embed_figures)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1
                            or len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset,"
@@ -944,9 +944,9 @@ def create_standard_report(results, filename, title="auto",
 
     # single-metric comparison tables
     gvmetric_switchBd = _create_single_metric_switchboard(ws, results_dict, False,
-                                                          dataset_labels, est_labels)
+                                                          dataset_labels, est_labels, embed_figures)
     gimetric_switchBd = _create_single_metric_switchboard(ws, results_dict, True,
-                                                          dataset_labels, est_labels)
+                                                          dataset_labels, est_labels, embed_figures)
     qtys['metricSwitchboard_gv'] = gvmetric_switchBd
     qtys['metricSwitchboard_gi'] = gimetric_switchBd
     if multidataset:
@@ -965,7 +965,7 @@ def create_standard_report(results, filename, title="auto",
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
                gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
 
-    grmetric_switchBd = _create_single_metric_switchboard(ws, {}, False, [])
+    grmetric_switchBd = _create_single_metric_switchboard(ws, {}, False, [], embed_figures=embed_figures)
     qtys['metricSwitchboard_gr'] = grmetric_switchBd
     addqty(4, 'bestGIMetricTable', ws.GaugeRobustMetricTable, gsFinal, gsTgt, grmetric_switchBd.metric, cri(1))
 
@@ -1141,7 +1141,7 @@ def create_standard_report(results, filename, title="auto",
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
                 ["buttons", "buttons"], [0, 1],
-                within_report=True
+                use_loadable_items=embed_figures
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))
@@ -1211,6 +1211,8 @@ def create_standard_report(results, filename, title="auto",
 
             if fmt == "html":
                 if filename.endswith(".html"):
+                    assert(embed_figures is False), \
+                        "Must set embed_figures=True when filename ends in .html (specifying a single file)"
                     _merge.merge_jinja_template(
                         qtys, filename, templateDir='~standard_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
@@ -1397,6 +1399,7 @@ def create_nqnoise_report(results, filename, title="auto",
     connected = advancedOptions.get('connected', False)
     resizable = advancedOptions.get('resizable', True)
     autosize = advancedOptions.get('autosize', 'initial')
+    embed_figures = advancedOptions.get('embed_figures', True)
     combine_robust = advancedOptions.get('combine_robust', True)  # REMOVE - also in docstring?
     ci_brevity = advancedOptions.get('confidence_interval_brevity', 1)
     idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
@@ -1473,7 +1476,7 @@ def create_nqnoise_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
         _create_master_switchboard(ws, results_dict, confidenceLevel,
                                    nmthreshold, printer, fmt,
-                                   combine_robust, idt_results_dict)
+                                   combine_robust, idt_results_dict, embed_figures)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1
                            or len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset,"
@@ -1738,7 +1741,7 @@ def create_nqnoise_report(results, filename, title="auto",
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
                 ["buttons", "buttons"], [0, 1],
-                within_report=True
+                use_loadable_items=embed_figures
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))

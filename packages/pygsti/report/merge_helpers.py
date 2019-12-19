@@ -467,7 +467,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
                           render_options=dict(switched_item_mode="inline",
                                               global_requirejs=False,
-                                              within_report=True,
+                                              use_loadable_items=True,
                                               resizable=resizable, autosize=autosize,
                                               output_dir=figDir, link_to=link_to,
                                               precision=precision),
@@ -573,7 +573,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     if not connected:
         rsync_offline_dir(outputDir)
 
-    if embed_figures or link_to is not None:
+    if embed_figures is False or link_to is not None:
         figDir = out_path / 'figures'
         figDir.mkdir(exist_ok=True)
     else:
@@ -583,7 +583,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
                           render_options=dict(switched_item_mode=switched_item_mode,
                                               global_requirejs=False,
-                                              within_report=True,
+                                              use_loadable_items=embed_figures,
                                               resizable=resizable, autosize=autosize,
                                               output_dir=figDir, link_to=link_to,
                                               precision=precision),

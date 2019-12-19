@@ -696,7 +696,7 @@ class Switchboard(_collections.OrderedDict):
     """
 
     def __init__(self, ws, switches, positions, types, initial_pos=None,
-                 descriptions=None, show="all", ID=None, within_report=False):
+                 descriptions=None, show="all", ID=None, use_loadable_items=False):
         """
         Create a new Switchboard.
 
@@ -748,7 +748,7 @@ class Switchboard(_collections.OrderedDict):
         self.switchIDs = ["switchbd%s_%d" % (self.ID, i)
                           for i in range(len(switches))]
         self.positionLabels = positions
-        self.within_report = within_report
+        self.use_loadable_items = use_loadable_items
         if initial_pos is None:
             self.initialPositions = _np.array([0] * len(switches), _np.int64)
         else:
@@ -1047,7 +1047,7 @@ class Switchboard(_collections.OrderedDict):
             switch_js.append(js)
 
         html = "\n".join(switch_html)
-        if not self.within_report:  # run JS as soon as the document is ready
+        if not self.use_loadable_items:  # run JS as soon as the document is ready
             js = "$(document).ready(function() {\n" + \
                 "\n".join(switch_js) + "\n});"
         else:  # in a report, where we have a 'loadable' parent and might not want to load right away
@@ -1348,7 +1348,7 @@ class WorkspaceOutput(object):
 
         #HTML specific
         'global_requirejs': False,
-        'within_report': False,
+        'use_loadable_items': False,
         'click_to_display': False,
         'render_math': True,
         'resizable': True,
@@ -1579,19 +1579,19 @@ class WorkspaceOutput(object):
 
     def _create_onready_handler(self, content, ID):
         global_requirejs = self.options.get('global_requirejs', False)
-        within_report = self.options.get('within_report', False)
+        use_loadable_items = self.options.get('use_loadable_items', False)
         ret = ""
 
         if global_requirejs:
             ret += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
 
         ret += '  $(document).ready(function() {\n'
-        if within_report:
+        if use_loadable_items:
             ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
 
         ret += content
 
-        if within_report:
+        if use_loadable_items:
             ret += "  });"  # end load_loadable_item handler
 
         ret += '}); //end on-ready or on-load handler\n'
