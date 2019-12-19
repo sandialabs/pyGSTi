@@ -16,12 +16,12 @@ import scipy.sparse as _sps
 import itertools as _itertools
 import functools as _functools
 
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..tools import matrixtools as _mt
-from ..tools import listtools as _lt
-from ..tools import optools as _gt
-from ..tools.matrixtools import _fas
+from ...tools import mpitools as _mpit
+from ...tools import slicetools as _slct
+from ...tools import matrixtools as _mt
+from ...tools import listtools as _lt
+from ...tools import optools as _gt
+from ...tools.matrixtools import _fas
 
 from scipy.sparse.linalg import LinearOperator
 
@@ -854,7 +854,7 @@ class SVOpRep_Exponentiated(SVOpRep):
 # Stabilizer state (SB) propagation wrapper classes
 class SBStateRep(object):
     def __init__(self, smatrix, pvectors, amps):
-        from .stabilizer import StabilizerFrame as _StabilizerFrame
+        from ..stabilizer import StabilizerFrame as _StabilizerFrame
         self.sframe = _StabilizerFrame(smatrix, pvectors, amps)
         # just rely on StabilizerFrame class to do all the heavy lifting...
 
@@ -2100,7 +2100,7 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
 
 
 def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
-    from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
+    from ..polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps

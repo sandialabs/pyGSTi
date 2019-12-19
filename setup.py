@@ -31,10 +31,10 @@ try:
             extra_link_args=["-std=c++11"]
         ),
         Extension(
-            "pygsti.objects.fastreplib",
+            "pygsti.objects.replib.fastreplib",
             sources=[
-                "packages/pygsti/objects/fastreplib.pyx",
-                "packages/pygsti/objects/fastreps.cpp"
+                "packages/pygsti/objects/replib/fastreplib.pyx",
+                "packages/pygsti/objects/replib/fastreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
             language="c++",

@@ -21,6 +21,8 @@
 #Maybe in the FUTURE we'll remove the decorator action once the warning
 #  has been issued?
 
+# XXX is the warning infrastructure here useful?
+
 try:
     #If we can import the fast stuff, great!
     from .fastreplib import *
