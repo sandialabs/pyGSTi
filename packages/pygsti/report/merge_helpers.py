@@ -392,7 +392,6 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
         # Assume path after ~ is relative to root packaged template directory
         relpath = templateDir[1:]
         loader = jinja2.PackageLoader('pygsti', _os.path.join('report/templates', relpath))
-
     else:
         # Use path as is.
         loader = jinja2.FileSystemLoader(templateDir)
@@ -465,7 +464,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
                           render_options=dict(switched_item_mode="inline",
                                               global_requirejs=False,
-                                              within_report=True,
+                                              use_loadable_items=True,
                                               resizable=resizable, autosize=autosize,
                                               output_dir=figDir, link_to=link_to,
                                               precision=precision),
@@ -476,7 +475,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     render_params = {
         **qtys,
         'config': {
-            **(toggles or {})
+            **(toggles or {}),
             # TODO whatever should be in config namespace
         }
     }
@@ -489,7 +488,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
 
 def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html',
                              auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
-                             renderMath=True, resizable=True, autosize='none', verbosity=0):
+                             renderMath=True, resizable=True, autosize='none', embed_figures=True, verbosity=0):
     """
     Renders `qtys` and merges them into the HTML files under `templateDir`,
     saving the output under `outputDir`.
@@ -515,6 +514,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
         everything else, respectively.  If an integer is given, it this
         same value is taken for all precision types.  If None, then
         a default is used.
+
     link_to : list, optional
         If not None, a list of one or more items from the set
         {"tex", "pdf", "pkl"} indicating whether or not to
@@ -540,6 +540,19 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
         i.e. just upon first rendering (`"initial"`) -- or whenever
         the browser window is resized (`"continual"`).
 
+    embed_figures : bool, optional
+        Whether figures should be embedded in the generated report. If
+        False, figures will be written to a 'figures' directory in the
+        output directory, and will be loaded dynamically via
+        AJAX. This may be useful for reducing the size of the
+        generated report if the report includes relatively many
+        figures.
+        Note that all major web browsers will block AJAX requests from
+        an HTML document loaded from the filesystem. If this option is
+        set to False, the generated report will fail to load from the
+        filesystem, and must be served up by a webserver. Python's
+        `http.server` module works fine.
+
     verbosity : int, optional
         Amount of detail to print to stdout.
 
@@ -557,16 +570,21 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     if not connected:
         rsync_offline_dir(outputDir)
 
-    if link_to is not None:
+    if embed_figures is False or link_to is not None:
         figDir = out_path / 'figures'
         figDir.mkdir(exist_ok=True)
+
+        if embed_figures is False:
+            with open(figDir / 'test.html', 'w') as f:
+                f.write("<div>Dummy to test ajax loading</div>")
     else:
         figDir = None
 
+    switched_item_mode = "inline" if embed_figures else "separate files"
     env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
-                          render_options=dict(switched_item_mode="inline",
+                          render_options=dict(switched_item_mode=switched_item_mode,
                                               global_requirejs=False,
-                                              within_report=True,
+                                              use_loadable_items=embed_figures,
                                               resizable=resizable, autosize=autosize,
                                               output_dir=figDir, link_to=link_to,
                                               precision=precision),
@@ -577,10 +595,13 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     render_params = {
         **qtys,
         'config': {
-            **(toggles or {})
+            **(toggles or {}),
             # TODO whatever should be in config namespace
         }
     }
+
+    #Additional configuration needed in jinja templates
+    render_params['config']['embed_figures'] = embed_figures  # to know when to test for AJAX errors
 
     # Render main page template to output path
     template = env.get_template(templateName)
