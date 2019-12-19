@@ -576,6 +576,10 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     if embed_figures is False or link_to is not None:
         figDir = out_path / 'figures'
         figDir.mkdir(exist_ok=True)
+
+        if embed_figures is False:
+            with open(figDir / 'test.html', 'w') as f:
+                f.write("<div>Dummy to test ajax loading</div>")
     else:
         figDir = None
 
@@ -598,6 +602,9 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
             # TODO whatever should be in config namespace
         }
     }
+
+    #Additional configuration needed in jinja templates
+    render_params['config']['embed_figures'] = embed_figures  # to know when to test for AJAX errors
 
     # Render main page template to output path
     template = env.get_template(templateName)

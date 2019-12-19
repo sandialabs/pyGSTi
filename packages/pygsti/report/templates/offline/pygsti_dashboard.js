@@ -164,3 +164,25 @@ $(document).ready(function() {
         $(this).children('.captiondetail').toggleClass('showcaption')
     });
 });
+
+
+function testLocalAjax(url, onerror) {
+   var request = new XMLHttpRequest();
+    request.responseType = 'text';
+    request.withCredentials = true; //b/c jupyter notebooks use user authentication
+    request.open('GET', url, true);
+    request.onload = function() {
+	var is_safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+	var is_chrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+	if (request.status == 200 || ((is_safari || is_chrome) && request.status == 0)) {
+	    console.log('testLocalAjax success!');
+	}
+	else {
+	    onerror(request.status);
+	}
+    };
+    request.onerror = function() {
+	onerror("connection error");
+    };
+    request.send();
+}
