@@ -33,36 +33,7 @@ from . import replib
 #import faulthandler
 #faulthandler.enable()
 
-from .opcalc import compact_deriv as _compact_deriv
-
-# TODO refactor into opcalc
-try:
-    from .opcalc import fastopcalc as _fastopcalc
-
-    def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
-        if _np.iscomplexobj(ctape):
-            ret = _fastopcalc.fast_bulk_eval_compact_polys_complex(
-                vtape, ctape, paramvec, dest_shape)
-            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6), \
-                "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret))  # DEBUG CHECK
-            return _np.real(ret)
-        else:
-            return _np.real(_fastopcalc.fast_bulk_eval_compact_polys(
-                vtape, ctape, paramvec, dest_shape))
-except ImportError:
-    from .opcalc.slowopcalc import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
-
-    def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
-        ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
-        if _np.iscomplexobj(ret):
-            #assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ), \
-            #    "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)) # DEBUG CHECK
-            if _np.linalg.norm(_np.imag(ret)) > 1e-6:
-                print("WARNING: norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)))
-
-            ret = _np.real(ret)
-        return ret  # always return a *real* vector
-
+from .opcalc import compact_deriv as _compact_deriv, safe_bulk_eval_compact_polys as _safe_bulk_eval_compact_polys
 
 _dummy_profiler = _DummyProfiler()
 
@@ -625,7 +596,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         assert(time is None), "TermForwardSimulator currently doesn't support time-dependent circuits"
         cpolys = self.prs_as_compact_polys(rholabel, elabels, circuit)
-        vals = [_bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
+        vals = [_safe_bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
                 for cpoly in cpolys]
         ps = _np.array([_np.real_if_close(val) for val in vals])
         if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
@@ -843,7 +814,7 @@ class TermForwardSimulator(ForwardSimulator):
             probs = self.prs_directly(evalTree, comm, memLimit)  # could make into a fill_routine?
         else:  # "pruned" or "taylor order"
             polys = evalTree.merged_compact_polys
-            probs = _bulk_eval_compact_polys(
+            probs = _safe_bulk_eval_compact_polys(
                 polys[0], polys[1], self.paramvec, (nEls,))  # shape (nElements,) -- could make this a *fill*
         _fas(mxToFill, [dest_indices], probs)
 
@@ -860,7 +831,7 @@ class TermForwardSimulator(ForwardSimulator):
             polys = evalTree.merged_compact_polys
             wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
             dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
-            dprobs = _bulk_eval_compact_polys(dpolys[0], dpolys[1], self.paramvec, (nEls, len(wrtInds)))
+            dprobs = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], self.paramvec, (nEls, len(wrtInds)))
         _fas(mxToFill, [dest_indices, dest_param_indices], dprobs)
 
     def _fill_hprobs_block(self, mxToFill, dest_indices, dest_param_indices1,
@@ -882,7 +853,8 @@ class TermForwardSimulator(ForwardSimulator):
             wrtInds2 = _np.ascontiguousarray(_slct.indices(param_slice2), _np.int64)
             dpolys = _compact_deriv(polys[0], polys[1], wrtInds1)
             hpolys = _compact_deriv(dpolys[0], dpolys[1], wrtInds2)
-            hprobs = _bulk_eval_compact_polys(hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
+            hprobs = _safe_bulk_eval_compact_polys(
+                hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
         _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
     def bulk_test_if_paths_are_sufficient(self, evalTree, probs, comm, memLimit, printer):

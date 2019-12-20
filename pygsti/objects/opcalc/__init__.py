@@ -8,6 +8,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+
 warn_msg = """
 An optimized Cython-based implementation of `{module}` is available as
 an extension, but couldn't be imported. This might happen if the
@@ -29,3 +31,23 @@ except ImportError:
         _warnings.warn(warn_msg)
 
     from .slowopcalc import *
+
+
+def safe_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
+    """Typechecking wrapper for :function:`bulk_eval_compact_polys`.
+
+    The underlying method has two implementations: one for real-valued
+    `ctape`, and one for complex-valued. This wrapper will dynamically
+    dispatch to the appropriate implementation method based on the
+    type of `ctape`. If the type of `ctape` is known prior to calling,
+    it's slightly faster to call the appropriate implementation method
+    directly; if not.
+    """
+    if _np.iscomplexobj(ctape):
+        ret = bulk_eval_compact_polys_complex(vtape, ctape, paramvec, dest_shape)
+        im_norm = _np.linalg.norm(_np.imag(ret))
+        if im_norm > 1e-6:
+            print("WARNING: norm(Im part) = {:g}".format(im_norm))
+    else:
+        ret = bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+    return _np.real(ret)
