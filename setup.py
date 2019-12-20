@@ -42,8 +42,8 @@ try:
             extra_link_args=["-std=c++11"]
         ),
         Extension(
-            "pygsti.io.fastcircuitparser",
-            sources=["pygsti/io/fastcircuitparser.pyx"],
+            "pygsti.io.circuitparser.fastcircuitparser",
+            sources=["pygsti/io/circuitparser/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"

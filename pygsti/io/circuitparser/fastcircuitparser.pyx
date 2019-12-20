@@ -32,7 +32,7 @@ cimport cython
 #cdef extern from "Python.h":
 #    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
 
-from ..objects import label as _lbl
+from ...objects import label as _lbl
 
 
 #Use 64-bit integers
@@ -41,7 +41,7 @@ ctypedef unsigned long long UINT
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls):
+def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls):
     if '@' in code:  # format:  <string>@<line_labels>
         code, labels = code.split(u'@')
         labels = labels.strip(u"( )")  # remove opening and closing parenthesis
