@@ -94,6 +94,9 @@
             {% include 'tabs/Drift.html' %}
           </div>
 
+          {% if not config['embed_figures'] %}
+          {% include 'tabs/AjaxError.html' %}
+          {% endif %}
         </div>
         <div id="status">
           No message

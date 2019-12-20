@@ -229,6 +229,10 @@
                         {% include 'tabs/Help.html' %}
                     </div>
                     {% endif %}
+
+                    {% if not config['embed_figures'] %}
+                    {% include 'tabs/AjaxError.html' %}
+                    {% endif %}
                 </div>
                 <div id="status">
                     No message
@@ -236,7 +240,7 @@
             </div>
         </div>
     </body>
-
+    
     <script>
       $(document).ready(function() {
           initNav(); // so sidebar is loaded and can hide/show

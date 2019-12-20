@@ -13,7 +13,7 @@ try:
     ext_modules = [
         Extension(
             "pygsti.tools.fastcalc",
-            sources=["packages/pygsti/tools/fastcalc.pyx"],  # , "fastcalc.c
+            sources=["pygsti/tools/fastcalc.pyx"],  # , "fastcalc.c
             # # Cython docs on NumPy usage should mention this!
             # define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
             # # leave above commented
@@ -24,7 +24,7 @@ try:
         ),
         Extension(
             "pygsti.objects.opcalc.fastopcalc",
-            sources=["packages/pygsti/objects/opcalc/fastopcalc.pyx"],
+            sources=["pygsti/objects/opcalc/fastopcalc.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
@@ -33,8 +33,8 @@ try:
         Extension(
             "pygsti.objects.replib.fastreplib",
             sources=[
-                "packages/pygsti/objects/replib/fastreplib.pyx",
-                "packages/pygsti/objects/replib/fastreps.cpp"
+                "pygsti/objects/replib/fastreplib.pyx",
+                "pygsti/objects/replib/fastreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
             language="c++",
@@ -43,7 +43,7 @@ try:
         ),
         Extension(
             "pygsti.io.fastcircuitparser",
-            sources=["packages/pygsti/io/fastcircuitparser.pyx"],
+            sources=["pygsti/io/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
@@ -121,7 +121,6 @@ extras = {
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 
 
-
 # Configure setuptools_scm to build the post-release version number
 def custom_version():
     from setuptools_scm.version import postrelease_version
@@ -152,7 +151,7 @@ setup(name='pyGSTi',
           'pygsti.report',
           'pygsti.tools'
       ],
-      package_dir={'': 'packages'},
+      package_dir={'': '.'},
       package_data={
           'pygsti.tools': ['fastcalc.pyx'],
           'pygsti.objects': [
