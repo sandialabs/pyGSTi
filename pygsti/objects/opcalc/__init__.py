@@ -27,7 +27,7 @@ except ImportError:
     import os as _os
     import warnings as _warnings
 
-    if 'PYGSTI_NO_CYTHON_WARNING' in _os.env:
+    if 'PYGSTI_NO_CYTHON_WARNING' not in _os.environ:
         _warnings.warn(warn_msg)
 
     from .slowopcalc import *
