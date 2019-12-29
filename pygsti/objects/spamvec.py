@@ -35,21 +35,9 @@ from . import term as _term
 from . import stabilizer as _stabilizer
 from .polynomial import Polynomial as _Polynomial
 from . import replib
+from .opcalc import bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
 
 IMAG_TOL = 1e-8  # tolerance for imaginary part being considered zero
-
-#Repeated in spamvec.py - TODO: consolidate
-try:
-    from . import fastopcalc as _fastopcalc
-
-    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
-        return _fastopcalc.fast_bulk_eval_compact_polys_complex(
-            vtape, ctape, paramvec, dest_shape)
-except ImportError:
-    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
-
-    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
-        return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
 
 
 def optimize_spamvec(vecToOptimize, targetVec):
@@ -523,7 +511,7 @@ class SPAMVec(_modelmember.ModelMember):
             if taylor_order <= MAX_CACHED_TERM_ORDER:
                 #print("order ",taylor_order," : ",len(terms), "terms")
                 terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
-                coeffs = _bulk_eval_complex_compact_polys(
+                coeffs = _bulk_eval_compact_polys_complex(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 mags = _np.abs(coeffs)
                 last_len = len(terms)
@@ -562,7 +550,7 @@ class SPAMVec(_modelmember.ModelMember):
         """ TODO: docstring """
         v = self.to_vector()
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
-        coeffs = _bulk_eval_complex_compact_polys(
+        coeffs = _bulk_eval_compact_polys_complex(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]

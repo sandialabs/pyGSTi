@@ -3,6 +3,7 @@ import numpy as np
 from ..util import BaseCase
 
 from pygsti.objects import polynomial as poly
+from pygsti.objects.opcalc import compact_deriv
 
 
 class CompactPolynomialTester(BaseCase):
@@ -24,7 +25,7 @@ class CompactPolynomialTester(BaseCase):
         c = np.concatenate((c, c2))
         c = np.ascontiguousarray(c, complex)
 
-        vout, cout = poly.compact_deriv(v, c, (1, 2, 3))
+        vout, cout = compact_deriv(v, c, np.array([1, 2, 3]))
         compact_polys = poly.bulk_load_compact_polys(vout, cout, keep_compact=True)
 
         def assertCompactPolysEqual(vctups1, vctups2):
