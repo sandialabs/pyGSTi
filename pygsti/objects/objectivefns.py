@@ -800,7 +800,7 @@ class LogLFunction(ObjectiveFunction):
 
     def _poisson_picture_v_from_probs(self, tm_start):
         x0 = self.min_p
-        x = self.probs / self.freqs_nonzero  # objective is -Nf*(log(x) + 1 - x)
+        x = self.probs / self.freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
         pos_x = _np.where(x < x0, x0, x)
         S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
         S2 = -0.5 * self.minusCntVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
@@ -822,7 +822,7 @@ class LogLFunction(ObjectiveFunction):
         # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
 
         if self.firsts is not None:
-            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nonzero[self.lookup[i]])
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nozeros[self.lookup[i]])
                                              for i in self.indicesOfCircuitsWithOmittedData])
             v[self.firsts] += self.totalCntVec[self.firsts] * \
                 _np.where(omitted_probs >= self.a, omitted_probs,
@@ -946,7 +946,7 @@ class LogLFunction(ObjectiveFunction):
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
 
         x0 = self.min_p
-        x = self.probs / self.freqs_nonzero  # objective is -Nf*(log(x) + 1 - x)
+        x = self.probs / self.freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
         pos_x = _np.where(x < x0, x0, x)
         S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
         S2 = -0.5 * self.minusCntVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
@@ -964,7 +964,7 @@ class LogLFunction(ObjectiveFunction):
                       v)
 
         if self.firsts is not None:
-            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nonzero[self.lookup[i]])
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nozeros[self.lookup[i]])
                                              for i in self.indicesOfCircuitsWithOmittedData])
             v[self.firsts] += self.totalCntVec[self.firsts] * \
                 _np.where(omitted_probs >= self.a, omitted_probs,
@@ -975,7 +975,7 @@ class LogLFunction(ObjectiveFunction):
         # below
         v = _np.maximum(v, 1e-100)
         dprobs_factor_pos = (0.5 / v) * (self.totalCntVec * (-1 / pos_x + 1))
-        dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (x - x0)) / self.freqs_nonzero
+        dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (x - x0)) / self.freqs_nozeros
         dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(self.probs >= self.a,
                                                                           1.0, (-1.0 / self.a**2) * self.probs**2
                                                                           + 2 * self.probs / self.a)
