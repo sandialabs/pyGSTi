@@ -20,25 +20,6 @@ class Protocol(object):
         raise NotImplementedError("Derived classes should implement this!")
 
 
-
-
-class RB(Protocol):
-    pass
-
-
-class RPE(Protocol):
-    pass
-
-
-
-def create_rb_input():
-    pass
-
-
-def create_rpe_input():
-    pass
-
-
 class ProtocolInput(object):
     """ Serialize-able input data for a protocol """
     def __init__(self, default_protocol_name=None, basedata=None, typestring=None):
