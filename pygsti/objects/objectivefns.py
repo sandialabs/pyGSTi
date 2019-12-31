@@ -743,7 +743,7 @@ class LogLFunction(ObjectiveFunction):
         self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
 
         if poissonPicture:
-            self.freqTerm = cntVecMx * (_np.log(self.freqs_nozeros) - 1.0)
+            self.freqTerm = None  # UNUSED TODO REMOVE cntVecMx * (_np.log(self.freqs_nozeros) - 1.0)
         else:
             self.freqTerm = cntVecMx * _np.log(self.freqs_nozeros)
             #DB_freqTerm = cntVecMx * (_np.log(freqs_nozeros) - 1.0)
@@ -799,6 +799,65 @@ class LogLFunction(ObjectiveFunction):
         return self._poisson_picture_v_from_probs(tm)
 
     def _poisson_picture_v_from_probs(self, tm_start):
+        x0 = self.min_p
+        x = self.probs / self.freqs_nonzero  # objective is -Nf*(log(x) + 1 - x)
+        pos_x = _np.where(x < x0, x0, x)
+        S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
+        S2 = -0.5 * self.minusCntVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
+        v = self.minusCntVecMx * (_np.log(pos_x) + 1.0 - pos_x)
+
+        # omit = 1-p1-p2  => 1/2-p1 + 1/2-p2
+
+        # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+        v = _np.maximum(v, 0)
+        # quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
+        v = _np.where(self.minusCntVecMx == 0,
+                      self.totalCntVec * _np.where(self.probs >= self.a,
+                                                   self.probs,
+                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a
+                                                   + self.a / 3.0),
+                      v)
+        # special handling for f == 0 terms
+        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+
+        if self.firsts is not None:
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nonzero[self.lookup[i]])
+                                             for i in self.indicesOfCircuitsWithOmittedData])
+            v[self.firsts] += self.totalCntVec[self.firsts] * \
+                _np.where(omitted_probs >= self.a, omitted_probs,
+                          (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
+
+        #CHECK OBJECTIVE FN
+        #logL_terms = _tools.logl_terms(mdl, dataset, circuitsToUse,
+        #                                     min_p, probClipInterval, a, poissonPicture, False,
+        #                                     opLabelAliases, evaltree_cache) # v = maxL - L so L + v - maxL should be 0
+        #print("DIFF2 = ",_np.sum(logL_terms), _np.sum(v), _np.sum(freqTerm), abs(_np.sum(logL_terms)
+        #      + _np.sum(v)-_np.sum(freqTerm)))
+
+        v = _np.sqrt(v)
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        if self.cptp_penalty_factor != 0:
+            cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
+        else: cpPenaltyVec = []
+
+        if self.spam_penalty_factor != 0:
+            spamPenaltyVec = _spam_penalty(self.mdl, self.spam_penalty_factor, self.opBasis)
+        else: spamPenaltyVec = []
+
+        v = _np.concatenate((v, cpPenaltyVec, spamPenaltyVec))
+
+        if self.forcefn_grad is not None:
+            forceVec = self.forceShift - _np.dot(self.forcefn_grad, self.mdl.to_vector())
+            assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
+            v = _np.concatenate((v, _np.sqrt(forceVec)))
+
+        # TODO: handle dummy profiler generation in simple_init??
+        if self.profiler: self.profiler.add_time("do_mlgst: OBJECTIVE", tm_start)
+        return v  # Note: no test for whether probs is in [0,1] so no guarantee that
+        #      sqrt is well defined unless probClipInterval is set within [0,1].
+    
+    def OLD_poisson_picture_v_from_probs(self, tm_start):
         pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
         S = self.minusCntVecMx / self.min_p + self.totalCntVec
         S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
@@ -886,16 +945,17 @@ class LogLFunction(ObjectiveFunction):
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
 
-        pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
-        S = self.minusCntVecMx / self.min_p + self.totalCntVec
-        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
-        v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs) + self.totalCntVec * \
-            pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+        x0 = self.min_p
+        x = self.probs / self.freqs_nonzero  # objective is -Nf*(log(x) + 1 - x)
+        pos_x = _np.where(x < x0, x0, x)
+        S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
+        S2 = -0.5 * self.minusCntVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
+        v = self.minusCntVecMx * (_np.log(pos_x) + 1.0 - pos_x)
 
         # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
         v = _np.maximum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where(self.probs < self.min_p, v + S * (self.probs - self.min_p) + S2 * (self.probs - self.min_p)**2, v)
+        v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
         v = _np.where(self.minusCntVecMx == 0,
                       self.totalCntVec * _np.where(self.probs >= self.a,
                                                    self.probs,
@@ -904,7 +964,7 @@ class LogLFunction(ObjectiveFunction):
                       v)
 
         if self.firsts is not None:
-            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nonzero[self.lookup[i]])
                                              for i in self.indicesOfCircuitsWithOmittedData])
             v[self.firsts] += self.totalCntVec[self.firsts] * \
                 _np.where(omitted_probs >= self.a, omitted_probs,
@@ -914,12 +974,12 @@ class LogLFunction(ObjectiveFunction):
         # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
         # below
         v = _np.maximum(v, 1e-100)
-        dprobs_factor_pos = (0.5 / v) * (self.minusCntVecMx / pos_probs + self.totalCntVec)
-        dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (self.probs - self.min_p))
+        dprobs_factor_pos = (0.5 / v) * (self.totalCntVec * (-1 / pos_x + 1))
+        dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (x - x0)) / self.freqs_nonzero
         dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(self.probs >= self.a,
                                                                           1.0, (-1.0 / self.a**2) * self.probs**2
                                                                           + 2 * self.probs / self.a)
-        dprobs_factor = _np.where(self.probs < self.min_p, dprobs_factor_neg, dprobs_factor_pos)
+        dprobs_factor = _np.where(x < x0, dprobs_factor_neg, dprobs_factor_pos)
         dprobs_factor = _np.where(self.minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
 
         if self.firsts is not None:
