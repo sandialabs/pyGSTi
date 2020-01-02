@@ -885,4 +885,4 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=()):
             # is just an idle: add idle placeholder if there were any components
             if idle is not None: lbls.append(_Lbl(idle))
 
-    return _cir.Circuit(lbls)
+    return _cir.Circuit(lbls, line_labels=sslbls_to_keep)
