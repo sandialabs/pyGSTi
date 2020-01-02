@@ -277,8 +277,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                     _sv.convert(_sv.StaticSPAMVec(v0), "TP", basis1Q))
                 povm_factors.append(
                     _povm.convert(_povm.UnconstrainedPOVM(([
-                        ('0', _sv.StaticSPAMVec(v0)),
-                        ('1', _sv.StaticSPAMVec(v1))])), "TP", basis1Q))
+                        ('0', _sv.StaticSPAMVec(v0, typ="effect")),
+                        ('1', _sv.StaticSPAMVec(v1, typ="effect"))])), "TP", basis1Q))
 
             prep_layers['rho0'] = _sv.TensorProdSPAMVec('prep', prep_factors)
             povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
