@@ -33,19 +33,12 @@ ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
-class GSTInput(_proto.ProtocolInput):
+class GSTInput(_proto.CircuitListsInput):
     """ Minimal Inputs needed for GST """
-    def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None):
+    def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None, qubit_labels=None):
+        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels)
         self.target_model = _load_model(targetModelFilenameOrObj)
-        self.circuit_lists = circuit_lists
-        if all_circuits_needing_data is not None:
-            self.all_circuits_needing_data = all_circuits_needing_data
-        else:
-            self.all_circuits_needing_data = []
-            for lst in circuit_lists:
-                self.all_circuits_needing_data.extend(lst)
-            _tools.remove_duplicates_inplace(self.all_circuits_needing_data)
-        super(default_protocol_name="GST")  # maybe should supply circuit list, as a property of *all* ProtocolInputs?
+        self.add_default_protocol("GST")
 
     #def create_circuit_list(self, verbosity=0):
     #    return self.all_circuits
@@ -55,7 +48,7 @@ class GSTInput(_proto.ProtocolInput):
 
 
 class StructuredGSTInput(GSTInput):
-    def __init__(self, targetModelFilenameOrObj, circuit_structs, nested=True):
+    def __init__(self, targetModelFilenameOrObj, circuit_structs, nested=True, qubit_labels=None):
 
         #Convert a single LsGermsStruct to a list if needed:
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
@@ -65,13 +58,10 @@ class StructuredGSTInput(GSTInput):
                                for i in range(len(master.Ls))]
             nested = True  # (by this construction)
 
-        circuit_lists = [s.allstrs for s in self.circuit_structs]
-        if nested:
-            all_circuits = self.lsgst_lists[-1].allstrs
-        else:
-            all_circuits = None
+        circuit_lists = [s.allstrs for s in circuit_structs]
+        all_circuits = circuit_lists[-1][:] if nested else None
 
-        super(targetModelFilenameOrObj, circuit_lists, all_circuits)
+        super().__init__(targetModelFilenameOrObj, circuit_lists, all_circuits, qubit_labels)
         self.circuit_structs = circuit_structs
         self.nested = nested
 
@@ -85,7 +75,7 @@ class StructuredGSTInput(GSTInput):
 class StandardGSTInput(StructuredGSTInput):
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, verbosity=0):
+                 keepSeed=None, qubit_labels=None, verbosity=0):
 
         #Get/load fiducials and germs
         prep, meas, germs = _load_fiducials_and_germs(
@@ -107,12 +97,15 @@ class StandardGSTInput(StructuredGSTInput):
         self.fpr_keep_fraction = keepFraction
         self.fpr_keep_seed = keepSeed
 
+        #TODO: add a line_labels arg to make_lsgst_structs and pass qubit_labels in?
+        target_model = _load_model(targetModelFilenameOrObj)
         structs = _construction.make_lsgst_structs(
-            self.target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
+            target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
-            self.fpr_keep_fraction, self.fpr_keep_seed, self.germ_length_limits, verbosity)
+            self.fpr_keep_fraction, self.fpr_keep_seed, germLengthLimits=self.germ_length_limits,
+            verbosity=verbosity)
 
-        super(targetModelFilenameOrObj, structs, self.nested)
+        super().__init__(target_model, structs, self.nested, qubit_labels)
 
 
 class GST(_proto.Protocol):
@@ -126,7 +119,7 @@ class GST(_proto.Protocol):
         if gaugeOptParams is None:
             gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
 
-        super()
+        super().__init__()
         self.initial_model = _load_model(initialModelFilenameOrObj) if initialModelFilenameOrObj else None
         self.gaugeOptParams = gaugeOptParams
         self.advancedOptions = advancedOptions
@@ -170,13 +163,17 @@ class GST(_proto.Protocol):
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: loading', tRef); tRef = tNxt
 
-        lsgstLists = data.input.circuit_lists
+        try:  # take structs if available
+            lsgstLists = data.input.circuit_structs
+        except:
+            lsgstLists = data.input.circuit_lists
         ds = data.dataset
 
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
         if self.initial_model is not None:  # then use user-supplied model
-            mdl_start = self.inital_model
+            mdl_start = self.initial_model
+            startingPt = "User-supplied-Model"  # for profiler log below
         else:
             #Use the target model, with optional post-processing
             target_model = data.input.target_model
@@ -222,8 +219,7 @@ class GST(_proto.Protocol):
                 raise ValueError("Invalid starting point: %s" % startingPt)
 
         tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: Starting Point (%s)'
-                          % startingPt, tRef); tRef = tNxt
+        profiler.add_time('do_long_sequence_gst: Starting Point (%s)' % startingPt, tRef); tRef = tNxt
 
         #Post-processing mdl_start : done only on root proc in case there is any nondeterminism.
         if comm is None or comm.Get_rank() == 0:
@@ -253,6 +249,7 @@ class GST(_proto.Protocol):
         # lsgstLists can hold either circuit lists or structures - get
         # just the lists for calling core gst routines (structure is used only
         # for LGST and post-analysis).
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         rawLists = [l.allstrs if isinstance(l, validStructTypes) else l
                     for l in lsgstLists]
 
@@ -344,7 +341,7 @@ class GST(_proto.Protocol):
         parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
         parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
-        return _package_into_results('do_long_sequence_gst', ds, target_model, mdl_start,
+        return _package_into_results('do_long_sequence_gst', ds, data.input.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
                                      gaugeOptParams, advancedOptions, comm, memLimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
@@ -360,7 +357,7 @@ class StandardPracticeGST(_proto.Protocol):
         # because they are mutable objects
         if advancedOptions is None: advancedOptions = {}
 
-        super()
+        super().__init__()
         self.modes = modes.split(',')
         self.models_to_test = modelsToTest
         self.gaugeOptSuite = gaugeOptSuite
@@ -404,7 +401,7 @@ class StandardPracticeGST(_proto.Protocol):
 
                 if mode == "Target":
                     est_label = mode
-                    model_to_test = data.inp.target_model.copy()  # no parameterization change
+                    model_to_test = data.input.target_model.copy()  # no parameterization change
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label, 'onBadFit': []})
                     mdltest = _ModelTest(model_to_test, False, advanced, self.comm,
                                          self.memLimit, verbosity=printer - 1)
@@ -432,7 +429,12 @@ class StandardPracticeGST(_proto.Protocol):
                 assert(not printer.is_recording()); printer.start_recording()
                 gaugeOptSuite = self.gaugeOptSuite
                 gaugeOptTarget = self.gaugeOptTarget
-                gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, tgt,
+                target_with_dgg =  data.input.target_model.copy()  # with valid default gauge group, dictating gauge opt
+                if mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode = parameterization
+                    target_with_dgg.set_all_parameterizations(mode)
+                else:  # no gauge opt is done on everything else (model tests)
+                    target_with_dgg.default_gauge_group = _objs.TrivialGaugeGroup(target_with_dgg.dim)
+                gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, target_with_dgg,
                                                                   advancedOptions, printer - 1)
 
                 if gaugeOptTarget is not None:
@@ -794,14 +796,21 @@ def _package_into_results(callerName, ds, target_model, mdl_start, lsgstLists,
         ret.init_dataset(ds)
         ret.init_circuits(lsgstLists)
     else:
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         assert(ret.dataset is ds), "DataSet inconsistency: cannot append!"
         assert(len(lsgstLists) == len(ret.circuit_structs['iteration'])), \
             "Iteration count inconsistency: cannot append!"
         for i, (a, b) in enumerate(zip(lsgstLists, ret.circuit_structs['iteration'])):
-            assert(len(a.allstrs) == len(b.allstrs)), \
-                "Iteration %d should have %d of sequences but has %d" % (i, len(b.allstrs), len(a.allstrs))
-            assert(set(a.allstrs) == set(b.allstrs)), \
-                "Iteration %d: sequences don't match existing Results object!" % i
+            if isinstance(a, validStructTypes):
+                assert(len(a.allstrs) == len(b.allstrs)), \
+                    "Iteration %d should have %d of sequences but has %d" % (i, len(b.allstrs), len(a.allstrs))
+                assert(set(a.allstrs) == set(b.allstrs)), \
+                    "Iteration %d: sequences don't match existing Results object!" % i
+            else:
+                assert(len(a) == len(b.allstrs)), \
+                    "Iteration %d should have %d of sequences but has %d" % (i, len(b.allstrs), len(a))
+                assert(set(a) == set(b.allstrs)), \
+                    "Iteration %d: sequences don't match existing Results object!" % i
 
     #add estimate to Results
     estlbl = advancedOptions.get('estimateLabel', 'default')

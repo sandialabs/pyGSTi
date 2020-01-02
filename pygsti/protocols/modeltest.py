@@ -18,7 +18,6 @@ import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
 from . import protocol as _proto
-from .gst import StandardGSTInput as _StandardGSTInput
 from .. import objects as _objs
 from .. import algorithms as _alg
 from .. import construction as _construction
@@ -43,7 +42,7 @@ class ModelTest(_proto.Protocol):
             model_to_test = model_to_test.copy()
             model_to_test.default_gauge_group = _objs.TrivialGaugeGroup(model_to_test.dim)  # so no gauge opt is done
 
-        super()
+        super().__init__()
         self.model_to_test = model_to_test
         self.gaugeOptParams = gaugeOptParams
         self.advancedOptions = advancedOptions
@@ -54,6 +53,7 @@ class ModelTest(_proto.Protocol):
 
     def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
                                       meas_fiducials, germs, maxLengths):
+        from .gst import StandardGSTInput as _StandardGSTInput
         inp = _StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
         return self.run(_proto.ProtocolData(inp, dataset))
 
@@ -94,6 +94,7 @@ class ModelTest(_proto.Protocol):
         if 'onBadFit' not in advancedOptions:
             advancedOptions['onBadFit'] = []  # empty list => 'do nothing'
 
+        from .gst import _package_into_results
         return _package_into_results('ModelTest.run', ds, target_model, the_model,
                                      lsgstLists, parameters, None, mdl_lsgst_list,
                                      self.gaugeOptParams, advancedOptions, comm, self.memLimit,
