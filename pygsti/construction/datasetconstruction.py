@@ -113,7 +113,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
 
     """
     NTOL = 10
-    TOL = 1 / (10**-NTOL)
+    TOL = 10**-NTOL
 
     if isinstance(modelOrDataset, _ds.DataSet):
         dsGen = modelOrDataset
@@ -173,25 +173,21 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                 if gsGen and sampleError in ("binomial", "multinomial"):
                     #Check that sum ~= 1 (and nudge if needed) since binomial and
                     #  multinomial random calls assume this.
-                    psum = sum(ps.values())
-                    adjusted = False
-                    if psum > 1 + TOL:
-                        adjusted = True
-                        _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                    if psum < 1 - TOL:
-                        adjusted = True
-                        _warnings.warn("Adjusting sum(probs) < 1 to 1")
-
-                    # A cleaner probability cleanup.. lol
                     OVERTOL = 1.0 + TOL
                     UNDERTOL = 1.0 - TOL
-                    def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
-                    if not normalized():
-                        m = max(ps.values())
-                        ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
-                        print(sum(ps.values()))
+                    psum = sum(ps.values())
+                    adjusted = False
+                    if psum > OVERTOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) = %g > 1 to 1" % psum)
+                    if psum < UNDERTOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) = %g < 1 to 1" % psum)
 
-                    assert normalized(), 'psum={}'.format(sum(ps.values()))
+                    if not UNDERTOL <= psum <= OVERTOL:
+                        ps = {lbl: p / psum for lbl, p in ps.items()}
+                    assert(UNDERTOL <= sum(ps.values()) <= OVERTOL), 'psum={}'.format(sum(ps.values()))
+                    
                     if adjusted:
                         _warnings.warn('Adjustment finished')
 
