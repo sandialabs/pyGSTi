@@ -57,7 +57,7 @@ class ModelTest(_proto.Protocol):
         inp = _StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
         return self.run(_proto.ProtocolData(inp, dataset))
 
-    def run(self, data):
+    def _run(self, data):
         the_model = self.model_to_test
         advancedOptions = self.advancedOptions
         comm = self.comm

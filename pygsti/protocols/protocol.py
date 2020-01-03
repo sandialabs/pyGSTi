@@ -20,100 +20,82 @@ class Protocol(object):
     def __init__(self):
         pass
 
-    def run():
-        raise NotImplementedError("Derived classes should implement this!")
+    def run(self, data):
+        if data.has_subdata():  # ~ is this is a directory
+            # Note: we also know that self *isn't* a MultiProtocol object since
+            # MultiProtocol overrides run(...).
+            implicit_multiprotocol = MultiProtocol(self)
+            return implicit_multiprotocol.run(data)
+        return self._run(data)
 
+    def _run(self, data):
+        raise NotImplementedError("Derived classes should implement this!")
 
 # SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
 #  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
-class SimultaneousProtocol(Protocol):
-    def __init__(self, protocols, qubit_labels_per_protocol=None):
-        super().__init__()
-        self.protocols = protocols
-        self.qubit_labels_per_protocol = qubit_labels_per_protocol
-
-    def run(self, data):
-        inp = data.input
-        dataset = data.dataset
-        results = ProtocolResults(data)
-        qubit_ordering = list(dataset.keys())[0].line_labels
-        qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
-
-        if isinstance(inp, SimultaneousInput):
-            #Then input tells us how to divide circuits (and has already done so)
-            protocols = [self.protocols[0]] * len(inp.inputs) if len(self.protocols) == 1 \
-                else self.protocols
-            assert(len(inp.inputs) == len(protocols))
-            for (qubit_labels, sub_input), protocol in zip(inp.inputs.items(), protocols):
-                qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
-                filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices, idle=None)  # Marginalize dataset
-
-                #DEBUG TODO REMOVE
-                for ii, c in enumerate(sub_input.all_circuits_needing_data):
-                    if c not in filtered_ds:
-                        print("Missing: ", c)
-                        print(ii)
-                        import bpdb; bpdb.set_trace()
-                        pass
-
-                sub_data = ProtocolData(sub_input, filtered_ds)
-                #TODO - save this marginalized dataset in results?
-                sub_results = protocol.run(sub_data)
-                results.qtys[qubit_labels] = sub_results.qtys  # something like this?
-        else:
-            #We must be told how to divy-up the data
-            assert(self.qubit_labels_per_protocol is not None)
-            protocols = [self.protocols[0]] * len(self.qubit_labels_per_protocol) if len(self.protocols) == 1 \
-                else self.protocols
-
-            for qubit_labels, protocol in zip(self.qubit_labels_per_protocol, protocols):
-                qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
-                filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
-                sub_input = ProtocolInput(list(filtered_ds.keys()), qubit_labels)
-                sub_data = ProtocolData(sub_input, filtered_ds)
-                #TODO - save this marginalized dataset in results?
-                sub_results = protocol.run(sub_data)
-                results.qtys[qubit_labels] = sub_results.qtys  # something like this?
-
-        return results
-
-
 # MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
 #   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
 #   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
 class MultiProtocol(Protocol):
-    def __init__(self, protocols, merge_results=False):
+    def __init__(self, protocols):
         super().__init__()
         self.protocols = protocols
-        self.merge_results = merge_results
 
     def run(self, data):
-        inp = data.input
-        dataset = data.dataset
+        assert(data.has_subdata()), "`MultiProtocol` can only be run on ProtocolData objects containing sub-data"
+        protocols = self.protocols
+        if isinstance(protocols, Protocol):  # allow a single Protocol to be given as 'self.protocols'
+            protocols = [protocols] * len(data)
+
+        assert(len(data) == len(protocols))
+
         results = ProtocolResults(data)
+        for (qubit_labels, sub_data), protocol in zip(data.items(), protocols):
+            sub_results = protocol.run(sub_data)
+            results.qtys[qubit_labels] = sub_results.qtys  # something like this?
+        return results
 
-        if isinstance(inp, MultiInput):
-            assert(len(inp.inputs) == len(self.protocols))
-            for (sub_name, sub_input), protocol in zip(inp.inputs.items(), self.protocols):
-                if sub_name.startswith("**"): subname = protocol.__class__.__name__
-                assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
-                sub_data = ProtocolData(sub_input, dataset)  #we *could* truncate the dataset to only sub_input.all_circuits_needing_data, but don't bother
-                sub_results = protocol.run(sub_data)
-                results.qtys[sub_name] = sub_results.qtys  # something like this?
+    
+#Same protocol!
+class SimultaneousProtocol(MultiProtocol):
+    pass
 
-        else:
-            if self.merge_results:
-                for protocol in self.protocols:
-                    sub_name = protocol.__class__.__name__
-                    assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
-                    sub_results = protocol.run(results)
-                    results.merge_in_qtys(sub_results.qtys)  # something like this?
-            else:
-                for protocol in self.protocols:
-                    sub_name = protocol.__class__.__name__
-                    assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
-                    sub_results = protocol.run(data)
-                    results.qtys[sub_name] = sub_results.qtys  # something like this?
+## MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
+##   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
+##   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
+#class MultiProtocol(Protocol):
+#    def __init__(self, protocols, merge_results=False):
+#        super().__init__()
+#        self.protocols = protocols
+#        self.merge_results = merge_results
+#
+#    def run(self, data):
+#        inp = data.input
+#        dataset = data.dataset
+#        results = ProtocolResults(data)
+#
+#        if isinstance(inp, MultiInput):
+#            assert(len(inp.inputs) == len(self.protocols))
+#            for (sub_name, sub_input), protocol in zip(inp.inputs.items(), self.protocols):
+#                if sub_name.startswith("**"): subname = protocol.__class__.__name__
+#                assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
+#                sub_data = ProtocolData(sub_input, dataset)  #we *could* truncate the dataset to only sub_input.all_circuits_needing_data, but don't bother
+#                sub_results = protocol.run(sub_data)
+#                results.qtys[sub_name] = sub_results.qtys  # something like this?
+#
+#        else:
+#            if self.merge_results:
+#                for protocol in self.protocols:
+#                    sub_name = protocol.__class__.__name__
+#                    assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
+#                    sub_results = protocol.run(results)
+#                    results.merge_in_qtys(sub_results.qtys)  # something like this?
+#            else:
+#                for protocol in self.protocols:
+#                    sub_name = protocol.__class__.__name__
+#                    assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
+#                    sub_results = protocol.run(data)
+#                    results.qtys[sub_name] = sub_results.qtys  # something like this?
 
 
 class ProtocolInput(object):
@@ -155,6 +137,9 @@ class ProtocolInput(object):
     def write(self, dirname):
         pass
 
+    def create_subdata(self, subdata_name, dataset):
+        raise NotImplementedError("This protocol input cannot create any subdata!")
+
 
 class CircuitListsInput(ProtocolInput):
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
@@ -190,8 +175,47 @@ class CircuitStructuresInput(CircuitListsInput):
         self.circuit_structs = circuit_structs
 
 
+# MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
+class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
+    def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None):
+        if not isinstance(sub_inputs, dict):
+            sub_inputs = {("**%d" % i): inp for i, inp in enumerate(sub_inputs)}
+
+        if all_circuits is None:
+            all_circuits = []
+            for inp in sub_inputs.values():
+                all_circuits.extend(inp.all_circuits_needing_data)
+            _lt.remove_duplicates_in_place(all_circuits)  #Maybe don't always do this?
+
+        if qubit_labels is None:
+            qubit_labels = tuple(_itertools.chain(*[inp.qubit_labels for inp in sub_inputs.values()]))
+
+        super().__init__(all_circuits, qubit_labels)
+        self._subinputs = sub_inputs
+
+    def create_subdata(self, sub_name, dataset):
+        """TODO: docstring - used to create sub-ProtocolData objects (by ProtocolData) """
+        sub_input = self[sub_name]
+        return ProtocolData(sub_input, dataset)
+
+    def items(self):
+        return self._subinputs.items()
+
+    def keys(self):
+        return self._subinputs.keys()
+    
+    def __getitem__(self, key):
+        return self._subinputs[key]
+
+    def __contains__(self, key):
+        return key in self._subinputs[key]
+
+    def __len__(self):
+        return len(self._subinputs)
+
+
 # SimultaneousInput -- specifies a "qubit structure" for each sub-input
-class SimultaneousInput(ProtocolInput):
+class SimultaneousInput(MultiInput):
     """ TODO - need to be given sub-inputs whose circuits all act on the same set of
         qubits and are disjoint with the sets of all other sub-inputs.
     """
@@ -227,26 +251,19 @@ class SimultaneousInput(ProtocolInput):
                 c.done_editing()
                 tensored_circuits.append(c)
 
-        super().__init__(tensored_circuits, qubit_labels)
-        self.inputs = {inp.qubit_labels: inp for inp in inputs}
+        sub_inputs = {inp.qubit_labels: inp for inp in inputs}
+        super().__init__(sub_inputs, tensored_circuits, qubit_labels)
 
-    def get_structure(self):
-        return list(self.inputs.keys())  # a list of qubit-label tuples
+    def get_structure(self):  #TODO: USED??
+        return list(self.keys())  # a list of qubit-label tuples
 
-
-# MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
-class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
-    def __init__(self, inputs):
-        if not isinstance(inputs, dict):
-            inputs = {("**%d" % i): inp for i,inp in enumerate(inputs)}
-
-        all_circuits = []; qubit_labels = []
-        for inp in inputs.values():
-            all_circuits.extend(inp.all_circuits_needing_data)
-            qubit_labels.extend(inp.qubit_labels[:])
-        _lt.remove_duplicates_in_place(all_circuits)
-        super().__init__(all_circuits, qubit_labels)
-        self.inputs = inputs
+    def create_subdata(self, qubit_labels, dataset):
+        qubit_ordering = list(dataset.keys())[0].line_labels
+        qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
+        sub_input = self[qubit_labels]
+        qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
+        filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices, idle=None)  # Marginalize dataset
+        return ProtocolData(sub_input, filtered_ds)
 
 
 class ProtocolData(object):
@@ -254,6 +271,46 @@ class ProtocolData(object):
         self.input = protocol_input
         self.dataset = dataset  # MultiDataSet allowed for multi-pass data?
         self.cache = cache if (cache is not None) else {}
+        self._subdatas = {} if isinstance(protocol_input, MultiInput) else None
+
+    def has_subdata(self):
+        return self._subdatas is not None
+        
+    #Support lazy evaluation of sub_datas
+    def keys(self):
+        if self.has_subdata():
+            return self.input.keys()
+        else:
+            return []
+
+    def items(self):
+        if self.has_subdata():
+            for name in self.input.keys():
+                yield name, self[name]
+
+    def __getitem__(self, subdata_name):
+        if not self.has_subdata():
+            raise ValueError("This ProtocolData object has no sub-datas.")
+        if subdata_name not in self._subdatas:
+            if subdata_name not in self.input.keys():
+                raise KeyError("Missing sub-data name: %s" % subdata_name)
+            self._subdatas[subdata_name] = self.input.create_subdata(subdata_name, self.dataset)
+        return self._subdatas[subdata_name]
+
+    #def __setitem__(self, subdata_name, val):
+    #    self._subdatas[subdata_name] = val
+
+    def __contains__(self, subdata_name):
+        if self.has_subdata():
+            return subdata_name in self.input.keys()
+        else:
+            return False
+
+    def __len__(self):
+        if self.has_subdata():
+            return len(self.input)
+        else:
+            return 0
 
 
 class ProtocolResults(ProtocolData):

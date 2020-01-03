@@ -364,7 +364,7 @@ class StandardPracticeGST(_proto.Protocol):
         data = _proto.ProtocolData(inp, dataset)
         return self.run(data)
 
-    def run(self, data):
+    def _run(self, data):
         printer = _objs.VerbosityPrinter.build_printer(self.verbosity, self.comm)
 
         modes = self.modes

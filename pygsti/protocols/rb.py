@@ -347,7 +347,7 @@ class VolumetricBenchmark(Benchmark):
             rescale_function = rescaler
         self.rescale_function = rescale_function
 
-    def run(self, data):
+    def _run(self, data):
 
         inp = data.input
 
@@ -469,7 +469,7 @@ class VolumetricBenchmark(Benchmark):
 
 class PredictedData(_proto.Protocol):
     #maybe just a function??
-    def run(self, data):
+    def _run(self, data):
 
         for i, ((circ, dsrow), auxdict, (pcirc, pdsrow)) in enumerate(iterator):
             if pcirc is not None:
