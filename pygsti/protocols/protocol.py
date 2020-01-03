@@ -22,7 +22,11 @@ class Protocol(object):
         pass
 
     def run(self, data):
-        if data.has_subdata():  # ~ is this is a directory
+        if data.is_multipass():
+            implicit_multipassprotocol = MultiPassProtocol(self)
+            return implicit_multipassprotocol.run(data)
+
+        elif data.is_multiinput():  # ~ is this is a directory
             # Note: we also know that self *isn't* a MultiProtocol object since
             # MultiProtocol overrides run(...).
             if isinstance(data.input, SimultaneousInput):
@@ -30,7 +34,9 @@ class Protocol(object):
             else:
                 implicit_multiprotocol = MultiProtocol(self)
             return implicit_multiprotocol.run(data)
-        return self._run(data)
+
+        else:
+            return self._run(data)
 
     def _run(self, data):
         raise NotImplementedError("Derived classes should implement this!")
@@ -46,14 +52,14 @@ class MultiProtocol(Protocol):
         self.root_qty_name = 'Protocol'
 
     def run(self, data):
-        assert(data.has_subdata()), "`MultiProtocol` can only be run on ProtocolData objects containing sub-data"
+        assert(data.is_multiinput()), "`MultiProtocol` can only be run on ProtocolData objects with multi-input data"
         protocols = self.protocols
         if isinstance(protocols, Protocol):  # allow a single Protocol to be given as 'self.protocols'
             protocols = [protocols] * len(data)
 
         assert(len(data) == len(protocols))
 
-        results = ProtocolResults(data, self.root_qty_name)
+        results = ProtocolResults(data, self.root_qty_name, 'category')
         for (sub_name, sub_data), protocol in zip(data.items(), protocols):
             sub_results = protocol.run(sub_data)
             results.qtys[sub_name] = sub_results  # something like this?
@@ -66,6 +72,23 @@ class SimultaneousProtocol(MultiProtocol):
     def __init__(self, protocols):
         super().__init__(protocols)
         self.root_qty_name = 'Qubits'
+
+
+class MultiPassProtocol(Protocol):
+    # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
+    def __init__(self, protocol):
+        super().__init__()
+        self.protocol = protocol
+
+    def run(self, data):
+        assert(data.is_multipass()), "`MultiPassProtocol` can only be run on ProtocolData objects with multi-pass data"
+
+        results = ProtocolResults(data, 'Pass', 'category')
+        for pass_name, sub_data in data.items():  # a multipass DataProtocol object contains per-pass datas
+            #TODO: print progress: pass X of Y, etc
+            sub_results = self.protocol.run(sub_data)
+            results.qtys[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
+        return results
 
 
 class ProtocolInput(object):
@@ -239,45 +262,67 @@ class SimultaneousInput(MultiInput):
 class ProtocolData(object):
     def __init__(self, protocol_input, dataset=None, cache=None):
         self.input = protocol_input
-        self.dataset = dataset  # MultiDataSet allowed for multi-pass data?
+        self.dataset = dataset  # MultiDataSet allowed for multi-pass data
         self.cache = cache if (cache is not None) else {}
-        self._subdatas = {} if isinstance(protocol_input, MultiInput) else None
+        if isinstance(dataset, _objs.MultiDataSet):
+            self._subdatas = {dsname: ProtocolData(self.input, ds) for dsname, ds in dataset.items()}
+        elif isinstance(protocol_input, MultiInput):
+            self._subdatas = {}
+        else:
+            self._subdatas = None
+        #Note: if a ProtocolData is given a multi-Input and multi-DataSet, then the sub-datas are
+        # for the different *passes* and not the inputs - i.e. multi-data takes precedence over multi-input.
 
-    def has_subdata(self):
-        return self._subdatas is not None
+    def is_multiinput(self):
+        return isinstance(self.input, MultiInput) and not isinstance(self.dataset, _objs.MultiDataSet)
+
+    def is_multipass(self):
+        return isinstance(self.dataset, _objs.MultiDataSet)
         
     #Support lazy evaluation of sub_datas
     def keys(self):
-        if self.has_subdata():
+        if self.is_multipass():
+            return self._subdatas.keys()
+        elif self.is_multiinput():
             return self.input.keys()
         else:
             return []
 
     def items(self):
-        if self.has_subdata():
+        if self.is_multipass():
+            for passname, val in self._subdatas.items():
+                yield passname, val
+        elif self.is_multiinput():
             for name in self.input.keys():
                 yield name, self[name]
 
     def __getitem__(self, subdata_name):
-        if not self.has_subdata():
+        if self.is_multipass():
+            return self._subdatas[subdata_name]
+        elif self.is_multiinput():  #can compute lazily
+            if subdata_name not in self._subdatas:
+                if subdata_name not in self.input.keys():
+                    raise KeyError("Missing sub-data name: %s" % subdata_name)
+                self._subdatas[subdata_name] = self.input.create_subdata(subdata_name, self.dataset)
+            return self._subdatas[subdata_name]
+        else:
             raise ValueError("This ProtocolData object has no sub-datas.")
-        if subdata_name not in self._subdatas:
-            if subdata_name not in self.input.keys():
-                raise KeyError("Missing sub-data name: %s" % subdata_name)
-            self._subdatas[subdata_name] = self.input.create_subdata(subdata_name, self.dataset)
-        return self._subdatas[subdata_name]
 
     #def __setitem__(self, subdata_name, val):
     #    self._subdatas[subdata_name] = val
 
     def __contains__(self, subdata_name):
-        if self.has_subdata():
+        if self.is_multipass():
+            return subdata_name in self._subdatas
+        elif self.is_multiinput():
             return subdata_name in self.input.keys()
         else:
             return False
 
     def __len__(self):
-        if self.has_subdata():
+        if self.is_multipass():
+            return len(self._subdatas)
+        elif self.is_multiinput():
             return len(self.input)
         else:
             return 0

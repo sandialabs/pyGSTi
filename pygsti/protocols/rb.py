@@ -169,25 +169,6 @@ class DirectRBInput(BenchmarkingInput):
 
 #TODO: maybe need more input types for simultaneous RB and mirrorRB "experiments"
 
-#class MultiPassProtocol(_proto.Protocol):
-#    # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
-#
-#    def run_multipass(self, data):
-#
-#        assert(isinstance(data.dataset, _objs.MultiDataSet))
-#        inp = data.input
-#        multids = data.dataset
-#        #numpasses = len(multids.keys())
-#
-#        final_result = _proto.MultiPassResults()
-#        for ds_name, ds in multids.items():
-#            #TODO: print progress: pass X of Y, etc
-#            data = _proto.ProtocolData(inp, ds)
-#            results = self.run(data)
-#            final_result.add_pass_results(results, ds_name)  #some Result objects have this method??
-#
-#        return final_result
-
 
 class Benchmark(_proto.Protocol):
 
@@ -264,47 +245,26 @@ class Benchmark(_proto.Protocol):
 
     #def compute_results_qty(self, results, qtyname, component_names, compute_fn, force=False, for_passes="all"):
     def compute_dict(self, data, component_names, compute_fn, for_passes="all"):
-
-        if isinstance(data.dataset, _objs.MultiDataSet):
-            multids = data.dataset
-            if for_passes == "all":
-                passes = list(multids.items())
-            elif for_passes == "first":  # only run for *first* dataset in multidataset
-                passes = [(None, multids[multids.keys()[0]])]
-            elif for_passes == "none":  # don't run on any data
-                passes = [(None, None)]
-            else:
-                raise ValueError("Invalid 'for_passes' arg!")
-        else:
-            passes = [(None, data.dataset)]
-            assert(for_passes in ("all", "first")), "'for_passes' can only be something other than 'all' for multi-pass data!"
-
+        
         inp = data.input
-
-        if (passes[0][0] is None):  # whether we have multiple passes
-            def passdata(): return []
-        else:
-            def passdata(): return {passname: [] for passname, ds in passes}
+        ds = data.dataset
 
         depths = inp.depths
-        qty_data = {comp: {depth: passdata() for depth in depths}
-                    for comp in component_names}
+        qty_data = _proto.NamedDict('Datatype', 'category', None,
+                                    {comp: _proto.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+                                     for comp in component_names})
+        
+        #loop over all circuits
+        for depth, circuits_at_depth, idealouts_at_depth in zip(depths, inp.circuit_lists, inp.idealout_lists):
+            for icirc, (circ, idealout) in enumerate(zip(circuits_at_depth, idealouts_at_depth)):
+                dsrow = ds[circ] if (ds is not None) else None  # stripOccurrenceTags=True ??
+                # -- this is where Tim thinks there's a bottleneck, as these loops will be called for each
+                # member of a simultaneous experiment separately instead of having an inner-more iteration
+                # that loops over the "structure", i.e. the simultaneous qubit sectors.
+                #TODO: <print percentage>
 
-        for passname, ds in passes:
-            #loop over all circuits
-            for depth, circuits_at_depth, idealouts_at_depth in zip(depths, inp.circuit_lists, inp.idealout_lists):
-                for icirc, (circ, idealout) in enumerate(zip(circuits_at_depth, idealouts_at_depth)):
-                    dsrow = ds[circ] if (ds is not None) else None  # stripOccurrenceTags=True ??
-                    # -- this is where Tim thinks there's a bottleneck, as these loops will be called for each
-                    # member of a simultaneous experiment separately instead of having an inner-more iteration
-                    # that loops over the "structure", i.e. the simultaneous qubit sectors.
-                    #TODO: <print percentage>
-
-                    for component_name, val in compute_fn(icirc, circ, dsrow, idealout).items():
-                        if passname is None:
-                            qty_data[component_name][depth].append(val)  # maybe use a pandas dataframe here?
-                        else:
-                            qty_data[component_name][depth][passname].append(val)  # maybe use a pandas dataframe here?
+                for component_name, val in compute_fn(icirc, circ, dsrow, idealout).items():
+                    qty_data[component_name][depth].append(val)  # maybe use a pandas dataframe here?
 
         return qty_data
 
@@ -312,8 +272,10 @@ class Benchmark(_proto.Protocol):
 class PassStabilityTest(_proto.Protocol):
     pass
 
+
 class VolumetricBenchmarkGrid(Benchmark):
     pass  #object that can take, e.g. a multiinput or simultaneous input and create a results object with the desired grid of width vs depth numbers
+
 
 class VolumetricBenchmark(Benchmark):
 
@@ -357,14 +319,13 @@ class VolumetricBenchmark(Benchmark):
             if self.datatype not in data.cache:
                 summary_data_dict = self.compute_summary_data(data)
                 data.cache.update(summary_data_dict)
-            src_data = data.cache[self.datatype]
-            passnames = list(data.dataset.keys()) if isinstance(data.dataset, _objs.MultiDataSet) else None
         elif self.datatype in self.dscmp_datatypes:
             if self.datatype not in data.cache:
                 dscmp_data = self.compute_dscmp_data(data, self.dscomparator)
                 data.cache.update(dscmp_data)
-            src_data = data.cache[self.datatype]
-            passnames = None
+        else:
+            raise ValueError("Invalid datatype: %s" % self.datatype)
+        src_data = data.cache[self.datatype]
 
         #self.compute_circuit_data(results)
         #self.compute_predicted_probs(results, qtyname, model)
@@ -394,57 +355,43 @@ class VolumetricBenchmark(Benchmark):
             failcount = _np.sum(_np.isnan(percircuitdata))
             return (nCircuits - failcount, failcount)
 
-        def new_passdata(depths, widths):
+        def new_datadict(depths, widths, seriestype):
             return _proto.NamedDict(
-                'Depth', 'int', None, {depth: _proto.NamedDict(
-                    'Width', 'int', None, {width: None for width in widths}) for depth in depths})
+                'Depth', 'int', seriestype, {depth: _proto.NamedDict(
+                    'Width', 'int', seriestype, {width: None for width in widths}) for depth in depths})
 
         #TODO REMOVE
         #BEFORE SimultaneousInputs: for qubits in inp.get_structure():        
         #width = len(qubits)
 
-        passdata_per_depth = src_data
+        data_per_depth = src_data
         if self.depths == 'all':
-            depths = passdata_per_depth.keys()
+            depths = data_per_depth.keys()
         else:
-            depths = filter(lambda d: d in passdata_per_depth, self.depths)
+            depths = filter(lambda d: d in data_per_depth, self.depths)
         width = len(inp.qubit_labels)
 
-        if passnames is None:
-            vb = new_passdata(depths, (width,))
-            fails = new_passdata(depths, (width,))
-        else:
-            vb = _proto.NamedDict('Pass', 'category', None, {passname: new_passdata(depths, (width,)) for passname in passnames})
-            fails = _proto.NamedDict('Pass', 'category', None, {passname: new_passdata(depths, (width,)) for passname in passnames})
+        vb = new_datadict(depths, (width,), 'float')
+        fails = new_datadict(depths, (width,), None)
 
         for depth in depths:
-            passdata = passdata_per_depth[depth]
+            percircuitdata = data_per_depth[depth]
 
-            if passnames is None:
-                percircuitdata = passdata
-                fails[depth][width] = failcnt_fn(percircuitdata)
-                vb[depth][width] = agg_fn(percircuitdata, width)
-            else:
-                failcounts = [failcnt_fn(passdata[passname]) for passname in passnames]
-                vbvals = [agg_fn(passdata[passname], width) for passname in passnames]
-
-                if not self.aggregate:
-                    for i, passname in enumerate(passnames):
-                        vb[passname][depth][width] = vbvals[i]
-                        fails[passname][depth][width] = failcounts[i]
-
-                else:  # aggregate pass data
-                    successcount = 0
-                    failcount = 0
-                    for (successcountpass, failcountpass) in failcounts:
-                        successcount += successcountpass
-                        failcount += failcountpass
-                    fails[depth][width] = (successcount, failcount)
-
-                    if self.statistic == 'dist':
-                        vb[depth][width] = [item for sublist in vbvals for item in sublist]
-                    else:
-                        vb[depth][width] = agg_fn(vbvals, width, rescale=False)
+            fails[depth][width] = failcnt_fn(percircuitdata)
+            vb[depth][width] = agg_fn(percircuitdata, width)
+            
+            #else:  # aggregate depth & width data across passes
+            #    successcount = 0
+            #    failcount = 0
+            #    for (successcountpass, failcountpass) in failcounts:
+            #        successcount += successcountpass
+            #        failcount += failcountpass
+            #    fails[depth][width] = (successcount, failcount)
+            #
+            #    if self.statistic == 'dist':
+            #        vb[depth][width] = [item for sublist in vbvals for item in sublist]
+            #    else:
+            #        vb[depth][width] = agg_fn(vbvals, width, rescale=False)
 
         if self.statistic in ('minmin', 'maxmax'):
             raise NotImplementedError("TODO")  # need a new MultiVolumetricBenchmark protocol?
