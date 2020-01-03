@@ -46,12 +46,15 @@ class SimultaneousProtocol(Protocol):
             assert(len(inp.inputs) == len(protocols))
             for (qubit_labels, sub_input), protocol in zip(inp.inputs.items(), protocols):
                 qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
-                filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+                filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices, idle=None)  # Marginalize dataset
 
                 #DEBUG TODO REMOVE
-                for c in sub_input.all_circuits_needing_data:
+                for ii, c in enumerate(sub_input.all_circuits_needing_data):
                     if c not in filtered_ds:
+                        print("Missing: ", c)
+                        print(ii)
                         import bpdb; bpdb.set_trace()
+                        pass
 
                 sub_data = ProtocolData(sub_input, filtered_ds)
                 #TODO - save this marginalized dataset in results?
@@ -101,13 +104,13 @@ class MultiProtocol(Protocol):
         else:
             if self.merge_results:
                 for protocol in self.protocols:
-                    subname = protocol.__class__.__name__
+                    sub_name = protocol.__class__.__name__
                     assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
                     sub_results = protocol.run(results)
                     results.merge_in_qtys(sub_results.qtys)  # something like this?
             else:
                 for protocol in self.protocols:
-                    subname = protocol.__class__.__name__
+                    sub_name = protocol.__class__.__name__
                     assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
                     sub_results = protocol.run(data)
                     results.qtys[sub_name] = sub_results.qtys  # something like this?
@@ -208,11 +211,18 @@ class SimultaneousInput(ProtocolInput):
         if tensored_circuits is None:
             #Build tensor product of circuits
             tensored_circuits = []
-            circuits_per_input = [inp.all_circuits_needing_data for inp in inputs]
-            for subcircuits in zip(*circuits_per_input):  # TODO: what if some lists are shorter - fill with empty? TODO
+            circuits_per_input = [inp.all_circuits_needing_data[:] for inp in inputs]
+
+            #Pad shorter lists with None values
+            maxLen = max(map(len, circuits_per_input))
+            for lst in circuits_per_input:
+                if len(lst) < maxLen: lst.extend([None] * (maxLen - len(lst)))
+                
+            for subcircuits in zip(*circuits_per_input):
                 c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
                 for subc in subcircuits:
-                    c.tensor_circuit(subc)
+                    if subc is not None:
+                        c.tensor_circuit(subc)
                 c.line_labels = qubit_labels
                 c.done_editing()
                 tensored_circuits.append(c)
@@ -234,7 +244,7 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
         for inp in inputs.values():
             all_circuits.extend(inp.all_circuits_needing_data)
             qubit_labels.extend(inp.qubit_labels[:])
-        _lt.remove_duplicates_inplace(all_circuits)
+        _lt.remove_duplicates_in_place(all_circuits)
         super().__init__(all_circuits, qubit_labels)
         self.inputs = inputs
 
