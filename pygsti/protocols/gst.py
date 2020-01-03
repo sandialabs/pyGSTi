@@ -14,6 +14,8 @@ import numpy as _np
 import pickle as _pickle
 import collections as _collections
 import warnings as _warnings
+import itertools as _itertools
+import copy as _copy
 import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
@@ -29,47 +31,36 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 
+#For results object:
+from ..objects.estimate import Estimate as _Estimate
+from ..objects.circuitstructure import LsGermsStructure as _LsGermsStructure
+from ..objects.circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
+from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
+from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
+
+
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
-
-class GSTInput(_proto.CircuitListsInput):
-    """ Minimal Inputs needed for GST """
-    def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None, qubit_labels=None):
-        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels)
+class HasTargetModel(object):
+    def __init__(self, targetModelFilenameOrObj):
         self.target_model = _load_model(targetModelFilenameOrObj)
+
+
+class GSTInput(_proto.CircuitListsInput, HasTargetModel):
+    """ Minimal Inputs needed for GST """
+    def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None,
+                 qubit_labels=None, nested=False):
+        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested)
+        HasTargetModel.__init__(self, targetModelFilenameOrObj)
         self.add_default_protocol("GST")
 
-    #def create_circuit_list(self, verbosity=0):
-    #    return self.all_circuits
-    #
-    #def create_circuit_lists(self, verbosity=0):
-    #    return self.circuit_lists
 
-
-class StructuredGSTInput(GSTInput):
-    def __init__(self, targetModelFilenameOrObj, circuit_structs, nested=True, qubit_labels=None):
-
-        #Convert a single LsGermsStruct to a list if needed:
-        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if isinstance(circuit_structs, validStructTypes):
-            master = circuit_structs
-            circuit_structs = [master.truncate(Ls=master.Ls[0:i + 1])
-                               for i in range(len(master.Ls))]
-            nested = True  # (by this construction)
-
-        circuit_lists = [s.allstrs for s in circuit_structs]
-        all_circuits = circuit_lists[-1][:] if nested else None
-
-        super().__init__(targetModelFilenameOrObj, circuit_lists, all_circuits, qubit_labels)
-        self.circuit_structs = circuit_structs
-        self.nested = nested
-
-    #def create_circuit_list(self, verbosity=0):
-    #    return self.lsgst_lists[-1].allstrs
-    #
-    #def create_circuit_lists(self, verbosity=0):
-    #    return [s.allstrs for s in self.lsgst_lists]
+class StructuredGSTInput(_proto.CircuitStructuresInput, HasTargetModel):
+    def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None, nested=False):
+        super().__init__(circuit_structs, qubit_labels, nested)
+        HasTargetModel.__init__(self, targetModelFilenameOrObj)
+        self.add_default_protocol("GST")
 
 
 class StandardGSTInput(StructuredGSTInput):
@@ -105,7 +96,7 @@ class StandardGSTInput(StructuredGSTInput):
             self.fpr_keep_fraction, self.fpr_keep_seed, germLengthLimits=self.germ_length_limits,
             verbosity=verbosity)
 
-        super().__init__(target_model, structs, self.nested, qubit_labels)
+        super().__init__(target_model, structs, qubit_labels, self.nested)
 
 
 class GST(_proto.Protocol):
@@ -341,7 +332,7 @@ class GST(_proto.Protocol):
         parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
         parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
-        return _package_into_results('do_long_sequence_gst', ds, data.input.target_model, mdl_start,
+        return _package_into_results('do_long_sequence_gst', data, data.input.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
                                      gaugeOptParams, advancedOptions, comm, memLimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
@@ -772,7 +763,7 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
     return lsgstLists
 
 
-def _package_into_results(callerName, ds, target_model, mdl_start, lsgstLists,
+def _package_into_results(callerName, data, target_model, mdl_start, lsgstLists,
                           parameters, opt_args, mdl_lsgst_list, gaugeOptParams,
                           advancedOptions, comm, memLimit, output_pkl, verbosity,
                           profiler, evaltree_cache=None):
@@ -792,25 +783,10 @@ def _package_into_results(callerName, ds, target_model, mdl_start, lsgstLists,
 
     ret = advancedOptions.get('appendTo', None)
     if ret is None:
-        ret = _objs.Results()
-        ret.init_dataset(ds)
-        ret.init_circuits(lsgstLists)
+        ret = ModelEstimateResults(data)
     else:
-        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        assert(ret.dataset is ds), "DataSet inconsistency: cannot append!"
-        assert(len(lsgstLists) == len(ret.circuit_structs['iteration'])), \
-            "Iteration count inconsistency: cannot append!"
-        for i, (a, b) in enumerate(zip(lsgstLists, ret.circuit_structs['iteration'])):
-            if isinstance(a, validStructTypes):
-                assert(len(a.allstrs) == len(b.allstrs)), \
-                    "Iteration %d should have %d of sequences but has %d" % (i, len(b.allstrs), len(a.allstrs))
-                assert(set(a.allstrs) == set(b.allstrs)), \
-                    "Iteration %d: sequences don't match existing Results object!" % i
-            else:
-                assert(len(a) == len(b.allstrs)), \
-                    "Iteration %d should have %d of sequences but has %d" % (i, len(b.allstrs), len(a))
-                assert(set(a) == set(b.allstrs)), \
-                    "Iteration %d: sequences don't match existing Results object!" % i
+        dummy = ModelEstimateResults(data)  # a dummy object to check compatibility w/ret2
+        ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
 
     #add estimate to Results
     estlbl = advancedOptions.get('estimateLabel', 'default')
@@ -1182,3 +1158,343 @@ def reoptimize_with_weights(model, ds, circuitList, circuitWeights, objective, o
     else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
 
     return mdl_reopt
+
+
+class ModelEstimateResults(_proto.ProtocolResults):
+    """
+    TODO: docstring (better)
+    Adds functionality to bare ProtocolResults object but *doesn't*
+    add additional data storage - all is still within same members,
+    even if this is is exposed differently.
+    """
+
+    def __init__(self, data, init_circuits=True):
+        """
+        Initialize an empty Results object.
+        TODO: docstring
+        """
+        super().__init__(data)
+
+        #Initialize some basic "results" by just exposing the circuit lists more directly
+        circuit_lists = _collections.OrderedDict()
+        circuit_structs = _collections.OrderedDict()
+
+        if init_circuits:
+            inp = self.input
+            if isinstance(inp, _proto.CircuitStructuresInput):
+                circuit_structs['iteration'] = inp.circuit_structs[:]
+                if len(inp.circuit_structs) > 0:
+                    circuit_structs['final'] = circuit_structs['iteration'][-1]
+    
+                #Set "Ls and germs" info: gives particular structure
+                finalStruct = circuit_structs['final']
+                if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
+                    circuit_lists['prep fiducials'] = finalStruct.prepStrs
+                    circuit_lists['effect fiducials'] = finalStruct.effectStrs
+                    circuit_lists['germs'] = finalStruct.germs
+    
+            elif isinstance(inp, _proto.CircuitListsInput):
+                circuit_structs['iteration'] = []
+                for lst in inp.circuit_lists:
+                    unindexed_gss = _LsGermsStructure([], [], [], [], None)
+                    unindexed_gss.add_unindexed(lst)
+                    circuit_structs['iteration'].append(unindexed_gss)
+    
+                #Needed?
+                circuit_lists['prep fiducials'] = []
+                circuit_lists['effect fiducials'] = []
+                circuit_lists['germs'] = []
+    
+            # Extract raw circuit lists from structs
+            circuit_lists['iteration'] = \
+                [gss.allstrs for gss in circuit_structs['iteration']]
+            circuit_lists['final'] = circuit_lists['iteration'][-1]
+            circuit_lists['all'] = _tools.remove_duplicates(
+                list(_itertools.chain(*circuit_lists['iteration'])))
+    
+            running_set = set(); delta_lsts = []
+            for lst in circuit_lists['iteration']:
+                delta_lst = [x for x in lst if (x not in running_set)]
+                delta_lsts.append(delta_lst); running_set.update(delta_lst)
+            circuit_lists['iteration delta'] = delta_lsts  # *added* at each iteration
+
+        self.qtys['circuit_lists'] = circuit_lists
+        self.qtys['circuit_structs'] = circuit_structs
+        self.qtys['estimates'] = _collections.OrderedDict()
+
+    @property
+    def circuit_lists(self):
+        return self.qtys['circuit_lists']
+
+    @property
+    def circuit_structs(self):
+        return self.qtys['circuit_structs']
+
+    @property
+    def estimates(self):
+        return self.qtys['estimates']
+
+    def add_estimates(self, results, estimatesToAdd=None):
+        """
+        Add some or all of the estimates from `results` to this `Results` object.
+
+        Parameters
+        ----------
+        results : Results
+            The object to import estimates from.  Note that this object must contain
+            the same data set and gate sequence information as the importing object
+            or an error is raised.
+
+        estimatesToAdd : list, optional
+            A list of estimate keys to import from `results`.  If None, then all
+            the estimates contained in `results` are imported.
+
+        Returns
+        -------
+        None
+        """
+        if self.dataset is None:
+            raise ValueError(("The data set must be initialized"
+                              "*before* adding estimates"))
+
+        if 'iteration' not in self.circuit_structs:
+            raise ValueError(("Circuits must be initialized"
+                              "*before* adding estimates"))
+
+        assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
+        assert(len(self.circuit_structs['iteration']) == len(results.circuit_structs['iteration'])), \
+            "Iteration count inconsistency: cannot import estimates!"
+
+        for estimate_key in results.estimates:
+            if estimatesToAdd is None or estimate_key in estimatesToAdd:
+                if estimate_key in self.estimates:
+                    _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                                   + " of this Results object!  Usually you don't"
+                                   + " want to do this.")
+                self.estimates[estimate_key] = results.estimates[estimate_key]
+
+    def rename_estimate(self, old_name, new_name):
+        """
+        Rename an estimate in this Results object.  Ordering of estimates is
+        not changed.
+
+        Parameters
+        ----------
+        old_name : str
+            The labels of the estimate to be renamed
+
+        new_name : str
+            The new name for the estimate.
+
+        Returns
+        -------
+        None
+        """
+        if old_name not in self.estimates:
+            raise KeyError("%s does not name an existing estimate" % old_name)
+
+        ordered_keys = list(self.estimates.keys())
+        self.estimates[new_name] = self.estimates[old_name]  # at end
+        del self.estimates[old_name]
+        keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
+        for key in keys_to_move: self.estimates.move_to_end(key)
+
+    def add_estimate(self, targetModel, seedModel, modelsByIter,
+                     parameters, estimate_key='default'):
+        """
+        Add a set of `Model` estimates to this `Results` object.
+
+        Parameters
+        ----------
+        targetModel : Model
+            The target model used when optimizing the objective.
+
+        seedModel : Model
+            The initial model used to seed the iterative part
+            of the objective optimization.  Typically this is
+            obtained via LGST.
+
+        modelsByIter : list of Models
+            The estimated model at each GST iteration. Typically these are the
+            estimated models *before* any gauge optimization is performed.
+
+        parameters : dict
+            A dictionary of parameters associated with how this estimate
+            was obtained.
+
+        estimate_key : str, optional
+            The key or label used to identify this estimate.
+
+        Returns
+        -------
+        None
+        """
+        if self.dataset is None:
+            raise ValueError(("The data set must be initialized"
+                              "*before* adding estimates"))
+
+        if 'iteration' not in self.circuit_structs:
+            raise ValueError(("Circuits must be initialized"
+                              "*before* adding estimates"))
+
+        la, lb = len(self.circuit_structs['iteration']), len(modelsByIter)
+        assert(la == lb), "Number of iterations (%d) must equal %d!" % (lb, la)
+
+        if estimate_key in self.estimates:
+            _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                           + " of this Results object!  Usually you don't"
+                           + " want to do this.")
+
+        self.estimates[estimate_key] = _Estimate(self, targetModel, seedModel,
+                                                 modelsByIter, parameters)
+
+        #Set gate sequence related parameters inherited from Results
+        self.estimates[estimate_key].parameters['max length list'] = \
+            self.circuit_structs['final'].Ls
+
+    def add_model_test(self, targetModel, themodel,
+                       estimate_key='test', gauge_opt_keys="auto"):
+        """
+        Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
+
+        Parameters
+        ----------
+        targetModel : Model
+            The target model used for comparison to the model.
+
+        themodel : Model
+            The "model" model whose fit to the data and distance from
+            `targetModel` are assessed.
+
+        estimate_key : str, optional
+            The key or label used to identify this estimate.
+
+        gauge_opt_keys : list, optional
+            A list of gauge-optimization keys to add to the estimate.  All
+            of these keys will correspond to trivial gauge optimizations,
+            as the model model is assumed to be fixed and to have no
+            gauge degrees of freedom.  The special value "auto" creates
+            gauge-optimized estimates for all the gauge optimization labels
+            currently in this `Results` object.
+
+        Returns
+        -------
+        None
+        """
+        nIter = len(self.circuit_structs['iteration'])
+
+        # base parameter values off of existing estimate parameters
+        defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
+                    'minProbClipForWeighting': 1e-4, 'opLabelAliases': None,
+                    'truncScheme': "whole germ powers"}
+        for est in self.estimates.values():
+            for ky in defaults:
+                if ky in est.parameters: defaults[ky] = est.parameters[ky]
+
+        #Construct a parameters dict, similar to do_model_test(...)
+        parameters = _collections.OrderedDict()
+        parameters['objective'] = defaults['objective']
+        if parameters['objective'] == 'logl':
+            parameters['minProbClip'] = defaults['minProbClip']
+            parameters['radius'] = defaults['radius']
+        elif parameters['objective'] == 'chi2':
+            parameters['minProbClipForWeighting'] = defaults['minProbClipForWeighting']
+        else:
+            raise ValueError("Invalid objective: %s" % parameters['objective'])
+        parameters['profiler'] = None
+        parameters['opLabelAliases'] = defaults['opLabelAliases']
+        parameters['weights'] = None  # Hardcoded
+
+        #Set default gate group to trival group to mimic do_model_test (an to
+        # be consistent with this function creating "gauge-optimized" models
+        # by just copying the initial one).
+        themodel = themodel.copy()
+        themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
+
+        self.add_estimate(targetModel, themodel, [themodel] * nIter,
+                          parameters, estimate_key=estimate_key)
+
+        #add gauge optimizations (always trivial)
+        if gauge_opt_keys == "auto":
+            gauge_opt_keys = []
+            for est in self.estimates.values():
+                for gokey in est.goparameters:
+                    if gokey not in gauge_opt_keys:
+                        gauge_opt_keys.append(gokey)
+
+        est = self.estimates[estimate_key]
+        for gokey in gauge_opt_keys:
+            trivialEl = _TrivialGaugeGroupElement(themodel.dim)
+            goparams = {'model': themodel,
+                        'targetModel': targetModel,
+                        '_gaugeGroupEl': trivialEl}
+            est.add_gaugeoptimized(goparams, themodel, gokey)
+
+    def view(self, estimate_keys, gaugeopt_keys=None):
+        """
+        Creates a shallow copy of this Results object containing only the
+        given estimate and gauge-optimization keys.
+
+        Parameters
+        ----------
+        estimate_keys : str or list
+            Either a single string-value estimate key or a list of such keys.
+
+        gaugeopt_keys : str or list, optional
+            Either a single string-value gauge-optimization key or a list of
+            such keys.  If `None`, then all gauge-optimization keys are
+            retained.
+
+        Returns
+        -------
+        Results
+        """
+        view = ModelEstimateResults(self, init_circuits=False)
+        view.qtys['circuit_lists'] = self.circuit_lists
+        view.qyts['circuit_structs'] = self.circuit_structs
+
+        if isinstance(estimate_keys, str):
+            estimate_keys = [estimate_keys]
+        for ky in estimate_keys:
+            if ky in self.estimates:
+                view.estimates[ky] = self.estimates[ky].view(gaugeopt_keys, view)
+
+        return view
+
+    def copy(self):
+        """ Creates a copy of this Results object. """
+        #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
+        data = _proto.ProtocolData(self.input, self.dataset)
+        cpy = ModelEstimateResults(data, init_circuits=False)
+        cpy.dataset = self.dataset.copy()
+        cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
+        cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)
+        for est_key, est in self.estimates.items():
+            cpy.estimates[est_key] = est.copy()
+        return cpy
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        for est in self.estimates.values():
+            est.set_parent(self)
+
+    def __str__(self):
+        s = "----------------------------------------------------------\n"
+        s += "---------------- pyGSTi Results Object -------------------\n"
+        s += "----------------------------------------------------------\n"
+        s += "\n"
+        s += "How to access my contents:\n\n"
+        s += " .dataset    -- the DataSet used to generate these results\n\n"
+        s += " .circuit_lists   -- a dict of Circuit lists w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(list(self.circuit_lists.keys())) + "\n"
+        s += "\n"
+        s += " .circuit_structs   -- a dict of CircuitStructures w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(list(self.circuit_structs.keys())) + "\n"
+        s += "\n"
+        s += " .estimates   -- a dictionary of Estimate objects:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(list(self.estimates.keys())) + "\n"
+        s += "\n"
+        return s

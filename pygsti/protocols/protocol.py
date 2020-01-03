@@ -9,9 +9,11 @@
 #***************************************************************************************************
 
 import itertools as _itertools
-from ..tools import listtools as _lt
+
 from .. import construction as _cnst
+from .. import objects as _objs
 from ..objects import circuit as _cir
+from ..tools import listtools as _lt
 
 
 class Protocol(object):
@@ -152,10 +154,12 @@ class ProtocolInput(object):
 
 
 class CircuitListsInput(ProtocolInput):
-    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None):
+    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
         
         if all_circuits_needing_data is not None:
             all_circuits = all_circuits_needing_data
+        elif nested and len(circuit_lists) > 0:
+            all_circuits = circuit_lists[-1]
         else:
             all_circuits = []
             for lst in circuit_lists:
@@ -163,7 +167,24 @@ class CircuitListsInput(ProtocolInput):
             _lt.remove_duplicates_in_place(all_circuits)
 
         self.circuit_lists = circuit_lists
+        self.nested = nested
         super().__init__(all_circuits, qubit_labels)
+
+
+class CircuitStructuresInput(CircuitListsInput):
+    def __init__(self, circuit_structs, qubit_labels=None, nested=False):
+        """ TODO: docstring - note that a *single* structure can be given as circuit_structs """
+        
+        #Convert a single LsGermsStruct to a list if needed:
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        if isinstance(circuit_structs, validStructTypes):
+            master = circuit_structs
+            circuit_structs = [master.truncate(Ls=master.Ls[0:i + 1])
+                               for i in range(len(master.Ls))]
+            nested = True  # (by this construction)
+
+        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested)
+        self.circuit_structs = circuit_structs
 
 
 # SimultaneousInput -- specifies a "qubit structure" for each sub-input
@@ -226,8 +247,8 @@ class ProtocolData(object):
 
 
 class ProtocolResults(ProtocolData):
-    def __init__(self, pdata, result_qtys=None):
-        super().__init__(pdata.input, pdata.dataset)
+    def __init__(self, data, result_qtys=None):
+        super().__init__(data.input, data.dataset)
         self.qtys = result_qtys if (result_qtys is not None) else {}
 
 
