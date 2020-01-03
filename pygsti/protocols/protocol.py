@@ -8,6 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 import itertools as _itertools
 
 from .. import construction as _cnst
@@ -24,15 +25,17 @@ class Protocol(object):
         if data.has_subdata():  # ~ is this is a directory
             # Note: we also know that self *isn't* a MultiProtocol object since
             # MultiProtocol overrides run(...).
-            implicit_multiprotocol = MultiProtocol(self)
+            if isinstance(data.input, SimultaneousInput):
+                implicit_multiprotocol = SimultaneousProtocol(self)
+            else:
+                implicit_multiprotocol = MultiProtocol(self)
             return implicit_multiprotocol.run(data)
         return self._run(data)
 
     def _run(self, data):
         raise NotImplementedError("Derived classes should implement this!")
 
-# SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
-#  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
+
 # MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
 #   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
 #   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
@@ -40,6 +43,7 @@ class MultiProtocol(Protocol):
     def __init__(self, protocols):
         super().__init__()
         self.protocols = protocols
+        self.root_qty_name = 'Protocol'
 
     def run(self, data):
         assert(data.has_subdata()), "`MultiProtocol` can only be run on ProtocolData objects containing sub-data"
@@ -49,53 +53,19 @@ class MultiProtocol(Protocol):
 
         assert(len(data) == len(protocols))
 
-        results = ProtocolResults(data)
-        for (qubit_labels, sub_data), protocol in zip(data.items(), protocols):
+        results = ProtocolResults(data, self.root_qty_name)
+        for (sub_name, sub_data), protocol in zip(data.items(), protocols):
             sub_results = protocol.run(sub_data)
-            results.qtys[qubit_labels] = sub_results.qtys  # something like this?
+            results.qtys[sub_name] = sub_results  # something like this?
         return results
 
-    
-#Same protocol!
-class SimultaneousProtocol(MultiProtocol):
-    pass
 
-## MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
-##   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
-##   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
-#class MultiProtocol(Protocol):
-#    def __init__(self, protocols, merge_results=False):
-#        super().__init__()
-#        self.protocols = protocols
-#        self.merge_results = merge_results
-#
-#    def run(self, data):
-#        inp = data.input
-#        dataset = data.dataset
-#        results = ProtocolResults(data)
-#
-#        if isinstance(inp, MultiInput):
-#            assert(len(inp.inputs) == len(self.protocols))
-#            for (sub_name, sub_input), protocol in zip(inp.inputs.items(), self.protocols):
-#                if sub_name.startswith("**"): subname = protocol.__class__.__name__
-#                assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
-#                sub_data = ProtocolData(sub_input, dataset)  #we *could* truncate the dataset to only sub_input.all_circuits_needing_data, but don't bother
-#                sub_results = protocol.run(sub_data)
-#                results.qtys[sub_name] = sub_results.qtys  # something like this?
-#
-#        else:
-#            if self.merge_results:
-#                for protocol in self.protocols:
-#                    sub_name = protocol.__class__.__name__
-#                    assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
-#                    sub_results = protocol.run(results)
-#                    results.merge_in_qtys(sub_results.qtys)  # something like this?
-#            else:
-#                for protocol in self.protocols:
-#                    sub_name = protocol.__class__.__name__
-#                    assert(sub_name not in results.qtys), "Multiple %s names in MultiInput/MultiProtocol" % sub_name
-#                    sub_results = protocol.run(data)
-#                    results.qtys[sub_name] = sub_results.qtys  # something like this?
+# SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
+#  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
+class SimultaneousProtocol(MultiProtocol):
+    def __init__(self, protocols):
+        super().__init__(protocols)
+        self.root_qty_name = 'Qubits'
 
 
 class ProtocolInput(object):
@@ -208,7 +178,7 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
         return self._subinputs[key]
 
     def __contains__(self, key):
-        return key in self._subinputs[key]
+        return key in self._subinputs
 
     def __len__(self):
         return len(self._subinputs)
@@ -313,10 +283,111 @@ class ProtocolData(object):
             return 0
 
 
+class NamedDict(dict):
+    def __init__(self, name=None, keytype=None, valtype=None, items=()):
+        super().__init__(items)
+        self.name = name
+        self.keytype = keytype
+        self.valtype = valtype
+
+    def __reduce__(self):
+        return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items)), None)
+
+    def asdataframe(self):
+        import pandas as _pandas
+
+        columns = {'value': []}
+        seriestypes = {'value': "unknown"}
+        self._add_to_columns(columns, seriestypes, {})
+
+        columns_as_series = {}
+        for colname, lst in columns.items():
+            seriestype = seriestypes[colname]
+            if seriestype == 'float':
+                s = _np.array(lst, dtype='d')
+            elif seriestype == 'int':
+                s = _np.array(lst, dtype=int)  # or pd.Series w/dtype?
+            elif seriestype == 'category':
+                s = _pandas.Categorical(lst)
+            else:
+                s = lst  # will infer an object array?
+
+            columns_as_series[colname] = s
+
+        df = _pandas.DataFrame(columns_as_series)
+        return df
+
+    def _add_to_columns(self, columns, seriestypes, row_prefix):
+        nm = self.name
+        if nm not in columns:
+            #add column; assume 'value' is always a column
+            columns[nm] = [None] * len(columns['value'])
+            seriestypes[nm] = self.keytype
+        elif seriestypes[nm] != self.keytype:
+            seriestypes[nm] = None  # conflicting types, so set to None
+
+        row = row_prefix.copy()
+        for k, v in self.items():
+            row[nm] = k
+            if isinstance(v, NamedDict):
+                v._add_to_columns(columns, seriestypes, row)
+            elif isinstance(v, ProtocolResults):
+                v.qtys._add_to_columns(columns, seriestypes, row)
+            else:
+                #Add row
+                complete_row = row.copy()
+                complete_row['value'] = v
+                
+                if seriestypes['value'] == "unknown":
+                    seriestypes['value'] = self.valtype
+                elif seriestypes['value'] != self.valtype:
+                    seriestypes['value'] = None  # conflicting type, so set to None
+                    
+                for rk, rv in complete_row.items():
+                    columns[rk].append(rv)
+
+
 class ProtocolResults(ProtocolData):
-    def __init__(self, data, result_qtys=None):
+    def __init__(self, data, root_qty_name='ROOT', root_qty_stypes=None):
         super().__init__(data.input, data.dataset)
-        self.qtys = result_qtys if (result_qtys is not None) else {}
+        if isinstance(root_qty_stypes, tuple):
+            ktype, vtype = root_qty_stypes
+        else:
+            ktype = root_qty_stypes; vtype = None
+        self.qtys = NamedDict(root_qty_name, ktype, vtype)
+
+    def items(self):
+        return self.qtys.items()
+
+    def keys(self):
+        return self.qtys.keys()
+    
+    def __getitem__(self, key):
+        return self.qtys[key]
+
+    def __contains__(self, key):
+        return key in self.qtys
+
+    def __len__(self):
+        return len(self.qtys)
+
+    def asdict(self):
+        ret = {}
+        for k, v in self.qtys.items():
+            if isinstance(v, ProtocolResults):
+                ret[k] = v.asdict()
+            else:
+                ret[k] = v
+        return ret
+
+    def asdataframe(self):
+        return self.qtys.asdataframe()
+
+    def __str__(self):
+        import pprint
+        P = pprint.PrettyPrinter()
+        return P.pformat(self.asdict())
+
 
 
 #Need way to specify *where* the data for a protocol input comes from that

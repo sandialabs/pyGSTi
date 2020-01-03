@@ -1173,7 +1173,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         Initialize an empty Results object.
         TODO: docstring
         """
-        super().__init__(data)
+        super().__init__(data, "Category", "category")
 
         #Initialize some basic "results" by just exposing the circuit lists more directly
         circuit_lists = _collections.OrderedDict()

@@ -395,7 +395,9 @@ class VolumetricBenchmark(Benchmark):
             return (nCircuits - failcount, failcount)
 
         def new_passdata(depths, widths):
-            return {depth: {width: None for width in widths} for depth in depths}
+            return _proto.NamedDict(
+                'Depth', 'int', None, {depth: _proto.NamedDict(
+                    'Width', 'int', None, {width: None for width in widths}) for depth in depths})
 
         #TODO REMOVE
         #BEFORE SimultaneousInputs: for qubits in inp.get_structure():        
@@ -412,8 +414,8 @@ class VolumetricBenchmark(Benchmark):
             vb = new_passdata(depths, (width,))
             fails = new_passdata(depths, (width,))
         else:
-            vb = {passname: new_passdata(depths, (width,)) for passname in passnames}
-            fails = {passname: new_passdata(depths, (width,)) for passname in passnames}
+            vb = _proto.NamedDict('Pass', 'category', None, {passname: new_passdata(depths, (width,)) for passname in passnames})
+            fails = _proto.NamedDict('Pass', 'category', None, {passname: new_passdata(depths, (width,)) for passname in passnames})
 
         for depth in depths:
             passdata = passdata_per_depth[depth]
@@ -461,7 +463,7 @@ class VolumetricBenchmark(Benchmark):
             #    for passname in passnames:
             #        agg_singlepass_vb(vb[passname])
 
-        results = _proto.ProtocolResults(data)
+        results = _proto.ProtocolResults(data, 'Qty', 'category')
         results.qtys['volumetric_benchmarks'] = vb
         results.qtys['failure_counts'] = fails
         return results
