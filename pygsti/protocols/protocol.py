@@ -10,6 +10,7 @@
 
 import numpy as _np
 import itertools as _itertools
+import copy as _copy
 
 from .. import construction as _cnst
 from .. import objects as _objs
@@ -278,7 +279,61 @@ class ProtocolData(object):
 
     def is_multipass(self):
         return isinstance(self.dataset, _objs.MultiDataSet)
-        
+
+    def view(self, paths, paths_are_sorted=False):
+        if paths_are_sorted:
+            sorted_paths = paths
+        else:
+            sorted_paths = sorted(paths)  # need paths to be grouped by prefix
+            
+        taken_paths = []
+        nPaths = len(sorted_paths)
+
+        assert(not self.is_multipass()), "Can't take views of multi-pass data yet."
+        if self.is_multiinput():
+
+            if paths == "all":
+                def get_paths(d, prefix):
+                    if d.is_multiinput():
+                        paths = []
+                        for ky, subdata in d.items():
+                            paths.extend(get_paths(subdata, prefix + (ky,)))
+                        return paths
+                    else:
+                        return prefix
+                paths = get_paths(self, ())
+                return self, paths
+            else:
+                inputs_to_keep = {}
+                subdatas_to_keep = {}
+    
+                i = 0
+                while i < nPaths:
+                    ky = sorted_paths[i][0]
+    
+                    paths_starting_with_ky = []
+                    while i < nPaths and sorted_paths[i][0] == ky:
+                        paths_starting_with_ky.append(sorted_paths[i][1:])
+                        i += 1
+                    dky_view, taken = self[ky].view(paths_starting_with_ky, True)
+    
+                    if len(taken) > 0:
+                        inputs_to_keep[ky] = dky_view.input
+                        subdatas_to_keep[ky] = dky_view
+                        for t in taken:
+                            taken_paths.append((ky,) + t)
+    
+                input_view = _copy.deepcopy(self.input)  # copies type of multi-input
+                input_view._subinputs = inputs_to_keep
+                d_view = ProtocolData(input_view, self.dataset, self.cache)  # ~ copy
+                d_view._subdatas = subdatas_to_keep
+                return d_view, taken_paths
+
+        elif paths == "all" or (len(paths) == 1 and len(paths[0]) == 0):  # a single empty path
+            return self, paths
+        else:
+            return None, []
+
     #Support lazy evaluation of sub_datas
     def keys(self):
         if self.is_multipass():

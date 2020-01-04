@@ -14,6 +14,7 @@ import numpy as _np
 import pickle as _pickle
 import collections as _collections
 import warnings as _warnings
+import copy as _copy
 import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
@@ -274,7 +275,79 @@ class PassStabilityTest(_proto.Protocol):
 
 
 class VolumetricBenchmarkGrid(Benchmark):
-    pass  #object that can take, e.g. a multiinput or simultaneous input and create a results object with the desired grid of width vs depth numbers
+    #object that can take, e.g. a multiinput or simultaneous input and create a results object with the desired grid of width vs depth numbers
+
+    def __init__(self, depths='all', widths='all', datatype='success_probabilities',
+                 paths='all', statistic='mean', aggregate=True, rescaler='auto', dscomparator=None):
+        
+        self.depths = depths
+        self.widths = widths
+        self.datatype = datatype
+        self.paths = sorted(paths)  # need to ensure paths are grouped by common prefix
+        self.statistic = statistic
+        self.aggregate = aggregate
+        self.dscomparator = dscomparator
+        self.rescaler = rescaler
+
+    def run(self, data):
+        #Note: implement "run" here, since we want to deal with multi-pass and multi-inputs
+
+        #Since we know that VolumetricBenchmark protocol objects Create a single results just fill
+        # in data under the result object's 'volumetric_benchmarks' and 'failure_counts'
+        # keys, and these are indexed by width and depth (even though each VolumetricBenchmark
+        # only contains data for a single width), we can just "merge" the VB results of all
+        # the underlying by-depth datas, so long as they're all for different widths.
+
+        #data can be multi-pass and multi-input
+        # when multi-input, can be a multi-input of simult-inputs of VBs
+        if data.is_multipass():
+            passes = list(data.items())
+            results = _proto.ProtocolResults(data, 'Pass', 'category')
+        else:
+            passes = [(None, data)]
+            results = _proto.ProtocolResults(data, 'Qty', 'category')
+
+        #HERE - trim down data based on specs/paths given to describe
+        # which data should be used for each depth,width pair, e.g.
+        # ('SpecA', ('Q0',Q1','Q2')) for width=3, etc.
+        for passname, passdata in passes:
+            trimmed_passdata, paths = passdata.view(self.paths)
+
+            #Then run resulting data normally, giving a results object
+            # with "top level" dicts correpsonding to different paths
+            VB = VolumetricBenchmark(self.depths, self.datatype, self.statistic,
+                                     self.aggregate, self.rescaler, self.dscomparator)
+            separate_results = VB.run(trimmed_passdata)
+
+            #Then we merge/flatten the data from different paths into one depth vs width grid
+            vb = None
+            fails = None
+            for path in paths:
+                #TODO: need to be able to filter based on widths... - maybe replace .update calls
+                # with something more complicated when width != 'all'
+
+                #Traverse path to get to root of VB data
+                root = separate_results.qtys
+                for key in path:
+                    root = root[key]
+                if vb is None:  # and fails is None:
+                    vb = _copy.deepcopy(root['volumetric_benchmarks'])
+                    fails = _copy.deepcopy(root['failure_counts'])
+                else:
+                    for depth in root:  # or in self.depths?
+                        vb['volumetric_benchmarks'][depth].update(root['volumetric_benchmarks'][depth])
+                        fails['failure_counts'][depth].update(root['failure_counts'][depth])
+
+            if passname is None:
+                results.qtys['volumetric_benchmarks'] = vb
+                results.qtys['failure_counts'] = fails
+            else:
+                results.qtys[passname] = _proto.NamedDict('Qty', 'category', None)
+                results.qtys[passname]['volumetric_benchmarks'] = vb
+                results.qtys[passname]['failure_counts'] = fails
+
+        #TODO - add aggregation by pass and by minmin or maxmax
+        return results
 
 
 class VolumetricBenchmark(Benchmark):
