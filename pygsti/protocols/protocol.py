@@ -92,6 +92,26 @@ class MultiPassProtocol(Protocol):
         return results
 
 
+import importlib as _importlib
+def class_for_name(module_and_class_name):
+    parts = module_and_class_name.split('.')
+    module_name = '.'.join(parts[0:-1])
+    class_name = parts[-1]
+    # load the module, will raise ImportError if module cannot be loaded
+    m = _importlib.import_module(module_name)
+    # get the class, will raise AttributeError if class cannot be found
+    c = getattr(m, class_name)
+    return c
+
+def read_input_from_dir(dirname):
+    p = _pathlib.Path(dirname)
+    with open(p / 'input' / 'meta.json', 'r') as f:
+        meta = _json.load(f)
+    typestr = meta['type']
+    cls = class_for_name(typestr)  # class of object to create
+    return cls.from_dir(dirname)
+
+
 class ProtocolInput(object):
     """ Serialize-able input data for a protocol """
 
@@ -102,10 +122,61 @@ class ProtocolInput(object):
     #    self.default_protocol_infos = {} if default_protocol_name is None \
     #        else {default_protocol_name: default_protocol_info}
 
+    @classmethod
+    def _get_auxfile_ext(cls, typ):
+        #get expected extension
+        if typ == 'text-circuit-list': ext = '.txt'
+        elif typ == 'json': ext = '.json'
+        elif typ == 'pickle': ext = '.pkl'
+        else: raise ValueError("Invalid aux-file type: %s" % typ)
+        return ext
+    
+    @classmethod
+    def from_dir(cls, dirname):
+        p = _pathlib.Path(dirname)
+        input_dir = p / 'input'
+
+        with open(input_dir / 'meta.json', 'r') as f:
+            meta = _json.load(f)
+
+        ret = cls.__new__()
+        for key, val in meta.items():
+            if key == 'type': continue  # ignore - this is just the class name
+            ret.__dict__[key] = val
+
+        for key, typ in meta['auxfile_types']:
+            
+            #check that expected path exists
+            pth = input_dir / (key + cls._get_auxfile_ext(typ))
+            if not (pth.exists() and not pth.is_dir()):
+                raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
+
+            #load value into object
+            if typ == 'text-circuit-list':
+                val = _io.load_circuit_list(pth)
+            elif typ == 'json':
+                with open(pth, 'r') as f:
+                    val = _json.load(f)
+            elif typ == 'pickle':
+                with open(pth, 'rb') as f:
+                    val = _pickle.load(f)
+            else:
+                raise ValueError("Invalid aux-file type: %s" % typ)
+
+            ret.__dict__[pth.stem] = val
+        return ret
+
     def __init__(self, circuits=None, qubit_labels=None):
-        self.typestring = self.__class__.__name__
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.default_protocol_infos = {}
+
+        #Instructions for saving/loading certain members - if a __dict__ member
+        # *isn't* listed in this dict, then it's assumed to be json-able and included
+        # in the main 'meta.json' file.  Allowed values are:
+        # 'text-circuit-list' - a text circuit list file
+        # 'json' - a json file
+        # 'pickle' - a python pickle file (use only if really needed!)
+        self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list'}
         
         if qubit_labels is None:
             if len(circuits) > 0:
@@ -119,17 +190,38 @@ class ProtocolInput(object):
         if default_protocol_info is None: default_protocol_info = {}
         self.default_protocol_infos[default_protocol_name] = default_protocol_info
 
-    def create_circuit_list(self, verbosity=0):
-        return self.basedata['circuitList']
-
-    def create_circuit_lists(self, verbosity=0):  # Needed?? / Helpful?
-        return [self.create_circuit_list()]
-
-    def read(self, dirname):
-        pass
+    #TODO REMOVE
+    #def create_circuit_list(self, verbosity=0):
+    #    return self.basedata['circuitList']
+    #
+    #def create_circuit_lists(self, verbosity=0):  # Needed?? / Helpful?
+    #    return [self.create_circuit_list()]        
 
     def write(self, dirname):
-        pass
+        p = _pathlib.Path(dirname)
+        input_dir = p / 'input'
+
+        meta = {'type': self.__class__.__name__}
+        for key, val in self.__dict__.items():
+            if key in self.auxfile_types: continue  # member is serialized to a separate file (see below)
+            meta[key] = val
+        with open(input_dir / 'meta.json', 'w'):
+            _json.dump(meta)
+
+        for auxnm, typ in self.auxfile_types.items():
+            pth = input_dir / (auxnm + self._get_auxfile_ext(typ))
+            val = self.__dict__[auxnm]
+
+            if typ == 'text-circuit-list':
+                _io.write_circuit_list(val, pth)
+            elif typ == 'json':
+                with open(pth, 'w') as f:
+                    val = _json.dump(val, f)
+            elif typ == 'pickle':
+                with open(pth, 'wb') as f:
+                    val = _pickle.dump(val, f)
+            else:
+                raise ValueError("Invalid aux-file type: %s" % typ)
 
     def create_subdata(self, subdata_name, dataset):
         raise NotImplementedError("This protocol input cannot create any subdata!")
