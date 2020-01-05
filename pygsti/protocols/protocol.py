@@ -197,7 +197,10 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
 
     def keys(self):
         return self._subinputs.keys()
-    
+
+    def __iter__(self):
+        return self._subinputs.__iter__()
+
     def __getitem__(self, key):
         return self._subinputs[key]
 
@@ -280,6 +283,19 @@ class ProtocolData(object):
     def is_multipass(self):
         return isinstance(self.dataset, _objs.MultiDataSet)
 
+    def get_all_paths(self):
+        def get_paths(d, prefix):
+            if d.is_multiinput():
+                paths = []
+                for ky, subdata in d.items():
+                    paths.extend(get_paths(subdata, prefix + (ky,)))
+                return paths
+            else:
+                return [prefix]
+
+        paths = get_paths(self, ())
+        return paths
+
     def view(self, paths, paths_are_sorted=False):
         if paths_are_sorted:
             sorted_paths = paths
@@ -292,44 +308,32 @@ class ProtocolData(object):
         assert(not self.is_multipass()), "Can't take views of multi-pass data yet."
         if self.is_multiinput():
 
-            if paths == "all":
-                def get_paths(d, prefix):
-                    if d.is_multiinput():
-                        paths = []
-                        for ky, subdata in d.items():
-                            paths.extend(get_paths(subdata, prefix + (ky,)))
-                        return paths
-                    else:
-                        return prefix
-                paths = get_paths(self, ())
-                return self, paths
-            else:
-                inputs_to_keep = {}
-                subdatas_to_keep = {}
-    
-                i = 0
-                while i < nPaths:
-                    ky = sorted_paths[i][0]
-    
-                    paths_starting_with_ky = []
-                    while i < nPaths and sorted_paths[i][0] == ky:
-                        paths_starting_with_ky.append(sorted_paths[i][1:])
-                        i += 1
-                    dky_view, taken = self[ky].view(paths_starting_with_ky, True)
-    
-                    if len(taken) > 0:
-                        inputs_to_keep[ky] = dky_view.input
-                        subdatas_to_keep[ky] = dky_view
-                        for t in taken:
-                            taken_paths.append((ky,) + t)
-    
-                input_view = _copy.deepcopy(self.input)  # copies type of multi-input
-                input_view._subinputs = inputs_to_keep
-                d_view = ProtocolData(input_view, self.dataset, self.cache)  # ~ copy
-                d_view._subdatas = subdatas_to_keep
-                return d_view, taken_paths
+            inputs_to_keep = {}
+            subdatas_to_keep = {}
 
-        elif paths == "all" or (len(paths) == 1 and len(paths[0]) == 0):  # a single empty path
+            i = 0
+            while i < nPaths:
+                ky = sorted_paths[i][0]
+
+                paths_starting_with_ky = []
+                while i < nPaths and sorted_paths[i][0] == ky:
+                    paths_starting_with_ky.append(sorted_paths[i][1:])
+                    i += 1
+                dky_view, taken = self[ky].view(paths_starting_with_ky, True)
+
+                if len(taken) > 0:
+                    inputs_to_keep[ky] = dky_view.input
+                    subdatas_to_keep[ky] = dky_view
+                    for t in taken:
+                        taken_paths.append((ky,) + t)
+
+            input_view = _copy.deepcopy(self.input)  # copies type of multi-input
+            input_view._subinputs = inputs_to_keep
+            d_view = ProtocolData(input_view, self.dataset, self.cache)  # ~ copy
+            d_view._subdatas = subdatas_to_keep
+            return d_view, taken_paths
+
+        elif (len(paths) == 1 and len(paths[0]) == 0):  # a single empty path
             return self, paths
         else:
             return None, []
@@ -350,6 +354,14 @@ class ProtocolData(object):
         elif self.is_multiinput():
             for name in self.input.keys():
                 yield name, self[name]
+
+    def __iter__(self):
+        if self.is_multipass():
+            return self._subdatas.__iter__()
+        elif self.is_multiinput():
+            return self.input.__iter__()
+        else:
+            return [].__iter__()
 
     def __getitem__(self, subdata_name):
         if self.is_multipass():
@@ -391,7 +403,7 @@ class NamedDict(dict):
         self.valtype = valtype
 
     def __reduce__(self):
-        return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items)), None)
+        return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items())), None)
 
     def asdataframe(self):
         import pandas as _pandas
