@@ -135,7 +135,10 @@ def _accumulate_explicit_sslbls(obj):
 
 def _opSeqToStr(seq, line_labels):
     """ Used for creating default string representations. """
-    if len(seq) == 0: return "{}"  # special case of empty operation sequence
+    if len(seq) == 0:  # special case of empty operation sequence (for speed)
+        if line_labels is None or line_labels == ('*',): return "{}"
+        else: return "{}@(" + ','.join(map(str, line_labels)) + ")"
+
     def process_lists(el): return el if not isinstance(el, list) else \
         ('[%s]' % ''.join(map(str, el)) if (len(el) != 1) else str(el[0]))
 
