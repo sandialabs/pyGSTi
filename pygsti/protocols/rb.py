@@ -321,7 +321,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                 trimmed_passdata = passdata
             else:
                 paths = self.paths
-                trimmed_passdata, _ = passdata.view(self.paths)
+                trimmed_passdata = passdata.filter_paths(self.paths)
 
             #Then run resulting data normally, giving a results object
             # with "top level" dicts correpsonding to different paths

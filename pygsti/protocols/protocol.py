@@ -103,7 +103,8 @@ def class_for_name(module_and_class_name):
     c = getattr(m, class_name)
     return c
 
-def read_input_from_dir(dirname):
+
+def load_input_from_dir(dirname):
     p = _pathlib.Path(dirname)
     with open(p / 'input' / 'meta.json', 'r') as f:
         meta = _json.load(f)
@@ -130,7 +131,7 @@ class ProtocolInput(object):
         elif typ == 'pickle': ext = '.pkl'
         else: raise ValueError("Invalid aux-file type: %s" % typ)
         return ext
-    
+
     @classmethod
     def from_dir(cls, dirname):
         p = _pathlib.Path(dirname)
@@ -139,12 +140,13 @@ class ProtocolInput(object):
         with open(input_dir / 'meta.json', 'r') as f:
             meta = _json.load(f)
 
-        ret = cls.__new__()
+        ret = cls.__new__(cls)
         for key, val in meta.items():
             if key == 'type': continue  # ignore - this is just the class name
             ret.__dict__[key] = val
 
         for key, typ in meta['auxfile_types']:
+            if typ == 'none': continue  # no file exists for this member
             
             #check that expected path exists
             pth = input_dir / (key + cls._get_auxfile_ext(typ))
@@ -216,12 +218,31 @@ class ProtocolInput(object):
                 _io.write_circuit_list(val, pth)
             elif typ == 'json':
                 with open(pth, 'w') as f:
-                    val = _json.dump(val, f)
+                    _json.dump(val, f)
             elif typ == 'pickle':
                 with open(pth, 'wb') as f:
-                    val = _pickle.dump(val, f)
+                    _pickle.dump(val, f)
+            elif typ == 'none':
+                pass
             else:
                 raise ValueError("Invalid aux-file type: %s" % typ)
+
+    def get_tree_paths(self):
+        """Dictionary paths leading to "terminal"/"leaf" input objects beneath this one"""
+        return [()]  # a single 0-length path, pointing to this terminal input itself
+
+    def view(self, keys_to_keep):
+        #Can only take views of "simple" (non-multi) inputs when there are no keys to keep
+        if len(keys_to_keep) == 0:
+            return self
+        else:
+            raise ValueError("Cannot take view w/keys=%s (I have no sub-inputs!)" % str(keys_to_keep))
+
+    def filter_paths(self, paths, paths_are_sorted=False):
+        if len(paths) == 1 and len(paths[0]) == 0:
+            return self
+        else:
+            raise ValueError("Cannot filter paths: %s (I have no sub-inputs!)" % str(paths))
 
     def create_subdata(self, subdata_name, dataset):
         raise NotImplementedError("This protocol input cannot create any subdata!")
@@ -263,7 +284,16 @@ class CircuitStructuresInput(CircuitListsInput):
 
 # MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
 class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
-    def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None):
+
+    @classmethod
+    def from_dir(cls, dirname):
+        ret = ProtocolInput.from_dir(dirname)
+        p = _pathlib.Path(dirname)
+        ret._subinputs = {subname: load_input_from_dir(p / subdir)
+                          for subname, subdir in ret._directories.items()}
+        return ret
+
+    def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None):
         if not isinstance(sub_inputs, dict):
             sub_inputs = {("**%d" % i): inp for i, inp in enumerate(sub_inputs)}
 
@@ -278,6 +308,11 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
 
         super().__init__(all_circuits, qubit_labels)
         self._subinputs = sub_inputs
+        if sub_input_dirs is None:
+            self._directories = {subname: subname.replace(' ','_') for subname in sub_inputs.keys()}
+        else:
+            self._directories = sub_input_dirs
+        self.auxfile_types['_subinputs'] = "none"
 
     def create_subdata(self, sub_name, dataset):
         """TODO: docstring - used to create sub-ProtocolData objects (by ProtocolData) """
@@ -301,6 +336,51 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
 
     def __len__(self):
         return len(self._subinputs)
+
+    def write(self, dirname):
+        p = _pathlib.Path(dirname)
+        super().write(dirname)
+        for subname, subdir in self._directories.items():
+            outdir = p / subdir
+            outdir.mkdir(exist_ok=True)
+            self._subinputs[subname].write(outdir)
+
+    def get_tree_paths(self):
+        paths = []
+        for subname, subinput in self.items():
+            paths.extend([(subname,) + pth for pth in subinput.get_tree_paths()])
+        return paths
+
+    def view(self, keys_to_keep):
+        input_view = _copy.deepcopy(self)  # copies type of multi-input
+        input_view._subinputs = {k: input_view[k] for k in keys_to_keep}
+        return input_view
+
+    def filter_paths(self, paths, paths_are_sorted=False):
+        sorted_paths = paths if paths_are_sorted else sorted(paths)
+        nPaths = len(sorted_paths)
+
+        if nPaths == 1 and len(sorted_paths[0]) == 0:
+            return self  # special case when this MultiInput itself is selected
+
+        i = 0
+        subinputs = {}
+        while i < nPaths:
+            assert(len(sorted_paths[i]) > 0), \
+                "Cannot select a MultiInput *and* some/all of its elements using filter_paths!"
+            ky = sorted_paths[i][0]
+
+            paths_starting_with_ky = []
+            while i < nPaths and sorted_paths[i][0] == ky:
+                paths_starting_with_ky.append(sorted_paths[i][1:])
+                i += 1
+            subinputs[ky] = self[ky].filter_paths(paths_starting_with_ky, True)
+
+        assert(len(subinputs) > 0)  # Multi-Inputs should always have at least one sub-input
+
+        input_view = _copy.deepcopy(self)  # copies type of multi-input
+        input_view._subinputs = subinputs
+        return input_view
 
 
 # SimultaneousInput -- specifies a "qubit structure" for each sub-input
@@ -341,7 +421,8 @@ class SimultaneousInput(MultiInput):
                 tensored_circuits.append(c)
 
         sub_inputs = {inp.qubit_labels: inp for inp in inputs}
-        super().__init__(sub_inputs, tensored_circuits, qubit_labels)
+        sub_input_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_inputs}
+        super().__init__(sub_inputs, tensored_circuits, qubit_labels, sub_input_dirs)
 
     def get_structure(self):  #TODO: USED??
         return list(self.keys())  # a list of qubit-label tuples
@@ -356,6 +437,61 @@ class SimultaneousInput(MultiInput):
 
 
 class ProtocolData(object):
+
+    @classmethod
+    def from_dir(cls, dirname, parent_data=None, load_subdatas=True):
+        p = _pathlib.Path(dirname)
+        data_dir = p / 'data'
+
+        with open(data_dir / 'meta.json', 'r') as f:
+            meta = _json.load(f)
+        dtype = meta['dataset_type']
+
+        ret = cls.__new__(cls)
+        ret.input = load_input_from_dir(dirname)
+        
+        if dtype == 'normal':
+            ret.dataset = _io.load_dataset(data_dir / 'dataset.txt')
+        elif dtype == 'multi-single-file':
+            ret.dataset = _io.load_multidataset(data_dir / 'dataset.txt')
+        elif dtype == 'multi-multiple-files':
+            raise NotImplementedError()  # should load in several datasetX.txt files as elements of a MultiDataSet
+        elif dtype == 'same-as-parent':
+            if parent_data is None:
+                parent_data = ProtocolData.from_dir(dirname / '..', load_subdatas=False)
+            ret.dataset = parent_data.dataset
+        else:
+            raise ValueError("Invalid dataset type: %s" % dtype)
+
+        ret.cache = {}
+        cache_dir = data_dir / 'cache'
+        if cache_dir.is_dir():
+            for pth in cache_dir.iterdir():
+                if pth.suffix == '.json':
+                    with open(pth, 'r') as f:
+                        val = _json.load(f)
+                elif pth.suffix == '.pkl':
+                    with open(pth, 'r') as f:
+                        val = _pickle.load(f)
+                else:
+                    continue  # ignore cache file times we don't understand
+                
+                ret.cache[pth.name] = val
+
+        ret._subdatas = {}
+        if load_subdatas:
+            if isinstance(ret.dataset, _objs.MultiDataSet):
+                for subname, sub_ds in ret.dataset.items():
+                    ret._subdatas[subname] = cls.from_dir(p / subname, parent_data=ret)
+            elif isinstance(ret.input, MultiInput):
+                for subname, subdir in ret.input._directories.items():
+                    if (p / subdir / 'data').exists():
+                        ret._subdatas[subname] = cls.from_dir(p / subdir, parent_data=ret)
+                    #It's ok if not all data exists - it is created on-demand
+            else: # no subdata to load
+                ret._subdatas = None
+        return ret
+
     def __init__(self, protocol_input, dataset=None, cache=None):
         self.input = protocol_input
         self.dataset = dataset  # MultiDataSet allowed for multi-pass data
@@ -375,60 +511,23 @@ class ProtocolData(object):
     def is_multipass(self):
         return isinstance(self.dataset, _objs.MultiDataSet)
 
-    def get_all_paths(self):
-        def get_paths(d, prefix):
-            if d.is_multiinput():
-                paths = []
-                for ky, subdata in d.items():
-                    paths.extend(get_paths(subdata, prefix + (ky,)))
-                return paths
-            else:
-                return [prefix]
+    def get_tree_paths(self):
+        return self.input.get_tree_paths()
 
-        paths = get_paths(self, ())
-        return paths
-
-    def view(self, paths, paths_are_sorted=False):
-        if paths_are_sorted:
-            sorted_paths = paths
-        else:
-            sorted_paths = sorted(paths)  # need paths to be grouped by prefix
-            
-        taken_paths = []
-        nPaths = len(sorted_paths)
-
+    def filter_paths(self, paths, paths_are_sorted=False):
         assert(not self.is_multipass()), "Can't take views of multi-pass data yet."
-        if self.is_multiinput():
 
-            inputs_to_keep = {}
-            subdatas_to_keep = {}
+        def build_data(inp, src_data):
+            """ Uses a template (filtered) input to selectively
+                copy the non-input parts of a 'src_data' ProtoolData """
+            ret = ProtocolData(inp, src_data.dataset, src_data.cache)
+            if ret.is_multiinput():
+                for subname, subinput in inp.items():
+                    ret._subdatas[subname] = build_data(subinput, src_data._subdatas[subname])
+            return ret
 
-            i = 0
-            while i < nPaths:
-                ky = sorted_paths[i][0]
-
-                paths_starting_with_ky = []
-                while i < nPaths and sorted_paths[i][0] == ky:
-                    paths_starting_with_ky.append(sorted_paths[i][1:])
-                    i += 1
-                dky_view, taken = self[ky].view(paths_starting_with_ky, True)
-
-                if len(taken) > 0:
-                    inputs_to_keep[ky] = dky_view.input
-                    subdatas_to_keep[ky] = dky_view
-                    for t in taken:
-                        taken_paths.append((ky,) + t)
-
-            input_view = _copy.deepcopy(self.input)  # copies type of multi-input
-            input_view._subinputs = inputs_to_keep
-            d_view = ProtocolData(input_view, self.dataset, self.cache)  # ~ copy
-            d_view._subdatas = subdatas_to_keep
-            return d_view, taken_paths
-
-        elif (len(paths) == 1 and len(paths[0]) == 0):  # a single empty path
-            return self, paths
-        else:
-            return None, []
+        filtered_input = self.input.filter_paths(paths, paths_are_sorted)
+        return build_data(filtered_input, self)
 
     #Support lazy evaluation of sub_datas
     def keys(self):
@@ -485,6 +584,47 @@ class ProtocolData(object):
             return len(self.input)
         else:
             return 0
+
+    def write(self, dirname, parent_data=None):
+        p = _pathlib.Path(dirname)
+        data_dir = p / 'data'
+        data_dir.mkdir(exist_ok=True)
+
+        self.input.write(dirname)
+
+        if parent_data and self.dataset is parent_data.dataset:
+            dtype = 'same-as-parent'
+        elif isinstance(self.dataset, _objs.MultiDataSet):
+            dtype = 'multi-single-file'
+            _io.write_multidataset(self.dataset, data_dir / 'dataset.txt')
+            #dtype = 'multi-multiple-files'  # TODO: how to decide between these?
+        else:
+            dtype = 'normal'
+            _io.write_dataset(self.dataset, data_dir / 'dataset.txt')
+
+        meta = {'dataset_type': dtype}
+        with open(data_dir / 'meta.json', 'r') as f:
+            meta = _json.load(f)
+
+        if self.cache:
+            cache_dir = data_dir / 'cache'
+            cache_dir.mkdir(exist_ok=True)
+            for key, val in self.cache.items():
+                try:
+                    with open(cache_dir / (key + '.json'), 'w') as f:
+                        _json.dump(val, f)
+                except:
+                    #remove json file??
+                    with open(cache_dir / (key + '.pkl'), 'wb') as f:
+                        _pickle.dump(val, f)
+
+        if isinstance(self.dataset, _objs.MultiDataSet):
+            for subname, sub_ds in self.dataset.items():
+                self._subdatas[subname].write(p / subname, parent_data=self)
+        elif isinstance(self.input, MultiInput):
+            for subname, subdata in self._subdatas.items():
+                subdir = self.input._directories[subname]
+                subdata.write(p / subdir, parent_data=self)
 
 
 class NamedDict(dict):
