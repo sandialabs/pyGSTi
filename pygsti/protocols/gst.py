@@ -42,9 +42,11 @@ from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupE
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
+
 class HasTargetModel(object):
     def __init__(self, targetModelFilenameOrObj):
         self.target_model = _load_model(targetModelFilenameOrObj)
+        self.auxfile_types['target_model'] = 'pickle'
 
 
 class GSTInput(_proto.CircuitListsInput, HasTargetModel):
@@ -97,6 +99,9 @@ class StandardGSTInput(StructuredGSTInput):
             verbosity=verbosity)
 
         super().__init__(target_model, structs, qubit_labels, self.nested)
+        self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
+        self.auxfile_types['meas_fiducials'] = 'text-circuit-list'
+        self.auxfile_types['germs'] = 'text-circuit-list'
 
 
 class GST(_proto.Protocol):

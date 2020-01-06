@@ -84,6 +84,7 @@ class BenchmarkingInput(ByDepthInput):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels)
         self.idealout_lists = ideal_outs
+        self.auxfile_types['idealout_lists'] = 'json'
 
 
 class CliffordRBInput(BenchmarkingInput):
@@ -246,7 +247,7 @@ class Benchmark(_proto.Protocol):
 
     #def compute_results_qty(self, results, qtyname, component_names, compute_fn, force=False, for_passes="all"):
     def compute_dict(self, data, component_names, compute_fn, for_passes="all"):
-        
+
         inp = data.input
         ds = data.dataset
 

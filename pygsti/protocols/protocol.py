@@ -11,11 +11,19 @@
 import numpy as _np
 import itertools as _itertools
 import copy as _copy
+import json as _json
+import pickle as _pickle
+import pathlib as _pathlib
 
 from .. import construction as _cnst
 from .. import objects as _objs
+from .. import io as _io
 from ..objects import circuit as _cir
 from ..tools import listtools as _lt
+
+
+def full_class_name(x):
+    return x.__class__.__module__ + '.' + x.__class__.__name__
 
 
 class Protocol(object):
@@ -127,8 +135,10 @@ class ProtocolInput(object):
     def _get_auxfile_ext(cls, typ):
         #get expected extension
         if typ == 'text-circuit-list': ext = '.txt'
+        elif typ == 'text-circuit-lists': ext = '.txt'
         elif typ == 'json': ext = '.json'
         elif typ == 'pickle': ext = '.pkl'
+        elif typ == 'none': ext = '.NONE'
         else: raise ValueError("Invalid aux-file type: %s" % typ)
         return ext
 
@@ -145,27 +155,38 @@ class ProtocolInput(object):
             if key == 'type': continue  # ignore - this is just the class name
             ret.__dict__[key] = val
 
-        for key, typ in meta['auxfile_types']:
+        for key, typ in meta['auxfile_types'].items():
             if typ == 'none': continue  # no file exists for this member
-            
-            #check that expected path exists
-            pth = input_dir / (key + cls._get_auxfile_ext(typ))
-            if not (pth.exists() and not pth.is_dir()):
-                raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
+            ext = cls._get_auxfile_ext(typ)
 
-            #load value into object
-            if typ == 'text-circuit-list':
-                val = _io.load_circuit_list(pth)
-            elif typ == 'json':
-                with open(pth, 'r') as f:
-                    val = _json.load(f)
-            elif typ == 'pickle':
-                with open(pth, 'rb') as f:
-                    val = _pickle.load(f)
+            #Process cases with non-standard expected path(s)
+            if typ == 'text-circuit-lists':
+                i = 0; val = []
+                while True:
+                    pth = input_dir / (key + str(i) + ext)
+                    if not pth.exists(): break
+                    val.append(_io.load_circuit_list(pth)); i += 1
+
             else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
 
-            ret.__dict__[pth.stem] = val
+                # cases with 'standard' expected path exists
+                pth = input_dir / (key + ext)
+                if not (pth.exists() and not pth.is_dir()):
+                    raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
+
+                #load value into object
+                if typ == 'text-circuit-list':
+                    val = _io.load_circuit_list(pth)
+                elif typ == 'json':
+                    with open(pth, 'r') as f:
+                        val = _json.load(f)
+                elif typ == 'pickle':
+                    with open(pth, 'rb') as f:
+                        val = _pickle.load(f)
+                else:
+                    raise ValueError("Invalid aux-file type: %s" % typ)
+
+            ret.__dict__[key] = val
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None):
@@ -179,7 +200,7 @@ class ProtocolInput(object):
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
         self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list'}
-        
+
         if qubit_labels is None:
             if len(circuits) > 0:
                 self.qubit_labels = circuits[0].line_labels
@@ -203,29 +224,41 @@ class ProtocolInput(object):
         p = _pathlib.Path(dirname)
         input_dir = p / 'input'
 
-        meta = {'type': self.__class__.__name__}
+        p.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(exist_ok=True)
+
+        meta = {'type': full_class_name(self)}
         for key, val in self.__dict__.items():
             if key in self.auxfile_types: continue  # member is serialized to a separate file (see below)
             meta[key] = val
-        with open(input_dir / 'meta.json', 'w'):
-            _json.dump(meta)
+        with open(input_dir / 'meta.json', 'w') as f:
+            _json.dump(meta, f)
 
         for auxnm, typ in self.auxfile_types.items():
-            pth = input_dir / (auxnm + self._get_auxfile_ext(typ))
             val = self.__dict__[auxnm]
+            ext = self._get_auxfile_ext(typ)
 
-            if typ == 'text-circuit-list':
-                _io.write_circuit_list(val, pth)
-            elif typ == 'json':
-                with open(pth, 'w') as f:
-                    _json.dump(val, f)
-            elif typ == 'pickle':
-                with open(pth, 'wb') as f:
-                    _pickle.dump(val, f)
-            elif typ == 'none':
-                pass
+            if typ == 'text-circuit-lists':
+                for i, circuit_list in enumerate(val):
+                    pth = input_dir / (auxnm + str(i) + ext)
+                    _io.write_circuit_list(pth, circuit_list)
+
             else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
+                # standard path cases
+                pth = input_dir / (auxnm + ext)
+
+                if typ == 'text-circuit-list':
+                    _io.write_circuit_list(pth, val)
+                elif typ == 'json':
+                    with open(pth, 'w') as f:
+                        _json.dump(val, f)
+                elif typ == 'pickle':
+                    with open(pth, 'wb') as f:
+                        _pickle.dump(val, f)
+                elif typ == 'none':
+                    pass
+                else:
+                    raise ValueError("Invalid aux-file type: %s" % typ)
 
     def get_tree_paths(self):
         """Dictionary paths leading to "terminal"/"leaf" input objects beneath this one"""
@@ -263,7 +296,9 @@ class CircuitListsInput(ProtocolInput):
 
         self.circuit_lists = circuit_lists
         self.nested = nested
+        
         super().__init__(all_circuits, qubit_labels)
+        self.auxfile_types['circuit_lists'] = 'text-circuit-lists'
 
 
 class CircuitStructuresInput(CircuitListsInput):
@@ -280,6 +315,7 @@ class CircuitStructuresInput(CircuitListsInput):
 
         super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested)
         self.circuit_structs = circuit_structs
+        self.auxfile_types['circuit_structs'] = 'pickle'
 
 
 # MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
@@ -287,10 +323,14 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
 
     @classmethod
     def from_dir(cls, dirname):
-        ret = ProtocolInput.from_dir(dirname)
+        ret = super().from_dir(dirname)  # Note: super() != ProtocolInput - this passes *`cls`* to base class method
+        for subdir in ret._directories:  # convert subname lists->tuples (json does opposite!)
+            if isinstance(ret._directories[subdir], list):  # (we never want list-type subnames b/c we must hash them)
+                ret._directories[subdir] = tuple(ret._directories[subdir])
+
         p = _pathlib.Path(dirname)
         ret._subinputs = {subname: load_input_from_dir(p / subdir)
-                          for subname, subdir in ret._directories.items()}
+                          for subdir, subname in ret._directories.items()}
         return ret
 
     def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None):
@@ -309,7 +349,7 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
         super().__init__(all_circuits, qubit_labels)
         self._subinputs = sub_inputs
         if sub_input_dirs is None:
-            self._directories = {subname: subname.replace(' ','_') for subname in sub_inputs.keys()}
+            self._directories = {subname.replace(' ','_'): subname for subname in sub_inputs.keys()}
         else:
             self._directories = sub_input_dirs
         self.auxfile_types['_subinputs'] = "none"
@@ -340,7 +380,7 @@ class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
     def write(self, dirname):
         p = _pathlib.Path(dirname)
         super().write(dirname)
-        for subname, subdir in self._directories.items():
+        for subdir, subname in self._directories.items():
             outdir = p / subdir
             outdir.mkdir(exist_ok=True)
             self._subinputs[subname].write(outdir)
@@ -421,7 +461,7 @@ class SimultaneousInput(MultiInput):
                 tensored_circuits.append(c)
 
         sub_inputs = {inp.qubit_labels: inp for inp in inputs}
-        sub_input_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_inputs}
+        sub_input_dirs = {'_'.join(map(str, qlbls)): qlbls for qlbls in sub_inputs}
         super().__init__(sub_inputs, tensored_circuits, qubit_labels, sub_input_dirs)
 
     def get_structure(self):  #TODO: USED??
@@ -434,6 +474,15 @@ class SimultaneousInput(MultiInput):
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
         filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices, idle=None)  # Marginalize dataset
         return ProtocolData(sub_input, filtered_ds)
+
+
+def load_data_from_dir(dirname):
+    p = _pathlib.Path(dirname)
+    with open(p / 'data' / 'meta.json', 'r') as f:
+        meta = _json.load(f)
+    typestr = meta['type']
+    cls = class_for_name(typestr)  # class of object to create
+    return cls.from_dir(dirname)
 
 
 class ProtocolData(object):
@@ -449,7 +498,7 @@ class ProtocolData(object):
 
         ret = cls.__new__(cls)
         ret.input = load_input_from_dir(dirname)
-        
+
         if dtype == 'normal':
             ret.dataset = _io.load_dataset(data_dir / 'dataset.txt')
         elif dtype == 'multi-single-file':
@@ -484,7 +533,7 @@ class ProtocolData(object):
                 for subname, sub_ds in ret.dataset.items():
                     ret._subdatas[subname] = cls.from_dir(p / subname, parent_data=ret)
             elif isinstance(ret.input, MultiInput):
-                for subname, subdir in ret.input._directories.items():
+                for subdir, subname in ret.input._directories.items():
                     if (p / subdir / 'data').exists():
                         ret._subdatas[subname] = cls.from_dir(p / subdir, parent_data=ret)
                     #It's ok if not all data exists - it is created on-demand
@@ -588,6 +637,8 @@ class ProtocolData(object):
     def write(self, dirname, parent_data=None):
         p = _pathlib.Path(dirname)
         data_dir = p / 'data'
+
+        p.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(exist_ok=True)
 
         self.input.write(dirname)
@@ -596,15 +647,15 @@ class ProtocolData(object):
             dtype = 'same-as-parent'
         elif isinstance(self.dataset, _objs.MultiDataSet):
             dtype = 'multi-single-file'
-            _io.write_multidataset(self.dataset, data_dir / 'dataset.txt')
+            _io.write_multidataset(data_dir / 'dataset.txt', self.dataset)
             #dtype = 'multi-multiple-files'  # TODO: how to decide between these?
         else:
             dtype = 'normal'
-            _io.write_dataset(self.dataset, data_dir / 'dataset.txt')
+            _io.write_dataset(data_dir / 'dataset.txt', self.dataset)
 
-        meta = {'dataset_type': dtype}
-        with open(data_dir / 'meta.json', 'r') as f:
-            meta = _json.load(f)
+        meta = {'type': full_class_name(self), 'dataset_type': dtype}
+        with open(data_dir / 'meta.json', 'w') as f:
+            _json.dump(meta, f)
 
         if self.cache:
             cache_dir = data_dir / 'cache'
@@ -622,8 +673,9 @@ class ProtocolData(object):
             for subname, sub_ds in self.dataset.items():
                 self._subdatas[subname].write(p / subname, parent_data=self)
         elif isinstance(self.input, MultiInput):
+            name_to_dir = {subname: subdir for subdir, subname in self.input._directories.items()}
             for subname, subdata in self._subdatas.items():
-                subdir = self.input._directories[subname]
+                subdir = name_to_dir[subname]
                 subdata.write(p / subdir, parent_data=self)
 
 
