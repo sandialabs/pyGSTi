@@ -95,7 +95,7 @@ class ModelTest(_proto.Protocol):
             advancedOptions['onBadFit'] = []  # empty list => 'do nothing'
 
         from .gst import _package_into_results
-        return _package_into_results('ModelTest.run', data, target_model, the_model,
+        return _package_into_results('ModelTest', data, target_model, the_model,
                                      lsgstLists, parameters, None, mdl_lsgst_list,
                                      self.gaugeOptParams, advancedOptions, comm, self.memLimit,
                                      self.output_pkl, self.verbosity, profiler)

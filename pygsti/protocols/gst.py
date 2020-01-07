@@ -107,7 +107,7 @@ class StandardGSTInput(StructuredGSTInput):
 class GST(_proto.Protocol):
     def __init__(self, initialModelFilenameOrObj=None, gaugeOptParams=None,
                  advancedOptions=None, comm=None, memLimit=None,
-                 output_pkl=None, verbosity=2):
+                 output_pkl=None, verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
         # because they are mutable objects
@@ -115,7 +115,7 @@ class GST(_proto.Protocol):
         if gaugeOptParams is None:
             gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
 
-        super().__init__()
+        super().__init__(name)
         self.initial_model = _load_model(initialModelFilenameOrObj) if initialModelFilenameOrObj else None
         self.gaugeOptParams = gaugeOptParams
         self.advancedOptions = advancedOptions
@@ -337,7 +337,7 @@ class GST(_proto.Protocol):
         parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
         parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
-        return _package_into_results('do_long_sequence_gst', data, data.input.target_model, mdl_start,
+        return _package_into_results('GST', data, data.input.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
                                      gaugeOptParams, advancedOptions, comm, memLimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
@@ -347,13 +347,13 @@ class StandardPracticeGST(_proto.Protocol):
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeOptSuite=('single', 'unreliable2Q'),
                  gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
-                 advancedOptions=None, output_pkl=None, verbosity=2):
+                 advancedOptions=None, output_pkl=None, verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
         # because they are mutable objects
         if advancedOptions is None: advancedOptions = {}
 
-        super().__init__()
+        super().__init__(name)
         self.modes = modes.split(',')
         self.models_to_test = modelsToTest
         self.gaugeOptSuite = gaugeOptSuite
@@ -482,6 +482,7 @@ class StandardPracticeGST(_proto.Protocol):
             else:
                 _pickle.dump(ret, self.output_pkl)
 
+        ret.name = "StdGST"
         return ret
 
 
@@ -788,9 +789,10 @@ def _package_into_results(callerName, data, target_model, mdl_start, lsgstLists,
 
     ret = advancedOptions.get('appendTo', None)
     if ret is None:
-        ret = ModelEstimateResults(data)
+        ret = ModelEstimateResults(data, protocol_name=callerName, protocol_info={})
     else:
-        dummy = ModelEstimateResults(data)  # a dummy object to check compatibility w/ret2
+        # a dummy object to check compatibility w/ret2
+        dummy = ModelEstimateResults(data, protocol_name='GST', protocol_info={})
         ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
 
     #add estimate to Results
@@ -1173,19 +1175,19 @@ class ModelEstimateResults(_proto.ProtocolResults):
     even if this is is exposed differently.
     """
 
-    def __init__(self, data, init_circuits=True):
+    def __init__(self, data, protocol_name, protocol_info=None, init_circuits=True):
         """
         Initialize an empty Results object.
         TODO: docstring
         """
-        super().__init__(data, "Category", "category")
+        super().__init__(data, protocol_name, protocol_info, "Category", "category")
 
         #Initialize some basic "results" by just exposing the circuit lists more directly
         circuit_lists = _collections.OrderedDict()
         circuit_structs = _collections.OrderedDict()
 
         if init_circuits:
-            inp = self.input
+            inp = self.data.input
             if isinstance(inp, _proto.CircuitStructuresInput):
                 circuit_structs['iteration'] = inp.circuit_structs[:]
                 if len(inp.circuit_structs) > 0:
@@ -1227,6 +1229,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.qtys['circuit_structs'] = circuit_structs
         self.qtys['estimates'] = _collections.OrderedDict()
 
+        #Punt on serialization of these qtys for now...
+        self.auxfile_types['circuit_lists'] = 'pickle'
+        self.auxfile_types['circuit_structs'] = 'pickle'
+        self.auxfile_types['estimates'] = 'pickle'
+
     @property
     def circuit_lists(self):
         return self.qtys['circuit_lists']
@@ -1238,6 +1245,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
     @property
     def estimates(self):
         return self.qtys['estimates']
+
+    @property
+    def dataset(self):
+        return self.data.dataset
 
     def add_estimates(self, results, estimatesToAdd=None):
         """
@@ -1454,7 +1465,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         -------
         Results
         """
-        view = ModelEstimateResults(self, init_circuits=False)
+        view = ModelEstimateResults(self, self.name, self.protocol_info, init_circuits=False)
         view.qtys['circuit_lists'] = self.circuit_lists
         view.qyts['circuit_structs'] = self.circuit_structs
 
@@ -1470,7 +1481,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         """ Creates a copy of this Results object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         data = _proto.ProtocolData(self.input, self.dataset)
-        cpy = ModelEstimateResults(data, init_circuits=False)
+        cpy = ModelEstimateResults(data, self.name, self.protocol_info, init_circuits=False)
         cpy.dataset = self.dataset.copy()
         cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
         cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)

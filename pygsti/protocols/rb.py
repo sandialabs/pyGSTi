@@ -177,6 +177,9 @@ class Benchmark(_proto.Protocol):
     summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities')
     dscmp_datatypes =  ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
+    def __init__(self, name):
+        super().__init__(name)
+
     def compute_summary_data(self, data):
 
         def success_counts(dsrow, circ, idealout):
@@ -284,8 +287,10 @@ class VolumetricBenchmarkGrid(Benchmark):
     #object that can take, e.g. a multiinput or simultaneous input and create a results object with the desired grid of width vs depth numbers
 
     def __init__(self, depths='all', widths='all', datatype='success_probabilities',
-                 paths='all', statistic='mean', aggregate=True, rescaler='auto', dscomparator=None):
-        
+                 paths='all', statistic='mean', aggregate=True, rescaler='auto',
+                 dscomparator=None, name=None):
+
+        super().__init__(name)
         self.depths = depths
         self.widths = widths
         self.datatype = datatype
@@ -306,19 +311,20 @@ class VolumetricBenchmarkGrid(Benchmark):
 
         #data can be multi-pass and multi-input
         # when multi-input, can be a multi-input of simult-inputs of VBs
+        protocol_info = {}  # TODO: ADD INFO
         if data.is_multipass():
             passes = list(data.items())
-            results = _proto.ProtocolResults(data, 'Pass', 'category')
+            results = _proto.ProtocolResults(data, self.name, protocol_info, 'Pass', 'category')
         else:
             passes = [(None, data)]
-            results = _proto.ProtocolResults(data, 'Qty', 'category')
+            results = _proto.ProtocolResults(data, self.name, protocol_info, 'Qty', 'category')
 
         # Trim down data based on specs/paths given to describe
         # which data should be used for each depth,width pair, e.g.
         # ('SpecA', ('Q0',Q1','Q2')) for width=3, etc.
         for passname, passdata in passes:
             if self.paths == 'all':
-                paths = passdata.get_all_paths()
+                paths = passdata.get_tree_paths()
                 trimmed_passdata = passdata
             else:
                 paths = self.paths
@@ -327,7 +333,7 @@ class VolumetricBenchmarkGrid(Benchmark):
             #Then run resulting data normally, giving a results object
             # with "top level" dicts correpsonding to different paths
             VB = VolumetricBenchmark(self.depths, self.datatype, self.statistic,
-                                     self.rescaler, self.dscomparator)
+                                     self.rescaler, self.dscomparator, name=self.name)
             separate_results = VB.run(trimmed_passdata)
 
             #Then we merge/flatten the data from different paths into one depth vs width grid
@@ -340,16 +346,16 @@ class VolumetricBenchmarkGrid(Benchmark):
                 #print("Aggregating path = ", path)  #TODO - show progress something like this later?
                 
                 #Traverse path to get to root of VB data
-                root = separate_results.qtys
+                root = separate_results
                 for key in path:
                     root = root[key]
-                assert(isinstance(root.input, ByDepthInput)), \
-                    "All paths must lead to by-depth inputs, not %s!" % str(type(root.input))
+                assert(isinstance(root.data.input, ByDepthInput)), \
+                    "All paths must lead to by-depth inputs, not %s!" % str(type(root.data.input))
 
                 #Get the list of depths we'll extract from this (`root`) sub-results
-                depths = root.input.depths if (self.depths == 'all') else \
-                    filter(lambda d: d in self.depths, root.input.depths)
-                width = len(root.input.qubit_labels)  # sub-results contains only a single width
+                depths = root.data.input.depths if (self.depths == 'all') else \
+                    filter(lambda d: d in self.depths, root.data.input.depths)
+                width = len(root.data.input.qubit_labels)  # sub-results contains only a single width
 
                 for depth in depths:
                     if depth not in vb:  # and depth not in fails
@@ -369,7 +375,7 @@ class VolumetricBenchmarkGrid(Benchmark):
             if self.statistic in ('minmin', 'maxmax') and not self.aggregate:
                 self._update_vb_minmin_maxmax(vb)   # aggregate now since we won't aggregate over passes
 
-            if passname is None or 'volumetric_benchmarks' not in results.qtys:
+            if passname is None:
                 results.qtys['volumetric_benchmarks'] = vb
                 results.qtys['failure_counts'] = fails
             else:
@@ -378,7 +384,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                 results.qtys[passname]['failure_counts'] = fails
 
         if self.aggregate and len(passes) > 1:  # aggregate pass data into a single set of qty dicts
-            aggregated_results = _proto.ProtocolResults(data, 'Qty', 'category')
+            aggregated_results = _proto.ProtocolResults(data, self.name, protocol_info, 'Qty', 'category')
             agg_vb = _proto.NamedDict('Depth', 'int', None)
             agg_fails = _proto.NamedDict('Depth', 'int', None)
             passnames = [passname for passname, _ in passes]
@@ -446,11 +452,11 @@ class VolumetricBenchmarkGrid(Benchmark):
 class VolumetricBenchmark(Benchmark):
 
     def __init__(self, depths='all', datatype='success_probabilities',
-                 statistic='mean', rescaler='auto', dscomparator=None):
+                 statistic='mean', rescaler='auto', dscomparator=None, name=None):
 
         assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin'))
 
-        super().__init__()
+        super().__init__(name)
         self.depths = depths
         #self.widths = widths  # widths='all',
         self.datatype = datatype
@@ -517,7 +523,7 @@ class VolumetricBenchmark(Benchmark):
         def failcnt_fn(percircuitdata):
             """ Returns (nSucceeded, nFailed) for all circuits at same depth """
             nCircuits = len(percircuitdata)
-            failcount = _np.sum(_np.isnan(percircuitdata))
+            failcount = int(_np.sum(_np.isnan(percircuitdata)))
             return (nCircuits - failcount, failcount)
 
         #TODO REMOVE
@@ -539,14 +545,21 @@ class VolumetricBenchmark(Benchmark):
             fails[depth][width] = failcnt_fn(percircuitdata)
             vb[depth][width] = agg_fn(percircuitdata, width)
 
-        results = _proto.ProtocolResults(data, 'Qty', 'category')
+        protocol_info = {}  # TODO: ADD INFO
+        results = _proto.ProtocolResults(data, self.name, protocol_info, 'Qty', 'category')
         results.qtys['volumetric_benchmarks'] = vb
         results.qtys['failure_counts'] = fails
+        results.auxfile_types['volumetric_benchmarks'] = 'json'
+        results.auxfile_types['failure_counts'] = 'json'
         return results
 
 
 class PredictedData(_proto.Protocol):
     #maybe just a function??
+
+    def __init__(self, name):
+        super().__init__(name)
+
     def _run(self, data):
 
         for i, ((circ, dsrow), auxdict, (pcirc, pdsrow)) in enumerate(iterator):

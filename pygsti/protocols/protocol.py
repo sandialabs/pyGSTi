@@ -27,8 +27,8 @@ def full_class_name(x):
 
 
 class Protocol(object):
-    def __init__(self):
-        pass
+    def __init__(self, name=None):
+        self.name = name if name else self.__class__.__name__
 
     def run(self, data):
         if data.is_multipass():
@@ -55,8 +55,11 @@ class Protocol(object):
 #   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
 #   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
 class MultiProtocol(Protocol):
-    def __init__(self, protocols):
-        super().__init__()
+    def __init__(self, protocols, name=None):
+        if name is None:
+            name = protocols.name if isinstance(protocols, Protocol) else \
+                '-'.join([p.name for p in protocols])
+        super().__init__(name)
         self.protocols = protocols
         self.root_qty_name = 'Protocol'
 
@@ -68,25 +71,27 @@ class MultiProtocol(Protocol):
 
         assert(len(data) == len(protocols))
 
-        results = ProtocolResults(data, self.root_qty_name, 'category')
+        protocol_info = {}  # TODO: extract this from protocol?
+        results = ProtocolResults(data, self.name, protocol_info, self.root_qty_name, 'category')
         for (sub_name, sub_data), protocol in zip(data.items(), protocols):
+            protocol.name = self.name  # override protocol's name so load/save works
             sub_results = protocol.run(sub_data)
-            results.qtys[sub_name] = sub_results  # something like this?
+            results._subresults[sub_name] = sub_results  # something like this?
         return results
 
 
 # SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
 #  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
 class SimultaneousProtocol(MultiProtocol):
-    def __init__(self, protocols):
-        super().__init__(protocols)
+    def __init__(self, protocols, name=None):
+        super().__init__(protocols, name)
         self.root_qty_name = 'Qubits'
 
 
 class MultiPassProtocol(Protocol):
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
-    def __init__(self, protocol):
-        super().__init__()
+    def __init__(self, protocol, name=None):
+        super().__init__(name)
         self.protocol = protocol
 
     def run(self, data):
@@ -96,7 +101,7 @@ class MultiPassProtocol(Protocol):
         for pass_name, sub_data in data.items():  # a multipass DataProtocol object contains per-pass datas
             #TODO: print progress: pass X of Y, etc
             sub_results = self.protocol.run(sub_data)
-            results.qtys[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
+            results._subresults[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
         return results
 
 
@@ -121,6 +126,102 @@ def load_input_from_dir(dirname):
     return cls.from_dir(dirname)
 
 
+def _get_auxfile_ext(typ):
+    #get expected extension
+    if typ == 'text-circuit-list': ext = '.txt'
+    elif typ == 'text-circuit-lists': ext = '.txt'
+    elif typ == 'json': ext = '.json'
+    elif typ == 'pickle': ext = '.pkl'
+    elif typ == 'none': ext = '.NONE'
+    else: raise ValueError("Invalid aux-file type: %s" % typ)
+    return ext
+
+
+def load_meta_based_dir(root_dir, ignore_meta=()):
+    root_dir = _pathlib.Path(root_dir)
+    ret = {}
+    with open(root_dir / 'meta.json', 'r') as f:
+        meta = _json.load(f)
+
+    for key, val in meta.items():
+        if key in ignore_meta or key == 'auxfile_types': continue
+        ret[key] = val
+
+    for key, typ in meta['auxfile_types'].items():
+        if typ == 'none': continue  # no file exists for this member
+        ext = _get_auxfile_ext(typ)
+
+        #Process cases with non-standard expected path(s)
+        if typ == 'text-circuit-lists':
+            i = 0; val = []
+            while True:
+                pth = root_dir / (key + str(i) + ext)
+                if not pth.exists(): break
+                val.append(_io.load_circuit_list(pth)); i += 1
+
+        else:  # cases with 'standard' expected path
+
+            pth = root_dir / (key + ext)
+            if not (pth.exists() and not pth.is_dir()):
+                raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
+
+            #load value into object
+            if typ == 'text-circuit-list':
+                val = _io.load_circuit_list(pth)
+            elif typ == 'json':
+                with open(pth, 'r') as f:
+                    val = _json.load(f)
+            elif typ == 'pickle':
+                with open(pth, 'rb') as f:
+                    val = _pickle.load(f)
+            else:
+                raise ValueError("Invalid aux-file type: %s" % typ)
+
+        ret[key] = val
+    return ret, meta['auxfile_types']
+
+
+def write_meta_based_dir(root_dir, valuedict, auxfile_types, init_meta=None):
+    root_dir = _pathlib.Path(root_dir)
+    root_dir.mkdir(exist_ok=True)
+
+    meta = {}
+    if init_meta: meta.update(init_meta)
+    meta['auxfile_types'] = auxfile_types
+    
+    for key, val in valuedict.items():
+        if key in auxfile_types: continue  # member is serialized to a separate file (see below)
+        meta[key] = val
+    with open(root_dir / 'meta.json', 'w') as f:
+        _json.dump(meta, f)
+
+    for auxnm, typ in auxfile_types.items():
+        val = valuedict[auxnm]
+        ext = _get_auxfile_ext(typ)
+
+        if typ == 'text-circuit-lists':
+            for i, circuit_list in enumerate(val):
+                pth = root_dir / (auxnm + str(i) + ext)
+                _io.write_circuit_list(pth, circuit_list)
+
+        else:
+            # standard path cases
+            pth = root_dir / (auxnm + ext)
+
+            if typ == 'text-circuit-list':
+                _io.write_circuit_list(pth, val)
+            elif typ == 'json':
+                with open(pth, 'w') as f:
+                    _json.dump(val, f)
+            elif typ == 'pickle':
+                with open(pth, 'wb') as f:
+                    _pickle.dump(val, f)
+            elif typ == 'none':
+                pass
+            else:
+                raise ValueError("Invalid aux-file type: %s" % typ)
+
+
 class ProtocolInput(object):
     """ Serialize-able input data for a protocol """
 
@@ -132,61 +233,14 @@ class ProtocolInput(object):
     #        else {default_protocol_name: default_protocol_info}
 
     @classmethod
-    def _get_auxfile_ext(cls, typ):
-        #get expected extension
-        if typ == 'text-circuit-list': ext = '.txt'
-        elif typ == 'text-circuit-lists': ext = '.txt'
-        elif typ == 'json': ext = '.json'
-        elif typ == 'pickle': ext = '.pkl'
-        elif typ == 'none': ext = '.NONE'
-        else: raise ValueError("Invalid aux-file type: %s" % typ)
-        return ext
-
-    @classmethod
     def from_dir(cls, dirname):
         p = _pathlib.Path(dirname)
         input_dir = p / 'input'
 
-        with open(input_dir / 'meta.json', 'r') as f:
-            meta = _json.load(f)
-
         ret = cls.__new__(cls)
-        for key, val in meta.items():
-            if key == 'type': continue  # ignore - this is just the class name
-            ret.__dict__[key] = val
-
-        for key, typ in meta['auxfile_types'].items():
-            if typ == 'none': continue  # no file exists for this member
-            ext = cls._get_auxfile_ext(typ)
-
-            #Process cases with non-standard expected path(s)
-            if typ == 'text-circuit-lists':
-                i = 0; val = []
-                while True:
-                    pth = input_dir / (key + str(i) + ext)
-                    if not pth.exists(): break
-                    val.append(_io.load_circuit_list(pth)); i += 1
-
-            else:
-
-                # cases with 'standard' expected path exists
-                pth = input_dir / (key + ext)
-                if not (pth.exists() and not pth.is_dir()):
-                    raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
-
-                #load value into object
-                if typ == 'text-circuit-list':
-                    val = _io.load_circuit_list(pth)
-                elif typ == 'json':
-                    with open(pth, 'r') as f:
-                        val = _json.load(f)
-                elif typ == 'pickle':
-                    with open(pth, 'rb') as f:
-                        val = _pickle.load(f)
-                else:
-                    raise ValueError("Invalid aux-file type: %s" % typ)
-
-            ret.__dict__[key] = val
+        d, auxfile_types = load_meta_based_dir(input_dir, ignore_meta=('type',))  # ignore - this is just the class name
+        ret.auxfile_types = auxfile_types
+        ret.__dict__.update(d)
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None):
@@ -223,42 +277,10 @@ class ProtocolInput(object):
     def write(self, dirname):
         p = _pathlib.Path(dirname)
         input_dir = p / 'input'
-
         p.mkdir(parents=True, exist_ok=True)
-        input_dir.mkdir(exist_ok=True)
 
         meta = {'type': full_class_name(self)}
-        for key, val in self.__dict__.items():
-            if key in self.auxfile_types: continue  # member is serialized to a separate file (see below)
-            meta[key] = val
-        with open(input_dir / 'meta.json', 'w') as f:
-            _json.dump(meta, f)
-
-        for auxnm, typ in self.auxfile_types.items():
-            val = self.__dict__[auxnm]
-            ext = self._get_auxfile_ext(typ)
-
-            if typ == 'text-circuit-lists':
-                for i, circuit_list in enumerate(val):
-                    pth = input_dir / (auxnm + str(i) + ext)
-                    _io.write_circuit_list(pth, circuit_list)
-
-            else:
-                # standard path cases
-                pth = input_dir / (auxnm + ext)
-
-                if typ == 'text-circuit-list':
-                    _io.write_circuit_list(pth, val)
-                elif typ == 'json':
-                    with open(pth, 'w') as f:
-                        _json.dump(val, f)
-                elif typ == 'pickle':
-                    with open(pth, 'wb') as f:
-                        _pickle.dump(val, f)
-                elif typ == 'none':
-                    pass
-                else:
-                    raise ValueError("Invalid aux-file type: %s" % typ)
+        write_meta_based_dir(input_dir, self.__dict__, self.auxfile_types, init_meta=meta)
 
     def get_tree_paths(self):
         """Dictionary paths leading to "terminal"/"leaf" input objects beneath this one"""
@@ -738,35 +760,115 @@ class NamedDict(dict):
                     seriestypes['value'] = self.valtype
                 elif seriestypes['value'] != self.valtype:
                     seriestypes['value'] = None  # conflicting type, so set to None
-                    
+
                 for rk, rv in complete_row.items():
                     columns[rk].append(rv)
 
 
-class ProtocolResults(ProtocolData):
-    def __init__(self, data, root_qty_name='ROOT', root_qty_stypes=None):
-        super().__init__(data.input, data.dataset)
+def load_results_from_dir(dirname, name=None, preloaded_data=None):
+    if name is None:  # then load all of the results in `dirname`
+        return ProtocolResultsDir.from_dir(dirname)
+
+    p = _pathlib.Path(dirname)
+    with open(p / 'results' / name / 'meta.json', 'r') as f:
+        meta = _json.load(f)
+    typestr = meta['type']
+    cls = class_for_name(typestr)  # class of object to create
+    return cls.from_dir(dirname, name, preloaded_data)
+
+
+class ProtocolResults(object):
+
+    @classmethod
+    def from_dir(cls, dirname, name, preloaded_data=None):
+        ret = cls.__new__(cls)
+        ret.name = name
+
+        #Initialize input and data
+        if preloaded_data is not None:
+            ret.data = preloaded_data
+        else:
+            ret.data = load_data_from_dir(dirname)
+
+        #Initialize results
+        p = _pathlib.Path(dirname)
+        results_dir = p / 'results' / name
+
+        #load qtys from results directory
+        d, ret.auxfile_types = load_meta_based_dir(results_dir, ignore_meta=('type',))
+        ret.qtys = d  #TODO - how to preserve NamedDict objects??
+
+        #load _subresults from other directories
+        ret._subresults = {}
+        if ret.data.is_multipass():
+            raise NotImplementedError()  # TODO - load in per-pass results as subresults??
+        elif ret.data.is_multiinput():
+            subname_to_subdir = {subname: subdir for subdir, subname in ret.data.input._directories.items()}
+            for sub_name, sub_data in ret.data.items():
+                subdir = subname_to_subdir[sub_name]
+                if (p / subdir / 'results' / 'meta.json').is_file():
+                    # A results object doesn't *need* to have all possible sub-results
+                    ret._subresults[sub_name] = load_results_from_dir(p / subdir, name, sub_data)
+
+        return ret
+
+    def __init__(self, data, protocol_name, protocol_info=None, root_qty_name='ROOT', root_qty_stypes=None):
+        """root quantity seriestypes, 'root_qty_stypes' can be a (key-type, val-type) tuple or a single key-type """
         if isinstance(root_qty_stypes, tuple):
             ktype, vtype = root_qty_stypes
         else:
             ktype = root_qty_stypes; vtype = None
+        self.name = protocol_name
+        self.protocol_info = protocol_info
+        self.data = data
         self.qtys = NamedDict(root_qty_name, ktype, vtype)
+        self.auxfile_types = {}
+        self._subresults = {}
 
     def items(self):
-        return self.qtys.items()
+        return _itertools.chain(self.qtys.items(), self._subresults.items())
 
     def keys(self):
-        return self.qtys.keys()
+        return _itertools.chain(self.qtys.keys(), self._subresults.keys())
     
     def __getitem__(self, key):
-        return self.qtys[key]
+        if key in self.qtys:
+            return self.qtys[key]
+        else:
+            return self._subresults[key]
 
     def __contains__(self, key):
-        return key in self.qtys
+        return key in self.qtys or key in self._subresults
 
     def __len__(self):
-        return len(self.qtys)
+        return len(self.qtys) + len(self._subresults)
 
+    def write(self, dirname, data_already_written=False):
+        p = _pathlib.Path(dirname)
+        results_dir = p / 'results' / self.name
+        results_dir.mkdir(parents=True, exist_ok=True)
+
+        #write input and data
+        if not data_already_written:
+            self.data.write(dirname)
+
+        #write qtys to results dir
+        meta = {'type': full_class_name(self)}
+        write_meta_based_dir(results_dir, self.qtys, self.auxfile_types, init_meta=meta)  # TODO - how to preserve NamedDict objects??
+
+        #write _subresults to other directories
+        if self.data.is_multiinput():
+            subname_to_subdir = {subname: subdir for subdir, subname in self.data.input._directories.items()}
+        elif self.data.is_multipass():
+            subname_to_subdir = {subname: subname for subname in self.data.keys()}
+        else:
+            subname_to_subdir = None  # shouldn't use below since _subresults should be empty
+        for sub_name, sub_results in self._subresults.items():
+            assert(sub_results.name == self.name), "Sub-results must have same name as parent results!"
+            subdir = subname_to_subdir[sub_name]
+            sub_results.write(p / subdir, data_already_written=True)  # avoid re-writing the data        
+
+    #TODO - revamp functions below here now that _subresults is added
     def asdict(self):
         ret = {}
         for k, v in self.qtys.items():
@@ -783,6 +885,84 @@ class ProtocolResults(ProtocolData):
         import pprint
         P = pprint.PrettyPrinter()
         return P.pformat(self.asdict())
+
+
+class ProtocolResultsDir(object):
+    """
+    A dict of ProtocolResults objects, but a separate class because of the nontrivial
+    from_dir(...) and write(...) methods, which deconvolve the data contained in a
+    directory containing the results from multiple protocols.  (Protocol Xs data is
+    stored in root_dir/results/X and sub-results are stored in root_dir/subdir/results/X,
+    not root_dir/results/X/subdir).
+    """
+    
+    @classmethod
+    def from_dir(cls, dirname):
+        #Find result names to load
+        p = _pathlib.Path(dirname)
+        results_dir = p / 'results'
+
+        names = []
+        for pth in results_dir.iterdir():
+            if pth.is_dir() and (pth / 'meta.json').is_file():
+                names.append(pth.stem)
+
+        #Load input and data (once!)
+        data = load_data_from_dir(dirname)
+
+        results = {}
+        for name in names:
+            results[name] = load_results_from_dir(dirname, name, preloaded_data=data)
+
+        return cls(data, results)
+
+    def __init__(self, data, protocol_results):
+        """ protocol_results should be a dict of ProtocolResults object whose keys are the names of the contained results """
+        self.data = data  # input and data
+        self.for_protocol = protocol_results.copy()
+        assert(all([r.data is self.data for r in self.for_protocol.values()]))
+
+    def items(self):
+        return self.for_protocol.items()
+
+    def keys(self):
+        return self.for_protocol.keys()
+    
+    def __getitem__(self, key):
+        return self.for_protocol[key]
+
+    def __contains__(self, key):
+        return key in self.for_protocol
+
+    def __len__(self):
+        return len(self.for_protocol)
+
+    def write(self, dirname):
+        #write the input and data (once!)
+        self.data.write(dirname)
+
+        #write the results
+        for name, results in self.for_protocol.items():
+            assert(results.name == name)
+            results.write(self, dirname, data_already_written=True)
+
+    ##TODO - revamp functions below here now that _subresults is added
+    #def asdict(self):
+    #    ret = {}
+    #    for k, v in self.qtys.items():
+    #        if isinstance(v, ProtocolResults):
+    #            ret[k] = v.asdict()
+    #        else:
+    #            ret[k] = v
+    #    return ret
+    #
+    #def asdataframe(self):
+    #    return self.qtys.asdataframe()
+    #
+    #def __str__(self):
+    #    import pprint
+    #    P = pprint.PrettyPrinter()
+    #    return P.pformat(self.asdict())
 
 
 
