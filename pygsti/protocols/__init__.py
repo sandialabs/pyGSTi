@@ -11,3 +11,4 @@
 from .protocol import *
 from .gst import *
 from .rb import *
+from .modeltest import *

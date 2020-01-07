@@ -55,20 +55,19 @@ class GSTInput(_proto.CircuitListsInput, HasTargetModel):
                  qubit_labels=None, nested=False):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
-        self.add_default_protocol("GST")
 
 
 class StructuredGSTInput(_proto.CircuitStructuresInput, HasTargetModel):
-    def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None, nested=False):
+    def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
+                 nested=False):
         super().__init__(circuit_structs, qubit_labels, nested)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
-        self.add_default_protocol("GST")
 
 
 class StandardGSTInput(StructuredGSTInput):
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, qubit_labels=None, verbosity=0):
+                 keepSeed=None, qubit_labels=None, verbosity=0, add_default_protocol=False):
 
         #Get/load fiducials and germs
         prep, meas, germs = _load_fiducials_and_germs(
@@ -102,6 +101,8 @@ class StandardGSTInput(StructuredGSTInput):
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
         self.auxfile_types['meas_fiducials'] = 'text-circuit-list'
         self.auxfile_types['germs'] = 'text-circuit-list'
+        if add_default_protocol:
+            self.add_default_protocol(StandardPracticeGST(name='StdGST'))
 
 
 class GST(_proto.Protocol):
@@ -123,6 +124,12 @@ class GST(_proto.Protocol):
         self.memLimit = memLimit
         self.output_pkl = output_pkl
         self.verbosity = verbosity
+
+        self.auxfile_types['initial_model'] = 'pickle'
+        self.auxfile_types['gaugeOptParams'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['advanced_options'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['comm'] = 'none'
+
 
     #TODO: Maybe make methods like this separate functions??
     def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
@@ -337,7 +344,7 @@ class GST(_proto.Protocol):
         parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
         parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
-        return _package_into_results('GST', data, data.input.target_model, mdl_start,
+        return _package_into_results(self.name, data, data.input.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
                                      gaugeOptParams, advancedOptions, comm, memLimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
@@ -363,6 +370,12 @@ class StandardPracticeGST(_proto.Protocol):
         self.memLimit = memLimit
         self.output_pkl = output_pkl
         self.verbosity = verbosity
+
+        self.auxfile_types['models_to_test'] = 'pickle'
+        self.auxfile_types['gaugeOptSuite'] = 'pickle'
+        self.auxfile_types['gaugeOptTarget'] = 'pickle'
+        self.auxfile_types['advancedOptions'] = 'pickle'
+        self.auxfile_types['comm'] = 'none'
 
     def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
         inp = StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
@@ -482,7 +495,7 @@ class StandardPracticeGST(_proto.Protocol):
             else:
                 _pickle.dump(ret, self.output_pkl)
 
-        ret.name = "StdGST"
+        ret.name = self.name
         return ret
 
 

@@ -32,7 +32,7 @@ from ..objects import objectivefns as _objfns
 class ModelTest(_proto.Protocol):
     def __init__(self, model_to_test, gaugeOptParams=None,
                  advancedOptions=None, comm=None, memLimit=None,
-                 output_pkl=None, verbosity=2):
+                 output_pkl=None, verbosity=2, name=None):
 
         if advancedOptions is None: advancedOptions = {}
         if gaugeOptParams is None:
@@ -42,7 +42,7 @@ class ModelTest(_proto.Protocol):
             model_to_test = model_to_test.copy()
             model_to_test.default_gauge_group = _objs.TrivialGaugeGroup(model_to_test.dim)  # so no gauge opt is done
 
-        super().__init__()
+        super().__init__(name)
         self.model_to_test = model_to_test
         self.gaugeOptParams = gaugeOptParams
         self.advancedOptions = advancedOptions
@@ -95,7 +95,7 @@ class ModelTest(_proto.Protocol):
             advancedOptions['onBadFit'] = []  # empty list => 'do nothing'
 
         from .gst import _package_into_results
-        return _package_into_results('ModelTest', data, target_model, the_model,
+        return _package_into_results(self.name, data, target_model, the_model,
                                      lsgstLists, parameters, None, mdl_lsgst_list,
                                      self.gaugeOptParams, advancedOptions, comm, self.memLimit,
                                      self.output_pkl, self.verbosity, profiler)

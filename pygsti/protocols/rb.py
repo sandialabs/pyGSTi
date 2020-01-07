@@ -91,7 +91,7 @@ class CliffordRBInput(BenchmarkingInput):
 
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
-                 verbosity=1):
+                 verbosity=1, add_default_protocol=False):
         #Translated from clifford_rb_experiment
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
@@ -120,6 +120,8 @@ class CliffordRBInput(BenchmarkingInput):
         self.citerations = citerations
         self.compilerargs = compilerargs
         self.descriptor = descriptor
+        if add_default_protocol:
+            self.add_default_protocol(RB(name='RB'))
 
 
 class DirectRBInput(BenchmarkingInput):
@@ -127,7 +129,7 @@ class DirectRBInput(BenchmarkingInput):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
-                 verbosity=1):
+                 verbosity=1, add_default_protocol=False):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
@@ -167,6 +169,9 @@ class DirectRBInput(BenchmarkingInput):
         self.compilerargs = compilerargs
         self.partitioned = partitioned
         self.descriptor = descriptor
+        if add_default_protocol:
+            self.add_default_protocol(RB(name='RB'))
+
 
 
 #TODO: maybe need more input types for simultaneous RB and mirrorRB "experiments"
@@ -175,7 +180,7 @@ class DirectRBInput(BenchmarkingInput):
 class Benchmark(_proto.Protocol):
 
     summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities')
-    dscmp_datatypes =  ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
+    dscmp_datatypes = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
         super().__init__(name)
@@ -299,6 +304,8 @@ class VolumetricBenchmarkGrid(Benchmark):
         self.aggregate = aggregate
         self.dscomparator = dscomparator
         self.rescaler = rescaler
+
+        self.auxfile_types['dscomparator'] = 'pickle'
 
     def run(self, data):
         #Note: implement "run" here, since we want to deal with multi-pass and multi-inputs
@@ -463,6 +470,9 @@ class VolumetricBenchmark(Benchmark):
         self.statistic = statistic
         self.dscomparator = dscomparator
 
+        self.auxfile_types['dscomparator'] = 'pickle'
+        self.auxfile_types['rescale_function'] = 'none'  # TODO: need to recreate this fn in from_dir!!
+
         if isinstance(rescaler, str):
             if rescaler == 'auto':
                 if datatype == 'success_probabilities':
@@ -574,5 +584,6 @@ class PredictedData(_proto.Protocol):
             
 
 class RB(_proto.Protocol):
-    pass
+    def __init__(self, name):
+        super().__init__(name)
 
