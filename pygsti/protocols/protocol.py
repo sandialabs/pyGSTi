@@ -7,7 +7,6 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
 import numpy as _np
 import itertools as _itertools
 import copy as _copy
@@ -16,6 +15,7 @@ import pickle as _pickle
 import pathlib as _pathlib
 import importlib as _importlib
 
+from . import support as _support
 from .. import construction as _cnst
 from .. import objects as _objs
 from .. import io as _io
@@ -23,301 +23,214 @@ from ..objects import circuit as _cir
 from ..tools import listtools as _lt
 
 
-def full_class_name(x):
-    return x.__class__.__module__ + '.' + x.__class__.__name__
-
-
-def class_for_name(module_and_class_name):
-    parts = module_and_class_name.split('.')
-    module_name = '.'.join(parts[0:-1])
-    class_name = parts[-1]
-    # load the module, will raise ImportError if module cannot be loaded
-    m = _importlib.import_module(module_name)
-    # get the class, will raise AttributeError if class cannot be found
-    c = getattr(m, class_name)
-    return c
-
-
-def load_protocol_from_meta_based_dir(dirname):
-    p = _pathlib.Path(dirname)
-    with open(p / 'meta.json', 'r') as f:
-        meta = _json.load(f)
-    typestr = meta['type']
-    cls = class_for_name(typestr)  # class of object to create
-    return cls.from_dir(dirname)
+def load_protocol_from_dir(dirname):
+    dirname = _pathlib.Path(dirname)
+    return _support.obj_from_meta_json(dirname).from_dir(dirname)
 
 
 class Protocol(object):
     @classmethod
     def from_dir(cls, dirname):
-        p = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(load_meta_based_dir(p))
+        ret.__dict__.update(_support.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret._init_unserialized_attributes()
         return ret
 
     def __init__(self, name=None):
+        super().__init__()
         self.name = name if name else self.__class__.__name__
         self.auxfile_types = {}
 
     def run(self, data):
-        if data.is_multipass():
-            implicit_multipassprotocol = MultiPassProtocol(self)
-            return implicit_multipassprotocol.run(data)
-
-        elif data.is_multiinput():  # ~ is this is a directory
-            # Note: we also know that self *isn't* a MultiProtocol object since
-            # MultiProtocol overrides run(...).
-            if isinstance(data.input, SimultaneousInput):
-                implicit_multiprotocol = SimultaneousProtocol(self)
-            else:
-                implicit_multiprotocol = MultiProtocol(self)
-            return implicit_multiprotocol.run(data)
-
-        else:
-            return self._run(data)
-
-    def _run(self, data):
         raise NotImplementedError("Derived classes should implement this!")
 
     def write(self, dirname):
-        p = _pathlib.Path(dirname)
-        p.mkdir(parents=True, exist_ok=True)
+        _support.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-        meta = {'type': full_class_name(self)}
-        write_meta_based_dir(p, self.__dict__, init_meta=meta)
-
-
-# MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
-#   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
-#   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
-class MultiProtocol(Protocol):
-    def __init__(self, protocols, name=None):
-        if name is None and protocols:
-            name = protocols.name if isinstance(protocols, Protocol) else \
-                '-'.join([p.name for p in protocols])
-        super().__init__(name)
-        self.protocols = protocols
-        self.root_qty_name = 'Protocol'
-        self.auxfile_types['protocols'] = 'list-of-protocolobjs'
-
-    def run(self, data):
-        protocols = self.protocols
-        results = ProtocolResults(data, self.name, self, self.root_qty_name, 'category')
-
-        if data.is_multiinput():
-            if isinstance(protocols, Protocol):  # allow a single Protocol to be given as 'self.protocols'
-                protocols = [protocols] * len(data)
-
-            assert(len(data) == len(protocols))
-
-            for (sub_name, sub_data), protocol in zip(data.items(), protocols):
-                protocol.name = self.name  # override protocol's name so load/save works
-                sub_results = protocol.run(sub_data)
-                results._subresults[sub_name] = sub_results  # something like this?
-        else:
-            assert(False), "We don't really want to do this..."
-            for protocol in protocols:
-                sub_results = protocol.run(data)
-                results.qtys[protocol.name] = sub_results  # something like this? - or just merge qtys?
-
-        return results
-
-
-# SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
-#  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
-class SimultaneousProtocol(MultiProtocol):
-    def __init__(self, protocols, name=None):
-        super().__init__(protocols, name)
-        self.root_qty_name = 'Qubits'
+    def _init_unserialized_attributes(self):
+        """Initialize anything that isn't serialized based on the things that are serialized.
+           Usually this means initializing things with auxfile_type == 'none' that aren't
+           separately serialized.
+        """
+        pass
 
 
 class MultiPassProtocol(Protocol):
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
     def __init__(self, protocol, name=None):
+        if name is None: name = self.protocol.name + "_multipass"
         super().__init__(name)
         self.protocol = protocol
         self.auxfile_types['protocol'] = 'protocolobj'
 
     def run(self, data):
-        assert(data.is_multipass()), "`MultiPassProtocol` can only be run on ProtocolData objects with multi-pass data"
-
-        results = ProtocolResults(data, 'Pass', 'category')
-        for pass_name, sub_data in data.items():  # a multipass DataProtocol object contains per-pass datas
+        results = MultiPassResults(data, self)
+        for pass_name, sub_data in data.passes.items():  # a multipass DataProtocol object contains per-pass datas
             #TODO: print progress: pass X of Y, etc
             sub_results = self.protocol.run(sub_data)
-            results._subresults[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
+            # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?  or call as_dict?
+            results.passes[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
         return results
 
 
-def load_input_from_dir(dirname):
-    p = _pathlib.Path(dirname)
-    with open(p / 'input' / 'meta.json', 'r') as f:
-        meta = _json.load(f)
-    typestr = meta['type']
-    cls = class_for_name(typestr)  # class of object to create
-    return cls.from_dir(dirname)
+#class SimpleProtocol(Protocol):
+#
+#    def run(self, data):
+#        if data.is_multipass():
+#            implicit_multipassprotocol = MultiPassProtocol(self)
+#            return implicit_multipassprotocol.run(data)
+#
+#        elif data.is_multiinput():  # ~ is this is a directory
+#            # Note: we also know that self *isn't* a MultiProtocol object since
+#            # MultiProtocol overrides run(...).
+#            #if isinstance(data.input, SimultaneousInput):
+#            #    implicit_multiprotocol = SimultaneousProtocol(self)
+#            #else:
+#            implicit_multiprotocol = MultiProtocol(self)
+#            return implicit_multiprotocol.run(data)
+#
+#        else:
+#            return self.simple_run(data)
+#
+#    def simple_run(self, data):
+#        raise NotImplementedError("Derived classes should implement this!")
 
 
-def _get_auxfile_ext(typ):
-    #get expected extension
-    if typ == 'text-circuit-list': ext = '.txt'
-    elif typ == 'text-circuit-lists': ext = '.txt'
-    elif typ == 'list-of-protocolobjs': ext = ''
-    elif typ == 'dict-of-protocolobjs': ext = ''
-    elif typ == 'protocolobj': ext = ''
-    elif typ == 'json': ext = '.json'
-    elif typ == 'pickle': ext = '.pkl'
-    elif typ == 'none': ext = '.NONE'
-    else: raise ValueError("Invalid aux-file type: %s" % typ)
-    return ext
+# MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
+#   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
+#   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
+class ProtocolRunner(object):
+    """ - creates ProtocolResultsDir vs. Protocols, which create ProtocolResults objects"""
+    def run(self, data):
+        raise NotImplementedError()
 
 
-def load_meta_based_dir(root_dir, ignore_meta=('type',), separate_auxfiletypes=False):
-    root_dir = _pathlib.Path(root_dir)
-    ret = {}
-    with open(root_dir / 'meta.json', 'r') as f:
-        meta = _json.load(f)
+class TreeRunner(ProtocolRunner):
+    """Run specific protocols on specific paths"""
+    def __init__(self, protocol_dict):
+        self.protocols = protocol_dict
 
-    for key, val in meta.items():
-        if key in ignore_meta: continue
-        ret[key] = val
+    def run(self, data):
+        ret = ProtocolResultsDir(data)  # creates entire tree of nodes
+        for path, protocol in self.protocols.items():
 
-    for key, typ in meta['auxfile_types'].items():
-        ext = _get_auxfile_ext(typ)
+            root = ret
+            for el in path:  # traverse path
+                root = root[el]
+            root.for_protocol[protocol.name] = protocol.run(root.data)  # run the protocol
 
-        #Process cases with non-standard expected path(s)
-        if typ == 'none':
-            val = None  # no file exists for this member
-            
-        elif typ == 'text-circuit-lists':
-            i = 0; val = []
-            while True:
-                pth = root_dir / (key + str(i) + ext)
-                if not pth.exists(): break
-                val.append(_io.load_circuit_list(pth)); i += 1
-
-        elif typ == 'protocolobj':
-            val = load_protocol_from_meta_based_dir(root_dir / (key + ext))
-
-        elif typ == 'list-of-protocolobjs':
-            i = 0; val = []
-            while True:
-                pth = root_dir / (key + str(i) + ext)
-                if not pth.exists(): break
-                val.append(load_protocol_from_meta_based_dir(pth)); i += 1
-
-        elif typ == 'dict-of-protocolobjs':
-            keys = meta[key]
-            val = {k: load_protocol_from_meta_based_dir(root_dir / (key + "_" + k + ext)) for k in keys}
-            
-        else:  # cases with 'standard' expected path
-
-            pth = root_dir / (key + ext)
-            if not (pth.exists() and not pth.is_dir()):
-                raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
-
-            #load value into object
-            if typ == 'text-circuit-list':
-                val = _io.load_circuit_list(pth)
-            elif typ == 'json':
-                with open(pth, 'r') as f:
-                    val = _json.load(f)
-            elif typ == 'pickle':
-                with open(pth, 'rb') as f:
-                    val = _pickle.load(f)
-            else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
-
-        ret[key] = val
-        
-    if separate_auxfiletypes:
-        del ret['auxfile_types']
-        return ret, meta['auxfile_types']
-    else:
         return ret
 
 
-def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None):
-    root_dir = _pathlib.Path(root_dir)
-    root_dir.mkdir(exist_ok=True)
+class SimpleRunner(ProtocolRunner):
+    """ Run a single protocol on every data node that has no sub-nodes (possibly separately for each pass) """
+    def __init__(self, protocol, protocol_can_handle_multipass_data=False):
+        self.protocol = protocol
+        self.do_passes_separately = not protocol_can_handle_multipass_data
 
-    if auxfile_types is None:
-        auxfile_types = valuedict['auxfile_types']
+    def run(self, data):
+        ret = ProtocolResultsDir(data)  # creates entire tree of nodes
 
-    meta = {}
-    if init_meta: meta.update(init_meta)
-    meta['auxfile_types'] = auxfile_types
-
-    for key, val in valuedict.items():
-        if key in auxfile_types: continue  # member is serialized to a separate file (see below)
-        meta[key] = val
-    #Wait to write meta.json until the end, since
-    # aux-types may utilize it too.
-
-    for auxnm, typ in auxfile_types.items():
-        val = valuedict[auxnm]
-        ext = _get_auxfile_ext(typ)
-
-        if typ == 'text-circuit-lists':
-            for i, circuit_list in enumerate(val):
-                pth = root_dir / (auxnm + str(i) + ext)
-                _io.write_circuit_list(pth, circuit_list)
-
-        elif typ == 'protocolobj':
-            val.write(root_dir / (auxnm + ext))
-
-        elif typ == 'list-of-protocolobjs':
-            for i, obj in enumerate(val):
-                pth = root_dir / (auxnm + str(i) + ext)
-                obj.write(pth)
-
-        elif typ == 'dict-of-protocolobjs':
-            meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-            for k, obj in val.items():
-                obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-                obj.write(root_dir / obj_dirname)
-
-        else:
-            # standard path cases
-            pth = root_dir / (auxnm + ext)
-
-            if typ == 'text-circuit-list':
-                _io.write_circuit_list(pth, val)
-            elif typ == 'json':
-                with open(pth, 'w') as f:
-                    _json.dump(val, f)
-            elif typ == 'pickle':
-                with open(pth, 'wb') as f:
-                    _pickle.dump(val, f)
-            elif typ == 'none':
-                pass
+        def visit_node(node):
+            if len(node.data) > 0:
+                for subname, subnode in node.items():
+                    visit_node(subnode)
+            elif node.data.is_multipass() and self.do_passes_separately:
+                implicit_multipassprotocol = MultiPassProtocol(self.protocol)
+                node.for_protocol[implicit_multipassprotocol.name] = implicit_multipassprotocol.run(node.data)
             else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
-
-    with open(root_dir / 'meta.json', 'w') as f:
-        _json.dump(meta, f)
-
+                node.for_protocol[self.protocol.name] = self.protocol.run(node.data)
+        visit_node(ret)
+        return ret
 
 
-class ProtocolInput(object):
+class DefaultRunner(ProtocolRunner):
+    def __init__(self):
+        pass
+
+    def run(self, data):
+        ret = ProtocolResultsDir(data)  # creates entire tree of nodes
+
+        def visit_node(node):
+            for name, protocol in node.data.input.default_protocols.items():
+                assert(name == protocol.name), "Protocol name inconsistency"
+                node.for_protocol[name] = protocol.run(node.data)
+
+            for subname, subnode in node.items():
+                visit_node(subnode)
+
+        visit_node(ret)
+        return ret
+
+        
+#class MultiProtocol(Protocol):
+#    """This class simply runs sub-protocols on corresponding sub-datas """
+#    def __init__(self, protocols, name=None):
+#        if name is None and protocols:
+#            name = protocols.name if isinstance(protocols, Protocol) else \
+#                '-'.join([p.name for p in protocols])
+#        super().__init__(name)
+#        self.protocols = protocols
+#        #self.root_qty_name = 'Protocol'
+#        self.auxfile_types['protocols'] = 'list-of-protocolobjs'
+#
+#    def run(self, data):
+#        protocols = self.protocols
+#
+#        assert(data.is_multiinput())
+#        #root_qty_name = data.input.root_qty_name  # the multi-input should know what category name corresponds to it's keys
+#        if isinstance(protocols, Protocol):  # allow a single Protocol to be given as 'self.protocols'
+#            protocols = [protocols] * len(data)
+#
+#        assert(len(data) == len(protocols))
+#
+#        subresults = {}
+#        for (sub_name, sub_data), protocol in zip(data.items(), protocols):
+#            protocol.name = self.name  # override protocol's name so load/save works
+#            sub_results = protocol.run(sub_data)
+#            subresults[sub_name] = sub_results  # something like this?
+#
+#        return MultiProtocolResults(data, subresults) #, root_qty_name)
+
+#for a given set of circuits, there's structure to the circuits (ProtocolInput),
+# but there can also be sub-structure to the circuits, i.e. how they're composed
+# of other circuit structures if you have both, then 
+            
+        #else:
+        #    assert(False), "We don't really want to do this..."
+        #    for protocol in protocols:
+        #        sub_results = protocol.run(data)
+        #        results.qtys[protocol.name] = sub_results  # something like this? - or just merge qtys?
+        #
+        #return results
+
+
+# SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
+#  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
+#class SimultaneousProtocol(MultiProtocol):
+#    def __init__(self, protocols, name=None):
+#        super().__init__(protocols, name)
+#        self.root_qty_name = 'Qubits'
+
+
+def load_input_from_dir(dirname):
+    dirname = _pathlib.Path(dirname)
+    return _support.obj_from_meta_json(dirname / 'input').from_dir(dirname)
+
+
+class ProtocolInput(_support.TreeNode):
     """ Serialize-able input data for a protocol """
 
-    #def __init__(self, default_protocol_name=None, default_protocol_info=None, circuits=None, typestring=None):
-    #    if default_protocol_info is None: default_protocol_info = {}
-    #    self.typestring = self.__class__.__name__
-    #    self.all_circuits_needing_data = all_circuits if (all_circuits is not None) else []
-    #    self.default_protocol_infos = {} if default_protocol_name is None \
-    #        else {default_protocol_name: default_protocol_info}
-
     @classmethod
-    def from_dir(cls, dirname):
-        p = _pathlib.Path(dirname)
-        input_dir = p / 'input'
+    def from_dir(cls, dirname, parent=None, name=None):
+        dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(load_meta_based_dir(input_dir))
+        ret.__dict__.update(_support.load_meta_based_dir(dirname / 'input', 'auxfile_types'))
+        ret._init_children(dirname, 'input')
         return ret
 
-    def __init__(self, circuits=None, qubit_labels=None):
+    def __init__(self, circuits=None, qubit_labels=None, children=None, children_dirs=None):
+
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.default_protocols = {}
 
@@ -328,51 +241,33 @@ class ProtocolInput(object):
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
         self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list',
-                              'default_protocols': 'dict-of-protocolobjs'}
+                              'default_protocols': 'dict-of-protocolobjs',
+                              '_dirs': 'none', '_vals': 'none'}  # b/c TreeNode takes care of its own serialization
 
         if qubit_labels is None:
             if len(circuits) > 0:
                 self.qubit_labels = circuits[0].line_labels
+            elif children:
+                self.qubit_labels = tuple(_itertools.chain(*[inp.qubit_labels for inp in children.values()]))
             else:
                 self.qubit_labels = ('*',)  # default "qubit labels"
         else:
             self.qubit_labels = tuple(qubit_labels)
 
+        if children is None: children = {} 
+        children_dirs = children_dirs.copy() if (children_dirs is not None) else \
+            {subname.replace(' ', '_'): subname for subname in children}
+
+        assert(set(children.keys()) == set(children_dirs.keys()))
+        super().__init__(children_dirs, children)
+
     def add_default_protocol(self, default_protocol_instance):
-        instance_name = default_protocol_instance.__class__.__name__
+        instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
 
-    #TODO REMOVE
-    #def create_circuit_list(self, verbosity=0):
-    #    return self.basedata['circuitList']
-    #
-    #def create_circuit_lists(self, verbosity=0):  # Needed?? / Helpful?
-    #    return [self.create_circuit_list()]        
-
-    def write(self, dirname):
-        p = _pathlib.Path(dirname)
-        input_dir = p / 'input'
-        p.mkdir(parents=True, exist_ok=True)
-
-        meta = {'type': full_class_name(self)}
-        write_meta_based_dir(input_dir, self.__dict__, init_meta=meta)
-
-    def get_tree_paths(self):
-        """Dictionary paths leading to "terminal"/"leaf" input objects beneath this one"""
-        return [()]  # a single 0-length path, pointing to this terminal input itself
-
-    def view(self, keys_to_keep):
-        #Can only take views of "simple" (non-multi) inputs when there are no keys to keep
-        if len(keys_to_keep) == 0:
-            return self
-        else:
-            raise ValueError("Cannot take view w/keys=%s (I have no sub-inputs!)" % str(keys_to_keep))
-
-    def filter_paths(self, paths, paths_are_sorted=False):
-        if len(paths) == 1 and len(paths[0]) == 0:
-            return self
-        else:
-            raise ValueError("Cannot filter paths: %s (I have no sub-inputs!)" % str(paths))
+    def write(self, dirname, parent=None):
+        _support.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'input', 'auxfile_types')
+        self.write_children(dirname)
 
     def create_subdata(self, subdata_name, dataset):
         raise NotImplementedError("This protocol input cannot create any subdata!")
@@ -380,7 +275,7 @@ class ProtocolInput(object):
 
 class CircuitListsInput(ProtocolInput):
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
-        
+
         if all_circuits_needing_data is not None:
             all_circuits = all_circuits_needing_data
         elif nested and len(circuit_lists) > 0:
@@ -393,7 +288,7 @@ class CircuitListsInput(ProtocolInput):
 
         self.circuit_lists = circuit_lists
         self.nested = nested
-        
+
         super().__init__(all_circuits, qubit_labels)
         self.auxfile_types['circuit_lists'] = 'text-circuit-lists'
 
@@ -401,7 +296,7 @@ class CircuitListsInput(ProtocolInput):
 class CircuitStructuresInput(CircuitListsInput):
     def __init__(self, circuit_structs, qubit_labels=None, nested=False):
         """ TODO: docstring - note that a *single* structure can be given as circuit_structs """
-        
+
         #Convert a single LsGermsStruct to a list if needed:
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_structs, validStructTypes):
@@ -416,121 +311,32 @@ class CircuitStructuresInput(CircuitListsInput):
 
 
 # MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
-class MultiInput(ProtocolInput):  # for multiple inputs on the same dataset
-
-    @classmethod
-    def from_dir(cls, dirname):
-        ret = super().from_dir(dirname)  # Note: super() != ProtocolInput - this passes *`cls`* to base class method
-        for subdir in ret._directories:  # convert subname lists->tuples (json does opposite!)
-            if isinstance(ret._directories[subdir], list):  # (we never want list-type subnames b/c we must hash them)
-                ret._directories[subdir] = tuple(ret._directories[subdir])
-
-        p = _pathlib.Path(dirname)
-        ret._subinputs = {subname: load_input_from_dir(p / subdir)
-                          for subdir, subname in ret._directories.items()}
-
-        #TODO: automatically populate protocols members of Multi-protocols??
-        #for nm, proto in ret.default_protocols.items():
-        #    if isinstance(proto, MultiProtocol):  # then supply as 'protocols' our sub-input's default protocols
-        #        proto.protocols = {subname: subinpt.default_protocols[0] for subname, subinpt in ret._subinpts.items()}
-
-        return ret
+class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
 
     def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None,
-                 add_default_protocol=False):
+                 interleave=False):
+
         if not isinstance(sub_inputs, dict):
             sub_inputs = {("**%d" % i): inp for i, inp in enumerate(sub_inputs)}
 
         if all_circuits is None:
             all_circuits = []
-            for inp in sub_inputs.values():
-                all_circuits.extend(inp.all_circuits_needing_data)
+            if not interleave:
+                for inp in sub_inputs.values():
+                    all_circuits.extend(inp.all_circuits_needing_data)
+            else:
+                raise NotImplementedError("Interleaving not implemented yet")
             _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
 
-        if qubit_labels is None:
-            qubit_labels = tuple(_itertools.chain(*[inp.qubit_labels for inp in sub_inputs.values()]))
-
-        super().__init__(all_circuits, qubit_labels)
-        self._subinputs = sub_inputs
-        if sub_input_dirs is None:
-            self._directories = {subname.replace(' ', '_'): subname for subname in sub_inputs.keys()}
-        else:
-            self._directories = sub_input_dirs
-        self.auxfile_types['_subinputs'] = "none"
-        if add_default_protocol:
-            self.add_default_protocol(MultiProtocol(None, name="Multi"))
+        super().__init__(all_circuits, qubit_labels, sub_inputs, sub_input_dirs)
 
     def create_subdata(self, sub_name, dataset):
         """TODO: docstring - used to create sub-ProtocolData objects (by ProtocolData) """
-        sub_input = self[sub_name]
-        return ProtocolData(sub_input, dataset)
-
-    def items(self):
-        return self._subinputs.items()
-
-    def keys(self):
-        return self._subinputs.keys()
-
-    def __iter__(self):
-        return self._subinputs.__iter__()
-
-    def __getitem__(self, key):
-        return self._subinputs[key]
-
-    def __contains__(self, key):
-        return key in self._subinputs
-
-    def __len__(self):
-        return len(self._subinputs)
-
-    def write(self, dirname):
-        p = _pathlib.Path(dirname)
-        super().write(dirname)
-        for subdir, subname in self._directories.items():
-            outdir = p / subdir
-            outdir.mkdir(exist_ok=True)
-            self._subinputs[subname].write(outdir)
-
-    def get_tree_paths(self):
-        paths = []
-        for subname, subinput in self.items():
-            paths.extend([(subname,) + pth for pth in subinput.get_tree_paths()])
-        return paths
-
-    def view(self, keys_to_keep):
-        input_view = _copy.deepcopy(self)  # copies type of multi-input
-        input_view._subinputs = {k: input_view[k] for k in keys_to_keep}
-        return input_view
-
-    def filter_paths(self, paths, paths_are_sorted=False):
-        sorted_paths = paths if paths_are_sorted else sorted(paths)
-        nPaths = len(sorted_paths)
-
-        if nPaths == 1 and len(sorted_paths[0]) == 0:
-            return self  # special case when this MultiInput itself is selected
-
-        i = 0
-        subinputs = {}
-        while i < nPaths:
-            assert(len(sorted_paths[i]) > 0), \
-                "Cannot select a MultiInput *and* some/all of its elements using filter_paths!"
-            ky = sorted_paths[i][0]
-
-            paths_starting_with_ky = []
-            while i < nPaths and sorted_paths[i][0] == ky:
-                paths_starting_with_ky.append(sorted_paths[i][1:])
-                i += 1
-            subinputs[ky] = self[ky].filter_paths(paths_starting_with_ky, True)
-
-        assert(len(subinputs) > 0)  # Multi-Inputs should always have at least one sub-input
-
-        input_view = _copy.deepcopy(self)  # copies type of multi-input
-        input_view._subinputs = subinputs
-        return input_view
+        return ProtocolData(self[sub_name], dataset)
 
 
 # SimultaneousInput -- specifies a "qubit structure" for each sub-input
-class SimultaneousInput(MultiInput):
+class SimultaneousInput(ProtocolInput):
     """ TODO - need to be given sub-inputs whose circuits all act on the same set of
         qubits and are disjoint with the sets of all other sub-inputs.
     """
@@ -541,8 +347,7 @@ class SimultaneousInput(MultiInput):
     # based on qubits, then copy (?) template input and just replace itself
     # all_circuits_needing_data member?
 
-    def __init__(self, inputs, tensored_circuits=None, qubit_labels=None,
-                 add_default_protocol=False):
+    def __init__(self, inputs, tensored_circuits=None, qubit_labels=None):
         #TODO: check that inputs don't have overlapping qubit_labels
 
         if qubit_labels is None:
@@ -568,15 +373,12 @@ class SimultaneousInput(MultiInput):
                 tensored_circuits.append(c)
 
         sub_inputs = {inp.qubit_labels: inp for inp in inputs}
-        sub_input_dirs = {'_'.join(map(str, qlbls)): qlbls for qlbls in sub_inputs}
-        super().__init__(sub_inputs, tensored_circuits, qubit_labels, sub_input_dirs)
-        if add_default_protocol:
-            self.add_default_protocol(SimultaneousProtocol(None, name='Simult'))
-
-    def get_structure(self):  #TODO: USED??
-        return list(self.keys())  # a list of qubit-label tuples
+        sub_input_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_inputs}
+        super().__init__(tensored_circuits, qubit_labels, sub_inputs, sub_input_dirs)
 
     def create_subdata(self, qubit_labels, dataset):
+        if isinstance(dataset, _objs.MultiDataSet):
+            raise NotImplementedError("SimultaneousInputs don't work with multi-pass data yet.")
         qubit_ordering = list(dataset.keys())[0].line_labels
         qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
         sub_input = self[qubit_labels]
@@ -586,349 +388,178 @@ class SimultaneousInput(MultiInput):
 
 
 def load_data_from_dir(dirname):
-    p = _pathlib.Path(dirname)
-    with open(p / 'data' / 'meta.json', 'r') as f:
-        meta = _json.load(f)
-    typestr = meta['type']
-    cls = class_for_name(typestr)  # class of object to create
-    return cls.from_dir(dirname)
+    dirname = _pathlib.Path(dirname)
+    return _support.obj_from_meta_json(dirname / 'data').from_dir(dirname)
 
 
-class ProtocolData(object):
+class ProtocolData(_support.TreeNode):
 
     @classmethod
-    def from_dir(cls, dirname, parent_data=None, load_subdatas=True):
+    def from_dir(cls, dirname, parent=None, name=None):
         p = _pathlib.Path(dirname)
+        inpt = parent.input[name] if parent and name else \
+            load_input_from_dir(dirname)
+
         data_dir = p / 'data'
+        #with open(data_dir / 'meta.json', 'r') as f:
+        #    meta = _json.load(f)
 
-        with open(data_dir / 'meta.json', 'r') as f:
-            meta = _json.load(f)
-        dtype = meta['dataset_type']
-
-        ret = cls.__new__(cls)
-        ret.input = load_input_from_dir(dirname)
-
-        if dtype == 'normal':
-            ret.dataset = _io.load_dataset(data_dir / 'dataset.txt')
-        elif dtype == 'multi-single-file':
-            ret.dataset = _io.load_multidataset(data_dir / 'dataset.txt')
-        elif dtype == 'multi-multiple-files':
-            raise NotImplementedError()  # should load in several datasetX.txt files as elements of a MultiDataSet
-        elif dtype == 'same-as-parent':
-            if parent_data is None:
-                parent_data = ProtocolData.from_dir(dirname / '..', load_subdatas=False)
-            ret.dataset = parent_data.dataset
+        #Load dataset or multidataset based on what files exist
+        dataset_files = sorted(list(data_dir.glob('*.txt')))
+        if len(dataset_files) == 0:  # assume same dataset as parent
+            if parent is None: parent = ProtocolData.from_dir(dirname / '..')
+            dataset = parent.dataset
+        elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
+            dataset = _io.load_dataset(dataset_files[0])
         else:
-            raise ValueError("Invalid dataset type: %s" % dtype)
+            raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
+            dataset = _objs.MultiDataSet.init_from_dict({pth.name: _io.load_dataset(pth) for pth in dataset_files})
 
-        ret.cache = {}
-        cache_dir = data_dir / 'cache'
-        if cache_dir.is_dir():
-            for pth in cache_dir.iterdir():
-                if pth.suffix == '.json':
-                    with open(pth, 'r') as f:
-                        val = _json.load(f)
-                elif pth.suffix == '.pkl':
-                    with open(pth, 'r') as f:
-                        val = _pickle.load(f)
-                else:
-                    continue  # ignore cache file times we don't understand
-                
-                ret.cache[pth.name] = val
+        cache = _support.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
-        ret._subdatas = {}
-        if load_subdatas:
-            if isinstance(ret.dataset, _objs.MultiDataSet):
-                for subname, sub_ds in ret.dataset.items():
-                    ret._subdatas[subname] = cls.from_dir(p / subname, parent_data=ret)
-            elif isinstance(ret.input, MultiInput):
-                for subdir, subname in ret.input._directories.items():
-                    if (p / subdir / 'data').exists():
-                        ret._subdatas[subname] = cls.from_dir(p / subdir, parent_data=ret)
-                    #It's ok if not all data exists - it is created on-demand
-            else: # no subdata to load
-                ret._subdatas = None
+        ret = cls(inpt, dataset, cache)
+        ret._init_children(dirname, 'data')  # loads child nodes
         return ret
 
     def __init__(self, protocol_input, dataset=None, cache=None):
         self.input = protocol_input
         self.dataset = dataset  # MultiDataSet allowed for multi-pass data
         self.cache = cache if (cache is not None) else {}
-        if isinstance(dataset, _objs.MultiDataSet):
-            self._subdatas = {dsname: ProtocolData(self.input, ds) for dsname, ds in dataset.items()}
-        elif isinstance(protocol_input, MultiInput):
-            self._subdatas = {}
-        else:
-            self._subdatas = None
-        #Note: if a ProtocolData is given a multi-Input and multi-DataSet, then the sub-datas are
-        # for the different *passes* and not the inputs - i.e. multi-data takes precedence over multi-input.
 
-    def is_multiinput(self):
-        return isinstance(self.input, MultiInput) and not isinstance(self.dataset, _objs.MultiDataSet)
+        if isinstance(self.dataset, _objs.MultiDataSet):
+            for dsname in self.dataset:
+                if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
+            self._passdatas = {dsname: ProtocolData(self.input, ds, self.cache[dsname])
+                               for dsname, ds in self.dataset.items()}
+        else:
+            self._passdatas = {None: self}
+            
+        super().__init__(self.input._dirs, {})  # children created on-demand
+
+    def _create_childval(self, key):  # (this is how children are created on-demand)
+        return self.input.create_subdata(key, self.dataset)
+
+    @property
+    def passes(self):
+        return self._passdatas
+
+    #def is_multiinput(self):
+    #    return isinstance(self.input, MultiInput)
+    #
 
     def is_multipass(self):
         return isinstance(self.dataset, _objs.MultiDataSet)
 
-    def get_tree_paths(self):
-        return self.input.get_tree_paths()
+    #def get_tree_paths(self):
+    #    return self.input.get_tree_paths()
 
     def filter_paths(self, paths, paths_are_sorted=False):
-        assert(not self.is_multipass()), "Can't take views of multi-pass data yet."
-
         def build_data(inp, src_data):
             """ Uses a template (filtered) input to selectively
-                copy the non-input parts of a 'src_data' ProtoolData """
+                copy the non-input parts of a 'src_data' ProtocolData """
             ret = ProtocolData(inp, src_data.dataset, src_data.cache)
-            if ret.is_multiinput():
-                for subname, subinput in inp.items():
-                    ret._subdatas[subname] = build_data(subinput, src_data._subdatas[subname])
+            for subname, subinput in inp.items():
+                if subname in src_data._vals:  # if we've actually created this sub-data...
+                    ret._vals[subname] = build_data(subinput, src_data._vals[subname])
             return ret
-
         filtered_input = self.input.filter_paths(paths, paths_are_sorted)
         return build_data(filtered_input, self)
 
-    #Support lazy evaluation of sub_datas
-    def keys(self):
-        if self.is_multipass():
-            return self._subdatas.keys()
-        elif self.is_multiinput():
-            return self.input.keys()
-        else:
-            return []
+    def write(self, dirname, parent=None):
+        dirname = _pathlib.Path(dirname)
+        data_dir = dirname / 'data'
+        data_dir.mkdir(parents=True, exist_ok=True)
 
-    def items(self):
-        if self.is_multipass():
-            for passname, val in self._subdatas.items():
-                yield passname, val
-        elif self.is_multiinput():
-            for name in self.input.keys():
-                yield name, self[name]
-
-    def __iter__(self):
-        if self.is_multipass():
-            return self._subdatas.__iter__()
-        elif self.is_multiinput():
-            return self.input.__iter__()
-        else:
-            return [].__iter__()
-
-    def __getitem__(self, subdata_name):
-        if self.is_multipass():
-            return self._subdatas[subdata_name]
-        elif self.is_multiinput():  #can compute lazily
-            if subdata_name not in self._subdatas:
-                if subdata_name not in self.input.keys():
-                    raise KeyError("Missing sub-data name: %s" % subdata_name)
-                self._subdatas[subdata_name] = self.input.create_subdata(subdata_name, self.dataset)
-            return self._subdatas[subdata_name]
-        else:
-            raise ValueError("This ProtocolData object has no sub-datas.")
-
-    #def __setitem__(self, subdata_name, val):
-    #    self._subdatas[subdata_name] = val
-
-    def __contains__(self, subdata_name):
-        if self.is_multipass():
-            return subdata_name in self._subdatas
-        elif self.is_multiinput():
-            return subdata_name in self.input.keys()
-        else:
-            return False
-
-    def __len__(self):
-        if self.is_multipass():
-            return len(self._subdatas)
-        elif self.is_multiinput():
-            return len(self.input)
-        else:
-            return 0
-
-    def write(self, dirname, parent_data=None):
-        p = _pathlib.Path(dirname)
-        data_dir = p / 'data'
-
-        p.mkdir(parents=True, exist_ok=True)
-        data_dir.mkdir(exist_ok=True)
-
-        self.input.write(dirname)
-
-        if parent_data and self.dataset is parent_data.dataset:
-            dtype = 'same-as-parent'
-        elif isinstance(self.dataset, _objs.MultiDataSet):
-            dtype = 'multi-single-file'
-            _io.write_multidataset(data_dir / 'dataset.txt', self.dataset)
-            #dtype = 'multi-multiple-files'  # TODO: how to decide between these?
-        else:
-            dtype = 'normal'
-            _io.write_dataset(data_dir / 'dataset.txt', self.dataset)
-
-        meta = {'type': full_class_name(self), 'dataset_type': dtype}
+        meta = {'type': _support.full_class_name(self)}
         with open(data_dir / 'meta.json', 'w') as f:
             _json.dump(meta, f)
 
+        if parent is None:
+            self.input.write(dirname)  # assume parent has already written input
+        
+        if parent and (self.dataset is parent.dataset):  # then no need to write any data
+            assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
+        else:
+            data_dir.mkdir(exist_ok=True)
+            if isinstance(self.dataset, _objs.MultiDataSet):
+                for dsname, ds in self.dataset.items():
+                    _io.write_dataset(data_dir / (dsname + '.txt'), ds)
+            else:
+                _io.write_dataset(data_dir / 'dataset.txt', self.dataset)
+
         if self.cache:
-            cache_dir = data_dir / 'cache'
-            cache_dir.mkdir(exist_ok=True)
-            for key, val in self.cache.items():
-                try:
-                    with open(cache_dir / (key + '.json'), 'w') as f:
-                        _json.dump(val, f)
-                except:
-                    #remove json file??
-                    with open(cache_dir / (key + '.pkl'), 'wb') as f:
-                        _pickle.dump(val, f)
+            _support.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
-        if isinstance(self.dataset, _objs.MultiDataSet):
-            for subname, sub_ds in self.dataset.items():
-                self._subdatas[subname].write(p / subname, parent_data=self)
-        elif isinstance(self.input, MultiInput):
-            name_to_dir = {subname: subdir for subdir, subname in self.input._directories.items()}
-            for subname, subdata in self._subdatas.items():
-                subdir = name_to_dir[subname]
-                subdata.write(p / subdir, parent_data=self)
-
-
-class NamedDict(dict):
-    def __init__(self, name=None, keytype=None, valtype=None, items=()):
-        super().__init__(items)
-        self.name = name
-        self.keytype = keytype
-        self.valtype = valtype
-
-    def __reduce__(self):
-        return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items())), None)
-
-    def asdataframe(self):
-        import pandas as _pandas
-
-        columns = {'value': []}
-        seriestypes = {'value': "unknown"}
-        self._add_to_columns(columns, seriestypes, {})
-
-        columns_as_series = {}
-        for colname, lst in columns.items():
-            seriestype = seriestypes[colname]
-            if seriestype == 'float':
-                s = _np.array(lst, dtype='d')
-            elif seriestype == 'int':
-                s = _np.array(lst, dtype=int)  # or pd.Series w/dtype?
-            elif seriestype == 'category':
-                s = _pandas.Categorical(lst)
-            else:
-                s = lst  # will infer an object array?
-
-            columns_as_series[colname] = s
-
-        df = _pandas.DataFrame(columns_as_series)
-        return df
-
-    def _add_to_columns(self, columns, seriestypes, row_prefix):
-        nm = self.name
-        if nm not in columns:
-            #add column; assume 'value' is always a column
-            columns[nm] = [None] * len(columns['value'])
-            seriestypes[nm] = self.keytype
-        elif seriestypes[nm] != self.keytype:
-            seriestypes[nm] = None  # conflicting types, so set to None
-
-        row = row_prefix.copy()
-        for k, v in self.items():
-            row[nm] = k
-            if isinstance(v, NamedDict):
-                v._add_to_columns(columns, seriestypes, row)
-            elif isinstance(v, ProtocolResults):
-                v.qtys._add_to_columns(columns, seriestypes, row)
-            else:
-                #Add row
-                complete_row = row.copy()
-                complete_row['value'] = v
-                
-                if seriestypes['value'] == "unknown":
-                    seriestypes['value'] = self.valtype
-                elif seriestypes['value'] != self.valtype:
-                    seriestypes['value'] = None  # conflicting type, so set to None
-
-                for rk, rv in complete_row.items():
-                    columns[rk].append(rv)
+        self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
 
 def load_results_from_dir(dirname, name=None, preloaded_data=None):
-    if name is None:  # then load all of the results in `dirname`
-        return ProtocolResultsDir.from_dir(dirname)
-
-    p = _pathlib.Path(dirname)
-    with open(p / 'results' / name / 'meta.json', 'r') as f:
-        meta = _json.load(f)
-    typestr = meta['type']
-    cls = class_for_name(typestr)  # class of object to create
-    return cls.from_dir(dirname, name, preloaded_data)
+    dirname = _pathlib.Path(dirname)
+    if name is None:
+        return ProtocolResultsDir.from_dir(dirname)  # load a directory of all of the results under `dirname`
+    else:  # load single ProtocolResults object
+        results_dir = dirname / 'results' / name
+        return _support.obj_from_meta_json(results_dir).from_dir(dirname, name, preloaded_data)
 
 
 class ProtocolResults(object):
-
     @classmethod
     def from_dir(cls, dirname, name, preloaded_data=None):
+        dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.name = name
-
-        #Initialize input and data
-        if preloaded_data is not None:
-            ret.data = preloaded_data
-        else:
-            ret.data = load_data_from_dir(dirname)
-
-        #Initialize results
-        p = _pathlib.Path(dirname)
-        results_dir = p / 'results' / name
-
-        #load qtys from results directory
-        d, ret.auxfile_types = load_meta_based_dir(results_dir, separate_auxfiletypes=True)
-        ret.qtys = d  #TODO - how to preserve NamedDict objects??
-
-        #load _subresults from other directories
-        ret._subresults = {}
-        if ret.data.is_multipass():
-            raise NotImplementedError()  # TODO - load in per-pass results as subresults??
-        elif ret.data.is_multiinput():
-            subname_to_subdir = {subname: subdir for subdir, subname in ret.data.input._directories.items()}
-            for sub_name, sub_data in ret.data.items():
-                subdir = subname_to_subdir[sub_name]
-                if (p / subdir / 'results' / 'meta.json').is_file():
-                    # A results object doesn't *need* to have all possible sub-results
-                    ret._subresults[sub_name] = load_results_from_dir(p / subdir, name, sub_data)
-
+        ret.data = preloaded_data if (preloaded_data is not None) else \
+            load_data_from_dir(dirname)
+        ret.__dict__.update(_support.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
+        assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
 
-    def __init__(self, data, name, protocol_instance, root_qty_name='ROOT', root_qty_stypes=None):
+#        #Initialize input and data
+#        if parent is not None:
+#            data = preloaded_data
+#        else:
+#            data = load_data_from_dir(dirname)
+#
+#        #Initialize results
+#        p = _pathlib.Path(dirname)
+#        results_dir = p / 'results' / name
+#
+#        protocol = load_protocol_from_dir(results_dir / 'protocol')
+#
+#        #load qtys from results directory
+#        qtys, auxfile_types = _support.load_meta_based_dir(results_dir, 'qty_auxfile_types', separate_auxfiletypes=True)
+#        #TODO - how to preserve NamedDict objects??
+#
+#        ret = cls(name, data, protocol, qtys)
+#        ret.qty_auxfile_types.update(auxfile_types)
+#        return ret
+
+    def __init__(self, data, protocol_instance):
         """root quantity seriestypes, 'root_qty_stypes' can be a (key-type, val-type) tuple or a single key-type """
-        if isinstance(root_qty_stypes, tuple):
-            ktype, vtype = root_qty_stypes
-        else:
-            ktype = root_qty_stypes; vtype = None
-        self.name = name
+        #if isinstance(root_qty_stypes, tuple):
+        #    ktype, vtype = root_qty_stypes
+        #else:
+        #    ktype = root_qty_stypes; vtype = None
+        self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
-        self.qtys = NamedDict(root_qty_name, ktype, vtype)
-        self.auxfile_types = {'protocol': 'protocolobj'}
-        self._subresults = {}
+        self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
 
-    def items(self):
-        return _itertools.chain(self.qtys.items(), self._subresults.items())
 
-    def keys(self):
-        return _itertools.chain(self.qtys.keys(), self._subresults.keys())
-    
-    def __getitem__(self, key):
-        if key in self.qtys:
-            return self.qtys[key]
-        else:
-            return self._subresults[key]
-
-    def __contains__(self, key):
-        return key in self.qtys or key in self._subresults
-
-    def __len__(self):
-        return len(self.qtys) + len(self._subresults)
+# self.qtys = {}
+#    def items(self):
+#        return self.qtys.items()
+#
+#    def keys(self):
+#        return self.qtys.keys()
+#
+#    def __getitem__(self, key):
+#        return self.qtys[key]
+#
+#    def __contains__(self, key):
+#        return key in self.qtys
+#
+#    def __len__(self):
+#        return len(self.qtys)
 
     def write(self, dirname, data_already_written=False):
         p = _pathlib.Path(dirname)
@@ -940,20 +571,7 @@ class ProtocolResults(object):
             self.data.write(dirname)
 
         #write qtys to results dir
-        meta = {'type': full_class_name(self)}
-        write_meta_based_dir(results_dir, self.qtys, self.auxfile_types, init_meta=meta)  # TODO - how to preserve NamedDict objects??
-
-        #write _subresults to other directories
-        if self.data.is_multiinput():
-            subname_to_subdir = {subname: subdir for subdir, subname in self.data.input._directories.items()}
-        elif self.data.is_multipass():
-            subname_to_subdir = {subname: subname for subname in self.data.keys()}
-        else:
-            subname_to_subdir = None  # shouldn't use below since _subresults should be empty
-        for sub_name, sub_results in self._subresults.items():
-            assert(sub_results.name == self.name), "Sub-results must have same name as parent results!"
-            subdir = subname_to_subdir[sub_name]
-            sub_results.write(p / subdir, data_already_written=True)  # avoid re-writing the data        
+        _support.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
 
     #TODO - revamp functions below here now that _subresults is added
     def asdict(self):
@@ -974,64 +592,82 @@ class ProtocolResults(object):
         return P.pformat(self.asdict())
 
 
-class ProtocolResultsDir(object):
-    """
-    A dict of ProtocolResults objects, but a separate class because of the nontrivial
-    from_dir(...) and write(...) methods, which deconvolve the data contained in a
-    directory containing the results from multiple protocols.  (Protocol Xs data is
-    stored in root_dir/results/X and sub-results are stored in root_dir/subdir/results/X,
-    not root_dir/results/X/subdir).
-    """
-    
+class MultiPassResults(ProtocolResults):
+    def __init__(self, data, protocol_instance):
+        """
+        Initialize an empty Results object.
+        TODO: docstring
+        """
+        super().__init__(data, protocol_instance)
+
+        self.passes = {}
+        self.auxfile_types['passes'] = 'dict-of-resultsobjs'
+
+
+class ProtocolResultsDir(_support.TreeNode):
+
     @classmethod
-    def from_dir(cls, dirname):
-        #Find result names to load
-        p = _pathlib.Path(dirname)
-        results_dir = p / 'results'
+    def from_dir(cls, dirname, parent=None, name=None):
+        dirname = _pathlib.Path(dirname)
+        data = parent.data[name] if (parent and name) else \
+            load_data_from_dir(dirname)
 
-        names = []
-        for pth in results_dir.iterdir():
-            if pth.is_dir() and (pth / 'meta.json').is_file():
-                names.append(pth.stem)
-
-        #Load input and data (once!)
-        data = load_data_from_dir(dirname)
-
+        #Load results in results_dir
         results = {}
-        for name in names:
-            results[name] = load_results_from_dir(dirname, name, preloaded_data=data)
+        results_dir = dirname / 'results'
+        if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
+            for pth in results_dir.iterdir():
+                if pth.is_dir() and (pth / 'meta.json').is_file():
+                    results[pth.name] = load_results_from_dir(dirname, pth.name, preloaded_data=data)
 
-        return cls(data, results)
+        ret = cls(data, results, {})  # don't initialize children now
+        ret._init_children(dirname, meta_subdir=None)  # loads child nodes of same type as self
+        return ret
 
-    def __init__(self, data, protocol_results):
+    def __init__(self, data, protocol_results=None, children=None):
         """ protocol_results should be a dict of ProtocolResults object whose keys are the names of the contained results """
         self.data = data  # input and data
-        self.for_protocol = protocol_results.copy()
+        self.for_protocol = protocol_results.copy() if protocol_results else {}
         assert(all([r.data is self.data for r in self.for_protocol.values()]))
 
-    def items(self):
-        return self.for_protocol.items()
+        #self._children = children if (children is not None) else {}
+        if children is None:
+            #automatically create tree based on data to hold whatever results we'll need
+            # otherwise need to be able to create these lazily like ProtocolData.
+            children = {}
+            for subname, subdata in self.data.items():
+                children[subname] = ProtocolResultsDir(subdata)
+        else:
+            children = children.copy()
 
-    def keys(self):
-        return self.for_protocol.keys()
-    
-    def __getitem__(self, key):
-        return self.for_protocol[key]
+        super().__init__(self.data.input._dirs, children)
 
-    def __contains__(self, key):
-        return key in self.for_protocol
-
-    def __len__(self):
-        return len(self.for_protocol)
-
-    def write(self, dirname):
-        #write the input and data (once!)
-        self.data.write(dirname)
+    def write(self, dirname, parent=None):
+        if parent is None: self.data.write(dirname)  # assume parent has already written data
 
         #write the results
         for name, results in self.for_protocol.items():
             assert(results.name == name)
-            results.write(self, dirname, data_already_written=True)
+            results.write(dirname, data_already_written=True)
+
+        self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
+        
+#     # Dictionary access into _children
+#     def items(self):
+#         return self._children.items()
+# 
+#     def keys(self):
+#         return self._children.keys()
+# 
+#     def __getitem__(self, key):
+#         return self._children[key]
+# 
+#     def __contains__(self, key):
+#         return key in self._children
+# 
+#     def __len__(self):
+#         return len(self._children)
+
 
     ##TODO - revamp functions below here now that _subresults is added
     #def asdict(self):
@@ -1050,6 +686,56 @@ class ProtocolResultsDir(object):
     #    import pprint
     #    P = pprint.PrettyPrinter()
     #    return P.pformat(self.asdict())
+
+
+#class ProtocolResultsTree(object):
+#    @classmethod
+#    def from_dir(cls, dirname, preloaded_data=None):
+#        ret = cls.__new__(cls)
+#        ret.name = name
+#    
+#        #Initialize input and data
+#        if preloaded_data is not None:
+#            ret.data = preloaded_data
+#        else:
+#            ret.data = load_data_from_dir(dirname)
+#
+#        #Traverse input tree, loading nodes at each location
+#        root = ProtocolResultsTreeNode.from_dir(dirname)
+#            
+#        #load _subresults from other directories
+#        p = _pathlib.Path(dirname)
+#        ret._subresults = {}
+#        if ret.data.is_multipass():
+#            raise NotImplementedError()  # TODO - load in per-pass results as subresults??
+#        elif ret.data.is_multiinput():
+#            subname_to_subdir = {subname: subdir for subdir, subname in ret.data.input._directories.items()}
+#            for sub_name, sub_data in ret.data.items():
+#                subdir = subname_to_subdir[sub_name]
+#                if (p / subdir / 'results' / 'meta.json').is_file():
+#                    # A results object doesn't *need* to have all possible sub-results
+#                    ret._subresults[sub_name] = load_results_from_dir(p / subdir, name, sub_data)
+#    
+#        return ret
+#
+#    def __init__(self, data, sub_results=None):
+#        assert(data.is_multiinput()), "MultiProtocolResults is meant to hold sub-results corresponding to sub-inputs!"
+#        self.data = data
+#        self._subresults = sub_results if (sub_results is not None) else {}
+#
+#
+#    def write(self, dirname, data_already_written=False):
+#        p = _pathlib.Path(dirname)
+#
+#        #write input and data
+#        if not data_already_written:
+#            self.data.write(dirname)
+#
+#        #write _subresults to other directories
+#        subname_to_subdir = {subname: subdir for subdir, subname in self.data.input._directories.items()}
+#        for sub_name, sub_results in self._subresults.items():
+#            subdir = subname_to_subdir[sub_name]
+#            sub_results.write(p / subdir, data_already_written=True)  # avoid re-writing the data
 
 
 

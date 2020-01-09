@@ -57,7 +57,7 @@ class ModelTest(_proto.Protocol):
         inp = _StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
         return self.run(_proto.ProtocolData(inp, dataset))
 
-    def _run(self, data):
+    def run(self, data):
         the_model = self.model_to_test
         advancedOptions = self.advancedOptions
         comm = self.comm
@@ -95,7 +95,7 @@ class ModelTest(_proto.Protocol):
             advancedOptions['onBadFit'] = []  # empty list => 'do nothing'
 
         from .gst import _package_into_results
-        return _package_into_results(self.name, data, target_model, the_model,
+        return _package_into_results(self, data, target_model, the_model,
                                      lsgstLists, parameters, None, mdl_lsgst_list,
                                      self.gaugeOptParams, advancedOptions, comm, self.memLimit,
                                      self.output_pkl, self.verbosity, profiler)
