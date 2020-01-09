@@ -5,8 +5,8 @@ mpl_logger.setLevel(logging.WARNING)
 import unittest
 import pygsti
 import numpy as np
-from pygsti.construction import std1Q_XY
-from pygsti.construction import std2Q_XYICNOT
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYICNOT
 from pygsti.objects import Label as L
 import pygsti.construction as pc
 import sys

@@ -5,7 +5,7 @@ import os
 import pygsti
 
 from pygsti.extras import drift
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 
 class DriftTestCase(BaseTestCase):
 

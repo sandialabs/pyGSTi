@@ -4,7 +4,7 @@ import numpy as np
 from ..util import BaseCase
 
 from pygsti.objects import DataSet, Circuit
-from pygsti.construction import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
+from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
 import pygsti.construction.nqnoiseconstruction as nc
 
 

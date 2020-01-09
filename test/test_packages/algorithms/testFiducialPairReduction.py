@@ -1,7 +1,7 @@
 import unittest
 import os
 import pygsti
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..testutils import compare_files, temp_files, regenerate_references
 
 import numpy as np

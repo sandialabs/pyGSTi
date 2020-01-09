@@ -9,8 +9,8 @@ import numpy as np
 import scipy.linalg as spl
 import pygsti
 import pygsti.construction as pc
-from pygsti.construction import std1Q_XYI as std
-from pygsti.construction import std1Q_XY
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L
 from pygsti.io import json
 
@@ -27,8 +27,8 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       spamtype="lindblad", addIdleNoiseToAllGates=True,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
 
-    #from pygsti.construction import std1Q_XY # the base model for 1Q gates
-    #from pygsti.construction import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
+    #from pygsti.modelpacks.legacy import std1Q_XY # the base model for 1Q gates
+    #from pygsti.modelpacks.legacy import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
     #
     #tgt1Q = std1Q_XY.target_model()
     #tgt2Q = std2Q_XYICNOT.target_model()
@@ -596,7 +596,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
 
     def test_circuitsim_stabilizer_1Qcheck(self):
-        from pygsti.construction import std1Q_XYI as stdChk
+        from pygsti.modelpacks.legacy import std1Q_XYI as stdChk
 
         maxLengths = [1,2,4]
         listOfExperiments = pygsti.construction.make_lsgst_experiment_list(

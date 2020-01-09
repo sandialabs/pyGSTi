@@ -9,7 +9,7 @@
 #***************************************************************************************************
 
 from ... import drivers as _drivers
-from ...construction import std1Q_Cliffords
+from ...modelpacks.legacy import std1Q_Cliffords
 
 import numpy as _np
 from functools import reduce as _reduce

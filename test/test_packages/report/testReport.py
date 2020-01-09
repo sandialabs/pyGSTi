@@ -6,7 +6,7 @@ import pygsti
 import os
 import shutil
 import subprocess
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..testutils import compare_files, temp_files
 
 import numpy as np

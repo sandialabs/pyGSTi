@@ -1,8 +1,8 @@
 import unittest
 import warnings
 import pygsti
-from pygsti.construction import std1Q_XYI as stdxyi
-from pygsti.construction import std1Q_XY as stdxy
+from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
+from pygsti.modelpacks.legacy import std1Q_XY as stdxy
 from pygsti.objects import modelfunction as gsf
 from pygsti.objects.mapforwardsim import MapForwardSimulator
 from pygsti.objects import Label as L

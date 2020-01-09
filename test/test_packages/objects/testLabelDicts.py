@@ -5,7 +5,7 @@ import warnings
 import pickle
 import os
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 

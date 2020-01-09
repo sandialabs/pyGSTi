@@ -2067,8 +2067,8 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
                                        sparse=False, verbosity=0, cache=None, idleOnly=False,
                                        idtPauliDicts=None, algorithm="greedy", comm=None):
 
-    from pygsti.construction import std1Q_XY  # the base model for 1Q gates
-    from pygsti.construction import std2Q_XYICNOT  # the base model for 2Q (CNOT) gate
+    from pygsti.modelpacks.legacy import std1Q_XY  # the base model for 1Q gates
+    from pygsti.modelpacks.legacy import std2Q_XYICNOT  # the base model for 2Q (CNOT) gate
 
     tgt1Q = std1Q_XY.target_model("static")
     tgt2Q = std2Q_XYICNOT.target_model("static")
@@ -3232,6 +3232,7 @@ def fidpairs_to_gatename_fidpair_list(fidpairs, nQubits):
 
 
 def stdmodule_to_smqmodule(std_module):
+    # XXX update this docstring!!!
     """
     Converts a pyGSTi "standard module" to a "standard multi-qubit module".
 

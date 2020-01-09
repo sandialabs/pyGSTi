@@ -1,6 +1,6 @@
 from ..util import BaseCase
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti.objects.circuitstructure as cs
 
 

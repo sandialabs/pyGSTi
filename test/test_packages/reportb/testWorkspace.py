@@ -4,7 +4,7 @@ import pickle
 import copy
 import pygsti
 from pygsti.extras import drift
-from pygsti.construction import stdQT_XYIMS
+from pygsti.modelpacks.legacy import stdQT_XYIMS
 
 from ..testutils import compare_files, temp_files
 

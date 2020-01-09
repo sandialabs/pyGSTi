@@ -4,7 +4,7 @@ import numpy as np
 import warnings
 import pickle
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
