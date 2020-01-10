@@ -30,7 +30,7 @@ from ..objects import objectivefns as _objfns
 
 
 class ModelTest(_proto.Protocol):
-    def __init__(self, model_to_test, gaugeOptParams=None,
+    def __init__(self, model_to_test, gaugeOptParams=False,
                  advancedOptions=None, comm=None, memLimit=None,
                  output_pkl=None, verbosity=2, name=None):
 
@@ -51,6 +51,12 @@ class ModelTest(_proto.Protocol):
         self.output_pkl = output_pkl
         self.verbosity = verbosity
 
+        self.auxfile_types['model_to_test'] = 'pickle'
+        self.auxfile_types['gaugeOptParams'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['advancedOptions'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['comm'] = 'reset'
+
+
     def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
                                       meas_fiducials, germs, maxLengths):
         from .gst import StandardGSTInput as _StandardGSTInput
@@ -62,9 +68,16 @@ class ModelTest(_proto.Protocol):
         advancedOptions = self.advancedOptions
         comm = self.comm
 
-        lsgstLists = data.input.circuit_lists
-        target_model = data.input.target_model
-        ds = data.dataset
+        if isinstance(data.input, _proto.CircuitListsInput):
+            lsgstLists = data.input.circuit_lists
+        else:
+            lsgstLists = [data.input.all_circuits_needing_data]
+            
+        if hasattr(data.input, 'target_model'):
+            target_model = data.input.target_model
+        else:
+            target_model = None  # target model isn't necessary
+
         mdl_lsgst_list = [the_model] * len(lsgstLists)
 
         #Create profiler

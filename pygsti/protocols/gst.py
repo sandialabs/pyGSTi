@@ -853,6 +853,7 @@ def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
     if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
 
     if "targetModel" not in gaugeOptParams:
+        assert(target_model is not None), "No target model!  Cannot gauge optimize."
         gaugeOptParams["targetModel"] = target_model
 
     # somewhat redundant given add_gaugeoptimized behavior - but
@@ -887,7 +888,7 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
     lsgstLists = results.circuit_structs['iteration']
     mdl_lsgst_list = base_estimate.models['iteration estimates']
     mdl_start = base_estimate.models['seed']
-    target_model = base_estimate.models['target']
+    target_model = base_estimate.models.get('target', None)
     ds = results.dataset
     parameters = base_estimate.parameters
     if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
@@ -1205,8 +1206,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
             inp = self.data.input
             if isinstance(inp, _proto.CircuitStructuresInput):
                 circuit_structs['iteration'] = inp.circuit_structs[:]
-                if len(inp.circuit_structs) > 0:
-                    circuit_structs['final'] = circuit_structs['iteration'][-1]
     
                 #Set "Ls and germs" info: gives particular structure
                 finalStruct = circuit_structs['final']
@@ -1226,6 +1225,18 @@ class ModelEstimateResults(_proto.ProtocolResults):
                 circuit_lists['prep fiducials'] = []
                 circuit_lists['effect fiducials'] = []
                 circuit_lists['germs'] = []
+            else:
+                #Single iteration
+                lst = inp.all_circuits_needing_data
+                unindexed_gss = _LsGermsStructure([], [], [], [], None)
+                unindexed_gss.add_unindexed(lst)
+                circuit_structs['iteration'] = [unindexed_gss]
+    
+                #Needed?
+                circuit_lists['prep fiducials'] = []
+                circuit_lists['effect fiducials'] = []
+                circuit_lists['germs'] = []
+                
     
             # Extract raw circuit lists from structs
             circuit_lists['iteration'] = \
@@ -1233,6 +1244,9 @@ class ModelEstimateResults(_proto.ProtocolResults):
             circuit_lists['final'] = circuit_lists['iteration'][-1]
             circuit_lists['all'] = _tools.remove_duplicates(
                 list(_itertools.chain(*circuit_lists['iteration'])))
+
+            if len(circuit_structs['iteration']) > 0:
+                circuit_structs['final'] = circuit_structs['iteration'][-1]
     
             running_set = set(); delta_lsts = []
             for lst in circuit_lists['iteration']:

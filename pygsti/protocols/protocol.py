@@ -803,24 +803,24 @@ class ProtocolResultsDir(_support.TreeNode):
 #  methods?  Is it possible to allow reports to pull from a cache of results somewhere?
 
 
-class ProtocolDirectory(object):
-    """ Holds multiple ProtocolData objects
-    - and maybe can add an object with a protocol input and a data name (or not?)?
-    - issue is, how to allow same data to be used for different protocols...
-    Could hold reports too?
-    """
-    def __init__(self, inputs, datas, reports):
-        self.inputs = inputs  # should be a dict of inputs; otherwise make into a dict
-        self.datas  # pull datas apart into datasets and inputs; collect unique DataSets -> all_datasets_in_datas
-        self.datasets = all_datasets_in_datas
-        self.reports = reports
-        self.results = TODO
-
-    def read(self, dirname):
-        pass
-
-    def write(self, dirname):
-        pass
+#class ProtocolDirectory(object):
+#    """ Holds multiple ProtocolData objects
+#    - and maybe can add an object with a protocol input and a data name (or not?)?
+#    - issue is, how to allow same data to be used for different protocols...
+#    Could hold reports too?
+#    """
+#    def __init__(self, inputs, datas, reports):
+#        self.inputs = inputs  # should be a dict of inputs; otherwise make into a dict
+#        self.datas  # pull datas apart into datasets and inputs; collect unique DataSets -> all_datasets_in_datas
+#        self.datasets = all_datasets_in_datas
+#        self.reports = reports
+#        self.results = TODO
+#
+#    def read(self, dirname):
+#        pass
+#
+#    def write(self, dirname):
+#        pass
 
 
 def run_default_protocols(data):

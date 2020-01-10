@@ -326,6 +326,11 @@ class NamedDict(dict):
 
                 for rk, rv in complete_row.items():
                     columns[rk].append(rv)
+                    
+                absent_colvals = set(columns.keys()) - set(complete_row.keys())
+                for rk in absent_colvals:  # Ensure all columns stay the same length
+                    columns[rk].append(None)
+                    seriestypes[rk] = None  # can't store Nones in special types
 
 
 #class DirSerializable(object):
