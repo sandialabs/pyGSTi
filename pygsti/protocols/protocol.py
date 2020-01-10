@@ -787,11 +787,28 @@ class ProtocolDirectory(object):
 
 
 def run_default_protocols(data):
-    default_protocols = data.input.default_protocols
-    if len(default_protocols) > 1:
-        proto = MultiProtocol(default_protocols)
-    elif len(default_protocols) == 1:
-        proto = default_protocols[list(default_protocols.keys())[0]]
+    return DefaultRunner().run(data)
+
+
+def write_empty_protocol_data(inpt, dirname, sparse="auto"):
+    dirname = _pathlib.Path(dirname)
+    data_dir = dirname / 'data'
+    circuits = inpt.all_circuits_needing_data
+    nQubits = len(inpt.qubit_labels)
+    if sparse == "auto":
+        sparse = bool(nQubits > 3)  # HARDCODED
+
+    if sparse:
+        header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+        nZeroCols = 0
     else:
-        raise ValueError("No default protocol(s) to run!")
-    return proto.run(data)
+        fstr = '{0:0%db} count' % nQubits
+        nZeroCols = 2**nQubits
+        header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+
+    pth = data_dir / 'dataset.txt'
+    if pth.exists():
+        raise ValueError("Template data file would clobber %s, which already exists!" % pth)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    inpt.write(dirname)
+    _io.write_empty_dataset(pth, circuits, header_str, nZeroCols)
