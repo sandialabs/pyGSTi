@@ -222,11 +222,11 @@ def read_json_or_pkl_files_to_dict(dirname):
             with open(pth, 'r') as f:
                 val = _json.load(f)
         elif pth.suffix == '.pkl':
-            with open(pth, 'r') as f:
+            with open(pth, 'rb') as f:
                 val = _pickle.load(f)
         else:
             continue  # ignore cache file times we don't understand
-        ret[pth.name] = val
+        ret[pth.stem] = val
     return ret
 
 
@@ -234,13 +234,14 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     dirname = _pathlib.Path(dirname)
     dirname.mkdir(exist_ok=True)
     for key, val in d.items():
-        try:
-            with open(dirname / (key + '.json'), 'w') as f:
-                _json.dump(val, f)
-        except:
-            #try to remove partial json file??
-            with open(dirname / (key + '.pkl'), 'wb') as f:
-                _pickle.dump(val, f)
+        #TODO: fix this - as we can write some things to json that don't get read back correctly, e.g. dicts with integer keys
+        #try:
+        #    with open(dirname / (key + '.json'), 'w') as f:
+        #        _json.dump(val, f)
+        #except:
+        #try to remove partial json file??
+        with open(dirname / (key + '.pkl'), 'wb') as f:
+            _pickle.dump(val, f)
 
 #    with open(data_dir / 'meta.json', 'r') as f:
 #        meta = _json.load(f)
