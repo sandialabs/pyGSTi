@@ -159,17 +159,19 @@ class DirectRBInput(BenchmarkingInput):
 
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels)
         self.circuits_per_depth = circuits_per_depth
+        self.randomizeout = randomizeout
+        self.citerations = citerations
+        self.compilerargs = compilerargs
+        self.descriptor = descriptor
+        
         self.sampler = sampler
         self.samplerargs = samplerargs
         self.addlocal = addlocal
         self.lsargs = lsargs
-        self.randomizeout = randomizeout
         self.cliffordtwirl = cliffordtwirl
         self.conditionaltwirl = conditionaltwirl
-        self.citerations = citerations
-        self.compilerargs = compilerargs
         self.partitioned = partitioned
-        self.descriptor = descriptor
+        
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB'))
 
@@ -180,7 +182,8 @@ class DirectRBInput(BenchmarkingInput):
 
 class Benchmark(_proto.Protocol):
 
-    summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities')
+    summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts',
+                         'success_probabilities', 'adjusted_success_probabilities')
     dscmp_datatypes = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
@@ -202,13 +205,23 @@ class Benchmark(_proto.Protocol):
                     hamming_distance_counts[_rb.analysis.hamming_distance(outbitstring, idealout[-1])] += counts
             return list(hamming_distance_counts)  # why a list?
 
+        def adjusted_success_probability(hamming_distance_counts):
+            """ TODO: docstring """
+            hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
+            #adjSP = _np.sum([(-1 / 2)**n * hamming_distance_counts[n] for n in range(numqubits + 1)]) / total_counts
+            adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
+            return adjSP
+        
         def get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
+            hdc = hamming_distance_counts(dsrow, circ, idealout)
+            
             ret = {'success_counts': sc,
                    'total_counts': tc,
                    'success_probabilities': _np.nan if tc == 0 else sc / tc,
-                   'hamming_distance_counts': hamming_distance_counts(dsrow, circ, idealout)}
+                   'hamming_distance_counts': hdc,
+                   'adjusted_success_probabilities': adjusted_success_probability(hdc)}
             return ret
 
         return self.compute_dict(data, self.summary_datatypes,
@@ -262,9 +275,9 @@ class Benchmark(_proto.Protocol):
 
         depths = inp.depths
         qty_data = _support.NamedDict('Datatype', 'category', None,
-                                    {comp: _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
-                                     for comp in component_names})
-        
+                                      {comp: _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+                                       for comp in component_names})
+
         #loop over all circuits
         for depth, circuits_at_depth, idealouts_at_depth in zip(depths, inp.circuit_lists, inp.idealout_lists):
             for icirc, (circ, idealout) in enumerate(zip(circuits_at_depth, idealouts_at_depth)):
@@ -283,6 +296,73 @@ class Benchmark(_proto.Protocol):
         return _support.NamedDict(
             'Depth', 'int', seriestype, {depth: _support.NamedDict(
                 'Width', 'int', seriestype, {width: fillfn() for width in widths}) for depth in depths})
+
+    def add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
+        """
+        Adds bootstrapped "summary datasets". The bootstrap is over both the finite counts of each
+        circuit and over the circuits at each length.
+
+        Note: only adds quantities if they're needed.
+
+        Parameters
+        ----------
+        num_qtys : int, optional
+            The number of bootstrapped datasets to construct.
+
+        Returns
+        -------
+        None
+        """
+        key = 'bootstraps' if finitecounts else 'infbootstraps'
+        if key in data_cache:
+            num_existing = len(data_cache['bootstraps'])
+        else:
+            data_cache[key] = []
+            num_existing = 0
+
+        #extract "base" values from cache, to base boostrap off of
+        success_probabilities = data_cache['success_probabilities']
+        total_counts = data_cache['total_counts']
+        hamming_distance_counts = data_cache['hamming_distance_counts']
+        depths = list(success_probabilities.keys())
+
+        for i in range(num_existing, num_qtys):
+
+            component_names = self.summary_datatypes
+            bcache = _support.NamedDict(
+                'Datatype', 'category', None,
+                {comp: _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+                 for comp in component_names})  # ~= "RB summary dataset"
+
+            for depth, SPs in success_probabilities.items():
+                numcircuits = len(SPs)
+                for k in range(numcircuits):
+                    ind = _np.random.randint(numcircuits)
+                    sampledSP = SPs[ind]
+                    totalcounts = total_counts[depth][ind] if finitecounts else None
+                    bcache['success_probabilities'][depth].append(sampledSP)
+                    if finitecounts:
+                        bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                        bcache['total_counts'][depth].append(totalcounts)
+                    else:
+                        bcache['success_counts'][depth].append(sampledSP)
+
+                    #ind = _np.random.randint(numcircuits)  # note: old code picked different random ints
+                    #totalcounts = total_counts[depth][ind] if finitecounts else None  # do this again if a different randint
+                    sampledHDcounts = hamming_distance_counts[depth][ind]
+                    sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
+
+                    if finitecounts:
+                        bcache['hamming_distance_counts'][depth].append(
+                            list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+                    else:
+                        bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
+
+                    # replicates adjusted_success_probability function above
+                    adjSP = _np.sum([(-1 / 2)**n * sampledHDpdf[n] for n in range(len(sampledHDpdf))])
+                    bcache['adjusted_success_probabilities'][depth].append(adjSP)
+
+            data_cache[key].append(bcache)
 
 
 class PassStabilityTest(_proto.Protocol):
@@ -355,7 +435,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                 root = root.for_protocol[self.name]
                 if passname:  # then we expect final Results are MultiPassResults
                     root = root.passes[passname]  # now root should be a BenchmarkingResults
-                assert(isinstance(root, BenchmarkingResults))
+                assert(isinstance(root, VolumetricBenchmarkingResults))
                 assert(isinstance(root.data.input, ByDepthInput)), \
                     "All paths must lead to by-depth inputs, not %s!" % str(type(root.data.input))
 
@@ -383,7 +463,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                 self._update_vb_minmin_maxmax(vb)   # aggregate now since we won't aggregate over passes
 
             #Create Results
-            results = BenchmarkingResults(data, self)
+            results = VolumetricBenchmarkingResults(data, self)
             results.volumetric_benchmarks = vb
             results.failure_counts = fails
             passresults.append(results)
@@ -433,7 +513,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                     else:
                         agg_vb[depth][width] = agg_fn(vb_ppd, width, rescale=False)
 
-            aggregated_results = BenchmarkingResults(data, self)
+            aggregated_results = VolumetricBenchmarkingResults(data, self)
             aggregated_results.volumetric_benchmarks = agg_vb
             aggregated_results.failure_counts = agg_fails
 
@@ -564,7 +644,7 @@ class VolumetricBenchmark(Benchmark):
             fails[depth][width] = failcnt_fn(percircuitdata)
             vb[depth][width] = agg_fn(percircuitdata, width)
 
-        results = BenchmarkingResults(data, self)  # 'Qty', 'category'
+        results = VolumetricBenchmarkingResults(data, self)  # 'Qty', 'category'
         results.volumetric_benchmarks = vb
         results.failure_counts = fails
         return results
@@ -589,12 +669,225 @@ class PredictedData(_proto.Protocol):
         #Similar to above but only on first dataset... see create_summary_data
             
 
-class RB(_proto.Protocol):
-    def __init__(self, name):
+class RB(Benchmark):
+    def __init__(self, seed=(0.8, 0.95), bootstrap_samples=200, asymptote='std', rtype='EI',
+                 datatype='success_probabilities', depths='all', name=None):
         super().__init__(name)
 
+        assert(datatype in self.summary_datatypes), "Unknown data type: %s!" % str(datatype)
+        assert(datatype in ('success_probabilities', 'adjusted_success_probabilities')), \
+            "Data type '%s' must be 'success_probabilities' or 'adjusted_success_probabilities'!" % str(datatype)
 
-class BenchmarkingResults(_proto.ProtocolResults):
+        self.seed = seed
+        self.depths = depths
+        self.bootstrap_samples = bootstrap_samples
+        self.asymptote = asymptote
+        self.rtype = rtype
+        self.datatype = datatype  #TIM: old code had an 'auto' option and used different vals, e.g. 'raw' - CHECK THIS
+
+    def run(self, data):
+
+        inp = data.input
+
+        if self.datatype not in data.cache:
+            summary_data_dict = self.compute_summary_data(data)
+            data.cache.update(summary_data_dict)
+        src_data = data.cache[self.datatype]
+        data_per_depth = src_data
+
+        if self.depths == 'all':
+            depths = list(data_per_depth.keys())
+        else:
+            depths = filter(lambda d: d in data_per_depth, self.depths)
+
+        nQubits = len(inp.qubit_labels)
+
+        if isinstance(self.asymptote, str):
+            assert(self.asymptote == 'std'), "If `asymptote` is a string it must be 'std'!"
+            if self.datatype == 'success_probabilities':
+                asymptote = 1 / 2**nQubits
+            elif self.datatype == 'adjusted_success_probabilities':
+                asymptote = 1 / 4**nQubits
+            else:
+                raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
+
+        #if datatype == 'adjusted':
+        #    ASPs = RBSdataset.adjusted_ASPs
+        #if datatype == 'raw':
+        #    ASPs = RBSdataset.ASPs
+
+        def get_rb_fits(circuitdata_per_depth):
+            ASPs = []
+            for depth in depths:
+                percircuitdata = circuitdata_per_depth[depth]
+                ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+
+            full_fit_results, fixed_asym_fit_results = _rb.analysis.std_least_squares_data_fitting(
+                depths, ASPs, nQubits, seed=self.seed, asymptote=asymptote,
+                ftype='full+FA', rtype=self.rtype)
+
+            return full_fit_results, fixed_asym_fit_results
+
+        #do RB fit on actual data
+        FF_results, FAF_results = get_rb_fits(data_per_depth)
+
+        if self.bootstrap_samples > 0:
+
+            parameters = ['A', 'B', 'p', 'r']
+            bootstraps_FF = {p: [] for p in parameters}
+            bootstraps_FAF = {p: [] for p in parameters}
+            failcount_FF = 0
+            failcount_FAF = 0
+
+            #Store bootstrap "cache" dicts (containing summary keys) as a list under data.cache
+            if 'bootstraps' not in data.cache or len(data.cache['bootstraps']) < self.bootstrap_samples:
+                self.add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)  #TIM - finite counts always True here?
+            bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
+
+            for bootstrap_cache in bootstrap_caches:
+                BS_FF_results, BS_FAF_results = get_rb_fits(bootstrap_cache[self.datatype])
+
+                if BS_FF_results['success']:
+                    for p in parameters:
+                        bootstraps_FF[p].append(BS_FF_results['estimates'][p])
+                else:
+                    failcount_FF += 1
+                if BS_FAF_results['success']:
+                    for p in parameters:
+                        bootstraps_FAF[p].append(BS_FAF_results['estimates'][p])
+                else:
+                    failcount_FAF += 1
+
+            failrate_FF = failcount_FF / self.bootstrap_samples
+            failrate_FAF = failcount_FAF / self.bootstrap_samples
+
+            std_FF = {p: _np.std(_np.array(bootstraps_FF[p])) for p in parameters}
+            std_FAF = {p: _np.std(_np.array(bootstraps_FAF[p])) for p in parameters}
+
+        else:
+            bootstraps_FF = None
+            std_FF = None
+            failrate_FF = None
+
+            bootstraps_FAF = None
+            std_FAF = None
+            failrate_FAF = None
+
+        fits = _support.NamedDict('FitType', 'category')
+        fits['full'] = _rb.analysis.FitResults(
+            'LS', FF_results['seed'], self.rtype, FF_results['success'], FF_results['estimates'],
+            FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,
+            bootstraps_failrate=failrate_FF)
+
+        fits['A-fixed'] = _rb.analysis.FitResults(
+            'LS', FAF_results['seed'], self.rtype, FAF_results['success'],
+            FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
+            bootstraps=bootstraps_FAF, bootstraps_failrate=failrate_FAF)
+
+        return RandomizedBenchmarkingResults(data, self, fits, depths)
+
+
+class RandomizedBenchmarkingResults(_proto.ProtocolResults):
+    def __init__(self, data, protocol_instance, fits, depths):
+        """
+        Initialize an empty Results object.
+        TODO: docstring
+        """
+        super().__init__(data, protocol_instance)
+
+        self.depths = depths  # Note: can be different from protocol_instance.depths (which can be 'all')
+        self.rtype = protocol_instance.rtype  # replicated for convenience?
+        self.fits = fits
+        self.auxfile_types['fits'] = 'pickle'  # b/c NamedDict don't json
+
+    def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
+             legend=True, title=None, figpath=None):
+        """
+        Plots RB data and, optionally, a fitted exponential decay.
+
+        Parameters
+        ----------
+        fitkey : dict key, optional
+            The key of the self.fits dictionary to plot the fit for. If None, will
+            look for a 'full' key (the key for a full fit to A + Bp^m if the standard
+            analysis functions are used) and plot this if possible. It otherwise checks
+            that there is only one key in the dict and defaults to this. If there are
+            multiple keys and none of them are 'full', `fitkey` must be specified when
+            `decay` is True.
+
+        decay : bool, optional
+            Whether to plot a fit, or just the data.
+
+        success_probabilities : bool, optional
+            Whether to plot the success probabilities distribution, as a violin plot. (as well
+            as the *average* success probabilities at each length).
+
+        size : tuple, optional
+            The figure size
+
+        ylim, xlim : tuple, optional
+            The x and y limits for the figure.
+
+        legend : bool, optional
+            Whether to show a legend.
+
+        title : str, optional
+            A title to put on the figure.
+
+        figpath : str, optional
+            If specified, the figure is saved with this filename.
+        """
+
+        # Future : change to a plotly plot.
+        try: import matplotlib.pyplot as _plt
+        except ImportError: raise ValueError("This function requires you to install matplotlib!")
+
+        if decay and fitkey is None:
+            allfitkeys = list(self.fits.keys())
+            if 'full' in allfitkeys: fitkey = 'full'
+            else:
+                assert(len(allfitkeys) == 1), \
+                    "There are multiple fits and none have the key 'full'. Please specify the fit to plot!"
+                fitkey = allfitkeys[0]
+
+        ASPs = []
+        data_per_depth = self.data.cache[self.protocol_instance.datatype]
+        for depth in self.depths:
+            percircuitdata = data_per_depth[depth]
+            ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+
+        _plt.figure(figsize=size)
+        _plt.plot(self.depths, ASPs, 'o', label='Average success probabilities')
+
+        if decay:
+            lengths = _np.linspace(0, max(self.depths), 200)
+            A = self.fits[fitkey].estimates['A']
+            B = self.fits[fitkey].estimates['B']
+            p = self.fits[fitkey].estimates['p']
+            _plt.plot(lengths, A + B * p**lengths,
+                      label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
+                                                              self.fits[fitkey].stds['r']))
+
+        if success_probabilities:
+            all_success_probs_by_depth = [data_per_depth[depth] for depth in self.depths]
+            _plt.violinplot(all_success_probs_by_depth, self.depths, points=10, widths=1.,
+                            showmeans=False, showextrema=False, showmedians=False)  # , label='Success probabilities')
+
+        if title is not None: _plt.title(title)
+        _plt.ylabel("Success probability")
+        _plt.xlabel("RB sequence length $(m)$")
+        _plt.ylim(ylim)
+        _plt.xlim(xlim)
+
+        if legend: _plt.legend()
+
+        if figpath is not None: _plt.savefig(figpath, dpi=1000)
+        else: _plt.show()
+
+        return
+
+
+class VolumetricBenchmarkingResults(_proto.ProtocolResults):
     def __init__(self, data, protocol_instance):
         """
         Initialize an empty Results object.
@@ -607,3 +900,7 @@ class BenchmarkingResults(_proto.ProtocolResults):
 
         self.auxfile_types['volumetric_benchmarks'] = 'pickle'  # b/c NamedDicts don't json
         self.auxfile_types['failure_counts'] = 'pickle'  # b/c NamedDict don't json
+
+
+RBResults = RandomizedBenchmarkingResults  # shorthand
+VBResults = VolumetricBenchmarkingResults  # shorthand

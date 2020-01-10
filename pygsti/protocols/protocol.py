@@ -500,7 +500,9 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None):
     dirname = _pathlib.Path(dirname)
     results_dir = dirname / 'results'
     if name is None:  # then it's a directory object
-        return _support.obj_from_meta_json(results_dir).from_dir(dirname)
+        cls = _support.obj_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
+            else ProtocolResultsDir  # default if no meta.json (if only a results obj has been written inside dir)
+        return cls.from_dir(dirname)
     else:  # it's a ProtocolResults object
         return _support.obj_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data)
 
