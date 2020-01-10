@@ -541,7 +541,8 @@ class VolumetricBenchmarkGrid(Benchmark):
 class VolumetricBenchmark(Benchmark):
 
     def __init__(self, depths='all', datatype='success_probabilities',
-                 statistic='mean', rescaler='auto', dscomparator=None, name=None):
+                 statistic='mean', rescaler='auto', dscomparator=None,
+                 custom_data_src=None, name=None):
 
         assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin'))
 
@@ -552,8 +553,10 @@ class VolumetricBenchmark(Benchmark):
         self.statistic = statistic
         self.dscomparator = dscomparator
         self.rescaler = rescaler
+        self.custom_data_src = custom_data_src
 
         self.auxfile_types['dscomparator'] = 'pickle'
+        self.auxfile_types['custom_data_src'] = 'pickle'  # because this *could* be a model or a qty dict (or just a string?)
         self.auxfile_types['rescale_function'] = 'none'  # don't serialize this, so need _set_rescale_function
         self._set_rescale_function()
 
@@ -583,22 +586,39 @@ class VolumetricBenchmark(Benchmark):
 
         inp = data.input
 
-        #Note: can only take/put things ("results") in data.cache that *only* depend on the input
-        # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
-        if self.datatype in self.summary_datatypes:
-            if self.datatype not in data.cache:
-                summary_data_dict = self.compute_summary_data(data)
-                data.cache.update(summary_data_dict)
-        elif self.datatype in self.dscmp_datatypes:
-            if self.datatype not in data.cache:
-                dscmp_data = self.compute_dscmp_data(data, self.dscomparator)
-                data.cache.update(dscmp_data)
-        else:
-            raise ValueError("Invalid datatype: %s" % self.datatype)
-        src_data = data.cache[self.datatype]
+        if self.custom_data_src is None:  # then use the data in `data`
+            #Note: can only take/put things ("results") in data.cache that *only* depend on the input
+            # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
+            if self.datatype in self.summary_datatypes:
+                if self.datatype not in data.cache:
+                    summary_data_dict = self.compute_summary_data(data)
+                    data.cache.update(summary_data_dict)
+            elif self.datatype in self.dscmp_datatypes:
+                if self.datatype not in data.cache:
+                    dscmp_data = self.compute_dscmp_data(data, self.dscomparator)
+                    data.cache.update(dscmp_data)
+            else:
+                raise ValueError("Invalid datatype: %s" % self.datatype)
+            src_data = data.cache[self.datatype]
+            
+        elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
+            assert(self.datatype == 'success_probabilities'), "Only success probabailities can be simulated."
+            sfmodel = self.custom_data_src
+            depths = data.input.depths if self.depths == 'all' else self.depths
+            src_data = _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+            circuit_lists_for_depths = {depth: lst for depth, lst in zip(inp.depths, inp.circuit_lists)}
 
-        #self.compute_circuit_data(results)
-        #self.compute_predicted_probs(results, qtyname, model)
+            for depth in depths:
+                for circ in circuit_lists_for_depths[depth]:
+                    predicted_success_prob = sfmodel.probs(circ)[('success',)]
+                    src_data[depth].append(predicted_success_prob)
+
+        elif isinstance(self.custom_data_src, dict):  #Assume this is a "summary dataset"
+            summary_data = self.custom_data_src
+            src_data = summary_data['success_probabilities']
+
+        else:
+            raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
 
         #Get function to aggregate the different per-circuit datatype values
         if self.statistic == 'max' or self.statistic == 'maxmax':
@@ -650,24 +670,13 @@ class VolumetricBenchmark(Benchmark):
         return results
 
 
-class PredictedData(_proto.Protocol):
-    #maybe just a function??
+class PredictedVolumetricBenchmark(VolumetricBenchmark):
+    """Runs VB on success/fail data predicted from a model"""
+    def __init__(self, model_or_summary_data, depths='all', statistic='mean',
+                 rescaler='auto', dscomparator=None, name=None):
+        super().__init__(depths, 'success_probabilities', statistic, rescaler,
+                         dscomparator, model_or_summary_data, name)
 
-    def __init__(self, name):
-        super().__init__(name)
-
-    def run(self, data):
-
-        for i, ((circ, dsrow), auxdict, (pcirc, pdsrow)) in enumerate(iterator):
-            if pcirc is not None:
-                if not circ == pcirc:
-                    print('-{}-'.format(i))
-                    pdsrow = predds[circ]
-                    _warnings.warn("Predicted DataSet is ordered differently to the main DataSet!"
-                                   + "Reverting to potentially slow dictionary hashing!")
-
-        #Similar to above but only on first dataset... see create_summary_data
-            
 
 class RB(Benchmark):
     def __init__(self, seed=(0.8, 0.95), bootstrap_samples=200, asymptote='std', rtype='EI',
