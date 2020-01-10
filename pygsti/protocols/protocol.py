@@ -124,8 +124,9 @@ class TreeRunner(ProtocolRunner):
 
 class SimpleRunner(ProtocolRunner):
     """ Run a single protocol on every data node that has no sub-nodes (possibly separately for each pass) """
-    def __init__(self, protocol, protocol_can_handle_multipass_data=False):
+    def __init__(self, protocol, protocol_can_handle_multipass_data=False, input_type='all'):
         self.protocol = protocol
+        self.input_type = input_type
         self.do_passes_separately = not protocol_can_handle_multipass_data
 
     def run(self, data):
@@ -138,8 +139,10 @@ class SimpleRunner(ProtocolRunner):
             elif node.data.is_multipass() and self.do_passes_separately:
                 implicit_multipassprotocol = MultiPassProtocol(self.protocol)
                 node.for_protocol[implicit_multipassprotocol.name] = implicit_multipassprotocol.run(node.data)
-            else:
+            elif self.input_type == 'all' or isinstance(node.data.input, self.input_type):
                 node.for_protocol[self.protocol.name] = self.protocol.run(node.data)
+            else:
+                pass  # don't run on this node, since the input is the wrong type
         visit_node(ret)
         return ret
 
