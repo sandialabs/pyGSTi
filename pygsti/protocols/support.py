@@ -199,6 +199,12 @@ def obj_from_meta_json(dirname): #, subdir=None, parent=None, name=None):
     return class_for_name(meta['type'])  # class of object to create
 
 
+def obj_to_meta_json(obj, dirname):
+    meta = {'type': full_class_name(obj)}
+    with open(_pathlib.Path(dirname) / 'meta.json', 'w') as f:
+        _json.dump(meta, f)
+
+
 def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member):
     meta = {'type': full_class_name(obj)}
     write_meta_based_dir(dirname, obj.__dict__,
@@ -404,9 +410,14 @@ class TreeNode(object):
         # ret._init_children(dirname, subdir_between_dirname_and_meta_json)  # loads child nodes
         # return ret
     
-    def __init__(self, possible_child_name_dirs, child_values=None):
+    def __init__(self, possible_child_name_dirs, child_values=None, child_category=None):
         self._dirs = possible_child_name_dirs  # maps possible child keys -> subdir name
         self._vals = child_values if child_values else {}
+        self._childcategory = child_category
+
+    @property
+    def child_category(self):
+        return self._childcategory
 
     def _init_children(self, dirname, meta_subdir=None):
         dirname = _pathlib.Path(dirname)
@@ -421,16 +432,16 @@ class TreeNode(object):
 
         self._dirs = child_dirs
         self._vals = {}
+        self._childcategory = meta.get('category', None)
 
         for nm, subdir in child_dirs.items():
             subobj_dir = dirname / subdir
-            if meta_subdir:
-                submeta_dir = subobj_dir / meta_subdir
-                if submeta_dir.exists():  # It's ok if not all possible sub-nodes exist
-                    self._vals[nm] = obj_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self, name=nm)
-            else:  # if meta_subdir is None, we default to the same class as self (ProtocolResultsDir case)
-                self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
-            
+            #if meta_subdir:
+            submeta_dir = subobj_dir / meta_subdir
+            if submeta_dir.exists():  # It's ok if not all possible sub-nodes exist
+                self._vals[nm] = obj_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self, name=nm)
+            #else:  # if meta_subdir is None, we default to the same class as self
+            #    self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
 
     def keys(self):
         return self._dirs.keys()
@@ -508,6 +519,7 @@ class TreeNode(object):
         if write_subdir_json:
             subdirs = {}
             subdirs['directories'] = {dirname: subname for subname, dirname in self._dirs.items()}
+            if self._childcategory: subdirs['category'] = self._childcategory
             # write self._dirs "backwards" b/c json doesn't allow tuple-like keys (sometimes keys are tuples)
             with open(dirname / 'input' / 'subdirs.json', 'w') as f:
                 _json.dump(subdirs, f)

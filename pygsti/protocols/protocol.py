@@ -229,7 +229,8 @@ class ProtocolInput(_support.TreeNode):
         ret._init_children(dirname, 'input')
         return ret
 
-    def __init__(self, circuits=None, qubit_labels=None, children=None, children_dirs=None):
+    def __init__(self, circuits=None, qubit_labels=None,
+                 children=None, children_dirs=None, child_category=None):
 
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.default_protocols = {}
@@ -241,8 +242,10 @@ class ProtocolInput(_support.TreeNode):
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
         self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list',
-                              'default_protocols': 'dict-of-protocolobjs',
-                              '_dirs': 'none', '_vals': 'none'}  # b/c TreeNode takes care of its own serialization
+                              'default_protocols': 'dict-of-protocolobjs'}
+
+        # because TreeNode takes care of its own serialization:
+        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none'})
 
         if qubit_labels is None:
             if len(circuits) > 0:
@@ -259,7 +262,7 @@ class ProtocolInput(_support.TreeNode):
             {subname.replace(' ', '_'): subname for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
-        super().__init__(children_dirs, children)
+        super().__init__(children_dirs, children, child_category)
 
     def add_default_protocol(self, default_protocol_instance):
         instance_name = default_protocol_instance.name
@@ -314,7 +317,7 @@ class CircuitStructuresInput(CircuitListsInput):
 class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
 
     def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None,
-                 interleave=False):
+                 interleave=False, category='Protocol'):
 
         if not isinstance(sub_inputs, dict):
             sub_inputs = {("**%d" % i): inp for i, inp in enumerate(sub_inputs)}
@@ -328,7 +331,7 @@ class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
                 raise NotImplementedError("Interleaving not implemented yet")
             _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
 
-        super().__init__(all_circuits, qubit_labels, sub_inputs, sub_input_dirs)
+        super().__init__(all_circuits, qubit_labels, sub_inputs, sub_input_dirs, category)
 
     def create_subdata(self, sub_name, dataset):
         """TODO: docstring - used to create sub-ProtocolData objects (by ProtocolData) """
@@ -347,7 +350,7 @@ class SimultaneousInput(ProtocolInput):
     # based on qubits, then copy (?) template input and just replace itself
     # all_circuits_needing_data member?
 
-    def __init__(self, inputs, tensored_circuits=None, qubit_labels=None):
+    def __init__(self, inputs, tensored_circuits=None, qubit_labels=None, category='Qubits'):
         #TODO: check that inputs don't have overlapping qubit_labels
 
         if qubit_labels is None:
@@ -374,7 +377,7 @@ class SimultaneousInput(ProtocolInput):
 
         sub_inputs = {inp.qubit_labels: inp for inp in inputs}
         sub_input_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_inputs}
-        super().__init__(tensored_circuits, qubit_labels, sub_inputs, sub_input_dirs)
+        super().__init__(tensored_circuits, qubit_labels, sub_inputs, sub_input_dirs, category)
 
     def create_subdata(self, qubit_labels, dataset):
         if isinstance(dataset, _objs.MultiDataSet):
@@ -434,7 +437,7 @@ class ProtocolData(_support.TreeNode):
         else:
             self._passdatas = {None: self}
             
-        super().__init__(self.input._dirs, {})  # children created on-demand
+        super().__init__(self.input._dirs, {}, self.input._childcategory)  # children created on-demand
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
         return self.input.create_subdata(key, self.dataset)
@@ -469,10 +472,7 @@ class ProtocolData(_support.TreeNode):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-
-        meta = {'type': _support.full_class_name(self)}
-        with open(data_dir / 'meta.json', 'w') as f:
-            _json.dump(meta, f)
+        _support.obj_to_meta_json(self, data_dir)
 
         if parent is None:
             self.input.write(dirname)  # assume parent has already written input
@@ -495,11 +495,11 @@ class ProtocolData(_support.TreeNode):
 
 def load_results_from_dir(dirname, name=None, preloaded_data=None):
     dirname = _pathlib.Path(dirname)
-    if name is None:
-        return ProtocolResultsDir.from_dir(dirname)  # load a directory of all of the results under `dirname`
-    else:  # load single ProtocolResults object
-        results_dir = dirname / 'results' / name
-        return _support.obj_from_meta_json(results_dir).from_dir(dirname, name, preloaded_data)
+    results_dir = dirname / 'results'
+    if name is None:  # then it's a directory object
+        return _support.obj_from_meta_json(results_dir).from_dir(dirname)
+    else:  # it's a ProtocolResults object
+        return _support.obj_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data)
 
 
 class ProtocolResults(object):
@@ -543,7 +543,6 @@ class ProtocolResults(object):
         self.protocol = protocol_instance
         self.data = data
         self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
-
 
 # self.qtys = {}
 #    def items(self):
@@ -618,10 +617,11 @@ class ProtocolResultsDir(_support.TreeNode):
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
-                    results[pth.name] = load_results_from_dir(dirname, pth.name, preloaded_data=data)
+                    results[pth.name] = _support.obj_from_meta_json(pth).from_dir(
+                        dirname, pth.name, preloaded_data=data)
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._init_children(dirname, meta_subdir=None)  # loads child nodes of same type as self
+        ret._init_children(dirname, meta_subdir='results')
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
@@ -640,10 +640,15 @@ class ProtocolResultsDir(_support.TreeNode):
         else:
             children = children.copy()
 
-        super().__init__(self.data.input._dirs, children)
+        super().__init__(self.data.input._dirs, children, self.data.input._childcategory)
 
     def write(self, dirname, parent=None):
         if parent is None: self.data.write(dirname)  # assume parent has already written data
+        dirname = _pathlib.Path(dirname)
+
+        results_dir = dirname / 'results'
+        results_dir.mkdir(parents=True, exist_ok=True)
+        _support.obj_to_meta_json(self, results_dir)
 
         #write the results
         for name, results in self.for_protocol.items():
