@@ -601,10 +601,9 @@ class BenchmarkingResults(_proto.ProtocolResults):
         TODO: docstring
         """
         super().__init__(data, protocol_instance)
-        
+
         self.volumetric_benchmarks = {}
         self.failure_counts = {}
-        
-        self.auxfile_types['volumetric_benchmarks'] = 'json'
-        self.auxfile_types['failure_counts'] = 'json'
 
+        self.auxfile_types['volumetric_benchmarks'] = 'pickle'  # b/c NamedDicts don't json
+        self.auxfile_types['failure_counts'] = 'pickle'  # b/c NamedDict don't json

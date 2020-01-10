@@ -270,7 +270,7 @@ class NamedDict(dict):
     def __reduce__(self):
         return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items())), None)
 
-    def asdataframe(self):
+    def as_dataframe(self):
         import pandas as _pandas
 
         columns = {'value': []}
@@ -303,13 +303,17 @@ class NamedDict(dict):
         elif seriestypes[nm] != self.keytype:
             seriestypes[nm] = None  # conflicting types, so set to None
 
+        assert(nm not in row_prefix), \
+            ("Column %s is assigned at multiple dict-levels (latter levels will "
+             "overwrite the values of earlier levels)! keys-so-far=%s") % (nm, tuple(row_prefix.keys()))
+        
         row = row_prefix.copy()
         for k, v in self.items():
             row[nm] = k
             if isinstance(v, NamedDict):
                 v._add_to_columns(columns, seriestypes, row)
-            elif isinstance(v, ProtocolResults):
-                v.qtys._add_to_columns(columns, seriestypes, row)
+            elif hasattr(v, 'as_nameddict'):  # e.g., for other ProtocolResults
+                v.as_nameddict()._add_to_columns(columns, seriestypes, row)
             else:
                 #Add row
                 complete_row = row.copy()

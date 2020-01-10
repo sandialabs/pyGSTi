@@ -317,7 +317,7 @@ class CircuitStructuresInput(CircuitListsInput):
 class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
 
     def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None,
-                 interleave=False, category='Protocol'):
+                 interleave=False, category='InputBranch'):
 
         if not isinstance(sub_inputs, dict):
             sub_inputs = {("**%d" % i): inp for i, inp in enumerate(sub_inputs)}
@@ -572,23 +572,30 @@ class ProtocolResults(object):
         #write qtys to results dir
         _support.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
 
-    #TODO - revamp functions below here now that _subresults is added
-    def asdict(self):
-        ret = {}
-        for k, v in self.qtys.items():
+    def as_nameddict(self):
+        #This function can be overridden by derived classes - this just
+        # tries to give a decent default implementation
+        ret = _support.NamedDict('Qty', 'category')
+        ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
+        for k, v in self.__dict__.items():
+            if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                ret[k] = v.asdict()
-            else:
+                ret[k] = v.as_nameddict()
+            elif isinstance(v, _support.NamedDict):
+                ret[k] = v
+            elif isinstance(v, dict):
+                pass  # don't know how to make a dict into a (nested) NamedDict
+            else:  # non-dicts are ok to just store
                 ret[k] = v
         return ret
 
-    def asdataframe(self):
-        return self.qtys.asdataframe()
+    def as_dataframe(self):
+        return self.as_nameddict().as_dataframe()
 
     def __str__(self):
         import pprint
         P = pprint.PrettyPrinter()
-        return P.pformat(self.asdict())
+        return P.pformat(self.as_nameddict())
 
 
 class MultiPassResults(ProtocolResults):
@@ -656,6 +663,31 @@ class ProtocolResultsDir(_support.TreeNode):
             results.write(dirname, data_already_written=True)
 
         self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
+
+    def as_nameddict(self):
+        sub_results = {k: v.as_nameddict() for k, v in self.items()}
+        results_on_this_node = _support.NamedDict('Protocol Instance', 'category',
+                                                  items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
+        if sub_results:
+            category = self.child_category if self.child_category else 'nocategory'
+            ret = _support.NamedDict(category, 'category')
+            if results_on_this_node:
+                #Results in this (self's) dir don't have a value for the sub-category, so put None
+                ret[None] = results_on_this_node
+            ret.update(sub_results)
+            return ret
+        else:  # no sub-results, so can just return a dict of results on this node
+            return results_on_this_node
+
+    def as_dataframe(self):
+        return self.as_nameddict().as_dataframe()
+
+    def __str__(self):
+        import pprint
+        P = pprint.PrettyPrinter()
+        return P.pformat(self.as_nameddict())
+
+
         
 #     # Dictionary access into _children
 #     def items(self):
