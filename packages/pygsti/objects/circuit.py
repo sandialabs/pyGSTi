@@ -24,6 +24,12 @@ from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 
+try:
+    import cirq
+except ImportError:
+    _has_cirq = False
+else:
+    _has_cirq = True
 
 #Internally:
 # when static: a tuple of Label objects labelling each top-level circuit layer
@@ -2636,6 +2642,48 @@ class Circuit(object):
         f.write("}\end{equation*}\n")
         f.write("\end{document}")
         f.close()
+
+    def convert_to_cirq(self,
+                        qubit_conversion,
+                        gatename_conversion=None):
+        """
+        Converts this circuit to a Cirq circuit.
+
+        Parameters
+        ----------
+        qubit_conversion : dict
+            Mapping from qubit labels (e.g. integers) to Cirq qubits.
+        gatename_conversion : dict, optional
+            If not None, a dictionary that converts the gatenames in the circuit to the
+            gatenames that will appear in the Cirq output. If only standard pyGSTi names
+            are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
+            be specified, and an automatic conversion to the standard Cirq names will be
+            implemented.
+
+        Returns
+        -------
+        A Cirq Circuit object.
+        """
+
+        if not _has_cirq:
+          raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+        if gatename_conversion is None:
+          gatename_conversion = _itgs.std_gatenames_to_cirq
+
+        moments = []
+        for i in range(self.num_layers()):
+            layer = self.get_layer(i)
+            operations = []
+            for gate in layer:
+                operation = gatename_conversion[gate.name]
+                if operation is None: # TODO: How to handle idle?
+                    continue
+                qubits = map(qubit_conversion.get, gate.qubits)
+                operations.append(operation.on(*qubits))
+            moments.append(cirq.Moment(operations))
+
+        return cirq.Circuit(moments)
 
     def convert_to_quil(self,
                         gatename_conversion=None,
