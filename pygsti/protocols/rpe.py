@@ -47,3 +47,8 @@ class RobustPhaseEstimationResults(_proto.ProtocolResults):
 
         self.auxfile_types['rpe_result_values'] = 'pickle'  # if rep_result_values can't be json'd
 
+        
+#shorthands
+RPEInput = RobustPhaseEstimationInput
+RPE = RobustPhaseEstimation
+RPEResults = RobustPhaseEstimationResults

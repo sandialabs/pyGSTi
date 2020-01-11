@@ -50,7 +50,7 @@ class HasTargetModel(object):
         self.auxfile_types['target_model'] = 'pickle'
 
 
-class GSTInput(_proto.CircuitListsInput, HasTargetModel):
+class GateSetTomographyInput(_proto.CircuitListsInput, HasTargetModel):
     """ Minimal Inputs needed for GST """
     def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None,
                  qubit_labels=None, nested=False):
@@ -103,10 +103,10 @@ class StandardGSTInput(StructuredGSTInput):
         self.auxfile_types['meas_fiducials'] = 'text-circuit-list'
         self.auxfile_types['germs'] = 'text-circuit-list'
         if add_default_protocol:
-            self.add_default_protocol(StandardPracticeGST(name='StdGST'))
+            self.add_default_protocol(StandardGST(name='StdGST'))
 
 
-class GST(_proto.Protocol):
+class GateSetTomography(_proto.Protocol):
     def __init__(self, initialModelFilenameOrObj=None, gaugeOptParams=None,
                  advancedOptions=None, comm=None, memLimit=None,
                  output_pkl=None, verbosity=2, name=None):
@@ -351,7 +351,7 @@ class GST(_proto.Protocol):
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
 
 
-class StandardPracticeGST(_proto.Protocol):
+class StandardGST(_proto.Protocol):
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeOptSuite=('single', 'unreliable2Q'),
                  gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
@@ -1538,3 +1538,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         s += "  " + "\n  ".join(list(self.estimates.keys())) + "\n"
         s += "\n"
         return s
+
+
+GSTInput = GateSetTomographyInput
+GST = GateSetTomography

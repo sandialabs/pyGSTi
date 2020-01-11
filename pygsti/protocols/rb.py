@@ -679,7 +679,7 @@ class PredictedVolumetricBenchmark(VolumetricBenchmark):
                          dscomparator, model_or_summary_data, name)
 
 
-class RB(Benchmark):
+class RandomizedBenchmarking(Benchmark):
     def __init__(self, seed=(0.8, 0.95), bootstrap_samples=200, asymptote='std', rtype='EI',
                  datatype='success_probabilities', depths='all', name=None):
         super().__init__(name)
@@ -912,5 +912,8 @@ class VolumetricBenchmarkingResults(_proto.ProtocolResults):
         self.auxfile_types['failure_counts'] = 'pickle'  # b/c NamedDict don't json
 
 
+RB = RandomizedBenchmarking
+VB = VolumetricBenchmark
+VBGrid = VolumetricBenchmarkGrid
 RBResults = RandomizedBenchmarkingResults  # shorthand
 VBResults = VolumetricBenchmarkingResults  # shorthand
