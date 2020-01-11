@@ -365,8 +365,9 @@ class Benchmark(_proto.Protocol):
             data_cache[key].append(bcache)
 
 
-class PassStabilityTest(_proto.Protocol):
-    pass
+#Add something like this?
+#class PassStabilityTest(_proto.Protocol):
+#    pass
 
 
 class VolumetricBenchmarkGrid(Benchmark):
