@@ -854,3 +854,37 @@ def write_empty_protocol_data(inpt, dirname, sparse="auto"):
     data_dir.mkdir(parents=True, exist_ok=True)
     inpt.write(dirname)
     _io.write_empty_dataset(pth, circuits, header_str, nZeroCols)
+
+
+class ProtocolPostProcessor(object):
+    """
+    Similar to a protocol, but runs on an existing results object, i.e. expects some results,
+    and produces a new (updated?) Results object.
+    """
+
+    #Note: this is essentially a duplicate of the Protocol class (except run takes a results object)
+    # but it's conceptually a different thing...  Should we derive it from Protocol?
+    
+    @classmethod
+    def from_dir(cls, dirname):  # same I/O pattern as Protocol
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_support.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret._init_unserialized_attributes()
+        return ret
+
+    def __init__(self, name):
+        super().__init__()
+        self.name = name if name else self.__class__.__name__
+        self.auxfile_types = {}
+
+    def _init_unserialized_attributes(self):
+        pass
+
+    def run(self, results):
+        #Maybe these could also take data objects and run protocols on them automatically?
+        #Returned Results object should be rooted at place of given results/resultsdir
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def write(self, dirname):
+        _support.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+

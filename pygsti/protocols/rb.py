@@ -378,44 +378,54 @@ class VolumetricBenchmarkGrid(Benchmark):
                  dscomparator=None, name=None):
 
         super().__init__(name)
-        self.depths = depths
-        self.widths = widths
-        self.datatype = datatype
-        self.paths = paths if paths == 'all' else sorted(paths)  # need to ensure paths are grouped by common prefix
-        self.statistic = statistic
-        self.aggregate = aggregate
+        self.postproc = VolumetricBenchmarkGridPP(depths, widths, datatype, paths, statistic, aggregate, self.name)
         self.dscomparator = dscomparator
         self.rescaler = rescaler
 
+        self.auxfile_types['postproc'] = 'protocolobj'
         self.auxfile_types['dscomparator'] = 'pickle'
         self.auxfile_types['rescaler'] = 'reset'  # punt for now - fix later
 
     def run(self, data):
-        #Note: implement "run" here, since we want to deal with multi-pass and multi-inputs
-
         #Since we know that VolumetricBenchmark protocol objects Create a single results just fill
         # in data under the result object's 'volumetric_benchmarks' and 'failure_counts'
         # keys, and these are indexed by width and depth (even though each VolumetricBenchmark
         # only contains data for a single width), we can just "merge" the VB results of all
         # the underlying by-depth datas, so long as they're all for different widths.
 
-        #results.volumetric_benchmarks = vb
-        #results.failure_counts = fails
-
         #Run VB protocol on appropriate paths -> separate_results
-        if self.paths == 'all':
-            paths = data.get_tree_paths()
+        if self.postproc.paths == 'all':
             trimmed_data = data
         else:
-            paths = self.paths
-            trimmed_data = data.filter_paths(self.paths)
+            trimmed_data = data.filter_paths(self.postproc.paths)
 
         #Then run resulting data normally, giving a results object
         # with "top level" dicts correpsonding to different paths
-        VB = VolumetricBenchmark(self.depths, self.datatype, self.statistic,
+        VB = VolumetricBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
                                  self.rescaler, self.dscomparator, name=self.name)
         separate_results = _proto.SimpleRunner(VB).run(trimmed_data)
-        
+        pp_results = self.postproc.run(separate_results)
+        pp_results.protocol = self
+        return pp_results
+
+
+class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
+    def __init__(self, depths='all', widths='all', datatype='success_probabilities',
+                 paths='all', statistic='mean', aggregate=True, name=None):
+
+        super().__init__(name)
+        self.depths = depths
+        self.widths = widths
+        self.datatype = datatype
+        self.paths = paths if paths == 'all' else sorted(paths)  # need to ensure paths are grouped by common prefix
+        self.statistic = statistic
+        self.aggregate = aggregate
+
+    def run(self, results):
+        data = results.data
+        paths = results.get_tree_paths() if self.paths == 'all' else self.paths
+        #Note: above won't work if given just a results object - needs a dir
+
         #Process results
         #Merge/flatten the data from different paths into one depth vs width grid
         passnames = list(data.passes.keys()) if data.is_multipass() else [None]
@@ -430,7 +440,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                 #print("Aggregating path = ", path)  #TODO - show progress something like this later?
                 
                 #Traverse path to get to root of VB data
-                root = separate_results
+                root = results
                 for key in path:
                     root = root[key]
                 root = root.for_protocol[self.name]
@@ -444,6 +454,7 @@ class VolumetricBenchmarkGrid(Benchmark):
                 depths = root.data.input.depths if (self.depths == 'all') else \
                     filter(lambda d: d in self.depths, root.data.input.depths)
                 width = len(root.data.input.qubit_labels)  # sub-results contains only a single width
+                if self.widths != 'all' and width not in self.widths: continue  # skip this one
 
                 for depth in depths:
                     if depth not in vb:  # and depth not in fails
