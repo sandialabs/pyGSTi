@@ -1579,11 +1579,13 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
         loglFn = _objfns.LogLFunction.simple_init(model, ds, circuitsToUse, min_p, pci, a,
                                                   poissonPicture=True, evaltree_cache=evaltree_cache,
                                                   comm=comm)
+        sqrt_dlogl_elements = loglFn.fn(model.to_vector())  # must evaluate loglFn before using it to init loglWCFn
         loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)
+
         nCircuits = len(circuitsToUse)
         dlogl_terms = _np.empty(nCircuits, 'd')
         # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
-        dlogl_elements = loglFn.fn(model.to_vector())**2
+        dlogl_elements = sqrt_dlogl_elements**2
         for i in range(nCircuits):
             dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
         print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
@@ -1643,8 +1645,9 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
             printer.log("  Trying eta = %g" % eta)
             nIters += 1
 
-    #print("Wildcard budget found for Wvec = ",Wvec)
     budget.from_vector(Wvec)
+    #print("Wildcard budget found for Wvec = ",Wvec)
+    #print("FINAL Wildcard budget = ", str(budget))
     printer.log(str(budget))
     return budget
 
