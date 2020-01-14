@@ -24,11 +24,30 @@ from ..tools import listtools as _lt
 
 
 def load_protocol_from_dir(dirname):
+    """
+    Load a :class:`Protocol` from a directory on disk.
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.
+
+    Returns
+    -------
+    Protocol
+    """
     dirname = _pathlib.Path(dirname)
     return _support.obj_from_meta_json(dirname).from_dir(dirname)
 
 
 class Protocol(object):
+    """
+    A Protocol object represents things like, but not strictly limited to, QCVV protocols.
+    This class is essentially a serializable `run` function that takes as input a
+    :class:`ProtocolData` object and returns a :class:`ProtocolResults` object.  This
+    function describes the working of the "protocol".
+    """
+
     @classmethod
     def from_dir(cls, dirname):
         ret = cls.__new__(cls)
@@ -56,6 +75,14 @@ class Protocol(object):
 
 
 class MultiPassProtocol(Protocol):
+    """
+    A simple protocol that runs a given contained :class:`Protocol` on
+    all the passes within a :class:`ProtocolData` object that contains
+    a :class:`MultiDataSet`.  Instances of this class essentially act as
+    wrappers around other protocols enabling them to handle multi-pass
+    data.
+    """
+
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
     def __init__(self, protocol, name=None):
         if name is None: name = self.protocol.name + "_multipass"
@@ -73,40 +100,25 @@ class MultiPassProtocol(Protocol):
         return results
 
 
-#class SimpleProtocol(Protocol):
-#
-#    def run(self, data):
-#        if data.is_multipass():
-#            implicit_multipassprotocol = MultiPassProtocol(self)
-#            return implicit_multipassprotocol.run(data)
-#
-#        elif data.is_multiinput():  # ~ is this is a directory
-#            # Note: we also know that self *isn't* a MultiProtocol object since
-#            # MultiProtocol overrides run(...).
-#            #if isinstance(data.input, SimultaneousInput):
-#            #    implicit_multiprotocol = SimultaneousProtocol(self)
-#            #else:
-#            implicit_multiprotocol = MultiProtocol(self)
-#            return implicit_multiprotocol.run(data)
-#
-#        else:
-#            return self.simple_run(data)
-#
-#    def simple_run(self, data):
-#        raise NotImplementedError("Derived classes should implement this!")
-
-
-# MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
-#   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
-#   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
 class ProtocolRunner(object):
-    """ - creates ProtocolResultsDir vs. Protocols, which create ProtocolResults objects"""
+    """
+    A a :class:`ProtocolRunner` object is used to combine multiple calls to :method:`Protocol.run`,
+    that is, to run potentially multiple protocols on potentially different data.  From the outside,
+    a :class:`ProtocolRunner` object behaves similarly, and can often be used interchangably,
+    with a Protocol object.  It posesses a `run` method that takes a :class:`ProtocolData`
+    as input and returns a :class:`ProtocolResultsDir` that can contain multiple :class:`ProtocolResults`
+    objects within it.
+    """
+    
     def run(self, data):
         raise NotImplementedError()
 
 
 class TreeRunner(ProtocolRunner):
-    """Run specific protocols on specific paths"""
+    """
+    Runs specific protocols on specific data-tree paths.
+    """
+    
     def __init__(self, protocol_dict):
         self.protocols = protocol_dict
 
@@ -123,7 +135,9 @@ class TreeRunner(ProtocolRunner):
 
 
 class SimpleRunner(ProtocolRunner):
-    """ Run a single protocol on every data node that has no sub-nodes (possibly separately for each pass) """
+    """ 
+    Runs a single protocol on every data node that has no sub-nodes (possibly separately for each pass).
+    """
     def __init__(self, protocol, protocol_can_handle_multipass_data=False, input_type='all'):
         self.protocol = protocol
         self.input_type = input_type
@@ -148,6 +162,11 @@ class SimpleRunner(ProtocolRunner):
 
 
 class DefaultRunner(ProtocolRunner):
+    """
+    Run the default protocol at each data-tree node.  (Default protocols
+    are given within :class:`ProtocolInput` objects.)
+    """
+
     def __init__(self):
         pass
 
@@ -165,64 +184,41 @@ class DefaultRunner(ProtocolRunner):
         visit_node(ret)
         return ret
 
-        
-#class MultiProtocol(Protocol):
-#    """This class simply runs sub-protocols on corresponding sub-datas """
-#    def __init__(self, protocols, name=None):
-#        if name is None and protocols:
-#            name = protocols.name if isinstance(protocols, Protocol) else \
-#                '-'.join([p.name for p in protocols])
-#        super().__init__(name)
-#        self.protocols = protocols
-#        #self.root_qty_name = 'Protocol'
-#        self.auxfile_types['protocols'] = 'list-of-protocolobjs'
-#
-#    def run(self, data):
-#        protocols = self.protocols
-#
-#        assert(data.is_multiinput())
-#        #root_qty_name = data.input.root_qty_name  # the multi-input should know what category name corresponds to it's keys
-#        if isinstance(protocols, Protocol):  # allow a single Protocol to be given as 'self.protocols'
-#            protocols = [protocols] * len(data)
-#
-#        assert(len(data) == len(protocols))
-#
-#        subresults = {}
-#        for (sub_name, sub_data), protocol in zip(data.items(), protocols):
-#            protocol.name = self.name  # override protocol's name so load/save works
-#            sub_results = protocol.run(sub_data)
-#            subresults[sub_name] = sub_results  # something like this?
-#
-#        return MultiProtocolResults(data, subresults) #, root_qty_name)
-
-#for a given set of circuits, there's structure to the circuits (ProtocolInput),
-# but there can also be sub-structure to the circuits, i.e. how they're composed
-# of other circuit structures if you have both, then 
-            
-        #else:
-        #    assert(False), "We don't really want to do this..."
-        #    for protocol in protocols:
-        #        sub_results = protocol.run(data)
-        #        results.qtys[protocol.name] = sub_results  # something like this? - or just merge qtys?
-        #
-        #return results
-
-
-# SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
-#  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
-#class SimultaneousProtocol(MultiProtocol):
-#    def __init__(self, protocols, name=None):
-#        super().__init__(protocols, name)
-#        self.root_qty_name = 'Qubits'
-
 
 def load_input_from_dir(dirname):
+    """
+    Load a :class:`ProtocolInput` from a directory on disk.
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.
+
+    Returns
+    -------
+    ProtocolInput
+    """
     dirname = _pathlib.Path(dirname)
     return _support.obj_from_meta_json(dirname / 'input').from_dir(dirname)
 
 
 class ProtocolInput(_support.TreeNode):
-    """ Serialize-able input data for a protocol """
+    """
+    An input-data specification for one or more QCVV protocols.
+
+    The "input" needed to collect data to run a :class:`Protocol`.  Minimally,
+    a :class:`ProtocolInput`  object holds a list of :class:`Circuit`s that need
+    to be run.  Typically, a :class:`ProtocolInput` object also contains
+    information used to interpret these circuits, either by describing how they
+    are constructed from smaller pieces or how they are drawn from a distribution.
+
+    It's important to note that a :class:`ProtocolInput` does *not* contain all the
+    inputs needed to run any particular QCVV protocol (e.g. there may be additional
+    parameters specified when creating a :class:`Protocol` object, and it may be the
+    case that the data described by a single :class:`ProtocolInput` can be used by
+    muliple protocols).  Rather, a :class:`ProtocolInput` specifies what is necessary
+    to acquire and interpret the *data* needed for one or more QCVV protocols.
+    """
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
@@ -280,6 +276,10 @@ class ProtocolInput(_support.TreeNode):
 
 
 class CircuitListsInput(ProtocolInput):
+    """
+    Protocol input-data specification that is comprised of multiple circuit lists.
+    """
+    
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
 
         if all_circuits_needing_data is not None:
@@ -300,6 +300,11 @@ class CircuitListsInput(ProtocolInput):
 
 
 class CircuitStructuresInput(CircuitListsInput):
+    """
+    Protocol input-data specification that is comprised of multiple circuit
+    structures (:class:`CircuitStructure` objects).
+    """
+
     def __init__(self, circuit_structs, qubit_labels=None, nested=False):
         """ TODO: docstring - note that a *single* structure can be given as circuit_structs """
 
@@ -318,6 +323,12 @@ class CircuitStructuresInput(CircuitListsInput):
 
 # MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
 class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
+    """
+    Protocol input-data specification that combines the input specifications of
+    one or more "sub-inputs".  The sub-inputs are preserved as children under
+    the :class:`CombinedInput` instance, creating a "data-tree" structure.  The
+    :class:`CombinedInput` object itself simply merges all of the circuit lists.
+    """
 
     def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None,
                  interleave=False, category='InputBranch'):
@@ -343,8 +354,11 @@ class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
 
 # SimultaneousInput -- specifies a "qubit structure" for each sub-input
 class SimultaneousInput(ProtocolInput):
-    """ TODO - need to be given sub-inputs whose circuits all act on the same set of
-        qubits and are disjoint with the sets of all other sub-inputs.
+    """
+    A protocol input-data specification whose circuits are the tensor-products
+    of the circuits from one or more  :class:`ProtocolInput` objects that
+    act on disjoint sets of qubits.  The sub-inputs are preserved as children under
+    the :class:`SimultaneousInput` instance, creating a "data-tree" structure.
     """
 
     @classmethod
@@ -394,11 +408,30 @@ class SimultaneousInput(ProtocolInput):
 
 
 def load_data_from_dir(dirname):
+    """
+    Load a :class:`ProtocolData` from a directory on disk.
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.
+
+    Returns
+    -------
+    ProtocolData
+    """
     dirname = _pathlib.Path(dirname)
     return _support.obj_from_meta_json(dirname / 'data').from_dir(dirname)
 
 
 class ProtocolData(_support.TreeNode):
+    """
+    A :class:`ProtocolData` object represents the experimental data needed to
+    run one or more QCVV protocols.  This class contains a :class:`ProtocolIput`,
+    which describes a set of circuits, and a :class:`DataSet` (or :class:`MultiDataSet`)
+    that holds data for these circuits.  These members correspond to the `.input`
+    and `.dataset` attributes.
+    """
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
@@ -497,6 +530,27 @@ class ProtocolData(_support.TreeNode):
 
 
 def load_results_from_dir(dirname, name=None, preloaded_data=None):
+    """
+    Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a
+    directory on disk (depending on whether `name` is given).
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.  This should be a "base" directory, containing
+        subdirectories like "input", "data", and "results"
+
+
+    name : string or None
+        The 'name' of a particular :class:`ProtocolResults` object, which
+        is a sub-directory beneath `dirname/results/`.  If None, then *all*
+        the results (all names) at the given base-directory are loaded and
+        returned as a :class:`ProtocolResultsDir` object.
+
+    Returns
+    -------
+    ProtocolResults or ProtocolResultsDir
+    """
     dirname = _pathlib.Path(dirname)
     results_dir = dirname / 'results'
     if name is None:  # then it's a directory object
@@ -508,6 +562,12 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None):
 
 
 class ProtocolResults(object):
+    """
+    A :class:`ProtocolResults` object contains a :class:`ProtocolData` object
+    and stores the results from running a QCVV protocol (a :class:`Protcocol`)
+    on this data.
+    """
+    
     @classmethod
     def from_dir(cls, dirname, name, preloaded_data=None):
         dirname = _pathlib.Path(dirname)
@@ -604,6 +664,13 @@ class ProtocolResults(object):
 
 
 class MultiPassResults(ProtocolResults):
+    """
+    Holds the results of a single protocol on multiple "passes"
+    (sets of data, typically taken at different times).  The results
+    of each pass are held as a separate :class:`ProtcolResults` object
+    within the `.passes` attribute.
+    """
+
     def __init__(self, data, protocol_instance):
         """
         Initialize an empty Results object.
@@ -616,6 +683,12 @@ class MultiPassResults(ProtocolResults):
 
 
 class ProtocolResultsDir(_support.TreeNode):
+    """
+    A :class:`ProtocolResultsDir` holds a dictionary of :class:`ProtocolResults`
+    objects.  It contains a :class:`ProtocolData` object and is rooted at the_model
+    corresponding node of the data-tree.  It contains links to child-:class:`ProtocolResultsDir`
+    objects representing sub-directories.
+    """
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
@@ -693,141 +766,6 @@ class ProtocolResultsDir(_support.TreeNode):
         return P.pformat(self.as_nameddict())
 
 
-        
-#     # Dictionary access into _children
-#     def items(self):
-#         return self._children.items()
-# 
-#     def keys(self):
-#         return self._children.keys()
-# 
-#     def __getitem__(self, key):
-#         return self._children[key]
-# 
-#     def __contains__(self, key):
-#         return key in self._children
-# 
-#     def __len__(self):
-#         return len(self._children)
-
-
-    ##TODO - revamp functions below here now that _subresults is added
-    #def asdict(self):
-    #    ret = {}
-    #    for k, v in self.qtys.items():
-    #        if isinstance(v, ProtocolResults):
-    #            ret[k] = v.asdict()
-    #        else:
-    #            ret[k] = v
-    #    return ret
-    #
-    #def asdataframe(self):
-    #    return self.qtys.asdataframe()
-    #
-    #def __str__(self):
-    #    import pprint
-    #    P = pprint.PrettyPrinter()
-    #    return P.pformat(self.asdict())
-
-
-#class ProtocolResultsTree(object):
-#    @classmethod
-#    def from_dir(cls, dirname, preloaded_data=None):
-#        ret = cls.__new__(cls)
-#        ret.name = name
-#    
-#        #Initialize input and data
-#        if preloaded_data is not None:
-#            ret.data = preloaded_data
-#        else:
-#            ret.data = load_data_from_dir(dirname)
-#
-#        #Traverse input tree, loading nodes at each location
-#        root = ProtocolResultsTreeNode.from_dir(dirname)
-#            
-#        #load _subresults from other directories
-#        p = _pathlib.Path(dirname)
-#        ret._subresults = {}
-#        if ret.data.is_multipass():
-#            raise NotImplementedError()  # TODO - load in per-pass results as subresults??
-#        elif ret.data.is_multiinput():
-#            subname_to_subdir = {subname: subdir for subdir, subname in ret.data.input._directories.items()}
-#            for sub_name, sub_data in ret.data.items():
-#                subdir = subname_to_subdir[sub_name]
-#                if (p / subdir / 'results' / 'meta.json').is_file():
-#                    # A results object doesn't *need* to have all possible sub-results
-#                    ret._subresults[sub_name] = load_results_from_dir(p / subdir, name, sub_data)
-#    
-#        return ret
-#
-#    def __init__(self, data, sub_results=None):
-#        assert(data.is_multiinput()), "MultiProtocolResults is meant to hold sub-results corresponding to sub-inputs!"
-#        self.data = data
-#        self._subresults = sub_results if (sub_results is not None) else {}
-#
-#
-#    def write(self, dirname, data_already_written=False):
-#        p = _pathlib.Path(dirname)
-#
-#        #write input and data
-#        if not data_already_written:
-#            self.data.write(dirname)
-#
-#        #write _subresults to other directories
-#        subname_to_subdir = {subname: subdir for subdir, subname in self.data.input._directories.items()}
-#        for sub_name, sub_results in self._subresults.items():
-#            subdir = subname_to_subdir[sub_name]
-#            sub_results.write(p / subdir, data_already_written=True)  # avoid re-writing the data
-
-
-
-#Need way to specify *where* the data for a protocol input comes from that
-# isn't the data itself - maybe an object within a ProtocolDirectory?
-# e.g. create a
-
-#Operations we'd like to have - maybe in creating MultiInput?
-# - merge circuits to perform protocols in parallel: Inputs => MultiInput
-# - interleave protcols so data is taken together: Inputs => MultiInput
-# - add a protocol whose data will be taken along with (and maybe overlaps) an existing
-#    protocol's data: Input.add(Input) => MultiInput containing both?
-# - don't nest MultiInputs, i.e. MultiInput + Input => MultiInput only one level deep
-# - Directory holds multinputs separately - a type of some kind of link between datasets and inputs...
-#    any other type needed?
-
-# - Protocol.run_on_data methods can take a ProtocolResults object and try to extract cached qtys to speed up calc
-# - possible to create inputs from a ProcessorSpec, protocol name, and target qubits?
-
-# Directory structure:
-# root/inputs/NAME/SUBinputNAME...   - same as saving a collection of inputs in named dirs
-# root/datasets/NAME - datasets - same names as top-level inputs (maybe multi-inputs) - just saved DataSets
-# root/results/NAME/SUBinputNAME...  -- but may want protocols to specify how results should be
-#  organized separately, e.g. datasets of success counts for nQ RB?  But could we add MultiInput types that
-#  know to store e.g. marginalized counts, in a higher level directory that any existing or added sub-protocols
-#  can utilize?
-# root/reports/REPORTNAME - reports generated separately?  Maybe Directory has create_report and add_report
-#  methods?  Is it possible to allow reports to pull from a cache of results somewhere?
-
-
-#class ProtocolDirectory(object):
-#    """ Holds multiple ProtocolData objects
-#    - and maybe can add an object with a protocol input and a data name (or not?)?
-#    - issue is, how to allow same data to be used for different protocols...
-#    Could hold reports too?
-#    """
-#    def __init__(self, inputs, datas, reports):
-#        self.inputs = inputs  # should be a dict of inputs; otherwise make into a dict
-#        self.datas  # pull datas apart into datasets and inputs; collect unique DataSets -> all_datasets_in_datas
-#        self.datasets = all_datasets_in_datas
-#        self.reports = reports
-#        self.results = TODO
-#
-#    def read(self, dirname):
-#        pass
-#
-#    def write(self, dirname):
-#        pass
-
-
 def run_default_protocols(data):
     return DefaultRunner().run(data)
 
@@ -858,8 +796,8 @@ def write_empty_protocol_data(inpt, dirname, sparse="auto"):
 
 class ProtocolPostProcessor(object):
     """
-    Similar to a protocol, but runs on an existing results object, i.e. expects some results,
-    and produces a new (updated?) Results object.
+    A :class:`ProtocolPostProcessor` is similar to a protocol, but runs on an
+    *existing* results object, and produces a new (updated?) Results object.
     """
 
     #Note: this is essentially a duplicate of the Protocol class (except run takes a results object)
