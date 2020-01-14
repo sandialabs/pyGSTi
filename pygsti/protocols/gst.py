@@ -107,19 +107,20 @@ class StandardGSTInput(StructuredGSTInput):
 
 
 class GateSetTomography(_proto.Protocol):
-    def __init__(self, initialModelFilenameOrObj=None, gaugeOptParams=None,
-                 advancedOptions=None, comm=None, memLimit=None,
-                 output_pkl=None, verbosity=2, name=None):
+    def __init__(self, initialModelFilenameOrObj=None, gaugeopt_suite=None,
+                 gaugeopt_target=None, advancedOptions=None, comm=None,
+                 memLimit=None, output_pkl=None, verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
         # because they are mutable objects
         if advancedOptions is None: advancedOptions = {}
-        if gaugeOptParams is None:
-            gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        if gaugeopt_suite is None:
+            gaugeopt_suite = ('single', 'unreliable2Q')  # OLD: {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
 
         super().__init__(name)
         self.initial_model = _load_model(initialModelFilenameOrObj) if initialModelFilenameOrObj else None
-        self.gaugeOptParams = gaugeOptParams
+        self.gaugeopt_suite = gaugeopt_suite
+        self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
         self.comm = comm
         self.memLimit = memLimit
@@ -127,7 +128,8 @@ class GateSetTomography(_proto.Protocol):
         self.verbosity = verbosity
 
         self.auxfile_types['initial_model'] = 'pickle'
-        self.auxfile_types['gaugeOptParams'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['gaugeopt_suite'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['gaugeopt_target'] = 'pickle' #TODO - better later? - json?
         self.auxfile_types['advancedOptions'] = 'pickle'  #TODO - better later? - json?
         self.auxfile_types['comm'] = 'reset'
 
@@ -151,7 +153,6 @@ class GateSetTomography(_proto.Protocol):
         comm = self.comm
         memLimit = self.memLimit
         advancedOptions = self.advancedOptions
-        gaugeOptParams = self.gaugeOptParams
 
         profile = advancedOptions.get('profile', 1)
 
@@ -210,7 +211,7 @@ class GateSetTomography(_proto.Protocol):
                 #In LGST case, gauge optimimize starting point to the target
                 # (historical; sometimes seems to help in practice, since it's gauge
                 # optimizing to physical gates (e.g. something in CPTP)
-                tol = gaugeOptParams.get('tol', 1e-8) if gaugeOptParams else 1e-8
+                tol = advancedOptions.get('lgst_gaugeopt_tol', 1e-8)
                 mdl_start = _alg.gaugeopt_to_target(mdl_start, target_model, tol=tol, comm=comm)
                 #Note: use *default* gauge-opt params when optimizing
 
@@ -347,14 +348,14 @@ class GateSetTomography(_proto.Protocol):
 
         return _package_into_results(self, data, data.input.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
-                                     gaugeOptParams, advancedOptions, comm, memLimit,
+                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm, memLimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
 
 
 class StandardGST(_proto.Protocol):
     def __init__(self, modes="TP,CPTP,Target",
-                 gaugeOptSuite=('single', 'unreliable2Q'),
-                 gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
+                 gaugeopt_suite=('single', 'unreliable2Q'),
+                 gaugeopt_target=None, modelsToTest=None, comm=None, memLimit=None,
                  advancedOptions=None, output_pkl=None, verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
@@ -364,8 +365,8 @@ class StandardGST(_proto.Protocol):
         super().__init__(name)
         self.modes = modes.split(',')
         self.models_to_test = modelsToTest
-        self.gaugeOptSuite = gaugeOptSuite
-        self.gaugeOptTarget = gaugeOptTarget
+        self.gaugeopt_suite = gaugeopt_suite
+        self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
         self.comm = comm
         self.memLimit = memLimit
@@ -373,8 +374,8 @@ class StandardGST(_proto.Protocol):
         self.verbosity = verbosity
 
         self.auxfile_types['models_to_test'] = 'pickle'
-        self.auxfile_types['gaugeOptSuite'] = 'pickle'
-        self.auxfile_types['gaugeOptTarget'] = 'pickle'
+        self.auxfile_types['gaugeopt_suite'] = 'pickle'
+        self.auxfile_types['gaugeopt_target'] = 'pickle'
         self.auxfile_types['advancedOptions'] = 'pickle'
         self.auxfile_types['comm'] = 'reset'
 
@@ -408,13 +409,13 @@ class StandardGST(_proto.Protocol):
                 #prepare advanced options dictionary
                 advanced = advancedOptions.get('all', {})
                 advanced.update(advancedOptions.get(mode, {}))
-
+                
                 if mode == "Target":
                     est_label = mode
                     model_to_test = data.input.target_model.copy()  # no parameterization change
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label, 'onBadFit': []})
-                    mdltest = _ModelTest(model_to_test, False, advanced, self.comm,
-                                         self.memLimit, verbosity=printer - 1)
+                    mdltest = _ModelTest(model_to_test, self.gaugeopt_suite, self.gaugeopt_target, advanced,
+                                         self.comm, self.memLimit, verbosity=printer - 1)
                     ret = mdltest.run(data)
 
                 elif mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode is a parameterization
@@ -423,70 +424,18 @@ class StandardGST(_proto.Protocol):
                     initial_model.set_all_parameterizations(parameterization)
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
 
-                    gst = GST(initial_model, False, advanced, self.comm, self.memLimit, verbosity=printer - 1)
+                    gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target,
+                              advanced, self.comm, self.memLimit, verbosity=printer - 1)
                     ret = gst.run(data)
 
                 elif mode in modelsToTest:
                     est_label = mode
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
-                    mdltest = _ModelTest(modelsToTest[mode], False, advanced,
-                                         self.comm, self.memLimit, verbosity=printer - 1)
+                    mdltest = _ModelTest(modelsToTest[mode], self.gaugeopt_suite, self.gaugeopt_target,
+                                         advanced, self.comm, self.memLimit, verbosity=printer - 1)
                     ret = mdltest.run(data)
                 else:
                     raise ValueError("Invalid item in 'modes' argument: %s" % mode)
-
-                #Get gauge optimization dictionary
-                assert(not printer.is_recording()); printer.start_recording()
-                gaugeOptSuite = self.gaugeOptSuite
-                gaugeOptTarget = self.gaugeOptTarget
-                target_with_dgg =  data.input.target_model.copy()  # with valid default gauge group, dictating gauge opt
-                if mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode = parameterization
-                    target_with_dgg.set_all_parameterizations(mode)
-                else:  # no gauge opt is done on everything else (model tests)
-                    target_with_dgg.default_gauge_group = _objs.TrivialGaugeGroup(target_with_dgg.dim)
-                gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, target_with_dgg,
-                                                                  advancedOptions, printer - 1)
-
-                if gaugeOptTarget is not None:
-                    assert(isinstance(gaugeOptTarget, _objs.Model)), "`gaugeOptTarget` must be None or a Model"
-                    for goparams in gaugeOptSuite_dict.values():
-                        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-                        for goparams_dict in goparams_list:
-                            if 'targetModel' in goparams_dict:
-                                _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                                "user-defined targetModel in gauge opt"
-                                                "param dict(s)"))
-                            goparams_dict.update({'targetModel': gaugeOptTarget})
-
-                #Gauge optimize to list of gauge optimization parameters
-                for goLabel, goparams in gaugeOptSuite_dict.items():
-
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel, est_label), 2)
-                    gsStart = ret.estimates[est_label].get_start_model(goparams)
-                    ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, self.comm, printer - 3)
-
-                    #Gauge optimize data-scaled estimate also
-                    for suffix in ROBUST_SUFFIX_LIST:
-                        if est_label + suffix in ret.estimates:
-                            gsStart_robust = ret.estimates[est_label + suffix].get_start_model(goparams)
-                            if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
-                                printer.log("-- Conveying '%s' gauge optimization to %s estimate --" %
-                                            (goLabel, est_label + suffix), 2)
-                                params = ret.estimates[est_label].goparameters[goLabel]  # no need to copy here
-                                gsopt = ret.estimates[est_label].models[goLabel].copy()
-                                ret.estimates[est_label + suffix].add_gaugeoptimized(params, gsopt, goLabel, self.comm,
-                                                                                     printer - 3)
-                            else:
-                                printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
-                                            (goLabel, est_label + suffix), 2)
-                                ret.estimates[est_label + suffix].add_gaugeoptimized(goparams, None, goLabel, self.comm,
-                                                                                     printer - 3)
-
-                # Add gauge optimizations to end of any existing "stdout" meta info
-                if 'stdout' in ret.estimates[est_label].meta:
-                    ret.estimates[est_label].meta['stdout'].extend(printer.stop_recording())
-                else:
-                    ret.estimates[est_label].meta['stdout'] = printer.stop_recording()
 
         #Write results to a pickle file if desired
         if self.output_pkl and (self.comm is None or self.comm.Get_rank() == 0):
@@ -502,7 +451,7 @@ class StandardGST(_proto.Protocol):
 
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
-def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=None, verbosity=0):
+def gaugeopt_suite_to_dictionary(gaugeOptSuite, model, advancedOptions=None, verbosity=0):
     """
     Constructs a dictionary of gauge-optimization parameter dictionaries based
     on "gauge optimization suite" name(s).
@@ -531,10 +480,11 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
           - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
           - "none" : no gauge optimizations are performed.
 
-    target_model : Model
+    model : Model
         A model which specifies the dimension (i.e. parameterization) of the
-        gauge-optimization and the basis.  Usually this is set to the *ideal*
-        `target model` for the model being gauge optimized.
+        gauge-optimization and the basis.  Typically the model that is optimized
+        or the ideal model using the same parameterization and having the correct
+        default-gauge-group as the model that is optimized.
 
     advancedOptions : dict, optional
         A dictionary of advanced options for internal use.
@@ -579,18 +529,18 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
             if suiteName == "single":
 
                 stages = []  # multi-stage gauge opt
-                gg = target_model.default_gauge_group
+                gg = model.default_gauge_group
                 if isinstance(gg, _objs.TrivialGaugeGroup):
                     #just do a single-stage "trivial" gauge opts using default group
                     gaugeOptSuite_dict['single'] = {'verbosity': printer}
 
-                    if "unreliable2Q" in gaugeOptSuites and target_model.dim == 16:
+                    if "unreliable2Q" in gaugeOptSuites and model.dim == 16:
                         if advancedOptions is not None:
                             # 'unreliableOps' can only be specified in 'all' options
                             advanced = advancedOptions.get('all', {})
                         else: advanced = {}
                         unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-                        if any([gl in target_model.operations.keys() for gl in unreliableOps]):
+                        if any([gl in model.operations.keys() for gl in unreliableOps]):
                             gaugeOptSuite_dict['single-2QUR'] = {'verbosity': printer}
 
                 elif gg is not None:
@@ -608,7 +558,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                     stages.append(
                         {
                             'itemWeights': {'gates': 1.0, 'spam': 0.0},
-                            'gauge_group': _objs.UnitaryGaugeGroup(target_model.dim, target_model.basis),
+                            'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
                             'verbosity': printer
                         })
 
@@ -621,22 +571,22 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                         {
                             'itemWeights': {'gates': 0.0, 'spam': 1.0},
                             'spam_penalty_factor': 1.0,
-                            'gauge_group': s3gg(target_model.dim),
+                            'gauge_group': s3gg(model.dim),
                             'verbosity': printer
                         })
 
                     gaugeOptSuite_dict['single'] = stages  # can be a list of stage dictionaries
 
-                    if "unreliable2Q" in gaugeOptSuites and target_model.dim == 16:
+                    if "unreliable2Q" in gaugeOptSuites and model.dim == 16:
                         if advancedOptions is not None:
                             # 'unreliableOps' can only be specified in 'all' options
                             advanced = advancedOptions.get('all', {})
                         else: advanced = {}
                         unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-                        if any([gl in target_model.operations.keys() for gl in unreliableOps]):
+                        if any([gl in model.operations.keys() for gl in unreliableOps]):
                             stage2_item_weights = {'gates': 1, 'spam': 0.0}
                             for gl in unreliableOps:
-                                if gl in target_model.operations.keys(): stage2_item_weights[gl] = 0.01
+                                if gl in model.operations.keys(): stage2_item_weights[gl] = 0.01
                             stages_2QUR = [stage.copy() for stage in stages]  # ~deep copy of stages
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
                             stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
@@ -652,16 +602,16 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
                 itemWeights_bases = _collections.OrderedDict()
                 itemWeights_bases[""] = {'gates': 1}
 
-                if "unreliable2Q" in gaugeOptSuites and target_model.dim == 16:
+                if "unreliable2Q" in gaugeOptSuites and model.dim == 16:
                     if advancedOptions is not None:
                         # 'unreliableOps' can only be specified in 'all' options
                         advanced = advancedOptions.get('all', {})
                     else: advanced = {}
                     unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-                    if any([gl in target_model.operations.keys() for gl in unreliableOps]):
+                    if any([gl in model.operations.keys() for gl in unreliableOps]):
                         base = {'gates': 1}
                         for gl in unreliableOps:
-                            if gl in target_model.operations.keys(): base[gl] = 0.01
+                            if gl in model.operations.keys(): base[gl] = 0.01
                         itemWeights_bases["-2QUR"] = base
 
                 if suiteName == "varySpam":
@@ -784,7 +734,7 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
 
 
 def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
-                          parameters, opt_args, mdl_lsgst_list, gaugeOptParams,
+                          parameters, opt_args, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
                           advancedOptions, comm, memLimit, output_pkl, verbosity,
                           profiler, evaltree_cache=None):
     """
@@ -815,12 +765,6 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     ret.add_estimate(target_model, mdl_start, mdl_lsgst_list, parameters, estlbl)
     profiler.add_time('%s: results initialization' % callerName, tRef); tRef = _time.time()
 
-    #Do final gauge optimization to *final* iteration result only
-    if gaugeOptParams:
-        add_gauge_opt(ret.estimates[estlbl], gaugeOptParams, target_model,
-                      mdl_lsgst_list[-1], comm, printer - 1)
-        profiler.add_time('%s: gauge optimization' % callerName, tRef)
-
     #Perform extra analysis if a bad fit was obtained
     badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
     onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
@@ -831,6 +775,13 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     #   estimate label's "stdout" meta information
     if printer.is_recording():
         ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
+
+    #Do final gauge optimization to *final* iteration result only
+    if gaugeopt_suite:
+        if gaugeopt_target is None: gaugeopt_target = target_model
+        add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
+                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
+        profiler.add_time('%s: gauge optimization' % callerName, tRef)
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
@@ -843,37 +794,69 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     return ret
 
 
-def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
-                  comm=None, verbosity=0):
+#def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
+#                  comm=None, verbosity=0):
+
+def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
+                  comm=None, advanced_options=None, verbosity=0):
+
     """
     Add a gauge optimization to an estimate.
     TODO: docstring - more details
+    - ** target_model should have default gauge group set **
+    - note: give results and base_est_label instead of an estimate so that related (e.g. badfit) estimates
+      can also be updated -- it this isn't needed, than could just take an estimate as input
     """
-    gaugeOptParams = gaugeOptParams.copy()  # so we don't modify the caller's dict
-    if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
+    if advanced_options is None: advanced_options = {}
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
-    if "targetModel" not in gaugeOptParams:
-        assert(target_model is not None), "No target model!  Cannot gauge optimize."
-        gaugeOptParams["targetModel"] = target_model
+    #Get gauge optimization dictionary
+    assert(not printer.is_recording()); printer.start_recording()
+    gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
+                                                      advanced_options, printer - 1)
 
-    # somewhat redundant given add_gaugeoptimized behavior - but
-    #  if not here won't do parallel gaugeopt_to_target below
-    if "comm" not in gaugeOptParams:
-        gaugeOptParams["comm"] = comm
+    if target_model is not None:
+        assert(isinstance(target_model, _objs.Model)), "`gaugeOptTarget` must be None or a Model"
+        for goparams in gaugeOptSuite_dict.values():
+            goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+            for goparams_dict in goparams_list:
+                if 'targetModel' in goparams_dict:
+                    _warnings.warn(("`gaugeOptTarget` argument is overriding"
+                                    "user-defined targetModel in gauge opt"
+                                    "param dict(s)"))
+                goparams_dict.update({'targetModel': target_model})
 
-    gaugeOptParams['returnAll'] = True  # so we get gaugeEl to save
-    gaugeOptParams['model'] = starting_model
+    #Gauge optimize to list of gauge optimization parameters
+    for goLabel, goparams in gaugeOptSuite_dict.items():
 
-    if isinstance(gaugeOptParams['model'], _objs.ExplicitOpModel):
-        #only explicit models can be gauge optimized
-        _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
+        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel, base_est_label), 2)
+
+        #Get starting model
+        results.estimates[base_est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
+        gsStart = results.estimates[base_est_label].get_start_model(goparams)
+
+        #Gauge optimize data-scaled estimate also
+        for suffix in ROBUST_SUFFIX_LIST:
+            robust_est_label = base_est_label + suffix
+            if robust_est_label in results.estimates:
+                gsStart_robust = results.estimates[robust_est_label].get_start_model(goparams)
+                
+                if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
+                    printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
+                                (goLabel, base_est_label, robust_est_label), 2)
+                    params = results.estimates[base_est_label].goparameters[goLabel]  # no need to copy here
+                    gsopt = results.estimates[base_est_label].models[goLabel].copy()
+                    results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, goLabel, comm, printer - 3)
+                else:
+                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
+                                (goLabel, robust_est_label), 2)
+                    results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
+
+    # Add gauge optimizations to end of any existing "stdout" meta info
+    if 'stdout' in results.estimates[base_est_label].meta:
+        results.estimates[base_est_label].meta['stdout'].extend(printer.stop_recording())
     else:
-        #but still fill in results for other models (?)
-        gaugeEl, go_gs_final = None, gaugeOptParams['model'].copy()
-
-    gaugeOptParams['_gaugeGroupEl'] = gaugeEl  # store gaugeopt el
-    estimate.add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                None, comm, verbosity)
+        results.estimates[base_est_label].meta['stdout'] = printer.stop_recording()
 
 
 def add_badfit_estimates(results, base_estimate_label="default", estimate_types=('wildcard',),
@@ -1206,21 +1189,21 @@ class ModelEstimateResults(_proto.ProtocolResults):
             inp = self.data.input
             if isinstance(inp, _proto.CircuitStructuresInput):
                 circuit_structs['iteration'] = inp.circuit_structs[:]
-    
+
                 #Set "Ls and germs" info: gives particular structure
-                finalStruct = circuit_structs['final']
+                finalStruct = circuit_structs['iteration'][-1]
                 if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
                     circuit_lists['prep fiducials'] = finalStruct.prepStrs
                     circuit_lists['effect fiducials'] = finalStruct.effectStrs
                     circuit_lists['germs'] = finalStruct.germs
-    
+
             elif isinstance(inp, _proto.CircuitListsInput):
                 circuit_structs['iteration'] = []
                 for lst in inp.circuit_lists:
                     unindexed_gss = _LsGermsStructure([], [], [], [], None)
                     unindexed_gss.add_unindexed(lst)
                     circuit_structs['iteration'].append(unindexed_gss)
-    
+
                 #Needed?
                 circuit_lists['prep fiducials'] = []
                 circuit_lists['effect fiducials'] = []

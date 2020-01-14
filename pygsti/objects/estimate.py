@@ -17,6 +17,7 @@ from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from .circuit import Circuit as _Circuit
+from .explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -178,6 +179,7 @@ class Estimate(object):
             else:
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
                 gop = gop.copy()  # so we don't change the caller's dict
+                if '_gaugeGroupEl' in gop: del gop['_gaugeGroupEl']
 
                 printer.log("Stage %d:" % i, 2)
                 if verbosity is not None:
@@ -202,7 +204,13 @@ class Estimate(object):
                     gop["maxiter"] = 100
 
                 gop['returnAll'] = True
-                _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                if isinstance(gop['model'], _ExplicitOpModel):
+                    #only explicit models can be gauge optimized
+                    _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                else:
+                    #but still fill in results for other models (?)
+                    gaugeGroupEl, last_gs = None, gop['model'].copy()
+
                 gop['_gaugeGroupEl'] = gaugeGroupEl  # an output stored here for convenience
 
             #sort the parameters by name for consistency

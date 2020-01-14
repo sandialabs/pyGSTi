@@ -30,13 +30,13 @@ from ..objects import objectivefns as _objfns
 
 
 class ModelTest(_proto.Protocol):
-    def __init__(self, model_to_test, gaugeOptParams=False,
-                 advancedOptions=None, comm=None, memLimit=None,
-                 output_pkl=None, verbosity=2, name=None):
+    def __init__(self, model_to_test, gaugeopt_suite=None,
+                 gaugeopt_target=None, advancedOptions=None, comm=None,
+                 memLimit=None, output_pkl=None, verbosity=2, name=None):
 
         if advancedOptions is None: advancedOptions = {}
-        if gaugeOptParams is None:
-            gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        if gaugeopt_suite is None:
+            gaugeopt_suite = ('single', 'unreliable2Q')  # OLD: {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
 
         if advancedOptions.get('set trivial gauge group', True):
             model_to_test = model_to_test.copy()
@@ -44,7 +44,8 @@ class ModelTest(_proto.Protocol):
 
         super().__init__(name)
         self.model_to_test = model_to_test
-        self.gaugeOptParams = gaugeOptParams
+        self.gaugeopt_suite = gaugeopt_suite
+        self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
         self.comm = comm
         self.memLimit = memLimit
@@ -52,10 +53,10 @@ class ModelTest(_proto.Protocol):
         self.verbosity = verbosity
 
         self.auxfile_types['model_to_test'] = 'pickle'
-        self.auxfile_types['gaugeOptParams'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['gaugeopt_suite'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['gaugeopt_target'] = 'pickle' #TODO - better later? - json?
         self.auxfile_types['advancedOptions'] = 'pickle'  #TODO - better later? - json?
         self.auxfile_types['comm'] = 'reset'
-
 
     def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
                                       meas_fiducials, germs, maxLengths):
@@ -110,5 +111,5 @@ class ModelTest(_proto.Protocol):
         from .gst import _package_into_results
         return _package_into_results(self, data, target_model, the_model,
                                      lsgstLists, parameters, None, mdl_lsgst_list,
-                                     self.gaugeOptParams, advancedOptions, comm, self.memLimit,
-                                     self.output_pkl, self.verbosity, profiler)
+                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm,
+                                     self.memLimit, self.output_pkl, self.verbosity, profiler)
