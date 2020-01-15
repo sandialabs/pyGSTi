@@ -50,20 +50,72 @@ class Protocol(object):
 
     @classmethod
     def from_dir(cls, dirname):
+        """
+        Initialize a new Protocol object from `dirname`.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name.
+
+        Returns
+        -------
+        Protocol
+        """
         ret = cls.__new__(cls)
         ret.__dict__.update(_support.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
         ret._init_unserialized_attributes()
         return ret
 
     def __init__(self, name=None):
+        """
+        Create a new Protocol object.
+
+        Parameters
+        ----------
+        name : str, optional
+            The name of this protocol, also used to (by default) name the
+            results produced by this protocol.  If None, the class name will
+            be used.
+
+        Returns
+        -------
+        Protocol
+        """
         super().__init__()
         self.name = name if name else self.__class__.__name__
         self.auxfile_types = {}
 
     def run(self, data):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        Returns
+        -------
+        ProtocolResults
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def write(self, dirname):
+        """
+        Write this protocol to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name to write.  This directory will be created
+            if needed, and the files in an existing directory will be
+            overwritten.
+
+        Returns
+        -------
+        None
+        """
         _support.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
     def _init_unserialized_attributes(self):
@@ -85,12 +137,41 @@ class MultiPassProtocol(Protocol):
 
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
     def __init__(self, protocol, name=None):
+        """
+        Create a new MultiPassProtocol object.
+
+        Parameters
+        ----------
+        protocol : Protocol
+            The protocol to run on each pass.
+
+        name : str, optional
+            The name of this protocol, also used to (by default) name the
+            results produced by this protocol.  If None, the class name will
+            be used.
+
+        Returns
+        -------
+        MultiPassProtocol
+        """
         if name is None: name = self.protocol.name + "_multipass"
         super().__init__(name)
         self.protocol = protocol
         self.auxfile_types['protocol'] = 'protocolobj'
 
     def run(self, data):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        Returns
+        -------
+        MultiPassResults
+        """
         results = MultiPassResults(data, self)
         for pass_name, sub_data in data.passes.items():  # a multipass DataProtocol object contains per-pass datas
             #TODO: print progress: pass X of Y, etc
@@ -111,6 +192,18 @@ class ProtocolRunner(object):
     """
     
     def run(self, data):
+        """
+        Run all the protocols specified by this protocol-runner on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        Returns
+        -------
+        ProtocolResultsDir
+        """
         raise NotImplementedError()
 
 
@@ -118,11 +211,38 @@ class TreeRunner(ProtocolRunner):
     """
     Runs specific protocols on specific data-tree paths.
     """
-    
+
     def __init__(self, protocol_dict):
+        """
+        Create a new TreeRunner object, which runs specific protocols on
+        specific data-tree paths.
+
+        Parameters
+        ----------
+        protocol_dict : dict
+            A dictionary of :class:`Protocol` objects whose keys are paths
+            (tuples of strings) specifying where in the data-tree that
+            protocol should be run.
+
+        Returns
+        -------
+        TreeRunner
+        """
         self.protocols = protocol_dict
 
     def run(self, data):
+        """
+        Run all the protocols specified by this protocol-runner on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        Returns
+        -------
+        ProtocolResultsDir
+        """
         ret = ProtocolResultsDir(data)  # creates entire tree of nodes
         for path, protocol in self.protocols.items():
 
@@ -138,12 +258,46 @@ class SimpleRunner(ProtocolRunner):
     """ 
     Runs a single protocol on every data node that has no sub-nodes (possibly separately for each pass).
     """
-    def __init__(self, protocol, protocol_can_handle_multipass_data=False, input_type='all'):
+    def __init__(self, protocol, protocol_can_handle_multipass_data=False, edesign_type='all'):
+        """
+        Create a new SimpleRunner object, which runs a single protocol on every
+        'leaf' of the data-tree.
+
+        Parameters
+        ----------
+        protocol : Protocol
+            The protocol to run.
+
+        protocol_can_handle_multipass_data : bool, optional
+            Whether `protocol` is able to process multi-pass data, or
+            if :class:`MultiPassProtocol` objects should be created
+            implicitly.
+
+        edesign_type : type or 'all'
+            Only run `protocol` on leaves with this type.  (If 'all', then
+            no filtering is performed.)
+
+        Returns
+        -------
+        SimpleRunner
+        """
         self.protocol = protocol
-        self.input_type = input_type
+        self.edesign_type = edesign_type
         self.do_passes_separately = not protocol_can_handle_multipass_data
 
     def run(self, data):
+        """
+        Run all the protocols specified by this protocol-runner on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        Returns
+        -------
+        ProtocolResultsDir
+        """
         ret = ProtocolResultsDir(data)  # creates entire tree of nodes
 
         def visit_node(node):
@@ -153,10 +307,10 @@ class SimpleRunner(ProtocolRunner):
             elif node.data.is_multipass() and self.do_passes_separately:
                 implicit_multipassprotocol = MultiPassProtocol(self.protocol)
                 node.for_protocol[implicit_multipassprotocol.name] = implicit_multipassprotocol.run(node.data)
-            elif self.input_type == 'all' or isinstance(node.data.input, self.input_type):
+            elif self.edesign_type == 'all' or isinstance(node.data.edesign, self.edesign_type):
                 node.for_protocol[self.protocol.name] = self.protocol.run(node.data)
             else:
-                pass  # don't run on this node, since the input is the wrong type
+                pass  # don't run on this node, since the experiment design has the wrong type
         visit_node(ret)
         return ret
 
@@ -164,17 +318,38 @@ class SimpleRunner(ProtocolRunner):
 class DefaultRunner(ProtocolRunner):
     """
     Run the default protocol at each data-tree node.  (Default protocols
-    are given within :class:`ProtocolInput` objects.)
+    are given within :class:`ExperimentDesign` objects.)
     """
 
     def __init__(self):
+        """
+        Create a new DefaultRunner object, which runs the default protocol at
+        each data-tree node.  (Default protocols are given within
+        :class:`ExperimentDesign` objects.)
+
+        Returns
+        -------
+        DefaultRunner
+        """
         pass
 
     def run(self, data):
+        """
+        Run all the protocols specified by this protocol-runner on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        Returns
+        -------
+        ProtocolResultsDir
+        """
         ret = ProtocolResultsDir(data)  # creates entire tree of nodes
 
         def visit_node(node):
-            for name, protocol in node.data.input.default_protocols.items():
+            for name, protocol in node.data.edesign.default_protocols.items():
                 assert(name == protocol.name), "Protocol name inconsistency"
                 node.for_protocol[name] = protocol.run(node.data)
 
@@ -185,9 +360,9 @@ class DefaultRunner(ProtocolRunner):
         return ret
 
 
-def load_input_from_dir(dirname):
+def load_edesign_from_dir(dirname):
     """
-    Load a :class:`ProtocolInput` from a directory on disk.
+    Load a :class:`ExperimentDesign` from a directory on disk.
 
     Parameters
     ----------
@@ -196,40 +371,89 @@ def load_input_from_dir(dirname):
 
     Returns
     -------
-    ProtocolInput
+    ExperimentDesign
     """
     dirname = _pathlib.Path(dirname)
-    return _support.obj_from_meta_json(dirname / 'input').from_dir(dirname)
+    return _support.obj_from_meta_json(dirname / 'edesign').from_dir(dirname)
 
 
-class ProtocolInput(_support.TreeNode):
+class ExperimentDesign(_support.TreeNode):
     """
-    An input-data specification for one or more QCVV protocols.
+    An experimental-design specification for one or more QCVV protocols.
 
-    The "input" needed to collect data to run a :class:`Protocol`.  Minimally,
-    a :class:`ProtocolInput`  object holds a list of :class:`Circuit`s that need
-    to be run.  Typically, a :class:`ProtocolInput` object also contains
-    information used to interpret these circuits, either by describing how they
-    are constructed from smaller pieces or how they are drawn from a distribution.
+    The quantities needed to define the experiments required to run a
+    :class:`Protocol`.  Minimally,  a :class:`ExperimentDesign`
+    object holds a list of :class:`Circuit`s that need to be run.  Typically,
+    a :class:`ExperimentDesign` object also contains information used to
+    interpret these circuits, either by describing how they are constructed from
+    smaller pieces or how they are drawn from a distribution.
 
-    It's important to note that a :class:`ProtocolInput` does *not* contain all the
-    inputs needed to run any particular QCVV protocol (e.g. there may be additional
-    parameters specified when creating a :class:`Protocol` object, and it may be the
-    case that the data described by a single :class:`ProtocolInput` can be used by
-    muliple protocols).  Rather, a :class:`ProtocolInput` specifies what is necessary
-    to acquire and interpret the *data* needed for one or more QCVV protocols.
+    It's important to note that a :class:`ExperimentDesign` does *not*
+    contain all the inputs needed to run any particular QCVV protocol (e.g. there
+    may be additional parameters specified when creating a :class:`Protocol` object,
+    and it may be the case that the data described by a single :class:`ExperimentDesign`
+    can be used by muliple protocols).  Rather, a :class:`ExperimentDesign`
+    specifies what is necessary to acquire and interpret the *data* needed for
+    one or more QCVV protocols.
     """
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
+        """
+        Initialize a new ExperimentDesign object from `dirname`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is a 'edesign'
+            subdirectory).
+
+        Returns
+        -------
+        ExperimentDesign
+        """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(_support.load_meta_based_dir(dirname / 'input', 'auxfile_types'))
-        ret._init_children(dirname, 'input')
+        ret.__dict__.update(_support.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
+        ret._init_children(dirname, 'edesign')
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None,
                  children=None, children_dirs=None, child_category=None):
+        """
+        Create a new ExperimentDesign object, which holds a set of circuits (needing data).
+
+        Parameters
+        ----------
+        circuits : list of Circuits, optional
+            A list of the circuits needing data.  If None, then the list is empty.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to.  These should also
+            be the line labels of `circuits`.  If None, the line labels of the
+            first circuit is used, or, if `circuits` is None, the concatenation
+            of the qubit labels of any child experiment designs is used.
+
+        children : dict, optional
+            A dictionary of whose values are child
+            :class:`ExperimentDesign` objects and whose keys are the
+            names used to identify them in a "path".
+
+        children_dirs : dict, optional
+            A dictionary whose values are directory names and keys are child
+            names (the same as the keys of `children`).  If None, then the
+            keys of `children` must be strings and are used as directory
+            names.  Directory names are used when saving the object (via
+            :method:`write`).
+
+        child_category : str, optional
+            The category that describes the children of this object.  This
+            is used as a heading for the keys of `children`.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
 
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.default_protocols = {}
@@ -250,7 +474,7 @@ class ProtocolInput(_support.TreeNode):
             if len(circuits) > 0:
                 self.qubit_labels = circuits[0].line_labels
             elif children:
-                self.qubit_labels = tuple(_itertools.chain(*[inp.qubit_labels for inp in children.values()]))
+                self.qubit_labels = tuple(_itertools.chain(*[design.qubit_labels for design in children.values()]))
             else:
                 self.qubit_labels = ('*',)  # default "qubit labels"
         else:
@@ -264,24 +488,94 @@ class ProtocolInput(_support.TreeNode):
         super().__init__(children_dirs, children, child_category)
 
     def add_default_protocol(self, default_protocol_instance):
+        """
+        Add a "default" protocol to this experiment design.
+
+        Default protocols are a way of designating protocols you mean to run
+        on the the data corresponding to an experiment design *before* that
+        data has been taken.  Use a :class:`DefaultRunner` object to run
+        (all) the default protocols of the experiment designs within a
+        :class:`ProtocolData` object.
+
+        Note that default protocols are indexed by their names, and so
+        when adding multiple default protocols they need to have distinct
+        names (usually given to the protocol when it is constructed).
+
+        Parameters
+        ----------
+        default_protocol_instance : Protocol
+            The protocol to add.  This protocol's name is used to index it.
+
+        Returns
+        -------
+        None
+        """
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
 
     def write(self, dirname, parent=None):
-        _support.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'input', 'auxfile_types')
+        """
+        Write this experiment design to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            an 'edesign' subdirectory, which will be created if needed and
+            overwritten if present.
+
+        Returns
+        -------
+        None
+        """
+        _support.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
 
     def create_subdata(self, subdata_name, dataset):
-        raise NotImplementedError("This protocol input cannot create any subdata!")
+        """
+        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        given by `subdata_name` starting from `dataset` as the data for *this*
+        experiment design.  This is used internally by :class:`ProtocolData`
+        objects, and shouldn't need to be used by external users.
+        """
+        raise NotImplementedError("This protocol edesign cannot create any subdata!")
 
 
-class CircuitListsInput(ProtocolInput):
+class CircuitListsDesign(ExperimentDesign):
     """
-    Protocol input-data specification that is comprised of multiple circuit lists.
+    Experiment deisgn specification that is comprised of multiple circuit lists.
     """
-    
+
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
+        """
+        Create a new CircuitListsDesign object.
 
+        Parameters
+        ----------
+        circuit_lists : list
+            A list whose elements are themselves lists of :class:`Circuit`
+            objects, specifying the data that needs to be taken.
+
+        all_circuits_needing_data : list, optional
+            A list of all the circuits needing data.  By default, This is just
+            the concatenation of the elements of `circuit_lists` with duplicates
+            removed.  The only reason to specify this separately is if you
+            happen to have this list lying around.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the
+            line labels of the first circuit is used.
+
+        nested : bool, optional
+            Whether the elements of `circuit_lists` are nested, e.g. whether
+            `circuit_lists[i]` is a subset of `circuit_lists[i+1]`.  This
+            is useful to know because certain operations can be more efficient
+            when it is known that the lists are nested.
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
         if all_circuits_needing_data is not None:
             all_circuits = all_circuits_needing_data
         elif nested and len(circuit_lists) > 0:
@@ -299,15 +593,36 @@ class CircuitListsInput(ProtocolInput):
         self.auxfile_types['circuit_lists'] = 'text-circuit-lists'
 
 
-class CircuitStructuresInput(CircuitListsInput):
+class CircuitStructuresDesign(CircuitListsDesign):
     """
-    Protocol input-data specification that is comprised of multiple circuit
-    structures (:class:`CircuitStructure` objects).
+    An experiment design that is comprised of multiple
+    circuit structures (:class:`CircuitStructure` objects).
     """
 
     def __init__(self, circuit_structs, qubit_labels=None, nested=False):
-        """ TODO: docstring - note that a *single* structure can be given as circuit_structs """
+        """
+        Create a new CircuitStructuresDesign object.
 
+        Parameters
+        ----------
+        circuit_structs : list or CircuitStructure
+            A list of :class:`CircuitStructure` objects, specifying the circuits
+            for which data is needed, OR a single :class:`CircuitStructure`
+            object specifying circuits at different lengths.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the
+            line labels of the first circuit is used.
+
+        nested : bool, optional
+            Whether the elements of `circuit_structs` contain nested circuit
+            lists, e.g. whether `circuit_structs[i].allstrs` is a subset of
+            `circuit_structs[i+1].allstrs`.
+
+        Returns
+        -------
+        CircuitStructureDesign
+        """
         #Convert a single LsGermsStruct to a list if needed:
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_structs, validStructTypes):
@@ -321,69 +636,135 @@ class CircuitStructuresInput(CircuitListsInput):
         self.auxfile_types['circuit_structs'] = 'pickle'
 
 
-# MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
-class CombinedInput(ProtocolInput):  # for multiple inputs on the same dataset
+class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
     """
-    Protocol input-data specification that combines the input specifications of
-    one or more "sub-inputs".  The sub-inputs are preserved as children under
-    the :class:`CombinedInput` instance, creating a "data-tree" structure.  The
-    :class:`CombinedInput` object itself simply merges all of the circuit lists.
+    An experiment design that combines the specifications of
+    one or more "sub-designs".  The sub-designs are preserved as children under
+    the :class:`CombinedExperimentDesign` instance, creating a "data-tree" structure.  The
+    :class:`CombinedExperimentDesign` object itself simply merges all of the circuit lists.
     """
 
-    def __init__(self, sub_inputs, all_circuits=None, qubit_labels=None, sub_input_dirs=None,
-                 interleave=False, category='InputBranch'):
+    def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
+                 interleave=False, category='EdesignBranch'):
+        """
+        Create a new CombinedExperimentDesign object.
 
-        if not isinstance(sub_inputs, dict):
-            sub_inputs = {("**%d" % i): inp for i, inp in enumerate(sub_inputs)}
+        Parameters
+        ----------
+        sub_designs : dict or list
+            A dictionary of other :class:`ExperimentDesign` objects whose keys
+            are names for each sub-edesign (used for directories and to index
+            the sub-edesigns from this experiment design).  If a list is given instead,
+            a default names of the form "**<number>" are used.
+
+        all_circuits : list, optional
+            A list of :class:`Circuit`s, specifying all the circuits needing
+            data.  This can include additional circuits that are not in any
+            of `sub_designs`.  By default, the union of all the circuits in
+            the sub-designs is used.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the line labels
+            of the first circuit is used.
+
+        sub_design_dirs : dict, optional
+            A dictionary whose values are directory names and keys are sub-edesign
+            names (the same as the keys of `sub_designs`).  If None, then the
+            keys of `sub_designs` must be strings and are used as directory
+            names.  Directory names are used when saving the object (via
+            :method:`write`).
+
+        category : str, optional
+            The category that describes the sub-edesigns of this object.  This
+            is used as a heading for the keys of `sub_designs`.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+
+        if not isinstance(sub_designs, dict):
+            sub_designs = {("**%d" % i): des for i, des in enumerate(sub_designs)}
 
         if all_circuits is None:
             all_circuits = []
             if not interleave:
-                for inp in sub_inputs.values():
-                    all_circuits.extend(inp.all_circuits_needing_data)
+                for des in sub_designs.values():
+                    all_circuits.extend(des.all_circuits_needing_data)
             else:
                 raise NotImplementedError("Interleaving not implemented yet")
             _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
 
-        super().__init__(all_circuits, qubit_labels, sub_inputs, sub_input_dirs, category)
+        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
 
     def create_subdata(self, sub_name, dataset):
-        """TODO: docstring - used to create sub-ProtocolData objects (by ProtocolData) """
+        """
+        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        given by `subdata_name` starting from `dataset` as the data for *this*
+        experiment design.  This is used internally by :class:`ProtocolData`
+        objects, and shouldn't need to be used by external users.
+        """
         return ProtocolData(self[sub_name], dataset)
 
 
-# SimultaneousInput -- specifies a "qubit structure" for each sub-input
-class SimultaneousInput(ProtocolInput):
+class SimultaneousExperimentDesign(ExperimentDesign):
     """
-    A protocol input-data specification whose circuits are the tensor-products
-    of the circuits from one or more  :class:`ProtocolInput` objects that
-    act on disjoint sets of qubits.  The sub-inputs are preserved as children under
-    the :class:`SimultaneousInput` instance, creating a "data-tree" structure.
+    An experiment design whose circuits are the tensor-products
+    of the circuits from one or more  :class:`ExperimentDesign` objects that
+    act on disjoint sets of qubits.  The sub-designs are preserved as children under
+    the :class:`SimultaneousExperimentDesign` instance, creating a "data-tree" structure.
     """
 
-    @classmethod
-    def from_tensored_circuits(cls, circuits, template_input, qubit_labels_per_input):
-        pass #Useful??? - need to break each circuit into different parts
-    # based on qubits, then copy (?) template input and just replace itself
+    #@classmethod
+    #def from_tensored_circuits(cls, circuits, template_edesign, qubit_labels_per_edesign):
+    #    pass #Useful??? - need to break each circuit into different parts
+    # based on qubits, then copy (?) template edesign and just replace itself
     # all_circuits_needing_data member?
 
-    def __init__(self, inputs, tensored_circuits=None, qubit_labels=None, category='Qubits'):
-        #TODO: check that inputs don't have overlapping qubit_labels
+    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None, category='Qubits'):
+        """
+        Create a new SimultaneousExperimentDesign object.
+
+        Parameters
+        ----------
+        edesigns : list
+            A list of :class:`ExperimentDesign` objects  whose circuits
+            are to occur simultaneously.
+
+        tensored_circuits : list, optional
+            A list of all the circuits for this experiment design.  By default,
+            these are the circuits of those in `edesigns` tensored together.
+            Typically this is left as the default.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the
+            concatenated qubit labels of `edesigns` are used (this is usually
+            what you want).
+
+        category : str, optional
+            The category name for the qubit-label-tuples correspoding to the
+            elements of `edesigns`.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        #TODO: check that sub-designs don't have overlapping qubit_labels
 
         if qubit_labels is None:
-            qubit_labels = tuple(_itertools.chain(*[inp.qubit_labels for inp in inputs]))
+            qubit_labels = tuple(_itertools.chain(*[des.qubit_labels for des in edesigns]))
 
         if tensored_circuits is None:
             #Build tensor product of circuits
             tensored_circuits = []
-            circuits_per_input = [inp.all_circuits_needing_data[:] for inp in inputs]
+            circuits_per_edesign = [des.all_circuits_needing_data[:] for des in edesigns]
 
             #Pad shorter lists with None values
-            maxLen = max(map(len, circuits_per_input))
-            for lst in circuits_per_input:
+            maxLen = max(map(len, circuits_per_edesign))
+            for lst in circuits_per_edesign:
                 if len(lst) < maxLen: lst.extend([None] * (maxLen - len(lst)))
                 
-            for subcircuits in zip(*circuits_per_input):
+            for subcircuits in zip(*circuits_per_edesign):
                 c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
                 for subc in subcircuits:
                     if subc is not None:
@@ -392,19 +773,25 @@ class SimultaneousInput(ProtocolInput):
                 c.done_editing()
                 tensored_circuits.append(c)
 
-        sub_inputs = {inp.qubit_labels: inp for inp in inputs}
-        sub_input_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_inputs}
-        super().__init__(tensored_circuits, qubit_labels, sub_inputs, sub_input_dirs, category)
+        sub_designs = {des.qubit_labels: des for des in edesigns}
+        sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
+        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
 
     def create_subdata(self, qubit_labels, dataset):
+        """
+        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        given by `subdata_name` starting from `dataset` as the data for *this*
+        experiment design.  This is used internally by :class:`ProtocolData`
+        objects, and shouldn't need to be used by external users.
+        """
         if isinstance(dataset, _objs.MultiDataSet):
-            raise NotImplementedError("SimultaneousInputs don't work with multi-pass data yet.")
+            raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
         qubit_ordering = list(dataset.keys())[0].line_labels
         qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
-        sub_input = self[qubit_labels]
+        sub_design = self[qubit_labels]
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
         filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices, idle=None)  # Marginalize dataset
-        return ProtocolData(sub_input, filtered_ds)
+        return ProtocolData(sub_design, filtered_ds)
 
 
 def load_data_from_dir(dirname):
@@ -429,15 +816,28 @@ class ProtocolData(_support.TreeNode):
     A :class:`ProtocolData` object represents the experimental data needed to
     run one or more QCVV protocols.  This class contains a :class:`ProtocolIput`,
     which describes a set of circuits, and a :class:`DataSet` (or :class:`MultiDataSet`)
-    that holds data for these circuits.  These members correspond to the `.input`
+    that holds data for these circuits.  These members correspond to the `.edesign`
     and `.dataset` attributes.
     """
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
+        """
+        Initialize a new ProtocolData object from `dirname`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there are 'edesign'
+            and 'data' subdirectories).
+
+        Returns
+        -------
+        ProtocolData
+        """
         p = _pathlib.Path(dirname)
-        inpt = parent.input[name] if parent and name else \
-            load_input_from_dir(dirname)
+        edesign = parent.edesign[name] if parent and name else \
+            load_edesign_from_dir(dirname)
 
         data_dir = p / 'data'
         #with open(data_dir / 'meta.json', 'r') as f:
@@ -456,62 +856,120 @@ class ProtocolData(_support.TreeNode):
 
         cache = _support.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
-        ret = cls(inpt, dataset, cache)
+        ret = cls(edesign, dataset, cache)
         ret._init_children(dirname, 'data')  # loads child nodes
         return ret
 
-    def __init__(self, protocol_input, dataset=None, cache=None):
-        self.input = protocol_input
-        self.dataset = dataset  # MultiDataSet allowed for multi-pass data
+    def __init__(self, edesign, dataset=None, cache=None):
+        """
+        Create a new ProtocolData object.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design describing what circuits this object
+            contains data for.
+
+        dataset : DataSet or MultiDataSet, optional
+            The data counts themselves.
+
+        cache : dict, optional
+            A cache of values which holds values derived *only* from
+            the experiment design and data in this object.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        self.edesign = edesign
+        self.dataset = dataset  # MultiDataSet allowed for multi-pass data; None also allowed.
         self.cache = cache if (cache is not None) else {}
 
         if isinstance(self.dataset, _objs.MultiDataSet):
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
-            self._passdatas = {dsname: ProtocolData(self.input, ds, self.cache[dsname])
+            self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
                                for dsname, ds in self.dataset.items()}
         else:
             self._passdatas = {None: self}
             
-        super().__init__(self.input._dirs, {}, self.input._childcategory)  # children created on-demand
+        super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
-        return self.input.create_subdata(key, self.dataset)
+        """ Create the value for `key` on demand. """
+        return self.edesign.create_subdata(key, self.dataset)
 
     @property
     def passes(self):
+        """A dictionary of the per-pass sub-results."""
         return self._passdatas
 
-    #def is_multiinput(self):
-    #    return isinstance(self.input, MultiInput)
-    #
-
     def is_multipass(self):
+        """
+        Whether this protocol data contains multiple passes (more
+        accurately, whether the `.dataset` of this object is a
+        :class:`MultiDataSet`).
+
+        Returns
+        -------
+        bool
+        """
         return isinstance(self.dataset, _objs.MultiDataSet)
 
     #def get_tree_paths(self):
-    #    return self.input.get_tree_paths()
+    #    return self.edesign.get_tree_paths()
 
     def filter_paths(self, paths, paths_are_sorted=False):
-        def build_data(inp, src_data):
-            """ Uses a template (filtered) input to selectively
-                copy the non-input parts of a 'src_data' ProtocolData """
-            ret = ProtocolData(inp, src_data.dataset, src_data.cache)
-            for subname, subinput in inp.items():
+        """
+        Returns a new :class:`ProtocolData` object with a subset of the
+        data-tree paths contained under this one.
+
+        Parameters
+        ----------
+        paths : list
+            A list of the paths to keep.  Each path is a tuple of keys, 
+            delineating a path in the data-tree.
+
+        paths_are_sorted : bool, optional
+            Whether `paths` has already been sorted lexographically.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        def build_data(des, src_data):
+            """ Uses a template (filtered) edesign to selectively
+                copy the non-edesign parts of a 'src_data' ProtocolData """
+            ret = ProtocolData(des, src_data.dataset, src_data.cache)
+            for subname, subedesign in des.items():
                 if subname in src_data._vals:  # if we've actually created this sub-data...
-                    ret._vals[subname] = build_data(subinput, src_data._vals[subname])
+                    ret._vals[subname] = build_data(subedesign, src_data._vals[subname])
             return ret
-        filtered_input = self.input.filter_paths(paths, paths_are_sorted)
-        return build_data(filtered_input, self)
+        filtered_edesign = self.edesign.filter_paths(paths, paths_are_sorted)
+        return build_data(filtered_edesign, self)
 
     def write(self, dirname, parent=None):
+        """
+        Write this protocol data to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            'edesign' and 'data' subdirectories, which will be created if
+            needed and overwritten if present.
+
+        Returns
+        -------
+        None
+        """
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
         _support.obj_to_meta_json(self, data_dir)
 
         if parent is None:
-            self.input.write(dirname)  # assume parent has already written input
+            self.edesign.write(dirname)  # assume parent has already written edesign
         
         if parent and (self.dataset is parent.dataset):  # then no need to write any data
             assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
@@ -538,7 +996,7 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None):
     ----------
     dirname : string
         Directory name.  This should be a "base" directory, containing
-        subdirectories like "input", "data", and "results"
+        subdirectories like "edesign", "data", and "results"
 
 
     name : string or None
@@ -567,9 +1025,32 @@ class ProtocolResults(object):
     and stores the results from running a QCVV protocol (a :class:`Protcocol`)
     on this data.
     """
-    
+
     @classmethod
     def from_dir(cls, dirname, name, preloaded_data=None):
+        """
+        Initialize a new ProtocolResults object from `dirname` / results / `name`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is are 'edesign',
+            'data', and 'results' subdirectories).
+
+        name : str
+            The sub-directory name of the particular results object to load
+            (there can be multiple under a given root `dirname`).  This is the
+            name of a subdirectory of `dirname` / results.
+
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        Returns
+        -------
+        ProtocolResults
+        """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
         ret.data = preloaded_data if (preloaded_data is not None) else \
@@ -578,59 +1059,52 @@ class ProtocolResults(object):
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
 
-#        #Initialize input and data
-#        if parent is not None:
-#            data = preloaded_data
-#        else:
-#            data = load_data_from_dir(dirname)
-#
-#        #Initialize results
-#        p = _pathlib.Path(dirname)
-#        results_dir = p / 'results' / name
-#
-#        protocol = load_protocol_from_dir(results_dir / 'protocol')
-#
-#        #load qtys from results directory
-#        qtys, auxfile_types = _support.load_meta_based_dir(results_dir, 'qty_auxfile_types', separate_auxfiletypes=True)
-#        #TODO - how to preserve NamedDict objects??
-#
-#        ret = cls(name, data, protocol, qtys)
-#        ret.qty_auxfile_types.update(auxfile_types)
-#        return ret
-
     def __init__(self, data, protocol_instance):
-        """root quantity seriestypes, 'root_qty_stypes' can be a (key-type, val-type) tuple or a single key-type """
-        #if isinstance(root_qty_stypes, tuple):
-        #    ktype, vtype = root_qty_stypes
-        #else:
-        #    ktype = root_qty_stypes; vtype = None
+        """
+        Create a new ProtocolResults object.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data from which these results are derived.
+
+        protocol_instance : Protocol
+            The protocol that created these results.
+
+        Returns
+        -------
+        ProtocolResults
+        """
         self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
         self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
 
-# self.qtys = {}
-#    def items(self):
-#        return self.qtys.items()
-#
-#    def keys(self):
-#        return self.qtys.keys()
-#
-#    def __getitem__(self, key):
-#        return self.qtys[key]
-#
-#    def __contains__(self, key):
-#        return key in self.qtys
-#
-#    def __len__(self):
-#        return len(self.qtys)
-
     def write(self, dirname, data_already_written=False):
+        """
+        Write these protocol results to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            'edesign', 'data', and 'results/<myname>' subdirectories, which will be
+            created if needed and overwritten if present.
+
+        data_already_written : bool, optional
+            Set this to True if you're sure the `.data` :class:`ProtocolData` object
+            within this results object has already been written to `dirname`.  Leaving
+            this as the default is a safe option.
+
+        Returns
+        -------
+        None
+        """
         p = _pathlib.Path(dirname)
         results_dir = p / 'results' / self.name
         results_dir.mkdir(parents=True, exist_ok=True)
 
-        #write input and data
+        #write edesign and data
         if not data_already_written:
             self.data.write(dirname)
 
@@ -638,6 +1112,13 @@ class ProtocolResults(object):
         _support.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
 
     def as_nameddict(self):
+        """
+        Convert these results into nested :class:`NamedDict` objects.
+
+        Returns
+        -------
+        NamedDict
+        """
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation
         ret = _support.NamedDict('Qty', 'category')
@@ -655,6 +1136,13 @@ class ProtocolResults(object):
         return ret
 
     def as_dataframe(self):
+        """
+        Convert these results into Pandas dataframe.
+
+        Returns
+        -------
+        DataFrame
+        """
         return self.as_nameddict().as_dataframe()
 
     def __str__(self):
@@ -673,8 +1161,21 @@ class MultiPassResults(ProtocolResults):
 
     def __init__(self, data, protocol_instance):
         """
-        Initialize an empty Results object.
-        TODO: docstring
+        Initialize an empty MultiPassResults object, which contain a dictionary
+        of sub-results one per "pass".  Usually these sub-results are obtained
+        by running `protocol_instance` on each data set within `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data from which these results are derived.
+
+        protocol_instance : Protocol
+            The protocol that created these results.
+
+        Returns
+        -------
+        MultiPassResults
         """
         super().__init__(data, protocol_instance)
 
@@ -692,6 +1193,29 @@ class ProtocolResultsDir(_support.TreeNode):
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
+        """
+        Initialize a new ProtocolResultsDir object from `dirname`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there are 'edesign'
+            and 'data', and possibly 'results', subdirectories).
+
+        parent : ProtocolResultsDir, optional
+            The parent results-directory object that is loading the
+            returned object as a sub-results.  This is used internally
+            when loading a :class:`ProtocolResultsDir` that represents
+            a node of the data-tree with children.
+
+        name : str, optional
+            The name of this result within `parent`.  This is only
+            used when `parent` is not None.
+
+        Returns
+        -------
+        ProtcolResultsDir
+        """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
             load_data_from_dir(dirname)
@@ -710,8 +1234,38 @@ class ProtocolResultsDir(_support.TreeNode):
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
-        """ protocol_results should be a dict of ProtocolResults object whose keys are the names of the contained results """
-        self.data = data  # input and data
+        """
+        Create a new ProtocolResultsDir object.
+
+        This container object holds two things:
+        1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
+           to different protocols (keys are protocol names).
+        
+        2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
+           object directly using the name of the sub-directory.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The data from which *all* the Results objects in this
+            ProtocolResultsDir are derived.
+
+        protocol_results : ProtocolResults, optional
+            An initial (single) results object to add.  The name of the
+            results object is used as its key within the `.for_protocol`
+            dictionary.  If None, then an empty results directory is created.
+
+        children : dict, optional
+            A dictionary of the :class:`ProtocolResultsDir` objects that are
+            sub-directories beneath this one.  If None, then children are
+            automatically created based upon the tree given by `data`.  (To
+            avoid creating any children, you can pass an empty dict here.)
+
+        Returns
+        -------
+        ProtocolResultsDir
+        """
+        self.data = data  # edesign and data
         self.for_protocol = protocol_results.copy() if protocol_results else {}
         assert(all([r.data is self.data for r in self.for_protocol.values()]))
 
@@ -725,9 +1279,23 @@ class ProtocolResultsDir(_support.TreeNode):
         else:
             children = children.copy()
 
-        super().__init__(self.data.input._dirs, children, self.data.input._childcategory)
+        super().__init__(self.data.edesign._dirs, children, self.data.edesign._childcategory)
 
     def write(self, dirname, parent=None):
+        """
+        Write this "protocol results directory" to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            'edesign', 'data', and 'results' subdirectories, which will be
+            created if needed and overwritten if present.
+
+        Returns
+        -------
+        None
+        """
         if parent is None: self.data.write(dirname)  # assume parent has already written data
         dirname = _pathlib.Path(dirname)
 
@@ -743,6 +1311,13 @@ class ProtocolResultsDir(_support.TreeNode):
         self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
 
     def as_nameddict(self):
+        """
+        Convert the results in this object into nested :class:`NamedDict` objects.
+
+        Returns
+        -------
+        NamedDict
+        """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
         results_on_this_node = _support.NamedDict('Protocol Instance', 'category',
                                                   items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
@@ -758,6 +1333,13 @@ class ProtocolResultsDir(_support.TreeNode):
             return results_on_this_node
 
     def as_dataframe(self):
+        """
+        Convert these results into Pandas dataframe.
+
+        Returns
+        -------
+        DataFrame
+        """
         return self.as_nameddict().as_dataframe()
 
     def __str__(self):
@@ -767,14 +1349,53 @@ class ProtocolResultsDir(_support.TreeNode):
 
 
 def run_default_protocols(data):
+    """
+    Run the default protocols for the data-tree rooted at `data`.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        the data to run default protocols on.
+
+    Returns
+    -------
+    ProtocolResultsDir
+    """
     return DefaultRunner().run(data)
 
 
-def write_empty_protocol_data(inpt, dirname, sparse="auto"):
+def write_empty_protocol_data(edesign, dirname, sparse="auto"):
+    """
+    Write to a directory an experimental design (`edesign`) and the dataset
+    template files needed to load in a :class:`ProtocolData` object, e.g.
+    using the :function:`load_data_from_dir` function, after the template
+    files are filled in.
+
+    Parameters
+    ----------
+    edesign : ExperimentDesign
+        The experiment design defining the circuits that need to be performed.
+
+    dirname : str
+        The *root* directory to write into.  This directory will have 'edesign'
+        and 'data' subdirectories created beneath it.
+
+    sparse : bool or "auto", optional
+        If True, then the template data set(s) are written in a sparse-data
+        format, i.e. in a format where not all the outcomes need to be given.
+        If False, then a dense data format is used, where counts for *all*
+        possible bit strings are given.  `"auto"` causes the sparse format
+        to be used when the number of qubits is > 2.
+
+    Returns
+    -------
+    None
+    """
+
     dirname = _pathlib.Path(dirname)
     data_dir = dirname / 'data'
-    circuits = inpt.all_circuits_needing_data
-    nQubits = len(inpt.qubit_labels)
+    circuits = edesign.all_circuits_needing_data
+    nQubits = len(edesign.qubit_labels)
     if sparse == "auto":
         sparse = bool(nQubits > 3)  # HARDCODED
 
@@ -790,7 +1411,7 @@ def write_empty_protocol_data(inpt, dirname, sparse="auto"):
     if pth.exists():
         raise ValueError("Template data file would clobber %s, which already exists!" % pth)
     data_dir.mkdir(parents=True, exist_ok=True)
-    inpt.write(dirname)
+    edesign.write(dirname)
     _io.write_empty_dataset(pth, circuits, header_str, nZeroCols)
 
 
@@ -802,15 +1423,39 @@ class ProtocolPostProcessor(object):
 
     #Note: this is essentially a duplicate of the Protocol class (except run takes a results object)
     # but it's conceptually a different thing...  Should we derive it from Protocol?
-    
+
     @classmethod
     def from_dir(cls, dirname):  # same I/O pattern as Protocol
+        """
+        Initialize a new ProtocolPostProcessor object from `dirname`.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name.
+
+        Returns
+        -------
+        ProtocolPostProcessor
+        """
         ret = cls.__new__(cls)
         ret.__dict__.update(_support.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
         ret._init_unserialized_attributes()
         return ret
 
     def __init__(self, name):
+        """
+        Create a new ProtocolPostProcessor object.
+
+        Parameters
+        ----------
+        name : str
+            The name of this post-processor.
+
+        Returns
+        -------
+        ProtocolPostProcessor
+        """
         super().__init__()
         self.name = name if name else self.__class__.__name__
         self.auxfile_types = {}
@@ -819,10 +1464,34 @@ class ProtocolPostProcessor(object):
         pass
 
     def run(self, results):
+        """
+        Run this post-processor on `results`.
+
+        Parameters
+        ----------
+        results : ProtocolResults
+            The input results.
+
+        Returns
+        -------
+        ProtocolResults
+        """
         #Maybe these could also take data objects and run protocols on them automatically?
         #Returned Results object should be rooted at place of given results/resultsdir
         raise NotImplementedError("Derived classes should implement this!")
 
     def write(self, dirname):
+        """
+        Write this protocol post-processor to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory to write into.
+
+        Returns
+        -------
+        None
+        """
         _support.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
