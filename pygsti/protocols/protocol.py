@@ -383,6 +383,7 @@ class ExperimentDesign(_TreeNode):
         ret = cls.__new__(cls)
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
         ret._init_children(dirname, 'edesign')
+        ret._loaded_from = str(dirname.absolute())
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None,
@@ -435,7 +436,7 @@ class ExperimentDesign(_TreeNode):
                               'default_protocols': 'dict-of-protocolobjs'}
 
         # because TreeNode takes care of its own serialization:
-        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none'})
+        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none', '_loaded_from': 'none'})
 
         if qubit_labels is None:
             if len(circuits) > 0:
@@ -480,7 +481,7 @@ class ExperimentDesign(_TreeNode):
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
 
-    def write(self, dirname, parent=None):
+    def write(self, dirname=None, parent=None):
         """
         Write this experiment design to a directory.
 
@@ -489,12 +490,22 @@ class ExperimentDesign(_TreeNode):
         dirname : str
             The *root* directory to write into.  This directory will have
             an 'edesign' subdirectory, which will be created if needed and
-            overwritten if present.
+            overwritten if present.  If None, then the path this object
+            was loaded from is used (if this object wasn't loaded from disk,
+            an error is raised).
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this
+            design as a sub-experiment-design.  Otherwise leave as None.
 
         Returns
         -------
         None
         """
+        if dirname is None:
+            dirname = self._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+            
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
 
@@ -807,6 +818,7 @@ class ProtocolData(_TreeNode):
         cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
+        ret._loaded_from = str(dirname.absolute())
         ret._init_children(dirname, 'data')  # loads child nodes
         return ret
 
@@ -898,7 +910,7 @@ class ProtocolData(_TreeNode):
         filtered_edesign = self.edesign.filter_paths(paths, paths_are_sorted)
         return build_data(filtered_edesign, self)
 
-    def write(self, dirname, parent=None):
+    def write(self, dirname=None, parent=None):
         """
         Write this protocol data to a directory.
 
@@ -907,12 +919,21 @@ class ProtocolData(_TreeNode):
         dirname : str
             The *root* directory to write into.  This directory will have
             'edesign' and 'data' subdirectories, which will be created if
-            needed and overwritten if present.
+            needed and overwritten if present.  If None, then the path this object
+            was loaded from is used (if this object wasn't loaded from disk,
+            an error is raised).
+
+        parent : ProtocolData, optional
+            The parent protocol data, when a parent is writing this
+            data as a sub-protocol-data object.  Otherwise leave as None.
 
         Returns
         -------
         None
         """
+        if dirname is None:
+            dirname = self._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -973,6 +994,7 @@ class ProtocolResults(object):
         ret = cls.__new__(cls)
         ret.data = preloaded_data if (preloaded_data is not None) else \
             _io.load_data_from_dir(dirname)
+        ret._loaded_from = str(dirname.absolute())
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
@@ -997,8 +1019,9 @@ class ProtocolResults(object):
         self.protocol = protocol_instance
         self.data = data
         self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
+        self._loaded_from = None
 
-    def write(self, dirname, data_already_written=False):
+    def write(self, dirname=None, data_already_written=False):
         """
         Write these protocol results to a directory.
 
@@ -1006,8 +1029,10 @@ class ProtocolResults(object):
         ----------
         dirname : str
             The *root* directory to write into.  This directory will have
-            'edesign', 'data', and 'results/<myname>' subdirectories, which will be
-            created if needed and overwritten if present.
+            'edesign', 'data', and 'results/<myname>' subdirectories, which will
+            path be created if needed and overwritten if present.  If None, then
+            the this object was loaded from is used (if this object wasn't
+            loaded from disk, an error is raised).
 
         data_already_written : bool, optional
             Set this to True if you're sure the `.data` :class:`ProtocolData` object
@@ -1018,6 +1043,10 @@ class ProtocolResults(object):
         -------
         None
         """
+        if dirname is None:
+            dirname = self._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+
         p = _pathlib.Path(dirname)
         results_dir = p / 'results' / self.name
         results_dir.mkdir(parents=True, exist_ok=True)
@@ -1148,6 +1177,7 @@ class ProtocolResultsDir(_TreeNode):
                         dirname, pth.name, preloaded_data=data)
 
         ret = cls(data, results, {})  # don't initialize children now
+        ret._loaded_from = str(dirname.absolute())
         ret._init_children(dirname, meta_subdir='results')
         return ret
 
@@ -1199,7 +1229,7 @@ class ProtocolResultsDir(_TreeNode):
 
         super().__init__(self.data.edesign._dirs, children, self.data.edesign._childcategory)
 
-    def write(self, dirname, parent=None):
+    def write(self, dirname=None, parent=None):
         """
         Write this "protocol results directory" to a directory.
 
@@ -1208,12 +1238,22 @@ class ProtocolResultsDir(_TreeNode):
         dirname : str
             The *root* directory to write into.  This directory will have
             'edesign', 'data', and 'results' subdirectories, which will be
-            created if needed and overwritten if present.
+            created if needed and overwritten if present.    If None, then
+            the path this object was loaded from is used (if this object
+            wasn't loaded from disk, an error is raised).
+
+        parent : ProtocolResultsDir, optional
+            The parent protocol results directory, when a parent is writing this
+            results dir as a sub-results-dir.  Otherwise leave as None.
 
         Returns
         -------
         None
         """
+        if dirname is None:
+            dirname = self._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+
         if parent is None: self.data.write(dirname)  # assume parent has already written data
         dirname = _pathlib.Path(dirname)
 
@@ -1361,4 +1401,3 @@ class ProtocolPostProcessor(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
-
