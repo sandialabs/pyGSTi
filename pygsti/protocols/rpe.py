@@ -11,14 +11,15 @@
 from . import protocol as _proto
 
 
-class RobustPhaseEstimationInput(_proto.CircuitListsInput):
-    def __init__(self, rpe_inputs, qubit_labels=None):
+class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
+    """ Experimental design for robust phase estimation """
+    def __init__(self, rpe_experiment_inputs, qubit_labels=None):
         circuit_lists = None  # TODO
         super().__init__(circuit_lists, qubit_labels=qubit_labels)
 
 
 class RobustPhaseEstimation(_proto.Protocol):
-    #object that can take, e.g. a multiinput or simultaneous input and create a results object with the desired grid of width vs depth numbers
+    """ Robust phase estimation (RPE) protocol """
 
     def __init__(self, rpe_params, name=None):
 
@@ -28,7 +29,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         self.auxfile_types['rpe_params'] = 'pickle'
 
     def run(self, data):
-        inp = data.inp  # input
+        design = data.edesign  # experiment design (specifies circuits)
         ds = data.dataset  # dataset
         ret = RobustPhaseEstimationResults()
         # ...
@@ -36,6 +37,7 @@ class RobustPhaseEstimation(_proto.Protocol):
 
 
 class RobustPhaseEstimationResults(_proto.ProtocolResults):
+    """ Results from the RPE protocol """
     def __init__(self, data, protocol_instance):
         """
         Initialize an empty Results object.
@@ -49,6 +51,6 @@ class RobustPhaseEstimationResults(_proto.ProtocolResults):
 
         
 #shorthands
-RPEInput = RobustPhaseEstimationInput
+RPEDesign = RobustPhaseEstimationDesign
 RPE = RobustPhaseEstimation
 RPEResults = RobustPhaseEstimationResults
