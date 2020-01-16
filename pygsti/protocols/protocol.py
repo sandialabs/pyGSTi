@@ -24,23 +24,6 @@ from ..tools import listtools as _lt
 from ..tools import NamedDict as _NamedDict
 
 
-def load_protocol_from_dir(dirname):
-    """
-    Load a :class:`Protocol` from a directory on disk.
-
-    Parameters
-    ----------
-    dirname : string
-        Directory name.
-
-    Returns
-    -------
-    Protocol
-    """
-    dirname = _pathlib.Path(dirname)
-    return _io.cls_from_meta_json(dirname).from_dir(dirname)
-
-
 class Protocol(object):
     """
     A Protocol object represents things like, but not strictly limited to, QCVV protocols.
@@ -359,23 +342,6 @@ class DefaultRunner(ProtocolRunner):
 
         visit_node(ret)
         return ret
-
-
-def load_edesign_from_dir(dirname):
-    """
-    Load a :class:`ExperimentDesign` from a directory on disk.
-
-    Parameters
-    ----------
-    dirname : string
-        Directory name.
-
-    Returns
-    -------
-    ExperimentDesign
-    """
-    dirname = _pathlib.Path(dirname)
-    return _io.cls_from_meta_json(dirname / 'edesign').from_dir(dirname)
 
 
 class ExperimentDesign(_TreeNode):
@@ -795,23 +761,6 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         return ProtocolData(sub_design, filtered_ds)
 
 
-def load_data_from_dir(dirname):
-    """
-    Load a :class:`ProtocolData` from a directory on disk.
-
-    Parameters
-    ----------
-    dirname : string
-        Directory name.
-
-    Returns
-    -------
-    ProtocolData
-    """
-    dirname = _pathlib.Path(dirname)
-    return _io.cls_from_meta_json(dirname / 'data').from_dir(dirname)
-
-
 class ProtocolData(_TreeNode):
     """
     A :class:`ProtocolData` object represents the experimental data needed to
@@ -838,7 +787,7 @@ class ProtocolData(_TreeNode):
         """
         p = _pathlib.Path(dirname)
         edesign = parent.edesign[name] if parent and name else \
-            load_edesign_from_dir(dirname)
+            _io.load_edesign_from_dir(dirname)
 
         data_dir = p / 'data'
         #with open(data_dir / 'meta.json', 'r') as f:
@@ -988,38 +937,6 @@ class ProtocolData(_TreeNode):
         self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
 
-def load_results_from_dir(dirname, name=None, preloaded_data=None):
-    """
-    Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a
-    directory on disk (depending on whether `name` is given).
-
-    Parameters
-    ----------
-    dirname : string
-        Directory name.  This should be a "base" directory, containing
-        subdirectories like "edesign", "data", and "results"
-
-
-    name : string or None
-        The 'name' of a particular :class:`ProtocolResults` object, which
-        is a sub-directory beneath `dirname/results/`.  If None, then *all*
-        the results (all names) at the given base-directory are loaded and
-        returned as a :class:`ProtocolResultsDir` object.
-
-    Returns
-    -------
-    ProtocolResults or ProtocolResultsDir
-    """
-    dirname = _pathlib.Path(dirname)
-    results_dir = dirname / 'results'
-    if name is None:  # then it's a directory object
-        cls = _io.cls_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
-            else ProtocolResultsDir  # default if no meta.json (if only a results obj has been written inside dir)
-        return cls.from_dir(dirname)
-    else:  # it's a ProtocolResults object
-        return _io.cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data)
-
-
 class ProtocolResults(object):
     """
     A :class:`ProtocolResults` object contains a :class:`ProtocolData` object
@@ -1055,7 +972,7 @@ class ProtocolResults(object):
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
         ret.data = preloaded_data if (preloaded_data is not None) else \
-            load_data_from_dir(dirname)
+            _io.load_data_from_dir(dirname)
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
@@ -1219,7 +1136,7 @@ class ProtocolResultsDir(_TreeNode):
         """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
-            load_data_from_dir(dirname)
+            _io.load_data_from_dir(dirname)
 
         #Load results in results_dir
         results = {}
@@ -1363,57 +1280,6 @@ def run_default_protocols(data):
     ProtocolResultsDir
     """
     return DefaultRunner().run(data)
-
-
-def write_empty_protocol_data(edesign, dirname, sparse="auto"):
-    """
-    Write to a directory an experimental design (`edesign`) and the dataset
-    template files needed to load in a :class:`ProtocolData` object, e.g.
-    using the :function:`load_data_from_dir` function, after the template
-    files are filled in.
-
-    Parameters
-    ----------
-    edesign : ExperimentDesign
-        The experiment design defining the circuits that need to be performed.
-
-    dirname : str
-        The *root* directory to write into.  This directory will have 'edesign'
-        and 'data' subdirectories created beneath it.
-
-    sparse : bool or "auto", optional
-        If True, then the template data set(s) are written in a sparse-data
-        format, i.e. in a format where not all the outcomes need to be given.
-        If False, then a dense data format is used, where counts for *all*
-        possible bit strings are given.  `"auto"` causes the sparse format
-        to be used when the number of qubits is > 2.
-
-    Returns
-    -------
-    None
-    """
-
-    dirname = _pathlib.Path(dirname)
-    data_dir = dirname / 'data'
-    circuits = edesign.all_circuits_needing_data
-    nQubits = len(edesign.qubit_labels)
-    if sparse == "auto":
-        sparse = bool(nQubits > 3)  # HARDCODED
-
-    if sparse:
-        header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
-        nZeroCols = 0
-    else:
-        fstr = '{0:0%db} count' % nQubits
-        nZeroCols = 2**nQubits
-        header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
-
-    pth = data_dir / 'dataset.txt'
-    if pth.exists():
-        raise ValueError("Template data file would clobber %s, which already exists!" % pth)
-    data_dir.mkdir(parents=True, exist_ok=True)
-    edesign.write(dirname)
-    _io.write_empty_dataset(pth, circuits, header_str, nZeroCols)
 
 
 class ProtocolPostProcessor(object):
