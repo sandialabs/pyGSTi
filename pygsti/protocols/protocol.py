@@ -15,12 +15,13 @@ import pickle as _pickle
 import pathlib as _pathlib
 import importlib as _importlib
 
-from . import support as _support
+from .treenode import TreeNode as _TreeNode
 from .. import construction as _cnst
 from .. import objects as _objs
 from .. import io as _io
 from ..objects import circuit as _cir
 from ..tools import listtools as _lt
+from ..tools import NamedDict as _NamedDict
 
 
 def load_protocol_from_dir(dirname):
@@ -37,7 +38,7 @@ def load_protocol_from_dir(dirname):
     Protocol
     """
     dirname = _pathlib.Path(dirname)
-    return _support.obj_from_meta_json(dirname).from_dir(dirname)
+    return _io.cls_from_meta_json(dirname).from_dir(dirname)
 
 
 class Protocol(object):
@@ -63,7 +64,7 @@ class Protocol(object):
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_support.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
         ret._init_unserialized_attributes()
         return ret
 
@@ -116,7 +117,7 @@ class Protocol(object):
         -------
         None
         """
-        _support.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+        _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
@@ -374,10 +375,10 @@ def load_edesign_from_dir(dirname):
     ExperimentDesign
     """
     dirname = _pathlib.Path(dirname)
-    return _support.obj_from_meta_json(dirname / 'edesign').from_dir(dirname)
+    return _io.cls_from_meta_json(dirname / 'edesign').from_dir(dirname)
 
 
-class ExperimentDesign(_support.TreeNode):
+class ExperimentDesign(_TreeNode):
     """
     An experimental-design specification for one or more QCVV protocols.
 
@@ -414,7 +415,7 @@ class ExperimentDesign(_support.TreeNode):
         """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(_support.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
         ret._init_children(dirname, 'edesign')
         return ret
 
@@ -528,7 +529,7 @@ class ExperimentDesign(_support.TreeNode):
         -------
         None
         """
-        _support.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
+        _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
 
     def create_subdata(self, subdata_name, dataset):
@@ -808,10 +809,10 @@ def load_data_from_dir(dirname):
     ProtocolData
     """
     dirname = _pathlib.Path(dirname)
-    return _support.obj_from_meta_json(dirname / 'data').from_dir(dirname)
+    return _io.cls_from_meta_json(dirname / 'data').from_dir(dirname)
 
 
-class ProtocolData(_support.TreeNode):
+class ProtocolData(_TreeNode):
     """
     A :class:`ProtocolData` object represents the experimental data needed to
     run one or more QCVV protocols.  This class contains a :class:`ProtocolIput`,
@@ -854,7 +855,7 @@ class ProtocolData(_support.TreeNode):
             raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
             dataset = _objs.MultiDataSet.init_from_dict({pth.name: _io.load_dataset(pth) for pth in dataset_files})
 
-        cache = _support.read_json_or_pkl_files_to_dict(data_dir / 'cache')
+        cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
         ret._init_children(dirname, 'data')  # loads child nodes
@@ -966,7 +967,7 @@ class ProtocolData(_support.TreeNode):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-        _support.obj_to_meta_json(self, data_dir)
+        _io.obj_to_meta_json(self, data_dir)
 
         if parent is None:
             self.edesign.write(dirname)  # assume parent has already written edesign
@@ -982,7 +983,7 @@ class ProtocolData(_support.TreeNode):
                 _io.write_dataset(data_dir / 'dataset.txt', self.dataset)
 
         if self.cache:
-            _support.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
+            _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
         self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
@@ -1012,11 +1013,11 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None):
     dirname = _pathlib.Path(dirname)
     results_dir = dirname / 'results'
     if name is None:  # then it's a directory object
-        cls = _support.obj_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
+        cls = _io.cls_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
             else ProtocolResultsDir  # default if no meta.json (if only a results obj has been written inside dir)
         return cls.from_dir(dirname)
     else:  # it's a ProtocolResults object
-        return _support.obj_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data)
+        return _io.cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data)
 
 
 class ProtocolResults(object):
@@ -1055,7 +1056,7 @@ class ProtocolResults(object):
         ret = cls.__new__(cls)
         ret.data = preloaded_data if (preloaded_data is not None) else \
             load_data_from_dir(dirname)
-        ret.__dict__.update(_support.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
 
@@ -1109,7 +1110,7 @@ class ProtocolResults(object):
             self.data.write(dirname)
 
         #write qtys to results dir
-        _support.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
+        _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
 
     def as_nameddict(self):
         """
@@ -1121,13 +1122,13 @@ class ProtocolResults(object):
         """
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation
-        ret = _support.NamedDict('Qty', 'category')
+        ret = _NamedDict('Qty', 'category')
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
                 ret[k] = v.as_nameddict()
-            elif isinstance(v, _support.NamedDict):
+            elif isinstance(v, _NamedDict):
                 ret[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
@@ -1183,7 +1184,7 @@ class MultiPassResults(ProtocolResults):
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
 
 
-class ProtocolResultsDir(_support.TreeNode):
+class ProtocolResultsDir(_TreeNode):
     """
     A :class:`ProtocolResultsDir` holds a dictionary of :class:`ProtocolResults`
     objects.  It contains a :class:`ProtocolData` object and is rooted at the_model
@@ -1226,7 +1227,7 @@ class ProtocolResultsDir(_support.TreeNode):
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
-                    results[pth.name] = _support.obj_from_meta_json(pth).from_dir(
+                    results[pth.name] = _io.cls_from_meta_json(pth).from_dir(
                         dirname, pth.name, preloaded_data=data)
 
         ret = cls(data, results, {})  # don't initialize children now
@@ -1301,7 +1302,7 @@ class ProtocolResultsDir(_support.TreeNode):
 
         results_dir = dirname / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
-        _support.obj_to_meta_json(self, results_dir)
+        _io.obj_to_meta_json(self, results_dir)
 
         #write the results
         for name, results in self.for_protocol.items():
@@ -1319,11 +1320,11 @@ class ProtocolResultsDir(_support.TreeNode):
         NamedDict
         """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        results_on_this_node = _support.NamedDict('Protocol Instance', 'category',
+        results_on_this_node = _NamedDict('Protocol Instance', 'category',
                                                   items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
         if sub_results:
             category = self.child_category if self.child_category else 'nocategory'
-            ret = _support.NamedDict(category, 'category')
+            ret = _NamedDict(category, 'category')
             if results_on_this_node:
                 #Results in this (self's) dir don't have a value for the sub-category, so put None
                 ret[None] = results_on_this_node
@@ -1439,7 +1440,7 @@ class ProtocolPostProcessor(object):
         ProtocolPostProcessor
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_support.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
         ret._init_unserialized_attributes()
         return ret
 
@@ -1493,5 +1494,5 @@ class ProtocolPostProcessor(object):
         -------
         None
         """
-        _support.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+        _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 

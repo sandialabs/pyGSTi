@@ -18,7 +18,6 @@ import copy as _copy
 import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
-from . import support as _support
 from . import protocol as _proto
 from .modeltest import ModelTest as _ModelTest
 from .. import objects as _objs
@@ -242,9 +241,9 @@ class Benchmark(_proto.Protocol):
         ds = data.dataset
 
         depths = design.depths
-        qty_data = _support.NamedDict('Datatype', 'category', None,
-                                      {comp: _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
-                                       for comp in component_names})
+        qty_data = _tools.NamedDict('Datatype', 'category', None,
+                                    {comp: _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+                                     for comp in component_names})
 
         #loop over all circuits
         for depth, circuits_at_depth, idealouts_at_depth in zip(depths, design.circuit_lists, design.idealout_lists):
@@ -261,8 +260,8 @@ class Benchmark(_proto.Protocol):
         return qty_data
 
     def create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
-        return _support.NamedDict(
-            'Depth', 'int', seriestype, {depth: _support.NamedDict(
+        return _tools.NamedDict(
+            'Depth', 'int', seriestype, {depth: _tools.NamedDict(
                 'Width', 'int', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
     def add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
@@ -297,9 +296,9 @@ class Benchmark(_proto.Protocol):
         for i in range(num_existing, num_qtys):
 
             component_names = self.summary_datatypes
-            bcache = _support.NamedDict(
+            bcache = _tools.NamedDict(
                 'Datatype', 'category', None,
-                {comp: _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+                {comp: _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
                  for comp in component_names})  # ~= "RB summary dataset"
 
             for depth, SPs in success_probabilities.items():
@@ -400,8 +399,8 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
         passnames = list(data.passes.keys()) if data.is_multipass() else [None]
         passresults = []
         for passname in passnames:
-            vb = _support.NamedDict('Depth', 'int', None)
-            fails = _support.NamedDict('Depth', 'int', None)
+            vb = _tools.NamedDict('Depth', 'int', None)
+            fails = _tools.NamedDict('Depth', 'int', None)
             path_for_gridloc = {}
             for path in paths:
                 #TODO: need to be able to filter based on widths... - maybe replace .update calls
@@ -427,8 +426,8 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
 
                 for depth in depths:
                     if depth not in vb:  # and depth not in fails
-                        vb[depth] = _support.NamedDict('Width', 'int', 'float')
-                        fails[depth] = _support.NamedDict('Width', 'int', None)
+                        vb[depth] = _tools.NamedDict('Width', 'int', 'float')
+                        fails[depth] = _tools.NamedDict('Width', 'int', None)
                         path_for_gridloc[depth] = {}  # just used for meaningful error message
 
                     if width in path_for_gridloc[depth]:
@@ -450,8 +449,8 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
             passresults.append(results)
             
         if self.aggregate and len(passnames) > 1:  # aggregate pass data into a single set of qty dicts
-            agg_vb = _support.NamedDict('Depth', 'int', None)
-            agg_fails = _support.NamedDict('Depth', 'int', None)
+            agg_vb = _tools.NamedDict('Depth', 'int', None)
+            agg_fails = _tools.NamedDict('Depth', 'int', None)
             template = passresults[0].volumetric_benchmarks  # to get widths and depths
 
             #Get function to aggregate the different per-circuit datatype values
@@ -474,8 +473,8 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                     return np_fn(rescaled)
 
             for depth, template_by_width_data in template.items():
-                agg_vb[depth] = _support.NamedDict('Width', 'int', 'float')
-                agg_fails[depth] = _support.NamedDict('Width', 'int', None)
+                agg_vb[depth] = _tools.NamedDict('Width', 'int', 'float')
+                agg_fails[depth] = _tools.NamedDict('Width', 'int', None)
 
                 for width in template_by_width_data.keys():
                     # ppd = "per pass data"
@@ -587,7 +586,7 @@ class VolumetricBenchmark(Benchmark):
             assert(self.datatype == 'success_probabilities'), "Only success probabailities can be simulated."
             sfmodel = self.custom_data_src
             depths = data.edesign.depths if self.depths == 'all' else self.depths
-            src_data = _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+            src_data = _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
             circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
 
             for depth in depths:
@@ -762,7 +761,7 @@ class RandomizedBenchmarking(Benchmark):
             std_FAF = None
             failrate_FAF = None
 
-        fits = _support.NamedDict('FitType', 'category')
+        fits = _tools.NamedDict('FitType', 'category')
         fits['full'] = _rb.analysis.FitResults(
             'LS', FF_results['seed'], self.rtype, FF_results['success'], FF_results['estimates'],
             FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,

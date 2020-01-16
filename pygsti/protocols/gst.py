@@ -20,7 +20,6 @@ import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
 from . import protocol as _proto
-from . import support as _support
 from .modeltest import ModelTest as _ModelTest
 from .. import objects as _objs
 from .. import algorithms as _alg
@@ -1248,7 +1247,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
     def as_nameddict(self):
         #Just return estimates
-        ret = _support.NamedDict('Estimate', 'category')
+        ret = _tools.NamedDict('Estimate', 'category')
         for k, v in self.estimates.items():
             ret[k] = v
         return ret
