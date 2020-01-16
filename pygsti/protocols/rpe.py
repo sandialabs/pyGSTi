@@ -31,14 +31,15 @@ class RobustPhaseEstimation(_proto.Protocol):
     def run(self, data):
         design = data.edesign  # experiment design (specifies circuits)
         ds = data.dataset  # dataset
-        ret = RobustPhaseEstimationResults()
+        # ...
+        ret = RobustPhaseEstimationResults(data, self, more_args)
         # ...
         return ret
 
 
 class RobustPhaseEstimationResults(_proto.ProtocolResults):
     """ Results from the RPE protocol """
-    def __init__(self, data, protocol_instance):
+    def __init__(self, data, protocol_instance, more_args):
         """
         Initialize an empty Results object.
         TODO: docstring
