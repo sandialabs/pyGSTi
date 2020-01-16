@@ -12,6 +12,8 @@ import json as _json
 import pathlib as _pathlib
 import copy as _copy
 
+from .. import io as _io
+
 
 class TreeNode(object):
     """ TODO: docstring
@@ -40,8 +42,8 @@ class TreeNode(object):
 
     def _init_children(self, dirname, meta_subdir=None):
         dirname = _pathlib.Path(dirname)
-        input_dir = dirname / 'input'  # because subdirs.json is always & only in 'input'
-        with open(input_dir / 'subdirs.json', 'r') as f:
+        edesign_dir = dirname / 'edesign'  # because subdirs.json is always & only in 'edesign'
+        with open(edesign_dir / 'subdirs.json', 'r') as f:
             meta = _json.load(f)
 
         child_dirs = {}
@@ -58,7 +60,7 @@ class TreeNode(object):
             #if meta_subdir:
             submeta_dir = subobj_dir / meta_subdir
             if submeta_dir.exists():  # It's ok if not all possible sub-nodes exist
-                self._vals[nm] = cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self, name=nm)
+                self._vals[nm] = _io.cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self, name=nm)
             #else:  # if meta_subdir is None, we default to the same class as self
             #    self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
 
@@ -86,7 +88,7 @@ class TreeNode(object):
         raise NotImplementedError("Derived class needs to implement _create_childval to create valid key: %s" % key)
     
     def get_tree_paths(self):
-        """Dictionary paths leading to input objects/nodes beneath this one"""
+        """Dictionary paths leading to data objects/nodes beneath this one"""
         paths = [()]  # path to self
         for child_name, child_node in self.items():
             paths.extend([(child_name,) + pth for pth in child_node.get_tree_paths()])
@@ -104,13 +106,13 @@ class TreeNode(object):
         nPaths = len(sorted_paths)
 
         if nPaths == 1 and len(sorted_paths[0]) == 0:
-            return self  # special case when this MultiInput itself is selected
+            return self  # special case when this TreeNode itself is selected
 
         i = 0
         children_to_keep = {}
         while i < nPaths:
             assert(len(sorted_paths[i]) > 0), \
-                "Cannot select a MultiInput *and* some/all of its elements using filter_paths!"
+                "Cannot select a TreeNode *and* some/all of its elements using filter_paths!"
             ky = sorted_paths[i][0]
 
             paths_starting_with_ky = []
@@ -120,7 +122,7 @@ class TreeNode(object):
             children_to_keep[ky] = self[ky].filter_paths(paths_starting_with_ky, True)
 
         #assert(len(children_to_keep) > 0)
-        view = _copy.deepcopy(self)  # copies type of multi-input
+        view = _copy.deepcopy(self)  # copies type of this tree node
         view._dirs = {k: self._dirs[k] for k in children_to_keep}
         view._vals = children_to_keep
         return view
@@ -129,7 +131,7 @@ class TreeNode(object):
         raise NotImplementedError("Derived classes should implement write(...)!")
         # *** This is a template showing how derived classes should implement write(...) ***
         # # <write derived-class specific data to dirname>
-        # #  write_subdir_json = True  # True only for the "master" type that defines the directory keys ('input')
+        # #  write_subdir_json = True  # True only for the "master" type that defines the directory keys ('edesign')
         # self.write_children(dirname, write_subdir_json)
 
     def write_children(self, dirname, write_subdir_json=True):
@@ -140,7 +142,7 @@ class TreeNode(object):
             subdirs['directories'] = {dirname: subname for subname, dirname in self._dirs.items()}
             if self._childcategory: subdirs['category'] = self._childcategory
             # write self._dirs "backwards" b/c json doesn't allow tuple-like keys (sometimes keys are tuples)
-            with open(dirname / 'input' / 'subdirs.json', 'w') as f:
+            with open(dirname / 'edesign' / 'subdirs.json', 'w') as f:
                 _json.dump(subdirs, f)
 
         for nm, val in self._vals.items():  # only write *existing* values
