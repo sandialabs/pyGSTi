@@ -34,45 +34,8 @@ from ..objects import objectivefns as _objfns
 from ..extras import rb as _rb
 
 
-#Useful to have a base class?
-#class RBInput(_proto.ProtocolInput):
-#    pass
-
-#Structure:
-# MultiInput -> specifies multiple circuit structures on (possibly subsets of) the same data (e.g. collecting into one large dataset the data for multiple protocols)
-# MultiProtocol -> runs, on same input circuit structure & data, multiple protocols (e.g. different GST & model tests on same GST data)
-#   if that one input is a MultiInput, then it must have the same number of inputs as there are protocols and each protocol is run on the corresponding input.
-#   if that one input is a normal input, then the protocols can cache information in a Results object that is handed down.
-# SimultaneousInput -- specifies a "qubit structure" for each sub-input
-# SimultaneousProtocol -> runs multiple protocols on the same data, but "trims" circuits and data before running sub-protocols
-#  (e.g. Volumetric or randomized benchmarks on different subsets of qubits) -- only accepts SimultaneousInputs.
-
-#Inputs:
-# Simultaneous: (spec1)
-#    Q1: ByDepthData
-#    Q2,Q3: ByDepthData
-#    Q4: ByDepthData
-
-#Protocols:
-# Simultaneous:
-#    Q1: Multi
-#      VB (aggregate)
-#      PredictedModelA
-#      PredictedModelB
-#      Datasetcomp (between passes)
-#    Q2,Q3: VB
-#    Q4: VB
-
-#OR: so that auto-running performs the above protocols:
-#Inputs:
-# Simultaneous: (spec1)
-#    Q1: MultiInput(VB, PredictedModelA, PredictedModelB) - or MultiBenchmark?
-#       ByDepthData
-#    Q2,Q3: VB-ByDepthData
-#    Q4: VB-ByDepthData
-
-
-class ByDepthInput(_proto.CircuitListsInput):
+class ByDepthDesign(_proto.CircuitListsDesign):
+    """ Experiment design that holds circuits organized by depth """
     def __init__(self, depths, circuit_lists, qubit_labels=None):
         assert(len(depths) == len(circuit_lists)), \
             "Number of depths must equal the number of circuit lists!"
@@ -80,7 +43,11 @@ class ByDepthInput(_proto.CircuitListsInput):
         self.depths = depths
 
         
-class BenchmarkingInput(ByDepthInput):
+class BenchmarkingDesign(ByDepthDesign):
+    """
+    Experiment design that holds benchmarking data, i.e. definite-outcome
+    circuits organized by depth along with their corresponding ideal outcomes.
+    """
     def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels)
@@ -88,8 +55,8 @@ class BenchmarkingInput(ByDepthInput):
         self.auxfile_types['idealout_lists'] = 'json'
 
 
-class CliffordRBInput(BenchmarkingInput):
-
+class CliffordRBDesign(BenchmarkingDesign):
+    """ Experiment design for Clifford randomized benchmarking """
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
                  verbosity=1, add_default_protocol=False):
@@ -125,8 +92,8 @@ class CliffordRBInput(BenchmarkingInput):
             self.add_default_protocol(RB(name='RB'))
 
 
-class DirectRBInput(BenchmarkingInput):
-
+class DirectRBDesign(BenchmarkingDesign):
+    """ Experiment design for Direct randomized benchmarking """
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
@@ -177,10 +144,11 @@ class DirectRBInput(BenchmarkingInput):
 
 
 
-#TODO: maybe need more input types for simultaneous RB and mirrorRB "experiments"
+#TODO: maybe need more experiment design types for simultaneous RB and mirrorRB "experiments"
 
 
 class Benchmark(_proto.Protocol):
+    """ A benchmarking protocol that can construct "summary" quantities from the raw data. """
 
     summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts',
                          'success_probabilities', 'adjusted_success_probabilities')
@@ -270,16 +238,16 @@ class Benchmark(_proto.Protocol):
     #def compute_results_qty(self, results, qtyname, component_names, compute_fn, force=False, for_passes="all"):
     def compute_dict(self, data, component_names, compute_fn, for_passes="all"):
 
-        inp = data.input
+        design = data.edesign
         ds = data.dataset
 
-        depths = inp.depths
+        depths = design.depths
         qty_data = _support.NamedDict('Datatype', 'category', None,
                                       {comp: _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
                                        for comp in component_names})
 
         #loop over all circuits
-        for depth, circuits_at_depth, idealouts_at_depth in zip(depths, inp.circuit_lists, inp.idealout_lists):
+        for depth, circuits_at_depth, idealouts_at_depth in zip(depths, design.circuit_lists, design.idealout_lists):
             for icirc, (circ, idealout) in enumerate(zip(circuits_at_depth, idealouts_at_depth)):
                 dsrow = ds[circ] if (ds is not None) else None  # stripOccurrenceTags=True ??
                 # -- this is where Tim thinks there's a bottleneck, as these loops will be called for each
@@ -371,7 +339,7 @@ class Benchmark(_proto.Protocol):
 
 
 class VolumetricBenchmarkGrid(Benchmark):
-    #object that can take, e.g. a multiinput or simultaneous input and create a results object with the desired grid of width vs depth numbers
+    """ A protocol that creates an entire depth vs. width grid of volumetric benchmark values """
 
     def __init__(self, depths='all', widths='all', datatype='success_probabilities',
                  paths='all', statistic='mean', aggregate=True, rescaler='auto',
@@ -410,6 +378,7 @@ class VolumetricBenchmarkGrid(Benchmark):
 
 
 class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
+    """ A postprocesor that constructs a grid of volumetric benchmarks from existing results. """
     def __init__(self, depths='all', widths='all', datatype='success_probabilities',
                  paths='all', statistic='mean', aggregate=True, name=None):
 
@@ -447,13 +416,13 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                 if passname:  # then we expect final Results are MultiPassResults
                     root = root.passes[passname]  # now root should be a BenchmarkingResults
                 assert(isinstance(root, VolumetricBenchmarkingResults))
-                assert(isinstance(root.data.input, ByDepthInput)), \
-                    "All paths must lead to by-depth inputs, not %s!" % str(type(root.data.input))
+                assert(isinstance(root.data.edesign, ByDepthDesign)), \
+                    "All paths must lead to by-depth exp. design, not %s!" % str(type(root.data.edesign))
 
                 #Get the list of depths we'll extract from this (`root`) sub-results
-                depths = root.data.input.depths if (self.depths == 'all') else \
-                    filter(lambda d: d in self.depths, root.data.input.depths)
-                width = len(root.data.input.qubit_labels)  # sub-results contains only a single width
+                depths = root.data.edesign.depths if (self.depths == 'all') else \
+                    filter(lambda d: d in self.depths, root.data.edesign.depths)
+                width = len(root.data.edesign.qubit_labels)  # sub-results contains only a single width
                 if self.widths != 'all' and width not in self.widths: continue  # skip this one
 
                 for depth in depths:
@@ -551,6 +520,7 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
 
 
 class VolumetricBenchmark(Benchmark):
+    """ A volumetric benchmark protocol """
 
     def __init__(self, depths='all', datatype='success_probabilities',
                  statistic='mean', rescaler='auto', dscomparator=None,
@@ -596,10 +566,10 @@ class VolumetricBenchmark(Benchmark):
 
     def run(self, data):
 
-        inp = data.input
+        design = data.edesign
 
         if self.custom_data_src is None:  # then use the data in `data`
-            #Note: can only take/put things ("results") in data.cache that *only* depend on the input
+            #Note: can only take/put things ("results") in data.cache that *only* depend on the exp. design
             # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
             if self.datatype in self.summary_datatypes:
                 if self.datatype not in data.cache:
@@ -616,9 +586,9 @@ class VolumetricBenchmark(Benchmark):
         elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
             assert(self.datatype == 'success_probabilities'), "Only success probabailities can be simulated."
             sfmodel = self.custom_data_src
-            depths = data.input.depths if self.depths == 'all' else self.depths
+            depths = data.edesign.depths if self.depths == 'all' else self.depths
             src_data = _support.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
-            circuit_lists_for_depths = {depth: lst for depth, lst in zip(inp.depths, inp.circuit_lists)}
+            circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
 
             for depth in depths:
                 for circ in circuit_lists_for_depths[depth]:
@@ -657,16 +627,12 @@ class VolumetricBenchmark(Benchmark):
             failcount = int(_np.sum(_np.isnan(percircuitdata)))
             return (nCircuits - failcount, failcount)
 
-        #TODO REMOVE
-        #BEFORE SimultaneousInputs: for qubits in inp.get_structure():        
-        #width = len(qubits)
-
         data_per_depth = src_data
         if self.depths == 'all':
             depths = data_per_depth.keys()
         else:
             depths = filter(lambda d: d in data_per_depth, self.depths)
-        width = len(inp.qubit_labels)
+        width = len(design.qubit_labels)
 
         vb = self.create_depthwidth_dict(depths, (width,), lambda: None, 'float')
         fails = self.create_depthwidth_dict(depths, (width,), lambda: None, None)
@@ -683,7 +649,7 @@ class VolumetricBenchmark(Benchmark):
 
 
 class PredictedVolumetricBenchmark(VolumetricBenchmark):
-    """Runs VB on success/fail data predicted from a model"""
+    """Runs a volumetric benchmark on success/fail data predicted from a model"""
     def __init__(self, model_or_summary_data, depths='all', statistic='mean',
                  rescaler='auto', dscomparator=None, name=None):
         super().__init__(depths, 'success_probabilities', statistic, rescaler,
@@ -691,6 +657,8 @@ class PredictedVolumetricBenchmark(VolumetricBenchmark):
 
 
 class RandomizedBenchmarking(Benchmark):
+    """ The randomized benchmarking protocol (this same analysis protocol is used for both Clifford and direct RB) """
+    
     def __init__(self, seed=(0.8, 0.95), bootstrap_samples=200, asymptote='std', rtype='EI',
                  datatype='success_probabilities', depths='all', name=None):
         super().__init__(name)
@@ -708,7 +676,7 @@ class RandomizedBenchmarking(Benchmark):
 
     def run(self, data):
 
-        inp = data.input
+        design = data.edesign
 
         if self.datatype not in data.cache:
             summary_data_dict = self.compute_summary_data(data)
@@ -721,7 +689,7 @@ class RandomizedBenchmarking(Benchmark):
         else:
             depths = filter(lambda d: d in data_per_depth, self.depths)
 
-        nQubits = len(inp.qubit_labels)
+        nQubits = len(design.qubit_labels)
 
         if isinstance(self.asymptote, str):
             assert(self.asymptote == 'std'), "If `asymptote` is a string it must be 'std'!"
@@ -809,6 +777,7 @@ class RandomizedBenchmarking(Benchmark):
 
 
 class RandomizedBenchmarkingResults(_proto.ProtocolResults):
+    """ The results of running a randomized benchmarking """
     def __init__(self, data, protocol_instance, fits, depths):
         """
         Initialize an empty Results object.
@@ -909,6 +878,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 
 
 class VolumetricBenchmarkingResults(_proto.ProtocolResults):
+    """ The results from running a volumetric benchmark protocol """
     def __init__(self, data, protocol_instance):
         """
         Initialize an empty Results object.

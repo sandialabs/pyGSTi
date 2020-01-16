@@ -45,27 +45,30 @@ DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
 class HasTargetModel(object):
+    """ Adds to an experiment design a target model """
     def __init__(self, targetModelFilenameOrObj):
         self.target_model = _load_model(targetModelFilenameOrObj)
         self.auxfile_types['target_model'] = 'pickle'
 
 
-class GateSetTomographyInput(_proto.CircuitListsInput, HasTargetModel):
-    """ Minimal Inputs needed for GST """
+class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
+    """ Minimal experiment design needed for GST """
     def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None,
                  qubit_labels=None, nested=False):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
 
 
-class StructuredGSTInput(_proto.CircuitStructuresInput, HasTargetModel):
+class StructuredGSTDesign(_proto.CircuitStructuresDesign, HasTargetModel):
+    """ GST experiment design where circuits are structured by length and germ (typically). """
     def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
                  nested=False):
         super().__init__(circuit_structs, qubit_labels, nested)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
 
 
-class StandardGSTInput(StructuredGSTInput):
+class StandardGSTDesign(StructuredGSTDesign):
+    """ Standard GST experiment design consisting of germ-powers sandwiched between fiducials. """
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
                  keepSeed=None, qubit_labels=None, verbosity=0, add_default_protocol=False):
@@ -107,6 +110,7 @@ class StandardGSTInput(StructuredGSTInput):
 
 
 class GateSetTomography(_proto.Protocol):
+    """ The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set."""
     def __init__(self, initialModelFilenameOrObj=None, gaugeopt_suite=None,
                  gaugeopt_target=None, advancedOptions=None, comm=None,
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
@@ -136,16 +140,16 @@ class GateSetTomography(_proto.Protocol):
 
     #TODO: Maybe make methods like this separate functions??
     def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-        inp = StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-        return self.run(_proto.ProtocolData(inp, dataset))
+        design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+        return self.run(_proto.ProtocolData(design, dataset))
 
     def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
-        inp = StructuredGSTInput(target_model, circuit_structs)
-        return self.run(_proto.ProtocolData(inp, dataset))
+        design = StructuredGSTDesign(target_model, circuit_structs)
+        return self.run(_proto.ProtocolData(design, dataset))
 
     def run_using_circuit_lists(self, target_model, circuit_lists, dataset):
-        inp = GSTInput(target_model, circuit_lists)
-        return self.run(_proto.ProtocolData(inp, dataset))
+        design = GateSetTomographyDesign(target_model, circuit_lists)
+        return self.run(_proto.ProtocolData(design, dataset))
 
     def run(self, data):
 
@@ -169,9 +173,9 @@ class GateSetTomography(_proto.Protocol):
         profiler.add_time('do_long_sequence_gst: loading', tRef); tRef = tNxt
 
         try:  # take structs if available
-            lsgstLists = data.input.circuit_structs
+            lsgstLists = data.edesign.circuit_structs
         except:
-            lsgstLists = data.input.circuit_lists
+            lsgstLists = data.edesign.circuit_lists
         ds = data.dataset
 
         #Get starting point (model), which is used to compute other quantities
@@ -181,7 +185,7 @@ class GateSetTomography(_proto.Protocol):
             startingPt = "User-supplied-Model"  # for profiler log below
         else:
             #Use the target model, with optional post-processing
-            target_model = data.input.target_model
+            target_model = data.edesign.target_model
             if isinstance(target_model, _objs.ExplicitOpModel):
                 LGSTcompatibleOps = all([(isinstance(g, _objs.FullDenseOp)
                                           or isinstance(g, _objs.TPDenseOp))
@@ -346,13 +350,14 @@ class GateSetTomography(_proto.Protocol):
         parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
         parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
-        return _package_into_results(self, data, data.input.target_model, mdl_start,
+        return _package_into_results(self, data, data.edesign.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
                                      self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm, memLimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
 
 
 class StandardGST(_proto.Protocol):
+    """The standard-practice GST protocol."""
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeopt_suite=('single', 'unreliable2Q'),
                  gaugeopt_target=None, modelsToTest=None, comm=None, memLimit=None,
@@ -380,8 +385,8 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['comm'] = 'reset'
 
     def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-        inp = StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-        data = _proto.ProtocolData(inp, dataset)
+        design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+        data = _proto.ProtocolData(design, dataset)
         return self.run(data)
 
     def run(self, data):
@@ -391,15 +396,6 @@ class StandardGST(_proto.Protocol):
         modelsToTest = self.models_to_test
         advancedOptions = self.advancedOptions.copy()  # ever None?? - if not, simplify below logic
         if modelsToTest is None: modelsToTest = {}
-
-        #TODO REMOVE
-        #inp = data.input
-        #ds = data.dataset
-        #target_model = inp.target_model
-        #prepStrs = inp.prep_fiducials
-        #effectStrs = inp.meas_fiducials
-        #germs = inp.germs
-        #maxLengths = inp.max_lengths
 
         ret = None
         with printer.progress_logging(1):
@@ -412,7 +408,7 @@ class StandardGST(_proto.Protocol):
                 
                 if mode == "Target":
                     est_label = mode
-                    model_to_test = data.input.target_model.copy()  # no parameterization change
+                    model_to_test = data.edesign.target_model.copy()  # no parameterization change
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label, 'onBadFit': []})
                     mdltest = _ModelTest(model_to_test, self.gaugeopt_suite, self.gaugeopt_target, advanced,
                                          self.comm, self.memLimit, verbosity=printer - 1)
@@ -420,7 +416,7 @@ class StandardGST(_proto.Protocol):
 
                 elif mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode is a parameterization
                     est_label = parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = data.input.target_model.copy()
+                    initial_model = data.edesign.target_model.copy()
                     initial_model.set_all_parameterizations(parameterization)
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
 
@@ -1168,11 +1164,11 @@ def reoptimize_with_weights(model, ds, circuitList, circuitWeights, objective, o
 
 class ModelEstimateResults(_proto.ProtocolResults):
     """
-    TODO: docstring (better)
-    Adds functionality to bare ProtocolResults object but *doesn't*
-    add additional data storage - all is still within same members,
-    even if this is is exposed differently.
+    A results object that holds model estimates.
     """
+    #Note: adds functionality to bare ProtocolResults object but *doesn't*
+    #add additional data storage - all is still within same members,
+    #even if this is is exposed differently.
 
     def __init__(self, data, protocol_instance, init_circuits=True):
         """
@@ -1186,9 +1182,9 @@ class ModelEstimateResults(_proto.ProtocolResults):
         circuit_structs = _collections.OrderedDict()
 
         if init_circuits:
-            inp = self.data.input
-            if isinstance(inp, _proto.CircuitStructuresInput):
-                circuit_structs['iteration'] = inp.circuit_structs[:]
+            edesign = self.data.edesign
+            if isinstance(edesign, _proto.CircuitStructuresDesign):
+                circuit_structs['iteration'] = edesign.circuit_structs[:]
 
                 #Set "Ls and germs" info: gives particular structure
                 finalStruct = circuit_structs['iteration'][-1]
@@ -1197,9 +1193,9 @@ class ModelEstimateResults(_proto.ProtocolResults):
                     circuit_lists['effect fiducials'] = finalStruct.effectStrs
                     circuit_lists['germs'] = finalStruct.germs
 
-            elif isinstance(inp, _proto.CircuitListsInput):
+            elif isinstance(edesign, _proto.CircuitListsDesign):
                 circuit_structs['iteration'] = []
-                for lst in inp.circuit_lists:
+                for lst in edesign.circuit_lists:
                     unindexed_gss = _LsGermsStructure([], [], [], [], None)
                     unindexed_gss.add_unindexed(lst)
                     circuit_structs['iteration'].append(unindexed_gss)
@@ -1210,7 +1206,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
                 circuit_lists['germs'] = []
             else:
                 #Single iteration
-                lst = inp.all_circuits_needing_data
+                lst = edesign.all_circuits_needing_data
                 unindexed_gss = _LsGermsStructure([], [], [], [], None)
                 unindexed_gss.add_unindexed(lst)
                 circuit_structs['iteration'] = [unindexed_gss]
@@ -1487,7 +1483,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
     def copy(self):
         """ Creates a copy of this Results object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
-        data = _proto.ProtocolData(self.input, self.dataset)
+        data = _proto.ProtocolData(self.edesign, self.dataset)
         cpy = ModelEstimateResults(data, self.protocol, init_circuits=False)
         cpy.dataset = self.dataset.copy()
         cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
@@ -1523,5 +1519,5 @@ class ModelEstimateResults(_proto.ProtocolResults):
         return s
 
 
-GSTInput = GateSetTomographyInput
+GSTDesign = GateSetTomographyDesign
 GST = GateSetTomography

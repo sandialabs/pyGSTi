@@ -30,6 +30,7 @@ from ..objects import objectivefns as _objfns
 
 
 class ModelTest(_proto.Protocol):
+    """A protocol that tests how well a model agrees with a given set of data."""
     def __init__(self, model_to_test, gaugeopt_suite=None,
                  gaugeopt_target=None, advancedOptions=None, comm=None,
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
@@ -60,22 +61,22 @@ class ModelTest(_proto.Protocol):
 
     def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
                                       meas_fiducials, germs, maxLengths):
-        from .gst import StandardGSTInput as _StandardGSTInput
-        inp = _StandardGSTInput(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-        return self.run(_proto.ProtocolData(inp, dataset))
+        from .gst import StandardGSTDesign as _StandardGSTDesign
+        design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+        return self.run(_proto.ProtocolData(design, dataset))
 
     def run(self, data):
         the_model = self.model_to_test
         advancedOptions = self.advancedOptions
         comm = self.comm
 
-        if isinstance(data.input, _proto.CircuitListsInput):
-            lsgstLists = data.input.circuit_lists
+        if isinstance(data.edesign, _proto.CircuitListsDesign):
+            lsgstLists = data.edesign.circuit_lists
         else:
-            lsgstLists = [data.input.all_circuits_needing_data]
+            lsgstLists = [data.edesign.all_circuits_needing_data]
             
-        if hasattr(data.input, 'target_model'):
-            target_model = data.input.target_model
+        if hasattr(data.edesign, 'target_model'):
+            target_model = data.edesign.target_model
         else:
             target_model = None  # target model isn't necessary
 
