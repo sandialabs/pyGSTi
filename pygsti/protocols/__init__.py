@@ -13,3 +13,4 @@ from .gst import *
 from .rb import *
 from .rpe import *
 from .modeltest import *
+from .stability import *
