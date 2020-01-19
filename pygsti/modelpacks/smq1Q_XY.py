@@ -1,4 +1,6 @@
-""" Variables for working with the a model containing X(pi/2) and Y(pi/2) gates. """
+"""
+Variables for working with the a model containing X(pi/2) and Y(pi/2) gates.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,95 +11,39 @@
 #***************************************************************************************************
 
 from collections import OrderedDict
+from pygsti.construction import circuitconstruction as _strc
+from pygsti.construction import modelconstruction as _setc
 
-from ..construction import circuitconstruction as strc
-from ..construction import modelconstruction as setc
-
-from ._modelpack import SMQModelPack
+from pygsti.modelpacks._modelpack import SMQModelPack
 
 
-# TODO update to SMQ
-class SMQ1Q_XY(SMQModelPack):
+
+class _Module(SMQModelPack):
     description = "X(pi/2) and Y(pi/2) gates"
 
-    gates = ['Gx', 'Gy']
-    fiducials = strc.circuit_list([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
-                                   ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')])  # for 1Q MUB
-    prepStrs = effectStrs = fiducials
-    germs = strc.circuit_list(
-        [('Gx',),
-         ('Gy',),
-         ('Gx', 'Gy',),
-         ('Gx', 'Gx', 'Gy'),
-         ('Gx', 'Gy', 'Gy'),
-         ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy',)])
+    gates = [('Gx', 0), ('Gy', 0)]
+
+    germs = _strc.circuit_list([(('Gx', 0),), (('Gy', 0),), (('Gx', 0), ('Gy', 0)), (('Gx', 0), ('Gx', 0), ('Gy', 0)), (('Gx', 0), ('Gy', 0), ('Gy', 0)), (('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0))], line_labels=[0])
 
     germs_lite = germs[0:4]
 
+    fiducials = _strc.circuit_list([(), (('Gx', 0),), (('Gy', 0),), (('Gx', 0), ('Gx', 0)), (('Gx', 0), ('Gx', 0), ('Gx', 0)), (('Gy', 0), ('Gy', 0), ('Gy', 0))], line_labels=[0])
+
+    prepStrs = fiducials
+
+    effectStrs = fiducials
+
+    clifford_compilation = OrderedDict([('Gc0', []), ('Gc1', [('Gy', 0), ('Gx', 0)]), ('Gc2', [('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0), ('Gy', 0)]), ('Gc3', [('Gx', 0), ('Gx', 0)]), ('Gc4', [('Gy', 0), ('Gy', 0), ('Gy', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)]), ('Gc5', [('Gx', 0), ('Gy', 0), ('Gy', 0), ('Gy', 0)]), ('Gc6', [('Gy', 0), ('Gy', 0)]), ('Gc7', [('Gy', 0), ('Gy', 0), ('Gy', 0), ('Gx', 0)]), ('Gc8', [('Gx', 0), ('Gy', 0)]), ('Gc9', [('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0)]), ('Gc10', [('Gy', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)]), ('Gc11', [('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gy', 0)]), ('Gc12', [('Gy', 0), ('Gx', 0), ('Gx', 0)]), ('Gc13', [('Gx', 0), ('Gx', 0), ('Gx', 0)]), ('Gc14', [('Gx', 0), ('Gy', 0), ('Gy', 0), ('Gy', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)]), ('Gc15', [('Gy', 0), ('Gy', 0), ('Gy', 0)]), ('Gc16', [('Gx', 0)]), ('Gc17', [('Gx', 0), ('Gy', 0), ('Gx', 0)]), ('Gc18', [('Gy', 0), ('Gy', 0), ('Gy', 0), ('Gx', 0), ('Gx', 0)]), ('Gc19', [('Gx', 0), ('Gy', 0), ('Gy', 0)]), ('Gc20', [('Gx', 0), ('Gy', 0), ('Gy', 0), ('Gy', 0), ('Gx', 0)]), ('Gc21', [('Gy', 0)]), ('Gc22', [('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0)]), ('Gc23', [('Gx', 0), ('Gy', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)])])
+    global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
+    pergerm_fidPairsDict = {('Gx',): [(1, 1), (3, 4), (4, 2), (5, 5)], ('Gy',): [(0, 2), (2, 2), (2, 4), (4, 4)], ('Gx', 'Gy'): [(0, 0), (0, 4), (2, 5), (5, 4)], ('Gx', 'Gx', 'Gy'): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)], ('Gx', 'Gy', 'Gy'): [(0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)], ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [(0, 0), (2, 3), (5, 2), (5, 4)]}
+    global_fidPairs_lite = [(0, 2), (2, 4), (3, 1), (3, 3)]
+    pergerm_fidPairsDict_lite = {('Gx',): [(1, 1), (3, 4), (4, 2), (5, 5)], ('Gy',): [(0, 2), (2, 2), (2, 4), (4, 4)], ('Gx', 'Gy'): [(0, 0), (0, 4), (2, 5), (5, 4)], ('Gx', 'Gx', 'Gy'): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)]}
+
     @property
     def _target_model(self):
-        #Construct a target model:  X(pi/2), Y(pi/2)
-        return setc.build_explicit_model([('Q0',)], ['Gx', 'Gy'],
-                                         ["X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        return _setc.build_explicit_model([(0,)], [('Gx', 0), ('Gy', 0)], ['X(pi/2,0)', 'Y(pi/2,0)'])
 
-    clifford_compilation = OrderedDict([
-        ("Gc0", []),
-        ("Gc1", ['Gy', 'Gx', ]),
-        ("Gc2", ['Gx', 'Gx', 'Gx', 'Gy', 'Gy', 'Gy', ]),
-        ("Gc3", ['Gx', 'Gx', ]),
-        ("Gc4", ['Gy', 'Gy', 'Gy', 'Gx', 'Gx', 'Gx', ]),
-        ("Gc5", ['Gx', 'Gy', 'Gy', 'Gy', ]),
-        ("Gc6", ['Gy', 'Gy', ]),
-        ("Gc7", ['Gy', 'Gy', 'Gy', 'Gx', ]),
-        ("Gc8", ['Gx', 'Gy', ]),
-        ("Gc9", ['Gx', 'Gx', 'Gy', 'Gy', ]),
-        ("Gc10", ['Gy', 'Gx', 'Gx', 'Gx', ]),
-        ("Gc11", ['Gx', 'Gx', 'Gx', 'Gy', ]),
-        ("Gc12", ['Gy', 'Gx', 'Gx', ]),
-        ("Gc13", ['Gx', 'Gx', 'Gx', ]),
-        ("Gc14", ['Gx', 'Gy', 'Gy', 'Gy', 'Gx', 'Gx', 'Gx', ]),
-        ("Gc15", ['Gy', 'Gy', 'Gy', ]),
-        ("Gc16", ['Gx', ]),
-        ("Gc17", ['Gx', 'Gy', 'Gx', ]),
-        ("Gc18", ['Gy', 'Gy', 'Gy', 'Gx', 'Gx', ]),
-        ("Gc19", ['Gx', 'Gy', 'Gy', ]),
-        ("Gc20", ['Gx', 'Gy', 'Gy', 'Gy', 'Gx', ]),
-        ("Gc21", ['Gy', ]),
-        ("Gc22", ['Gx', 'Gx', 'Gx', 'Gy', 'Gy', ]),
-        ("Gc23", ['Gx', 'Gy', 'Gx', 'Gx', 'Gx', ])
-    ])
-
-    global_fidPairs = [
-        (0, 0), (2, 3), (5, 2), (5, 4)]
-
-    pergerm_fidPairsDict = {
-        ('Gx',): [
-            (1, 1), (3, 4), (4, 2), (5, 5)],
-        ('Gy',): [
-            (0, 2), (2, 2), (2, 4), (4, 4)],
-        ('Gx', 'Gy'): [
-            (0, 0), (0, 4), (2, 5), (5, 4)],
-        ('Gx', 'Gx', 'Gy'): [
-            (1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)],
-        ('Gx', 'Gy', 'Gy'): [
-            (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
-        ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [
-            (0, 0), (2, 3), (5, 2), (5, 4)],
-    }
-
-    global_fidPairs_lite = [
-        (0, 2), (2, 4), (3, 1), (3, 3)]
-
-    pergerm_fidPairsDict_lite = {
-        ('Gx',): [
-            (1, 1), (3, 4), (4, 2), (5, 5)],
-        ('Gy',): [
-            (0, 2), (2, 2), (2, 4), (4, 4)],
-        ('Gx', 'Gy'): [
-            (0, 0), (0, 4), (2, 5), (5, 4)],
-        ('Gx', 'Gx', 'Gy'): [
-            (1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)],
-    }
 
 import sys
-sys.modules[__name__] = SMQ1Q_XY()
+sys.modules[__name__] = _Module()
+
