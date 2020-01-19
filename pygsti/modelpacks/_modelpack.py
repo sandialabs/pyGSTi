@@ -53,7 +53,7 @@ class ModelPack(_ABC):
             mdl = self._target_model.copy()
             mdl.set_all_parameterizations(parameterization_type)  # automatically sets sim_type
             if parameterization_type == "H+S terms":
-                assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
+                assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
                 simt = "termorder:1" if sim_type == "auto" else sim_type  # don't update sim_type b/c gscache
                 calc_cache = {}  # the default
 
@@ -79,7 +79,7 @@ class ModelPack(_ABC):
             # cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
             #                           "caches")
 
-            assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
+            assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
             termOrder = 1 if sim_type == "auto" else int(sim_type.split(":")[1])
             fn = ("cacheHS%d." % termOrder) + self.__module__
             return cachePath / (fn + "_keys.pkz"), cachePath / (fn + "_vals.npz")
@@ -110,7 +110,7 @@ class SMQModelPack(ModelPack):
 class RPEModelPack(ModelPack):
     """ ABC for robust phase estimation modelpacks """
     def get_rpe_inputs(max_max_length):
-        pass # TODO
+        pass  # TODO
 
 
 # Helper functions
