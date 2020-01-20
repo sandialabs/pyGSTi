@@ -359,15 +359,15 @@ class Estimate(object):
 
         ref_model = self.models[from_model_label]
         goparams = self.goparameters[to_model_label]
-        start_model = goparams['model'].copy()
+        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+        start_model = goparams_list[0]['model'].copy()
         final_model = self.models[to_model_label].copy()
 
-        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
         gaugeGroupEls = []
         for gop in goparams_list:
             assert('_gaugeGroupEl' in gop), "To propagate a confidence " + \
                 "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
-            gaugeGroupEls.append(goparams['_gaugeGroupEl'])
+            gaugeGroupEls.append(gop['_gaugeGroupEl'])
 
         assert(start_model.frobeniusdist(ref_model) < 1e-6), \
             "Gauge-opt starting point must be the 'from' (reference) Model"
