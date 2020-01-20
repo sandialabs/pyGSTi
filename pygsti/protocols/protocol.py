@@ -504,7 +504,7 @@ class ExperimentDesign(_TreeNode):
         """
         if dirname is None:
             dirname = self._loaded_from
-            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+            if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
             
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
@@ -819,7 +819,6 @@ class ProtocolData(_TreeNode):
         cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
-        ret._loaded_from = str(dirname.absolute())
         ret._init_children(dirname, 'data')  # loads child nodes
         return ret
 
@@ -939,8 +938,8 @@ class ProtocolData(_TreeNode):
         None
         """
         if dirname is None:
-            dirname = self._loaded_from
-            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+            dirname = self.edesign._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -1002,7 +1001,6 @@ class ProtocolResults(object):
         ret = cls.__new__(cls)
         ret.data = preloaded_data if (preloaded_data is not None) else \
             _io.load_data_from_dir(dirname)
-        ret._loaded_from = str(dirname.absolute())
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
@@ -1027,7 +1025,6 @@ class ProtocolResults(object):
         self.protocol = protocol_instance
         self.data = data
         self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
-        self._loaded_from = None
 
     def write(self, dirname=None, data_already_written=False):
         """
@@ -1052,8 +1049,8 @@ class ProtocolResults(object):
         None
         """
         if dirname is None:
-            dirname = self._loaded_from
-            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+            dirname = self.data.edesign._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         p = _pathlib.Path(dirname)
         results_dir = p / 'results' / self.name
@@ -1185,7 +1182,6 @@ class ProtocolResultsDir(_TreeNode):
                         dirname, pth.name, preloaded_data=data)
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._loaded_from = str(dirname.absolute())
         ret._init_children(dirname, meta_subdir='results')
         return ret
 
@@ -1259,8 +1255,8 @@ class ProtocolResultsDir(_TreeNode):
         None
         """
         if dirname is None:
-            dirname = self._loaded_from
-            if dirname is None: raise ValueError("`dirname` must be given because this object wasn't loaded from disk")
+            dirname = self.data.edesign._loaded_from
+            if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         if parent is None: self.data.write(dirname)  # assume parent has already written data
         dirname = _pathlib.Path(dirname)

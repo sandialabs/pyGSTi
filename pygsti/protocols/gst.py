@@ -58,7 +58,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
 
 
-class StructuredGSTDesign(_proto.CircuitStructuresDesign, GateSetTomographyDesign):
+class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesign):
     """ GST experiment design where circuits are structured by length and germ (typically). """
     def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
                  nested=False):
