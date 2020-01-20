@@ -58,12 +58,14 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
 
 
-class StructuredGSTDesign(_proto.CircuitStructuresDesign, HasTargetModel):
+class StructuredGSTDesign(_proto.CircuitStructuresDesign, GateSetTomographyDesign):
     """ GST experiment design where circuits are structured by length and germ (typically). """
     def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
                  nested=False):
-        super().__init__(circuit_structs, qubit_labels, nested)
+        _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
+        #Note: we *don't* need to init GateSetTomographyDesign here, only HasTargetModel,
+        # GateSetTomographyDesign's non-target-model data is initialized by CircuitStructuresDesign.
 
 
 class StandardGSTDesign(StructuredGSTDesign):
@@ -110,15 +112,13 @@ class StandardGSTDesign(StructuredGSTDesign):
 
 class GateSetTomography(_proto.Protocol):
     """ The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set."""
-    def __init__(self, initialModelFilenameOrObj=None, gaugeopt_suite=None,
+    def __init__(self, initialModelFilenameOrObj=None, gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, advancedOptions=None, comm=None,
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
         # because they are mutable objects
         if advancedOptions is None: advancedOptions = {}
-        if gaugeopt_suite is None:
-            gaugeopt_suite = ('single', 'unreliable2Q')  # OLD: {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
 
         super().__init__(name)
         self.initial_model = _load_model(initialModelFilenameOrObj) if initialModelFilenameOrObj else None
@@ -358,7 +358,7 @@ class GateSetTomography(_proto.Protocol):
 class StandardGST(_proto.Protocol):
     """The standard-practice GST protocol."""
     def __init__(self, modes="TP,CPTP,Target",
-                 gaugeopt_suite=('single', 'unreliable2Q'),
+                 gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, modelsToTest=None, comm=None, memLimit=None,
                  advancedOptions=None, output_pkl=None, verbosity=2, name=None):
 
@@ -498,147 +498,153 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, model, advancedOptions=None, ver
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
+    if gaugeOptSuite is None:
+        gaugeOptSuite = {}
+    elif isinstance(gaugeOptSuite, str):
+        gaugeOptSuite = {gaugeOptSuite: gaugeOptSuite}
+    elif isinstance(gaugeOptSuite, tuple):
+        gaugeOptSuite = {nm: nm for nm in gaugeOptSuite}
+
+    assert(isinstance(gaugeOptSuite, dict)), \
+        "Can't convert type '%s' to a gauge optimization suite dictionary!" % str(type(gaugeOptSuite))
+
     #Build ordered dict of gauge optimization parameters
-    if isinstance(gaugeOptSuite, dict):
-        gaugeOptSuite_dict = _collections.OrderedDict()
-        for lbl, goparams in gaugeOptSuite.items():
-            if hasattr(goparams, 'keys'):
-                gaugeOptSuite_dict[lbl] = goparams.copy()
-                gaugeOptSuite_dict[lbl].update({'verbosity': printer})
-            else:
-                assert(isinstance(goparams, list)), "If not a dictionary, gauge opt params should be a list of dicts!"
-                gaugeOptSuite_dict[lbl] = []
-                for goparams_stage in goparams:
-                    dct = goparams_stage.copy()
-                    dct.update({'verbosity': printer})
-                    gaugeOptSuite_dict[lbl].append(dct)
-
-    else:
-        gaugeOptSuite_dict = _collections.OrderedDict()
-        if isinstance(gaugeOptSuite, str):
-            gaugeOptSuites = [gaugeOptSuite]
+    gaugeOptSuite_dict = _collections.OrderedDict()
+    for lbl, goparams in gaugeOptSuite.items():
+        if isinstance(goparams, str):
+            _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, lbl, goparams,
+                                                 model, printer, advancedOptions)
+        elif hasattr(goparams, 'keys'):
+            gaugeOptSuite_dict[lbl] = goparams.copy()
+            gaugeOptSuite_dict[lbl].update({'verbosity': printer})
         else:
-            gaugeOptSuites = gaugeOptSuite[:]  # assumes gaugeOptSuite is a list/tuple of strs
-
-        for suiteName in gaugeOptSuites:
-            if suiteName == "single":
-
-                stages = []  # multi-stage gauge opt
-                gg = model.default_gauge_group
-                if isinstance(gg, _objs.TrivialGaugeGroup):
-                    #just do a single-stage "trivial" gauge opts using default group
-                    gaugeOptSuite_dict['single'] = {'verbosity': printer}
-
-                    if "unreliable2Q" in gaugeOptSuites and model.dim == 16:
-                        if advancedOptions is not None:
-                            # 'unreliableOps' can only be specified in 'all' options
-                            advanced = advancedOptions.get('all', {})
-                        else: advanced = {}
-                        unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-                        if any([gl in model.operations.keys() for gl in unreliableOps]):
-                            gaugeOptSuite_dict['single-2QUR'] = {'verbosity': printer}
-
-                elif gg is not None:
-
-                    #Stage 1: plain vanilla gauge opt to get into "right ballpark"
-                    if gg.name in ("Full", "TP"):
-                        stages.append(
-                            {
-                                'itemWeights': {'gates': 1.0, 'spam': 1.0},
-                                'verbosity': printer
-                            })
-
-                    #Stage 2: unitary gauge opt that tries to nail down gates (at
-                    #         expense of spam if needed)
-                    stages.append(
-                        {
-                            'itemWeights': {'gates': 1.0, 'spam': 0.0},
-                            'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
-                            'verbosity': printer
-                        })
-
-                    #Stage 3: spam gauge opt that fixes spam scaling at expense of
-                    #         non-unital parts of gates (but shouldn't affect these
-                    #         elements much since they should be small from Stage 2).
-                    s3gg = _objs.SpamGaugeGroup if (gg.name == "Full") else \
-                        _objs.TPSpamGaugeGroup
-                    stages.append(
-                        {
-                            'itemWeights': {'gates': 0.0, 'spam': 1.0},
-                            'spam_penalty_factor': 1.0,
-                            'gauge_group': s3gg(model.dim),
-                            'verbosity': printer
-                        })
-
-                    gaugeOptSuite_dict['single'] = stages  # can be a list of stage dictionaries
-
-                    if "unreliable2Q" in gaugeOptSuites and model.dim == 16:
-                        if advancedOptions is not None:
-                            # 'unreliableOps' can only be specified in 'all' options
-                            advanced = advancedOptions.get('all', {})
-                        else: advanced = {}
-                        unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-                        if any([gl in model.operations.keys() for gl in unreliableOps]):
-                            stage2_item_weights = {'gates': 1, 'spam': 0.0}
-                            for gl in unreliableOps:
-                                if gl in model.operations.keys(): stage2_item_weights[gl] = 0.01
-                            stages_2QUR = [stage.copy() for stage in stages]  # ~deep copy of stages
-                            iStage2 = 1 if gg.name in ("Full", "TP") else 0
-                            stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
-                            gaugeOptSuite_dict['single-2QUR'] = stages_2QUR  # add additional gauge opt
-                        else:
-                            _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
-                                            " gate names in advancedOptions['all']['unreliableOps'], i.e., %s,"
-                                            " are present in the target model.  Omitting 'single-2QUR' gauge opt.")
-                                           % (", ".join(unreliableOps)))
-
-            elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
-
-                itemWeights_bases = _collections.OrderedDict()
-                itemWeights_bases[""] = {'gates': 1}
-
-                if "unreliable2Q" in gaugeOptSuites and model.dim == 16:
-                    if advancedOptions is not None:
-                        # 'unreliableOps' can only be specified in 'all' options
-                        advanced = advancedOptions.get('all', {})
-                    else: advanced = {}
-                    unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-                    if any([gl in model.operations.keys() for gl in unreliableOps]):
-                        base = {'gates': 1}
-                        for gl in unreliableOps:
-                            if gl in model.operations.keys(): base[gl] = 0.01
-                        itemWeights_bases["-2QUR"] = base
-
-                if suiteName == "varySpam":
-                    vSpam_range = [0, 1]; spamWt_range = [1e-4, 1e-1]
-                elif suiteName == "varySpamWt":
-                    vSpam_range = [0]; spamWt_range = [1e-4, 1e-1]
-                elif suiteName == "varyValidSpamWt":
-                    vSpam_range = [1]; spamWt_range = [1e-4, 1e-1]
-                elif suiteName == "toggleValidSpam":
-                    vSpam_range = [0, 1]; spamWt_range = [1e-3]
-
-                for postfix, baseWts in itemWeights_bases.items():
-                    for vSpam in vSpam_range:
-                        for spamWt in spamWt_range:
-                            lbl = "Spam %g%s%s" % (spamWt, "+v" if vSpam else "", postfix)
-                            itemWeights = baseWts.copy()
-                            itemWeights['spam'] = spamWt
-                            gaugeOptSuite_dict[lbl] = {
-                                'itemWeights': itemWeights,
-                                'spam_penalty_factor': vSpam, 'verbosity': printer}
-
-            elif suiteName == "unreliable2Q":
-                assert(any([nm in ("single", "varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam")
-                            for nm in gaugeOptSuite])), "'unreliable2Q' suite must be used with a spam or single suite."
-
-            elif suiteName == "none":
-                pass  # add nothing
-
-            else:
-                raise ValueError("Invalid `gaugeOptSuite` argument - unknown suite '%s'" % suiteName)
+            assert(isinstance(goparams, list)), "If not a dictionary, gauge opt params should be a list of dicts!"
+            gaugeOptSuite_dict[lbl] = []
+            for goparams_stage in goparams:
+                dct = goparams_stage.copy()
+                dct.update({'verbosity': printer})
+                gaugeOptSuite_dict[lbl].append(dct)
 
     return gaugeOptSuite_dict
+
+
+def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName, model, printer, advancedOptions):
+    if suiteName in ("stdgaugeopt", "stdgaugeopt-unreliable2Q"):
+
+        stages = []  # multi-stage gauge opt
+        gg = model.default_gauge_group
+        if isinstance(gg, _objs.TrivialGaugeGroup):
+            if suiteName == "stdgaugeopt-unreliable2Q" and model.dim == 16:
+                if advancedOptions is not None:
+                    # 'unreliableOps' can only be specified in 'all' options
+                    advanced = advancedOptions.get('all', {})
+                else: advanced = {}
+                unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+                if any([gl in model.operations.keys() for gl in unreliableOps]):
+                    gaugeOptSuite_dict[rootLbl] = {'verbosity': printer}
+            else:
+                #just do a single-stage "trivial" gauge opts using default group
+                gaugeOptSuite_dict[rootLbl] = {'verbosity': printer}
+
+        elif gg is not None:
+
+            #Stage 1: plain vanilla gauge opt to get into "right ballpark"
+            if gg.name in ("Full", "TP"):
+                stages.append(
+                    {
+                        'itemWeights': {'gates': 1.0, 'spam': 1.0},
+                        'verbosity': printer
+                    })
+
+            #Stage 2: unitary gauge opt that tries to nail down gates (at
+            #         expense of spam if needed)
+            stages.append(
+                {
+                    'itemWeights': {'gates': 1.0, 'spam': 0.0},
+                    'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
+                    'verbosity': printer
+                })
+
+            #Stage 3: spam gauge opt that fixes spam scaling at expense of
+            #         non-unital parts of gates (but shouldn't affect these
+            #         elements much since they should be small from Stage 2).
+            s3gg = _objs.SpamGaugeGroup if (gg.name == "Full") else \
+                _objs.TPSpamGaugeGroup
+            stages.append(
+                {
+                    'itemWeights': {'gates': 0.0, 'spam': 1.0},
+                    'spam_penalty_factor': 1.0,
+                    'gauge_group': s3gg(model.dim),
+                    'verbosity': printer
+                })
+
+            if suiteName == "stdgaugeopt-unreliable2Q" and model.dim == 16:
+                if advancedOptions is not None:
+                    # 'unreliableOps' can only be specified in 'all' options
+                    advanced = advancedOptions.get('all', {})
+                else: advanced = {}
+                unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+                if any([gl in model.operations.keys() for gl in unreliableOps]):
+                    stage2_item_weights = {'gates': 1, 'spam': 0.0}
+                    for gl in unreliableOps:
+                        if gl in model.operations.keys(): stage2_item_weights[gl] = 0.01
+                    stages_2QUR = [stage.copy() for stage in stages]  # ~deep copy of stages
+                    iStage2 = 1 if gg.name in ("Full", "TP") else 0
+                    stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
+                    gaugeOptSuite_dict[rootLbl] = stages_2QUR  # add additional gauge opt
+                else:
+                    _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
+                                    " gate names in advancedOptions['all']['unreliableOps'], i.e., %s,"
+                                    " are present in the target model.  Omitting 'single-2QUR' gauge opt.")
+                                   % (", ".join(unreliableOps)))
+            else:
+                gaugeOptSuite_dict[rootLbl] = stages  # can be a list of stage dictionaries
+
+    elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam") or \
+        suiteName in ("varySpam-unreliable2Q", "varySpamWt-unreliable2Q",
+                      "varyValidSpamWt-unreliable2Q", "toggleValidSpam-unreliable2Q"):
+
+        baseWts = {'gates': 1}
+        if suiteName.endswith("unreliable2Q") and model.dim == 16:
+            if advancedOptions is not None:
+                # 'unreliableOps' can only be specified in 'all' options
+                advanced = advancedOptions.get('all', {})
+            else: advanced = {}
+            unreliableOps = advanced.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+            if any([gl in model.operations.keys() for gl in unreliableOps]):
+                base = {'gates': 1}
+                for gl in unreliableOps:
+                    if gl in model.operations.keys(): base[gl] = 0.01
+                baseWts = base
+
+        if suiteName == "varySpam":
+            vSpam_range = [0, 1]; spamWt_range = [1e-4, 1e-1]
+        elif suiteName == "varySpamWt":
+            vSpam_range = [0]; spamWt_range = [1e-4, 1e-1]
+        elif suiteName == "varyValidSpamWt":
+            vSpam_range = [1]; spamWt_range = [1e-4, 1e-1]
+        elif suiteName == "toggleValidSpam":
+            vSpam_range = [0, 1]; spamWt_range = [1e-3]
+
+        if suiteName == rootLbl:  # then shorten the root name
+            rootLbl = "2QUR-" if suiteName.endswith("unreliable2Q") else ""
+            
+        for vSpam in vSpam_range:
+            for spamWt in spamWt_range:
+                lbl = rootLbl + "Spam %g%s" % (spamWt, "+v" if vSpam else "")
+                itemWeights = baseWts.copy()
+                itemWeights['spam'] = spamWt
+                gaugeOptSuite_dict[lbl] = {
+                    'itemWeights': itemWeights,
+                    'spam_penalty_factor': vSpam, 'verbosity': printer}
+
+    elif suiteName == "unreliable2Q":
+        raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite name, "
+                          "e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
+    elif suiteName == "none":
+        pass  # add nothing
+    else:
+        raise ValueError("Unknown gauge-optimization suite '%s'" % suiteName)
 
 
 def _load_model(modelFilenameOrObj):
@@ -1169,6 +1175,36 @@ class ModelEstimateResults(_proto.ProtocolResults):
     #add additional data storage - all is still within same members,
     #even if this is is exposed differently.
 
+    @classmethod
+    def from_dir(cls, dirname, name, preloaded_data=None):
+        """
+        Initialize a new ModelEstimateResults object from `dirname` / results / `name`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is are 'edesign',
+            'data', and 'results' subdirectories).
+
+        name : str
+            The sub-directory name of the particular results object to load
+            (there can be multiple under a given root `dirname`).  This is the
+            name of a subdirectory of `dirname` / results.
+
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        Returns
+        -------
+        ModelEstimateResults
+        """
+        ret = super().from_dir(dirname, name, preloaded_data)  # loads members, but doesn't create parent "links"
+        for est in ret.estimates.values():
+            est.parent = ret  # link estimate to parent results object
+        return ret
+
     def __init__(self, data, protocol_instance, init_circuits=True):
         """
         Initialize an empty Results object.
@@ -1498,7 +1534,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
     def __str__(self):
         s = "----------------------------------------------------------\n"
-        s += "---------------- pyGSTi Results Object -------------------\n"
+        s += "----------- pyGSTi ModelEstimateResults Object -----------\n"
         s += "----------------------------------------------------------\n"
         s += "\n"
         s += "How to access my contents:\n\n"

@@ -36,9 +36,6 @@ class ModelTest(_proto.Protocol):
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
 
         if advancedOptions is None: advancedOptions = {}
-        if gaugeopt_suite is None:
-            gaugeopt_suite = ('single', 'unreliable2Q')  # OLD: {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
-
         if advancedOptions.get('set trivial gauge group', True):
             model_to_test = model_to_test.copy()
             model_to_test.default_gauge_group = _objs.TrivialGaugeGroup(model_to_test.dim)  # so no gauge opt is done

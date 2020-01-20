@@ -16,6 +16,7 @@ from . import algorithms as alg
 from . import construction as cst
 from . import objects as obj
 from . import report as rpt
+from . import protocols
 
 from .algorithms.core import *
 from .algorithms.gaugeopt import *

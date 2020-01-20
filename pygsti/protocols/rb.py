@@ -75,7 +75,7 @@ class CliffordRBDesign(BenchmarkingDesign):
                 c, iout = _rb.sample.clifford_rb_circuit(pspec, l, subsetQs=qubit_labels, randomizeout=randomizeout,
                                                   citerations=citerations, compilerargs=compilerargs)
                 circuits_at_depth.append(c)
-                idealouts_at_depth.append(iout)
+                idealouts_at_depth.append((''.join(map(str, iout)),))
                 if verbosity > 0: print(j + 1, end=',')
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
@@ -840,7 +840,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
                 fitkey = allfitkeys[0]
 
         ASPs = []
-        data_per_depth = self.data.cache[self.protocol_instance.datatype]
+        data_per_depth = self.data.cache[self.protocol.datatype]
         for depth in self.depths:
             percircuitdata = data_per_depth[depth]
             ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities

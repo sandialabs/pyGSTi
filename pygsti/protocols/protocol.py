@@ -810,10 +810,11 @@ class ProtocolData(_TreeNode):
             if parent is None: parent = ProtocolData.from_dir(dirname / '..')
             dataset = parent.dataset
         elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-            dataset = _io.load_dataset(dataset_files[0])
+            dataset = _io.load_dataset(dataset_files[0], verbosity=0)
         else:
             raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-            dataset = _objs.MultiDataSet.init_from_dict({pth.name: _io.load_dataset(pth) for pth in dataset_files})
+            dataset = _objs.MultiDataSet.init_from_dict(
+                {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
@@ -830,7 +831,9 @@ class ProtocolData(_TreeNode):
         ----------
         edesign : ExperimentDesign
             The experiment design describing what circuits this object
-            contains data for.
+            contains data for.  If None, then an unstructured
+            :class:`ExperimentDesign` is created containing the circuits
+            present in `dataset`.
 
         dataset : DataSet or MultiDataSet, optional
             The data counts themselves.
@@ -852,9 +855,13 @@ class ProtocolData(_TreeNode):
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
                                for dsname, ds in self.dataset.items()}
+            ds_to_get_circuits_from = self.dataset[list(self.dataset.keys())[0]]
         else:
             self._passdatas = {None: self}
+            ds_to_get_circuits_from = dataset
             
+        if self.edesign is None:
+            self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
         super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
@@ -941,16 +948,17 @@ class ProtocolData(_TreeNode):
 
         if parent is None:
             self.edesign.write(dirname)  # assume parent has already written edesign
-        
-        if parent and (self.dataset is parent.dataset):  # then no need to write any data
-            assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
-        else:
-            data_dir.mkdir(exist_ok=True)
-            if isinstance(self.dataset, _objs.MultiDataSet):
-                for dsname, ds in self.dataset.items():
-                    _io.write_dataset(data_dir / (dsname + '.txt'), ds)
+
+        if self.dataset is not None:  # otherwise don't write any dataset
+            if parent and (self.dataset is parent.dataset):  # then no need to write any data
+                assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
-                _io.write_dataset(data_dir / 'dataset.txt', self.dataset)
+                data_dir.mkdir(exist_ok=True)
+                if isinstance(self.dataset, _objs.MultiDataSet):
+                    for dsname, ds in self.dataset.items():
+                        _io.write_dataset(data_dir / (dsname + '.txt'), ds)
+                else:
+                    _io.write_dataset(data_dir / 'dataset.txt', self.dataset)
 
         if self.cache:
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
