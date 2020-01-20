@@ -10,6 +10,7 @@
 
 import warnings as _warnings
 import numpy as _np
+import pathlib as _pathlib
 
 # from . import stdinput as _stdinput
 from .. import tools as _tools
@@ -410,3 +411,54 @@ def write_model(mdl, filename, title=None):
             output.write("GAUGEGROUP: TP\n")
         elif isinstance(mdl.default_gauge_group, _objs.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
+
+
+def write_empty_protocol_data(edesign, dirname, sparse="auto"):
+    """
+    Write to a directory an experimental design (`edesign`) and the dataset
+    template files needed to load in a :class:`ProtocolData` object, e.g.
+    using the :function:`load_data_from_dir` function, after the template
+    files are filled in.
+
+    Parameters
+    ----------
+    edesign : ExperimentDesign
+        The experiment design defining the circuits that need to be performed.
+
+    dirname : str
+        The *root* directory to write into.  This directory will have 'edesign'
+        and 'data' subdirectories created beneath it.
+
+    sparse : bool or "auto", optional
+        If True, then the template data set(s) are written in a sparse-data
+        format, i.e. in a format where not all the outcomes need to be given.
+        If False, then a dense data format is used, where counts for *all*
+        possible bit strings are given.  `"auto"` causes the sparse format
+        to be used when the number of qubits is > 2.
+
+    Returns
+    -------
+    None
+    """
+
+    dirname = _pathlib.Path(dirname)
+    data_dir = dirname / 'data'
+    circuits = edesign.all_circuits_needing_data
+    nQubits = len(edesign.qubit_labels)
+    if sparse == "auto":
+        sparse = bool(nQubits > 3)  # HARDCODED
+
+    if sparse:
+        header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+        nZeroCols = 0
+    else:
+        fstr = '{0:0%db} count' % nQubits
+        nZeroCols = 2**nQubits
+        header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+
+    pth = data_dir / 'dataset.txt'
+    if pth.exists():
+        raise ValueError("Template data file would clobber %s, which already exists!" % pth)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    edesign.write(dirname)
+    write_empty_dataset(pth, circuits, header_str, nZeroCols)

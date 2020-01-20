@@ -416,6 +416,8 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
     variable['A'] = True
     variable['B'] = True
     variable['p'] = True
+    lengths = _np.array(lengths, int)
+    ASPs = _np.array(ASPs, 'd')
 
     # The fit to do if a fixed value for A is given
     if A is not None:
