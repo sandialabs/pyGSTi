@@ -7,6 +7,9 @@ import importlib
 from pprint import pformat
 import astor
 import ast as _ast
+from functools import lru_cache
+
+from pygsti.objects import Circuit
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('stdmodule', action="store",
@@ -17,20 +20,6 @@ args = parser.parse_args()
 # Prepare static analysis tools for upgrade
 std = importlib.import_module(args.stdmodule)
 ast = astor.code_to_ast.parse_file(std.__file__)
-
-
-def name_or_none(name):
-    return getattr(std, name) if hasattr(std, name) else None
-
-
-def single_line(results):
-    """ Pretty source generator for astor.to_source which will produce output on a single line, to be formatted at will """
-    return ''.join(results)
-
-
-def stringy_ast(obj):
-    """ Build an ast for a stringly-typable object """
-    return _ast.parse(str(obj)).body[0].value
 
 
 mdl = std.target_model()
@@ -71,11 +60,55 @@ else:
     raise ValueError(f"Unsupported model dimension: {mdl.dim}")
 
 
+def name_or_none(name):
+    return getattr(std, name) if hasattr(std, name) else None
+
+
+def single_line(results):
+    """ Pretty source generator for astor.to_source which will produce output on a single line, to be formatted at will """
+    return ''.join(results)
+
+
+@lru_cache(32)
+def stringy_ast(obj):
+    """ Build an ast for a stringly-typable object """
+    return _ast.parse(str(obj)).body[0].value
+
+
+def prototype_circuits(circuits):
+    """ Deconstruct a circuit structure into a raw data structure that can be used as an argument to `circuit_list` """
+    for c in circuits:
+        if isinstance(c, Circuit):
+            yield tuple(str(lbl) for lbl in c)
+        else:
+            yield list(prototype_circuits(c))
+
+
+def upgrade_iter(iterable):
+    """ Given a list/tuple, upgrade all the contents according to the given upgrade map """
+    for el in iterable:
+        if isinstance(el, list):
+            yield list(upgrade_iter(el))
+        elif isinstance(el, tuple):
+            yield tuple(upgrade_iter(el))
+        else:
+            yield find_replace_labels.get(el, el)
+
+
+def upgrade_circuits(name):
+    """ Shortcut to build an upgraded prototype for a circuit list from std, or None if it isn't there """
+    if hasattr(std, name):
+        return list(upgrade_iter(prototype_circuits(getattr(std, name))))
+
+
+# We have to do a little AST manipulation on the original to upgrade
+# the call to build the target model.  This is because information is
+# lost in the construction of the target model, but we'd still like to
+# have it available to make the call to the constructor look sane.
 class DependencyWalker(astor.TreeWalk):
     """ Walks the AST, building a set of names on which the tree depends """
-    def __init__(self, *args, **kwargs):
+    def init_dependencies(self):
         self.dependencies = set()
-        astor.TreeWalk.__init__(self, *args, **kwargs)
 
     def pre_Name(self):
         self.dependencies.add(self.cur_node.id)
@@ -112,10 +145,8 @@ class ExpressionWalker(astor.TreeWalk):
 
 class UpgradeWalker(astor.TreeWalk):
     """ Walks the AST, building a map of upgraded names and their dependencies """
-    def __init__(self, *args, **kwargs):
+    def init_upgrade(self):
         self.upgrades = {}
-        self.dependencies = {}
-        astor.TreeWalk.__init__(self, *args, **kwargs)
 
     def pre_Assign(self):
         value = self.cur_node.value
@@ -129,23 +160,13 @@ class UpgradeWalker(astor.TreeWalk):
                     LabelWalker(value.args[1])
                     ExpressionWalker(value.args[2])
                 else:
-                    # "hey, it can't hurt..."
                     LabelWalker(value)
-
-                self.upgrades[target.id] = value
 
                 # Build dependencies from the rhs
                 # We don't consider the function name a dependency so bypass that
                 critical_ast = value.args if isinstance(value, _ast.Call) else value
-                self.dependencies[target.id] = DependencyWalker(critical_ast).dependencies
-        return False
-
-    def pre_Call(self):
-        func = self.cur_node.func
-        if isinstance(func, _ast.Attribute) and func.attr == 'circuit_list':
-            # explicitly specify `line_labels` for calls to `_strc.circuit_list`
-            if not any([kw.arg == 'line_labels' for kw in self.cur_node.keywords]):
-                self.cur_node.keywords.append(_ast.keyword('line_labels', stringy_ast(sslbls)))
+                value._dependencies = DependencyWalker(critical_ast).dependencies
+                self.upgrades[target.id] = value
 
         return False
 
@@ -157,41 +178,38 @@ root_import_path = "." if args.relative else "pygsti"
 # Handle Clifford compilation separately, it's defined strangely
 # XXX weirdly enough, it looks like the original dynamic SMQ converter just drops Clifford compilations...
 if hasattr(std, 'clifford_compilation'):
-    cc_pairs = [(k, [find_replace_labels.get(lbl, lbl) for lbl in v]) for k, v in std.clifford_compilation.items()]
+    cc_pairs = [(k, list(upgrade_iter(v))) for k, v in std.clifford_compilation.items()]
     cc_src = f"OrderedDict({cc_pairs})"
 else:
     cc_src = None
 
-# Don't upgrade these names
-description = name_or_none('description')
-global_fidPairs = name_or_none('global_fidPairs')
-pergerm_fidPairsDict = name_or_none('pergerm_fidPairsDict')
-global_fidPairs_lite = name_or_none('global_fidPairs_lite')
-pergerm_fidPairsDict_lite = name_or_none('pergerm_fidPairsDict_lite')
 
-ast_upgrades = UpgradeWalker(ast)
+ast_upgrades = UpgradeWalker(ast).upgrades
+
+target_model_src = astor.to_source(ast_upgrades.get('_target_model', stringy_ast(None)), pretty_source=single_line)
 
 
-def upgrade_src(name):
-    """ Shortcut to generate source for an upgraded name """
-    upgrade_ast = ast_upgrades.upgrades.get(name, stringy_ast(None))
-    return astor.to_source(upgrade_ast, pretty_source=single_line)
-
-
-# Include extra names where they're depended upon by the critical names included by default
-critical_names = ['germs', 'germs_lite', 'prepStrs', 'effectStrs', 'fiducials', 'clifford_compilation', '_target_model']
-extra_names = [ast_upgrades.dependencies.get(name, set()) for name in critical_names]
-extra_names = set().union(*extra_names).difference(critical_names)
-
-# this is wild as hell
-extra_names_src = ''.join([
-    astor.to_source(
+def assignment_src(name, node):
+    return astor.to_source(
         _ast.Assign(
             [_ast.Name(name)],
-            ast_upgrades.upgrades.get(name, stringy_ast(None))
+            node
         ),
-        pretty_source=single_line) for name in extra_names
-])
+        pretty_source=single_line)
+
+
+def dependencies(name):
+    node = ast_upgrades.get(name, None)
+    if node and hasattr(node, '_dependencies'):
+        for d in node._dependencies:
+            yield d
+            yield from dependencies(d)
+
+
+extra_names = set(dependencies('_target_model'))
+extra_names_src = ''.join(
+    assignment_src(name, ast_upgrades.get(name, stringy_ast(None))) for name in extra_names
+)
 
 # Dead simple: just fill in a template string for the new-style module source
 template_str = f"""\"""{std.__doc__}\"""
@@ -213,27 +231,40 @@ from {modelpack_import_path}._modelpack import SMQModelPack
 {extra_names_src}
 
 class _Module(SMQModelPack):
-    description = "{description}"
+    description = "{name_or_none('description')}"
 
-    gates = {upgrade_src('gates')}
-    germs = {upgrade_src('germs')}
-    germs_lite = {upgrade_src('germs_lite')}
-    fiducials = {upgrade_src('fiducials')}
-    prepStrs = {upgrade_src('prepStrs')}
-    effectStrs = {upgrade_src('effectStrs')}
+    gates = {list(upgrade_iter(std.gates)) if hasattr(std, 'gates') else None}
+
+    _sslbls = {sslbls}
+
+    _germs = {upgrade_circuits('germs')}
+
+    _germs_lite = {upgrade_circuits('germs_lite')}
+
+    _fiducials = {upgrade_circuits('fiducials')}
+
+    _prepStrs = {upgrade_circuits('prepStrs')}
+
+    _effectStrs = {upgrade_circuits('effectStrs')}
+
     clifford_compilation = {cc_src}
-    global_fidPairs = {global_fidPairs}
-    pergerm_fidPairsDict = {pergerm_fidPairsDict}
-    global_fidPairs_lite = {global_fidPairs_lite}
-    pergerm_fidPairsDict_lite = {pergerm_fidPairsDict_lite}
+
+    global_fidPairs = {name_or_none('global_fidPairs')}
+
+    pergerm_fidPairsDict = {name_or_none('pergerm_fidPairsDict')}
+
+    global_fidPairs_lite = {name_or_none('global_fidPairs_lite')}
+
+    pergerm_fidPairsDict_lite = {name_or_none('pergerm_fidPairsDict_lite')}
 
     @property
     def _target_model(self):
-        return {upgrade_src('_target_model')}
+        return {target_model_src}
 
 import sys
 sys.modules[__name__] = _Module()
 """
 
+import bpdb; bpdb.set_trace()
 # Dump it to stdout
 print(template_str)
