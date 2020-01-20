@@ -20,60 +20,60 @@ from pygsti.modelpacks._modelpack import SMQModelPack
 class _Module(SMQModelPack):
     description = "Idle, X(pi/2), and Y(pi/2) gates"
 
-    gates = ['Gii', 'Gxi', 'Gyi']
+    gates = [(), ('Gxpi2', 0), ('Gypi2', 0)]
 
     _sslbls = [0]
 
-    _germs = [('Gii', ), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gyi'), ('Gxi', 'Gyi', 'Gii'), ('Gxi', 'Gii', 'Gyi'),
-              ('Gxi', 'Gii', 'Gii'), ('Gyi', 'Gii', 'Gii'), ('Gxi', 'Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gyi', 'Gyi', 'Gii'),
-              ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi')]
+    _germs = [((), ), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gypi2', 0)), (('Gxpi2', 0), ('Gypi2', 0), ()), (('Gxpi2', 0), (), ('Gypi2', 0)),
+              (('Gxpi2', 0), (), ()), (('Gypi2', 0), (), ()), (('Gxpi2', 0), ('Gxpi2', 0), (), ('Gypi2', 0)), (('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ()),
+              (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0))]
 
     _germs_lite = None
 
-    _fiducials = [(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')]
+    _fiducials = [(), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 0))]
 
-    _prepStrs = [(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')]
+    _prepStrs = [(), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 0))]
 
-    _effectStrs = [(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')]
+    _effectStrs = [(), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 0))]
 
-    clifford_compilation = OrderedDict([('Gc1c0', ['Gyi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc2c0', ['Gxi', 'Gxi', 'Gxi', 'Gyi', 'Gyi', 'Gyi', 'Gii']),
-                                        ('Gc3c0', ['Gxi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc4c0', ['Gyi', 'Gyi', 'Gyi', 'Gxi', 'Gxi', 'Gxi', 'Gii']),
-                                        ('Gc5c0', ['Gxi', 'Gyi', 'Gyi', 'Gyi', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc6c0', ['Gyi', 'Gyi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc7c0', ['Gyi', 'Gyi', 'Gyi', 'Gxi', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc8c0', ['Gxi', 'Gyi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc9c0', ['Gxi', 'Gxi', 'Gyi', 'Gyi', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc10c0', ['Gyi', 'Gxi', 'Gxi', 'Gxi', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc11c0', ['Gxi', 'Gxi', 'Gxi', 'Gyi', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc12c0', ['Gyi', 'Gxi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc13c0', ['Gxi', 'Gxi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc14c0', ['Gxi', 'Gyi', 'Gyi', 'Gyi', 'Gxi', 'Gxi', 'Gxi']),
-                                        ('Gc15c0', ['Gyi', 'Gyi', 'Gyi', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc16c0', ['Gxi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc17c0', ['Gxi', 'Gyi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc18c0', ['Gyi', 'Gyi', 'Gyi', 'Gxi', 'Gxi', 'Gii', 'Gii']),
-                                        ('Gc19c0', ['Gxi', 'Gyi', 'Gyi', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc20c0', ['Gxi', 'Gyi', 'Gyi', 'Gyi', 'Gxi', 'Gii', 'Gii']),
-                                        ('Gc21c0', ['Gyi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
-                                        ('Gc22c0', ['Gxi', 'Gxi', 'Gxi', 'Gyi', 'Gyi', 'Gii', 'Gii']),
-                                        ('Gc23c0', ['Gxi', 'Gyi', 'Gxi', 'Gxi', 'Gxi', 'Gii', 'Gii'])])
+    clifford_compilation = OrderedDict([('Gc1c0', [('Gypi2', 0), ('Gxpi2', 0), (), (), (), (), ()]),
+                                        ('Gc2c0', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ()]),
+                                        ('Gc3c0', [('Gxpi2', 0), ('Gxpi2', 0), (), (), (), (), ()]),
+                                        ('Gc4c0', [('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ()]),
+                                        ('Gc5c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), (), (), ()]),
+                                        ('Gc6c0', [('Gypi2', 0), ('Gypi2', 0), (), (), (), (), ()]),
+                                        ('Gc7c0', [('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gxpi2', 0), (), (), ()]),
+                                        ('Gc8c0', [('Gxpi2', 0), ('Gypi2', 0), (), (), (), (), ()]),
+                                        ('Gc9c0', [('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), (), (), ()]),
+                                        ('Gc10c0', [('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), (), (), ()]),
+                                        ('Gc11c0', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), (), (), ()]),
+                                        ('Gc12c0', [('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), (), (), (), ()]),
+                                        ('Gc13c0', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), (), (), (), ()]),
+                                        ('Gc14c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)]),
+                                        ('Gc15c0', [('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), (), (), (), ()]),
+                                        ('Gc16c0', [('Gxpi2', 0), (), (), (), (), (), ()]),
+                                        ('Gc17c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), (), (), (), ()]),
+                                        ('Gc18c0', [('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), (), ()]),
+                                        ('Gc19c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), (), (), (), ()]),
+                                        ('Gc20c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gxpi2', 0), (), ()]),
+                                        ('Gc21c0', [('Gypi2', 0), (), (), (), (), (), ()]),
+                                        ('Gc22c0', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), (), ()]),
+                                        ('Gc23c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), (), ()])])
 
     global_fidPairs = [(0, 1), (2, 0), (2, 1), (3, 3)]
 
     pergerm_fidPairsDict = {
-        ('Gii', ): [(1, 1), (2, 2), (3, 3)],
-        ('Gxi', ): [(1, 2), (2, 2), (3, 1), (3, 3)],
-        ('Gyi', ): [(0, 1), (1, 1), (2, 0), (3, 0)],
-        ('Gxi', 'Gyi'): [(0, 1), (2, 0), (2, 1), (3, 3)],
-        ('Gxi', 'Gyi', 'Gii'): [(0, 1), (2, 0), (2, 1), (3, 3)],
-        ('Gxi', 'Gii', 'Gyi'): [(0, 1), (2, 0), (2, 1), (3, 3)],
-        ('Gyi', 'Gii', 'Gii'): [(0, 1), (1, 1), (2, 0), (3, 0)],
-        ('Gxi', 'Gii', 'Gii'): [(1, 2), (2, 2), (3, 1), (3, 3)],
-        ('Gxi', 'Gyi', 'Gyi', 'Gii'): [(0, 2), (1, 0), (1, 1), (2, 0), (2, 2), (3, 3)],
-        ('Gxi', 'Gxi', 'Gii', 'Gyi'): [(0, 0), (1, 0), (1, 1), (2, 1), (3, 2), (3, 3)],
-        ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi'): [(0, 0), (0, 1), (0, 2), (1, 2)]
+        ((), ): [(1, 1), (2, 2), (3, 3)],
+        (('Gxpi2', 0), ): [(1, 2), (2, 2), (3, 1), (3, 3)],
+        (('Gypi2', 0), ): [(0, 1), (1, 1), (2, 0), (3, 0)],
+        (('Gxpi2', 0), ('Gypi2', 0)): [(0, 1), (2, 0), (2, 1), (3, 3)],
+        (('Gxpi2', 0), ('Gypi2', 0), ()): [(0, 1), (2, 0), (2, 1), (3, 3)],
+        (('Gxpi2', 0), (), ('Gypi2', 0)): [(0, 1), (2, 0), (2, 1), (3, 3)],
+        (('Gypi2', 0), (), ()): [(0, 1), (1, 1), (2, 0), (3, 0)],
+        (('Gxpi2', 0), (), ()): [(1, 2), (2, 2), (3, 1), (3, 3)],
+        (('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ()): [(0, 2), (1, 0), (1, 1), (2, 0), (2, 2), (3, 3)],
+        (('Gxpi2', 0), ('Gxpi2', 0), (), ('Gypi2', 0)): [(0, 0), (1, 0), (1, 1), (2, 1), (3, 2), (3, 3)],
+        (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0)): [(0, 0), (0, 1), (0, 2), (1, 2)]
     }
 
     global_fidPairs_lite = None
@@ -82,7 +82,7 @@ class _Module(SMQModelPack):
 
     @property
     def _target_model(self):
-        return _setc.build_explicit_model([(0, )], ['Gii', 'Gxi', 'Gyi'], ['I(0)', 'X(pi/2,0)', 'Y(pi/2,0)'],
+        return _setc.build_explicit_model([(0, )], [(), ('Gxpi2', 0), ('Gypi2', 0)], ['I(0)', 'X(pi/2,0)', 'Y(pi/2,0)'],
                                           effectLabels=['0', '1'],
                                           effectExpressions=['0', '1'])
 
