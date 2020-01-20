@@ -577,7 +577,7 @@ def create_general_report(results, filename, title="auto",
          '  pygsti.report.create_standard_report(...)\n'))
 
 
-# TODO deprecate in favor of `build_standard_report`
+# TODO deprecate in favor of `construct_standard_report`
 def create_standard_report(results, filename, title="auto",
                            confidenceLevel=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
@@ -1252,7 +1252,7 @@ def create_standard_report(results, filename, title="auto",
     return ws
 
 
-# TODO deprecate in favor of `build_nqnoise_report`
+# TODO deprecate in favor of `construct_nqnoise_report`
 def create_nqnoise_report(results, filename, title="auto",
                           confidenceLevel=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
@@ -2110,7 +2110,7 @@ def find_std_clifford_compilation(model, verbosity=0):
     return None
 
 
-def build_standard_report(results, confidenceLevel=None, errgenType='logGTi',
+def construct_standard_report(results, confidenceLevel=None, errgenType='logGTi',
                           linlogPercentile=5, brevity=0, workspace=None):
     """
     Create a "standard" GST report, containing details about each estimate
@@ -2138,7 +2138,7 @@ def build_standard_report(results, confidenceLevel=None, errgenType='logGTi',
     return report
 
 
-def build_nqnoise_report(results, confidenceLevel=None, brevity=0, workspace=None):
+def construct_nqnoise_report(results, confidenceLevel=None, brevity=0, workspace=None):
     """
     Creates a report designed to display results containing for n-qubit noisy
     model estimates.
@@ -2152,7 +2152,7 @@ def build_nqnoise_report(results, confidenceLevel=None, brevity=0, workspace=Non
     pass  # TODO
 
 
-def build_drift_report(results, confidenceLevel=None, brevity=0, workspace=None):
+def construct_drift_report(results, confidenceLevel=None, brevity=0, workspace=None):
     """
     Creates a Drift report.
 
