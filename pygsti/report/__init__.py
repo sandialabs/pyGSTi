@@ -10,6 +10,7 @@
 
 #Import the most important/useful routines of each module into
 # the package namespace
+from .report import Report
 from .reportables import *
 from .factory import *
 from .workspace import Workspace

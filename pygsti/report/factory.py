@@ -30,6 +30,7 @@ from . import workspace as _ws
 from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from . import reportables as _reportables
+from . import Report as _Report
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
 
@@ -576,6 +577,7 @@ def create_general_report(results, filename, title="auto",
          '  pygsti.report.create_standard_report(...)\n'))
 
 
+# TODO deprecate in favor of `build_standard_report`
 def create_standard_report(results, filename, title="auto",
                            confidenceLevel=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
@@ -1250,6 +1252,7 @@ def create_standard_report(results, filename, title="auto",
     return ws
 
 
+# TODO deprecate in favor of `build_nqnoise_report`
 def create_nqnoise_report(results, filename, title="auto",
                           confidenceLevel=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
@@ -2105,6 +2108,62 @@ def find_std_clifford_compilation(model, verbosity=0):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation
     return None
+
+
+def build_standard_report(results, confidenceLevel=None, errgenType='logGTi',
+                          linlogPercentile=5, brevity=0, workspace=None):
+    """
+    Create a "standard" GST report, containing details about each estimate
+    in `results` individually.
+
+    TODO docstring
+
+    Returns
+    -------
+    :class:`Report` : A constructed report object
+    """
+
+    workspace = workspace or _ws.Workspace()
+    report = _Report()
+
+    # Quantities not tied to any section
+    report.qtys.update({
+        "confidenceLevel": str(confidenceLevel) if confidenceLevel is not None else "NOT-SET",
+        "linlg_pcntl": str(round(linlogPercentile)),  # round to nearest %
+        "linlg_pcntle_inv": str(100 - int(round(linlogPercentile)))
+    })
+
+
+    # TODO
+    return report
+
+
+def build_nqnoise_report(results, confidenceLevel=None, brevity=0, workspace=None):
+    """
+    Creates a report designed to display results containing for n-qubit noisy
+    model estimates.
+
+    TODO docstring
+
+    Returns
+    -------
+    :class:`Report` : A constructed report object
+    """
+    pass  # TODO
+
+
+def build_drift_report(results, confidenceLevel=None, brevity=0, workspace=None):
+    """
+    Creates a Drift report.
+
+    TODO docstring
+
+    Returns
+    -------
+    :class:`Report` : A constructed report object
+    """
+    pass  # TODO
+
 
 # # XXX this needs to be revised into a script
 # # Scratch: SAVE!!! this code generates "projected" models which can be sent to

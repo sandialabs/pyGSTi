@@ -8,18 +8,42 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import workspace as _ws
+import time as _time
+import warnings as _warnings
+
+from . import autotitle as _autotitle
+from . import merge_helpers as _merge
+from .. import _version
 
 
 class Report:
-    """ The internal model of a report
+    """ The internal model of a report.
 
-    TODO docstring
+    This class should never be instantiated directly. instead, users
+    should use the appropriate factory method in
+    `pygsti.report.factory`.
+
     """
-    def __init__(self, cache_file=None):
-        self._sections = []
-        self._globals = {}
-        self._workspace = _ws.Workspace(cache_file)
+    def __init__(self):
+        self.sections = []
+        self.qtys = {}
+
+    def _finalize(self):
+        """ Finish construction of the underlying report """
+
+        if 'date' not in self.qtys:
+            self.qtys['date'] = _time.strftime("%B %d, %Y")
+        if 'title' not in self.qtys:
+            autoname = _autotitle.generate_name()
+            _warnings.warn(("You should really specify `title=` when generating reports,"
+                            " as this makes it much easier to identify them later on.  "
+                            "Since you didn't, pyGSTi has generated a random one"
+                            " for you: '{}'.").format(autoname))
+            self.qtys['title'] = "GST Report for {}".format(autoname)
+        if 'pdfinfo' not in self.qtys:
+            pdfInfo = [('Author', 'pyGSTi'), ('Title', self.qtys['title']),
+                       ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+            self.qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     def write_html(self, path):
         """ Write this report to the disk as a collection of HTML documents.
@@ -31,7 +55,8 @@ class Report:
             to. If the specified directory does not exist, it will be
             created automatically.
         """
-        pass  # TODO
+        self._finalize()
+        # TODO
 
     def write_notebook(self, path):
         """ Write this report to the disk as an IPython notebook
@@ -42,7 +67,8 @@ class Report:
             The filesystem path to write the report to. By convention,
             this should use the `.ipynb` file extension.
         """
-        pass  # TODO
+        self._finalize()
+        # TODO
 
     def write_pdf(self, path):
         """ Write this report to the disk as a PDF document.
@@ -53,4 +79,5 @@ class Report:
             The filesystem path to write the report to. By convention,
             this should use the `.pdf` file extension.
         """
-        pass  # TODO
+        self._finalize()
+        # TODO

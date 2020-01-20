@@ -570,6 +570,7 @@ def _create_drift_switchboard(ws, results, gss):
     return drift_switchBd
 
 
+# TODO deprecate in favor of `report.factory.build_drift_report`
 def create_drift_report(results, gss, filename, title="auto",
                         ws=None, auto_open=False, link_to=None,
                         brevity=0, advancedOptions=None, verbosity=1):
