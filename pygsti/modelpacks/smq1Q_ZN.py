@@ -22,27 +22,27 @@ class _Module(SMQModelPack):
 
     gates = None
 
-    germs = _strc.circuit_list([(('Gz', 0), ), (('Gn', 0), ), (('Gz', 0), ('Gn', 0)), (('Gz', 0), ('Gz', 0), ('Gn', 0)),
-                                (('Gz', 0), ('Gn', 0), ('Gn', 0)),
-                                (('Gz', 0), ('Gz', 0), ('Gn', 0), ('Gz', 0), ('Gn', 0), ('Gn', 0))],
-                               line_labels=[0])
+    _sslbls = [0]
 
-    germs_lite = germs[:]
+    _germs = [(('Gz', 0), ), (('Gn', 0), ), (('Gz', 0), ('Gn', 0)), (('Gz', 0), ('Gz', 0), ('Gn', 0)),
+              (('Gz', 0), ('Gn', 0), ('Gn', 0)), (('Gz', 0), ('Gz', 0), ('Gn', 0), ('Gz', 0), ('Gn', 0), ('Gn', 0))]
 
-    fiducials = None
+    _germs_lite = [(('Gz', 0), ), (('Gn', 0), ), (('Gz', 0), ('Gn', 0)), (('Gz', 0), ('Gz', 0), ('Gn', 0)),
+                   (('Gz', 0), ('Gn', 0), ('Gn', 0)),
+                   (('Gz', 0), ('Gz', 0), ('Gn', 0), ('Gz', 0), ('Gn', 0), ('Gn', 0))]
 
-    prepStrs = _strc.circuit_list([(), (('Gn', 0), ), (('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gz', 0), ('Gn', 0)),
-                                   (('Gn', 0), ('Gn', 0), ('Gn', 0)),
-                                   (('Gn', 0), ('Gz', 0), ('Gn', 0), ('Gn', 0), ('Gn', 0))],
-                                  line_labels=[0])
+    _fiducials = None
 
-    effectStrs = _strc.circuit_list([(), (('Gn', 0), ), (('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gz', 0), ('Gn', 0)),
-                                     (('Gn', 0), ('Gn', 0), ('Gn', 0)),
-                                     (('Gn', 0), ('Gn', 0), ('Gn', 0), ('Gz', 0), ('Gn', 0))],
-                                    line_labels=[0])
+    _prepStrs = [(), (('Gn', 0), ), (('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gz', 0), ('Gn', 0)),
+                 (('Gn', 0), ('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gz', 0), ('Gn', 0), ('Gn', 0), ('Gn', 0))]
+
+    _effectStrs = [(), (('Gn', 0), ), (('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gz', 0), ('Gn', 0)),
+                   (('Gn', 0), ('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gn', 0), ('Gn', 0), ('Gz', 0), ('Gn', 0))]
 
     clifford_compilation = None
+
     global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
+
     pergerm_fidPairsDict = {
         ('Gz', ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         ('Gn', ): [(0, 0), (2, 3), (5, 2), (5, 4)],
@@ -51,7 +51,9 @@ class _Module(SMQModelPack):
         ('Gz', 'Gz', 'Gn'): [(0, 0), (2, 3), (5, 2), (5, 4)],
         ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn'): [(0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)]
     }
+
     global_fidPairs_lite = [(0, 0), (2, 3), (5, 2), (5, 4)]
+
     pergerm_fidPairsDict_lite = {
         ('Gz', ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         ('Gn', ): [(0, 0), (2, 3), (5, 2), (5, 4)],
@@ -63,7 +65,8 @@ class _Module(SMQModelPack):
 
     @property
     def _target_model(self):
-        return _setc.build_explicit_model([0], [('Gz', 0), ('Gn', 0)], ['Z(pi/2,0)', 'N(pi/2, sqrt(3)/2, 0, -0.5, 0)'])
+        return _setc.build_explicit_model([(0, )], [('Gz', 0), ('Gn', 0)],
+                                          ['Z(pi/2,0)', 'N(pi/2, sqrt(3)/2, 0, -0.5, 0)'])
 
 
 import sys

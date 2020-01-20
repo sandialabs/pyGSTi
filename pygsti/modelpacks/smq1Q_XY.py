@@ -22,20 +22,21 @@ class _Module(SMQModelPack):
 
     gates = [('Gx', 0), ('Gy', 0)]
 
-    germs = _strc.circuit_list([(('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gy', 0)), (('Gx', 0), ('Gx', 0), ('Gy', 0)),
-                                (('Gx', 0), ('Gy', 0), ('Gy', 0)),
-                                (('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0))],
-                               line_labels=[0])
+    _sslbls = [0]
 
-    germs_lite = germs[0:4]
+    _germs = [(('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gy', 0)), (('Gx', 0), ('Gx', 0), ('Gy', 0)),
+              (('Gx', 0), ('Gy', 0), ('Gy', 0)), (('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0))]
 
-    fiducials = _strc.circuit_list([(), (('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gx', 0)),
-                                    (('Gx', 0), ('Gx', 0), ('Gx', 0)), (('Gy', 0), ('Gy', 0), ('Gy', 0))],
-                                   line_labels=[0])
+    _germs_lite = [(('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gy', 0)), (('Gx', 0), ('Gx', 0), ('Gy', 0))]
 
-    prepStrs = fiducials
+    _fiducials = [(), (('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gx', 0)), (('Gx', 0), ('Gx', 0), ('Gx', 0)),
+                  (('Gy', 0), ('Gy', 0), ('Gy', 0))]
 
-    effectStrs = fiducials
+    _prepStrs = [(), (('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gx', 0)), (('Gx', 0), ('Gx', 0), ('Gx', 0)),
+                 (('Gy', 0), ('Gy', 0), ('Gy', 0))]
+
+    _effectStrs = [(), (('Gx', 0), ), (('Gy', 0), ), (('Gx', 0), ('Gx', 0)), (('Gx', 0), ('Gx', 0), ('Gx', 0)),
+                   (('Gy', 0), ('Gy', 0), ('Gy', 0))]
 
     clifford_compilation = OrderedDict([('Gc0', []), ('Gc1', [('Gy', 0), ('Gx', 0)]),
                                         ('Gc2', [('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0), ('Gy', 0)]),
@@ -59,7 +60,9 @@ class _Module(SMQModelPack):
                                         ('Gc21', [('Gy', 0)]),
                                         ('Gc22', [('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gy', 0), ('Gy', 0)]),
                                         ('Gc23', [('Gx', 0), ('Gy', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)])])
+
     global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
+
     pergerm_fidPairsDict = {
         ('Gx', ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         ('Gy', ): [(0, 2), (2, 2), (2, 4), (4, 4)],
@@ -68,7 +71,9 @@ class _Module(SMQModelPack):
         ('Gx', 'Gy', 'Gy'): [(0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
         ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [(0, 0), (2, 3), (5, 2), (5, 4)]
     }
+
     global_fidPairs_lite = [(0, 2), (2, 4), (3, 1), (3, 3)]
+
     pergerm_fidPairsDict_lite = {
         ('Gx', ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         ('Gy', ): [(0, 2), (2, 2), (2, 4), (4, 4)],

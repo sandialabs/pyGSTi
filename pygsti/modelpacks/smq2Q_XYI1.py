@@ -22,19 +22,19 @@ class _Module(SMQModelPack):
 
     gates = ['Gii', 'Gxi', 'Gyi']
 
-    germs = _strc.circuit_list([('Gii', ), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gyi'), ('Gxi', 'Gyi', 'Gii'),
-                                ('Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gii', 'Gii'), ('Gyi', 'Gii', 'Gii'),
-                                ('Gxi', 'Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gyi', 'Gyi', 'Gii'),
-                                ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi')],
-                               line_labels=[0])
+    _sslbls = [0]
 
-    germs_lite = None
+    _germs = [('Gii', ), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gyi'), ('Gxi', 'Gyi', 'Gii'), ('Gxi', 'Gii', 'Gyi'),
+              ('Gxi', 'Gii', 'Gii'), ('Gyi', 'Gii', 'Gii'), ('Gxi', 'Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gyi', 'Gyi', 'Gii'),
+              ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi')]
 
-    fiducials = _strc.circuit_list([(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')], line_labels=[0])
+    _germs_lite = None
 
-    prepStrs = fiducials
+    _fiducials = [(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')]
 
-    effectStrs = fiducials
+    _prepStrs = [(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')]
+
+    _effectStrs = [(), ('Gxi', ), ('Gyi', ), ('Gxi', 'Gxi')]
 
     clifford_compilation = OrderedDict([('Gc1c0', ['Gyi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
                                         ('Gc2c0', ['Gxi', 'Gxi', 'Gxi', 'Gyi', 'Gyi', 'Gyi', 'Gii']),
@@ -59,7 +59,9 @@ class _Module(SMQModelPack):
                                         ('Gc21c0', ['Gyi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']),
                                         ('Gc22c0', ['Gxi', 'Gxi', 'Gxi', 'Gyi', 'Gyi', 'Gii', 'Gii']),
                                         ('Gc23c0', ['Gxi', 'Gyi', 'Gxi', 'Gxi', 'Gxi', 'Gii', 'Gii'])])
+
     global_fidPairs = [(0, 1), (2, 0), (2, 1), (3, 3)]
+
     pergerm_fidPairsDict = {
         ('Gii', ): [(1, 1), (2, 2), (3, 3)],
         ('Gxi', ): [(1, 2), (2, 2), (3, 1), (3, 3)],
@@ -73,7 +75,9 @@ class _Module(SMQModelPack):
         ('Gxi', 'Gxi', 'Gii', 'Gyi'): [(0, 0), (1, 0), (1, 1), (2, 1), (3, 2), (3, 3)],
         ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi'): [(0, 0), (0, 1), (0, 2), (1, 2)]
     }
+
     global_fidPairs_lite = None
+
     pergerm_fidPairsDict_lite = None
 
     @property
