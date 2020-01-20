@@ -8,6 +8,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+# XXX this module should probably be deprecated with the new `pygsti.modelpacks` API
+
 import time as _time
 import os as _os
 import pickle as _pickle
