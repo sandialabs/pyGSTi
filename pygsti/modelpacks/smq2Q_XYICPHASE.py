@@ -15,10 +15,10 @@ from collections import OrderedDict
 from pygsti.construction import circuitconstruction as _strc
 from pygsti.construction import modelconstruction as _setc
 
-from pygsti.modelpacks._modelpack import SMQModelPack
+from pygsti.modelpacks._modelpack import GSTModelPack
 
 
-class _Module(SMQModelPack):
+class _Module(GSTModelPack):
     description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE gates"
 
     gates = [('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0), ('Gcphase', 0, 1)]

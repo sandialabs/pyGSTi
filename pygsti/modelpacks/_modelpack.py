@@ -24,8 +24,7 @@ class ModelPack(_ABC):
     description = None
 
 
-# XXX should this be GSTModelPack?
-class SMQModelPack(ModelPack):
+class GSTModelPack(ModelPack):
     """ ABC for standard multi-qubit modelpacks """
     gates = None
     _sslbls = None

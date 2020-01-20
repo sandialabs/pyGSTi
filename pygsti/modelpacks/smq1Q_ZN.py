@@ -14,10 +14,10 @@ from collections import OrderedDict
 from pygsti.construction import circuitconstruction as _strc
 from pygsti.construction import modelconstruction as _setc
 
-from pygsti.modelpacks._modelpack import SMQModelPack
+from pygsti.modelpacks._modelpack import GSTModelPack
 
 
-class _Module(SMQModelPack):
+class _Module(GSTModelPack):
     description = "None"
 
     gates = None
