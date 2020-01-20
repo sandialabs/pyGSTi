@@ -16,19 +16,7 @@ import pickle as _pickle
 
 from ..objects.polynomial import bulk_load_compact_polys as _bulk_load_compact_polys
 from ..construction.circuitconstruction import circuit_list as _circuit_list
-
-
-def _transform_indices(prototype, index_fn):
-    """ Transform the indices of a circuit list with the given index factory """
-    def transform(circuit):
-        if len(circuit) > 1:
-            lbl, *idx = circuit
-            return (lbl, *[index_fn(i) for i in idx])
-        else:
-            return circuit
-
-    for level in prototype:
-        yield tuple(transform(circuit) for circuit in level)
+from ..protocols import gst as _gst
 
 
 class ModelPack(_ABC):
@@ -46,6 +34,9 @@ class SMQModelPack(ModelPack):
     _fiducials = None
     _prepStrs = None
     _effectStrs = None
+
+    def __init__(self):
+        self._gscache = {("full", "auto"): self._target_model}
 
     def _indexed_circuits(self, prototype, index=lambda n: n):
         if prototype is not None:
@@ -66,16 +57,39 @@ class SMQModelPack(ModelPack):
     def effectStrs(self, index=lambda n: n):
         return self._indexed_circuits(self._effectStrs, index)
 
-    def get_gst_inputs(max_max_length, drift_analysis=False):
+    def get_gst_inputs(self, max_max_length, index=lambda n: n, **kwargs):
+        """ Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
+
+        Parameters
+        ----------
+        max_max_length : number
+            The greatest maximum-length to use. Equivalent to
+            constructing a :class:`StandardGSTDesign` with a
+            `maxLengths` list of powers of two less than or equal to
+            the given value.
+        index : (int) -> int, optional
+            A factory for gate label indices.
+        **kwargs :
+            Additional arguments to pass to :class:`StandardGSTDesign`
+
+        Returns
+        -------
+        :class:`StandardGSTDesign`
+        """
+
+        # TODO should fidPairs, qubit_labels, etc be populated automatically?
+        return _gst.StandardGSTDesign(
+            self._target_model.copy(),
+            self.prepStrs(index),
+            self.effectStrs(index),
+            self.germs(index),
+            list(_gen_max_length(max_max_length)),
+            **kwargs
+        )
+
+    def get_gst_circuits_struct(self, max_max_length, **kwargs):
         """ TODO """
         pass  # TODO
-
-    def get_gst_circuits_struct(max_max_length):
-        """ TODO """
-        pass  # TODO
-
-    def __init__(self):
-        self._gscache = {("full", "auto"): self._target_model}
 
     @property
     @_abstractmethod
@@ -140,7 +154,7 @@ class SMQModelPack(ModelPack):
 
 class RPEModelPack(ModelPack):
     """ ABC for robust phase estimation modelpacks """
-    def get_rpe_inputs(max_max_length):
+    def get_rpe_inputs(max_max_length, **kwargs):
         pass  # TODO
 
 
@@ -168,3 +182,23 @@ def _load_calccache(key_path, val_path):
     calc_cache = {k: v for k, v in zip(keys, vals)}
     #print("Done in %.1fs" % (_time.time()-t0))
     return calc_cache
+
+
+def _transform_indices(prototype, index_fn):
+    """ Transform the indices of a circuit list with the given index factory """
+    def transform(circuit):
+        if len(circuit) > 1:
+            lbl, *idx = circuit
+            return (lbl, *[index_fn(i) for i in idx])
+        else:
+            return circuit
+
+    for level in prototype:
+        yield tuple(transform(circuit) for circuit in level)
+
+
+def _gen_max_length(max_max_length):
+    i = 1
+    while i <= max_max_length:
+        yield i
+        i *= 2
