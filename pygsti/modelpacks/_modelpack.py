@@ -15,11 +15,64 @@ import gzip as _gzip
 import pickle as _pickle
 
 from ..objects.polynomial import bulk_load_compact_polys as _bulk_load_compact_polys
+from ..construction.circuitconstruction import circuit_list as _circuit_list
+
+
+def _transform_indices(prototype, index_fn):
+    """ Transform the indices of a circuit list with the given index factory """
+    def transform(circuit):
+        if len(circuit) > 1:
+            lbl, *idx = circuit
+            return (lbl, *[index_fn(i) for i in idx])
+        else:
+            return circuit
+
+    for level in prototype:
+        yield tuple(transform(circuit) for circuit in level)
 
 
 class ModelPack(_ABC):
     """ ABC of all derived modelpack types"""
     description = None
+
+
+# XXX should this be GSTModelPack?
+class SMQModelPack(ModelPack):
+    """ ABC for standard multi-qubit modelpacks """
+    gates = None
+    _sslbls = None
+    _germs = None
+    _germs_lite = None
+    _fiducials = None
+    _prepStrs = None
+    _effectStrs = None
+
+    def _indexed_circuits(self, prototype, index=lambda n: n):
+        if prototype is not None:
+            return _circuit_list(_transform_indices(prototype, index), tuple(map(index, self._sslbls)))
+
+    def germs(self, index=lambda n: n):
+        return self._indexed_circuits(self._germs, index)
+
+    def germs_lite(self, index=lambda n: n):
+        return self._indexed_circuits(self._germs_lite, index)
+
+    def fiducials(self, index=lambda n: n):
+        return self._indexed_circuits(self._fiducials, index)
+
+    def prepStrs(self, index=lambda n: n):
+        return self._indexed_circuits(self._prepStrs, index)
+
+    def effectStrs(self, index=lambda n: n):
+        return self._indexed_circuits(self._effectStrs, index)
+
+    def get_gst_inputs(max_max_length, drift_analysis=False):
+        """ TODO """
+        pass  # TODO
+
+    def get_gst_circuits_struct(max_max_length):
+        """ TODO """
+        pass  # TODO
 
     def __init__(self):
         self._gscache = {("full", "auto"): self._target_model}
@@ -76,35 +129,13 @@ class ModelPack(_ABC):
 
         if param_type == "H+S terms":
             cachePath = _Path(__file__).absolute().parent / "caches"
-            # cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-            #                           "caches")
 
             assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
             termOrder = 1 if sim_type == "auto" else int(sim_type.split(":")[1])
             fn = ("cacheHS%d." % termOrder) + self.__module__
             return cachePath / (fn + "_keys.pkz"), cachePath / (fn + "_vals.npz")
-            # fn = _os.path.join(cachePath, fn)
-            # return fn + "_keys.pkz", fn + "_vals.npz"
         else:
             raise ValueError("No cache files used for param-type=%s" % param_type)
-
-
-# XXX should this be GSTModelPack?
-class SMQModelPack(ModelPack):
-    """ ABC for standard multi-qubit modelpacks """
-    gates = None
-    fiducials = None
-    effectStrs = None
-    prepStrs = None
-    germs = None
-
-    def get_gst_inputs(max_max_length, drift_analysis=False):
-        """ TODO """
-        pass  # TODO
-
-    def get_gst_circuits_struct(max_max_length):
-        """ TODO """
-        pass  # TODO
 
 
 class RPEModelPack(ModelPack):
