@@ -36,9 +36,9 @@ class GSTModelPack(ModelPack):
     _fiducials = None
     _prepfiducials = None
     _measfiducials = None
-    
+
     _pergerm_fidPairsDict = None
-    _pergerm_fidPairsDict_lite = None    
+    _pergerm_fidPairsDict_lite = None
 
     def __init__(self):
         self._gscache = {}
@@ -47,14 +47,13 @@ class GSTModelPack(ModelPack):
         if index is None: index = self._sslbls
         assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)
         if prototype is not None:
-            return _circuit_list(_transform_indices(prototype, index), index)
+            return _circuit_list(_transform_circuittup_list(prototype, index), index)
 
     def _indexed_circuitdict(self, prototype, index):
         if index is None: index = self._sslbls
-        assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)        
+        assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)
         if prototype is not None:
-            trans_kys = list(_transform_indices(prototype.keys(), index))
-            return {_Circuit(lbls, line_labels=index): prototype[k] for lbls, k in zip(trans_kys, prototype.keys())}  # UGLY!
+            return {_Circuit(_transform_circuit_tup(k, index), line_labels=index): val for k, val in prototype.items()}
 
     def germs(self, qubit_labels=None, lite=True):
         if lite and self._germs_lite is not None:
@@ -301,19 +300,24 @@ def _load_calccache(key_path, val_path):
     return calc_cache
 
 
-def _transform_indices(circuit_list, index_tup):
-    """ Transform the indices of the tuples in a circuit list with the given index factory """
-    def transform(layerlbl):
-        if len(layerlbl) > 1:
-            # This assumes simple layer labels that == a gate label
-            # We could use the Label object here in future to support more complex labels
-            lbl, *idx = layerlbl
-            return (lbl, *[index_tup[i] for i in idx])
-        else:
-            return layerlbl
+def _transform_layer_tup(layer_tup, index_tup):
+    if len(layer_tup) > 1:
+        # This assumes simple layer labels that == a gate label
+        # We could use the Label object here in future to support more complex labels
+        lbl, *idx = layer_tup
+        return (lbl, *[index_tup[i] for i in idx])
+    else:
+        return layer_tup
 
-    for circuit in circuit_list:
-        yield tuple(transform(layer_lbl) for layer_lbl in circuit)
+
+def _transform_circuit_tup(circuit_tup, index_tup):
+    return tuple(_transform_layer_tup(layer_lbl, index_tup) for layer_lbl in circuit_tup)
+
+
+def _transform_circuittup_list(circuittup_list, index_tup):
+    """ Transform the indices of the tuples in a circuit list with the given index factory """
+    for circuit_tup in circuittup_list:
+        yield _transform_circuit_tup(circuit_tup, index_tup)
 
 
 def _gen_max_length(max_max_length):
