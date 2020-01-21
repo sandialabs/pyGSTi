@@ -396,11 +396,13 @@ class ExperimentDesign(_TreeNode):
         circuits : list of Circuits, optional
             A list of the circuits needing data.  If None, then the list is empty.
 
-        qubit_labels : tuple, optional
+        qubit_labels : tuple or "multiple", optional
             The qubits that this experiment design applies to.  These should also
-            be the line labels of `circuits`.  If None, the line labels of the
-            first circuit is used, or, if `circuits` is None, the concatenation
-            of the qubit labels of any child experiment designs is used.
+            be the line labels of `circuits`.  If None,  the concatenation
+            of the qubit labels of any child experiment designs is used, or, if
+            there are no child designs, the line labels of the first circuit is used.
+            The special "multiple" value means that different circuits act on different
+            qubit lines.
 
         children : dict, optional
             A dictionary of whose values are child
@@ -439,16 +441,24 @@ class ExperimentDesign(_TreeNode):
         self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none', '_loaded_from': 'none'})
 
         if qubit_labels is None:
-            if len(circuits) > 0:
+            if children:
+                if any([des.qubit_labels == "multiple" for des in children.values()]):
+                    self.qubit_labels = "multiple"
+                else:
+                    self.qubit_labels = tuple(_itertools.chain(*[design.qubit_labels for design in children.values()]))
+
+            elif len(circuits) > 0:
                 self.qubit_labels = circuits[0].line_labels
-            elif children:
-                self.qubit_labels = tuple(_itertools.chain(*[design.qubit_labels for design in children.values()]))
+
             else:
                 self.qubit_labels = ('*',)  # default "qubit labels"
+
+        elif qubit_labels == "multiple":
+            self.qubit_labels = "multiple"
         else:
             self.qubit_labels = tuple(qubit_labels)
 
-        if children is None: children = {} 
+        if children is None: children = {}
         children_dirs = children_dirs.copy() if (children_dirs is not None) else \
             {subname.replace(' ', '_'): subname for subname in children}
 
@@ -673,6 +683,13 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
                 raise NotImplementedError("Interleaving not implemented yet")
             _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
 
+        if qubit_labels is None and len(sub_designs) > 0:
+            first = sub_designs[list(sub_designs.keys())[0]].qubit_labels
+            if any([des.qubit_labels != first for des in sub_designs.values()]):
+                qubit_labels = "multiple"
+            else:
+                qubit_labels = first
+
         super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
 
     def create_subdata(self, sub_name, dataset):
@@ -728,6 +745,8 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         SimultaneousExperimentDesign
         """
         #TODO: check that sub-designs don't have overlapping qubit_labels
+        assert(not any([des.qubit_labels == "multiple" for des in edesigns])), \
+            "SimultaneousExperimentDesign requires sub-designs with definite qubit_labels, not 'multiple'"
 
         if qubit_labels is None:
             qubit_labels = tuple(_itertools.chain(*[des.qubit_labels for des in edesigns]))

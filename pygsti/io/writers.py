@@ -450,9 +450,9 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     dirname = _pathlib.Path(dirname)
     data_dir = dirname / 'data'
     circuits = edesign.all_circuits_needing_data
-    nQubits = len(edesign.qubit_labels)
+    nQubits = "multiple" if edesign.qubit_labels == "multiple" else len(edesign.qubit_labels)
     if sparse == "auto":
-        sparse = bool(nQubits > 3)  # HARDCODED
+        sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
 
     if sparse:
         header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
