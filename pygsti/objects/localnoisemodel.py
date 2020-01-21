@@ -732,23 +732,38 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
     def get_effect(self, layerlbl):
-        return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        if layerlbl in self.effect_blks['layers']:
+            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        else:
+            #see if this effect label is for a marginalized POVM
+            if isinstance(layerlbl, _Lbl):  # this should always be the case...
+                povmName = _gt.eLabelToPOVM(layerlbl)
+                if povmName in self.povm_blks['layers']:
+                    # implicit marginalized POVMs whereby an existing POVM name is used with sslbls that
+                    # are not present in the stored POVM's label.
+                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache this in FUTURE
+                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
+                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
+                    return self.effect_blks['layers'][layerlbl]
+        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
     def get_operation(self, layerlbl):
         dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
-        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.op_blks['layers'])
+        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.simpleop_blks['layers'])
 
         # OLD: special case: 'Gi' acts as global idle!
         #if hasGlobalIdle and layerlbl == 'Gi' and \
-        #   'Gi' not in self.op_blks['layers'])):
-        #    return self.op_blks['layers'][_Lbl('globalIdle')]
+        #   'Gi' not in self.simpleop_blks['layers'])):
+        #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
 
         if len(components) == 1 and not bHasGlobalIdle:
             return self.get_layer_component_operation(components[0], dense)
         else:
-            gblIdle = [self.op_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+            gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             return Composed(gblIdle + [self.get_layer_component_operation(l, dense) for l in components],
                             dim=self.model.dim,
@@ -757,7 +772,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
     def get_layer_component_operation(self, complbl, dense):
         if isinstance(complbl, _CircuitLabel):
             return self.get_circuitlabel_op(complbl, dense)
-        elif complbl in self.op_blks['layers']:
-            return self.op_blks['layers'][complbl]
+        elif complbl in self.simpleop_blks['layers']:
+            return self.simpleop_blks['layers'][complbl]
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)

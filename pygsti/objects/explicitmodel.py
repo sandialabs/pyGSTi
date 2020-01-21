@@ -131,8 +131,8 @@ class ExplicitOpModel(_mdl.OpModel):
             basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
                 else "sv"  # ( if evotype in ("statevec","stabilizer") )
 
-        chelper = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments)
-        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, chelper, sim_type)
+        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, None, sim_type)
+        self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
 
     def get_primitive_prep_labels(self):
         """ Return the primitive state preparation labels of this model"""
@@ -472,7 +472,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self._state_space_labels = stateDict['stateSpaceLabels']
             self._paramlbls = None
             self._shlp = _sh.MemberDictSimplifierHelper(
-                stateDict['preps'], stateDict['povms'], stateDict['instruments'])
+                stateDict['preps'], stateDict['povms'], stateDict['instruments'], self._state_space_labels)
             del stateDict['gates']
             del stateDict['_autogator']
             del stateDict['auto_idle_gatename']
@@ -1179,7 +1179,8 @@ class ExplicitOpModel(_mdl.OpModel):
         copyInto.povms = self.povms.copy(copyInto)
         copyInto.operations = self.operations.copy(copyInto)
         copyInto.instruments = self.instruments.copy(copyInto)
-        copyInto._shlp = _sh.MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments)
+        copyInto._shlp = _sh.MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments,
+                                                        self.state_space_labels)
 
         copyInto._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 

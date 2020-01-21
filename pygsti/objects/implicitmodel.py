@@ -134,9 +134,9 @@ class ImplicitOpModel(_mdl.OpModel):
             # by default, assume *_blk members have keys which match the simple
             # labels found in the circuits this model can simulate.
         self.simplifier_helper_class = simplifier_helper_class
-        simplifier_helper = simplifier_helper_class(self)
         super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
-                                              simplifier_helper, sim_type)
+                                              None, sim_type)
+        self._shlp = simplifier_helper_class(self)
 
     def get_primitive_prep_labels(self):
         """ Return the primitive state preparation labels of this model"""
@@ -185,23 +185,25 @@ class ImplicitOpModel(_mdl.OpModel):
         """ (simplified op server) """
         self._clean_paramvec()  # just to be safe
 
-        simplified_effect_blks = _collections.OrderedDict()
-        for povm_dict_lbl, povmdict in self.povm_blks.items():
-            simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
-                [(k, e) for povm_lbl, povm in povmdict.items()
-                 for k, e in povm.simplify_effects(povm_lbl).items()])
-
-        simplified_op_blks = self.operation_blks.copy()  # no compilation needed
-        for inst_dict_lbl, instdict in self.instrument_blks.items():
-            if inst_dict_lbl not in simplified_op_blks:  # only create when needed
-                simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
-            for inst_lbl, inst in instdict.items():
-                for k, g in inst.simplify_operations(inst_lbl).items():
-                    simplified_op_blks[inst_dict_lbl][k] = g
-
-        simplified_prep_blks = self.prep_blks.copy()  # no compilation needed
-
-        return self._lizardClass(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)
+        #TODO REMOVE
+        #simplified_effect_blks = _collections.OrderedDict()
+        #for povm_dict_lbl, povmdict in self.povm_blks.items():
+        #    simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
+        #        [(k, e) for povm_lbl, povm in povmdict.items()
+        #         for k, e in povm.simplify_effects(povm_lbl).items()])
+        #
+        #simplified_op_blks = self.operation_blks.copy()  # no compilation needed
+        #for inst_dict_lbl, instdict in self.instrument_blks.items():
+        #    if inst_dict_lbl not in simplified_op_blks:  # only create when needed
+        #        simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
+        #    for inst_lbl, inst in instdict.items():
+        #        for k, g in inst.simplify_operations(inst_lbl).items():
+        #            simplified_op_blks[inst_dict_lbl][k] = g
+        #
+        #simplified_prep_blks = self.prep_blks.copy()  # no compilation needed
+        #return self._lizardClass(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)
+        
+        return self._lizardClass(self.prep_blks, self.operation_blks, self.povm_blks, self.instrument_blks, self)
         # maybe add a self.factories arg? (but factories aren't really "simplified"...
         # use self._lizardArgs internally?
 

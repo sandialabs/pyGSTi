@@ -1177,7 +1177,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
 
         components = layerlbl.components
         if len(components) == 0:  # or layerlbl == 'Gi': # OLD: special case: 'Gi' acts as global idle!
-            return self.op_blks['layers']['globalIdle']  # idle!
+            return self.simpleop_blks['layers']['globalIdle']  # idle!
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
@@ -1188,7 +1188,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         ops_to_compose = [targetOp]
 
         if errcomp_type == "gates":
-            if add_idle_noise: ops_to_compose.append(self.op_blks['layers']['globalIdle'])
+            if add_idle_noise: ops_to_compose.append(self.simpleop_blks['layers']['globalIdle'])
             component_cloudnoise_ops = self.get_layer_component_cloudnoises(components)
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
@@ -1202,7 +1202,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             #We compose the target operations to create a
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
-            errorGens = [self.op_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
+            errorGens = [self.simpleop_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
             errorGens.extend(self.get_layer_component_cloudnoises(components))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
@@ -1226,8 +1226,8 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
             #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
-        elif complbl in self.op_blks['layers']:
-            return self.op_blks['layers'][complbl]
+        elif complbl in self.simpleop_blks['layers']:
+            return self.simpleop_blks['layers'][complbl]
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
 
@@ -1239,8 +1239,8 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         """
         ret = []
         for complbl in complbl_list:
-            if complbl in self.op_blks['cloudnoise']:
-                ret.append(self.op_blks['cloudnoise'][complbl])
+            if complbl in self.simpleop_blks['cloudnoise']:
+                ret.append(self.simpleop_blks['cloudnoise'][complbl])
             else:
                 try:
                     ret.append(_opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl))

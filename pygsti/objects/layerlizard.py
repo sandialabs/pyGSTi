@@ -201,21 +201,41 @@ class ImplicitLayerLizard(LayerLizard):
     logic for how to construct layer operations from model components).
     """
 
-    def __init__(self, preps, ops, effects, model):
+    def __init__(self, prep_blks, op_blks, povm_blks, instrument_blks, model):
         """
         Creates a new ExplicitLayerLizard.
 
         Parameters
         ----------
-        preps, ops, effects : dict
+        prep_blks, op_blks, povm_blks, instrument_blks : dict
             Dictionaries of :class:`OrderedMemberDict` objects, one per
-            "category" of simplified operators.  These are stored and used
+            "category" of operators.  These are stored and used
             to build layer operations for serving to a forwared simulator.
 
         model : Model
-            The model associated with the simplified operations.
+            The model associated with the operations.
         """
-        self.prep_blks, self.op_blks, self.effect_blks = preps, ops, effects
+        #Create dicts of all "POVMName_EffectName" effects, one dict per category
+        # This simplification also ensures all gpindices are pointing to the parent model's paramvec
+        simplified_effect_blks = _collections.OrderedDict()
+        for povm_dict_lbl, povmdict in povm_blks.items():
+            simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
+                [(k, e) for povm_lbl, povm in povmdict.items()
+                 for k, e in povm.simplify_effects(povm_lbl).items()])
+
+        simplified_op_blks = op_blks.copy()  # no compilation needed
+        for inst_dict_lbl, instdict in instrument_blks.items():
+            if inst_dict_lbl not in simplified_op_blks:  # only create when needed
+                simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
+            for inst_lbl, inst in instdict.items():
+                for k, g in inst.simplify_operations(inst_lbl).items():
+                    simplified_op_blks[inst_dict_lbl][k] = g
+
+        self.prep_blks = prep_blks.copy()  # no compilation needed
+        self.operation_blks = op_blks.copy()
+        self.povm_blks = povm_blks.copy()
+        self.simpleop_blks = simplified_op_blks
+        self.effect_blks = simplified_effect_blks
         super(ImplicitLayerLizard, self).__init__(model)
 
     def get_prep(self, layerlbl):
@@ -269,7 +289,7 @@ class ImplicitLayerLizard(LayerLizard):
         """
         for _, objdict in _itertools.chain(self.prep_blks.items(),
                                            self.effect_blks.items(),
-                                           self.op_blks.items()):
+                                           self.simpleop_blks.items()):
             for _, obj in objdict.items():
                 obj.from_vector(v[obj.gpindices], close, nodirty)
 

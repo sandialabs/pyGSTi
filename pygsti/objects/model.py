@@ -857,11 +857,11 @@ class OpModel(Model):
         if len(circuit) > 0 and self._shlp.is_povm_lbl(circuit[-1]):
             povm_lbl = circuit[-1]
             circuit = circuit[:-1]
-        elif self._shlp.get_default_povm_lbl() is not None:
-            povm_lbl = self._shlp.get_default_povm_lbl()
+        elif self._shlp.get_default_povm_lbl(circuit.line_labels) is not None:
+            povm_lbl = self._shlp.get_default_povm_lbl(circuit.line_labels)
         else:
             if 'povm' in erroron and self._shlp.has_povms():
-                raise ValueError("Cannot resolve POVM in %s" % circuit)
+                raise ValueError("Cannot resolve POVM in %s" % str(circuit))
             else: povm_lbl = None
 
         return prep_lbl, circuit, povm_lbl
@@ -962,8 +962,12 @@ class OpModel(Model):
                     # elbl = oout[-1] -- the last element corresponds
                     # to the POVM (earlier ones = instruments)
                 else:
-                    elabels = [povm_lbl + "_" + elbl
-                               for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
+                    if isinstance(povm_lbl, _Label):  # support for POVMs being labels, e.g. for marginalized POVMs
+                        elabels = [_Label(povm_lbl.name + "_" + elbl, povm_lbl.sslbls)
+                                   for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
+                    else:
+                        elabels = [povm_lbl + "_" + elbl
+                                   for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
 
             #Include prep-label as part of circuit
             if prep_lbl is not None:

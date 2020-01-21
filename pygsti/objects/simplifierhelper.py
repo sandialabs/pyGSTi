@@ -56,7 +56,8 @@ class SimplifierHelper(object):
     would provide - it only needs a function to check if a given value is a
     viable state-preparation label.
     """
-    pass
+    def __init__(self, sslbls):
+        self.sslbls = sslbls  # the state space labels for the model this helper is associated with
 
 
 class BasicSimplifierHelper(SimplifierHelper):
@@ -65,7 +66,7 @@ class BasicSimplifierHelper(SimplifierHelper):
     """
 
     def __init__(self, preplbls, povmlbls, instrumentlbls,
-                 povm_effect_lbls, instrument_member_lbls):
+                 povm_effect_lbls, instrument_member_lbls, sslbls):
         """
         Create a new BasicSimplifierHelper.
 
@@ -79,6 +80,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         self.instrumentlbls = instrumentlbls
         self.povm_effect_lbls = povm_effect_lbls
         self.instrument_member_lbls = instrument_member_lbls
+        super().__init__(sslbls)
 
     def is_prep_lbl(self, lbl):
         """Whether `lbl` is a valid state prep label (returns boolean)"""
@@ -105,7 +107,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         return self.preplbls[0] \
             if len(self.preplbls) == 1 else None
 
-    def get_default_povm_lbl(self):
+    def get_default_povm_lbl(self, sslbls):
         """
         Gets the default POVM label (used when a circuit
         is specified without one).  Returns `None` if there is
@@ -115,6 +117,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         -------
         Label or None
         """
+        assert(sslbls is None or sslbls == ('*',))
         return self.povmlbls[0] \
             if len(self.povmlbls) == 1 else None
 
@@ -166,7 +169,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
     :class:`ExplicitOpModel`.
     """
 
-    def __init__(self, preps, povms, instruments):
+    def __init__(self, preps, povms, instruments, sslbls):
         """
         Create a new MemberDictSimplifierHelper.
 
@@ -177,6 +180,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         self.preps = preps
         self.povms = povms
         self.instruments = instruments
+        super().__init__(sslbls)
 
     def is_prep_lbl(self, lbl):
         """Whether `lbl` is a valid state prep label (returns boolean)"""
@@ -203,7 +207,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         return tuple(self.preps.keys())[0] \
             if len(self.preps) == 1 else None
 
-    def get_default_povm_lbl(self):
+    def get_default_povm_lbl(self, sslbls):
         """
         Gets the default POVM label (used when a circuit
         is specified without one).  Returns `None` if there is
@@ -213,6 +217,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         -------
         Label or None
         """
+        assert(sslbls is None or sslbls == ('*',))
         return tuple(self.povms.keys())[0] \
             if len(self.povms) == 1 else None
 
@@ -264,7 +269,7 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
     contained in an :class:`ImplicitOpModel`.
     """
 
-    def __init__(self, prep_blks, povm_blks, instrument_blks):
+    def __init__(self, prep_blks, povm_blks, instrument_blks, sslbls):
         """
         Create a new MemberDictDictSimplifierHelper.
 
@@ -275,6 +280,7 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         self.prep_blks = prep_blks
         self.povm_blks = povm_blks
         self.instrument_blks = instrument_blks
+        super().__init__(sslbls)
 
     def is_prep_lbl(self, lbl):
         """Whether `lbl` is a valid state prep label (returns boolean)"""
@@ -303,11 +309,11 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
             for prepdict in self.prep_blks.values():
                 if len(prepdict) > 0:
                     return tuple(prepdict.keys())[0]
-            assert(False), "Logic error: one prepdict should have had lenght > 0!"
+            assert(False), "Logic error: one prepdict should have had length > 0!"
         else:
             return None
 
-    def get_default_povm_lbl(self):
+    def get_default_povm_lbl(self, sslbls):
         """
         Gets the default POVM label (used when a circuit
         is specified without one).  Returns `None` if there is
@@ -321,8 +327,12 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         if npovms == 1:
             for povmdict in self.povm_blks.values():
                 if len(povmdict) > 0:
-                    return tuple(povmdict.keys())[0]
-            assert(False), "Logic error: one povmdict should have had lenght > 0!"
+                    povmName = tuple(povmdict.keys())[0]  # assume this is a POVM for all of model's sslbls
+                    if len(self.sslbls.labels) == 1 and self.sslbls.labels[0] == sslbls or sslbls == ('*',):
+                        return _Label(povmName)  # because sslbls == all of model's sslbls
+                    else:
+                        return _Label(povmName, sslbls)
+            assert(False), "Logic error: one povmdict should have had length > 0!"
         else:
             return None
 
@@ -351,7 +361,10 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         for povmdict in self.povm_blks.values():
             if povm_lbl in povmdict:
                 return tuple(povmdict[povm_lbl].keys())
-        raise KeyError("No POVM labeled %s!" % povm_lbl)
+            if isinstance(povm_lbl, _Label) and povm_lbl.name in povmdict:
+                return tuple(_povm.MarginalizedPOVM(povmdict[povm_lbl.name], self.sslbls, povm_lbl.sslbls).keys())
+
+        raise KeyError("No POVM labeled %s!" % str(povm_lbl))
 
     def get_member_labels_for_instrument(self, inst_lbl):
         """
@@ -385,4 +398,5 @@ class ImplicitModelSimplifierHelper(MemberDictDictSimplifierHelper):
         implicitModel : ImplicitOpModel
         """
         super(ImplicitModelSimplifierHelper, self).__init__(
-            implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks)
+            implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks,
+            implicitModel.state_space_labels)

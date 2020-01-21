@@ -476,7 +476,8 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
 def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
                                          sampleError="multinomial", seed=None, randState=None,
                                          aliasDict=None, collisionAction="aggregate",
-                                         recordZeroCnts=True, comm=None, memLimit=None, times=None):
+                                         recordZeroCnts=True, comm=None, memLimit=None, times=None,
+                                         fixedColumnMode="auto"):
     """
     Fills in the text-format data set file `dataset_fileame` with simulated data counts using `model`.
 
@@ -501,4 +502,6 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
                              sampleError, seed, randState, aliasDict,
                              collisionAction, recordZeroCnts, comm,
                              memLimit, times)
-    write_dataset(dataset_filename, ds, fixedColumnMode=bool(len(ds_template.get_outcome_labels()) <= 8))
+    if fixedColumnMode == "auto":
+        fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8)
+    write_dataset(dataset_filename, ds, fixedColumnMode=fixedColumnMode)

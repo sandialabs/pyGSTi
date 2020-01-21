@@ -7049,8 +7049,7 @@ class LindbladErrorgen(LinearOperator):
                 assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
             for op in t._rep.post_ops:
                 test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-                if not (_np.allclose(test, _np.identity(test.shape[0], 'd'))):
-                    import bpdb; bpdb.set_trace()
+                assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
 
         return Lterms, coeffs_as_compact_polys
 
