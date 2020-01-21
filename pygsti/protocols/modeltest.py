@@ -31,7 +31,7 @@ from ..objects import objectivefns as _objfns
 
 class ModelTest(_proto.Protocol):
     """A protocol that tests how well a model agrees with a given set of data."""
-    def __init__(self, model_to_test, gaugeopt_suite=None,
+    def __init__(self, model_to_test, target_model=None, gaugeopt_suite=None,
                  gaugeopt_target=None, advancedOptions=None, comm=None,
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
 
@@ -42,6 +42,7 @@ class ModelTest(_proto.Protocol):
 
         super().__init__(name)
         self.model_to_test = model_to_test
+        self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
@@ -51,6 +52,7 @@ class ModelTest(_proto.Protocol):
         self.verbosity = verbosity
 
         self.auxfile_types['model_to_test'] = 'pickle'
+        self.auxfile_types['target_model'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  #TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle' #TODO - better later? - json?
         self.auxfile_types['advancedOptions'] = 'pickle'  #TODO - better later? - json?
@@ -71,8 +73,10 @@ class ModelTest(_proto.Protocol):
             lsgstLists = data.edesign.circuit_lists
         else:
             lsgstLists = [data.edesign.all_circuits_needing_data]
-            
-        if hasattr(data.edesign, 'target_model'):
+
+        if self.target_model is not None:
+            target_model = self.target_model
+        elif hasattr(data.edesign, 'target_model'):
             target_model = data.edesign.target_model
         else:
             target_model = None  # target model isn't necessary

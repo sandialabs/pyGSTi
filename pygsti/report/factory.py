@@ -2127,6 +2127,8 @@ def find_std_clifford_compilation(model, verbosity=0):
     for module_name in smq_modules:
         mod = importlib.import_module("pygsti.modelpacks." + module_name)
         qubit_labels = model.state_space_labels.labels[0]  # this usually gets the qubit labels
+        if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
+        
         target_model = mod.target_model(qubit_labels=qubit_labels)
         if target_model.dim == model.dim and \
            set(target_model.operations.keys()) == set(model.operations.keys()) and \
