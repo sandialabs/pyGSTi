@@ -526,6 +526,76 @@ def entanglement_infidelity(A, B, mxBasis='pp'):
     return 1 - float(entanglement_fidelity(A, B, mxBasis))
 
 
+def gateset_infidelity(mdl, target_model, itype='EI',
+                       weights=None, mxBasis=None):
+    """
+    Computes the average-over-gates of the infidelity between  gates in `mdl`
+    and the gates in `target_model`. If `itype` is 'EI' then the "infidelity"
+    is the entanglement infidelity; if `itype` is 'AGI' then the "infidelity"
+    is the average gate infidelity (AGI and EI are related by a dimension
+    dependent constant).
+
+    This is the quantity that RB error rates are sometimes claimed to be
+    related to directly related.
+
+    Parameters
+    ----------
+    mdl : Model
+        The model to calculate the average infidelity, to `target_model`, of.
+
+    target_model : Model
+        The model to calculate the average infidelity, to `mdl`, of.
+
+    itype : str, optional
+        The infidelity type. Either 'EI', corresponding to entanglement
+        infidelity, or 'AGI', corresponding to average gate infidelity.
+
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates
+        in `mdl` and the values are, possibly unnormalized, probabilities.
+        These probabilities corresponding to the weighting in the average,
+        so if the model contains gates A and B and weights[A] = 2 and
+        weights[B] = 1 then the output is Inf(A)*2/3  + Inf(B)/3 where
+        Inf(X) is the infidelity (to the corresponding element in the other
+        model) of X. If None, a uniform-average is taken, equivalent to
+        setting all the weights to 1.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the models. If None, the basis is obtained from
+        the model.
+
+    Returns
+    -------
+    float
+        The weighted average-over-gates infidelity between the two models.
+
+    """
+    assert(itype == 'AGI' or itype == 'EI'), \
+        "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
+
+    if mxBasis is None: mxBasis = mdl.basis
+
+    sum_of_weights = 0
+    I_list = []
+    for gate in list(target_model.operations.keys()):
+        if itype == 'AGI':
+            I = average_gate_infidelity(mdl.operations[gate], target_model.operations[gate], mxBasis=mxBasis)
+        if itype == 'EI':
+            I = entanglement_infidelity(mdl.operations[gate], target_model.operations[gate], mxBasis=mxBasis)
+        if weights is None:
+            w = 1
+        else:
+            w = weights[gate]
+
+        I_list.append(w * I)
+        sum_of_weights += w
+
+    assert(sum_of_weights > 0), "The sum of the weights should be positive!"
+    AI = _np.sum(I_list) / sum_of_weights
+
+    return AI
+
+
 def unitarity(A, mxBasis="gm"):
     """
     Returns the "unitarity" of a channel, as defined in Wallman et al,

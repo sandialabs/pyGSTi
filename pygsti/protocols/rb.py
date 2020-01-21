@@ -29,8 +29,8 @@ from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
-
-from ..extras import rb as _rb
+from ..algorithms import randomcircuit as _rc
+from ..algorithms import rbfit as _rbfit
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -41,7 +41,7 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         super().__init__(circuit_lists, qubit_labels=qubit_labels)
         self.depths = depths
 
-        
+
 class BenchmarkingDesign(ByDepthDesign):
     """
     Experiment design that holds benchmarking data, i.e. definite-outcome
@@ -63,7 +63,7 @@ class CliffordRBDesign(BenchmarkingDesign):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
-    
+
         for lnum, l in enumerate(depths):
             if verbosity > 0:
                 print('- Sampling {} circuits at CRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
@@ -72,7 +72,7 @@ class CliffordRBDesign(BenchmarkingDesign):
             circuits_at_depth = []
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
-                c, iout = _rb.sample.clifford_rb_circuit(pspec, l, subsetQs=qubit_labels, randomizeout=randomizeout,
+                c, iout = _rc.clifford_rb_circuit(pspec, l, subsetQs=qubit_labels, randomizeout=randomizeout,
                                                   citerations=citerations, compilerargs=compilerargs)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
@@ -110,7 +110,7 @@ class DirectRBDesign(BenchmarkingDesign):
             circuits_at_depth = []
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
-                c, iout = _rb.sample.direct_rb_circuit(
+                c, iout = _rc.direct_rb_circuit(
                     pspec, l, subsetQs=qubit_labels, sampler=sampler, samplerargs=samplerargs,
                     addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
                     cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
@@ -129,7 +129,6 @@ class DirectRBDesign(BenchmarkingDesign):
         self.citerations = citerations
         self.compilerargs = compilerargs
         self.descriptor = descriptor
-        
         self.sampler = sampler
         self.samplerargs = samplerargs
         self.addlocal = addlocal
@@ -137,11 +136,9 @@ class DirectRBDesign(BenchmarkingDesign):
         self.cliffordtwirl = cliffordtwirl
         self.conditionaltwirl = conditionaltwirl
         self.partitioned = partitioned
-        
+
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB'))
-
-
 
 #TODO: maybe need more experiment design types for simultaneous RB and mirrorRB "experiments"
 
@@ -169,7 +166,7 @@ class Benchmark(_proto.Protocol):
             if dsrow.total > 0:
                 for outcome_lbl, counts in dsrow.counts.items():
                     outbitstring = outcome_lbl[-1]
-                    hamming_distance_counts[_rb.analysis.hamming_distance(outbitstring, idealout[-1])] += counts
+                    hamming_distance_counts[_tools.rbtools.hamming_distance(outbitstring, idealout[-1])] += counts
             return list(hamming_distance_counts)  # why a list?
 
         def adjusted_success_probability(hamming_distance_counts):
@@ -178,12 +175,12 @@ class Benchmark(_proto.Protocol):
             #adjSP = _np.sum([(-1 / 2)**n * hamming_distance_counts[n] for n in range(numqubits + 1)]) / total_counts
             adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
             return adjSP
-        
+
         def get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
             hdc = hamming_distance_counts(dsrow, circ, idealout)
-            
+
             ret = {'success_counts': sc,
                    'total_counts': tc,
                    'success_probabilities': _np.nan if tc == 0 else sc / tc,
@@ -211,10 +208,10 @@ class Benchmark(_proto.Protocol):
     def compute_dscmp_data(self, data, dscomparator):
 
         def get_dscmp_values(icirc, circ, dsrow, idealout):
-            ret = {'tvds':  dscomparator.tvds.get(circ, _np.nan),
+            ret = {'tvds': dscomparator.tvds.get(circ, _np.nan),
                    'pvals': dscomparator.pVals.get(circ, _np.nan),
-                   'jsds':  dscomparator.jsds.get(circ, _np.nan),
-                   'llrs':  dscomparator.llrs.get(circ, _np.nan)}
+                   'jsds': dscomparator.jsds.get(circ, _np.nan),
+                   'llrs': dscomparator.llrs.get(circ, _np.nan)}
             return ret
 
         return self.compute_dict(data, "dscmpdata", self.dsmp_datatypes, get_dscmp_values, for_passes="none")
@@ -656,10 +653,54 @@ class PredictedVolumetricBenchmark(VolumetricBenchmark):
 
 
 class RandomizedBenchmarking(Benchmark):
-    """ The randomized benchmarking protocol (this same analysis protocol is used for both Clifford and direct RB) """
-    
-    def __init__(self, seed=(0.8, 0.95), bootstrap_samples=200, asymptote='std', rtype='EI',
-                 datatype='success_probabilities', depths='all', name=None):
+    """
+    The randomized benchmarking protocol. This same analysis protocol is used for Clifford, Direct and Mirror RB.
+    The standard Mirror RB analysis is obtained by setting `datatype` = `adjusted_success_probabilities`.
+    """
+    def __init__(self, datatype='success_probabilities', defaultfit='A-fixed', asymptote='std', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
+        """
+        Initialize an RB protocol for analyzing RB data.
+
+        Parameters
+        ----------
+        datatype: 'success_probabilities' or 'adjusted_success_probabilities', optional
+            The type of summary data to extract, average, and the fit to an exponential decay. If
+            'success_probabilities' then the summary data for a circuit is the frequency that
+            the target bitstring is observed, i.e., the success probability of the circuit. If
+            'adjusted_success_probabilties' then the summary data for a circuit is
+            S = sum_{k = 0}^n (-1/2)^k h_k where h_k is the frequency at which the output bitstring is
+            a Hamming distance of k from the target bitstring, and n is the number of qubits.
+            This datatype is used in Mirror RB, but can also be used in Clifford and Direct RB.
+
+        defaultfit: 'A-fixed' or 'full'
+            The summary data is fit to A + Bp^m with A fixed and with A as a fit parameter.
+            If 'A-fixed' then the default results displayed are those from fitting with A
+            fixed, and if 'full' then the default results displayed are those where A is a
+            fit parameter.
+
+        asymptote : 'std' or float, optional
+            The summary data is fit to A + Bp^m with A fixed and with A has a fit parameter,
+            with the default results returned set by `defaultfit`. This argument specifies the
+            value used when 'A' is fixed. If left as 'std', then 'A' defaults to 1/2^n if 
+            `datatype` is `success_probabilities` and to 1/4^n if `datatype` is 
+            `adjusted_success_probabilities`.
+
+        rtype : 'EI' or 'AGI', optional
+            The RB error rate definition convention. 'EI' results in RB error rates that are associated
+            with the entanglement infidelity, which is the error probability with stochastic Pauli errors.
+            'AGI' results in RB error rates that are associated with the average gate infidelity.
+
+        seed : list, optional
+            Seeds for the fit of B and p (A is seeded to the asymptote defined by `asympote`).
+
+        bootstrap_samples : float, optional
+            The number of samples for generating bootstrapped error bars.
+
+        depths: list or 'all'
+            If not 'all', a list of depths to use (data at other depths is discarded).
+
+        """
         super().__init__(name)
 
         assert(datatype in self.summary_datatypes), "Unknown data type: %s!" % str(datatype)
@@ -671,7 +712,7 @@ class RandomizedBenchmarking(Benchmark):
         self.bootstrap_samples = bootstrap_samples
         self.asymptote = asymptote
         self.rtype = rtype
-        self.datatype = datatype  #TIM: old code had an 'auto' option and used different vals, e.g. 'raw' - CHECK THIS
+        self.datatype = datatype
 
     def run(self, data):
 
@@ -699,18 +740,13 @@ class RandomizedBenchmarking(Benchmark):
             else:
                 raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
 
-        #if datatype == 'adjusted':
-        #    ASPs = RBSdataset.adjusted_ASPs
-        #if datatype == 'raw':
-        #    ASPs = RBSdataset.ASPs
-
         def get_rb_fits(circuitdata_per_depth):
             ASPs = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
                 ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
 
-            full_fit_results, fixed_asym_fit_results = _rb.analysis.std_least_squares_data_fitting(
+            full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_data_fitting(
                 depths, ASPs, nQubits, seed=self.seed, asymptote=asymptote,
                 ftype='full+FA', rtype=self.rtype)
 
@@ -762,12 +798,12 @@ class RandomizedBenchmarking(Benchmark):
             failrate_FAF = None
 
         fits = _tools.NamedDict('FitType', 'category')
-        fits['full'] = _rb.analysis.FitResults(
+        fits['full'] = _rbfit.FitResults(
             'LS', FF_results['seed'], self.rtype, FF_results['success'], FF_results['estimates'],
             FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,
             bootstraps_failrate=failrate_FF)
 
-        fits['A-fixed'] = _rb.analysis.FitResults(
+        fits['A-fixed'] = _rbfit.FitResults(
             'LS', FAF_results['seed'], self.rtype, FAF_results['success'],
             FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
             bootstraps=bootstraps_FAF, bootstraps_failrate=failrate_FAF)
@@ -864,7 +900,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 
         if title is not None: _plt.title(title)
         _plt.ylabel("Success probability")
-        _plt.xlabel("RB sequence length $(m)$")
+        _plt.xlabel("RB depth $(m)$")
         _plt.ylim(ylim)
         _plt.xlim(xlim)
 

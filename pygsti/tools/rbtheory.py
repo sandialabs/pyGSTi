@@ -8,84 +8,15 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import analysis as _analysis
-from ... import tools as _tls
-from ... import objects as _objs
-from ... import construction as _cnst
-from ... import algorithms as _algs
+from . import rbtools as _rbtls
+from . import optools as _optls
+from . import matrixtools as _mtls
+from .. import objects as _objs
+from .. import construction as _cnst
+from .. import algorithms as _algs
 
 import numpy as _np
 import warnings as _warnings
-
-
-def gateset_infidelity(mdl, target_model, itype='EI',
-                       weights=None, mxBasis=None):
-    """
-    Computes the average-over-gates of the infidelity between  gates in `mdl`
-    and the gates in `target_model`. If `itype` is 'EI' then the "infidelity"
-    is the entanglement infidelity; if `itype` is 'AGI' then the "infidelity"
-    is the average gate infidelity (AGI and EI are related by a dimension
-    dependent constant).
-
-    This is the quantity that RB error rates are sometimes claimed to be
-    related to directly related.
-
-    Parameters
-    ----------
-    mdl : Model
-        The model to calculate the average infidelity, to `target_model`, of.
-
-    target_model : Model
-        The model to calculate the average infidelity, to `mdl`, of.
-
-    itype : str, optional
-        The infidelity type. Either 'EI', corresponding to entanglement
-        infidelity, or 'AGI', corresponding to average gate infidelity.
-
-    weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are, possibly unnormalized, probabilities.
-        These probabilities corresponding to the weighting in the average,
-        so if the model contains gates A and B and weights[A] = 2 and
-        weights[B] = 1 then the output is Inf(A)*2/3  + Inf(B)/3 where
-        Inf(X) is the infidelity (to the corresponding element in the other
-        model) of X. If None, a uniform-average is taken, equivalent to
-        setting all the weights to 1.
-
-    mxBasis : {"std","gm","pp"} or Basis object, optional
-        The basis of the models. If None, the basis is obtained from
-        the model.
-
-    Returns
-    -------
-    float
-        The weighted average-over-gates infidelity between the two models.
-
-    """
-    assert(itype == 'AGI' or itype == 'EI'), \
-        "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
-
-    if mxBasis is None: mxBasis = mdl.basis
-
-    sum_of_weights = 0
-    I_list = []
-    for gate in list(target_model.operations.keys()):
-        if itype == 'AGI':
-            I = _tls.average_gate_infidelity(mdl.operations[gate], target_model.operations[gate], mxBasis=mxBasis)
-        if itype == 'EI':
-            I = _tls.entanglement_infidelity(mdl.operations[gate], target_model.operations[gate], mxBasis=mxBasis)
-        if weights is None:
-            w = 1
-        else:
-            w = weights[gate]
-
-        I_list.append(w * I)
-        sum_of_weights += w
-
-    assert(sum_of_weights > 0), "The sum of the weights should be positive!"
-    AI = _np.sum(I_list) / sum_of_weights
-
-    return AI
 
 
 def predicted_RB_number(mdl, target_model, weights=None, d=None, rtype='EI'):
@@ -157,7 +88,7 @@ def predicted_RB_number(mdl, target_model, weights=None, d=None, rtype='EI'):
     """
     if d is None: d = int(round(_np.sqrt(mdl.dim)))
     p = predicted_RB_decay_parameter(mdl, target_model, weights=weights)
-    r = _analysis.p_to_r(p, d=d, rtype=rtype)
+    r = _rbtls.p_to_r(p, d=d, rtype=rtype)
     return r
 
 
@@ -282,7 +213,7 @@ def rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weightin
         vec_l_operator = vec_l_operator.real
 
     vec_l_operator[abs(vec_l_operator) < 10**(-15)] = 0.
-    l_operator = _tls.unvec(vec_l_operator)
+    l_operator = _mtls.unvec(vec_l_operator)
 
     return l_operator
 
@@ -604,8 +535,8 @@ def exact_RB_ASPs(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
     R = R_matrix(mdl, group, group_to_model=group_to_model, weights=weights)
     success_prepLabel = list(mdl.preps.keys())[0]  # just take first prep
     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
-    extended_E = _np.kron(_tls.column_basis_vector(0, group_dim).T, mdl.povms['Mdefault'][success_effectLabel].T)
-    extended_rho = _np.kron(_tls.column_basis_vector(0, group_dim), mdl.preps[success_prepLabel])
+    extended_E = _np.kron(_mtls.column_basis_vector(0, group_dim).T, mdl.povms['Mdefault'][success_effectLabel].T)
+    extended_rho = _np.kron(_mtls.column_basis_vector(0, group_dim), mdl.preps[success_prepLabel])
 
     if compilation is None:
         extended_E = group_dim * _np.dot(extended_E, R)
@@ -721,7 +652,7 @@ def L_matrix_ASPs(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     L = L_matrix(mdl_go, target_model, weights=weights)
     success_prepLabel = list(mdl.preps.keys())[0]  # just take first prep
     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
-    identity_vec = _tls.vec(_np.identity(d**2, float))
+    identity_vec = _mtls.vec(_np.identity(d**2, float))
 
     if compilation is not None:
         mdl_group = _cnst.build_explicit_alias_model(mdl_go, compilation)
@@ -749,9 +680,9 @@ def L_matrix_ASPs(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     for i in range(0, 1 + i_max):
         m[i] = m_min + i * m_step
         if group_twirled:
-            L_m_rdd = _tls.unvec(_np.dot(L_group, _np.dot(Literate, identity_vec)))
+            L_m_rdd = _mtls.unvec(_np.dot(L_group, _np.dot(Literate, identity_vec)))
         else:
-            L_m_rdd = _tls.unvec(_np.dot(Literate, identity_vec))
+            L_m_rdd = _mtls.unvec(_np.dot(Literate, identity_vec))
         P_m[i] = _np.dot(E_eff, _np.dot(L_m_rdd, mdl_go.preps[success_prepLabel]))
         Literate = _np.dot(Lstep, Literate)
         upper_bound[i] = P_m[i] + delta / 2
@@ -846,11 +777,11 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None
         if norm == 'diamond':
             print(error_gs.operations[gate])
             print(error_gs.operations['Gavg'])
-            delta.append(_tls.diamonddist(error_gs.operations[gate], error_gs.operations['Gavg'],
+            delta.append(_optls.diamonddist(error_gs.operations[gate], error_gs.operations['Gavg'],
                                           mxBasis=mxBasis))
         elif norm == '1to1':
             gate_dif = error_gs.operations[gate] - error_gs.operations['Gavg']
-            delta.append(_tls.norm1to1(gate_dif, n_samples=1000, mxBasis=mxBasis, return_list=False))
+            delta.append(_optls.norm1to1(gate_dif, n_samples=1000, mxBasis=mxBasis, return_list=False))
         else:
             raise ValueError("Only diamond or 1to1 norm available.")
 
