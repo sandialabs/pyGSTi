@@ -22,7 +22,7 @@ class _Module(GSTModelPack, RBModelPack):
 
     gates = [(), ('Gxpi2', 0), ('Gypi2', 0)]
 
-    _sslbls = [0]
+    _sslbls = (0,)
 
     _germs = [((), ), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gypi2', 0)), (('Gxpi2', 0), ('Gypi2', 0), ()), (('Gxpi2', 0), (), ('Gypi2', 0)),
               (('Gxpi2', 0), (), ()), (('Gypi2', 0), (), ()), (('Gxpi2', 0), ('Gxpi2', 0), (), ('Gypi2', 0)), (('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ()),

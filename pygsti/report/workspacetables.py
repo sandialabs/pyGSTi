@@ -577,7 +577,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.get_primitive_op_labels()  # use labels of 1st model
 
-        colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % lbl for lbl in opLabels]
+        colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
         confidenceRegionInfo = None  # Don't deal with CIs yet...
 
@@ -726,7 +726,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.get_primitive_op_labels()
 
-        colHeadings = [''] + ['%s' % lbl for lbl in opLabels]
+        colHeadings = [''] + ['%s' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
         confidenceRegionInfo = None  # Don't deal with CIs yet...
 

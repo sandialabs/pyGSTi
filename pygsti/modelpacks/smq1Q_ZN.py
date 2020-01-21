@@ -22,7 +22,7 @@ class _Module(GSTModelPack):
 
     gates = None
 
-    _sslbls = [0]
+    _sslbls = (0,)
 
     _germs = [(('Gzpi2', 0), ), (('Gn', 0), ), (('Gzpi2', 0), ('Gn', 0)), (('Gzpi2', 0), ('Gzpi2', 0), ('Gn', 0)),
               (('Gzpi2', 0), ('Gn', 0), ('Gn', 0)), (('Gzpi2', 0), ('Gzpi2', 0), ('Gn', 0), ('Gzpi2', 0), ('Gn', 0), ('Gn', 0))]
@@ -63,7 +63,7 @@ class _Module(GSTModelPack):
 
     def _target_model(self, sslbls):
         return self._build_explicit_target_model(
-            sslbls, [(('Gzpi2', 0), ('Gn', 0)],
+            sslbls, [('Gzpi2', 0), ('Gn', 0)],
             ['Z(pi/2,{0})', 'N(pi/2, sqrt(3)/2, 0, -0.5, {0})'])
 
 

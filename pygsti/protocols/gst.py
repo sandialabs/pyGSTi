@@ -409,7 +409,7 @@ class StandardGST(_proto.Protocol):
                     est_label = mode
                     model_to_test = data.edesign.target_model.copy()  # no parameterization change
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label, 'onBadFit': []})
-                    mdltest = _ModelTest(model_to_test, self.gaugeopt_suite, self.gaugeopt_target, advanced,
+                    mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite, self.gaugeopt_target, advanced,
                                          self.comm, self.memLimit, verbosity=printer - 1)
                     ret = mdltest.run(data)
 
@@ -426,7 +426,7 @@ class StandardGST(_proto.Protocol):
                 elif mode in modelsToTest:
                     est_label = mode
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
-                    mdltest = _ModelTest(modelsToTest[mode], self.gaugeopt_suite, self.gaugeopt_target,
+                    mdltest = _ModelTest(modelsToTest[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
                                          advanced, self.comm, self.memLimit, verbosity=printer - 1)
                     ret = mdltest.run(data)
                 else:

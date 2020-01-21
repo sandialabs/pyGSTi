@@ -833,7 +833,10 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
             else:
                 raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
-    ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
+    if gss.aliases is not None:
+        ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
+    else:
+        ds_gstrs = gstrs
 
     if Np is None: Np = model.num_nongauge_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset

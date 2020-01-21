@@ -804,8 +804,12 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     cntVecMx_all = _np.empty(nEls, 'd')
     totalCntVec_all = _np.empty(nEls, 'd')
 
-    ds_subtree_circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    if opLabelAliases is not None:
+        ds_subtree_circuit_list = _lt.find_replace_tuple_list(
+            circuit_list, opLabelAliases)
+    else:
+        ds_subtree_circuit_list = circuit_list
+        
     for (i, opStr) in enumerate(ds_subtree_circuit_list):
         cnts = dataset[opStr].counts
         totalCntVec_all[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
