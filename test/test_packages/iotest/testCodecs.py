@@ -11,7 +11,7 @@ import pickle
 import collections
 
 import pygsti
-from pygsti.construction import std1Q_XY as std
+from pygsti.modelpacks.legacy import std1Q_XY as std
 import pygsti.io.json as json
 import pygsti.io.msgpack as msgpack
 from pygsti.objects.label import CircuitLabel
@@ -330,7 +330,7 @@ class TestCodecs(CodecsTestCase):
     #def test_labels(self):
     #    strLabel = pygsti.obj.Label("Gi")
     #    #strLabel = ("Gi",)
-    #    from pygsti.construction import std1Q_XYI as std
+    #    from pygsti.modelpacks.legacy import std1Q_XYI as std
     #
     #    s = json.dumps(strLabel)
     #    print("s = ",str(s))

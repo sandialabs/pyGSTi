@@ -11,9 +11,9 @@ Variables for working with the a model containing all 24 1-qubit Clifford gates
 """
 
 import sys as _sys
-from . import circuitconstruction as _strc
-from . import modelconstruction as _setc
-from . import stdtarget as _stdtarget
+from ...construction import circuitconstruction as _strc
+from ...construction import modelconstruction as _setc
+from ...construction import stdtarget as _stdtarget
 from collections import OrderedDict as _OrderedDict
 
 description = "The 1-qubit Clifford group"

@@ -4,7 +4,7 @@ from ..util import BaseCase, Namespace
 from . import fixtures as pkg
 
 from pygsti.objects import results, estimate
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 
 
 class ResultsBase(object):
@@ -55,7 +55,7 @@ class ResultsTester(ResultsBase, BaseCase):
 
     def test_init_circuits_raises_on_bad_arg(self):
         # XXX Don't test this unless init_circuits can actually take a string  EGN: we can remove this test.
-        # (and if it can, document it)  
+        # (and if it can, document it)
         with self.assertRaises(ValueError):
             self.res.init_circuits("foobar")
 

@@ -187,7 +187,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                     if not UNDERTOL <= psum <= OVERTOL:
                         ps = {lbl: p / psum for lbl, p in ps.items()}
                     assert(UNDERTOL <= sum(ps.values()) <= OVERTOL), 'psum={}'.format(sum(ps.values()))
-                    
+
                     if adjusted:
                         _warnings.warn('Adjustment finished')
 

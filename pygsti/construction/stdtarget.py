@@ -8,6 +8,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+# XXX this module should probably be deprecated with the new `pygsti.modelpacks` API
+
 import time as _time
 import os as _os
 import pickle as _pickle
@@ -37,6 +39,7 @@ def _get_cachefile_names(std_module, param_type, sim_type, py_version):
         raise ValueError("No cache files used for param-type=%s" % param_type)
 
 
+# XXX is this used?
 def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False, comm=None):
     """
     A utility routine to for creating the term-based cache files for a standard module
@@ -157,6 +160,7 @@ def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False
     #    _write_calccache(calc_cache, key_fn, val_fn, json_too, comm)
 
 
+# XXX apparently only used from _make_HScache_for_std_model which itself looks unused
 def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
     """
     Write `caclcache`, a dictionary of compact polys, to disk in two files,

@@ -56,11 +56,11 @@ class RBTestCase(BaseTestCase):
         # Tests the Clifford compilations hard-coded into the various std models. Perhaps this can be
         # automated to run over all the std models that contain a Clifford compilation?
 
-        from pygsti.construction import std1Q_Cliffords
+        from pygsti.modelpacks.legacy import std1Q_Cliffords
         target_model = std1Q_Cliffords.target_model()
         clifford_group = rb.group.construct_1Q_Clifford_group()
 
-        from pygsti.construction import std1Q_XY
+        from pygsti.modelpacks.legacy import std1Q_XY
         target_model = std1Q_XY.target_model()
         clifford_compilation = std1Q_XY.clifford_compilation
         compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
@@ -68,7 +68,7 @@ class RBTestCase(BaseTestCase):
         for key in list(compiled_cliffords.operations.keys()):
             self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.get_matrix(key))), 10**(-10))
 
-        from pygsti.construction import std1Q_XYI
+        from pygsti.modelpacks.legacy import std1Q_XYI
         target_model = std1Q_XYI.target_model()
         clifford_compilation = std1Q_XYI.clifford_compilation
         compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)

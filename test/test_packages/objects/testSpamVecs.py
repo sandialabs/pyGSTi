@@ -6,7 +6,7 @@ import itertools
 
 from numpy.random import random,seed
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 from  pygsti.objects import SPAMVec, DenseSPAMVec
 import pygsti.construction as pc
 

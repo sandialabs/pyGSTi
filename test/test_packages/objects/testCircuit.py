@@ -9,7 +9,7 @@ from ..testutils import BaseTestCase
 
 class CircuitTestCase(BaseTestCase):
     def test_simulate_circuitlabels(self):
-        from pygsti.construction import std1Q_XYI
+        from pygsti.modelpacks.legacy import std1Q_XYI
 
         pygsti.obj.Circuit.default_expand_subcircuits = False # so mult/exponentiation => CircuitLabels
 

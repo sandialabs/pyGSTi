@@ -2,7 +2,7 @@ import numpy as np
 
 from ..util import BaseCase
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.construction.modelconstruction import build_explicit_model, build_operation
 import pygsti.objects.explicitmodel as mdl
 

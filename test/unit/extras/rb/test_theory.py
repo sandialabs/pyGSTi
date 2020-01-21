@@ -3,7 +3,7 @@ import numpy as np
 from ...util import BaseCase
 
 from pygsti.tools import optools as ot
-from pygsti.construction import std1Q_Cliffords, std1Q_XY, std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_Cliffords, std1Q_XY, std1Q_XYI
 #from pygsti.extras import rb
 
 

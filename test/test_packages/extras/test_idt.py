@@ -220,7 +220,7 @@ class IDTTestCase(BaseTestCase):
         self.assertLess(maxA, 1e-6)
 
     def test_idletomog_gstdata_std1Q(self):
-        from pygsti.construction import std1Q_XYI as std
+        from pygsti.modelpacks.legacy import std1Q_XYI as std
         std = pygsti.construction.stdmodule_to_smqmodule(std)
 
         maxLens = [1,2,4]
@@ -238,8 +238,8 @@ class IDTTestCase(BaseTestCase):
 
     def test_idletomog_gstdata_1Qofstd2Q(self):
         # perform idle tomography on first qubit of 2Q
-        from pygsti.construction import std2Q_XYICNOT as std2Q
-        from pygsti.construction import std1Q_XYI as std
+        from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
+        from pygsti.modelpacks.legacy import std1Q_XYI as std
         std2Q = pygsti.construction.stdmodule_to_smqmodule(std2Q)
         std = pygsti.construction.stdmodule_to_smqmodule(std)
 

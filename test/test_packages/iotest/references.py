@@ -1,7 +1,7 @@
 """IO test reference generation"""
 import functools
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti
 
 from pathlib import Path
