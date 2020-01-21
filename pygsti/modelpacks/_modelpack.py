@@ -16,6 +16,7 @@ import pickle as _pickle
 
 from ..objects.polynomial import bulk_load_compact_polys as _bulk_load_compact_polys
 from ..construction.circuitconstruction import circuit_list as _circuit_list
+from ..construction.modelconstruction import build_explicit_model as _build_explicit_model
 from ..protocols import gst as _gst
 
 
@@ -31,32 +32,34 @@ class GSTModelPack(ModelPack):
     _germs = None
     _germs_lite = None
     _fiducials = None
-    _prepStrs = None
-    _effectStrs = None
+    _prepfiducials = None
+    _measfiducials = None
 
     def __init__(self):
-        self._gscache = {("full", "auto"): self._target_model}
+        self._gscache = {}
 
-    def _indexed_circuits(self, prototype, index=lambda n: n):
+    def _indexed_circuits(self, prototype, index):
+        if index is None: index = self._sslbls
+        assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)
         if prototype is not None:
-            return _circuit_list(_transform_indices(prototype, index), tuple(map(index, self._sslbls)))
+            return _circuit_list(_transform_indices(prototype, index), index)
 
-    def germs(self, index=lambda n: n):
-        return self._indexed_circuits(self._germs, index)
+    def germs(self, qubit_labels=None, lite=True):
+        if lite and self._germs_lite is not None:
+            return self._indexed_circuits(self._germs_lite, qubit_labels)
+        else:
+            return self._indexed_circuits(self._germs, qubit_labels)
 
-    def germs_lite(self, index=lambda n: n):
-        return self._indexed_circuits(self._germs_lite, index)
+    def fiducials(self, qubit_labels=None):
+        return self._indexed_circuits(self._fiducials, qubit_labels)
 
-    def fiducials(self, index=lambda n: n):
-        return self._indexed_circuits(self._fiducials, index)
+    def prep_fiducials(self, qubit_labels=None):
+        return self._indexed_circuits(self._prepfiducials, qubit_labels)
 
-    def prepStrs(self, index=lambda n: n):
-        return self._indexed_circuits(self._prepStrs, index)
+    def meas_fiducials(self, qubit_labels=None):
+        return self._indexed_circuits(self._measfiducials, qubit_labels)
 
-    def effectStrs(self, index=lambda n: n):
-        return self._indexed_circuits(self._effectStrs, index)
-
-    def get_gst_inputs(self, max_max_length, index=lambda n: n, **kwargs):
+    def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """ Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
 
         Parameters
@@ -66,8 +69,19 @@ class GSTModelPack(ModelPack):
             constructing a :class:`StandardGSTDesign` with a
             `maxLengths` list of powers of two less than or equal to
             the given value.
-        index : (int) -> int, optional
-            A factory for gate label indices.
+
+        qubit_labels : tuple, optional
+            A tuple of qubit labels.  None means the integers starting at 0.
+
+        fpr : bool, optional
+            Whether to reduce the number of sequences using fiducial
+            pair reduction (FPR).
+
+        lite : bool, optional
+            Whether to use a smaller "lite" list of germs.  Unless you
+            know you have a need to use the more pessimistic "full" set
+            of germs, leave this set to True.
+
         **kwargs :
             Additional arguments to pass to :class:`StandardGSTDesign`
 
@@ -75,27 +89,58 @@ class GSTModelPack(ModelPack):
         -------
         :class:`StandardGSTDesign`
         """
+        for k in kwargs.keys():
+            if k not in ('germLengthLimits', 'keepFraction', 'keepSeed', 'verbosity', 'add_default_protocol'):
+                raise ValueError("Cannot pass '%s' to StandardGSTDesign" % k)
 
-        # TODO should fidPairs, qubit_labels, etc be populated automatically?
+        if qubit_labels is None: qubit_labels = self._sslbls
+        assert(len(qubit_labels) == len(self._sslbls)), \
+            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
+
+        if fpr:
+            fidpairs = self.pergerm_fidPairsDict_lite if lite else \
+                self.pergerm_fidPairsDict
+            if fidpairs is None:
+                raise ValueError("No FPR information for lite=%s" % lite)
+        else:
+            fidpairs = None
+
         return _gst.StandardGSTDesign(
-            self._target_model.copy(),
-            self.prepStrs(index),
-            self.effectStrs(index),
-            self.germs(index),
+            self._target_model(qubit_labels),
+            self.prep_fiducials(qubit_labels),
+            self.meas_fiducials(qubit_labels),
+            self.germs(qubit_labels, lite),
             list(_gen_max_length(max_max_length)),
-            **kwargs
+            kwargs.get('germLengthLimits', None),
+            fidpairs,
+            kwargs.get('keepFraction', 1),
+            kwargs.get('keepSeed', None),
+            qubit_labels,
+            kwargs.get('verbosity', 0),
+            kwargs.get('add_default_protocol', False),
         )
 
     def get_gst_circuits_struct(self, max_max_length, **kwargs):
         """ TODO """
         pass  # TODO
 
-    @property
     @_abstractmethod
-    def _target_model(self):
+    def _target_model(self, sslbls):
         pass
 
-    def target_model(self, parameterization_type="full", sim_type="auto"):
+    def _build_explicit_target_model(self, sslbls, gate_names, gate_expressions, **kwargs):
+        """
+        A helper function for derived classes which create explicit models.
+        Updates gate names and expressions with a given set of state-space labels.
+        """
+        def update_gatename(gn):
+            return gn[0:1] + tuple([sslbls[i] for i in gn[1:]])
+        full_sslbls = [sslbls]  # put all sslbls in single tensor product block
+        updated_gatenames = [update_gatename(gn) for gn in gate_names]
+        updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
+        return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
+
+    def target_model(self, parameterization_type="full", sim_type="auto", qubit_labels=None):
         """
         Returns a copy of the target model in the given parameterization.
 
@@ -105,37 +150,49 @@ class GSTModelPack(ModelPack):
             The gate and SPAM vector parameterization type. See
             :function:`Model.set_all_parameterizations` for all allowed values.
 
-        sim_type : {"auto", "matrix", "map", "termorder:X" }
+        sim_type : {"auto", "matrix", "map", "termorder" }
             The simulator type to be used for model calculations (leave as
             "auto" if you're not sure what this is).
+
+        qubit_labels : tuple, optional
+            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  The default
+            are the integers starting at 0.
 
         Returns
         -------
         Model
         """
+        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
+        assert(len(qubit_labels) == len(self._sslbls)), \
+            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        if (parameterization_type, sim_type) not in self._gscache:
+        if (parameterization_type, sim_type, qubit_labels) not in self._gscache:
             # cache miss
-            mdl = self._target_model.copy()
+            mdl = self._target_model(qubit_labels)
             mdl.set_all_parameterizations(parameterization_type)  # automatically sets sim_type
             if parameterization_type == "H+S terms":
-                assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
-                simt = "termorder:1" if sim_type == "auto" else sim_type  # don't update sim_type b/c gscache
-                calc_cache = {}  # the default
-
+                assert (sim_type == "auto" or sim_type in ("termorder", "termgap", "termdirect")), \
+                    "Invalid `sim_type` argument for H+S terms: %s!" % sim_type
+                if sim_type == "auto":
+                    simt = "termorder"
+                    simt_kwargs = {'max_order': 1}
+                else:
+                    simt = sim_type  # don't update sim_type b/c gscache
+                    simt_kwargs = {'max_order': 1}  #TODO: update so user can specify other args?
+                    
                 key_path, val_path = self._get_cachefile_names(parameterization_type, simt)
                 if key_path.exists() and val_path.exists():
-                    calc_cache = _load_calccache(key_path, val_path)
+                    simt_kwargs['cache'] = _load_calccache(key_path, val_path)
 
-                mdl.set_simtype(simt, calc_cache)
+                mdl.set_simtype(simt, **simt_kwargs)
             else:
                 if sim_type != "auto":
                     mdl.set_simtype(sim_type)
 
             # finally cache result
-            self._gscache[(parameterization_type, sim_type)] = mdl
+            self._gscache[(parameterization_type, sim_type, qubit_labels)] = mdl
 
-        return self._gscache[(parameterization_type, sim_type)].copy()
+        return self._gscache[(parameterization_type, sim_type, qubit_labels)].copy()
 
     def _get_cachefile_names(self, param_type, sim_type):
         """ Get the standard cache file names for a modelpack """
@@ -183,17 +240,19 @@ def _load_calccache(key_path, val_path):
     return calc_cache
 
 
-def _transform_indices(prototype, index_fn):
-    """ Transform the indices of a circuit list with the given index factory """
-    def transform(circuit):
-        if len(circuit) > 1:
-            lbl, *idx = circuit
-            return (lbl, *[index_fn(i) for i in idx])
+def _transform_indices(circuit_list, index_tup):
+    """ Transform the indices of the tuples in a circuit list with the given index factory """
+    def transform(layerlbl):
+        if len(layerlbl) > 1:
+            # This assumes simple layer labels that == a gate label
+            # We could use the Label object here in future to support more complex labels
+            lbl, *idx = layerlbl
+            return (lbl, *[index_tup[i] for i in idx])
         else:
-            return circuit
+            return layerlbl
 
-    for level in prototype:
-        yield tuple(transform(circuit) for circuit in level)
+    for circuit in circuit_list:
+        yield tuple(transform(layer_lbl) for layer_lbl in circuit)
 
 
 def _gen_max_length(max_max_length):

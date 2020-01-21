@@ -105,13 +105,13 @@ class _Module(GSTModelPack):
                   (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 1)),
                   (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 1), ('Gxpi2', 1))]
 
-    _prepStrs = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 1)),
+    _prepfiducials = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 1)),
                  (('Gxpi2', 0), ('Gypi2', 1)), (('Gxpi2', 0), ('Gxpi2', 1), ('Gxpi2', 1)), (('Gypi2', 0), ), (('Gypi2', 0), ('Gxpi2', 1)),
                  (('Gypi2', 0), ('Gypi2', 1)), (('Gypi2', 0), ('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gxpi2', 0)),
                  (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 1)),
                  (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 1), ('Gxpi2', 1))]
 
-    _effectStrs = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ), (('Gypi2', 0), ),
+    _measfiducials = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ), (('Gypi2', 0), ),
                    (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gypi2', 1)), (('Gypi2', 0), ('Gxpi2', 1)),
                    (('Gypi2', 0), ('Gypi2', 1))]
 
@@ -431,16 +431,13 @@ class _Module(GSTModelPack):
 
     pergerm_fidPairsDict_lite = None
 
-    @property
-    def _target_model(self):
-        return _setc.build_explicit_model(
-            [(0, 1)],
-            [(), ('Gxpi2', 1), ('Gypi2', 1), ('Gzpi2', 1), ('Gxpi2', 0), ('Gypi2', 0), ('Gzpi2', 0), ('Gcnot', 0, 1)],
-            ['I(0):I(1)', 'I(0):X(pi/2,1)', 'I(0):Y(pi/2,1)', 'I(0):Z(pi/2,1)',
-             'X(pi/2,0):I(1)', 'Y(pi/2,0):I(1)', 'Z(pi/2,0):I(1)', 'CNOT(0,1)'],
+    def _target_model(self, sslbls):
+        return self._build_explicit_target_model(
+            sslbls, [('Gxpi2', 1), ('Gypi2', 1), ('Gzpi2', 1), ('Gxpi2', 0), ('Gypi2', 0), ('Gzpi2', 0), ('Gcnot', 0, 1)],
+            ['I({0}):I({1})', 'I({0}):X(pi/2,{1})', 'I({0}):Y(pi/2,{1})', 'I({0}):Z(pi/2,{1})',
+             'X(pi/2,{0}):I({1})', 'Y(pi/2,{0}):I({1})', 'Z(pi/2,{0}):I({1})', 'CNOT({0},{1})'],
             effectLabels=['00', '01', '10', '11'],
-            effectExpressions=['0', '1', '2', '3']
-        )
+            effectExpressions=['0', '1', '2', '3'])
 
 
 import sys

@@ -31,12 +31,12 @@ class _Module(GSTModelPack):
 
     _fiducials = None
 
-    _prepStrs = [(), (('Gxpi4', 0), ('Gxpi4', 0)), (('Gxpi4', 0), ('Gxpi4', 0), ('Gzpi2', 0)),
+    _prepfiducials = [(), (('Gxpi4', 0), ('Gxpi4', 0)), (('Gxpi4', 0), ('Gxpi4', 0), ('Gzpi2', 0)),
                  (('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                  (('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                  (('Gxpi4', 0), ('Gxpi4', 0), ('Gzpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0))]
 
-    _effectStrs = [(), (('Gxpi4', 0), ('Gxpi4', 0)), (('Gzpi2', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
+    _measfiducials = [(), (('Gxpi4', 0), ('Gxpi4', 0)), (('Gzpi2', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                    (('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                    (('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                    (('Gzpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi4', 0), ('Gxpi4', 0))]
@@ -62,9 +62,9 @@ class _Module(GSTModelPack):
         (('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi4', 0)): [(0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)]
     }
 
-    @property
-    def _target_model(self):
-        return _setc.build_explicit_model([(0, )], [('Gxpi4', 0), ('Gzpi2', 0)], ['X(pi/4,0)', 'Z(pi/2,0)'])
+    def _target_model(self, sslbls):
+        return self._build_explicit_target_model(
+            sslbls, [('Gxpi4', 0), ('Gzpi2', 0)], ['X(pi/4,{0})', 'Z(pi/2,{0})'])
 
 
 import sys

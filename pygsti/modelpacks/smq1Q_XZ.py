@@ -30,10 +30,10 @@ class _Module(GSTModelPack):
 
     _fiducials = None
 
-    _prepStrs = [(), (('Gxpi2', 0), ), (('Gxpi2', 0), ('Gzpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)),
+    _prepfiducials = [(), (('Gxpi2', 0), ), (('Gxpi2', 0), ('Gzpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)),
                  (('Gxpi2', 0), ('Gzpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0))]
 
-    _effectStrs = [(), (('Gxpi2', 0), ), (('Gzpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)),
+    _measfiducials = [(), (('Gxpi2', 0), ), (('Gzpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)),
                    (('Gxpi2', 0), ('Gxpi2', 0), ('Gzpi2', 0), ('Gxpi2', 0))]
 
     clifford_compilation = None
@@ -56,9 +56,9 @@ class _Module(GSTModelPack):
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gzpi2', 0)): [(0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)]
     }
 
-    @property
-    def _target_model(self):
-        return _setc.build_explicit_model([(0, )], [('Gxpi2', 0), ('Gzpi2', 0)], ['X(pi/2,0)', 'Z(pi/2,0)'])
+    def _target_model(self, sslbls):
+        return self._build_explicit_target_model(
+            sslbls, [('Gxpi2', 0), ('Gzpi2', 0)], ['X(pi/2,{0})', 'Z(pi/2,{0})'])
 
 
 import sys

@@ -32,9 +32,9 @@ class _Module(GSTModelPack):
 
     _fiducials = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1))]
 
-    _prepStrs = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1))]
+    _prepfiducials = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1))]
 
-    _effectStrs = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1))]
+    _measfiducials = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1))]
 
     clifford_compilation = OrderedDict([('Gc0c0', [(), (), (), (), (), (), ()]),
                                         ('Gc0c1', [('Gypi2', 1), ('Gxpi2', 1), (), (), (), (), ()]),
@@ -81,11 +81,11 @@ class _Module(GSTModelPack):
 
     pergerm_fidPairsDict_lite = None
 
-    @property
-    def _target_model(self):
-        return _setc.build_explicit_model([(0, )], [(), ('Gxpi2', 1), ('Gypi2', 1)], ['I(0)', 'X(pi/2,0)', 'Y(pi/2,0)'],
-                                          effectLabels=['0', '1'],
-                                          effectExpressions=['0', '1'])
+    def _target_model(self, sslbls):  # Note: same as smq2Q_XYI1 -- (this entire module may be redundant)
+        return self._build_explicit_target_model(
+            sslbls, [(), ('Gxpi2', 0), ('Gypi2', 0)],
+            ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})'],
+            effectLabels=['0', '1'], effectExpressions=['0', '1'])
 
 
 import sys
