@@ -14,10 +14,10 @@ from collections import OrderedDict
 from pygsti.construction import circuitconstruction as _strc
 from pygsti.construction import modelconstruction as _setc
 
-from pygsti.modelpacks._modelpack import GSTModelPack
+from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
 
 
-class _Module(GSTModelPack):
+class _Module(GSTModelPack, RBModelPack):
     description = "Idle, X(pi/2), and Y(pi/2) gates"
 
     gates = [(), ('Gxpi2', 0), ('Gypi2', 0)]
@@ -36,7 +36,7 @@ class _Module(GSTModelPack):
 
     _measfiducials = [(), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 0))]
 
-    clifford_compilation = OrderedDict([('Gc1c0', [('Gypi2', 0), ('Gxpi2', 0), (), (), (), (), ()]),
+    _clifford_compilation = OrderedDict([('Gc1c0', [('Gypi2', 0), ('Gxpi2', 0), (), (), (), (), ()]),
                                         ('Gc2c0', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ()]),
                                         ('Gc3c0', [('Gxpi2', 0), ('Gxpi2', 0), (), (), (), (), ()]),
                                         ('Gc4c0', [('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ()]),

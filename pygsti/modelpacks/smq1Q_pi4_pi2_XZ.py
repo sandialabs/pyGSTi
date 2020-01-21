@@ -41,8 +41,6 @@ class _Module(GSTModelPack):
                    (('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                    (('Gzpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi4', 0), ('Gxpi4', 0))]
 
-    clifford_compilation = None
-
     global_fidPairs = [(0, 3), (3, 2), (4, 0), (5, 3)]
 
     _pergerm_fidPairsDict = {

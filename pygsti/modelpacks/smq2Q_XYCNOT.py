@@ -90,8 +90,6 @@ class _Module(GSTModelPack):
                    (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gypi2', 1)), (('Gypi2', 0), ('Gxpi2', 1)),
                    (('Gypi2', 0), ('Gypi2', 1))]
 
-    clifford_compilation = None
-
     global_fidPairs = [(0, 1), (0, 5), (1, 3), (2, 4), (3, 8), (5, 5), (7, 0), (9, 3), (9, 9), (9, 10), (10, 8),
                        (12, 2), (12, 6), (14, 6), (15, 0), (15, 5)]
 

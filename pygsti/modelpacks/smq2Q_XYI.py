@@ -83,7 +83,7 @@ class _Module(GSTModelPack):
                    (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gypi2', 1)), (('Gypi2', 0), ('Gxpi2', 1)),
                    (('Gypi2', 0), ('Gypi2', 1))]
 
-    clifford_compilation = OrderedDict([
+    _clifford_compilation = OrderedDict([
         ('Gc0c0', [(), (), (), (), (), (), ()]), ('Gc0c1', [('Gypi2', 1), ('Gxpi2', 1), (), (), (), (), ()]),
         ('Gc0c2', [('Gxpi2', 1), ('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gypi2', 1), ('Gypi2', 1), ()]),
         ('Gc0c3', [('Gxpi2', 1), ('Gxpi2', 1), (), (), (), (), ()]),

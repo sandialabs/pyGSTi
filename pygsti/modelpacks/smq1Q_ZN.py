@@ -39,8 +39,6 @@ class _Module(GSTModelPack):
     _measfiducials = [(), (('Gn', 0), ), (('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gzpi2', 0), ('Gn', 0)),
                    (('Gn', 0), ('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gn', 0), ('Gn', 0), ('Gzpi2', 0), ('Gn', 0))]
 
-    clifford_compilation = None
-
     global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
 
     _pergerm_fidPairsDict = {

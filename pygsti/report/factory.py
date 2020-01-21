@@ -32,6 +32,7 @@ from . import merge_helpers as _merge
 from . import reportables as _reportables
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
+from ..modelpacks import RBModelPack as _RBModelPack
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]
@@ -2075,26 +2076,27 @@ def find_std_clifford_compilation(model, verbosity=0):
     if not isinstance(model, _objs.ExplicitOpModel):
         return None  # only match explicit models
 
-    std_modules = ("std1Q_XY",
-                   "std1Q_XYI",
-                   "std1Q_XYZI",
-                   "std1Q_XZ",
-                   "std1Q_ZN",
-                   "std1Q_pi4_pi2_XZ",
-                   "std2Q_XXII",
-                   "std2Q_XXYYII",
-                   "std2Q_XY",
-                   "std2Q_XYCNOT",
-                   "std2Q_XYCPHASE",
-                   "std2Q_XYI",
-                   "std2Q_XYI1",
-                   "std2Q_XYI2",
-                   "std2Q_XYICNOT",
-                   "std2Q_XYICPHASE",
-                   "std2Q_XYZICNOT")
     import importlib
-    for module_name in std_modules:
-        mod = importlib.import_module("pygsti.construction." + module_name)
+
+    legacy_std_modules = ("std1Q_XY",
+                          "std1Q_XYI",
+                          "std1Q_XYZI",
+                          "std1Q_XZ",
+                          "std1Q_ZN",
+                          "std1Q_pi4_pi2_XZ",
+                          "std2Q_XXII",
+                          "std2Q_XXYYII",
+                          "std2Q_XY",
+                          "std2Q_XYCNOT",
+                          "std2Q_XYCPHASE",
+                          "std2Q_XYI",
+                          "std2Q_XYI1",
+                          "std2Q_XYI2",
+                          "std2Q_XYICNOT",
+                          "std2Q_XYICPHASE",
+                          "std2Q_XYZICNOT")
+    for module_name in legacy_std_modules:
+        mod = importlib.import_module("pygsti.modelpacks.legacy." + module_name)
         target_model = mod.target_model()
         if target_model.dim == model.dim and \
            set(target_model.operations.keys()) == set(model.operations.keys()) and \
@@ -2104,6 +2106,37 @@ def find_std_clifford_compilation(model, verbosity=0):
                 if hasattr(mod, "clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation
+
+    smq_modules = ("smq1Q_XY",
+                   "smq1Q_XYI",
+                   "smq1Q_XYZI",
+                   "smq1Q_XZ",
+                   "smq1Q_ZN",
+                   "smq1Q_pi4_pi2_XZ",
+                   "smq2Q_XXII",
+                   "smq2Q_XXYYII",
+                   "smq2Q_XY",
+                   "smq2Q_XYCNOT",
+                   "smq2Q_XYCPHASE",
+                   "smq2Q_XYI",
+                   "smq2Q_XYI1",
+                   "smq2Q_XYI2",
+                   "smq2Q_XYICNOT",
+                   "smq2Q_XYICPHASE",
+                   "smq2Q_XYZICNOT")
+    for module_name in smq_modules:
+        mod = importlib.import_module("pygsti.modelpacks." + module_name)
+        qubit_labels = model.state_space_labels.labels[0]  # this usually gets the qubit labels
+        target_model = mod.target_model(qubit_labels)
+        if target_model.dim == model.dim and \
+           set(target_model.operations.keys()) == set(model.operations.keys()) and \
+           set(target_model.preps.keys()) == set(model.preps.keys()) and \
+           set(target_model.povms.keys()) == set(model.povms.keys()):
+            if target_model.frobeniusdist(model) < 1e-6:
+                if isinstance(mod, _RBModelPack):
+                    printer.log("Found standard clifford compilation from %s" % module_name)
+                    return mod.clifford_compilation(qubit_labels)
+
     return None
 
 # # XXX this needs to be revised into a script

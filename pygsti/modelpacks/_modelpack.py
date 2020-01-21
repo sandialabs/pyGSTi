@@ -25,18 +25,106 @@ from ..protocols import gst as _gst
 class ModelPack(_ABC):
     """ ABC of all derived modelpack types"""
     description = None
+    gates = None
+    _sslbls = None
+
+    def __init__(self):
+        self._gscache = {}
+
+    @_abstractmethod
+    def _target_model(self, sslbls):
+        pass
+
+    def _build_explicit_target_model(self, sslbls, gate_names, gate_expressions, **kwargs):
+        """
+        A helper function for derived classes which create explicit models.
+        Updates gate names and expressions with a given set of state-space labels.
+        """
+        def update_gatename(gn):
+            return gn[0:1] + tuple([sslbls[i] for i in gn[1:]])
+        full_sslbls = [sslbls]  # put all sslbls in single tensor product block
+        updated_gatenames = [update_gatename(gn) for gn in gate_names]
+        updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
+        return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
+
+    def target_model(self, parameterization_type="full", sim_type="auto", qubit_labels=None):
+        """
+        Returns a copy of the target model in the given parameterization.
+
+        Parameters
+        ----------
+        parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+            The gate and SPAM vector parameterization type. See
+            :function:`Model.set_all_parameterizations` for all allowed values.
+
+        sim_type : {"auto", "matrix", "map", "termorder" }
+            The simulator type to be used for model calculations (leave as
+            "auto" if you're not sure what this is).
+
+        qubit_labels : tuple, optional
+            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  The default
+            are the integers starting at 0.
+
+        Returns
+        -------
+        Model
+        """
+        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
+        assert(len(qubit_labels) == len(self._sslbls)), \
+            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
+
+        if (parameterization_type, sim_type, qubit_labels) not in self._gscache:
+            # cache miss
+            mdl = self._target_model(qubit_labels)
+            mdl.set_all_parameterizations(parameterization_type)  # automatically sets sim_type
+            if parameterization_type == "H+S terms":
+                assert (sim_type == "auto" or sim_type in ("termorder", "termgap", "termdirect")), \
+                    "Invalid `sim_type` argument for H+S terms: %s!" % sim_type
+                if sim_type == "auto":
+                    simt = "termorder"
+                    simt_kwargs = {'max_order': 1}
+                else:
+                    simt = sim_type  # don't update sim_type b/c gscache
+                    simt_kwargs = {'max_order': 1}  #TODO: update so user can specify other args?
+                    
+                key_path, val_path = self._get_cachefile_names(parameterization_type, simt)
+                if key_path.exists() and val_path.exists():
+                    simt_kwargs['cache'] = _load_calccache(key_path, val_path)
+
+                mdl.set_simtype(simt, **simt_kwargs)
+            else:
+                if sim_type != "auto":
+                    mdl.set_simtype(sim_type)
+
+            # finally cache result
+            self._gscache[(parameterization_type, sim_type, qubit_labels)] = mdl
+
+        return self._gscache[(parameterization_type, sim_type, qubit_labels)].copy()
+
+    def _get_cachefile_names(self, param_type, sim_type):
+        """ Get the standard cache file names for a modelpack """
+
+        if param_type == "H+S terms":
+            cachePath = _Path(__file__).absolute().parent / "caches"
+
+            assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
+            termOrder = 1 if sim_type == "auto" else int(sim_type.split(":")[1])
+            fn = ("cacheHS%d." % termOrder) + self.__module__
+            return cachePath / (fn + "_keys.pkz"), cachePath / (fn + "_vals.npz")
+        else:
+            raise ValueError("No cache files used for param-type=%s" % param_type)
 
 
 class GSTModelPack(ModelPack):
-    """ ABC for standard multi-qubit modelpacks """
-    gates = None
-    _sslbls = None
+    """ ABC for modelpacks with GST information"""
     _germs = None
     _germs_lite = None
     _fiducials = None
     _prepfiducials = None
     _measfiducials = None
 
+    global_fidPairs = None
+    global_fidPairs_lite = None
     _pergerm_fidPairsDict = None
     _pergerm_fidPairsDict_lite = None
 
@@ -184,88 +272,16 @@ class GSTModelPack(ModelPack):
                                       **kwargs)
         return structs[-1]  # just return final struct (for longest sequences)
 
-    @_abstractmethod
-    def _target_model(self, sslbls):
-        pass
 
-    def _build_explicit_target_model(self, sslbls, gate_names, gate_expressions, **kwargs):
-        """
-        A helper function for derived classes which create explicit models.
-        Updates gate names and expressions with a given set of state-space labels.
-        """
-        def update_gatename(gn):
-            return gn[0:1] + tuple([sslbls[i] for i in gn[1:]])
-        full_sslbls = [sslbls]  # put all sslbls in single tensor product block
-        updated_gatenames = [update_gatename(gn) for gn in gate_names]
-        updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
-        return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
+class RBModelPack(ModelPack):
+    _clifford_compilation = None
 
-    def target_model(self, parameterization_type="full", sim_type="auto", qubit_labels=None):
-        """
-        Returns a copy of the target model in the given parameterization.
-
-        Parameters
-        ----------
-        parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
-            The gate and SPAM vector parameterization type. See
-            :function:`Model.set_all_parameterizations` for all allowed values.
-
-        sim_type : {"auto", "matrix", "map", "termorder" }
-            The simulator type to be used for model calculations (leave as
-            "auto" if you're not sure what this is).
-
-        qubit_labels : tuple, optional
-            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  The default
-            are the integers starting at 0.
-
-        Returns
-        -------
-        Model
-        """
-        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
-        assert(len(qubit_labels) == len(self._sslbls)), \
-            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
-
-        if (parameterization_type, sim_type, qubit_labels) not in self._gscache:
-            # cache miss
-            mdl = self._target_model(qubit_labels)
-            mdl.set_all_parameterizations(parameterization_type)  # automatically sets sim_type
-            if parameterization_type == "H+S terms":
-                assert (sim_type == "auto" or sim_type in ("termorder", "termgap", "termdirect")), \
-                    "Invalid `sim_type` argument for H+S terms: %s!" % sim_type
-                if sim_type == "auto":
-                    simt = "termorder"
-                    simt_kwargs = {'max_order': 1}
-                else:
-                    simt = sim_type  # don't update sim_type b/c gscache
-                    simt_kwargs = {'max_order': 1}  #TODO: update so user can specify other args?
-                    
-                key_path, val_path = self._get_cachefile_names(parameterization_type, simt)
-                if key_path.exists() and val_path.exists():
-                    simt_kwargs['cache'] = _load_calccache(key_path, val_path)
-
-                mdl.set_simtype(simt, **simt_kwargs)
-            else:
-                if sim_type != "auto":
-                    mdl.set_simtype(sim_type)
-
-            # finally cache result
-            self._gscache[(parameterization_type, sim_type, qubit_labels)] = mdl
-
-        return self._gscache[(parameterization_type, sim_type, qubit_labels)].copy()
-
-    def _get_cachefile_names(self, param_type, sim_type):
-        """ Get the standard cache file names for a modelpack """
-
-        if param_type == "H+S terms":
-            cachePath = _Path(__file__).absolute().parent / "caches"
-
-            assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
-            termOrder = 1 if sim_type == "auto" else int(sim_type.split(":")[1])
-            fn = ("cacheHS%d." % termOrder) + self.__module__
-            return cachePath / (fn + "_keys.pkz"), cachePath / (fn + "_vals.npz")
-        else:
-            raise ValueError("No cache files used for param-type=%s" % param_type)
+    def clifford_compilation(self, qubit_labels=None):
+        if qubit_labels is None: qubit_labels = self._sslbls
+        assert(len(qubit_labels) == len(self._sslbls)), "Wrong number of labels in: %s" % str(qubit_labels)
+        return {clifford_name: _Circuit(_transform_circuit_tup(circuittup_of_native_gates,
+                                                               qubit_labels), line_labels=qubit_labels)
+                for clifford_name, circuittup_of_native_gates in self._clifford_compilation.items() }
 
 
 class RPEModelPack(ModelPack):

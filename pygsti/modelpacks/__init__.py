@@ -7,3 +7,5 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
+from ._modelpack import ModelPack, GSTModelPack, RBModelPack, RPEModelPack
