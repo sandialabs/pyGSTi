@@ -15,8 +15,10 @@ import gzip as _gzip
 import pickle as _pickle
 
 from ..objects.polynomial import bulk_load_compact_polys as _bulk_load_compact_polys
+from ..objects.circuit import Circuit as _Circuit
 from ..construction.circuitconstruction import circuit_list as _circuit_list
 from ..construction.modelconstruction import build_explicit_model as _build_explicit_model
+from ..construction.stdlists import make_lsgst_structs as _make_lsgst_structs
 from ..protocols import gst as _gst
 
 
@@ -34,6 +36,9 @@ class GSTModelPack(ModelPack):
     _fiducials = None
     _prepfiducials = None
     _measfiducials = None
+    
+    _pergerm_fidPairsDict = None
+    _pergerm_fidPairsDict_lite = None    
 
     def __init__(self):
         self._gscache = {}
@@ -43,6 +48,13 @@ class GSTModelPack(ModelPack):
         assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)
         if prototype is not None:
             return _circuit_list(_transform_indices(prototype, index), index)
+
+    def _indexed_circuitdict(self, prototype, index):
+        if index is None: index = self._sslbls
+        assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)        
+        if prototype is not None:
+            trans_kys = list(_transform_indices(prototype.keys(), index))
+            return {_Circuit(lbls, line_labels=index): prototype[k] for lbls, k in zip(trans_kys, prototype.keys())}  # UGLY!
 
     def germs(self, qubit_labels=None, lite=True):
         if lite and self._germs_lite is not None:
@@ -58,6 +70,12 @@ class GSTModelPack(ModelPack):
 
     def meas_fiducials(self, qubit_labels=None):
         return self._indexed_circuits(self._measfiducials, qubit_labels)
+
+    def pergerm_fidpair_dict(self, qubit_labels=None):
+        return self._indexed_circuitdict(self._pergerm_fidPairsDict, qubit_labels)
+
+    def pergerm_fidpair_dict_lite(self, qubit_labels=None):
+        return self._indexed_circuitdict(self._pergerm_fidPairsDict_lite, qubit_labels)
 
     def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """ Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
@@ -78,9 +96,9 @@ class GSTModelPack(ModelPack):
             pair reduction (FPR).
 
         lite : bool, optional
-            Whether to use a smaller "lite" list of germs.  Unless you
-            know you have a need to use the more pessimistic "full" set
-            of germs, leave this set to True.
+            Whether to use a smaller "lite" list of germs. Unless you know
+            you have a need to use the more pessimistic "full" set of germs,
+            leave this set to True.
 
         **kwargs :
             Additional arguments to pass to :class:`StandardGSTDesign`
@@ -96,10 +114,10 @@ class GSTModelPack(ModelPack):
         if qubit_labels is None: qubit_labels = self._sslbls
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
-
+        
         if fpr:
-            fidpairs = self.pergerm_fidPairsDict_lite if lite else \
-                self.pergerm_fidPairsDict
+            fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
+                self.pergerm_fidpair_dict(qubit_labels)
             if fidpairs is None:
                 raise ValueError("No FPR information for lite=%s" % lite)
         else:
@@ -120,9 +138,52 @@ class GSTModelPack(ModelPack):
             kwargs.get('add_default_protocol', False),
         )
 
-    def get_gst_circuits_struct(self, max_max_length, **kwargs):
-        """ TODO """
-        pass  # TODO
+    def get_gst_circuits_struct(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+        """ Construct a :class:`pygsti.objects.LsGermsStructure` from this modelpack.
+
+        Parameters
+        ----------
+        max_max_length : number
+            The greatest maximum-length to use. Equivalent to
+            constructing a cicuit struct with a `maxLengths`
+            list of powers of two less than or equal to
+            the given value.
+
+        qubit_labels : tuple, optional
+            A tuple of qubit labels.  None means the integers starting at 0.
+
+        fpr : bool, optional
+            Whether to reduce the number of sequences using fiducial
+            pair reduction (FPR).
+
+        lite : bool, optional
+            Whether to use a smaller "lite" list of germs. Unless you know
+            you have a need to use the more pessimistic "full" set of germs,
+            leave this set to True.
+
+        **kwargs :
+            Additional arguments to pass to :function:`make_lsgst_structs`
+
+        Returns
+        -------
+        :class:`pygsti.objects.LsGermsStructure`
+        """
+        if fpr:
+            fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
+                self.pergerm_fidpair_dict(qubit_labels)
+            if fidpairs is None:
+                raise ValueError("No FPR information for lite=%s" % lite)
+        else:
+            fidpairs = None
+
+        structs = _make_lsgst_structs(self._target_model(qubit_labels),  # Note: only need gate names here
+                                      self.prep_fiducials(qubit_labels),
+                                      self.meas_fiducials(qubit_labels),
+                                      self.germs(qubit_labels, lite),
+                                      list(_gen_max_length(max_max_length)),
+                                      fidpairs,
+                                      **kwargs)
+        return structs[-1]  # just return final struct (for longest sequences)
 
     @_abstractmethod
     def _target_model(self, sslbls):

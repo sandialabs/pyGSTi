@@ -134,7 +134,7 @@ class _Module(GSTModelPack):
                        (5, 9), (6, 4), (6, 10), (7, 9), (8, 6), (9, 0), (9, 5), (9, 7), (9, 10), (10, 0), (10, 4),
                        (11, 2), (11, 4), (12, 2), (13, 1), (13, 3), (14, 8), (15, 3)]
 
-    pergerm_fidPairsDict = {
+    _pergerm_fidPairsDict = {
         (('Gypi2', 0), ): [(3, 1), (4, 1), (4, 2), (5, 0), (5, 1), (5, 7), (6, 0), (6, 8), (7, 2), (7, 4), (7, 9), (8, 0),
                     (8, 7), (9, 2), (9, 3), (10, 9), (10, 10), (14, 7), (14, 9), (15, 10)],
         ((), ): [(0, 8), (1, 0), (1, 1), (1, 3), (1, 10), (2, 5), (2, 9), (3, 3), (3, 9), (4, 3), (4, 8), (5, 0),
@@ -303,7 +303,7 @@ class _Module(GSTModelPack):
 
     global_fidPairs_lite = None
 
-    pergerm_fidPairsDict_lite = None
+    _pergerm_fidPairsDict_lite = None
 
     def _target_model(self, sslbls):
         return self._build_explicit_target_model(

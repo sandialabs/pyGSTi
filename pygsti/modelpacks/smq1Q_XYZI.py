@@ -47,7 +47,7 @@ class _Module(GSTModelPack):
 
     global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
 
-    pergerm_fidPairsDict = {
+    _pergerm_fidPairsDict = {
         (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         ((), ): [(0, 3), (1, 1), (5, 5)],
         (('Gzpi2', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
@@ -71,7 +71,7 @@ class _Module(GSTModelPack):
     global_fidPairs_lite = [(0, 4), (0, 5), (1, 0), (2, 0), (2, 4), (2, 5), (3, 0), (4, 2), (4, 4), (5, 1), (5, 2),
                             (5, 3)]
 
-    pergerm_fidPairsDict_lite = {
+    _pergerm_fidPairsDict_lite = {
         (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         ((), ): [(0, 3), (1, 1), (5, 5)],
         (('Gzpi2', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
