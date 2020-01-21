@@ -376,7 +376,10 @@ def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = _tools.find_replace_tuple(opLabelString, opLabelAliases)
+            if opLabelAliases is not None:
+                dsStr = _tools.find_replace_tuple(opLabelString, opLabelAliases)
+            else:
+                dsStr = opLabelString
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
@@ -404,7 +407,10 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
             opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = _tools.find_replace_tuple(tuple(opLabelString), opLabelAliases)
+            if opLabelAliases is not None:
+                dsStr = _tools.find_replace_tuple(tuple(opLabelString), opLabelAliases)
+            else:
+                dsStr = opLabelString
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
