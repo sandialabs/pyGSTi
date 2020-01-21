@@ -8,176 +8,173 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ...algorithms import compilers as _cmpl
-from ...objects import circuit as _cir
-from ...objects import label as _lbl
-from ...tools import symplectic as _symp
-from ... import construction as _cnst
-from ... import objects as _objs
-from ... import io as _io
-from ... import tools as _tools
-from . import group as _rbobjs
+from . import compilers as _cmpl
+from ..objects import circuit as _cir
+from ..objects import label as _lbl
+from ..tools import symplectic as _symp
+from .. import construction as _cnst
+from .. import objects as _objs
+from .. import io as _io
+from .. import tools as _tools
+from ..tools import group as _rbobjs
 
 import numpy as _np
 import copy as _copy
 import itertools as _itertools
 
-# todo : update this to be derived from a dictionary.
+# class BenchmarkSpec(object):
+#     """
+#     Intended to encapsulate the specification of a benchmarking experiment (including randomized benchmarking), so that,
+#     alongside a ProcessorSpec, the circuit sampling (and perhaps the exact circuits sampled) is entirely specified.
+#     """
 
+#     def __init__(self, btype, structure, sampler, samplerargs, depths=None, numcircuits=None, circuits=None,
+#                  subtype={}):
+#         """
+#         todo
 
-class BenchmarkSpec(object):
-    """
-    Intended to encapsulate the specification of a benchmarking experiment (including randomized benchmarking), so that,
-    alongside a ProcessorSpec, the circuit sampling (and perhaps the exact circuits sampled) is entirely specified.
-    """
+#         """
+#         self.type = btype
+#         self.subtype = subtype
+#         # The `structure` should always be stored as a tuple of tuples. If it isn't we convert to that.
+#         if isinstance(structure[0], str):
+#             self.structure = (structure, )
+#         else:
+#             self.structure = structure
 
-    def __init__(self, btype, structure, sampler, samplerargs, depths=None, numcircuits=None, circuits=None,
-                 subtype={}):
-        """
-        todo
+#         self.sampler = sampler
+#         self.samplerargs = _copy.deepcopy(samplerargs)
 
-        """
-        self.type = btype
-        self.subtype = subtype
-        # The `structure` should always be stored as a tuple of tuples. If it isn't we convert to that.
-        if isinstance(structure[0], str):
-            self.structure = (structure, )
-        else:
-            self.structure = structure
+#         self.depths = _copy.copy(depths)
+#         self.numcircuits = _copy.copy(numcircuits)
 
-        self.sampler = sampler
-        self.samplerargs = _copy.deepcopy(samplerargs)
+#         if circuits is not None:
+#             self.add_circuits(circuits)
 
-        self.depths = _copy.copy(depths)
-        self.numcircuits = _copy.copy(numcircuits)
+#         else:
+#             self.circuits = None
 
-        if circuits is not None:
-            self.add_circuits(circuits)
+#     def to_dict(self):
 
-        else:
-            self.circuits = None
+#         asdict = {}
+#         asdict['type'] = self.type
+#         asdict['subtype'] = self.subtype
+#         asdict['structure'] = self.structure
+#         asdict['depths'] = self.depths
+#         asdict['sampler'] = self.sampler
+#         asdict['samplerargs'] = self.samplerargs
+#         asdict['numcircuits'] = self.numcircuits
+#         asdict['circuits'] = self.circuits
 
-    def to_dict(self):
+#         return asdict
 
-        asdict = {}
-        asdict['type'] = self.type
-        asdict['subtype'] = self.subtype
-        asdict['structure'] = self.structure
-        asdict['depths'] = self.depths
-        asdict['sampler'] = self.sampler
-        asdict['samplerargs'] = self.samplerargs
-        asdict['numcircuits'] = self.numcircuits
-        asdict['circuits'] = self.circuits
+#     def add_circuits(self, circuits):
 
-        return asdict
+#         self.circuits = circuits
+#         depths = list(self.circuits.keys())
+#         depths.sort()
+#         if self.depths is not None:
+#             assert(depths == self.depths), \
+#                 "There are already a set of depths specified, and the circuits do not match them!"
+#         else:
+#             self.depths = depths
 
-    def add_circuits(self, circuits):
+#     def discard_circuits(self):
 
-        self.circuits = circuits
-        depths = list(self.circuits.keys())
-        depths.sort()
-        if self.depths is not None:
-            assert(depths == self.depths), \
-                "There are already a set of depths specified, and the circuits do not match them!"
-        else:
-            self.depths = depths
+#         self.circuits = None
 
-    def discard_circuits(self):
+#     def get_type(self):
+#         """
+#         The type of benchmark that this spec encodes.
+#         """
+#         return self.type
 
-        self.circuits = None
+#     def get_structure(self):
+#         """
+#         todo
+#         """
+#         return self.structure
 
-    def get_type(self):
-        """
-        The type of benchmark that this spec encodes.
-        """
-        return self.type
+#     def is_simultaneous_benchmark(self):
+#         """
+#         todo
+#         """
+#         return len(self.structure) > 1
 
-    def get_structure(self):
-        """
-        todo
-        """
-        return self.structure
+#     def get_twoQgate_rate(self):
+#         """
+#         todo:
+#         sampler: bool
+#             If True then this is the rate that two-qubit gates appear in ...
 
-    def is_simultaneous_benchmark(self):
-        """
-        todo
-        """
-        return len(self.structure) > 1
+#         """
+#         #if sampler:
 
-    def get_twoQgate_rate(self):
-        """
-        todo:
-        sampler: bool
-            If True then this is the rate that two-qubit gates appear in ...
+#         if self.sampler == 'co2Qgates':
 
-        """
-        #if sampler:
+#             mean_num2Qgates_in_layers = []
+#             for co2Qgatesublist in self.samplerargs['co2Qgates']:
 
-        if self.sampler == 'co2Qgates':
+#                 # We can have a empty list as a co2Qgates list, so we check that's not the case
+#                 if len(co2Qgatesublist) > 0:
+#                     # It's only a list if we have nested co2Qgate lists. So make it always list.
+#                     if not isinstance(co2Qgatesublist[0], list):
+#                         co2Qgatesublist = [co2Qgatesublist, ]
 
-            mean_num2Qgates_in_layers = []
-            for co2Qgatesublist in self.samplerargs['co2Qgates']:
+#                     mean_num2Qgates_in_layers.append(
+#                         _np.mean([len(co2Qgatechoice) for co2Qgatechoice in co2Qgatesublist]))
 
-                # We can have a empty list as a co2Qgates list, so we check that's not the case
-                if len(co2Qgatesublist) > 0:
-                    # It's only a list if we have nested co2Qgate lists. So make it always list.
-                    if not isinstance(co2Qgatesublist[0], list):
-                        co2Qgatesublist = [co2Qgatesublist, ]
+#                 # If it's an empty list, then there's 0 2-qubit gates in it.
+#                 else:
+#                     mean_num2Qgates_in_layers.append(0)
+#             #print(mean_num2Qgates_in_layers)
+#             mean_num2Qgates_in_layers = self.samplerargs['twoQprob'] * _np.array(mean_num2Qgates_in_layers)
+#             #print("-", mean_num2Qgates_in_layers)
 
-                    mean_num2Qgates_in_layers.append(
-                        _np.mean([len(co2Qgatechoice) for co2Qgatechoice in co2Qgatesublist]))
+#             if isinstance(self.samplerargs['co2Qgatesprob'], str):
+#                 assert(self.samplerargs['co2Qgatesprob'] == 'uniform')
+#                 num_twoQgates_perlayer = _np.mean(mean_num2Qgates_in_layers)
+#             else:
+#                 num_twoQgates_perlayer = _np.sum(
+#                     _np.array(self.samplerargs['co2Qgatesprob']) * mean_num2Qgates_in_layers)
 
-                # If it's an empty list, then there's 0 2-qubit gates in it.
-                else:
-                    mean_num2Qgates_in_layers.append(0)
-            #print(mean_num2Qgates_in_layers)
-            mean_num2Qgates_in_layers = self.samplerargs['twoQprob'] * _np.array(mean_num2Qgates_in_layers)
-            #print("-", mean_num2Qgates_in_layers)
+#             return num_twoQgates_perlayer
 
-            if isinstance(self.samplerargs['co2Qgatesprob'], str):
-                assert(self.samplerargs['co2Qgatesprob'] == 'uniform')
-                num_twoQgates_perlayer = _np.mean(mean_num2Qgates_in_layers)
-            else:
-                num_twoQgates_perlayer = _np.sum(
-                    _np.array(self.samplerargs['co2Qgatesprob']) * mean_num2Qgates_in_layers)
+#         else:
+#             raise NotImplementedError("This has only been implemented for the co2Qgates sampler!")
 
-            return num_twoQgates_perlayer
+#         #else:
+#         #    raise NotImplementedError
 
-        else:
-            raise NotImplementedError("This has only been implemented for the co2Qgates sampler!")
+#     def get_sampler(self):
+#         """
+#         todo
+#         """
+#         return self.sampler
 
-        #else:
-        #    raise NotImplementedError
+#     def get_circuits(self):
+#         """
+#         todo
+#         """
+#         assert(self.circuits is not None), "The circuits are not specified!"
+#         return self.circuits
 
-    def get_sampler(self):
-        """
-        todo
-        """
-        return self.sampler
+#     # def get_sampler_argument(self, argument):
+#     #     """
+#     #     todo
+#     #     """
+#     #     if argument == 'co2Qgates':
+#     #         assert(self.sampler == 'co2Qgates')
+#     #         return self.samplerargs['co2Qgates']
 
-    def get_circuits(self):
-        """
-        todo
-        """
-        assert(self.circuits is not None), "The circuits are not specified!"
-        return self.circuits
+#     #     else:
+#     #         raise ValueError("{} is not currently a requestable sampler argument, altough it may be \
+#     #             a valid sampler argument!".format(argument))
 
-    # def get_sampler_argument(self, argument):
-    #     """
-    #     todo
-    #     """
-    #     if argument == 'co2Qgates':
-    #         assert(self.sampler == 'co2Qgates')
-    #         return self.samplerargs['co2Qgates']
-
-    #     else:
-    #         raise ValueError("{} is not currently a requestable sampler argument, altough it may be \
-    #             a valid sampler argument!".format(argument))
-
-    def __str__(self):
-        # todo: make this more informative.
-        s = 'An RB specification for a {} RB experiment'.format(self.type)
-        return s
+#     def __str__(self):
+#         # todo: make this more informative.
+#         s = 'An RB specification for a {} RB experiment'.format(self.type)
+#         return s
 
 
 def find_all_sets_of_compatible_twoQgates(edgelist, n, gatename='Gcnot', aslabel=False):
