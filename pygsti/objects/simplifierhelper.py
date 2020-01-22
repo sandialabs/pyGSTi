@@ -217,7 +217,9 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         -------
         Label or None
         """
-        assert(sslbls is None or sslbls == ('*',))
+        assert(sslbls in (None, ('*',)) or (len(self.sslbls.labels) == 1 and self.sslbls.labels[0] == sslbls)), \
+            "No default POVM label for sslbls=%s (less than *all* the state space labels, which are %s)" % (
+                str(sslbls), str(self.sslbls.labels))
         return tuple(self.povms.keys())[0] \
             if len(self.povms) == 1 else None
 
