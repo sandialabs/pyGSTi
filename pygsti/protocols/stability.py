@@ -21,7 +21,7 @@ class StabilityAnalysisDesign(_proto.ExperimentDesign):
 class StabilityAnalysis(_proto.Protocol):
     """ Robust phase estimation (RPE) protocol """
 
-    def __init__(self, params_from_do_stability_analysis, name=None):
+    def __init__(self, params_from_do_stability_analysis, transform, name=None):
 
         super().__init__(name)
         self.transform = transform
@@ -33,7 +33,7 @@ class StabilityAnalysis(_proto.Protocol):
         design = data.edesign  # experiment design (specifies circuits)
         ds = data.dataset  # dataset
         # ... do analysis
-        return StabilityAnalysisResults(data, self, more_args)  # put results in here
+        return StabilityAnalysisResults(data, self, self.more_args)  # put results in here
 
 
 class StabilityAnalysisResults(_proto.ProtocolResults):
@@ -45,7 +45,7 @@ class StabilityAnalysisResults(_proto.ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.stored_results = XXX
+        self.stored_results = more_args
 
         #self.auxfile_types['rpe_result_values'] = 'pickle'  # if rep_result_values can't be json'd
 

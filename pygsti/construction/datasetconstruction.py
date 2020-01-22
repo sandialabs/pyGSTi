@@ -130,8 +130,11 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                      for ky, val in aliasDict.items()}  # convert to use Labels
 
     if gsGen and times is None:
-        trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
-                              for s in circuit_list]
+        if aliasDict is not None:
+            trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
+                                  for s in circuit_list]
+        else:
+            trans_circuit_list = circuit_list
         all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 

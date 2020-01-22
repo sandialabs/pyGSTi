@@ -224,7 +224,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         for effectLabel in targetModel.povms[povmLabel]:
             EVec = _np.zeros((1, nRhoSpecs))
             for i, rhostr in enumerate(prepStrs):
-                circuit = rhostr + _objs.Circuit((povmLabel,))
+                circuit = rhostr + _objs.Circuit((povmLabel,), line_labels=rhostr.line_labels)
                 if circuit not in dataset and len(targetModel.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
@@ -240,7 +240,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     for prepLabel in rhoLabelsToEstimate:
         rhoVec = _np.zeros((nESpecs, 1)); eoff = 0
         for i, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
-            circuit = _objs.Circuit((prepLabel,)) + estr  # ; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
+            circuit = _objs.Circuit((prepLabel,), line_labels=estr.line_labels) + estr
             if circuit not in dataset and len(targetModel.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
@@ -406,7 +406,7 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
     eoff = 0  # effect-dimension offset
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
+            opLabelString = rhostr + _objs.Circuit(opLabelTuple, line_labels=rhostr.line_labels) + estr
             if opLabelAliases is not None:
                 dsStr = _tools.find_replace_tuple(tuple(opLabelString), opLabelAliases)
             else:
@@ -442,7 +442,7 @@ def _constructA(effectStrs, mdl):
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
             mdl.preps['rho_LGST_tmp'] = basis_st
-            probs = mdl.probs(_objs.Circuit(('rho_LGST_tmp',)) + estr)
+            probs = mdl.probs(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in mdl.povms[povmLbl]]  # CHECK will this work?
             del mdl.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
@@ -469,7 +469,7 @@ def _constructB(prepStrs, mdl):
     for k, rhostr in enumerate(prepStrs):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',)))
+        probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del mdl.povms['M_LGST_tmp_povm']

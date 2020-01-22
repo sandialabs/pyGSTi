@@ -32,7 +32,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         design = data.edesign  # experiment design (specifies circuits)
         ds = data.dataset  # dataset
         # ...
-        ret = RobustPhaseEstimationResults(data, self, more_args)
+        ret = RobustPhaseEstimationResults(data, self, self.more_args)
         # ...
         return ret
 
