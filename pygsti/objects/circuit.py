@@ -314,10 +314,10 @@ class Circuit(object):
                     if len(layer_labels) > 0:
                         assert(num_lines > 0), "`num_lines` must be > 0!"
                     self._line_labels = tuple(range(num_lines))
-                elif len(layer_labels) > 0:
+                elif len(layer_labels) > 0 or not editable:
                     self._line_labels = ('*',)  # special single line-label when no line labels are given
                 else:
-                    self._line_labels = ()  # empty circuit can have zero line labels
+                    self._line_labels = ()  # empty *editable* circuits begin with zero line labels (this is ok)
             else:
                 self._line_labels = tuple(sorted(explicit_lbls))
         else:
