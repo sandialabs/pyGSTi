@@ -3,10 +3,10 @@ import unittest
 from ..util import BaseCase
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects import slowreplib
+from pygsti.objects.replib import slowreplib
 
 try:
-    from pygsti.objects import fastreplib
+    from pygsti.objects.replib import fastreplib
     _FASTREPLIB_LOADED = True
 except ImportError:
     _FASTREPLIB_LOADED = False
@@ -37,7 +37,7 @@ class SlowReplibTester(ReplibBase, BaseCase):
     replib = slowreplib
 
 
-@unittest.skipUnless(_FASTREPLIB_LOADED, "`pygsti.objects.fastreplib` not built")
+@unittest.skipUnless(_FASTREPLIB_LOADED, "`pygsti.objects.replib.fastreplib` not built")
 class FastReplibTester(ReplibBase, BaseCase):
     @classmethod
     def setUpClass(cls):

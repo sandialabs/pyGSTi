@@ -18,41 +18,8 @@ from .circuit import Circuit as _Circuit
 from .polynomial import Polynomial as _Polynomial
 from ..tools import slicetools as _slct
 
-try:
-    from . import fastopcalc as _fastopcalc
-    from .fastopcalc import fast_compact_deriv as _compact_deriv
-    from .fastopcalc import float_product as prod
-
-    def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
-        if _np.iscomplexobj(ctape):
-            ret = _fastopcalc.fast_bulk_eval_compact_polys_complex(
-                vtape, ctape, paramvec, dest_shape)
-            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6), \
-                "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret))  # DEBUG CHECK
-            return _np.real(ret)
-        else:
-            return _np.real(_fastopcalc.fast_bulk_eval_compact_polys(
-                vtape, ctape, paramvec, dest_shape))
-except ImportError:
-    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
-    from .polynomial import compact_deriv as _compact_deriv
-
-    def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
-        ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
-        if _np.iscomplexobj(ret):
-            #assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ), \
-            #    "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)) # DEBUG CHECK
-            if _np.linalg.norm(_np.imag(ret)) > 1e-6:
-                print("WARNING: norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)))
-
-            ret = _np.real(ret)
-        return ret  # always return a *real* vector
-
-    def prod(ar):
-        ret = 1.0
-        for x in ar:
-            ret *= x
-        return ret
+from .opcalc import compact_deriv as _compact_deriv, float_product as prod, \
+    safe_bulk_eval_compact_polys as _safe_bulk_eval_compact_polys
 
 
 class OplessModelTree(_EvalTree):
@@ -227,7 +194,7 @@ class OplessModel(_Model):
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         if False and evalTree.cache:  # TEST (disabled)
             cpolys = evalTree.cache
-            ps = _bulk_eval_compact_polys(cpolys[0], cpolys[1], self._paramvec, (evalTree.num_final_elements(),))
+            ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], self._paramvec, (evalTree.num_final_elements(),))
             assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
             ps = _np.real(ps)
             if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
@@ -251,13 +218,13 @@ class OplessModel(_Model):
         if False and evalTree.cache:  # TEST (disabled)
             cpolys = evalTree.cache
             if prMxToFill is not None:
-                ps = _bulk_eval_compact_polys(cpolys[0], cpolys[1], p, (evalTree.num_final_elements(),))
+                ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], p, (evalTree.num_final_elements(),))
                 assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
                 ps = _np.real(ps)
                 if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
                 prMxToFill[:] = ps
             dpolys = _compact_deriv(cpolys[0], cpolys[1], list(range(Np)))
-            dps = _bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (evalTree.num_final_elements(), Np))
+            dps = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (evalTree.num_final_elements(), Np))
             mxToFill[:, :] = dps
         else:
             # eps = 1e-6
