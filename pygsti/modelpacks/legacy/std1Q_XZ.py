@@ -23,14 +23,14 @@ prepStrs = _strc.circuit_list([(),
                                ('Gx', 'Gz'),
                                ('Gx', 'Gx'),
                                ('Gx', 'Gx', 'Gx'),
-                               ('Gx', 'Gz', 'Gx', 'Gx')])  # for 1Q MUB
+                               ('Gx', 'Gz', 'Gx', 'Gx')], line_labels=('*',))  # for 1Q MUB
 
 effectStrs = _strc.circuit_list([(),
                                  ('Gx',),
                                  ('Gz', 'Gx'),
                                  ('Gx', 'Gx'),
                                  ('Gx', 'Gx', 'Gx'),
-                                 ('Gx', 'Gx', 'Gz', 'Gx')])
+                                 ('Gx', 'Gx', 'Gz', 'Gx')], line_labels=('*',))
 
 germs = _strc.circuit_list(
     [('Gx',),
@@ -38,11 +38,11 @@ germs = _strc.circuit_list(
      ('Gx', 'Gz',),
      ('Gx', 'Gx', 'Gz'),
      ('Gx', 'Gz', 'Gz'),
-     ('Gx', 'Gx', 'Gz', 'Gx', 'Gz', 'Gz',)])
+     ('Gx', 'Gx', 'Gz', 'Gx', 'Gz', 'Gz',)], line_labels=('*',))
 germs_lite = germs[0:4]
 
 
-germs = _strc.circuit_list([('Gx',), ('Gz',), ('Gz', 'Gx', 'Gx'), ('Gz', 'Gz', 'Gx')])
+germs = _strc.circuit_list([('Gx',), ('Gz',), ('Gz', 'Gx', 'Gx'), ('Gz', 'Gz', 'Gx')], line_labels=('*',))
 
 #Construct a target model:  X(pi/2), Z(pi/2)
 _target_model = _setc.build_explicit_model([('Q0',)], ['Gx', 'Gz'],

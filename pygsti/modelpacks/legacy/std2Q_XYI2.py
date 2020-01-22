@@ -19,14 +19,14 @@ from collections import OrderedDict as _OrderedDict
 description = "Idle, X(pi/2), and Y(pi/2) gates"
 
 gates = ['Gii', 'Gix', 'Giy']
-fiducials = _strc.circuit_list([(), ('Gix',), ('Giy',), ('Gix', 'Gix')])
+fiducials = _strc.circuit_list([(), ('Gix',), ('Giy',), ('Gix', 'Gix')], line_labels=('*',))
 #                                     ('Gix','Gix','Gix'), ('Giy','Giy','Giy') ] ) # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
 germs = _strc.circuit_list([('Gii',), ('Gix',), ('Giy',), ('Gix', 'Giy'),
                             ('Gix', 'Giy', 'Gii'), ('Gix', 'Gii', 'Giy'), ('Gix', 'Gii', 'Gii'), ('Giy', 'Gii', 'Gii'),
                             ('Gix', 'Gix', 'Gii', 'Giy'), ('Gix', 'Giy', 'Giy', 'Gii'),
-                            ('Gix', 'Gix', 'Giy', 'Gix', 'Giy', 'Giy')])
+                            ('Gix', 'Gix', 'Giy', 'Gix', 'Giy', 'Giy')], line_labels=('*',))
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
 _target_model = _setc.build_explicit_model([('Q0',)], ['Gii', 'Gix', 'Giy'],

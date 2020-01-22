@@ -19,7 +19,7 @@ description = "Idle, X(pi/2), Y(pi/2), Z(pi/2) gates"
 
 gates = ['Gi', 'Gx', 'Gy', 'Gz']
 fiducials = _strc.circuit_list([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
-                                ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')])  # for 1Q MUB
+                                ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')], line_labels=('*',))  # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
 germs = _strc.circuit_list(
@@ -30,7 +30,7 @@ germs = _strc.circuit_list(
      ('Gx', 'Gy', 'Gi'), ('Gx', 'Gi', 'Gy'),
      ('Gx', 'Gi', 'Gi'), ('Gy', 'Gi', 'Gi'),
      ('Gi', 'Gx', 'Gz'), ('Gi', 'Gy', 'Gz'),
-     ('Gx', 'Gy', 'Gy', 'Gi'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')])
+     ('Gx', 'Gy', 'Gy', 'Gi'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')], line_labels=('*',))
 germs_lite = germs[0:10]
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)

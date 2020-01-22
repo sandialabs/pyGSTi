@@ -24,7 +24,7 @@ fiducials16 = _strc.circuit_list(
     [(), ('Gix',), ('Giy',), ('Gix', 'Gix'),
      ('Gxi',), ('Gxi', 'Gix'), ('Gxi', 'Giy'), ('Gxi', 'Gix', 'Gix'),
      ('Gyi',), ('Gyi', 'Gix'), ('Gyi', 'Giy'), ('Gyi', 'Gix', 'Gix'),
-     ('Gxi', 'Gxi'), ('Gxi', 'Gxi', 'Gix'), ('Gxi', 'Gxi', 'Giy'), ('Gxi', 'Gxi', 'Gix', 'Gix')])
+     ('Gxi', 'Gxi'), ('Gxi', 'Gxi', 'Gix'), ('Gxi', 'Gxi', 'Giy'), ('Gxi', 'Gxi', 'Gix', 'Gix')], line_labels=('*',))
 
 fiducials36 = _strc.circuit_list(
     [(),
@@ -62,7 +62,7 @@ fiducials36 = _strc.circuit_list(
      ('Gyi', 'Gyi', 'Gyi', 'Giy'),
      ('Gyi', 'Gyi', 'Gyi', 'Gix', 'Gix'),
      ('Gyi', 'Gyi', 'Gyi', 'Gix', 'Gix', 'Gix'),
-     ('Gyi', 'Gyi', 'Gyi', 'Giy', 'Giy', 'Giy')])
+     ('Gyi', 'Gyi', 'Gyi', 'Giy', 'Giy', 'Giy')], line_labels=('*',))
 
 fiducials = fiducials16
 prepStrs = fiducials16
@@ -72,7 +72,7 @@ effectStrs = _strc.circuit_list(
      ('Gix', 'Gix'), ('Gxi',),
      ('Gyi',), ('Gxi', 'Gxi'),
      ('Gxi', 'Gix'), ('Gxi', 'Giy'),
-     ('Gyi', 'Gix'), ('Gyi', 'Giy')])
+     ('Gyi', 'Gix'), ('Gyi', 'Giy')], line_labels=('*',))
 
 germs = _strc.circuit_list(
     [('Gii',),
@@ -164,7 +164,7 @@ germs = _strc.circuit_list(
      ('Gxx', 'Gxx', 'Gxx', 'Gxi', 'Gix', 'Gii', 'Giy'),
      ('Gyi', 'Gxi', 'Giy', 'Gxi', 'Gix', 'Gxi', 'Gyi', 'Giy'),
      ('Gix', 'Gix', 'Gyi', 'Gxi', 'Giy', 'Gxi', 'Giy', 'Gyi')
-     ])
+     ], line_labels=('*',))
 
 germs_lite = _strc.circuit_list(
     [('Gii',),
@@ -181,7 +181,7 @@ germs_lite = _strc.circuit_list(
      ('Gxi', 'Gix', 'Giy', 'Gxi', 'Giy', 'Gyi'),
      ('Gxi', 'Giy', 'Gix', 'Gyi', 'Gix', 'Gix'),
      ('Gyi', 'Gxi', 'Giy', 'Gxi', 'Gix', 'Gxi', 'Gyi', 'Giy')
-     ])
+     ], line_labels=('*',))
 
 #Construct the target model
 _target_model = _setc.build_explicit_model(
