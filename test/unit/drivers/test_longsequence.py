@@ -323,8 +323,9 @@ class TruncatedGermPowersTester(LongSequenceGSTWithChi2):
         )
 
     def setUp(self):
-        super(TruncatedGermPowersTester, self).setUp()
-        self.options = {'truncScheme': "truncated germ powers"}
+        self.skipTest("Deprecated functionality that isn't supported anymore")
+        #super(TruncatedGermPowersTester, self).setUp()
+        #self.options = {'truncScheme': "truncated germ powers"}
 
 
 class LengthAsExponentTester(LongSequenceGSTWithChi2):

@@ -141,7 +141,7 @@ class CoreELGSTTester(CoreStdData, BaseCase):
         # XXX this doesn't look useful either
         all_min_errs, all_gs_exlgst_tups = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
-            [[mdl.tup for mdl in gsList] for gsList in self.elgstStrings],
+            [[cir.tup for cir in gsList] for gsList in self.elgstStrings],
             targetModel=self.model, svdTruncateTo=4,
             returnAll=True, returnErrorVec=True
         )

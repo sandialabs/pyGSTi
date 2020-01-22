@@ -20,7 +20,7 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from cython.operator cimport dereference as deref, preincrement as inc
-from ..tools import symplectic
+from ...tools import symplectic
 cimport numpy as np
 cimport cython
 
@@ -65,10 +65,10 @@ def test_map(s):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
-                                 np.ndarray[double, ndim=1, mode="c"] ctape,
-                                 np.ndarray[double, ndim=1, mode="c"] paramvec,
-                                 dest_shape):
+def bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                            np.ndarray[double, ndim=1, mode="c"] ctape,
+                            np.ndarray[double, ndim=1, mode="c"] paramvec,
+                            dest_shape):
     cdef INT dest_size = np.product(dest_shape)
     cdef np.ndarray[np.float64_t, ndim=1, mode="c"] res = np.empty(dest_size, np.float64)
 
@@ -103,14 +103,14 @@ def fast_bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
 #Same as above, just takes a complex ctape
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
-                                         np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
-                                         np.ndarray[double, ndim=1, mode="c"] paramvec,
-                                         dest_shape):
+def bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                    np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                                    np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                    dest_shape):
     cdef INT k
     cdef INT dest_size = 1  # np.product(dest_shape) #SLOW!
     for k in range(len(dest_shape)):
-        dest_size *= dest_shape[k] 
+        dest_size *= dest_shape[k]
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] res = np.empty(dest_size, np.complex128)
 
     cdef INT c = 0
@@ -144,10 +144,10 @@ def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"
 #  is slow and this is done often in get_total_term_magnitude calls.
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_abs_sum_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
-                                                 np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
-                                                 np.ndarray[double, ndim=1, mode="c"] paramvec,
-                                                 INT dest_size):    
+def abs_sum_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                            np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                                            np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                            INT dest_size):
     cdef INT c = 0
     cdef INT i = 0
     cdef INT vtape_sz = vtape.size
@@ -177,9 +177,9 @@ def fast_abs_sum_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
-                       np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
-                       np.ndarray[np.int64_t, ndim=1, mode="c"] wrtParams):
+def compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                  np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                  np.ndarray[np.int64_t, ndim=1, mode="c"] wrtParams):
 
     #Note: assumes wrtParams is SORTED but doesn't assert it like Python version does
 
@@ -322,8 +322,8 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
 
 
 
-def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
-                      int stabilizer_evo):
+def prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
+                 int stabilizer_evo):
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
 

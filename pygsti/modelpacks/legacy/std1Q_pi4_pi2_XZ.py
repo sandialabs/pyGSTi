@@ -24,7 +24,7 @@ prepStrs = _strc.circuit_list([(),
                                ('Gx', 'Gx', 'Gz'),
                                ('Gx', 'Gx', 'Gx', 'Gx'),
                                ('Gx', 'Gx', 'Gx', 'Gx', 'Gx', 'Gx'),
-                               ('Gx', 'Gx', 'Gz', 'Gz', 'Gz')])
+                               ('Gx', 'Gx', 'Gz', 'Gz', 'Gz')], line_labels=('*',))
 
 
 effectStrs = _strc.circuit_list([(),
@@ -32,13 +32,13 @@ effectStrs = _strc.circuit_list([(),
                                  ('Gz', 'Gx', 'Gx'),
                                  ('Gx', 'Gx', 'Gx', 'Gx'),
                                  ('Gx', 'Gx', 'Gx', 'Gx', 'Gx', 'Gx'),
-                                 ('Gz', 'Gz', 'Gz', 'Gx', 'Gx')])
+                                 ('Gz', 'Gz', 'Gz', 'Gx', 'Gx')], line_labels=('*',))
 
 germs = _strc.circuit_list([('Gx',),
                             ('Gz',),
                             ('Gz', 'Gx'),
                             ('Gz', 'Gz', 'Gx'),
-                            ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx')])
+                            ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx')], line_labels=('*',))
 germs_lite = germs[0:4]
 
 #Construct a target model:  X(pi/4), Z(pi/2)

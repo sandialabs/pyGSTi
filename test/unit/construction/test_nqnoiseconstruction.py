@@ -140,7 +140,7 @@ class NQNoiseConstructionTester(BaseCase):
 
         ccmdl = nc.build_cloud_crosstalk_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
                                                {}, nonstd_gate_unitaries={'Ga': fn})
-        c = Circuit("Gx:1Ga;0.3:1Gx:1")
+        c = Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
         p1 = ccmdl.probs(c)
 
         self.assertAlmostEqual(p1['00'], 0.08733219254516078)

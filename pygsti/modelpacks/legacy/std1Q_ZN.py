@@ -25,21 +25,21 @@ prepStrs = _strc.circuit_list([(),
                                ('Gn', 'Gn'),
                                ('Gn', 'Gz', 'Gn'),
                                ('Gn', 'Gn', 'Gn',),
-                               ('Gn', 'Gz', 'Gn', 'Gn', 'Gn')])  # for 1Q MUB
+                               ('Gn', 'Gz', 'Gn', 'Gn', 'Gn')], line_labels=('*',))  # for 1Q MUB
 
 effectStrs = _strc.circuit_list([(),
                                  ('Gn',),
                                  ('Gn', 'Gn'),
                                  ('Gn', 'Gz', 'Gn'),
                                  ('Gn', 'Gn', 'Gn',),
-                                 ('Gn', 'Gn', 'Gn', 'Gz', 'Gn')])  # for 1Q MUB
+                                 ('Gn', 'Gn', 'Gn', 'Gz', 'Gn')], line_labels=('*',))  # for 1Q MUB
 
 germs = _strc.circuit_list([('Gz',),
                             ('Gn',),
                             ('Gz', 'Gn'),
                             ('Gz', 'Gz', 'Gn'),
                             ('Gz', 'Gn', 'Gn'),
-                            ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn')])
+                            ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn')], line_labels=('*',))
 germs_lite = germs[:]  # same list!
 
 

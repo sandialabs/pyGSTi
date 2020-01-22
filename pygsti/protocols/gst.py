@@ -101,6 +101,13 @@ class StandardGSTDesign(StructuredGSTDesign):
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, germLengthLimits=self.germ_length_limits,
             verbosity=verbosity)
+        #FUTURE: add support for "advanced options" (probably not in __init__ though?):
+        # actionIfMissing = advancedOptions.get('missingDataAction', 'drop')
+        # nest=advancedOptions.get('nestedCircuitLists', True),
+        # includeLGST=advancedOptions.get('includeLGST', True),
+        # opLabelAliases=advancedOptions.get('opLabelAliases', None),
+        # sequenceRules=advancedOptions.get('stringManipRules', None),
+        # truncScheme=advancedOptions.get('truncScheme', "whole germ powers")
 
         super().__init__(target_model, structs, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'

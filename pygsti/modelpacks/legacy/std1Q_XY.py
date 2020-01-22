@@ -20,7 +20,7 @@ description = "X(pi/2) and Y(pi/2) gates"
 
 gates = ['Gx', 'Gy']
 fiducials = _strc.circuit_list([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
-                                ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')])  # for 1Q MUB
+                                ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')], line_labels=('*',))  # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
 germs = _strc.circuit_list(
@@ -29,7 +29,7 @@ germs = _strc.circuit_list(
      ('Gx', 'Gy',),
      ('Gx', 'Gx', 'Gy'),
      ('Gx', 'Gy', 'Gy'),
-     ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy',)])
+     ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy',)], line_labels=('*',))
 germs_lite = germs[0:4]
 
 #Construct a target model:  X(pi/2), Y(pi/2)

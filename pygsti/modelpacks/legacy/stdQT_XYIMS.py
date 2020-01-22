@@ -23,11 +23,11 @@ gates = ['Gi', 'Gx', 'Gy', 'Gm']
 prepStrs = _strc.circuit_list([
     (), ('Gx',), ('Gy',), ('Gm',),
     ('Gx', 'Gx'), ('Gm', 'Gx'), ('Gm', 'Gy'),
-    ('Gy', 'Gy', 'Gy'), ('Gx', 'Gx', 'Gx')])
+    ('Gy', 'Gy', 'Gy'), ('Gx', 'Gx', 'Gx')], line_labels=('*',))
 
 effectStrs = _strc.circuit_list([
     (), ('Gx',), ('Gy',), ('Gm',),
-    ('Gx', 'Gx'), ('Gy', 'Gm'), ('Gx', 'Gm')])
+    ('Gx', 'Gx'), ('Gy', 'Gm'), ('Gx', 'Gm')], line_labels=('*',))
 
 germs = _strc.circuit_list([
     ('Gi',),
@@ -98,7 +98,7 @@ germs = _strc.circuit_list([
     ('Gx', 'Gi', 'Gi', 'Gy', 'Gy', 'Gy'),
     ('Gm', 'Gy', 'Gi', 'Gx', 'Gy', 'Gi'),
     ('Gx', 'Gx', 'Gy', 'Gx', 'Gi', 'Gx'),
-    ('Gm', 'Gy', 'Gx', 'Gm', 'Gm', 'Gy')])
+    ('Gm', 'Gy', 'Gx', 'Gm', 'Gm', 'Gy')], line_labels=('*',))
 
 
 germs_lite = _strc.circuit_list([
@@ -132,7 +132,7 @@ germs_lite = _strc.circuit_list([
     ('Gy', 'Gm', 'Gx'),
     ('Gy', 'Gm', 'Gm'),
     ('Gx', 'Gx', 'Gm'),
-    ('Gx', 'Gm', 'Gm')])
+    ('Gx', 'Gm', 'Gm')], line_labels=('*',))
 
 
 legacy_germs = _strc.circuit_list([
@@ -197,7 +197,7 @@ legacy_germs = _strc.circuit_list([
     ('Gy', 'Gi', 'Gx', 'Gx', 'Gy', 'Gm'),
     ('Gm', 'Gx', 'Gy', 'Gx', 'Gx', 'Gx'),
     ('Gi', 'Gy', 'Gx', 'Gx', 'Gy', 'Gy'),
-    ('Gm', 'Gy', 'Gx', 'Gm', 'Gm', 'Gy')])
+    ('Gm', 'Gy', 'Gx', 'Gm', 'Gm', 'Gy')], line_labels=('*',))
 
 #Missing GxGxGy (compared to non-legacy), which is needed to contain
 # all of the std1Q_XYI `germs_lite` germs.
@@ -231,7 +231,7 @@ legacy_germs_lite = _strc.circuit_list([
     ('Gy', 'Gm', 'Gx'),
     ('Gy', 'Gm', 'Gm'),
     ('Gx', 'Gx', 'Gm'),
-    ('Gx', 'Gm', 'Gm')])
+    ('Gx', 'Gm', 'Gm')], line_labels=('*',))
 
 
 #Construct a target model: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson

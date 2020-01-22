@@ -227,6 +227,7 @@ class ImplicitOpModel(_mdl.OpModel):
         copyInto.factories = _collections.OrderedDict([(lbl, fdict.copy(copyInto))
                                                        for lbl, fdict in self.factories.items()])
 
+        copyInto._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
         copyInto._shlp = self.simplifier_helper_class(copyInto)
 
     def __setstate__(self, stateDict):
