@@ -192,9 +192,9 @@ def make_rpe_angle_str_lists(kList, angleName, rpeconfig_inst):
     sinStrList = []
     for k in kList:
         cosStrList += [_objs.Circuit(cos_prep_tuple + cos_germ_tuple * k + cos_meas_tuple,
-                                     cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
+                                     stringrep=cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
         sinStrList += [_objs.Circuit(sin_prep_tuple + sin_germ_tuple * k + sin_meas_tuple,
-                                     sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
+                                     stringrep=sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
     return cosStrList, sinStrList
 
 
