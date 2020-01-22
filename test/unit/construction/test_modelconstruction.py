@@ -136,7 +136,7 @@ class ModelConstructionTester(BaseCase):
         cfmdl = mc.build_crosstalk_free_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
                                               {}, nonstd_gate_unitaries={'Ga': fn})
 
-        c = pygsti.obj.Circuit("Gx:1Ga;0.3:1Gx:1")
+        c = pygsti.obj.Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
         p = cfmdl.probs(c)
 
         self.assertAlmostEqual(p['00'], 0.08733219254516078)

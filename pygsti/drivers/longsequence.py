@@ -130,8 +130,8 @@ def do_model_test(modelFilenameOrObj,
     data = _proto.ProtocolData(exp_design, ds)
 
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
-    proto = _proto.ModelTest(_load_model(modelFilenameOrObj), gopt_suite, advancedOptions,
-                             comm, memLimit, output_pkl, printer)
+    proto = _proto.ModelTest(_load_model(modelFilenameOrObj), None, gopt_suite, None,
+                             advancedOptions, comm, memLimit, output_pkl, printer)
     return proto.run(data)
 
 
@@ -297,20 +297,20 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - probClipInterval = tuple (default == (-1e6,1e6)
         - radius = float (default == 1e-4)
         - useFreqWeightedChiSq = True / False (default)
-        - nestedCircuitLists = True (default) / False
-        - includeLGST = True / False (default is True)
+        - XX nestedCircuitLists = True (default) / False
+        - XX includeLGST = True / False (default is True)
         - distributeMethod = "default", "circuits" or "deriv"
         - profile = int (default == 1)
         - check = True / False (default)
-        - opLabelAliases = dict (default = None)
+        - XX opLabelAliases = dict (default = None)
         - alwaysPerformMLE = bool (default = False)
         - onlyPerformMLE = bool (default = False)
-        - truncScheme = "whole germ powers" (default) or "truncated germ powers"
-                        or "length as exponent"
+        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers"
+                          or "length as exponent"
         - appendTo = Results (default = None)
         - estimateLabel = str (default = "default")
-        - missingDataAction = {'drop','raise'} (default = 'drop')
-        - stringManipRules = list of (find,replace) tuples
+        - XX missingDataAction = {'drop','raise'} (default = 'drop')
+        - XX stringManipRules = list of (find,replace) tuples
         - germLengthLimits = dict of form {germ: maxlength}
         - recordOutput = bool (default = True)
         - timeDependent = bool (default = False)
@@ -343,9 +343,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if advancedOptions is None: advancedOptions = {}
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
-                                          germsListOrFilename, maxLengths, verbosity=printer)
+                                          germsListOrFilename, maxLengths,
+                                          advancedOptions.get('germLengthLimits', None),
+                                          verbosity=printer)
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
 
