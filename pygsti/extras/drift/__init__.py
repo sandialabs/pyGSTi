@@ -12,7 +12,7 @@
 # the package namespace
 #from .core import *
 #from .signal import DCT
-from .core import *
+#from .core import *
 from .stabilityanalyzer import StabilityAnalyzer
 from . import driftreport as report
 from . import signal
