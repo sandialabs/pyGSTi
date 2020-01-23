@@ -1156,7 +1156,23 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layers'] are full prep ops
 
     def get_effect(self, layerlbl):
-        return self.effect_blks['layers'][layerlbl]  # effect_blks['layers'] are full effect ops
+        if layerlbl in self.effect_blks['layers']:
+            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        else:
+            # See if this effect label could correspond to a *marginalized* POVM, and
+            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
+            if isinstance(layerlbl, _Lbl):  # this should always be the case...
+                povmName = _gt.eLabelToPOVM(layerlbl)
+                if povmName in self.povm_blks['layers']:
+                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+                    # are not present in the stored POVM's label.
+                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache this in FUTURE
+                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
+                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
+                    return self.effect_blks['layers'][layerlbl]
+        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
     def get_operation(self, layerlbl):
         dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created

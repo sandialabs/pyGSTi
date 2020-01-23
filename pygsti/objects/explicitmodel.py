@@ -182,20 +182,7 @@ class ExplicitOpModel(_mdl.OpModel):
     def _layer_lizard(self):
         """ Return a layer lizard for this model """
         self._clean_paramvec()  # just to be safe
-
-        simplified_effects = _collections.OrderedDict()
-        for povm_lbl, povm in self.povms.items():
-            for k, e in povm.simplify_effects(povm_lbl).items():
-                simplified_effects[k] = e
-
-        simplified_ops = _collections.OrderedDict()
-        for k, g in self.operations.items(): simplified_ops[k] = g
-        for inst_lbl, inst in self.instruments.items():
-            for k, g in inst.simplify_operations(inst_lbl).items():
-                simplified_ops[k] = g
-        simplified_preps = self.preps
-
-        return _ll.ExplicitLayerLizard(simplified_preps, simplified_ops, simplified_effects, self)
+        return _ll.ExplicitLayerLizard(self.preps, self.operations, self.povms, self.instruments, self)
 
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """

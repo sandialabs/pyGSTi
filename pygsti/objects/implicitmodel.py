@@ -184,25 +184,6 @@ class ImplicitOpModel(_mdl.OpModel):
     def _layer_lizard(self):
         """ (simplified op server) """
         self._clean_paramvec()  # just to be safe
-
-        #TODO REMOVE
-        #simplified_effect_blks = _collections.OrderedDict()
-        #for povm_dict_lbl, povmdict in self.povm_blks.items():
-        #    simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
-        #        [(k, e) for povm_lbl, povm in povmdict.items()
-        #         for k, e in povm.simplify_effects(povm_lbl).items()])
-        #
-        #simplified_op_blks = self.operation_blks.copy()  # no compilation needed
-        #for inst_dict_lbl, instdict in self.instrument_blks.items():
-        #    if inst_dict_lbl not in simplified_op_blks:  # only create when needed
-        #        simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
-        #    for inst_lbl, inst in instdict.items():
-        #        for k, g in inst.simplify_operations(inst_lbl).items():
-        #            simplified_op_blks[inst_dict_lbl][k] = g
-        #
-        #simplified_prep_blks = self.prep_blks.copy()  # no compilation needed
-        #return self._lizardClass(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)
-        
         return self._lizardClass(self.prep_blks, self.operation_blks, self.povm_blks, self.instrument_blks, self)
         # maybe add a self.factories arg? (but factories aren't really "simplified"...
         # use self._lizardArgs internally?

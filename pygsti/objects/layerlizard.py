@@ -118,7 +118,7 @@ class ExplicitLayerLizard(LayerLizard):
     operations it have been explicitly provided upon initialization.
     """
 
-    def __init__(self, preps, ops, effects, model):
+    def __init__(self, preps, operations, povms, instruments, model):
         """
         Creates a new ExplicitLayerLizard.
 
@@ -131,7 +131,25 @@ class ExplicitLayerLizard(LayerLizard):
         model : Model
             The model associated with the simplified operations.
         """
-        self.preps, self.ops, self.effects = preps, ops, effects
+
+        simplified_effects = _collections.OrderedDict()
+        for povm_lbl, povm in povms.items():
+            for k, e in povm.simplify_effects(povm_lbl).items():
+                simplified_effects[k] = e
+
+        simplified_ops = _collections.OrderedDict()
+        for k, g in operations.items(): simplified_ops[k] = g
+        for inst_lbl, inst in instruments.items():
+            for k, g in inst.simplify_operations(inst_lbl).items():
+                simplified_ops[k] = g
+        
+        self.preps = preps.copy()  # no compilation needed
+        self.operations = operations.copy()
+        self.povms = povms.copy()
+        self.instruments = instruments.copy()
+        
+        self.simpleops = simplified_ops
+        self.effects = simplified_effects
         super(ExplicitLayerLizard, self).__init__(model)
 
     def get_evotype(self):
@@ -176,7 +194,7 @@ class ExplicitLayerLizard(LayerLizard):
             dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
             return self.get_circuitlabel_op(layerlbl, dense)
         else:
-            return self.ops[layerlbl]
+            return self.simpleops[layerlbl]
 
     def from_vector(self, v, close=False, nodirty=False):
         """
@@ -189,7 +207,7 @@ class ExplicitLayerLizard(LayerLizard):
         """
         for _, obj in _itertools.chain(self.preps.items(),
                                        self.effects.items(),
-                                       self.ops.items(),
+                                       self.simpleops.items(),
                                        self.opcache.items()):
             obj.from_vector(v[obj.gpindices], close, nodirty)
 
@@ -234,6 +252,8 @@ class ImplicitLayerLizard(LayerLizard):
         self.prep_blks = prep_blks.copy()  # no compilation needed
         self.operation_blks = op_blks.copy()
         self.povm_blks = povm_blks.copy()
+        self.instrument_blks = instrument_blks.copy()
+        
         self.simpleop_blks = simplified_op_blks
         self.effect_blks = simplified_effect_blks
         super(ImplicitLayerLizard, self).__init__(model)
