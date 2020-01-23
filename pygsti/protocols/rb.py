@@ -59,7 +59,81 @@ class CliffordRBDesign(BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
                  verbosity=1, add_default_protocol=False):
-        #Translated from clifford_rb_experiment
+        """
+        Generates a "Clifford randomized benchmarking" (CRB) experiment, which is the RB protocol defined
+        in "Scalable and robust randomized benchmarking of quantum processes", Magesan et al. PRL 106 180504 (2011).
+        The circuits created by this function will respect the connectivity and gate-set of the device encoded
+        by `pspec` (see the ProcessorSpec object docstring for how to construct the relevant `pspec` for a device).
+
+        Note that this function uses the convention that a depth "l" CRB circuit  consists of "l"+2 Clifford gates
+        before compilation.
+
+        Parameters
+        ----------
+        pspec : ProcessorSpec
+           The ProcessorSpec for the device that the CRB experiment is being generated for, which defines the
+           "native" gate-set and the connectivity of the device. The returned CRB circuits will be over
+           the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
+
+        depths : list of ints
+            The "CRB depths" of the circuit; a list of integers >= 0. The CRB length is the number of Cliffords
+            in the circuit - 2 *before* each Clifford is compiled into the native gate-set.
+
+        circuits_per_depth : int
+            The number of (possibly) different CRB circuits sampled at each length.
+
+        qubit_labels : list, optional
+            If not None, a list of the qubits that the RB circuits are to be sampled for. This should
+            be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+            If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+            ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+            irrelevant. If desired, a circuit that explicitly idles on the other qubits can be obtained
+            by using methods of the Circuit object.
+
+        randomizeout : bool, optional
+            If False, the ideal output of the circuits (the "success" or "survival" outcome) is always
+            the all-zeros bit string. This is probably considered to be the "standard" in CRB. If True,
+            the ideal output a circuit is randomized to a uniformly random bit-string. This setting is
+            useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+        citerations : int, optional
+            Some of the Clifford compilation algorithms in pyGSTi (including the default algorithm) are
+            randomized, and the lowest-cost circuit is chosen from all the circuit generated in the
+            iterations of the algorithm. This is the number of iterations used. The time required to
+            generate a CRB circuit is linear in `citerations` * (CRB length + 2). Lower-depth / lower 2-qubit
+            gate count compilations of the Cliffords are important in order to successfully implement
+            CRB on more qubits.
+
+        compilerargs : list, optional
+            A list of arguments that are handed to compile_clifford() function, which includes all the
+            optional arguments of compile_clifford() *after* the `iterations` option (set by `citerations`).
+            In order, this list should be values for:
+                - algorithm : str. A string that specifies the compilation algorithm. The default in
+                    compile_clifford() will always be whatever we consider to be the 'best' all-round
+                    algorith,
+                - aargs : list. A list of optional arguments for the particular compilation algorithm.
+                - costfunction : 'str' or function. The cost-function from which the "best" compilation
+                    for a Clifford is chosen from all `citerations` compilations. The default costs a
+                    circuit as 10x the num. of 2-qubit gates in the circuit + 1x the depth of the circuit.
+                - prefixpaulis : bool. Whether to prefix or append the Paulis on each Clifford.
+                - paulirandomize : bool. Whether to follow each layer in the Clifford circuit with a
+                    random Pauli on each qubit (compiled into native gates). I.e., if this is True the
+                    native gates are Pauli-randomized. When True, this prevents any coherent errors adding
+                    (on average) inside the layers of each compiled Clifford, at the cost of increased
+                    circuit depth. Defaults to False.
+            For more information on these options, see the compile_clifford() docstring.
+
+        decscriptor : str, optional
+            A string describing the experiment generated, which will be stored in the returned
+            dictionary.
+
+        verbosity : int, optional
+            If > 0 the number of circuits generated so far is shown.
+
+        Returns
+        -------
+        CliffordRBDesign
+        """
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
@@ -72,7 +146,7 @@ class CliffordRBDesign(BenchmarkingDesign):
             circuits_at_depth = []
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
-                c, iout = _rc.clifford_rb_circuit(pspec, l, subsetQs=qubit_labels, randomizeout=randomizeout,
+                c, iout = _rc.clifford_rb_circuit(pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
                                                   citerations=citerations, compilerargs=compilerargs)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
@@ -88,7 +162,11 @@ class CliffordRBDesign(BenchmarkingDesign):
         self.compilerargs = compilerargs
         self.descriptor = descriptor
         if add_default_protocol:
-            self.add_default_protocol(RB(name='RB'))
+            if randomizeout:
+                defaultfit = 'A-fixed'
+            else:
+                defaultfit = 'full'
+            self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
 
 class DirectRBDesign(BenchmarkingDesign):
@@ -97,6 +175,121 @@ class DirectRBDesign(BenchmarkingDesign):
                  addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
                  verbosity=1, add_default_protocol=False):
+        """
+        Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
+        arXiv:1807.07975 (2018).
+
+        An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
+        (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to
+        some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
+        the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
+        details.
+
+        Parameters
+        ----------
+        pspec : ProcessorSpec
+           The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+           "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+           the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+           is always handed to the sampler, as the first argument of the sampler function (this is only
+           of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+           `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+
+        depths : int
+            The set of "direct RB depths" for the circuits. The DRB depths must be integers >= 0.
+            Unless `addlocal` is True, the DRB length is the depth of the "core" random circuit,
+            sampled according to `sampler`, specified in step (2) above. If `addlocal` is True,
+            each layer in the "core" circuit sampled according to "sampler` is followed by a layer of
+            1-qubit gates, with sampling specified by `lsargs` (and the first layer is proceeded by a
+            layer of 1-qubit gates), and so the circuit of step (2) is length 2*`length` + 1.
+
+        circuits_per_depth : int
+            The number of (possibly) different DRB circuits sampled at each length.
+
+        qubit_labels : list, optional
+            If not None, a list of the qubits to sample the circuit for. This is a subset of
+            `pspec.qubit_labels`. If None, the circuit is sampled to act on all the qubits
+            in `pspec`.
+
+        sampler : str or function, optional
+            If a string, this should be one of:
+                {'edgegrab', pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+            Except for 'local', this corresponds to sampling layers according to the sampling function
+            in rb.sampler named circuit_layer_by_* (with * replaced by 'sampler'). For 'local', this
+            corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+            a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function].
+            If `sampler` is a function, it should be a function that takes as the first argument a
+            ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+            the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
+            only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+            connectivity devices. See the docstrings for each of these samplers for more information.
+
+        samplerargs : list, optional
+            A list of arguments that are handed to the sampler function, specified by `sampler`.
+            The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
+            and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+            optional for some choices of `sampler`.
+
+        addlocal : bool, optional
+            Whether to follow each layer in the "core" circuits, sampled according to `sampler` with
+            a layer of 1-qubit gates.
+
+        lsargs : list, optional
+            Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+            layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
+
+        randomizeout : bool, optional
+            If False, the ideal output of the circuits (the "success" or "survival" outcome) is the all-zeros
+            bit string. If True, the ideal output of each circuit is randomized to a uniformly random bit-string.
+            This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+        cliffordtwirl : bool, optional
+            Wether to begin the circuits with a sequence that generates a random stabilizer state. For
+            standard DRB this should be set to True. There are a variety of reasons why it is better
+            to have this set to True.
+
+        conditionaltwirl : bool, optional
+            DRB only requires that the initial/final sequences of step (1) and (3) create/measure
+            a uniformly random / particular stabilizer state, rather than implement a particular unitary.
+            step (1) and (3) can be achieved by implementing a uniformly random Clifford gate and the
+            unique inversion Clifford, respectively. This is implemented if `conditionaltwirl` is False.
+            However, steps (1) and (3) can be implemented much more efficiently than this: the sequences
+            of (1) and (3) only need to map a particular input state to a particular output state,
+            if `conditionaltwirl` is True this more efficient option is chosen -- this is option corresponds
+            to "standard" DRB. (the term "conditional" refers to the fact that in this case we essentially
+            implementing a particular Clifford conditional on a known input).
+
+        citerations : int, optional
+            Some of the stabilizer state / Clifford compilation algorithms in pyGSTi (including the default
+            algorithms) are  randomized, and the lowest-cost circuit is chosen from all the circuits generated
+            in the iterations of the algorithm. This is the number of iterations used. The time required to
+            generate a DRB circuit is linear in `citerations`. Lower-depth / lower 2-qubit gate count
+            compilations of steps (1) and (3) are important in order to successfully implement DRB on as many
+            qubits as possible.
+
+        compilerargs : list, optional
+            A list of arguments that are handed to the compile_stabilier_state/measurement()functions (or the
+            compile_clifford() function if `conditionaltwirl `is False). This includes all the optional
+            arguments of these functions *after* the `iterations` option (set by `citerations`). For most
+            purposes the default options will be suitable (or at least near-optimal from the compilation methods
+            in-built into pyGSTi). See the docstrings of these functions for more information.
+
+        partitioned : bool, optional
+            If False, each circuit is returned as a single full circuit. If True, each circuit is returned as
+            a list of three circuits consisting of: (1) the stabilizer-prep circuit, (2) the core random circuit,
+            (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
+            and then (3) to (1).
+
+        descriptor : str, optional
+            A description of the experiment being generated. Stored in the output dictionary.
+
+        verbosity : int, optional
+            If > 0 the number of circuits generated so far is shown.
+
+        Returns
+        -------
+        DirectRBDesign
+        """
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
@@ -111,7 +304,7 @@ class DirectRBDesign(BenchmarkingDesign):
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
                 c, iout = _rc.direct_rb_circuit(
-                    pspec, l, subsetQs=qubit_labels, sampler=sampler, samplerargs=samplerargs,
+                    pspec, l, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
                     addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
                     cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
                     citerations=citerations, compilerargs=compilerargs,
@@ -138,9 +331,123 @@ class DirectRBDesign(BenchmarkingDesign):
         self.partitioned = partitioned
 
         if add_default_protocol:
-            self.add_default_protocol(RB(name='RB'))
+            if randomizeout:
+                defaultfit = 'A-fixed'
+            else:
+                defaultfit = 'full'
+            self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
-#TODO: maybe need more experiment design types for simultaneous RB and mirrorRB "experiments"
+
+class MirrorRBDesign(BenchmarkingDesign):
+    """ Experiment design for Direct randomized benchmarking """
+    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
+                 localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
+                 add_default_protocol=False):
+        """
+        Generates a "mirror randomized benchmarking" (MRB) experiment, for the case of Clifford gates and with
+        the option of Pauli randomization and local Clifford twirling. To implement mirror RB it is necessary
+        for U^(-1) to in the gate set for every gate U in the gate set.
+
+
+        THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
+        OF PYGSTI!
+
+        Parameters
+        ----------
+        pspec : ProcessorSpec
+           The ProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
+           handed to the sampler, as the first argument of the sampler function.
+
+        depths : list of ints
+            The "mirror RB depths" of the circuits, which is closely related to the circuit depth. A MRB
+            length must be an even integer, and can be zero.
+
+            - If `localclifford` and `paulirandomize` are False, the depth of a sampled circuit = the MRB length.
+              The first length/2 layers are all sampled independently according to the sampler specified by
+              `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
+              by the first half.
+
+            - If `paulirandomize` is True and `localclifford` is False, the depth of a circuit is
+              2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
+              the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
+
+            - If `paulirandomize` and `localclifford` are True, the depth of a circuit is
+              2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+              the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+            - If `paulirandomize` is False and `localclifford` is True, the depth of a circuit is
+              length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+              the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+        qubit_labels : list, optional
+            If not None, a list of the qubits that the RB circuit is to be sampled for. This should
+            be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+            If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+            ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+            irrelevant.
+
+        sampler : str or function, optional
+            If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+            Except for 'local', this corresponds to sampling layers according to the sampling function
+            in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+            corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+            a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
+            forbidden by this function]. If `sampler` is a function, it should be a function that takes
+            as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+            Label objects. Note that the default 'Qelimination' is not necessarily the most useful
+            in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+            *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
+            for more information.
+
+        samplerargs : list, optional
+            A list of arguments that are handed to the sampler function, specified by `sampler`.
+            The first argument handed to the sampler is `pspec` and `samplerargs` lists the
+            remaining arguments handed to the sampler.
+
+        localclifford : bool, optional
+            Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the
+            qubits (compiled into the native gates of the device).
+
+        paulirandomize : bool, optional
+            Whether to have uniformly random Pauli operators on all of the qubits before and
+            after all of the layers in the "out" and "back" random circuits. At length 0 there
+            is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
+            gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
+            are
+
+        descriptor : str, optional
+            A string describing the generated experiment. Stored in the returned dictionary.
+
+        Returns
+        -------
+        MirrorRBDesign
+        """
+        if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
+        circuit_lists = []
+        ideal_outs = []
+
+        for lnum, l in enumerate(depths):
+            circuits_at_depth = []
+            idealouts_at_depth = []
+            for j in range(circuits_per_depth):
+                c, iout = _rc.mirror_rb_circuit(pspec, l, qubit_labels=qubit_labels, sampler=sampler,
+                                                samplerargs=samplerargs, localclifford=localclifford,
+                                                paulirandomize=paulirandomize)
+                circuits_at_depth.append(c)
+                idealouts_at_depth.append((''.join(map(str, iout)),))
+            circuit_lists.append(circuits_at_depth)
+            ideal_outs.append(idealouts_at_depth)
+
+        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels)
+        self.circuits_per_depth = circuits_per_depth
+        self.descriptor = descriptor
+        self.sampler = sampler
+        self.samplerargs = samplerargs
+        self.localclifford = localclifford
+        self.paulirandomize = paulirandomize
+
+        if add_default_protocol:
+            self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
 
 class Benchmark(_proto.Protocol):
@@ -657,7 +964,7 @@ class RandomizedBenchmarking(Benchmark):
     The randomized benchmarking protocol. This same analysis protocol is used for Clifford, Direct and Mirror RB.
     The standard Mirror RB analysis is obtained by setting `datatype` = `adjusted_success_probabilities`.
     """
-    def __init__(self, datatype='success_probabilities', defaultfit='A-fixed', asymptote='std', rtype='EI',
+    def __init__(self, datatype='success_probabilities', defaultfit='full', asymptote='std', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
         """
         Initialize an RB protocol for analyzing RB data.
@@ -713,6 +1020,7 @@ class RandomizedBenchmarking(Benchmark):
         self.asymptote = asymptote
         self.rtype = rtype
         self.datatype = datatype
+        self.defaultfit = defaultfit
 
     def run(self, data):
 
@@ -808,12 +1116,12 @@ class RandomizedBenchmarking(Benchmark):
             FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
             bootstraps=bootstraps_FAF, bootstraps_failrate=failrate_FAF)
 
-        return RandomizedBenchmarkingResults(data, self, fits, depths)
+        return RandomizedBenchmarkingResults(data, self, fits, depths, self.defaultfit)
 
 
 class RandomizedBenchmarkingResults(_proto.ProtocolResults):
     """ The results of running a randomized benchmarking """
-    def __init__(self, data, protocol_instance, fits, depths):
+    def __init__(self, data, protocol_instance, fits, depths, defaultfit):
         """
         Initialize an empty Results object.
         TODO: docstring
@@ -823,6 +1131,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         self.depths = depths  # Note: can be different from protocol_instance.depths (which can be 'all')
         self.rtype = protocol_instance.rtype  # replicated for convenience?
         self.fits = fits
+        self.defaultfit = defaultfit
         self.auxfile_types['fits'] = 'pickle'  # b/c NamedDict don't json
 
     def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
@@ -868,12 +1177,15 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         except ImportError: raise ValueError("This function requires you to install matplotlib!")
 
         if decay and fitkey is None:
-            allfitkeys = list(self.fits.keys())
-            if 'full' in allfitkeys: fitkey = 'full'
+            if self.defaultfit is not None:
+                fitkey = self.defaultfit
             else:
-                assert(len(allfitkeys) == 1), \
-                    "There are multiple fits and none have the key 'full'. Please specify the fit to plot!"
-                fitkey = allfitkeys[0]
+                allfitkeys = list(self.fits.keys())
+                if 'full' in allfitkeys: fitkey = 'full'
+                else:
+                    assert(len(allfitkeys) == 1), \
+                        "There are multiple fits, there is no defaultfit and none have the key 'full'. Please specify the fit to plot!"
+                    fitkey = allfitkeys[0]
 
         ASPs = []
         data_per_depth = self.data.cache[self.protocol.datatype]
