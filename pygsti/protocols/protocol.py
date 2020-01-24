@@ -14,6 +14,7 @@ import json as _json
 import pickle as _pickle
 import pathlib as _pathlib
 import importlib as _importlib
+import collections as _collections
 
 from .treenode import TreeNode as _TreeNode
 from .. import construction as _cnst
@@ -332,15 +333,16 @@ class DefaultRunner(ProtocolRunner):
         """
         ret = ProtocolResultsDir(data)  # creates entire tree of nodes
 
-        def visit_node(node):
+        def visit_node(node, breadcrumb):
             for name, protocol in node.data.edesign.default_protocols.items():
                 assert(name == protocol.name), "Protocol name inconsistency"
+                print("Running protocol %s at %s" % (name, breadcrumb))
                 node.for_protocol[name] = protocol.run(node.data)
 
             for subname, subnode in node.items():
-                visit_node(subnode)
+                visit_node(subnode, breadcrumb + '/' + str(subname))
 
-        visit_node(ret)
+        visit_node(ret, '.')
         return ret
 
 
@@ -426,6 +428,7 @@ class ExperimentDesign(_TreeNode):
         """
 
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
+        self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
 
         #Instructions for saving/loading certain members - if a __dict__ member
@@ -435,6 +438,7 @@ class ExperimentDesign(_TreeNode):
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
         self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list',
+                              'alt_actual_circuits_executed': 'text-circuit-list',
                               'default_protocols': 'dict-of-protocolobjs'}
 
         # because TreeNode takes care of its own serialization:
@@ -464,6 +468,27 @@ class ExperimentDesign(_TreeNode):
 
         assert(set(children.keys()) == set(children_dirs.keys()))
         super().__init__(children_dirs, children, child_category)
+
+    def set_actual_circuits_executed(self, actual_circuits):
+        """
+        Sets a list of circuits equivalent to those in
+        self.all_circuits_needing_data that will actually be
+        executed.  For example, when the circuits in this design
+        are run simultaneously with other circuits, the circuits
+        in this design may need to be padded with idles.
+
+        Parameters
+        ----------
+        actual_circuits : list
+            A list of :class:`Circuit` objects that must be the same
+            length as self.all_circuits_needing_data.
+
+        Returns
+        -------
+        None
+        """
+        assert(len(actual_circuits) == len(self.all_circuits_needing_data))
+        self.alt_actual_circuits_executed = actual_circuits
 
     def add_default_protocol(self, default_protocol_instance):
         """
@@ -699,7 +724,9 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
         """
-        return ProtocolData(self[sub_name], dataset)
+        sub_circuits = self[sub_name].all_circuits_needing_data
+        truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
+        return ProtocolData(self[sub_name], truncated_ds)
 
 
 class SimultaneousExperimentDesign(ExperimentDesign):
@@ -760,15 +787,36 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             maxLen = max(map(len, circuits_per_edesign))
             for lst in circuits_per_edesign:
                 if len(lst) < maxLen: lst.extend([None] * (maxLen - len(lst)))
-                
+
+            def PAD(subcs):
+                maxLen = max([len(c) if (c is not None) else 0 for c in subcs])
+                padded = []
+                for c in subcs:
+                    if c is not None and len(c) < maxLen:
+                        cpy = c.copy(editable=True)
+                        cpy.insert_idling_layers(None, maxLen - len(cpy))
+                        cpy.done_editing()
+                        padded.append(cpy)
+                    else:
+                        padded.append(c)
+                assert(all([len(c) == maxLen for c in padded if c is not None]))
+                return padded
+
+            padded_circuit_lists = [list() for des in edesigns]
             for subcircuits in zip(*circuits_per_edesign):
                 c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
-                for subc in subcircuits:
+                padded_subcircuits = PAD(subcircuits)
+                for subc in padded_subcircuits:
                     if subc is not None:
                         c.tensor_circuit(subc)
                 c.line_labels = qubit_labels
                 c.done_editing()
                 tensored_circuits.append(c)
+                for lst, subc in zip(padded_circuit_lists, padded_subcircuits):
+                    if subc is not None: lst.append(subc)
+
+            for des, padded_circuits in zip(edesigns, padded_circuit_lists):
+                des.set_actual_circuits_executed(padded_circuits)
 
         sub_designs = {des.qubit_labels: des for des in edesigns}
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
@@ -783,11 +831,22 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         """
         if isinstance(dataset, _objs.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
-        qubit_ordering = list(dataset.keys())[0].line_labels
+        
+        all_circuits = self.all_circuits_needing_data
+        qubit_ordering = all_circuits[0].line_labels  # first circuit in *this* edesign determines qubit order
         qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
         sub_design = self[qubit_labels]
-        qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # TODO: better way to connect qubit indices in dataset with labels??
-        filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices, idle=None)  # Marginalize dataset
+        qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
+        filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+
+        if sub_design.alt_actual_circuits_executed:
+            actual_to_desired = _collections.defaultdict(lambda: None)
+            actual_to_desired.update({actual: desired for actual, desired in
+                                      zip(sub_design.alt_actual_circuits_executed,
+                                          sub_design.all_circuits_needing_data)})
+            filtered_ds = filtered_ds.copy_nonstatic()
+            filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
+            filtered_ds.done_adding_data()
         return ProtocolData(sub_design, filtered_ds)
 
 

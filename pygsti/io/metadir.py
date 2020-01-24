@@ -158,11 +158,11 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
         else:  # cases with 'standard' expected path
 
             pth = root_dir / (key + ext)
-            if not (pth.exists() and not pth.is_dir()):
-                raise ValueError("Expected path: %s does not exist or is a dir!" % pth)
-
-            #load value into object
-            if typ == 'text-circuit-list':
+            if pth.is_dir():
+                raise ValueError("Expected path: %s is a dir!" % pth)
+            elif not pth.exists():
+                val = None  # missing files => None values
+            elif typ == 'text-circuit-list':
                 val = _load.load_circuit_list(pth)
             elif typ == 'json':
                 with open(pth, 'r') as f:
@@ -258,7 +258,9 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
             # standard path cases
             pth = root_dir / (auxnm + ext)
 
-            if typ == 'text-circuit-list':
+            if val is None:   # None values don't get written
+                pass
+            elif typ == 'text-circuit-list':
                 _write.write_circuit_list(pth, val)
             elif typ == 'json':
                 with open(pth, 'w') as f:

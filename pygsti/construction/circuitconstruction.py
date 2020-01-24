@@ -879,10 +879,10 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=()):
                 lbls.append(sublbls[0])
             else:
                 lbls.append(sublbls)
-        elif len(lbl.components) > 0:
+        else:  # if len(lbl.components) > 0:
             # no mention of any of sslbls_to_keep in all components (otherwise
             # either pintersect would be set or len(sublbls) > 0), so this layer
-            # is just an idle: add idle placeholder if there were any components
+            # is just an idle: add idle placeholder.
             if idle is not None: lbls.append(_Lbl(idle))
 
     return _cir.Circuit(lbls, line_labels=sslbls_to_keep)

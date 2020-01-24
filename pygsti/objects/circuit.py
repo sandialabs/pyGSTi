@@ -358,6 +358,7 @@ class Circuit(object):
         self._str = stringrep if self._static else None  # can be None (lazy generation)
         self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
 
         # # Special case: layer_labels can be a single CircuitLabel or Circuit
         # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
