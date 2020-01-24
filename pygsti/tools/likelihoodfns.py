@@ -162,11 +162,7 @@ def logl_terms(model, dataset, circuit_list=None,
     nEls = evalTree.num_final_elements()
     probs = _np.zeros(nEls, 'd')  # _np.empty( nEls, 'd' ) - .zeros b/c of caching
 
-    if opLabelAliases:
-        ds_circuit_list = _lt.find_replace_tuple_list(
-            circuit_list, opLabelAliases)
-    else:
-        ds_circuit_list = circuit_list
+    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
@@ -453,8 +449,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
     probs = _np.empty(nEls, 'd')
     dprobs = _np.empty((nEls, nP), 'd')
 
-    ds_circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
 
     countVecMx = _np.empty(nEls, 'd')
     totalCntVec = _np.empty(nEls, 'd')
@@ -804,11 +799,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     cntVecMx_all = _np.empty(nEls, 'd')
     totalCntVec_all = _np.empty(nEls, 'd')
 
-    if opLabelAliases is not None:
-        ds_subtree_circuit_list = _lt.find_replace_tuple_list(
-            circuit_list, opLabelAliases)
-    else:
-        ds_subtree_circuit_list = circuit_list
+    ds_subtree_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
         
     for (i, opStr) in enumerate(ds_subtree_circuit_list):
         cnts = dataset[opStr].counts
@@ -1018,8 +1009,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     probs = _np.empty(nEls, 'd')
     dprobs = _np.empty((nEls, nP), 'd')
 
-    ds_circuit_list = _lt.find_replace_tuple_list(
-        circuit_list, opLabelAliases)
+    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
 
     cntVecMx = _np.empty(nEls, 'd')
     totalCntVec = _np.empty(nEls, 'd')
@@ -1186,9 +1176,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
         # won't make one here and so won't fill an empty
         # evaltree_cache.
 
-    if opLabelAliases is not None:
-        circuit_list = _lt.find_replace_tuple_list(
-            circuit_list, opLabelAliases)
+    circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
@@ -1342,11 +1330,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        if opLabelAliases is not None:
-            ds_strs = _lt.find_replace_tuple_list(
-                circuit_list, opLabelAliases)
-        else:
-            ds_strs = circuit_list
+        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
     else: ds_strs = None
 
     Ns = dataset.get_degrees_of_freedom(ds_strs)
@@ -1395,11 +1379,7 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        if opLabelAliases is not None:
-            ds_strs = _lt.find_replace_tuple_list(
-                circuit_list, opLabelAliases)
-        else:
-            ds_strs = circuit_list
+        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
     else: ds_strs = None
 
     Ns = dataset.get_degrees_of_freedom(ds_strs)

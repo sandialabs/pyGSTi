@@ -170,6 +170,10 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     def _auto_embed(self, key_label, value):
         if not self.flags['auto_embed']: return value  # no auto-embedding
         if self.parent is not None and key_label.sslbls is not None:
+            parent_sslbls = self.parent.state_space_labels
+            parent_sslbls = parent_sslbls.labels[0] if len(parent_sslbls.labels) == 1 else None  # only 1st TPB
+            if parent_sslbls == key_label.sslbls: return value  # no need to embed, as key_label uses *all* sslbls
+
             if self.flags['cast_to_type'] == "operation":
                 return self.parent._embedOperation(key_label.sslbls, self.cast_to_obj(value))
             else:

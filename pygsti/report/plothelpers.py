@@ -457,8 +457,8 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6, 1e6),
 
     if wildcard:
         freqs = _np.empty(evt.num_final_elements(), 'd')
-        ds_circuit_list = _tools.find_replace_tuple_list(
-            circuitList, opLabelAliases)
+        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, opLabelAliases)
+        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, opLabelAliases)
         for (i, opStr) in enumerate(ds_circuit_list):
             cnts = dataset[opStr].counts; total = sum(cnts.values())
             freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
@@ -833,10 +833,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
             else:
                 raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
-    if gss.aliases is not None:
-        ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
-    else:
-        ds_gstrs = gstrs
+    ds_gstrs = _tools.apply_aliases_to_circuit_list(gstrs, gss.aliases)
 
     if Np is None: Np = model.num_nongauge_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset

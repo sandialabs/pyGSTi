@@ -307,7 +307,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if not isinstance(label, _Label): label = _Label(label)
 
-        if label.has_prefix(self.preps._prefix):
+        if label == _Label(()):  # special case
+            self.operations[label] = value
+        elif label.has_prefix(self.preps._prefix):
             self.preps[label] = value
         elif label.has_prefix(self.povms._prefix):
             self.povms[label] = value
@@ -332,7 +334,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if not isinstance(label, _Label): label = _Label(label)
 
-        if label.has_prefix(self.preps._prefix):
+        if label == _Label(()):  # special case
+            return self.operations[label]
+        elif label.has_prefix(self.preps._prefix):
             return self.preps[label]
         elif label.has_prefix(self.povms._prefix):
             return self.povms[label]
@@ -1128,11 +1132,11 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.preps[lbl].todense() - otherModel.preps[lbl].todense()))
+                (str(lbl), _np.linalg.norm(self.preps[lbl].todense() - otherModel.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl, povm in self.povms.items():
-            s += "  %s: " % povm_lbl
+            s += "  %s: " % str(povm_lbl)
             for lbl in povm:
                 s += "    %s = %g\n" % \
                      (lbl, _np.linalg.norm(povm[lbl].todense() - otherModel.povms[povm_lbl][lbl].todense()))
@@ -1140,15 +1144,15 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.operations[lbl].todense() - otherModel.operations[lbl].todense()))
+                (str(lbl), _np.linalg.norm(self.operations[lbl].todense() - otherModel.operations[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
             for inst_lbl, inst in self.instruments.items():
-                s += "  %s: " % inst_lbl
+                s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
                     s += "    %s = %g\n" % \
-                         (lbl, _np.linalg.norm(inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
+                         (str(lbl), _np.linalg.norm(inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
 
         return s
 

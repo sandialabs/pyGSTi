@@ -420,7 +420,7 @@ class _BasePOVM(POVM):
         if key == self.complement_label:
             raise KeyError("Cannot directly assign the complement effect vector!")
         value = value.copy() if isinstance(value, _sv.SPAMVec) else \
-            _sv.FullSPAMVec(value)
+            _sv.FullSPAMVec(value, typ='effect')
         _collections.OrderedDict.__setitem__(self, key, value)
         self._reset_member_gpindices()
         self._rebuild_complement()

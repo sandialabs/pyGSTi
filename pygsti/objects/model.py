@@ -1016,7 +1016,7 @@ class OpModel(Model):
                         outcomes = []  # the outcome tuple associated with this overall label
                         for sub_gl, inst_el_lbl in sublabel_tups:
                             if inst_el_lbl is not None:
-                                sublabels.append(sub_gl + "_" + inst_el_lbl)
+                                sublabels.append(_Label(sub_gl.name + "_" + inst_el_lbl, sub_gl.sslbls))
                                 outcomes.append(inst_el_lbl)
                             else:
                                 sublabels.append(sub_gl)

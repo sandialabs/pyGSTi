@@ -2938,7 +2938,7 @@ class LindbladOp(LinearOperator):
                 else:
                     upost = self.unitary_postfactor
 
-                dense = _np.dot(exp_errgen, upost)
+                dense = _mt.safedot(exp_errgen, upost)
             else:
                 dense = exp_errgen
             return dense

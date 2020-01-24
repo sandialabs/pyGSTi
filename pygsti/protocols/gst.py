@@ -1525,9 +1525,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
     def copy(self):
         """ Creates a copy of this Results object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
-        data = _proto.ProtocolData(self.edesign, self.dataset)
+        data = _proto.ProtocolData(self.data.edesign, self.data.dataset)
         cpy = ModelEstimateResults(data, self.protocol, init_circuits=False)
-        cpy.dataset = self.dataset.copy()
         cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
         cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)
         for est_key, est in self.estimates.items():

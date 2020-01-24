@@ -743,7 +743,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
                     # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                     # are not present in the stored POVM's label.
                     mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
-                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache this in FUTURE
+                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
                     mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
                     self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
                     assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"

@@ -530,11 +530,7 @@ class Estimate(object):
                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
-        if len(gss.allstrs) > 0 and isinstance(gss.allstrs[0], _Circuit):
-            allstrs_as_tups = [s.tup for s in gss.allstrs]
-        else:
-            allstrs_as_tups = gss.allstrs
-        ds_allstrs = _tools.find_replace_tuple_list(allstrs_as_tups, gss.aliases)
+        ds_allstrs = _tools.apply_aliases_to_circuit_list(gss.allstrs, gss.aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
         k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean

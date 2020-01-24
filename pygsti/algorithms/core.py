@@ -39,7 +39,7 @@ FLOATSIZE = 8  # TODO: better way?
 ###################################################################################
 
 
-def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases={},
+def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases=None,
             guessModelForGauge=None, svdTruncateTo=None, verbosity=0):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
@@ -376,10 +376,7 @@ def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            if opLabelAliases is not None:
-                dsStr = _tools.find_replace_tuple(opLabelString, opLabelAliases)
-            else:
-                dsStr = opLabelString
+            dsStr = opLabelString.replace_layers_with_aliases(opLabelAliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
@@ -407,10 +404,7 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
             opLabelString = rhostr + _objs.Circuit(opLabelTuple, line_labels=rhostr.line_labels) + estr
-            if opLabelAliases is not None:
-                dsStr = _tools.find_replace_tuple(tuple(opLabelString), opLabelAliases)
-            else:
-                dsStr = opLabelString
+            dsStr = opLabelString.replace_layers_with_aliases(opLabelAliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
@@ -654,7 +648,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
 
     opLabelAliases = {}
     for i, opStrTuple in enumerate(circuitsToUseInEstimation):
-        opLabelAliases["Gestimator%d" % i] = opStrTuple
+        opLabelAliases["Gestimator%d" % i] = _objs.Circuit(opStrTuple)  # Note: line labels don't matter in aliases
 
     lgstEstimates = do_lgst(dataset, prepStrs, effectStrs, targetModel, list(opLabelAliases.keys()),
                             opLabelAliases, guessModelForGauge, svdTruncateTo,
@@ -1153,11 +1147,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     profiler.add_time("do_mc2gst: pre-opt treegen", tStart)
 
     #Expand operation label aliases used in DataSet lookups
-    if opLabelAliases is not None:
-        dsCircuitsToUse = _tools.find_replace_tuple_list(
-            circuitsToUse, opLabelAliases)
-    else:
-        dsCircuitsToUse = circuitsToUse
+    dsCircuitsToUse = _tools.apply_aliases_to_circuit_list(circuitsToUse, opLabelAliases)
 
     #  Allocate peristent memory
     #  (must be AFTER possible operation sequence permutation by
@@ -2240,11 +2230,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
     #Expand operation label aliases used in DataSet lookups
-    if opLabelAliases is not None:
-        dsCircuitsToUse = _tools.find_replace_tuple_list(
-            circuitsToUse, opLabelAliases)
-    else:
-        dsCircuitsToUse = circuitsToUse
+    dsCircuitsToUse = _tools.apply_aliases_to_circuit_list(circuitsToUse, opLabelAliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         cntVecMx = evaltree_cache['cntVecMx']

@@ -1689,7 +1689,7 @@ class Circuit(object):
         Parameters
         ----------
         old_layer, new_layer : string or Label
-            The layer to find and the to replace.
+            The layer to find and to replace found layers with, respectively.
 
         Returns
         -------
@@ -1705,6 +1705,43 @@ class Circuit(object):
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit([new_layer if lbl == old_layer else lbl
                             for lbl in self._labels], self.line_labels)
+
+    def replace_layers_with_aliases(self, alias_dict):
+        """
+        Returns a copy of this Circuit except that it's layers that match
+        keys of `alias_dict` are replaced with the corresponding values.
+
+        Parameters
+        ----------
+        alias_dict : dict
+            A dictionary whose keys are layer Labels (or equivalent tuples or
+            strings), and whose values are Circuits.
+
+        Returns
+        -------
+        Circuit
+        """
+        if not self._static:
+            #Could to this in both cases, but is slow for large static circuits            
+            cpy = self.copy(editable=False)  # convert our layers to Labels
+            if not alias_dict: return cpy
+            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+            layers = cpy._labels
+            for label, c in alias_dict.items():
+                while label in layers:
+                    i = layers.index(label)
+                    layers = layers[:i] + c._labels + layers[i + 1:]
+            return Circuit(layers, self.line_labels)
+        
+        else:  # static case: so self._labels is a tuple of Labels
+            if not alias_dict: return self  # no copy needed b/c static
+            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+            layers = self._labels  # a *tuple*
+            for label, c in alias_dict.items():
+                while label in layers:
+                    i = layers.index(label)
+                    layers = layers[:i] + c._labels + layers[i + 1:]
+            return Circuit(layers, self.line_labels)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """

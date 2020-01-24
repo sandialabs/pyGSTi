@@ -142,12 +142,13 @@ class ExplicitLayerLizard(LayerLizard):
         for inst_lbl, inst in instruments.items():
             for k, g in inst.simplify_operations(inst_lbl).items():
                 simplified_ops[k] = g
-        
-        self.preps = preps.copy()  # no compilation needed
-        self.operations = operations.copy()
-        self.povms = povms.copy()
-        self.instruments = instruments.copy()
-        
+
+        #Note: maybe copies not needed here?
+        self.preps = {k: v for k, v in preps.items()}  # no compilation needed
+        self.operations = {k: v for k, v in operations.items()}  # shallow copy
+        self.povms = {k: v for k, v in povms.items()}
+        self.instruments = {k: v for k, v in instruments.items()}
+
         self.simpleops = simplified_ops
         self.effects = simplified_effects
         super(ExplicitLayerLizard, self).__init__(model)
@@ -250,7 +251,7 @@ class ImplicitLayerLizard(LayerLizard):
                     simplified_op_blks[inst_dict_lbl][k] = g
 
         self.prep_blks = prep_blks.copy()  # no compilation needed
-        self.operation_blks = op_blks.copy()
+        self.operation_blks = op_blks.copy()  # shallow copy of normal dict
         self.povm_blks = povm_blks.copy()
         self.instrument_blks = instrument_blks.copy()
         
