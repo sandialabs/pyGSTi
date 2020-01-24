@@ -8,19 +8,18 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from abc import ABC as _ABC, abstractmethod as _abstractmethod
 
-
-class Section(_ABC):
+class Section:
     """ Abstract base class for report sections.
 
     Derived classes encapsulate the structure of data within the
     respective section of the report, and provide methods for
     rendering the section to various output formats.
     """
+    _HTML_TEMPLATE = None
 
-    def __init__(self):
-        self._quantities = {}
+    def __init__(self, quantities):
+        self._quantities = quantities
 
     @_abstractmethod
     def render_html(self, global_qtys):
