@@ -11,6 +11,7 @@
 from . import protocol as _proto
 from ..extras import drift as _drift
 
+
 class StabilityAnalysisDesign(_proto.ExperimentDesign):
     """ Experimental design for stability analysis """
     def __init__(self, circuit_list, qubit_labels=None):
@@ -199,7 +200,7 @@ class StabilityAnalysis(_proto.Protocol):
         """
         super().__init__(name)
         self.significance = significance
-        self.transform = transform 
+        self.transform = transform
         self.marginalize = marginalize
         self.mergeoutcomes = mergeoutcomes
         self.constnumtimes = constnumtimes
@@ -217,16 +218,13 @@ class StabilityAnalysis(_proto.Protocol):
         #self.auxfile_types['big_thing'] = 'pickle'
 
     def run(self, data):
-        # data IS CURRENTLY A DATASET
-        # The design is not currently used in the stability analysis.
         #design = data.edesign  # experiment design (specifies circuits)
-        #ds = data.dataset  # dataset
-        ds = data
+        ds = data.dataset  # dataset
 
         if self.verbosity > 0: print(" - Formatting the data...", end='')
         results = _drift.StabilityAnalyzer(ds, transform=self.transform, marginalize=self.marginalize,
                                            mergeoutcomes=self.mergeoutcomes,
-                                            constnumtimes=self.constnumtimes, ids=self.ids)
+                                           constnumtimes=self.constnumtimes, ids=self.ids)
         if self.verbosity > 0: print("done!")
 
         # Calculate the power spectra.
@@ -265,4 +263,8 @@ class StabilityAnalysisResults(_proto.ProtocolResults):
         super().__init__(data, protocol_instance)
 
         self.stabilityanalyzer = stabilityanalyzer
-        self.auxfile_types['stabilityanalyzer'] = 'pickle'  # if rep_result_values can't be json'd
+        self.auxfile_types['stabilityanalyzer'] = 'pickle'
+
+    def __getattr__(self, attr):
+        # punt to stabilityanalyzer for now
+        return getattr(self.stabilityanalyzer, attr)
