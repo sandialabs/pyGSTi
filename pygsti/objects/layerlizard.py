@@ -254,7 +254,7 @@ class ImplicitLayerLizard(LayerLizard):
         self.operation_blks = op_blks.copy()  # shallow copy of normal dict
         self.povm_blks = povm_blks.copy()
         self.instrument_blks = instrument_blks.copy()
-        
+
         self.simpleop_blks = simplified_op_blks
         self.effect_blks = simplified_effect_blks
         super(ImplicitLayerLizard, self).__init__(model)
@@ -316,4 +316,3 @@ class ImplicitLayerLizard(LayerLizard):
 
         for _, obj in self.opcache.items():
             obj.from_vector(v[obj.gpindices], close, nodirty)
-

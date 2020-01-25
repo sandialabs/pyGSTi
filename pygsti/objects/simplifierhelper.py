@@ -56,6 +56,7 @@ class SimplifierHelper(object):
     would provide - it only needs a function to check if a given value is a
     viable state-preparation label.
     """
+
     def __init__(self, sslbls):
         self.sslbls = sslbls  # the state space labels for the model this helper is associated with
 

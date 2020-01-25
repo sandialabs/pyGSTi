@@ -778,7 +778,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None
             print(error_gs.operations[gate])
             print(error_gs.operations['Gavg'])
             delta.append(_optls.diamonddist(error_gs.operations[gate], error_gs.operations['Gavg'],
-                                          mxBasis=mxBasis))
+                                            mxBasis=mxBasis))
         elif norm == '1to1':
             gate_dif = error_gs.operations[gate] - error_gs.operations['Gavg']
             delta.append(_optls.norm1to1(gate_dif, n_samples=1000, mxBasis=mxBasis, return_list=False))

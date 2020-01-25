@@ -1266,7 +1266,7 @@ class MarginalizedPOVM(POVM):
         for i in self.indices_to_marginalize:
             elbl = elbl[:i] + elbl[i + 1:]  # remove i-th character
         return elbl
-        
+
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
         return bool(key in self._elements_to_sum)
@@ -1298,7 +1298,7 @@ class MarginalizedPOVM(POVM):
             #FUTURE: maybe have a "SumSPAMVec" that can add spamvecs to preserve paramterization and avoid dense reps
             effect_vec = None  # Note: currently all marginalized POVMs are *static*, since
             # we don't have a good general way to add parameterized effect vectors.
-            
+
             for k in self._elements_to_sum[key]:
                 e = self.povm_to_marginalize[k]
                 if effect_vec is None:

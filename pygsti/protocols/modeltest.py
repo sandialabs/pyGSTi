@@ -31,6 +31,7 @@ from ..objects import objectivefns as _objfns
 
 class ModelTest(_proto.Protocol):
     """A protocol that tests how well a model agrees with a given set of data."""
+
     def __init__(self, model_to_test, target_model=None, gaugeopt_suite=None,
                  gaugeopt_target=None, advancedOptions=None, comm=None,
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
@@ -53,9 +54,9 @@ class ModelTest(_proto.Protocol):
 
         self.auxfile_types['model_to_test'] = 'pickle'
         self.auxfile_types['target_model'] = 'pickle'
-        self.auxfile_types['gaugeopt_suite'] = 'pickle'  #TODO - better later? - json?
-        self.auxfile_types['gaugeopt_target'] = 'pickle' #TODO - better later? - json?
-        self.auxfile_types['advancedOptions'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['advancedOptions'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['comm'] = 'reset'
 
     def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,

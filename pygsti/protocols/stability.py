@@ -14,6 +14,7 @@ from ..extras import drift as _drift
 
 class StabilityAnalysisDesign(_proto.ExperimentDesign):
     """ Experimental design for stability analysis """
+
     def __init__(self, circuit_list, qubit_labels=None):
         self.needs_timestamps = True
         super().__init__(circuit_list, qubit_labels=qubit_labels)
@@ -21,6 +22,7 @@ class StabilityAnalysisDesign(_proto.ExperimentDesign):
 
 class StabilityAnalysis(_proto.Protocol):
     """ Stability Analysis protocol """
+
     def __init__(self, significance=0.05, transform='auto', marginalize='auto', mergeoutcomes=None,
                  constnumtimes='auto', ids=False, frequencies='auto', freqpointers={}, freqstest=None,
                  tests='auto', inclass_correction={}, betweenclass_weighting='auto', estimator='auto',
@@ -255,6 +257,7 @@ class StabilityAnalysis(_proto.Protocol):
 
 class StabilityAnalysisResults(_proto.ProtocolResults):
     """ Results from the RPE protocol """
+
     def __init__(self, data, protocol_instance, stabilityanalyzer):
         """
         Initialize an empty Results object.

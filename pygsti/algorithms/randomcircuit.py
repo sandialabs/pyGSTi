@@ -832,7 +832,8 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
                ), "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for qubit_labels in structure:
-            assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+            assert(isinstance(qubit_labels, list) or isinstance(
+                qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(qubit_labels)
             assert(len(set(qubits_used)) == len(qubits_used)
                    ), "The qubits in the tuples/lists of `structure must all be unique!"
@@ -862,7 +863,8 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
                                         sampler=sampler, samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[qubit_labels] = subset_circuit
         # find the symplectic matrix / phase vector this circuit implements.
-        s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit, pspec=pspec)
+        s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(
+            subset_circuit, pspec=pspec)
         # Tensors this circuit with the current circuit
         circuit.tensor_circuit(subset_circuit)
 
@@ -1000,7 +1002,8 @@ def simultaneous_random_circuits_experiment(pspec, depths, circuits_per_length, 
             "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for qubit_labels in structure:
-            assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+            assert(isinstance(qubit_labels, list) or isinstance(
+                qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(qubit_labels)
             assert(len(set(qubits_used)) == len(qubits_used)), \
                 "The qubits in the tuples/lists of `structure must all be unique!"
@@ -1152,7 +1155,8 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, cir
             "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for qubit_labels in structure:
-            assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+            assert(isinstance(qubit_labels, list) or isinstance(
+                qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(qubit_labels)
             assert(len(set(qubits_used)) == len(qubits_used)), \
                 "The qubits in the tuples/lists of `structure must all be unique!"
@@ -1175,7 +1179,7 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, cir
         for i in range(circuits_per_subset):
             l = allowed_depths[_np.random.randint(len(allowed_depths))]
             circuits[qubit_labels].append(random_circuit(pspec, l, qubit_labels=qubit_labels,
-                                                     sampler=sampler, samplerargs=samplerargs))
+                                                         sampler=sampler, samplerargs=samplerargs))
 
     experiment_dict['subset_circuits'] = circuits
 
@@ -1521,7 +1525,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
                ), "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for qubit_labels in structure:
-            assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+            assert(isinstance(qubit_labels, list) or isinstance(
+                qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(qubit_labels)
             assert(len(set(qubits_used)) == len(qubits_used)
                    ), "The qubits in the tuples/lists of `structure must all be unique!"
@@ -1532,7 +1537,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
 
     for qubit_labels in structure:
         subgraph = pspec.qubitgraph.subgraph(list(qubit_labels))
-        assert(subgraph.are_glob_connected(list(qubit_labels))), "Each subset of qubits in `structure` must be connected!"
+        assert(subgraph.are_glob_connected(list(qubit_labels))
+               ), "Each subset of qubits in `structure` must be connected!"
 
     # Creates a empty circuit over no wires
     circuit = _cir.Circuit(num_lines=0, editable=True)
@@ -1549,7 +1555,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
                                         samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[qubit_labels] = subset_circuit
         # find the symplectic matrix / phase vector this circuit implements.
-        s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit, pspec=pspec)
+        s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(
+            subset_circuit, pspec=pspec)
         # Tensors this circuit with the current circuit
         circuit.tensor_circuit(subset_circuit)
 
@@ -1833,7 +1840,8 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
             "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for qubit_labels in structure:
-            assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+            assert(isinstance(qubit_labels, list) or isinstance(
+                qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(qubit_labels)
             assert(len(set(qubits_used)) == len(qubits_used)), \
                 "The qubits in the tuples/lists of `structure must all be unique!"
@@ -1848,7 +1856,8 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
 
     for qubit_labels in structure:
         subgraph = pspec.qubitgraph.subgraph(list(qubit_labels))
-        assert(subgraph.are_glob_connected(list(qubit_labels))), "Each subset of qubits in `structure` must be connected!"
+        assert(subgraph.are_glob_connected(list(qubit_labels))
+               ), "Each subset of qubits in `structure` must be connected!"
 
     for lnum, l in enumerate(depths):
         if verbosity > 0:
@@ -2240,7 +2249,8 @@ def mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', 
     random_natives_circuit_length = length // 2
 
     if qubit_labels is not None:
-        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "If not None, `qubit_labels` must be a list!"
+        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)
+               ), "If not None, `qubit_labels` must be a list!"
         qubit_labels = list(qubit_labels)
         n = len(qubit_labels)
     else:
@@ -2708,7 +2718,8 @@ def random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, localclif
     #assert(length % 2 == 0), "The mirror rb length `length` must be even!"
 
     if qubit_labels is not None:
-        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "If not None, `qubit_labels` must be a list!"
+        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)
+               ), "If not None, `qubit_labels` must be a list!"
         qubit_labels = list(qubit_labels)
         n = len(qubit_labels)
     else:

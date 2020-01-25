@@ -35,6 +35,7 @@ from ..algorithms import rbfit as _rbfit
 
 class ByDepthDesign(_proto.CircuitListsDesign):
     """ Experiment design that holds circuits organized by depth """
+
     def __init__(self, depths, circuit_lists, qubit_labels=None):
         assert(len(depths) == len(circuit_lists)), \
             "Number of depths must equal the number of circuit lists!"
@@ -47,6 +48,7 @@ class BenchmarkingDesign(ByDepthDesign):
     Experiment design that holds benchmarking data, i.e. definite-outcome
     circuits organized by depth along with their corresponding ideal outcomes.
     """
+
     def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels)
@@ -56,6 +58,7 @@ class BenchmarkingDesign(ByDepthDesign):
 
 class CliffordRBDesign(BenchmarkingDesign):
     """ Experiment design for Clifford randomized benchmarking """
+
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
                  verbosity=1, add_default_protocol=False):
@@ -171,6 +174,7 @@ class CliffordRBDesign(BenchmarkingDesign):
 
 class DirectRBDesign(BenchmarkingDesign):
     """ Experiment design for Direct randomized benchmarking """
+
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
@@ -340,6 +344,7 @@ class DirectRBDesign(BenchmarkingDesign):
 
 class MirrorRBDesign(BenchmarkingDesign):
     """ Experiment design for Direct randomized benchmarking """
+
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                  add_default_protocol=False):
@@ -682,6 +687,7 @@ class VolumetricBenchmarkGrid(Benchmark):
 
 class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
     """ A postprocesor that constructs a grid of volumetric benchmarks from existing results. """
+
     def __init__(self, depths='all', widths='all', datatype='success_probabilities',
                  paths='all', statistic='mean', aggregate=True, name=None):
 
@@ -710,7 +716,7 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                 #TODO: need to be able to filter based on widths... - maybe replace .update calls
                 # with something more complicated when width != 'all'
                 #print("Aggregating path = ", path)  #TODO - show progress something like this later?
-                
+
                 #Traverse path to get to root of VB data
                 root = results
                 for key in path:
@@ -751,7 +757,7 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
             results.volumetric_benchmarks = vb
             results.failure_counts = fails
             passresults.append(results)
-            
+
         if self.aggregate and len(passnames) > 1:  # aggregate pass data into a single set of qty dicts
             agg_vb = _tools.NamedDict('Depth', 'int', None)
             agg_fails = _tools.NamedDict('Depth', 'int', None)
@@ -841,7 +847,8 @@ class VolumetricBenchmark(Benchmark):
         self.custom_data_src = custom_data_src
 
         self.auxfile_types['dscomparator'] = 'pickle'
-        self.auxfile_types['custom_data_src'] = 'pickle'  # because this *could* be a model or a qty dict (or just a string?)
+        # because this *could* be a model or a qty dict (or just a string?)
+        self.auxfile_types['custom_data_src'] = 'pickle'
         self.auxfile_types['rescale_function'] = 'none'  # don't serialize this, so need _set_rescale_function
         self._set_rescale_function()
 
@@ -885,7 +892,7 @@ class VolumetricBenchmark(Benchmark):
             else:
                 raise ValueError("Invalid datatype: %s" % self.datatype)
             src_data = data.cache[self.datatype]
-            
+
         elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
             assert(self.datatype == 'success_probabilities'), "Only success probabailities can be simulated."
             sfmodel = self.custom_data_src
@@ -898,7 +905,7 @@ class VolumetricBenchmark(Benchmark):
                     predicted_success_prob = sfmodel.probs(circ)[('success',)]
                     src_data[depth].append(predicted_success_prob)
 
-        elif isinstance(self.custom_data_src, dict):  #Assume this is a "summary dataset"
+        elif isinstance(self.custom_data_src, dict):  # Assume this is a "summary dataset"
             summary_data = self.custom_data_src
             src_data = summary_data['success_probabilities']
 
@@ -953,6 +960,7 @@ class VolumetricBenchmark(Benchmark):
 
 class PredictedVolumetricBenchmark(VolumetricBenchmark):
     """Runs a volumetric benchmark on success/fail data predicted from a model"""
+
     def __init__(self, model_or_summary_data, depths='all', statistic='mean',
                  rescaler='auto', dscomparator=None, name=None):
         super().__init__(depths, 'success_probabilities', statistic, rescaler,
@@ -964,6 +972,7 @@ class RandomizedBenchmarking(Benchmark):
     The randomized benchmarking protocol. This same analysis protocol is used for Clifford, Direct and Mirror RB.
     The standard Mirror RB analysis is obtained by setting `datatype` = `adjusted_success_probabilities`.
     """
+
     def __init__(self, datatype='success_probabilities', defaultfit='full', asymptote='std', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
         """
@@ -989,8 +998,8 @@ class RandomizedBenchmarking(Benchmark):
         asymptote : 'std' or float, optional
             The summary data is fit to A + Bp^m with A fixed and with A has a fit parameter,
             with the default results returned set by `defaultfit`. This argument specifies the
-            value used when 'A' is fixed. If left as 'std', then 'A' defaults to 1/2^n if 
-            `datatype` is `success_probabilities` and to 1/4^n if `datatype` is 
+            value used when 'A' is fixed. If left as 'std', then 'A' defaults to 1/2^n if
+            `datatype` is `success_probabilities` and to 1/4^n if `datatype` is
             `adjusted_success_probabilities`.
 
         rtype : 'EI' or 'AGI', optional
@@ -1073,7 +1082,8 @@ class RandomizedBenchmarking(Benchmark):
 
             #Store bootstrap "cache" dicts (containing summary keys) as a list under data.cache
             if 'bootstraps' not in data.cache or len(data.cache['bootstraps']) < self.bootstrap_samples:
-                self.add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)  #TIM - finite counts always True here?
+                # TIM - finite counts always True here?
+                self.add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
             for bootstrap_cache in bootstrap_caches:
@@ -1121,6 +1131,7 @@ class RandomizedBenchmarking(Benchmark):
 
 class RandomizedBenchmarkingResults(_proto.ProtocolResults):
     """ The results of running a randomized benchmarking """
+
     def __init__(self, data, protocol_instance, fits, depths, defaultfit):
         """
         Initialize an empty Results object.
@@ -1226,6 +1237,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 
 class VolumetricBenchmarkingResults(_proto.ProtocolResults):
     """ The results from running a volumetric benchmark protocol """
+
     def __init__(self, data, protocol_instance):
         """
         Initialize an empty Results object.

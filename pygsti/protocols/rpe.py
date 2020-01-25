@@ -13,6 +13,7 @@ from . import protocol as _proto
 
 class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
     """ Experimental design for robust phase estimation """
+
     def __init__(self, rpe_experiment_inputs, qubit_labels=None):
         circuit_lists = None  # TODO
         super().__init__(circuit_lists, qubit_labels=qubit_labels)
@@ -39,6 +40,7 @@ class RobustPhaseEstimation(_proto.Protocol):
 
 class RobustPhaseEstimationResults(_proto.ProtocolResults):
     """ Results from the RPE protocol """
+
     def __init__(self, data, protocol_instance, more_args):
         """
         Initialize an empty Results object.
@@ -50,7 +52,7 @@ class RobustPhaseEstimationResults(_proto.ProtocolResults):
 
         self.auxfile_types['rpe_result_values'] = 'pickle'  # if rep_result_values can't be json'd
 
-        
+
 #shorthands
 RPEDesign = RobustPhaseEstimationDesign
 RPE = RobustPhaseEstimation

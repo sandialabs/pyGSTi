@@ -30,7 +30,7 @@ class TreeNode(object):
         # subdir_between_dirname_and_meta_json = None  # typically this identifies a particular derived class
         # ret._init_children(dirname, subdir_between_dirname_and_meta_json)  # loads child nodes
         # return ret
-    
+
     def __init__(self, possible_child_name_dirs, child_values=None, child_category=None):
         self._dirs = possible_child_name_dirs  # maps possible child keys -> subdir name
         self._vals = child_values if child_values else {}
@@ -87,7 +87,7 @@ class TreeNode(object):
 
     def _create_childval(self, key):
         raise NotImplementedError("Derived class needs to implement _create_childval to create valid key: %s" % key)
-    
+
     def get_tree_paths(self):
         """Dictionary paths leading to data objects/nodes beneath this one"""
         paths = [()]  # path to self

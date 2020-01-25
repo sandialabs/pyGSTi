@@ -1152,7 +1152,8 @@ class ExplicitOpModel(_mdl.OpModel):
                 s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
                     s += "    %s = %g\n" % \
-                         (str(lbl), _np.linalg.norm(inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
+                         (str(lbl), _np.linalg.norm(inst[lbl].todense() -
+                                                    otherModel.instruments[inst_lbl][lbl].todense()))
 
         return s
 

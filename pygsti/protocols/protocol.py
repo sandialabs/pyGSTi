@@ -175,7 +175,7 @@ class ProtocolRunner(object):
     as input and returns a :class:`ProtocolResultsDir` that can contain multiple :class:`ProtocolResults`
     objects within it.
     """
-    
+
     def run(self, data):
         """
         Run all the protocols specified by this protocol-runner on `data`.
@@ -240,9 +240,10 @@ class TreeRunner(ProtocolRunner):
 
 
 class SimpleRunner(ProtocolRunner):
-    """ 
+    """
     Runs a single protocol on every data node that has no sub-nodes (possibly separately for each pass).
     """
+
     def __init__(self, protocol, protocol_can_handle_multipass_data=False, edesign_type='all'):
         """
         Create a new SimpleRunner object, which runs a single protocol on every
@@ -540,7 +541,7 @@ class ExperimentDesign(_TreeNode):
         if dirname is None:
             dirname = self._loaded_from
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
-            
+
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
 
@@ -831,7 +832,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         """
         if isinstance(dataset, _objs.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
-        
+
         all_circuits = self.all_circuits_needing_data
         qubit_ordering = all_circuits[0].line_labels  # first circuit in *this* edesign determines qubit order
         qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
@@ -936,7 +937,7 @@ class ProtocolData(_TreeNode):
         else:
             self._passdatas = {None: self}
             ds_to_get_circuits_from = dataset
-            
+
         if self.edesign is None:
             self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
         super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
@@ -985,7 +986,7 @@ class ProtocolData(_TreeNode):
         Parameters
         ----------
         paths : list
-            A list of the paths to keep.  Each path is a tuple of keys, 
+            A list of the paths to keep.  Each path is a tuple of keys,
             delineating a path in the data-tree.
 
         paths_are_sorted : bool, optional
@@ -1282,7 +1283,7 @@ class ProtocolResultsDir(_TreeNode):
         This container object holds two things:
         1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
            to different protocols (keys are protocol names).
-        
+
         2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
            object directly using the name of the sub-directory.
 
@@ -1372,7 +1373,7 @@ class ProtocolResultsDir(_TreeNode):
         """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
         results_on_this_node = _NamedDict('Protocol Instance', 'category',
-                                                  items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
+                                          items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
         if sub_results:
             category = self.child_category if self.child_category else 'nocategory'
             ret = _NamedDict(category, 'category')

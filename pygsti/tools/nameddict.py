@@ -57,7 +57,7 @@ class NamedDict(dict):
         assert(nm not in row_prefix), \
             ("Column %s is assigned at multiple dict-levels (latter levels will "
              "overwrite the values of earlier levels)! keys-so-far=%s") % (nm, tuple(row_prefix.keys()))
-        
+
         row = row_prefix.copy()
         for k, v in self.items():
             row[nm] = k
@@ -69,7 +69,7 @@ class NamedDict(dict):
                 #Add row
                 complete_row = row.copy()
                 complete_row['value'] = v
-                
+
                 if seriestypes['value'] == "unknown":
                     seriestypes['value'] = self.valtype
                 elif seriestypes['value'] != self.valtype:
@@ -77,7 +77,7 @@ class NamedDict(dict):
 
                 for rk, rv in complete_row.items():
                     columns[rk].append(rv)
-                    
+
                 absent_colvals = set(columns.keys()) - set(complete_row.keys())
                 for rk in absent_colvals:  # Ensure all columns stay the same length
                     columns[rk].append(None)

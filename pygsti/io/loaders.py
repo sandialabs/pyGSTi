@@ -295,7 +295,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
         std = _stdinput.StdInputParser()
         return std.parse_stringfile(filename, line_labels, num_lines)
 
-    
+
 def load_protocol_from_dir(dirname):
     """
     Load a :class:`Protocol` from a directory on disk.

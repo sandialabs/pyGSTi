@@ -85,8 +85,8 @@ class ModelPack(_ABC):
                     simt_kwargs = {'max_order': 1}
                 else:
                     simt = sim_type  # don't update sim_type b/c gscache
-                    simt_kwargs = {'max_order': 1}  #TODO: update so user can specify other args?
-                    
+                    simt_kwargs = {'max_order': 1}  # TODO: update so user can specify other args?
+
                 key_path, val_path = self._get_cachefile_names(parameterization_type, simt)
                 if key_path.exists() and val_path.exists():
                     simt_kwargs['cache'] = _load_calccache(key_path, val_path)
@@ -201,7 +201,7 @@ class GSTModelPack(ModelPack):
         if qubit_labels is None: qubit_labels = self._sslbls
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
-        
+
         if fpr:
             fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
                 self.pergerm_fidpair_dict(qubit_labels)
@@ -281,7 +281,7 @@ class RBModelPack(ModelPack):
         assert(len(qubit_labels) == len(self._sslbls)), "Wrong number of labels in: %s" % str(qubit_labels)
         return {clifford_name: _Circuit(_transform_circuit_tup(circuittup_of_native_gates,
                                                                qubit_labels), line_labels=qubit_labels)
-                for clifford_name, circuittup_of_native_gates in self._clifford_compilation.items() }
+                for clifford_name, circuittup_of_native_gates in self._clifford_compilation.items()}
 
 
 class RPEModelPack(ModelPack):

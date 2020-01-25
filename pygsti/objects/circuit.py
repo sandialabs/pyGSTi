@@ -1723,7 +1723,7 @@ class Circuit(object):
         Circuit
         """
         if not self._static:
-            #Could to this in both cases, but is slow for large static circuits            
+            #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=False)  # convert our layers to Labels
             if not alias_dict: return cpy
             assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
@@ -1733,7 +1733,7 @@ class Circuit(object):
                     i = layers.index(label)
                     layers = layers[:i] + c._labels + layers[i + 1:]
             return Circuit(layers, self.line_labels)
-        
+
         else:  # static case: so self._labels is a tuple of Labels
             if not alias_dict: return self  # no copy needed b/c static
             assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"

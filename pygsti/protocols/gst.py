@@ -45,6 +45,7 @@ DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 class HasTargetModel(object):
     """ Adds to an experiment design a target model """
+
     def __init__(self, targetModelFilenameOrObj):
         self.target_model = _load_model(targetModelFilenameOrObj)
         self.auxfile_types['target_model'] = 'pickle'
@@ -52,6 +53,7 @@ class HasTargetModel(object):
 
 class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
     """ Minimal experiment design needed for GST """
+
     def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None,
                  qubit_labels=None, nested=False):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested)
@@ -60,6 +62,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
 
 class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesign):
     """ GST experiment design where circuits are structured by length and germ (typically). """
+
     def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
                  nested=False):
         _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested)
@@ -70,6 +73,7 @@ class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesig
 
 class StandardGSTDesign(StructuredGSTDesign):
     """ Standard GST experiment design consisting of germ-powers sandwiched between fiducials. """
+
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
                  keepSeed=None, qubit_labels=None, verbosity=0, add_default_protocol=False):
@@ -119,6 +123,7 @@ class StandardGSTDesign(StructuredGSTDesign):
 
 class GateSetTomography(_proto.Protocol):
     """ The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set."""
+
     def __init__(self, initialModelFilenameOrObj=None, gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, advancedOptions=None, comm=None,
                  memLimit=None, output_pkl=None, verbosity=2, name=None):
@@ -138,13 +143,13 @@ class GateSetTomography(_proto.Protocol):
         self.verbosity = verbosity
 
         self.auxfile_types['initial_model'] = 'pickle'
-        self.auxfile_types['gaugeopt_suite'] = 'pickle'  #TODO - better later? - json?
-        self.auxfile_types['gaugeopt_target'] = 'pickle' #TODO - better later? - json?
-        self.auxfile_types['advancedOptions'] = 'pickle'  #TODO - better later? - json?
+        self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['advancedOptions'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['comm'] = 'reset'
 
-
     #TODO: Maybe make methods like this separate functions??
+
     def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
         design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
         return self.run(_proto.ProtocolData(design, dataset))
@@ -241,7 +246,8 @@ class GateSetTomography(_proto.Protocol):
             #Advanced Options can specify further manipulation of starting model
             if advancedOptions.get('contractStartToCPTP', False):
                 mdl_start = _alg.contract(mdl_start, "CPTP")
-                raise ValueError("'contractStartToCPTP' has been removed b/c it can change the parameterization of a model")
+                raise ValueError(
+                    "'contractStartToCPTP' has been removed b/c it can change the parameterization of a model")
             if advancedOptions.get('depolarizeStart', 0) > 0:
                 mdl_start = mdl_start.depolarize(op_noise=advancedOptions.get('depolarizeStart', 0))
             if advancedOptions.get('randomizeStart', 0) > 0:
@@ -364,6 +370,7 @@ class GateSetTomography(_proto.Protocol):
 
 class StandardGST(_proto.Protocol):
     """The standard-practice GST protocol."""
+
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, modelsToTest=None, comm=None, memLimit=None,
@@ -411,7 +418,7 @@ class StandardGST(_proto.Protocol):
                 #prepare advanced options dictionary
                 advanced = advancedOptions.get('all', {})
                 advanced.update(advancedOptions.get(mode, {}))
-                
+
                 if mode == "Target":
                     est_label = mode
                     model_to_test = data.edesign.target_model.copy()  # no parameterization change
@@ -635,7 +642,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
 
         if suiteName == rootLbl:  # then shorten the root name
             rootLbl = "2QUR-" if suiteName.endswith("unreliable2Q") else ""
-            
+
         for vSpam in vSpam_range:
             for spamWt in spamWt_range:
                 lbl = rootLbl + "Spam %g%s" % (spamWt, "+v" if vSpam else "")
@@ -807,7 +814,6 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
 
 def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
                   comm=None, advanced_options=None, verbosity=0):
-
     """
     Add a gauge optimization to an estimate.
     TODO: docstring - more details
@@ -848,7 +854,7 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
             robust_est_label = base_est_label + suffix
             if robust_est_label in results.estimates:
                 gsStart_robust = results.estimates[robust_est_label].get_start_model(goparams)
-                
+
                 if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
                     printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
                                 (goLabel, base_est_label, robust_est_label), 2)
@@ -1263,7 +1269,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
             if len(circuit_structs['iteration']) > 0:
                 circuit_structs['final'] = circuit_structs['iteration'][-1]
-    
+
             running_set = set(); delta_lsts = []
             for lst in circuit_lists['iteration']:
                 delta_lst = [x for x in lst if (x not in running_set)]

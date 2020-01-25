@@ -400,13 +400,14 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
 
             result_index = error_labels.index(label)
             if hamiltonian and ('H', P) in errgen_coeffs:
-                ham_intrinsic_rates[result_index] = errgen_coeffs[('H',P)]
+                ham_intrinsic_rates[result_index] = errgen_coeffs[('H', P)]
             if stochastic and ('S', P) in errgen_coeffs:
-                sto_intrinsic_rates[result_index] = errgen_coeffs[('S',P)]
+                sto_intrinsic_rates[result_index] = errgen_coeffs[('S', P)]
             if affine and ('A', P) in errgen_coeffs:
                 scale = 1 / (_np.sqrt(2)**nTargetQubits)  # not exactly sure how this is derived
-                aff_intrinsic_rates[result_index] = errgen_coeffs[('A',P)] * scale
-            
+                aff_intrinsic_rates[result_index] = errgen_coeffs[('A', P)] * scale
+
+            #TODO REMOVE (OLD)
             #if stochastic: sval = stochastic_sub_v[k]
             #if hamiltonian: hval = hamiltonian_sub_v[k]
             #if affine: aval = affine_sub_v[k]

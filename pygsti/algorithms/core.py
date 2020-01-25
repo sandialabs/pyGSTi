@@ -1341,7 +1341,7 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     # when evTree was created.
     pathSet = fwdsim.get_current_pathset(evTree, comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
-        pathFraction = pathSet.get_allowed_path_fraction() 
+        pathFraction = pathSet.get_allowed_path_fraction()
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                     (pathSet.num_failures, 100 * pathFraction))
     else:

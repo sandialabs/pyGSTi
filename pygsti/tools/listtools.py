@@ -168,7 +168,7 @@ def apply_aliases_to_circuit_list(list_of_circuits, alias_dict):
     ----------
     list_of_circuits : list
         A list of circuits to make replacements in.
-    
+
     alias_dict : dict
         A dictionary whose keys are layer Labels (or equivalent tuples or
         strings), and whose values are Circuits or tuples of labels.

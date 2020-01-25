@@ -85,7 +85,7 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     ----------
     root_dir : str
         The directory name.
-    
+
     auxfile_types_member : str, optional
         The key within meta.json that is used to describe how other
         members have been serialized into files.  Unless you know what you're
@@ -132,7 +132,7 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
             continue
         elif typ == 'reset':  # 'reset' doesn't write and loads in as None
             val = None  # no file exists for this member
-            
+
         elif typ == 'text-circuit-lists':
             i = 0; val = []
             while True:
@@ -154,7 +154,7 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
         elif typ == 'dict-of-protocolobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
             val = {k: cls_from_meta_json(pth).from_dir(pth) for k, pth in zip(keys, paths)}
-            
+
         else:  # cases with 'standard' expected path
 
             pth = root_dir / (key + ext)
