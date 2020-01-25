@@ -90,12 +90,12 @@ def model_with_lgst_circuit_estimates(
     if circuitLabels is not None:
         assert(len(circuitLabels) == len(circuitsToEstimate))
         for opLabel, opStr in zip(circuitLabels, circuitsToEstimate):
-            aliases[opLabel] = _tools.find_replace_tuple(opStr, opLabelAliases)
+            aliases[opLabel] = opStr.replace_layers_with_aliases(opLabelAliases)
             opLabels.append(opLabel)
     else:
         for opStr in circuitsToEstimate:
             newLabel = 'G' + '.'.join(map(str, tuple(opStr)))
-            aliases[newLabel] = _tools.find_replace_tuple(opStr, opLabelAliases)  # use circuit tuple as label
+            aliases[newLabel] = opStr.replace_layers_with_aliases(opLabelAliases)  # use circuit tuple as label
             opLabels.append(newLabel)
 
     #Add target model labels (not aliased) if requested
@@ -454,7 +454,7 @@ def direct_mlgst_model(circuitToEstimate, circuitLabel, dataset,
                          for prepStr in prepStrs for effectStr in effectStrs])
 
     aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
-    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate, opLabelAliases)
+    aliases[circuitLabel] = circuitToEstimate.replace_layers_with_aliases(opLabelAliases)
 
     _, direct_mlegst = _core.do_mlgst(
         dataset, direct_lgst, circuits, minProbClip=minProbClip,

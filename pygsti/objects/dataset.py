@@ -896,7 +896,13 @@ class DataSet(object):
         return self.get_row(circuit)
 
     def __setitem__(self, circuit, outcomeDictOrSeries):
-        return self.set_row(circuit, outcomeDictOrSeries)
+        ca = self.collisionAction
+        self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems mose natural)
+        try:
+            ret = self.set_row(circuit, outcomeDictOrSeries)
+        finally:
+            self.collisionAction = ca
+        return ret
 
     def __delitem__(self, circuit):
         if not isinstance(circuit, _cir.Circuit):

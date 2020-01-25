@@ -124,6 +124,8 @@ class TestCodecs(CodecsTestCase):
         std.target_model()._check_paramvec()
         print("target_model = ",id(std.target_model()))
         print("rho0 parent = ",id(std.target_model().preps['rho0'].parent))
+
+        #import bpdb; bpdb.set_trace()
         with open(temp_files + "/results.json",'w') as f:
             json.dump(self.results, f)
         print("mdl_target2 = ",id(std.target_model()))

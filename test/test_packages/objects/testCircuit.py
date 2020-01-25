@@ -37,7 +37,7 @@ class CircuitTestCase(BaseTestCase):
     def test_replace_with_idling_line(self):
         c = pygsti.obj.Circuit( [('Gcnot',0,1)], editable=True)
         c.replace_with_idling_line(0)
-        self.assertEqual(c, ((),))
+        self.assertEqual(c.layertup, ((),))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

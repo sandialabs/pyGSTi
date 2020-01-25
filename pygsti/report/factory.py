@@ -40,7 +40,7 @@ DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
 def _errgen_formula(errgen_type, typ):
-    assert(typ in ('html', 'latex'))
+    assert(typ in ('html', 'latex', 'noreport'))
 
     notDuringTxt = ("This is <em>not</em> the Lindblad-type generator that would produce this noise if it "
                     "acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that "
@@ -305,9 +305,9 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
         switchBd.ds[d] = results.dataset
         switchBd.prepStrs[d] = results.circuit_lists['prep fiducials']
-        switchBd.effectStrs[d] = results.circuit_lists['effect fiducials']
+        switchBd.effectStrs[d] = results.circuit_lists['meas fiducials']
         switchBd.strs[d] = (results.circuit_lists['prep fiducials'],
-                            results.circuit_lists['effect fiducials'])
+                            results.circuit_lists['meas fiducials'])
         switchBd.germs[d] = results.circuit_lists['germs']
 
         switchBd.gssFinal[d] = results.circuit_structs['final']
@@ -760,7 +760,9 @@ def create_standard_report(results, filename, title="auto",
     idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
     bgcolor = advancedOptions.get('colorboxplot_bgcolor', 'white')
 
-    if filename.endswith(".pdf"):
+    if filename is None:
+        fmt = "noreport"
+    elif filename.endswith(".pdf"):
         fmt = "latex"
     else:
         fmt = "html"
@@ -1211,7 +1213,7 @@ def create_standard_report(results, filename, title="auto",
 
             if fmt == "html":
                 if filename.endswith(".html"):
-                    assert(embed_figures is False), \
+                    assert(embed_figures is True), \
                         "Must set embed_figures=True when filename ends in .html (specifying a single file)"
                     _merge.merge_jinja_template(
                         qtys, filename, templateDir='~standard_html_report',
@@ -1977,7 +1979,7 @@ def create_report_notebook(results, filename, title="auto",
         gssPerIter = results.circuit_structs['iteration'] #ALL_L
 
         prepStrs = results.circuit_lists['prep fiducials']
-        effectStrs = results.circuit_lists['effect fiducials']
+        effectStrs = results.circuit_lists['meas fiducials']
         germs = results.circuit_lists['germs']
         strs = (prepStrs, effectStrs)
 

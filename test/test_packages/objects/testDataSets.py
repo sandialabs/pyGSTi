@@ -22,8 +22,7 @@ class TestDataSetMethods(BaseTestCase):
             ds[ ('Gx',) ]['new'] = 20 # assignment can't create *new* outcome labels (yet)
         ds.add_count_dict( ('Gy','Gy'), {'FooBar': 10, '1': 90 }) # OK to add outcome labels on the fly
         ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # now all outcome labels OK now
-        ds.add_count_dict( ('Gy','Gy'),pygsti.obj.labeldicts.OutcomeLabelDict([('0',10), ('1',90)]),
-                           overwriteExisting=False) #adds counts at next available integer timestep
+        ds.add_count_dict( ('Gy','Gy'),pygsti.obj.labeldicts.OutcomeLabelDict([('0',10), ('1',90)]))
         ds.done_adding_data()
 
         #Pickle and unpickle

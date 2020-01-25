@@ -114,13 +114,13 @@ class TimeDependentTestCase(BaseTestCase):
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
         self.assertAlmostEqual(pygsti.tools.chi2(results.estimates['default'].models['iteration estimates'][0], results.dataset, results.circuit_lists['iteration'][0]),
                                pygsti.tools.chi2(results2.estimates['default'].models['iteration estimates'][0], results2.dataset, results2.circuit_lists['iteration'][0]),
-                               places=1)
+                               places=0)
         self.assertAlmostEqual(pygsti.tools.chi2(results.estimates['default'].models['iteration estimates'][1], results.dataset, results.circuit_lists['iteration'][1]),
                                pygsti.tools.chi2(results2.estimates['default'].models['iteration estimates'][1], results2.dataset, results2.circuit_lists['iteration'][1]),
-                               places=1)
+                               places=0)
         self.assertAlmostEqual(pygsti.tools.two_delta_logl(results.estimates['default'].models['final iteration estimate'], results.dataset),
                                pygsti.tools.two_delta_logl(results2.estimates['default'].models['final iteration estimate'], results2.dataset),
-                               places=1)
+                               places=0)
 
     def test_time_dependent_gst(self):
         #run GST in a time-dependent mode:

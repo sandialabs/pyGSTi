@@ -941,6 +941,18 @@ class ProtocolData(_TreeNode):
             self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
         super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
 
+    def __getstate__(self):
+        # don't pickle ourself recursively if self._passdatas contains just ourself
+        to_pickle = self.__dict__.copy()
+        if list(to_pickle['_passdatas'].keys()) == [None]:
+            to_pickle['_passdatas'] = None
+        return to_pickle
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        if self._passdatas is None:
+            self._passdatas = {None: self}
+
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
         return self.edesign.create_subdata(key, self.dataset)

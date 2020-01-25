@@ -195,12 +195,12 @@ class IDTTestCase(BaseTestCase):
         # funky and unphysical data here, but data that idle tomography should be
         # able to fit *exactly* (with any errMags, so be pick a big one).
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simtype="termorder:1")
+                                  nSamplesList=('inf',), simtype="termorder")  # how specify order
 
         # Note: no spam error, as accounting for this isn't build into idle tomography yet.
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
                                                 errMag=0.01, spamMag=0, nSamples='inf',
-                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder:1")
+                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder")  # how specify order
 
         #Make sure exact identification of errors was possible
         self.assertLess(maxH, 1e-6)
@@ -211,10 +211,10 @@ class IDTTestCase(BaseTestCase):
         #Same thing but for 2 qubits
         nQ = 2
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simtype="termorder:1")
+                                  nSamplesList=('inf',), simtype="termorder")  #How specify order?
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
                                                 errMag=0.01, spamMag=0, nSamples='inf',
-                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder:1")
+                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder") # how specify order?
         self.assertLess(maxH, 1e-6)
         self.assertLess(maxS, 1e-6)
         self.assertLess(maxA, 1e-6)
@@ -346,7 +346,7 @@ class IDTTestCase(BaseTestCase):
         #Run GST on the data (set tolerance high so this 2Q-GST run doesn't take long)
         gstresults = pygsti.do_long_sequence_gst_base(ds, target_model, gss,
                                                       advancedOptions={'tolerance': 1e-1}, verbosity=3)
-
+        
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'
             gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp",16)

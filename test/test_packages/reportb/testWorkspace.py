@@ -530,7 +530,7 @@ class TestWorkspace(ReportBaseCase):
             raw_wo.saveas("doesntmatter.html")
 
         raw_wo.set_render_options(global_requirejs=True)
-        raw_wo._create_onready_handler("myJavascriptCode;")
+        raw_wo._create_onready_handler("myJavascriptCode;", "MyID")
 
         try:
             raw_wo.display()

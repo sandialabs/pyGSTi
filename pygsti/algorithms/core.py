@@ -1333,15 +1333,19 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
 
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
     maxTermStages = fwdsim.max_term_stages
-    pathFractionThreshold = fwdsim.path_fraction_threshold
+    pathFractionThreshold = fwdsim.path_fraction_threshold  # 0 when not using path-sets
     oob_check_interval = fwdsim.oob_check_interval
+    if extra_lm_opts is None: extra_lm_opts = {}
 
     #assume a path set has already been chosen, as one should have been chosen
     # when evTree was created.
     pathSet = fwdsim.get_current_pathset(evTree, comm)
-    pathFraction = pathSet.get_allowed_path_fraction()
-    printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
-                (pathSet.num_failures, 100 * pathFraction))
+    if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
+        pathFraction = pathSet.get_allowed_path_fraction() 
+        printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
+                    (pathSet.num_failures, 100 * pathFraction))
+    else:
+        pathFraction = 1.0  # b/c "all" paths are used, and > pathFractionThreshold, which should be 0
 
     minErrVec = None
     for sub_iter in range(maxTermStages):
@@ -1500,9 +1504,9 @@ def do_mc2gst_with_model_selection(
     #convert list of Circuits to list of raw tuples since that's all we'll need
     #if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0], _objs.Circuit):
     #    circuitsToUse = [opstr.tup for opstr in circuitsToUse]
-
+    extra_lm_opts = {}  # FUTURE: make these accessible to caller?
     minErr, mdl = do_mc2gst(dataset, startModel, circuitsToUse, maxiter,
-                            maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                            maxfev, 0, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor,
                             minProbClipForWeighting, probClipInterval,
                             useFreqWeightedChiSq, regularizeFactor, printer - 1,
                             check, check_jacobian, circuitWeights, opLabelAliases,
@@ -1531,7 +1535,7 @@ def do_mc2gst_with_model_selection(
         nParams = curStartModel.num_params()
 
         minErr, mdl = do_mc2gst(dataset, curStartModel, circuitsToUse, maxiter,
-                                maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                                maxfev, 0, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor,
                                 minProbClipForWeighting, probClipInterval,
                                 useFreqWeightedChiSq, regularizeFactor, printer - 1,
                                 check, check_jacobian, circuitWeights, opLabelAliases,
@@ -1570,7 +1574,7 @@ def do_mc2gst_with_model_selection(
             continue
 
         minErr, mdl = do_mc2gst(dataset, curStartModel, circuitsToUse, maxiter,
-                                maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                                maxfev, 0, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor,
                                 minProbClipForWeighting, probClipInterval,
                                 useFreqWeightedChiSq, regularizeFactor, printer - 1,
                                 check, check_jacobian, circuitWeights, opLabelAliases,

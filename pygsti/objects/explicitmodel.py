@@ -413,7 +413,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     self.set_simtype("matrix" if self.dim <= 16 else "map")
             elif evotype in ("svterm", "cterm"):
                 if self._sim_type != "termorder":
-                    self.set_simtype("termorder:1")
+                    self.set_simtype("termorder", max_order=1)
 
         else:  # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"

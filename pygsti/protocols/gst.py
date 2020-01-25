@@ -1232,7 +1232,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
                 finalStruct = circuit_structs['iteration'][-1]
                 if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
                     circuit_lists['prep fiducials'] = finalStruct.prepStrs
-                    circuit_lists['effect fiducials'] = finalStruct.effectStrs
+                    circuit_lists['meas fiducials'] = finalStruct.effectStrs
                     circuit_lists['germs'] = finalStruct.germs
 
             elif isinstance(edesign, _proto.CircuitListsDesign):
@@ -1242,23 +1242,18 @@ class ModelEstimateResults(_proto.ProtocolResults):
                     unindexed_gss.add_unindexed(lst)
                     circuit_structs['iteration'].append(unindexed_gss)
 
-                #Needed?
-                circuit_lists['prep fiducials'] = []
-                circuit_lists['effect fiducials'] = []
-                circuit_lists['germs'] = []
             else:
                 #Single iteration
                 lst = edesign.all_circuits_needing_data
                 unindexed_gss = _LsGermsStructure([], [], [], [], None)
                 unindexed_gss.add_unindexed(lst)
                 circuit_structs['iteration'] = [unindexed_gss]
-    
-                #Needed?
-                circuit_lists['prep fiducials'] = []
-                circuit_lists['effect fiducials'] = []
-                circuit_lists['germs'] = []
-                
-    
+
+            #We currently expect to have these keys (in future have users check for them?)
+            if 'prep fiducials' not in circuit_lists: circuit_lists['prep fiducials'] = []
+            if 'meas fiducials' not in circuit_lists: circuit_lists['meas fiducials'] = []
+            if 'germs' not in circuit_lists: circuit_lists['germs'] = []
+
             # Extract raw circuit lists from structs
             circuit_lists['iteration'] = \
                 [gss.allstrs for gss in circuit_structs['iteration']]

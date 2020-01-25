@@ -106,7 +106,7 @@ def create_fake_dataset(comm):
 
 @mpitest(4)
 def test_MPI_products(comm):
-
+    assert(comm.Get_size() == 4)
     #Create some model
     mdl = std.target_model()
 

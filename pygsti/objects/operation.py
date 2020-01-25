@@ -7015,20 +7015,21 @@ class LindbladErrorgen(LinearOperator):
             ctape = _np.empty(0, complex)
         coeffs_as_compact_polys = (vtape, ctape)
 
-        #DEBUG TODO REMOVE - check norm of rank-1 terms:
+        #DEBUG TODO REMOVE (and make into test) - check norm of rank-1 terms
+        # (Note: doesn't work for Clifford terms, which have no .base):
         # rho =OP=> coeff * A rho B
         # want to bound | coeff * Tr(E Op rho) | = | coeff | * | <e|A|psi><psi|B|e> |
         # so A and B should be unitary so that | <e|A|psi><psi|B|e> | <= 1
         # but typically these are unitaries / (sqrt(2)*nqubits)
         #import bpdb; bpdb.set_trace()
-        scale = 1.0
-        for t in Lterms:
-            for op in t._rep.pre_ops:
-                test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-                assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
-            for op in t._rep.post_ops:
-                test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-                assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
+        #scale = 1.0
+        #for t in Lterms:
+        #    for op in t._rep.pre_ops:
+        #        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
+        #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
+        #    for op in t._rep.post_ops:
+        #        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
+        #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
 
         return Lterms, coeffs_as_compact_polys
 

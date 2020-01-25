@@ -978,7 +978,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
     if prepLbl is None:
         prepLbl = model._shlp.get_default_prep_lbl()
     if effectLbls is None:
-        povmLbl = model._shlp.get_default_povm_lbl()
+        povmLbl = model._shlp.get_default_povm_lbl(sslbls=None)
         effectLbls = [_Lbl("%s_%s" % (povmLbl, l))
                       for l in model._shlp.get_effect_labels_for_povm(povmLbl)]
     if singleQfiducials is None:

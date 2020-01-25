@@ -316,3 +316,4 @@ class ImplicitLayerLizard(LayerLizard):
 
         for _, obj in self.opcache.items():
             obj.from_vector(v[obj.gpindices], close, nodirty)
+

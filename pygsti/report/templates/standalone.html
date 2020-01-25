@@ -32,6 +32,17 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ static_ref('images/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
 
+    <script>
+      function jsFallbackFromCDN(libname_to_check, localFilename) {
+          var parts = libname_to_check.split('.')
+          if (((parts.length == 1) && (typeof window[parts[0]] == "undefined")) ||
+              ((parts.length == 2) && (typeof window[parts[0]][parts[1]] == "undefined"))) {
+              console.log(`***Failed to load ${localFilename} from CDN. Falling back to local offline version.***`);
+              document.write(unescape(`%3Cscript src="./offline/${localFilename}" type="text/javascript"%3E%3C/script%3E`));
+          }
+      }
+    </script>
+
     {{ cdn_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js", "jQuery",
     integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=") }}
 

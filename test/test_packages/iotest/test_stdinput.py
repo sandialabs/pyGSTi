@@ -37,22 +37,22 @@ class ParserTester(StdInputBase, IOBase):
                         ("G1*((G2G3)^2G4G5)^2G7", ('G1', 'G2', 'G3', 'G2', 'G3',
                                                    'G4', 'G5', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G7')),
                         ("G1(G2^2(G3G4)^2)^2", ('G1', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4')),
-                        ("G1 * G2", ('G1', 'G2')),
-                        ("S<1>", ('G1',)),
-                        ("S<2>", ('G1', 'G2')),
-                        ("G1S<2>^2G3", ('G1', 'G1', 'G2', 'G1', 'G2', 'G3')),
-                        ("G1S<1>G3", ('G1', 'G1', 'G3')),
-                        ("S<3>[0:4]", ('G1', 'G2', 'G3', 'G4')),
+                        ("G1*G2", ('G1', 'G2')),
+                        #("S<1>", ('G1',)),
+                        #("S<2>", ('G1', 'G2')),
+                        #("G1S<2>^2G3", ('G1', 'G1', 'G2', 'G1', 'G2', 'G3')),
+                        #("G1S<1>G3", ('G1', 'G1', 'G3')),
+                        #("S<3>[0:4]", ('G1', 'G2', 'G3', 'G4')),
                         ("G_my_xG_my_y", ('G_my_x', 'G_my_y')),
                         ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
-                        ("G_my_x G_my_y", ('G_my_x', 'G_my_y')),
+                        ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
                         ("GsG___", ('Gs', 'G___')),
-                        ("S < 2 >G3", ('G1', 'G2', 'G3')),
-                        ("S<G12>", ('G1', 'G2')),
-                        ("S<S23>", ('G2', 'G3')),
-                        ("G1\tG2", ('G1', 'G2')),
-                        ("rho0 Gx", ('rho0', 'Gx')),
-                        ("rho0 Gx Mdefault", ('rho0', 'Gx', 'Mdefault'))]
+                        #("S < 2 >G3", ('G1', 'G2', 'G3')),
+                        #("S<G12>", ('G1', 'G2')),
+                        #("S<S23>", ('G2', 'G3')),
+                        ("G1G2", ('G1', 'G2')),
+                        ("rho0*Gx", ('rho0', 'Gx')),
+                        ("rho0*Gx*Mdefault", ('rho0', 'Gx', 'Mdefault'))]
 
         for s, expected in string_tests:
             result, line_labels = self.std.parse_circuit(s, lookup=lkup)
@@ -72,31 +72,31 @@ class ParserTester(StdInputBase, IOBase):
             self.std.parse_circuit("(G1")
 
         with self.assertRaises(ValueError):
-            self.std.parse_circuit("G1 S[test]")
+            self.std.parse_circuit("G1*S[test]")
 
         with self.assertRaises(ValueError):
-            self.std.parse_circuit("G1 SS")
+            self.std.parse_circuit("G1*SS")
 
     def test_parse_dataline(self):
         dataline_tests = ["G1G2G3           0.1 100",
-                          "G1 G2 G3         0.798 100",
-                          "G1 (G2 G3)^2 G4  1.0 100"]
+                          "G1*G2*G3         0.798 100",
+                          "G1*(G2*G3)^2*G4  1.0 100"]
 
         self.assertEqual(
-            self.std.parse_dataline(dataline_tests[0]),
-            (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])
+            self.std.parse_dataline(dataline_tests[0], expectedCounts=2),
+            (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0])
         )
         self.assertEqual(
-            self.std.parse_dataline(dataline_tests[1]),
-            (('G1', 'G2', 'G3'), 'G1 G2 G3', None, [0.798, 100.0])
+            self.std.parse_dataline(dataline_tests[1], expectedCounts=2),
+            (['G1', 'G2', 'G3'], 'G1*G2*G3', None, [0.798, 100.0])
         )
         self.assertEqual(
-            self.std.parse_dataline(dataline_tests[2]),
-            (('G1', CircuitLabel('', ('G2', 'G3'), None, 2), 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0])
+            self.std.parse_dataline(dataline_tests[2], expectedCounts=2),
+            (['G1', CircuitLabel('', ('G2', 'G3'), None, 2), 'G4'], 'G1*(G2*G3)^2*G4', None, [1.0, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
-            (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])
+            (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0])
         )  # extra col ignored
 
     def test_parse_dataline_raises_on_syntax_error(self):
@@ -110,11 +110,11 @@ class ParserTester(StdInputBase, IOBase):
                           "MyFav (G1G2)^3"]
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[0]),
-            ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None)
+            ('1', ['G1', 'G2', 'G3'], 'G1G2G3', None)
         )
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[1]),
-            ('MyFav', (CircuitLabel('', ('G1', 'G2'), None, 3),), '(G1G2)^3', None)
+            ('MyFav', [CircuitLabel('', ('G1', 'G2'), None, 3)], '(G1G2)^3', None)
         )
 
 
@@ -129,7 +129,7 @@ class FileInputTester(StdInputBase, IOBase):
 MyFav1 G1G1G1
 MyFav2 G2^3
 this1  G3*G3*G3
-thatOne G1 G2 * G3
+thatOne G1G2*G3
 """
         with open(file_path, 'w') as f:
             f.write(contents)
@@ -157,20 +157,20 @@ thatOne G1 G2 * G3
 
 #simple sequences
 G1G2          0.098  100
-G2 G3         0.2    100
+G2G3          0.2    100
 (G1)^4        0.1   1000
 
 #using lookups
-G1 S<1>       0.9999 100
-S<MyFav1>G2   0.23   100
-G1S<2>^2      0.5     20
-S<3>[0:4]     0.2      5
-G1G2G3G4      0.2      5
+#G1 S<1>       0.9999 100
+#S<MyFav1>G2   0.23   100
+#G1S<2>^2      0.5     20
+#S<3>[0:4]     0.2      5
+#G1G2G3G4      0.2      5
 
 #different ways to concatenate gates
 G_my_xG_my_y  0.5 24.0
 G_my_x*G_my_y 0.5 24.0
-G_my_x G_my_y 0.5 24.0
+G_my_xG_my_y 0.5 24.0
 """.format(dict_path=dict_path)
         with open(tmp_path, 'w') as f:
             f.write(contents)
