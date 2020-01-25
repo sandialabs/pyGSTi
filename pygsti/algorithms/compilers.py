@@ -181,7 +181,7 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
             qubit_labels = qubit_labels
     else:
         assert(qubit_labels is None), "qubit_labels can only be specified if `pspec` is not None!"
-        qubit_labels = list(range(n))
+        #qubit_labels = list(range(n))  #EGN commented this out b/c it leads to assertion error in compile_simplectic
 
     # Create a circuit that implements a Clifford with symplectic matrix s. This is the core
     # of this compiler, and is the part that can be implemented with different algorithms.
@@ -194,6 +194,7 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
 
     # Find the necessary Pauli layer to compile the correct Clifford, not just the correct
     # Clifford up to Paulis. The required Pauli layer depends on whether we pre-fix or post-fix it.
+    if qubit_labels is None: qubit_labels = tuple(range(n))
     if prefixpaulis: pauli_layer = _symp.find_premultipled_pauli(s, temp_p, p, qubit_labels=qubit_labels)
     else: pauli_layer = _symp.find_postmultipled_pauli(s, temp_p, p, qubit_labels=qubit_labels)
     # Turn the Pauli layer into a circuit.
@@ -328,6 +329,9 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
             assert(len(qubit_labels) == n), \
                 "The subset of qubits to compile `s` for is the wrong size for this symplectic matrix!"
     else:
+        if qubit_labels is not None:
+            import bpdb; bpdb.set_trace()
+            pass
         assert(qubit_labels is None), "qubit_labels can only be specified if `pspec` is not None!"
 
     all_algorithms = ['BGGE', 'ROGGE', 'iAGvGE']  # Future: ['AGvGE','AGvPMH','iAGvPMH']

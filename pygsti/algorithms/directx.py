@@ -240,7 +240,7 @@ def direct_mc2gst_model(circuitToEstimate, circuitLabel, dataset,
 
     Parameters
     ----------
-    circuitToEstimate : Circuit or tuple
+    circuitToEstimate : Circuit
         The single operation sequence to estimate using LSGST
 
     circuitLabel : string
@@ -297,7 +297,7 @@ def direct_mc2gst_model(circuitToEstimate, circuitLabel, dataset,
                          for prepStr in prepStrs for effectStr in effectStrs])
 
     aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
-    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate, opLabelAliases)
+    aliases[circuitLabel] = circuitToEstimate.replace_layers_with_aliases(opLabelAliases)
 
     _, direct_lsgst = _core.do_mc2gst(
         dataset, direct_lgst, circuits,

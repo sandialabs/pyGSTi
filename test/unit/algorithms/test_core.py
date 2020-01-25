@@ -223,7 +223,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         mdl_lsgst = core.do_mc2gst(
             self.ds, aliased_model, aliased_list, minProbClipForWeighting=1e-4,
             probClipInterval=(-1e6, 1e6),
-            opLabelAliases={Label('GA1'): (Label('Gx'),)}
+            opLabelAliases={Label('GA1'): Circuit(['Gx'])}
         )
         # TODO assert correctness
 
@@ -362,7 +362,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         model = core.do_mlgst(
             self.ds, aliased_model, aliased_list, minProbClip=1e-4,
             probClipInterval=(-1e6, 1e6),
-            opLabelAliases={Label('GA1'): (Label('Gx'),)}
+            opLabelAliases={Label('GA1'): Circuit(['Gx'])}
         )
         # TODO assert correctness
 

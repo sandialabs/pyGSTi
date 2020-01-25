@@ -809,7 +809,8 @@ class DataSet(object):
             if len(self.cirIndex) > 0:
                 maxOlIndex = self.olIndex_max
                 if bStatic:
-                    assert(max([_np.amax(self.oliData[i]) for i in self.cirIndex.values()]) <= maxOlIndex)
+                    assert(max([_np.amax(self.oliData[i]) if (len(self.oliData[i]) > 0) else 0
+                                for i in self.cirIndex.values()]) <= maxOlIndex)
                     # self.oliData.shape[0] > maxIndex doesn't make sense since cirIndex holds slices
                 else:
                     #Note: for non-static datasets, assume *all* data in self.oliData is "in" this data set, i.e.,
