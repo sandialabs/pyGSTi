@@ -624,7 +624,7 @@ class Benchmark(_proto.Protocol):
                         bcache['success_counts'][depth].append(sampledSP)
 
                     #ind = _np.random.randint(numcircuits)  # note: old code picked different random ints
-                    #totalcounts = total_counts[depth][ind] if finitecounts else None  # do this again if a different randint
+                    #totalcounts = total_counts[depth][ind] if finitecounts else None  # need this if a new randint
                     sampledHDcounts = hamming_distance_counts[depth][ind]
                     sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
 
@@ -1195,7 +1195,8 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
                 if 'full' in allfitkeys: fitkey = 'full'
                 else:
                     assert(len(allfitkeys) == 1), \
-                        "There are multiple fits, there is no defaultfit and none have the key 'full'. Please specify the fit to plot!"
+                        ("There are multiple fits, there is no defaultfit and none have the key "
+                         "'full'. Please specify the fit to plot!")
                     fitkey = allfitkeys[0]
 
         ASPs = []

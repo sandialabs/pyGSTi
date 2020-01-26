@@ -185,9 +185,9 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
 
     # Create a circuit that implements a Clifford with symplectic matrix s. This is the core
     # of this compiler, and is the part that can be implemented with different algorithms.
-    circuit = compile_symplectic(s, pspec=pspec, qubit_labels=qubit_labels, iterations=iterations, algorithms=[algorithm, ],
-                                 costfunction=costfunction, paulirandomize=paulirandomize, aargs={'algorithm': aargs},
-                                 check=False)
+    circuit = compile_symplectic(s, pspec=pspec, qubit_labels=qubit_labels, iterations=iterations,
+                                 algorithms=[algorithm], costfunction=costfunction,
+                                 paulirandomize=paulirandomize, aargs={'algorithm': aargs}, check=False)
     circuit = circuit.copy(editable=True)
 
     temp_s, temp_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
@@ -543,7 +543,8 @@ def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, qubit_labels=None, c
     return bestcircuit
 
 
-def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qubit_labels=None, ctype='basic', check=True):
+def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qubit_labels=None,
+                                            ctype='basic', check=True):
     """
     An ordered global Gaussian elimiation algorithm for creating a circuit that implements a Clifford that is
     represented by the symplectic matrix `s` (and *some* phase vector). This algorithm is more conveniently and flexibly
@@ -623,8 +624,8 @@ def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qub
 
     # If the qubit_labels is not None, we relabel the circuit in terms of the labels of these qubits.
     if qubit_labels is not None:
-        assert(len(eliminationorder) == len(qubit_labels)
-               ), "`qubit_labels` must be the same length as `elimintionorder`! The mapping to qubit labels is ambigiuous!"
+        assert(len(eliminationorder) == len(qubit_labels)), \
+            "`qubit_labels` must be the same length as `elimintionorder`! The mapping to qubit labels is ambigiuous!"
         circuit.map_state_space_labels_inplace({i: qubit_labels[eliminationorder[i]] for i in range(n)})
         circuit.reorder_lines(qubit_labels)
     # If the qubit_labels is None, but there is a pspec, we relabel the circuit in terms of the full set

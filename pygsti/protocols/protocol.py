@@ -161,7 +161,8 @@ class MultiPassProtocol(Protocol):
         for pass_name, sub_data in data.passes.items():  # a multipass DataProtocol object contains per-pass datas
             #TODO: print progress: pass X of Y, etc
             sub_results = self.protocol.run(sub_data)
-            # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?  or call as_dict?
+            # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?
+            #  or call as_dict?
             results.passes[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
         return results
 

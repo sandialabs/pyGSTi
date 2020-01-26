@@ -402,7 +402,8 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     dirname = _pathlib.Path(dirname)
     dirname.mkdir(exist_ok=True)
     for key, val in d.items():
-        #TODO: fix this - as we can write some things to json that don't get read back correctly, e.g. dicts with integer keys
+        #TODO: fix this - as we can write some things to json that don't get read back correctly,
+        # e.g. dicts with integer keys
         #try:
         #    with open(dirname / (key + '.json'), 'w') as f:
         #        _json.dump(val, f)

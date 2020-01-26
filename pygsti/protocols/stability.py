@@ -248,8 +248,8 @@ class StabilityAnalysis(_proto.Protocol):
 
         # The model selector something slightly more complicated for this method: this function only allows us to
         # set the second part of the modelselector tuple.
-        results.do_instability_characterization(estimator=self.estimator, modelselector=(None, self.modelselector), default=True,
-                                                verbosity=self.verbosity - 1)
+        results.do_instability_characterization(estimator=self.estimator, modelselector=(None, self.modelselector),
+                                                default=True, verbosity=self.verbosity - 1)
         if self.verbosity == 1: print("done!")
 
         return StabilityAnalysisResults(data, self, results)  # put results in here

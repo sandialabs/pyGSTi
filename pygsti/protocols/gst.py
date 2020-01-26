@@ -1236,7 +1236,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
                 #Set "Ls and germs" info: gives particular structure
                 finalStruct = circuit_structs['iteration'][-1]
-                if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
+                if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something w/ a *LsGermsSerialStructure*
                     circuit_lists['prep fiducials'] = finalStruct.prepStrs
                     circuit_lists['meas fiducials'] = finalStruct.effectStrs
                     circuit_lists['germs'] = finalStruct.germs

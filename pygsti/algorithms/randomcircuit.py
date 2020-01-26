@@ -1197,8 +1197,8 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, cir
     return experiment_dict
 
 
-def direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
-                      randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
+def direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], addlocal=False,
+                      lsargs=[], randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
                       compilerargs=[], partitioned=False):
     """
     Generates a "direct randomized benchmarking" (DRB) circuit, which is the protocol introduced in
@@ -2807,9 +2807,9 @@ def random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, localclif
     return circlist, outlist, aux
 
 
-def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_length, qubit_labels=None, sampler='edgegrab',
-                                               samplerargs=[1 / 4], localclifford=True, paulirandomize=True,
-                                               fixed_versus_depth=False, descriptor=''):
+def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_length, qubit_labels=None,
+                                               sampler='edgegrab', samplerargs=[1 / 4], localclifford=True,
+                                               paulirandomize=True, fixed_versus_depth=False, descriptor=''):
 
     assert(sampler == 'edgegrab'), "The germ must be selected with edgegrab sampling!"
     experiment_dict = {}

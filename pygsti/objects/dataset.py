@@ -1722,7 +1722,7 @@ class DataSet(object):
             trunc_olIndex = _OrderedDict([(self.ol[i], i) for i in sorted(used_oli)])
             trunc_dataset = DataSet(self.oliData, self.timeData, self.repData,
                                     circuitIndices=trunc_cirIndex,
-                                    outcomeLabelIndices=trunc_olIndex, bStatic=True)  # don't copy counts, just reference
+                                    outcomeLabelIndices=trunc_olIndex, bStatic=True)  # reference (don't copy) counts
 
         else:
             trunc_dataset = DataSet(outcomeLabels=[])  # let outcome labels be added automatically
