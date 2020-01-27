@@ -712,13 +712,28 @@ def create_standard_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
     report = construct_standard_report(
-        results, title, confidenceLevel, comm, ws, auto_open, link_to, brevity, advancedOptions, verbosity
+        results, title, confidenceLevel, comm, ws, brevity, advancedOptions, verbosity
     )
+
+    precision = advancedOptions.get('precision', None)
+
     if filename is not None:
         if filename.endswith(".pdf"):
-            report.write_pdf(filename)
+            report.write_pdf(filename, precision=precision, auto_open=auto_open, verbosity=verbosity)
         else:
-            report.write_html(filename)
+            resizable = advancedOptions.get('resizable', True)
+            autosize = advancedOptions.get('autosize', 'initial')
+            embed_figures = advancedOptions.get('embed_figures', True)
+            single_file = filename.endswith(".html")
+
+            report.write_html(
+                filename, auto_open=auto_open, link_to=link_to,
+                embed_figures=embed_figures, render_options={
+                    'precision': precision,
+                    'resizable': resizable,
+                    'autosize': autosize
+                }, single_file=single_file, verbosity=verbosity
+            )
 
     return ws
 
@@ -864,13 +879,28 @@ def create_nqnoise_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
     report = construct_standard_report(
-        results, title, confidenceLevel, comm, ws, auto_open, link_to, brevity, advancedOptions, verbosity
+        results, title, confidenceLevel, comm, ws, brevity, advancedOptions, verbosity
     )
+
+    precision = advancedOptions.get('precision', None)
+
     if filename is not None:
         if filename.endswith(".pdf"):
-            report.write_pdf(filename)
+            report.write_pdf(filename, precision=precision, auto_open=auto_open, verbosity=verbosity)
         else:
-            report.write_html(filename)
+            resizable = advancedOptions.get('resizable', True)
+            autosize = advancedOptions.get('autosize', 'initial')
+            embed_figures = advancedOptions.get('embed_figures', True)
+            single_file = filename.endswith(".html")
+
+            report.write_html(
+                filename, auto_open=auto_open, link_to=link_to,
+                embed_figures=embed_figures, render_options={
+                    'precision': precision,
+                    'resizable': resizable,
+                    'autosize': autosize
+                }, single_file=single_file, verbosity=verbosity
+            )
 
     return ws
 
@@ -2036,7 +2066,9 @@ def construct_nqnoise_report(results, title="auto",
     return report
 
 
-def construct_drift_report(results, confidenceLevel=None, brevity=0, workspace=None):
+def construct_drift_report(results, gss, title='auto', ws=None,
+                           brevity=0, advancedOptions=None,
+                           verbosity=1):
     """
     Creates a Drift report.
 
@@ -2046,7 +2078,101 @@ def construct_drift_report(results, confidenceLevel=None, brevity=0, workspace=N
     -------
     :class:`Report` : A constructed report object
     """
-    pass  # TODO
+    # TODO refactor to actually work as an abstract factory using report.Report
+    from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
+    from ..extras.drift import driftreport
+    assert(isinstance(results, StabilityAnalyzer)), "Support for multiple results as a Dict is not yet included!"
+    singleresults = results
+
+    tStart = _time.time()
+    printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
+
+    if advancedOptions is None: advancedOptions = {}
+    cachefile = advancedOptions.get('cachefile', None)
+    connected = advancedOptions.get('connected', False)
+
+    printer.log('*** Creating workspace ***')
+    if ws is None: ws = _ws.Workspace(cachefile)
+
+    if title is None or title == "auto":
+        autoname = _autotitle.generate_name()
+        title = "Drift Report for " + autoname
+        _warnings.warn(("You should really specify `title=` when generating reports,"
+                        " as this makes it much easier to identify them later on.  "
+                        "Since you didn't, pyGSTi has generated a random one"
+                        " for you: '{}'.").format(autoname))
+
+    results_dict = results if isinstance(results, dict) else {"unique": results}
+
+    drift_switchBd = driftreport._create_drift_switchboard(ws, results, gss)
+
+    report = _Report()
+
+    # Sets whether or not the dataset key is a switchboard or not.
+    if len(results.data.keys()) > 1:
+        dskey = drift_switchBd.dataset
+        arb_dskey = list(singleresults.data.keys())[0]
+    else:
+        dskey = list(singleresults.data.keys())[0]
+        arb_dskey = dskey
+
+    # TODO remove
+    def addqty(b, name, fn, *args, **kwargs):
+        """Adds an item to the qtys dict within a timed block"""
+        if b is None or brevity < b:
+            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+                report.qtys[name] = fn(*args, **kwargs)
+
+    report.qtys['title'] = title
+    report.qtys['date'] = _time.strftime("%B %d, %Y")
+
+    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+    report.qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
+
+    # Generate Switchboard
+    printer.log("*** Generating switchboard ***")
+
+    #Create master switchboard
+    switchBd, dataset_labels = \
+        driftreport._create_switchboard(ws, results_dict)
+
+    # Generate Tables
+    printer.log("*** Generating tables ***")
+
+    report.qtys['drift_switchBd'] = drift_switchBd
+    report.qtys['topSwitchboard'] = switchBd
+
+    results = switchBd.results
+    A = None  # no brevity restriction: always display
+
+    addqty(A, 'driftSummaryTable', ws.DriftSummaryTable, results, dskey)
+    addqty(A, 'driftDetailsTable', ws.DriftDetailsTable, results)
+
+    # Generate plots
+    printer.log("*** Generating plots ***")
+    # If we are allowed to average power spectra, because they have the same frequencies.
+    if singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1):
+        # The power spectrum averaged over circuits and outcomes, but not datasets
+        addqty(A, 'GlobalPowerSpectraPlot', ws.PowerSpectraPlot, results, {'dataset': dskey})
+    # The power spectrum for each length with a germ-fiducial pairing (averaged over outcomes).
+    addqty(A, 'GermFiducialPowerSpectraPlot', ws.GermFiducialPowerSpectraPlot, results, gss,
+           drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, dskey,
+           None, True,)
+    # The estimated probability trajectoris for each length with a germ-fiducial pairing.
+    addqty(A, 'GermFiducialProbTrajectoriesPlot', ws.GermFiducialProbTrajectoriesPlot, results, gss,
+           drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, drift_switchBd.outcomes, 1, None,
+           dskey, None, None, True)
+    # The boxplot summarizing the evidence for drift in each circuit.
+    addqty(A, 'driftdetectorColorBoxPlot', ws.ColorBoxPlot, 'driftdetector', gss, None, None, False, False, True, False,
+           'compact', .05, 1e-4, None, None, results)
+    # The boxplot summarizing the size of any detected drift in each circuit.
+    addqty(A, 'driftsizeColorBoxPlot', ws.ColorBoxPlot, 'driftsize', gss, None, None, False, False, True, False,
+           'compact', .05, 1e-4, None, None, results)
+
+    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart))
+    return report
+
 
 
 # # XXX this needs to be revised into a script
