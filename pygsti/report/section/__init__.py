@@ -21,8 +21,7 @@ class Section:
     def __init__(self, quantities):
         self._quantities = quantities
 
-    @_abstractmethod
-    def render_html(self, global_qtys):
+    def render_html(self, global_qtys, bgcolor='white', workspace=None, comm=None):
         """ Render this section to HTML
 
         Parameters
@@ -30,10 +29,12 @@ class Section:
         global_qtys: {WorkspaceOutput}
             A dictionary of reportable quantities global to the report
         """
-        pass  # TODO
 
-    @_abstractmethod
-    def render_latex(self, global_qtys):
+        # TODO actually do rendering in this method
+        # as a quick stand-in we can just treat local quantities as global
+        global_qtys.update(self._quantities)
+
+    def render_latex(self, global_qtys, workspace=None, comm=None):
         """ Render this section to LaTeX
 
         Parameters
@@ -45,10 +46,11 @@ class Section:
         -------
         str : The generated LaTeX source for this section
         """
-        pass  # TODO
+        # TODO actually do rendering in this method
+        # as a quick stand-in we can just treat local quantities as global
+        global_qtys.update(self._quantities)
 
-    @_abstractmethod
-    def render_notebook(self, global_qtys, notebook):
+    def render_notebook(self, global_qtys, notebook, workspace=None, comm=None):
         """ Render this section to an IPython notebook
 
         Parameters
@@ -58,4 +60,13 @@ class Section:
         notebook: :class:`Notebook`
             The IPython notebook to extend with this section
         """
-        pass  # TODO
+        # TODO actually do rendering in this method
+        # as a quick stand-in we can just treat local quantities as global
+        global_qtys.update(self._quantities)
+
+
+from .summary import SummarySection
+from .help import HelpSection
+from .meta import InputSection, MetaSection
+# TODO
+# from .goodness import GoodnessSection, GoodnessColorBoxPlotSection, GoodnessScalingSection, GoodnessUnmodeledSection
