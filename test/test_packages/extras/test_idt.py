@@ -354,7 +354,6 @@ class IDTTestCase(BaseTestCase):
         #pygsti.report.create_standard_report(gstresults, temp_files + "/gstWithIdleTomogTestReport",
         #                                    "Test GST Report w/Idle Tomography Tab",
         #                                    verbosity=3, auto_open=False)
-        import bpdb; bpdb.set_trace()
         pygsti.report.create_nqnoise_report(gstresults, temp_files + "/gstWithIdleTomogTestReport",
                                             "Test nQNoise Report w/Idle Tomography Tab",
                                             verbosity=3, auto_open=False)
