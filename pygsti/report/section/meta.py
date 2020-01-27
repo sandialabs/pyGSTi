@@ -14,14 +14,24 @@ from . import Section as _Section
 class InputSection(_Section):
     _HTML_TEMPLATE = 'tabs/Input.html'
 
-    def __init__(self, workspace, fiducials, germs, target, dataset):
+    def __init__(self, workspace, germs, dataset):
         super().__init__({
-            'fiducialListTable': workspace.CircuitTable(fiducials, ["Prep.", "Measure"], commonTitle="Fiducials"),
             'germList2ColTable': workspace.CircuitTable(germs, "Germ", nCols=2),
-            'targetGatesBoxTable': workspace.GatesTable(target, display_as="boxes"),
             'datasetOverviewTable': workspace.DataSetOverviewTable(dataset),
-            'targetSpamBriefTable': workspace.SpamTable(target, None, display_as='boxes', includeHSVec=False)
         })
+
+    def with_fiducial_list(self, workspace, fiducials):
+        self._quantities['fiducialListTable'] = workspace.CircuitTable(
+            fiducials, ["Prep.", "Measure"], commonTitle="Fiducials"
+        )
+        return self
+
+    def with_target_gates_and_spam(self, workspace, target):
+        self._quantities['targetGatesBoxTable'] = workspace.GatesTable(target, display_as="boxes")
+        self._quantities['targetSpamBriefTable'] = workspace.SpamTable(
+            target, None, display_as='boxes', includeHSVec=False
+        )
+        return self
 
 
 class MetaSection(_Section):

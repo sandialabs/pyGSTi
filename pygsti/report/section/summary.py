@@ -17,8 +17,8 @@ class SummarySection(_Section):
     _HTML_TEMPLATE = 'tabs/Summary.html'
 
     def __init__(self, workspace, dataset_labels, estimate_labels, Ls,
-                 switchboard, cri, linlog_percentile,
-                 show_unmodeled_error, bgcolor, comm=None):
+                 switchboard, linlog_percentile,
+                 bgcolor, comm=None):
         # TODO bgcolor really should not be needed until render time...
 
         # Build finalFitComparePlot
@@ -40,24 +40,18 @@ class SummarySection(_Section):
             gsGrid = [[na_to_none(switchboard.gsL_modvi[d, i, -1]) for i in est_inds_mt]
                       for d in range(Nd)]
             final_fit_comparison = workspace.FitComparisonBoxPlot(
-                est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, comm=comm
+                est_lbls_mt, dataset_labels, gssGrid, gsGrid, dsGrid, grid_objective, comm=comm
             )
         else:
             dsGrid = [na_to_none(switchboard.modvi_ds[0, i]) for i in est_inds_mt]
             gssGrid = [na_to_none(switchboard.gssFinal[0])] * Ne
-            gsGrid = [na_to_none(switchboard.gsL_modvi[0, i, -1]) for i in est_inds_mt]
+            if switchboard.gsL_modvi.shape[2] == 0:  # can't use -1 index on length-0 array
+                gsGrid = [None for i in est_inds_mt]
+            else:
+                gsGrid = [na_to_none(switchboard.gsL_modvi[0, i, -1]) for i in est_inds_mt]
             final_fit_comparison = workspace.FitComparisonBarPlot(
                 est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate', comm=comm
             )
-
-        summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond'); wildcardBudget = None
-        if show_unmodeled_error:
-            summary_display += ('unmodeled',)
-            wildcardBudget = switchboard.wildcardBudget
-        best_gates_vs_target = workspace.GatesVsTargetTable(
-            switchboard.gsFinal, switchboard.gsTarget, cri,
-            summary_display, wildcardBudget
-        )
 
         super().__init__({
             'finalFitComparePlot': final_fit_comparison,
@@ -72,6 +66,17 @@ class SummarySection(_Section):
                 linlog_percentile / 100,
                 minProbClipForWeighting=switchboard.mpc_modvi,
                 typ='histogram', comm=comm, bgcolor=bgcolor
-            ),
-            'bestGatesVsTargetTable_sum': best_gates_vs_target
+            )
         })
+
+    def with_best_gates_vs_target(self, workspace, switchboard, cri, show_unmodeled_error):
+        summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        wildcardBudget = None
+        if show_unmodeled_error:
+            summary_display += ('unmodeled',)
+            wildcardBudget = switchboard.wildcardBudget
+        self._quantities['bestGatesVsTargetTable_sum'] = workspace.GatesVsTargetTable(
+            switchboard.gsFinal, switchboard.gsTarget, cri,
+            summary_display, wildcardBudget
+        )
+        return self

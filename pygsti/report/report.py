@@ -67,7 +67,7 @@ class Report:
         autosize = render_options.get('autosize', 'initial')
 
         # TODO refactor all rendering into this method and section rendering methods
-        # XXX FWIW single-file mode is a bad idea
+        # TODO find a better solution than single-file mode
         template_fn = _merge.merge_jinja_template if single_file else _merge.merge_jinja_template_dir
         template_fn(
             global_qtys, path, templateDir=template_dir,
@@ -116,13 +116,8 @@ class Report:
 
         # Remove switchboards
         # TODO these should be generated when rendering HTML, making this redundant
-        from .workspace import SwitchboardView, Switchboard
-        to_del = []
-        for k, v in global_qtys.items():
-            if isinstance(v, SwitchboardView) or isinstance(v, Switchboard):
-                to_del.append(k)
-        for k in to_del:
-            del global_qtys[k]
+        del global_qtys['topSwitchboard']
+        del global_qtys['maxLSwitchboard1']
 
         printer.log("Generating LaTeX source...")
         _merge.merge_latex_template(
