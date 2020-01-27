@@ -284,12 +284,6 @@ class RBModelPack(ModelPack):
                 for clifford_name, circuittup_of_native_gates in self._clifford_compilation.items()}
 
 
-class RPEModelPack(ModelPack):
-    """ ABC for robust phase estimation modelpacks """
-    def get_rpe_inputs(max_max_length, **kwargs):
-        pass  # TODO
-
-
 # Helper functions
 def _load_calccache(key_path, val_path):
     """
