@@ -20,16 +20,17 @@ def get_rpe_experiment_design(max_max_length, qubit_labels=None, req_counts=None
     if not (int(max_log_lengths) - max_log_lengths == 0):
         raise ValueError('Only integer powers of two accepted for max_max_length.')
 
+    assert(qubit_labels is None or qubit_labels == (0,)), "Only qubit_labels=(0,) is supported so far"
     return _rpe.RobustPhaseEstimationDesign(
-                _obj.Circuit([('Gxpi2',0)]),
-                [ 2**i for i in range(int(max_log_lengths)+1) ],
-                _obj.Circuit([],num_lines=1),
-                _obj.Circuit([('Gxpi2',0)]),
-                ['1'],
-                ['0'],
-                _obj.Circuit([],num_lines=1),
-                _obj.Circuit([],num_lines=1),
-                ['0'],
-                ['1'],
-                qubit_labels=qubit_labels,
-                req_counts=req_counts)
+        _obj.Circuit([('Gxpi2', 0)], line_labels=(0,)),
+        [2**i for i in range(int(max_log_lengths) + 1)],
+        _obj.Circuit([], line_labels=(0,)),
+        _obj.Circuit([('Gxpi2', 0)], line_labels=(0,)),
+        ['1'],
+        ['0'],
+        _obj.Circuit([], line_labels=(0,)),
+        _obj.Circuit([], line_labels=(0,)),
+        ['0'],
+        ['1'],
+        qubit_labels=qubit_labels,
+        req_counts=req_counts)

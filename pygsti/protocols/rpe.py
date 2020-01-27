@@ -33,7 +33,7 @@ class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
         cos_outcomes_neg,
         *,
         qubit_labels=None,
-        req_counts=None,
+        req_counts=None
     ):
         """
         Produces an Experiment Design to test the phase that develops on a target
