@@ -212,6 +212,16 @@ class GaugeVariantsErrGenSection(_Section):
         return errgen_type
 
 
+class GaugeVariantsErrGenNQubitSection(GaugeVariantsErrGenSection):
+    @_Section.figure_factory(4)
+    def bestGatesetErrGenBoxTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
+                                  errgen_type='logGTi', **kwargs):
+        return workspace.NQubitErrgenTable(
+            switchboard.gsGIRep, _cri(1, switchboard, confidence_level, ci_brevity),
+            ('errgen', 'H', 'S'), 'boxes'
+        )
+
+
 class GaugeVariantsRawSection(_Section):
     _HTML_TEMPLATE = 'tabs/GaugeVariants_raw.html'
 
