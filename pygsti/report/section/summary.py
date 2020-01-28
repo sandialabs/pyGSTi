@@ -55,13 +55,13 @@ class SummarySection(_Section):
         )
 
     @_Section.figure_factory()
-    def finalFitComparePlot(workspace, switchboard=None, estimate_labels=None, dataset_labels=None, comm=None,
+    def finalFitComparePlot(workspace, switchboard=None, est_labels=None, dataset_labels=None, comm=None,
                             **kwargs):
         # Build finalFitComparePlot
         # Don't display "Target" in model violation summary, as it's often
         # huge and messes up the plot scale.
-        est_inds_mt = [i for i, l in enumerate(estimate_labels) if l != "Target"]
-        est_lbls_mt = [estimate_labels[i] for i in est_inds_mt]  # "minus target"
+        est_inds_mt = [i for i, l in enumerate(est_labels) if l != "Target"]
+        est_lbls_mt = [est_labels[i] for i in est_inds_mt]  # "minus target"
         Nd = len(dataset_labels)
         Ne = len(est_inds_mt)
         grid_objective = switchboard.objective_modvi[0, 0]  # just take first one for now

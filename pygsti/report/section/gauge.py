@@ -29,7 +29,7 @@ class GaugeInvariantsGatesSection(_Section):
             'metricSwitchboard_gi': gi_switchboard,
             'metricSwitchboard_gr': gr_switchboard,
             **super().render(
-                self, workspace, gr_switchboard=gr_switchboard,
+                workspace, gr_switchboard=gr_switchboard,
                 gi_switchboard=gi_switchboard,
                 dataset_labels=dataset_labels, est_labels=est_labels,
                 embed_figures=embed_figures, **kwargs
@@ -107,14 +107,14 @@ class GaugeInvariantsGermsSection(_Section):
     @_Section.figure_factory(3)
     def bestGatesVsTargetTable_gigerms(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
-            switchboard.gsGIRep, switchboard.gsGIRepEP, _criGI(0, confidence_level, ci_brevity),
+            switchboard.gsGIRep, switchboard.gsGIRepEP, _criGI(0, switchboard, confidence_level, ci_brevity),
             display=('evdiamond', 'evnudiamond'), virtual_ops=switchboard.germs
         )
 
     @_Section.figure_factory(3)
     def bestGermsEvalTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GateEigenvalueTable(
-            switchboard.gsGIRep, switchboard.gsGIRepEP, _criGI(1, confidence_level, ci_brevity),
+            switchboard.gsGIRep, switchboard.gsGIRepEP, _criGI(1, switchboard, confidence_level, ci_brevity),
             display=('evals', 'target', 'absdiff-evals', 'infdiff-evals', 'log-evals', 'absdiff-log-evals'),
             virtual_ops=switchboard.germs
         )
@@ -133,7 +133,7 @@ class GaugeVariantSection(_Section):
         return {
             'metricSwitchboard_gv': gv_switchboard,
             **super().render(
-                self, workspace, gv_switchboard=gv_switchboard,
+                workspace, gv_switchboard=gv_switchboard,
                 dataset_labels=dataset_labels, est_labels=est_labels,
                 embed_figures=embed_figures, **kwargs
             )
@@ -142,20 +142,20 @@ class GaugeVariantSection(_Section):
     @_Section.figure_factory(4)
     def bestGatesetSpamVsTargetTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.SpamVsTargetTable(
-            switchboard.gsFinal, switchboard.gsTarget, _cri(1, confidence_level, ci_brevity)
+            switchboard.gsFinal, switchboard.gsTarget, _cri(1, switchboard, confidence_level, ci_brevity)
         )
 
     @_Section.figure_factory(4)
     def bestGatesVsTargetTable_gv(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
-            switchboard.gsFinal, switchboard.gsTarget, _cri(1, confidence_level, ci_brevity),
+            switchboard.gsFinal, switchboard.gsTarget, _cri(1, switchboard, confidence_level, ci_brevity),
             display=('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi')
         )
 
     @_Section.figure_factory(3)
     def bestGatesVsTargetTable_gvgerms(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
-            switchboard.gsFinal, switchboard.gsTarget, _cri(0, confidence_level, ci_brevity),
+            switchboard.gsFinal, switchboard.gsTarget, _cri(0, switchboard, confidence_level, ci_brevity),
             display=('inf', 'trace', 'nuinf'), virtual_ops=switchboard.germs
         )
 
@@ -185,13 +185,13 @@ class GaugeVariantsDecompSection(_Section):
     @_Section.figure_factory(4)
     def bestGatesetChoiEvalTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.ChoiTable(
-            switchboard.gsFinal, None, _cri(1, confidence_level, ci_brevity), display=('boxplot', 'barplot')
+            switchboard.gsFinal, None, _cri(1, switchboard, confidence_level, ci_brevity), display=('boxplot', 'barplot')
         )
 
     @_Section.figure_factory(4)
     def bestGatesetDecompTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GateDecompTable(
-            switchboard.gsFinal, switchboard.gsTarget, _cri(0, confidence_level, ci_brevity)
+            switchboard.gsFinal, switchboard.gsTarget, _cri(0, switchboard, confidence_level, ci_brevity)
         )
 
 
@@ -202,7 +202,7 @@ class GaugeVariantsErrGenSection(_Section):
     def bestGatesetErrGenBoxTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                   errgen_type='logGTi', **kwargs):
         return workspace.ErrgenTable(
-            switchboard.gsFinal, switchboard.gsTarget, _cri(1, confidence_level, ci_brevity),
+            switchboard.gsFinal, switchboard.gsTarget, _cri(1, switchboard, confidence_level, ci_brevity),
             ('errgen', 'H', 'S', 'A'), 'boxes', errgen_type
         )
 
@@ -218,14 +218,15 @@ class GaugeVariantsRawSection(_Section):
     @_Section.figure_factory(4)
     def bestGatesetGatesBoxTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GatesTable(
-            switchboard.gsTargetAndFinal, ['Target', 'Estimated'], 'boxes', _cri(1, confidence_level, ci_brevity)
+            switchboard.gsTargetAndFinal, ['Target', 'Estimated'], 'boxes',
+            _cri(1, switchboard, confidence_level, ci_brevity)
         )
 
     @_Section.figure_factory(4)
     def bestGatesetSpamBriefTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.SpamTable(
-            switchboard.gsTargetAndFinal, ['Target', 'Estimated'], 'boxes', _cri(1, confidence_level, ci_brevity),
-            includeHSVec=False
+            switchboard.gsTargetAndFinal, ['Target', 'Estimated'], 'boxes',
+            _cri(1, switchboard, confidence_level, ci_brevity), includeHSVec=False
         )
 
 
