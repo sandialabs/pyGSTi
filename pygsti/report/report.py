@@ -23,7 +23,7 @@ from ..objects import VerbosityPrinter as _VerbosityPrinter
 class Report:
     """ The internal model of a report.
 
-    This class should never be instantiated directly. instead, users
+    This class should never be instantiated directly. Instead, users
     should use the appropriate factory method in
     `pygsti.report.factory`.
 
@@ -39,19 +39,79 @@ class Report:
 
     def write_html(self, path, template_dir='~standard_html_report',
                    template_name='main.html', auto_open=False,
-                   link_to=None, embed_figures=True,
-                   render_options=None, single_file=False,
+                   link_to=None, connected=False, precision=None,
+                   resizable=True, autosize='initial',
+                   embed_figures=True, single_file=False,
                    verbosity=0):
         """ Write this report to the disk as a collection of HTML documents.
 
         Parameters
         ----------
-        path : path-like object
+        path : str or path-like object
             The filesystem path of a directory to write the report
             to. If the specified directory does not exist, it will be
-            created automatically.
+            created automatically
 
-        TODO docstring
+        templateDir : str, optional
+            Path to look for templates, relative to pyGSTi's `templates` directory.
+
+        templateName : str, optional
+            The entry-point template filename, relative to pyGSTi's `templates` directory.
+
+        auto_open : bool, optional
+            Whether the output file should be automatically opened in a web browser.
+
+        link_to : list, optional
+            If not None, a list of one or more items from the set
+            {"tex", "pdf", "pkl"} indicating whether or not to
+            create and include links to Latex, PDF, and Python pickle
+            files, respectively.
+
+        connected : bool, optional
+            Whether output HTML should assume an active internet connection.  If
+            True, then the resulting HTML file size will be reduced because it
+            will link to web resources (e.g. CDN libraries) instead of embedding
+            them.
+
+        precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the
+            precision for complex angles, numbers in scientific notation, and
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+        resizable : bool, optional
+            Whether plots and tables are made with resize handles and can be
+            resized within the report.
+
+        autosize : {'none', 'initial', 'continual'}
+            Whether tables and plots should be resized, either initially --
+            i.e. just upon first rendering (`"initial"`) -- or whenever
+            the browser window is resized (`"continual"`).
+
+        embed_figures : bool, optional
+            Whether figures should be embedded in the generated report. If
+            False, figures will be written to a 'figures' directory in the
+            output directory, and will be loaded dynamically via
+            AJAX. This may be useful for reducing the size of the
+            generated report if the report includes relatively many
+            figures.
+            Note that all major web browsers will block AJAX requests from
+            an HTML document loaded from the filesystem. If this option is
+            set to False, the generated report will fail to load from the
+            filesystem, and must be served up by a webserver. Python's
+            `http.server` module works fine.
+
+        single_file : bool, optional
+            If true, the report will be written to a single HTML
+            document, with external dependencies baked-in. This mode
+            is not recommended for large reports, because this file
+            can grow large enough that major web browsers may struggle
+            to render it.
+
+        verbosity : int, optional
+            Amount of detail to print to stdout.
         """
 
         # Render sections
@@ -61,28 +121,30 @@ class Report:
         for section in self.sections:
             section.render_html(global_qtys)
 
-        render_options = render_options or {}
-        precision = render_options.get('precision', None)
-        resizable = render_options.get('resizable', True)
-        autosize = render_options.get('autosize', 'initial')
-
         # TODO refactor all rendering into this method and section rendering methods
-        # TODO find a better solution than single-file mode
-        template_fn = _merge.merge_jinja_template if single_file else _merge.merge_jinja_template_dir
-        template_fn(
-            global_qtys, path, templateDir=template_dir,
-            templateName=template_name, auto_open=auto_open,
-            precision=precision, link_to=link_to, connected=False,
-            toggles=self._toggles, renderMath=True, resizable=resizable,
-            autosize=autosize, verbosity=verbosity
-        )
+        if single_file:
+            _merge.merge_jinja_template(
+                global_qtys, path, templateDir=template_dir,
+                templateName=template_name, auto_open=auto_open,
+                precision=precision, link_to=link_to, connected=connected,
+                toggles=self._toggles, renderMath=True, resizable=resizable,
+                autosize=autosize, verbosity=verbosity
+            )
+        else:
+            _merge.merge_jinja_template_dir(
+                global_qtys, path, templateDir=template_dir,
+                templateName=template_name, auto_open=auto_open,
+                precision=precision, link_to=link_to, connected=connected,
+                toggles=self._toggles, renderMath=True, resizable=resizable,
+                autosize=autosize, embed_figures=embed_figures, verbosity=verbosity
+            )
 
     def write_notebook(self, path, template_file=None):
         """ Write this report to the disk as an IPython notebook
 
         Parameters
         ----------
-        path : path-like object
+        path : str or path-like object
             The filesystem path to write the report to. By convention,
             this should use the `.ipynb` file extension.
         """
@@ -90,17 +152,44 @@ class Report:
         # TODO
 
     def write_pdf(self, path, template="standard_pdf_report.tex",
-                  precision=None, latex_cmd='pdflatex', latex_flags=None,
+                  latex_cmd='pdflatex', latex_flags=None, precision=None,
                   auto_open=False, comm=None, verbosity=0):
         """ Write this report to the disk as a PDF document.
 
         Parameters
         ----------
-        path : path-like object
+        path : str or path-like object
             The filesystem path to write the report to. By convention,
             this should use the `.pdf` file extension.
 
-        TODO docstring
+        template : str or path-like object, optional
+            The filesystem path of the LaTeX template to
+            fill. Relative to the pygsti template directoy.
+
+        latex_cmd : str, optional
+            Shell command to run to compile a PDF document from the
+            generated LaTeX source.
+
+        latex_flags : [str], optional
+            List of flags to pass when calling `latex_cmd`.
+
+        precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the
+            precision for complex angles, numbers in scientific notation, and
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+        auto_open : bool, optional
+            Whether the output file should be automatically opened in a web browser.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        verbosity : int, optional
+            Amount of detail to print to stdout.
         """
 
         printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)

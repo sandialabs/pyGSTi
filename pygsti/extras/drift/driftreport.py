@@ -594,16 +594,14 @@ def create_drift_report(results, gss, filename, title="auto",
         else:
             resizable = advancedOptions.get('resizable', True)
             autosize = advancedOptions.get('autosize', 'initial')
+            connected = advancedOptions.get('connected', False)
             embed_figures = advancedOptions.get('embed_figures', True)
             single_file = filename.endswith(".html")
 
             report.write_html(
-                filename, auto_open=auto_open, link_to=link_to,
-                embed_figures=embed_figures, render_options={
-                    'precision': precision,
-                    'resizable': resizable,
-                    'autosize': autosize
-                }, single_file=single_file, verbosity=verbosity
+                filename, auto_open=auto_open, link_to=link_to, connected=connected, precision=precision,
+                resizable=resizable, autosize=autosize, embed_figures=embed_figures, single_file=single_file,
+                verbosity=verbosity
             )
 
     return ws
