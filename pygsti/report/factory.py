@@ -267,6 +267,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("eff_ds", (0, 1))
     switchBd.add("modvi_ds", (0, 1))
     switchBd.add("wildcardBudget", (0, 1))
+    switchBd.add("wildcardBudgetOptional", (0, 1))
     switchBd.add("scaledSubMxsDict", (0, 1))
     switchBd.add("gsTarget", (0, 1))
     switchBd.add("params", (0, 1))
@@ -381,6 +382,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.eff_ds[d, i] = NA
                 switchBd.scaledSubMxsDict[d, i] = NA
 
+            switchBd.wildcardBudgetOptional[d, i] = est.parameters.get("unmodeled_error", None)
             if est.parameters.get("unmodeled_error", None):
                 switchBd.wildcardBudget[d, i] = est.parameters['unmodeled_error']
             else:
@@ -931,7 +933,7 @@ def create_standard_report(results, filename, title="auto",
     summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond'); wildcardBudget = None
     if toggles["ShowUnmodeledError"]:
         summary_display += ('unmodeled',)
-        wildcardBudget = switchBd.wildcardBudget
+        wildcardBudget = switchBd.wildcardBudgetOptional
     addqty(A, 'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
            display=summary_display, wildcard=wildcardBudget)
 

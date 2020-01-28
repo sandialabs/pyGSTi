@@ -419,6 +419,10 @@ class WildcardBudget(object):
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
 
+            if _np.min(qvec) < 0:
+                raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts *negative* "
+                                           "probabilities! (and %s predicts p=%.3g)" % (circ.str, _np.min(qvec))))
+
             initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
             if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 probs_out[elInds] = fvec  # _tools.matrixtools._fas(probs_out, (elInds,), fvec)
@@ -472,7 +476,6 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                import bpdb; bpdb.set_trace()
                 assert(False), "TVD should eventually reach zero (I think)!"
 
             #Now A,B,C are fixed to what they need to be for our given W

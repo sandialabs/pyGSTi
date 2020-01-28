@@ -780,7 +780,14 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     ret.add_estimate(target_model, mdl_start, mdl_lsgst_list, parameters, estlbl)
     profiler.add_time('%s: results initialization' % callerName, tRef); tRef = _time.time()
 
-    #Perform extra analysis if a bad fit was obtained
+    #Do final gauge optimization to *final* iteration result only
+    if gaugeopt_suite:
+        if gaugeopt_target is None: gaugeopt_target = target_model
+        add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
+                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
+        profiler.add_time('%s: gauge optimization' % callerName, tRef)
+
+    #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
     badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
     onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
     add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, opt_args, evaltree_cache, comm, memLimit, printer - 1)
@@ -790,13 +797,6 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     #   estimate label's "stdout" meta information
     if printer.is_recording():
         ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
-
-    #Do final gauge optimization to *final* iteration result only
-    if gaugeopt_suite:
-        if gaugeopt_target is None: gaugeopt_target = target_model
-        add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
-                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
-        profiler.add_time('%s: gauge optimization' % callerName, tRef)
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
@@ -825,7 +825,6 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     #Get gauge optimization dictionary
-    assert(not printer.is_recording()); printer.start_recording()
     gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
                                                       advanced_options, printer - 1)
 
@@ -865,12 +864,6 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
                     printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
                                 (goLabel, robust_est_label), 2)
                     results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
-
-    # Add gauge optimizations to end of any existing "stdout" meta info
-    if 'stdout' in results.estimates[base_est_label].meta:
-        results.estimates[base_est_label].meta['stdout'].extend(printer.stop_recording())
-    else:
-        results.estimates[base_est_label].meta['stdout'] = printer.stop_recording()
 
 
 def add_badfit_estimates(results, base_estimate_label="default", estimate_types=('wildcard',),
@@ -937,13 +930,13 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
         #Add gauge optimizations to the new estimate
         for gokey, gaugeOptParams in base_estimate.goparameters.items():
             if new_final_model is not None:
-                add_gauge_opt(results.estimates[base_estimate_label + '.' + badfit_typ], gaugeOptParams,
+                add_gauge_opt(results.estimates[base_estimate_label + '.' + badfit_typ], {gokey: gaugeOptParams},
                               target_model, new_final_model, comm, printer - 1)
             else:
                 # add same gauge-optimized result as above
                 go_gs_final = base_estimate.models[gokey]
                 results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
-                    gaugeOptParams.copy(), go_gs_final, None, comm, printer - 1)
+                    gaugeOptParams.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
 def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
@@ -1056,13 +1049,13 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
     twoDeltaLogL_terms = fitQty
     twoDeltaLogL = sum(twoDeltaLogL_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.get_primitive_op_labels(), add_spam=True,
-                                              start_budget=0.0)
+    budget = _wild.PrimitiveOpsWildcardBudget(model.get_primitive_op_labels() + model.get_primitive_instrument_labels(),
+                                              add_spam=True, start_budget=0.0)
 
     if twoDeltaLogL <= twoDeltaLogL_threshold \
        and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
         printer.log("No need to add budget!")
-        Wvec = _np.zeros(len(model.get_primitive_op_labels()), 'd')
+        Wvec = _np.zeros(len(model.get_primitive_op_labels()) + len(model.get_primitive_instrument_labels()), 'd')
     else:
         pci = parameters.get('probClipInterval', (-1e6, 1e6))
         min_p = parameters.get('minProbClip', 1e-4)
@@ -1071,11 +1064,12 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
         loglFn = _objfns.LogLFunction.simple_init(model, ds, circuitsToUse, min_p, pci, a,
                                                   poissonPicture=True, evaltree_cache=evaltree_cache,
                                                   comm=comm)
+        sqrt_dlogl_elements = loglFn.fn(model.to_vector())  # must evaluate loglFn before using it to init loglWCFn
         loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)
         nCircuits = len(circuitsToUse)
         dlogl_terms = _np.empty(nCircuits, 'd')
         # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
-        dlogl_elements = loglFn.fn(model.to_vector())**2
+        dlogl_elements = sqrt_dlogl_elements**2
         for i in range(nCircuits):
             dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
         print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
@@ -1134,8 +1128,8 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
 
             printer.log("  Trying eta = %g" % eta)
             nIters += 1
-
     #print("Wildcard budget found for Wvec = ",Wvec)
+    #print("FINAL Wildcard budget = ", str(budget))
     budget.from_vector(Wvec)
     printer.log(str(budget))
     return budget

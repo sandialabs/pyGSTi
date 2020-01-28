@@ -933,6 +933,7 @@ class GatesVsTargetTable(WorkspaceTable):
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         tooltips = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         for disp in display:
+            if disp == "unmodeled" and not wildcard: continue  # skip wildcard column if there is no wilcard info
             try:
                 heading, tooltip = _reportables.info_of_opfn_by_name(disp)
             except ValueError:
@@ -958,9 +959,10 @@ class GatesVsTargetTable(WorkspaceTable):
 
             for disp in display:
                 if disp == "unmodeled":  # a special case for now
-                    row_data.append(_objs.reportableqty.ReportableQty(
-                        wildcard.get_op_budget(gl)))
-                    continue
+                    if wildcard:
+                        row_data.append(_objs.reportableqty.ReportableQty(
+                            wildcard.get_op_budget(gl)))
+                    continue  # Note: don't append anything if 'not wildcard'
 
                 #import time as _time #DEBUG
                 #tStart = _time.time() #DEBUG
