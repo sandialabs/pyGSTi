@@ -61,7 +61,7 @@ class CliffordRBDesign(BenchmarkingDesign):
 
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
-                 verbosity=1, add_default_protocol=False):
+                 add_default_protocol=False, seed=None, verbosity=1):
         """
         Generates a "Clifford randomized benchmarking" (CRB) experiment, which is the RB protocol defined
         in "Scalable and robust randomized benchmarking of quantum processes", Magesan et al. PRL 106 180504 (2011).
@@ -130,6 +130,14 @@ class CliffordRBDesign(BenchmarkingDesign):
             A string describing the experiment generated, which will be stored in the returned
             dictionary.
 
+        add_default_protocol : bool, optional
+            Whether to add a default RB protocol to the experiment design, which can be run
+            later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+
+        seed : int, optional
+            A seed to initialize the random number generator used for creating random clifford
+            circuits.
+
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
 
@@ -140,6 +148,8 @@ class CliffordRBDesign(BenchmarkingDesign):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
+        if seed is not None:
+            _np.random.seed(seed)
 
         for lnum, l in enumerate(depths):
             if verbosity > 0:
@@ -178,7 +188,7 @@ class DirectRBDesign(BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
-                 verbosity=1, add_default_protocol=False):
+                 add_default_protocol=False, seed=None, verbosity=1):
         """
         Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
         arXiv:1807.07975 (2018).
@@ -287,6 +297,14 @@ class DirectRBDesign(BenchmarkingDesign):
         descriptor : str, optional
             A description of the experiment being generated. Stored in the output dictionary.
 
+        add_default_protocol : bool, optional
+            Whether to add a default RB protocol to the experiment design, which can be run
+            later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+
+        seed : int, optional
+            A seed to initialize the random number generator used for creating random clifford
+            circuits.
+
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
 
@@ -298,6 +316,8 @@ class DirectRBDesign(BenchmarkingDesign):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
+        if seed is not None:
+            _np.random.seed(seed)
 
         for lnum, l in enumerate(depths):
             if verbosity > 0:
