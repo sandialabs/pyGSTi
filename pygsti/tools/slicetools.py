@@ -145,8 +145,9 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
       an AssertionError is raised.
 
     require_contiguous : bool, optional
-      If True, then lst must correspond to a contiguous (step=1)
-      slice, or else an AssertionError is raised.
+      If True, then lst will only be converted to a contiguous (step=1)
+      slice, otherwise either a ValueError is raised (if `array_ok`
+      is False) or an array is returned.
 
     Returns
     -------
@@ -165,15 +166,17 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
 
     if len(lst) == 1: return slice(start, start + 1)
     step = lst[1] - lst[0]; stop = start + step * len(lst)
-    if require_contiguous:
-        assert(step == 1), "Slice must be contiguous!"
 
     if list(lst) == list(range(start, stop, step)):
+        if require_contiguous and step != 1:
+            if array_ok: return _np.array(lst, _np.int64)
+            else: raise ValueError("Slice must be contiguous (or array_ok must be True)!")
         if step == 1: step = None
         return slice(start, stop, step)
-
-    if array_ok: return _np.array(lst, _np.int64)
-    else: raise ValueError("List does not correspond to a slice!")
+    elif array_ok:
+        return _np.array(lst, _np.int64)
+    else:
+        raise ValueError("List does not correspond to a slice!")
 
 
 def as_array(slcOrListLike):
