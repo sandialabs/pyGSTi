@@ -14,33 +14,46 @@ from . import Section as _Section
 class InputSection(_Section):
     _HTML_TEMPLATE = 'tabs/Input.html'
 
-    def __init__(self, workspace, germs, dataset):
-        super().__init__({
-            'germList2ColTable': workspace.CircuitTable(germs, "Germ", nCols=2),
-            'datasetOverviewTable': workspace.DataSetOverviewTable(dataset),
-        })
-
-    def with_fiducial_list(self, workspace, fiducials):
-        self._quantities['fiducialListTable'] = workspace.CircuitTable(
-            fiducials, ["Prep.", "Measure"], commonTitle="Fiducials"
+    @_Section.figure_factory(2)
+    def fiducialListTable(workspace, switchboard=None, **kwargs):
+        return workspace.CircuitTable(
+            switchboard.strs, ["Prep.", "Measure"], commonTitle="Fiducials"
         )
-        return self
 
-    def with_target_gates_and_spam(self, workspace, target):
-        self._quantities['targetGatesBoxTable'] = workspace.GatesTable(target, display_as="boxes")
-        self._quantities['targetSpamBriefTable'] = workspace.SpamTable(
-            target, None, display_as='boxes', includeHSVec=False
+    @_Section.figure_factory(2)
+    def germList2ColTable(workspace, switchboard=None, **kwargs):
+        return workspace.CircuitTable(switchboard.germs, "Germ", nCols=2)
+
+    @_Section.figure_factory(2)
+    def datasetOverviewTable(workspace, switchboard=None, **kwargs):
+        return workspace.DataSetOverviewTable(switchboard.ds)
+
+    @_Section.figure_factory(2)
+    def targetGatesBoxTable(workspace, switchboard=None, **kwargs):
+        return workspace.GatesTable(switchboard.gsTarget, display_as="boxes")
+
+    @_Section.figure_factory(2)
+    def targetSpamBriefTable(workspace, switchboard=None, **kwargs):
+        return workspace.SpamTable(
+            switchboard.gsTarget, None, display_as='boxes', includeHSVec=False
         )
-        return self
 
 
 class MetaSection(_Section):
     _HTML_TEMPLATE = 'tabs/Meta.html'
 
-    def __init__(self, workspace, final_model, params, stdout, profiler):
-        super().__init__({
-            'metadataTable': workspace.MetadataTable(final_model, params),
-            'stdoutBlock': workspace.StdoutText(stdout),
-            'profilerTable': workspace.ProfilerTable(profiler),
-            'softwareEnvTable': workspace.SoftwareEnvTable()
-        })
+    @_Section.figure_factory(2)
+    def metadataTable(workspace, switchboard=None, **kwargs):
+        return workspace.MetadataTable(switchboard.gsFinal, switchboard.params)
+
+    @_Section.figure_factory(2)
+    def stdoutBlock(workspace, switchboard=None, **kwargs):
+        return workspace.StdoutText(switchboard.meta_stdout)
+
+    @_Section.figure_factory(2)
+    def profilerTable(workspace, switchboard=None, **kwargs):
+        return workspace.ProfilerTable(switchboard.profiler)
+
+    @_Section.figure_factory(2)
+    def softwareEnvTable(workspace, **kwargs):
+        return workspace.SoftwareEnvTable()

@@ -16,11 +16,47 @@ from .. import workspace as _ws
 class SummarySection(_Section):
     _HTML_TEMPLATE = 'tabs/Summary.html'
 
-    def __init__(self, workspace, dataset_labels, estimate_labels, Ls,
-                 switchboard, linlog_percentile,
-                 bgcolor, comm=None):
-        # TODO bgcolor really should not be needed until render time...
+    @_Section.figure_factory()
+    def progressBarPlot_sum(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+        return workspace.FitComparisonBarPlot(
+            Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
+            switchboard.modvi_ds, switchboard.objective_modvi,
+            'L', comm=comm
+        )
 
+    @_Section.figure_factory()
+    def bestEstimateColorHistogram(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
+                                   **kwargs):
+        return workspace.ColorBoxPlot(
+            switchboard.objective, switchboard.gss,
+            switchboard.modvi_ds, switchboard.gsL_modvi,
+            linlog_percentile / 100,
+            minProbClipForWeighting=switchboard.mpc_modvi,
+            typ='histogram', comm=comm, bgcolor=bgcolor
+        )
+
+    @_Section.figure_factory()
+    def bestGatesVsTargetTable_sum(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
+                                   show_unmodeled_error=False, **kwargs):
+        summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        wildcardBudget = None
+        if show_unmodeled_error:
+            summary_display += ('unmodeled',)
+            wildcardBudget = switchboard.wildcardBudget
+
+        if confidence_level is not None and ci_brevity <= 1:
+            cri = switchboard.cri
+        else:
+            cri = None
+
+        return workspace.GatesVsTargetTable(
+            switchboard.gsFinal, switchboard.gsTarget, cri,
+            summary_display, wildcardBudget
+        )
+
+    @_Section.figure_factory()
+    def finalFitComparePlot(workspace, switchboard=None, estimate_labels=None, dataset_labels=None, comm=None,
+                            **kwargs):
         # Build finalFitComparePlot
         # Don't display "Target" in model violation summary, as it's often
         # huge and messes up the plot scale.
@@ -39,7 +75,7 @@ class SummarySection(_Section):
             gssGrid = [[na_to_none(switchboard.gssFinal[i])] * Ne for i in range(Nd)]
             gsGrid = [[na_to_none(switchboard.gsL_modvi[d, i, -1]) for i in est_inds_mt]
                       for d in range(Nd)]
-            final_fit_comparison = workspace.FitComparisonBoxPlot(
+            return workspace.FitComparisonBoxPlot(
                 est_lbls_mt, dataset_labels, gssGrid, gsGrid, dsGrid, grid_objective, comm=comm
             )
         else:
@@ -49,34 +85,6 @@ class SummarySection(_Section):
                 gsGrid = [None for i in est_inds_mt]
             else:
                 gsGrid = [na_to_none(switchboard.gsL_modvi[0, i, -1]) for i in est_inds_mt]
-            final_fit_comparison = workspace.FitComparisonBarPlot(
+            return workspace.FitComparisonBarPlot(
                 est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate', comm=comm
             )
-
-        super().__init__({
-            'finalFitComparePlot': final_fit_comparison,
-            'progressBarPlot_sum': workspace.FitComparisonBarPlot(
-                Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
-                switchboard.modvi_ds, switchboard.objective_modvi,
-                'L', comm=comm
-            ),
-            'bestEstimateColorHistogram': workspace.ColorBoxPlot(
-                switchboard.objective, switchboard.gss,
-                switchboard.modvi_ds, switchboard.gsL_modvi,
-                linlog_percentile / 100,
-                minProbClipForWeighting=switchboard.mpc_modvi,
-                typ='histogram', comm=comm, bgcolor=bgcolor
-            )
-        })
-
-    def with_best_gates_vs_target(self, workspace, switchboard, cri, show_unmodeled_error):
-        summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
-        wildcardBudget = None
-        if show_unmodeled_error:
-            summary_display += ('unmodeled',)
-            wildcardBudget = switchboard.wildcardBudget
-        self._quantities['bestGatesVsTargetTable_sum'] = workspace.GatesVsTargetTable(
-            switchboard.gsFinal, switchboard.gsTarget, cri,
-            summary_display, wildcardBudget
-        )
-        return self

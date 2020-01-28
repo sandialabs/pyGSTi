@@ -1,4 +1,4 @@
-""" Help section """
+""" Idle Tomography section """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,11 +11,16 @@
 from . import Section as _Section
 
 
-class HelpSection(_Section):
-    _HTML_TEMPLATE = 'tabs/Help.html'
+class IdleTomographySection(_Section):
+    _HTML_TEMPLATE = 'tabs/IdleTomography.html'
 
     @_Section.figure_factory()
-    def exampleTable(workspace, switchboard, **kwargs):
-        example_table = workspace.ExampleTable()
-        example_table.set_render_options(click_to_display=True)
-        return example_table
+    def idtIntrinsicErrorsTable(workspace, switchboard=None, **kwargs):
+        return workspace.IdleTomographyIntrinsicErrorsTable(switchboard.idtresults)
+
+    @_Section.figure_factory(3)
+    def idtObservedRatesTable(workspace, switchboard=None, **kwargs):
+        # HARDCODED - show only top 20 rates
+        return workspace.IdleTomographyObservedRatesTable(
+            switchboard.idtresults, 20, switchboard.gsGIRep
+        )

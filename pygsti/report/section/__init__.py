@@ -18,8 +18,28 @@ class Section:
     """
     _HTML_TEMPLATE = None
 
-    def __init__(self, quantities):
-        self._quantities = quantities
+    @staticmethod
+    def figure_factory(brevity_limit=None):
+        """ Decorator to designate a method as a figure factory """
+        def decorator(fn):
+            fn.__figure_brevity_limit__ = brevity_limit
+            return fn
+        return decorator
+
+    def __init__(self, **kwargs):
+        self._figure_factories = {}
+
+        for name in dir(self.__class__):
+            member = getattr(self.__class__, name)
+            if hasattr(member, '__figure_brevity_limit__') and kwargs.get(name, True):
+                self._figure_factories[name] = member
+
+    def render(self, workspace, brevity=0, **kwargs):
+        return {
+            k: v(workspace, brevity=brevity, **kwargs)
+            for k, v in self._figure_factories.items()
+            if v.__figure_brevity_limit__ is None or brevity < v.__figure_brevity_limit__
+        }
 
     def render_html(self, global_qtys, bgcolor='white', workspace=None, comm=None):
         """ Render this section to HTML
@@ -68,5 +88,11 @@ class Section:
 from .summary import SummarySection
 from .help import HelpSection
 from .meta import InputSection, MetaSection
-# TODO
-# from .goodness import GoodnessSection, GoodnessColorBoxPlotSection, GoodnessScalingSection, GoodnessUnmodeledSection
+from .goodness import GoodnessSection, GoodnessColorBoxPlotSection, GoodnessScalingSection, GoodnessUnmodeledSection
+from .gauge import (
+    GaugeInvariantsGatesSection, GaugeInvariantsGermsSection,
+    GaugeVariantSection, GaugeVariantsDecompSection,
+    GaugeVariantsErrGenSection, GaugeVariantsRawSection
+)
+from .idle import IdleTomographySection
+from .datacomparison import DataComparisonSection
