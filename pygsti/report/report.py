@@ -13,16 +13,17 @@ import warnings as _warnings
 from pathlib import Path as _Path
 import shutil as _shutil
 from collections import defaultdict as _defaultdict, OrderedDict as _OrderedDict
+import pickle as _pickle
 
 from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from .. import _version, tools as _tools
 from ..objects import VerbosityPrinter as _VerbosityPrinter, ExplicitOpModel as _ExplicitOpModel
 from . import workspace as _ws
+from .notebook import Notebook as _Notebook
 
-ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]
 
-
+# TODO this whole thing needs to be rewritten with different reports as derived classes
 class Report:
     """ The internal model of a report.
 
@@ -186,16 +187,172 @@ class Report:
                 verbosity=verbosity
             )
 
-    def write_notebook(self, path):
+    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0):
         """ Write this report to the disk as an IPython notebook
+
+        A notebook report allows the user to interact more flexibly with the data
+        underlying the figures, and to easily generate customized variants on the
+        figures.  As such, this type of report will be most useful for experts
+        who want to tinker with the standard analysis presented in the static
+        HTML or LaTeX format reports.
 
         Parameters
         ----------
         path : str or path-like object
             The filesystem path to write the report to. By convention,
             this should use the `.ipynb` file extension.
+        auto_open : bool, optional
+            If True, automatically open the report in a web browser after it
+            has been generated.
+
+        connected : bool, optional
+            Whether output notebook should assume an active internet connection.  If
+            True, then the resulting file size will be reduced because it will link
+            to web resources (e.g. CDN libraries) instead of embedding them.
+
+        verbosity : int, optional
+           How much detail to send to stdout.
         """
-        pass  # TODO
+
+        # TODO this only applies to standard reports; rewrite generally
+        title = self._global_qtys['title']
+        confidenceLevel = self._report_params['confidence_level']
+
+        path = _Path(path)
+        printer = _VerbosityPrinter.build_printer(verbosity)
+        templatePath = _Path(__file__).parent / 'templates' / self._templates['notebook']
+        outputDir = path.parent
+
+        #Copy offline directory into position
+        if not connected:
+            _merge.rsync_offline_dir(outputDir)
+
+        #Save results to file
+        # basename = _os.path.splitext(_os.path.basename(filename))[0]
+        basename = path.stem
+        results_file_base = basename + '_results.pkl'
+        results_file = outputDir / results_file_base
+        with open(results_file, 'wb') as f:
+            _pickle.dump(self._results, f)
+
+        nb = _Notebook()
+        nb.add_markdown('# {title}\n(Created on {date})'.format(
+            title=title, date=_time.strftime("%B %d, %Y")))
+
+        nb.add_code("""\
+            import pickle
+            import pygsti""")
+
+        dsKeys = list(self._results.keys())
+        results = self._results[dsKeys[0]]
+        #Note: `results` is always a single Results obj from here down
+
+        nb.add_code("""\
+        #Load results dictionary
+        with open('{infile}', 'rb') as infile:
+            results_dict = pickle.load(infile)
+        print("Available dataset keys: ", ', '.join(results_dict.keys()))\
+        """.format(infile=results_file_base))
+
+        nb.add_code("""\
+        #Set which dataset should be used below
+        results = results_dict['{dsKey}']
+        print("Available estimates: ", ', '.join(results.estimates.keys()))\
+        """.format(dsKey=dsKeys[0]))
+
+        estLabels = list(results.estimates.keys())
+        estimate = results.estimates[estLabels[0]]
+        nb.add_code("""\
+        #Set which estimate is to be used below
+        estimate = results.estimates['{estLabel}']
+        print("Available gauge opts: ", ', '.join(estimate.goparameters.keys()))\
+        """.format(estLabel=estLabels[0]))
+
+        goLabels = list(estimate.goparameters.keys())
+        nb.add_code("""\
+            gopt      = '{goLabel}'
+            ds        = results.dataset
+
+            gssFinal  = results.circuit_structs['final']
+            Ls        = results.circuit_structs['final'].Ls
+            gssPerIter = results.circuit_structs['iteration'] #ALL_L
+
+            prepStrs = results.circuit_lists['prep fiducials']
+            effectStrs = results.circuit_lists['effect fiducials']
+            germs = results.circuit_lists['germs']
+            strs = (prepStrs, effectStrs)
+
+            params = estimate.parameters
+            objective = estimate.parameters['objective']
+            if objective == "logl":
+                mpc = estimate.parameters['minProbClip']
+            else:
+                mpc = estimate.parameters['minProbClipForWeighting']
+            clifford_compilation = estimate.parameters.get('clifford_compilation',None)
+
+            effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
+            scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
+
+            models       = estimate.models
+            mdl          = models[gopt] #FINAL
+            mdl_final    = models['final iteration estimate'] #ITER
+            target_model = models['target']
+            mdlPerIter   = models['iteration estimates']
+
+            mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
+
+            goparams = estimate.goparameters[gopt]
+
+            confidenceLevel = {CL}
+            if confidenceLevel is None:
+                cri = None
+            else:
+                crfactory = estimate.get_confidence_region_factory(gopt)
+                region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
+                cri = crfactory.view(abs(confidenceLevel), region_type)\
+        """.format(goLabel=goLabels[0], CL=confidenceLevel))
+
+        nb.add_code("""\
+            from pygsti.report import Workspace
+            ws = Workspace()
+            ws.init_notebook_mode(connected={conn}, autodisplay=True)\
+            """.format(conn=str(connected)))
+
+        nb.add_notebook_text_files([
+            templatePath / 'summary.txt',
+            templatePath / 'goodness.txt',
+            templatePath / 'gauge_invariant.txt',
+            templatePath / 'gauge_variant.txt'])
+
+        #Insert multi-dataset specific analysis
+        if len(dsKeys) > 1:
+            nb.add_markdown(('# Dataset comparisons\n'
+                             'This report contains information for more than one data set.'
+                             'This page shows comparisons between different data sets.'))
+
+            nb.add_code("""\
+            dslbl1 = '{dsLbl1}'
+            dslbl2 = '{dsLbl2}'
+            dscmp_gss = results_dict[dslbl1].circuit_structs['final']
+            ds1 = results_dict[dslbl1].dataset
+            ds2 = results_dict[dslbl2].dataset
+            dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+            """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
+            nb.add_notebook_text_files([
+                templatePath / 'data_comparison.txt'])
+
+        #Add reference material
+        nb.add_notebook_text_files([
+            templatePath / 'input.txt',
+            templatePath / 'meta.txt'])
+
+        printer.log("Report Notebook created as %s" % path)
+
+        if auto_open:
+            port = "auto" if auto_open is True else int(auto_open)
+            nb.launch(str(path), port=port)
+        else:
+            nb.save_to(str(path))
 
     def write_pdf(self, path, latex_cmd='pdflatex', latex_flags=None,
                   brevity=0, errgen_type='logGTi', ci_brevity=1,

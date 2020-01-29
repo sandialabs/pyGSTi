@@ -916,6 +916,7 @@ def create_nqnoise_report(results, filename, title="auto",
     return ws
 
 
+@_deprecated_fn('Report.write_notebook')
 def create_report_notebook(results, filename, title="auto",
                            confidenceLevel=None,
                            auto_open=False, connected=False, verbosity=0):
@@ -970,160 +971,13 @@ def create_report_notebook(results, filename, title="auto",
     Returns
     -------
     None
+
+    .. deprecated:: v0.9.9
+        `create_report_notebook` will be removed in the next major release of pyGSTi. It is replaced by
+        the `Report.write_notebook`
     """
-    printer = _VerbosityPrinter.build_printer(verbosity)
-    templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                 "templates", "report_notebook")
-    assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
-    outputDir = _os.path.dirname(filename)
-
-    #Copy offline directory into position
-    if not connected:
-        _merge.rsync_offline_dir(outputDir)
-
-    #Save results to file
-    basename = _os.path.splitext(_os.path.basename(filename))[0]
-    results_file_base = basename + '_results.pkl'
-    results_file = _os.path.join(outputDir, results_file_base)
-    with open(results_file, 'wb') as f:
-        _pickle.dump(results, f)
-
-    if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
-        title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        "as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi will has generated a random one"
-                        " for you: '{}'.").format(autoname))
-
-    nb = _Notebook()
-    nb.add_markdown('# {title}\n(Created on {date})'.format(
-        title=title, date=_time.strftime("%B %d, %Y")))
-
-    nb.add_code("""\
-        import pickle
-        import pygsti""")
-
-    if isinstance(results, dict):
-        dsKeys = list(results.keys())
-        results = results[dsKeys[0]]
-        #Note: `results` is always a single Results obj from here down
-
-        nb.add_code("""\
-        #Load results dictionary
-        with open('{infile}', 'rb') as infile:
-            results_dict = pickle.load(infile)
-        print("Available dataset keys: ", ', '.join(results_dict.keys()))\
-        """.format(infile=results_file_base))
-
-        nb.add_code("""\
-        #Set which dataset should be used below
-        results = results_dict['{dsKey}']
-        print("Available estimates: ", ', '.join(results.estimates.keys()))\
-        """.format(dsKey=dsKeys[0]))
-
-    else:
-        dsKeys = []
-        nb.add_code("""\
-        #Load results
-        with open('{infile}', 'rb') as infile:
-            results = pickle.load(infile)
-        print("Available estimates: ", ', '.join(results.estimates.keys()))\
-        """.format(infile=results_file_base))
-
-    estLabels = list(results.estimates.keys())
-    estimate = results.estimates[estLabels[0]]
-    nb.add_code("""\
-    #Set which estimate is to be used below
-    estimate = results.estimates['{estLabel}']
-    print("Available gauge opts: ", ', '.join(estimate.goparameters.keys()))\
-    """.format(estLabel=estLabels[0]))
-
-    goLabels = list(estimate.goparameters.keys())
-    nb.add_code("""\
-        gopt      = '{goLabel}'
-        ds        = results.dataset
-
-        gssFinal  = results.circuit_structs['final']
-        Ls        = results.circuit_structs['final'].Ls
-        gssPerIter = results.circuit_structs['iteration'] #ALL_L
-
-        prepStrs = results.circuit_lists['prep fiducials']
-        effectStrs = results.circuit_lists['effect fiducials']
-        germs = results.circuit_lists['germs']
-        strs = (prepStrs, effectStrs)
-
-        params = estimate.parameters
-        objective = estimate.parameters['objective']
-        if objective == "logl":
-            mpc = estimate.parameters['minProbClip']
-        else:
-            mpc = estimate.parameters['minProbClipForWeighting']
-        clifford_compilation = estimate.parameters.get('clifford_compilation',None)
-
-        effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
-        scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
-
-        models       = estimate.models
-        mdl          = models[gopt] #FINAL
-        mdl_final    = models['final iteration estimate'] #ITER
-        target_model = models['target']
-        mdlPerIter   = models['iteration estimates']
-
-        mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
-
-        goparams = estimate.goparameters[gopt]
-
-        confidenceLevel = {CL}
-        if confidenceLevel is None:
-            cri = None
-        else:
-            crfactory = estimate.get_confidence_region_factory(gopt)
-            region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
-            cri = crfactory.view(abs(confidenceLevel), region_type)\
-    """.format(goLabel=goLabels[0], CL=confidenceLevel))
-
-    nb.add_code("""\
-        from pygsti.report import Workspace
-        ws = Workspace()
-        ws.init_notebook_mode(connected={conn}, autodisplay=True)\
-        """.format(conn=str(connected)))
-
-    nb.add_notebook_text_files([
-        _os.path.join(templatePath, 'summary.txt'),
-        _os.path.join(templatePath, 'goodness.txt'),
-        _os.path.join(templatePath, 'gauge_invariant.txt'),
-        _os.path.join(templatePath, 'gauge_variant.txt')])
-
-    #Insert multi-dataset specific analysis
-    if len(dsKeys) > 1:
-        nb.add_markdown(('# Dataset comparisons\n'
-                         'This report contains information for more than one data set.'
-                         'This page shows comparisons between different data sets.'))
-
-        nb.add_code("""\
-        dslbl1 = '{dsLbl1}'
-        dslbl2 = '{dsLbl2}'
-        dscmp_gss = results_dict[dslbl1].circuit_structs['final']
-        ds1 = results_dict[dslbl1].dataset
-        ds2 = results_dict[dslbl2].dataset
-        dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
-        """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
-        nb.add_notebook_text_files([
-            _os.path.join(templatePath, 'data_comparison.txt')])
-
-    #Add reference material
-    nb.add_notebook_text_files([
-        _os.path.join(templatePath, 'input.txt'),
-        _os.path.join(templatePath, 'meta.txt')])
-
-    printer.log("Report Notebook created as %s" % filename)
-
-    if auto_open:
-        port = "auto" if auto_open is True else int(auto_open)
-        nb.launch(filename, port=port)
-    else:
-        nb.save_to(filename)
+    report = construct_standard_report(results, title=title, confidenceLevel=confidenceLevel, verbosity=verbosity)
+    report.write_notebook(filename, auto_open=auto_open, connected=connected, verbosity=verbosity)
 
 
 def find_std_clifford_compilation(model, verbosity=0):
@@ -1274,7 +1128,7 @@ def construct_standard_report(results, title="auto",
     if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
                           " specifying an int here because in older versions of pyGSTi"
-                          " the third argument to create_general_report was the"
+                          " the third argument to general_report was the"
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
@@ -1384,7 +1238,8 @@ def construct_standard_report(results, title="auto",
 
     templates = dict(
         html='~standard_html_report',
-        pdf='standard_pdf_report.tex'
+        pdf='standard_pdf_report.tex',
+        notebook='report_notebook'
     )
     return _Report(templates, results, sections, flags, global_qtys, report_params, workspace=ws)
 
