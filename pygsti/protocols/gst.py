@@ -930,8 +930,8 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
         #Add gauge optimizations to the new estimate
         for gokey, gaugeOptParams in base_estimate.goparameters.items():
             if new_final_model is not None:
-                add_gauge_opt(results.estimates[base_estimate_label + '.' + badfit_typ], {gokey: gaugeOptParams},
-                              target_model, new_final_model, comm, printer - 1)
+                add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gaugeOptParams},
+                              target_model, new_final_model, comm, None, printer - 1)
             else:
                 # add same gauge-optimized result as above
                 go_gs_final = base_estimate.models[gokey]
