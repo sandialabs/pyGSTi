@@ -23,6 +23,7 @@ from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from ..tools import internalgates as _itgs
 from ..tools import mpitools as _mpit
+from ..tools.legacytools import deprecated_fn as _deprecated_fn
 from ..objects import model as _mdl
 from ..objects import operation as _op
 from ..objects import opfactory as _opfactory
@@ -977,7 +978,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
     if prepLbl is None:
         prepLbl = model._shlp.get_default_prep_lbl()
     if effectLbls is None:
-        povmLbl = model._shlp.get_default_povm_lbl()
+        povmLbl = model._shlp.get_default_povm_lbl(sslbls=None)
         effectLbls = [_Lbl("%s_%s" % (povmLbl, l))
                       for l in model._shlp.get_effect_labels_for_povm(povmLbl)]
     if singleQfiducials is None:
@@ -2067,8 +2068,8 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
                                        sparse=False, verbosity=0, cache=None, idleOnly=False,
                                        idtPauliDicts=None, algorithm="greedy", comm=None):
 
-    from pygsti.construction import std1Q_XY  # the base model for 1Q gates
-    from pygsti.construction import std2Q_XYICNOT  # the base model for 2Q (CNOT) gate
+    from pygsti.modelpacks.legacy import std1Q_XY  # the base model for 1Q gates
+    from pygsti.modelpacks.legacy import std2Q_XYICNOT  # the base model for 2Q (CNOT) gate
 
     tgt1Q = std1Q_XY.target_model("static")
     tgt2Q = std2Q_XYICNOT.target_model("static")
@@ -3231,6 +3232,7 @@ def fidpairs_to_gatename_fidpair_list(fidpairs, nQubits):
     return gatename_fidpair_list
 
 
+@_deprecated_fn("the pre-build SMQ modelpacks under `pygsti.modelpacks`")
 def stdmodule_to_smqmodule(std_module):
     """
     Converts a pyGSTi "standard module" to a "standard multi-qubit module".
@@ -3251,12 +3253,12 @@ def stdmodule_to_smqmodule(std_module):
     module, and these typically begin with `"smq"` rather than `"std"`.
 
     Standard multi-qubit modules are *created* by this function.  For example,
-    If you want the multi-qubit version of `pygsti.construction.std1Q_XYI`
+    If you want the multi-qubit version of `pygsti.modelpacks.legacy.std1Q_XYI`
     you must:
 
-    1. import `std1Q_XYI` (`from pygsti.construction import std1Q_XYI`)
+    1. import `std1Q_XYI` (`from pygsti.modelpacks.legacy import std1Q_XYI`)
     2. call this function (i.e. `stdmodule_to_smqmodule(std1Q_XYI)`)
-    3. import `smq1Q_XYI` (`from pygsti.construction import smq1Q_XYI`)
+    3. import `smq1Q_XYI` (`from pygsti.modelpacks.legacy import smq1Q_XYI`)
 
     The `smq1Q_XYI` module will look just like the `std1Q_XYI` module but use
     multi-qubit labelling conventions.
@@ -3271,6 +3273,11 @@ def stdmodule_to_smqmodule(std_module):
     Module
        The new module, although it's better to import this using the appropriate
        "smq"-prefixed name as described above.
+
+    .. deprecated:: v0.9.9
+        `stdmodule_to_smqmodule` will be removed in future versions of
+        pyGSTi. Instead, import pre-built SMQ modelpacks directly from
+        `pygsti.modelpacks`.
     """
     from types import ModuleType as _ModuleType
     import sys as _sys

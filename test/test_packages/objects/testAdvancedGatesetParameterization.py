@@ -4,8 +4,8 @@ import pygsti
 import numpy as np
 import scipy.sparse as sps
 
-from pygsti.construction import std1Q_XYI
-from pygsti.construction import std2Q_XYICNOT
+from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.modelpacks.legacy import std2Q_XYICNOT
 from pygsti.objects import LindbladDenseOp, ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
 from pygsti.objects import LindbladOp
 

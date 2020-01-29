@@ -141,7 +141,7 @@ class CoreELGSTTester(CoreStdData, BaseCase):
         # XXX this doesn't look useful either
         all_min_errs, all_gs_exlgst_tups = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
-            [[mdl.tup for mdl in gsList] for gsList in self.elgstStrings],
+            [[cir.tup for cir in gsList] for gsList in self.elgstStrings],
             targetModel=self.model, svdTruncateTo=4,
             returnAll=True, returnErrorVec=True
         )
@@ -223,7 +223,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         mdl_lsgst = core.do_mc2gst(
             self.ds, aliased_model, aliased_list, minProbClipForWeighting=1e-4,
             probClipInterval=(-1e6, 1e6),
-            opLabelAliases={Label('GA1'): (Label('Gx'),)}
+            opLabelAliases={Label('GA1'): Circuit(['Gx'])}
         )
         # TODO assert correctness
 
@@ -362,7 +362,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         model = core.do_mlgst(
             self.ds, aliased_model, aliased_list, minProbClip=1e-4,
             probClipInterval=(-1e6, 1e6),
-            opLabelAliases={Label('GA1'): (Label('Gx'),)}
+            opLabelAliases={Label('GA1'): Circuit(['Gx'])}
         )
         # TODO assert correctness
 

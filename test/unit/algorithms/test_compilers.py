@@ -102,7 +102,7 @@ class CompileSymplecticSubsetTester(CompileSymplecticTester):
         super(CompileSymplecticSubsetTester, self).setUp()
         self.options.update(
             pspec=fixture_3Q.pspec,
-            subsetQs=['Q1', 'Q2'],
+            qubit_labels=['Q1', 'Q2'],
             iterations=2,
             algorithms=['BGGE', 'ROGGE', 'iAGvGE']
         )
@@ -139,7 +139,7 @@ class CompileClifford1QPspecTester(CompileClifford1QTester):
         super(CompileClifford1QPspecTester, self).setUp()
         self.options.update(
             pspec=fixture_2Q.pspec,
-            subsetQs=['Q1'],
+            qubit_labels=['Q1'],
             prefixpaulis=False,
             paulirandomize=True
         )
@@ -160,7 +160,7 @@ class CompileCliffordSubsetTester(CompileClifford2QTester):
         super(CompileCliffordSubsetTester, self).setUp()
         self.options.update(
             pspec=fixture_3Q.pspec,
-            subsetQs=['Q1', 'Q2'],
+            qubit_labels=['Q1', 'Q2'],
             prefixpaulis=True,
             paulirandomize=True
         )
@@ -197,7 +197,7 @@ class CompileCNOTCircuitBase(object):
         compiled = compilers.compile_cnot_circuit(
             fixture_2Q.cnot_circuit_sym,
             fixture_3Q.pspec,
-            subsetQs=fixture_2Q.qubit_labels,
+            qubit_labels=fixture_2Q.qubit_labels,
             algorithm=self.algorithm,
             aargs=self.aargs
         )
@@ -320,7 +320,7 @@ class CompileStabilizer1QSubsetTester(CompileStabilizerCOCAGE1QTester):
         super(CompileStabilizer1QSubsetTester, self).setUp()
         self.options.update(
             pspec=fixture_3Q.pspec,
-            subsetQs=['Q1', ],
+            qubit_labels=['Q1', ],
             algorithm='COiCAGE',
             paulirandomize=False
         )
@@ -331,5 +331,5 @@ class CompileStabilizer2QSubsetTester(CompileStabilizer1QSubsetTester):
         super(CompileStabilizer2QSubsetTester, self).setUp()
         self.fixture = fixture_2Q
         self.options.update(
-            subsetQs=['Q1', 'Q2']
+            qubit_labels=['Q1', 'Q2']
         )

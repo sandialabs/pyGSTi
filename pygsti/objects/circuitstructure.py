@@ -85,14 +85,14 @@ class CircuitPlaquette(object):
         new_fidpairs = [] if (self.fidpairs is not None) else None
         for k, (i, j, s) in enumerate(self.elements):
             s2 = s if (self.aliases is None) else \
-                _lt.find_replace_tuple(s, self.aliases)
+                s.replace_layers_with_aliases(self.aliases)
 
             if new_fidpairs:
                 prep, effect = self.fidpairs[k]
                 prep2 = prep if (self.aliases is None) else \
-                    _lt.find_replace_tuple(prep, self.aliases)
+                    prep.replace_layers_with_aliases(self.aliases)
                 effect2 = effect if (self.aliases is None) else \
-                    _lt.find_replace_tuple(effect, self.aliases)
+                    effect.replace_layers_with_aliases(self.aliases)
 
             if dsFilter is None or s2 in dsFilter:
                 new_elements.append((i, j, s2))

@@ -2,7 +2,7 @@
 from ..util import Namespace
 
 import pygsti
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 
 ns = Namespace()
 ns.model = std.target_model()

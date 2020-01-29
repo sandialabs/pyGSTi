@@ -130,11 +130,11 @@ class Results(object):
         finalStruct = self.circuit_structs['final']
         if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
             self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
-            self.circuit_lists['effect fiducials'] = finalStruct.effectStrs
+            self.circuit_lists['meas fiducials'] = finalStruct.effectStrs
             self.circuit_lists['germs'] = finalStruct.germs
         else:
             self.circuit_lists['prep fiducials'] = []
-            self.circuit_lists['effect fiducials'] = []
+            self.circuit_lists['meas fiducials'] = []
             self.circuit_lists['germs'] = []
 
     def add_estimates(self, results, estimatesToAdd=None):

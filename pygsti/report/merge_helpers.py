@@ -21,6 +21,11 @@ from pathlib import Path
 from ..tools import timed_block as _timed_block
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
+try:
+    from jinja2.runtime import Undefined as _jinja_undefined
+except ImportError:
+    _jinja_undefined = ()
+
 
 def read_contents(filename):
     """
@@ -267,6 +272,8 @@ def _render_as_html(value, render_options, link_to):
     """
     if isinstance(value, str):
         html = value
+    elif isinstance(value, _jinja_undefined):
+        html = "OMITTED"
     else:
         if hasattr(value, 'set_render_options'):
             value.set_render_options(**render_options)

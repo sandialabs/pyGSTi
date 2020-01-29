@@ -2383,7 +2383,7 @@ class WorkspacePlot(WorkspaceOutput):
                         lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
-                        rel_figure_dir=_os.path.basename(output_dir) if (output_dir is not None) else None)
+                        rel_figure_dir=_os.path.basename(output_dir) if not (output_dir in (None, False)) else None)
 
                 if switched_item_mode == 'separate files':
                     assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file

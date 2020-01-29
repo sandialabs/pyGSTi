@@ -9,7 +9,7 @@ from ..testutils import BaseTestCase
 
 class CircuitTestCase(BaseTestCase):
     def test_simulate_circuitlabels(self):
-        from pygsti.construction import std1Q_XYI
+        from pygsti.modelpacks.legacy import std1Q_XYI
 
         pygsti.obj.Circuit.default_expand_subcircuits = False # so mult/exponentiation => CircuitLabels
 
@@ -37,7 +37,7 @@ class CircuitTestCase(BaseTestCase):
     def test_replace_with_idling_line(self):
         c = pygsti.obj.Circuit( [('Gcnot',0,1)], editable=True)
         c.replace_with_idling_line(0)
-        self.assertEqual(c, ((),))
+        self.assertEqual(c.layertup, ((),))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

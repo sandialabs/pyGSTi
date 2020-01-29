@@ -35,6 +35,7 @@ from . import Report as _Report
 from . import section as _section
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
+from ..modelpacks import RBModelPack as _RBModelPack
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]
@@ -234,6 +235,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("eff_ds", (0, 1))
     switchBd.add("modvi_ds", (0, 1))
     switchBd.add("wildcardBudget", (0, 1))
+    switchBd.add("wildcardBudgetOptional", (0, 1))
     switchBd.add("scaledSubMxsDict", (0, 1))
     switchBd.add("gsTarget", (0, 1))
     switchBd.add("params", (0, 1))
@@ -272,9 +274,9 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
         switchBd.ds[d] = results.dataset
         switchBd.prepStrs[d] = results.circuit_lists['prep fiducials']
-        switchBd.effectStrs[d] = results.circuit_lists['effect fiducials']
+        switchBd.effectStrs[d] = results.circuit_lists['meas fiducials']
         switchBd.strs[d] = (results.circuit_lists['prep fiducials'],
-                            results.circuit_lists['effect fiducials'])
+                            results.circuit_lists['meas fiducials'])
         switchBd.germs[d] = results.circuit_lists['germs']
 
         switchBd.gssFinal[d] = results.circuit_structs['final']
@@ -348,6 +350,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.eff_ds[d, i] = NA
                 switchBd.scaledSubMxsDict[d, i] = NA
 
+            switchBd.wildcardBudgetOptional[d, i] = est.parameters.get("unmodeled_error", None)
             if est.parameters.get("unmodeled_error", None):
                 switchBd.wildcardBudget[d, i] = est.parameters['unmodeled_error']
             else:
@@ -1002,26 +1005,27 @@ def find_std_clifford_compilation(model, verbosity=0):
     if not isinstance(model, _objs.ExplicitOpModel):
         return None  # only match explicit models
 
-    std_modules = ("std1Q_XY",
-                   "std1Q_XYI",
-                   "std1Q_XYZI",
-                   "std1Q_XZ",
-                   "std1Q_ZN",
-                   "std1Q_pi4_pi2_XZ",
-                   "std2Q_XXII",
-                   "std2Q_XXYYII",
-                   "std2Q_XY",
-                   "std2Q_XYCNOT",
-                   "std2Q_XYCPHASE",
-                   "std2Q_XYI",
-                   "std2Q_XYI1",
-                   "std2Q_XYI2",
-                   "std2Q_XYICNOT",
-                   "std2Q_XYICPHASE",
-                   "std2Q_XYZICNOT")
     import importlib
-    for module_name in std_modules:
-        mod = importlib.import_module("pygsti.construction." + module_name)
+
+    legacy_std_modules = ("std1Q_XY",
+                          "std1Q_XYI",
+                          "std1Q_XYZI",
+                          "std1Q_XZ",
+                          "std1Q_ZN",
+                          "std1Q_pi4_pi2_XZ",
+                          "std2Q_XXII",
+                          "std2Q_XXYYII",
+                          "std2Q_XY",
+                          "std2Q_XYCNOT",
+                          "std2Q_XYCPHASE",
+                          "std2Q_XYI",
+                          "std2Q_XYI1",
+                          "std2Q_XYI2",
+                          "std2Q_XYICNOT",
+                          "std2Q_XYICPHASE",
+                          "std2Q_XYZICNOT")
+    for module_name in legacy_std_modules:
+        mod = importlib.import_module("pygsti.modelpacks.legacy." + module_name)
         target_model = mod.target_model()
         if target_model.dim == model.dim and \
            set(target_model.operations.keys()) == set(model.operations.keys()) and \
@@ -1031,6 +1035,39 @@ def find_std_clifford_compilation(model, verbosity=0):
                 if hasattr(mod, "clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation
+
+    smq_modules = ("smq1Q_XY",
+                   "smq1Q_XYI",
+                   "smq1Q_XYZI",
+                   "smq1Q_XZ",
+                   "smq1Q_ZN",
+                   "smq1Q_pi4_pi2_XZ",
+                   "smq2Q_XXII",
+                   "smq2Q_XXYYII",
+                   "smq2Q_XY",
+                   "smq2Q_XYCNOT",
+                   "smq2Q_XYCPHASE",
+                   "smq2Q_XYI",
+                   "smq2Q_XYI1",
+                   "smq2Q_XYI2",
+                   "smq2Q_XYICNOT",
+                   "smq2Q_XYICPHASE",
+                   "smq2Q_XYZICNOT")
+    for module_name in smq_modules:
+        mod = importlib.import_module("pygsti.modelpacks." + module_name)
+        qubit_labels = model.state_space_labels.labels[0]  # this usually gets the qubit labels
+        if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
+
+        target_model = mod.target_model(qubit_labels=qubit_labels)
+        if target_model.dim == model.dim and \
+           set(target_model.operations.keys()) == set(model.operations.keys()) and \
+           set(target_model.preps.keys()) == set(model.preps.keys()) and \
+           set(target_model.povms.keys()) == set(model.povms.keys()):
+            if target_model.frobeniusdist(model) < 1e-6:
+                if isinstance(mod, _RBModelPack):
+                    printer.log("Found standard clifford compilation from %s" % module_name)
+                    return mod.clifford_compilation(qubit_labels)
+
     return None
 
 

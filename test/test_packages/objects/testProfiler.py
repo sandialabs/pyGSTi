@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 import time
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 import pygsti.construction as pc
 from pygsti.objects import profiler
 

@@ -15,13 +15,16 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     if '@' in code:  # format:  <string>@<line_labels>
         code, labels = code.split('@')
         labels = labels.strip("( )")  # remove opening and closing parenthesis
-        def process(x): return int(x) if x.strip().isdigit() else x.strip()
-        labels = tuple(map(process, labels.split(',')))
+        if len(labels) > 0:
+            def process(x): return int(x) if x.strip().isdigit() else x.strip()
+            labels = tuple(map(process, labels.split(',')))
+        else:
+            labels = ()  # no labels
     else:
         labels = None
 
     result = []
-    code = code.replace('*', '')
+    code = code.replace('*', '')  # multiplication is implicit (no need for '*' ops)
     i = 0; end = len(code); segment = 0
 
     while(True):

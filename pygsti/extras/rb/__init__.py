@@ -8,11 +8,6 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import group
-from . import theory
-from . import sample
-from . import io
 from . import dataset
 from .benchmarker import Benchmarker
 from . import simulate
-from . import analysis

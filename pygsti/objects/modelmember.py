@@ -277,6 +277,7 @@ class ModelMember(ModelChild):
                 all_gpindices.extend(subm.gpindices_as_array())
 
             _lt.remove_duplicates_in_place(all_gpindices)  # in case multiple submembers have the same params
+            all_gpindices.sort()
 
             #Then just set the gpindices of this member to those used by
             # its submembers - assume this object doesn't need to allocate any
@@ -287,7 +288,7 @@ class ModelMember(ModelChild):
             # object, not the submembers as this is already done above.
             memo.add(id(self))  # would have been called in a proper set_gpindices call
             self._set_only_my_gpindices(
-                _slct.list_to_slice(all_gpindices, array_ok=True, require_contiguous=False),
+                _slct.list_to_slice(all_gpindices, array_ok=True, require_contiguous=True),
                 parent)
             return tot_new_params
 

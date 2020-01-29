@@ -7,7 +7,7 @@ import numpy as np
 from .mpinoseutils import *
 
 import pygsti
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects import profiler
 
 g_maxLengths = [1,2,4,8]
@@ -106,7 +106,7 @@ def create_fake_dataset(comm):
 
 @mpitest(4)
 def test_MPI_products(comm):
-
+    assert(comm.Get_size() == 4)
     #Create some model
     mdl = std.target_model()
 
@@ -509,7 +509,7 @@ def test_MPI_fills(comm):
 def test_MPI_compute_cache(comm):
     #try to run hard-to-reach cases where there are lots of processors compared to
     # the number of elements being computed:
-    from pygsti.construction import std1Q_XY #nice b/c only 2 gates
+    from pygsti.modelpacks.legacy import std1Q_XY #nice b/c only 2 gates
 
     #Create some model
     mdl = std.target_model()
@@ -804,7 +804,7 @@ def test_MPI_derivcols(comm):
 
 @mpitest(4)
 def test_run1Q_end2end(comm):
-    from pygsti.construction import std1Q_XYI
+    from pygsti.modelpacks.legacy import std1Q_XYI
     target_model = std1Q_XYI.target_model()
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs

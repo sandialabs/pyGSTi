@@ -6,7 +6,7 @@ import pygsti
 import os
 import shutil
 import subprocess
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..testutils import compare_files, temp_files
 
 import numpy as np
@@ -163,80 +163,29 @@ class TestReport(ReportBaseCase):
     def test_inline_template(self):
         #Generate some results (quickly)
         mdl_tgt = std.target_model()
-        mdl_datagen = mdl_tgt.depolarize(op_noise=0.01,spam_noise=0.01)
-        circuits = pygsti.construction.make_lsgst_experiment_list(
-            mdl_tgt, std.fiducials, std.fiducials, std.germs,[1])
-        ds = pygsti.construction.generate_fake_data(
-            mdl_datagen, circuits, nSamples=10000, sampleError='round')
-        mdl_test = mdl_tgt.depolarize(op_noise=0.01,spam_noise=0.01)
-        results = pygsti.do_model_test(mdl_test, ds, mdl_tgt, std.fiducials, std.fiducials, std.germs, [1])
 
         #Mimic factory report creation to test "inline" rendering of switchboards, tables, and figures:
         qtys = {}
         qtys['title'] = "Test Inline Report"
         qtys['date'] = "THE DATE"
-        qtys['confidenceLevel'] = "NOT-SET"
-        qtys['linlg_pcntle'] = "95"
-        qtys['linlg_pcntle_inv'] = "5"
-        #qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
-
         qtys['pdfinfo'] = "PDFINFO"
 
-        # Generate Switchboard
         ws = pygsti.report.Workspace()
         printer = pygsti.obj.VerbosityPrinter(1)
-        switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-            pygsti.report.factory._create_master_switchboard(ws, {'MyTest': results}, None, 10,
-                                                             printer, 'html', False)
-
-        gsTgt = switchBd.gsTarget
-        ds = switchBd.ds
-        eff_ds = switchBd.eff_ds
-        modvi_ds = switchBd.modvi_ds
-        prepStrs = switchBd.prepStrs
-        effectStrs = switchBd.effectStrs
-        germs = switchBd.germs
-        strs = switchBd.strs
-        cliffcomp = switchBd.clifford_compilation
-
-        def addqty(b, name, fn, *args, **kwargs):
-            qtys[name] = fn(*args, **kwargs)
-
-        addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
-        addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
-        addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
-
-        gsFinal = switchBd.gsFinal
-        gsGIRep = switchBd.gsGIRep
-        gsEP = switchBd.gsGIRepEP
-        cri = None
-
-        addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
-               ['Target','Estimated'], cri )
-        addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-               ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
-        addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
-        addqty(4,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
-        addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
-               ['Target','Estimated'], "boxes", cri)
-
-        # Generate plots
-        addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+        qtys['targetGatesBoxTable'] = ws.GatesTable(mdl_tgt, display_as="boxes")
 
         # 3) populate template file => report file
-        templateFile = "../../../../test/test_packages/cmp_chk_files/report_dashboard_template.html"
-          # trickery to use a template in nonstadard location
         linkto = ()
-        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+        if bLatex: linkto = ('tex', 'pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
         if bPandas: linkto = ('pkl',) + linkto
         toggles = {'CompareDatasets': False, 'ShowScaling': False, 'CombineRobust': True }
         if os.path.exists(temp_files + "/inline_report.html.files"):
             shutil.rmtree(temp_files + "/inline_report.html.files") #clear figures directory
-        pygsti.report.merge_helpers.merge_html_template(qtys, templateFile, temp_files + "/inline_report.html",
-                                                        auto_open=False, precision=None, link_to=linkto,
-                                                        connected=False, toggles=toggles, renderMath=True,
-                                                        resizable=True, autosize='none', verbosity=printer)
-
+        pygsti.report.merge_helpers.merge_jinja_template(qtys, temp_files + "/inline_report.html",
+                                                         templateDir=compare_files, templateName="report_dashboard_template.html",
+                                                         auto_open=False, precision=None, link_to=linkto,
+                                                         connected=False, toggles=toggles, renderMath=True,
+                                                         resizable=True, autosize='none', verbosity=printer)
 
     def test_table_formatting(self):
         vec = np.array( [1.0,2.0,3.0] )
@@ -353,9 +302,9 @@ class TestReport(ReportBaseCase):
         mh.makeEmptyDir(dirname)
 
 
-        # ---- fill_std_qtys ----
-        qtys = {}
-        mh.fill_std_qtys(qtys, connected=True, renderMath=True, CSSnames=[]) #test connected=True case
+        # ---- fill_std_qtys ---- Not a function anymore
+        #qtys = {}
+        #mh.fill_std_qtys(qtys, connected=True, renderMath=True, CSSnames=[]) #test connected=True case HERE
 
         # ---- evaluate_call ----
         printer = pygsti.obj.VerbosityPrinter(1)

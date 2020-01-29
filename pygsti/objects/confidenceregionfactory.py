@@ -223,8 +223,7 @@ class ConfidenceRegionFactory(object):
         assert(useFreqWt is False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
         #Expand operation label aliases used in DataSet lookups
-        ds_circuit_list = _tools.find_replace_tuple_list(
-            circuit_list, aliases)
+        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
 
         nModelParams = model.num_nongauge_params()
         nDataParams = dataset.get_degrees_of_freedom(ds_circuit_list)

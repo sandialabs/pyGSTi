@@ -1,7 +1,8 @@
 from ..util import BaseCase
 
 from pygsti.objects import Circuit, Label, DataSet
-from pygsti.construction import stdlists, std1Q_XY, circuitconstruction as cc
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.construction import stdlists, circuitconstruction as cc
 
 
 class StdListTester(BaseCase):

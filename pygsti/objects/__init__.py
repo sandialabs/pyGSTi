@@ -56,6 +56,7 @@ from .povm import UnconstrainedPOVM
 from .povm import TensorProdPOVM
 from .povm import ComputationalBasisPOVM
 from .povm import LindbladPOVM
+from .povm import MarginalizedPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 from .opfactory import OpFactory

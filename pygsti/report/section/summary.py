@@ -42,7 +42,7 @@ class SummarySection(_Section):
         wildcardBudget = None
         if show_unmodeled_error:
             summary_display += ('unmodeled',)
-            wildcardBudget = switchboard.wildcardBudget
+            wildcardBudget = switchboard.wildcardBudgetOptional
 
         if confidence_level is not None and ci_brevity <= 1:
             cri = switchboard.cri

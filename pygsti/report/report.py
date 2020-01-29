@@ -170,6 +170,8 @@ class Report:
         ))
 
         if single_file:
+            assert(embed_figures), \
+                "Single-file mode requires `embed_figures` to be True"
             _merge.merge_jinja_template(
                 qtys, path, templateDir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
@@ -278,7 +280,7 @@ class Report:
             gssPerIter = results.circuit_structs['iteration'] #ALL_L
 
             prepStrs = results.circuit_lists['prep fiducials']
-            effectStrs = results.circuit_lists['effect fiducials']
+            effectStrs = results.circuit_lists['meas fiducials']
             germs = results.circuit_lists['germs']
             strs = (prepStrs, effectStrs)
 

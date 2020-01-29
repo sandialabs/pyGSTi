@@ -13,6 +13,7 @@
 from .circuitparser import CircuitParser
 from .loaders import *
 from .writers import *
+from .metadir import *
 from .stdinput import *
 from . import json
 from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling

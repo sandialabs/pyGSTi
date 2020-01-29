@@ -3,7 +3,7 @@ from . import fixtures as pkg
 
 from pygsti.tools import likelihoodfns as lfn
 from pygsti.objects.dataset import DataSet
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti import construction
 
 

@@ -17,6 +17,7 @@ import pickle as _pickle
 import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
+from .. import protocols as _proto
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import objects as _objs
@@ -36,6 +37,593 @@ def do_model_test(modelFilenameOrObj,
                   germsListOrFilename, maxLengths, gaugeOptParams=None,
                   advancedOptions=None, comm=None, memLimit=None,
                   output_pkl=None, verbosity=2):
+    """
+    Tests a Model model against a DataSet using a specific set of structured
+    operation sequences (given by fiducials, maxLengths and germs).
+
+    Constructs operation sequences by repeating germ strings an integer number of
+    times such that the length of the repeated germ is less than or equal to
+    the maximum length set in maxLengths.  Each string thus constructed is
+    sandwiched between all pairs of (prep, effect) fiducial sequences.
+
+    `themodel` is used directly (without any optimization) as the
+    the model estimate at each maximum-length "iteration".  The model
+    is given a trivial `default_gauge_group` so that it is not altered
+    during any gauge optimization step.
+
+    A :class:`~pygsti.report.Results` object is returned, which encapsulates
+    the model estimate and related parameters, and can be used with
+    report-generation routines.
+    Parameters
+    ----------
+    modelFilenameOrObj : Model or string
+        The model model, specified either directly or by the filename of a
+        model file (text format).
+
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetModelFilenameOrObj : Model or string
+        The target model, specified either directly or by the filename of a
+        model file (text format).
+
+    prepStrsListOrFilename : (list of Circuits) or string
+        The state preparation fiducial operation sequences, specified either directly
+        or by the filename of a operation sequence list file (text format).
+
+    effectStrsListOrFilename : (list of Circuits) or string or None
+        The measurement fiducial operation sequences, specified either directly or by
+        the filename of a operation sequence list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    germsListOrFilename : (list of Circuits) or string
+        The germ operation sequences, specified either directly or by the filename of a
+        operation sequence list file (text format).
+
+    maxLengths : list of ints
+        List of integers, one per LSGST iteration, which set truncation lengths
+        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        iteration includes the repeated germs truncated to the L-values *up to*
+        and including the i-th one.
+
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `model`
+        argument, which is specified internally.  The `targetModel` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+
+    Returns
+    -------
+    Results
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
+                                          prepStrsListOrFilename, effectStrsListOrFilename,
+                                          germsListOrFilename, maxLengths, verbosity=printer)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    data = _proto.ProtocolData(exp_design, ds)
+
+    gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    proto = _proto.ModelTest(_load_model(modelFilenameOrObj), None, gopt_suite, None,
+                             advancedOptions, comm, memLimit, output_pkl, printer)
+    return proto.run(data)
+
+
+def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
+                  prepStrsListOrFilename, effectStrsListOrFilename,
+                  gaugeOptParams=None, advancedOptions=None, comm=None,
+                  memLimit=None, output_pkl=None, verbosity=2):
+    """
+    Perform Linear Gate Set Tomography (LGST).
+
+    This function differs from the lower level :function:`do_lgst` function
+    in that it may perform a post-LGST gauge optimization and this routine
+    returns a :class:`Results` object containing the LGST estimate.
+
+    Overall, this is a high-level driver routine which can be used similarly
+    to :function:`do_long_sequence_gst`  whereas `do_lgst` is a low-level
+    routine used when building your own algorithms.
+
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetModelFilenameOrObj : Model or string
+        The target model, specified either directly or by the filename of a
+        model file (text format).
+
+    prepStrsListOrFilename : (list of Circuits) or string
+        The state preparation fiducial operation sequences, specified either directly
+        or by the filename of a operation sequence list file (text format).
+
+    effectStrsListOrFilename : (list of Circuits) or string or None
+        The measurement fiducial operation sequences, specified either directly or by
+        the filename of a operation sequence list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `model`
+        argument, which is specified internally.  The `targetModel` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  See
+        :function:`do_long_sequence_gst`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.  In this LGST case, this is just the gauge
+        optimization.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+
+    Returns
+    -------
+    Results
+    """
+    raise NotImplementedError("The LGST protocol has not been updated yet - please use `legacy_do_linear_gst` for now.")
+
+
+def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
+                         prepStrsListOrFilename, effectStrsListOrFilename,
+                         germsListOrFilename, maxLengths, gaugeOptParams=None,
+                         advancedOptions=None, comm=None, memLimit=None,
+                         output_pkl=None, verbosity=2):
+    """
+    Perform end-to-end GST analysis using Ls and germs, with L as a maximum
+    length.
+
+    Constructs operation sequences by repeating germ strings an integer number of
+    times such that the length of the repeated germ is less than or equal to
+    the maximum length set in maxLengths.  The LGST estimate of the gates is
+    computed, gauge optimized, and then used as the seed for either LSGST or
+    MLEGST.
+    LSGST is iterated ``len(maxLengths)`` times with successively larger sets
+    of operation sequences.  On the i-th iteration, the repeated germs sequences
+    limited by ``maxLengths[i]`` are included in the growing set of strings
+    used by LSGST.  The final iteration will use MLEGST when ``objective ==
+    "logl"`` to maximize the true log-likelihood instead of minimizing the
+    chi-squared function.
+    Once computed, the model estimates are optionally gauge optimized to
+    the CPTP space and then to the target model (using `gaugeOptRatio`
+    and `gaugeOptItemWeights`). A :class:`~pygsti.report.Results`
+    object is returned, which encapsulates the input and outputs of this GST
+    analysis, and can generate final end-user output such as reports and
+    presentations.
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetModelFilenameOrObj : Model or string
+        The target model, specified either directly or by the filename of a
+        model file (text format).
+
+    prepStrsListOrFilename : (list of Circuits) or string
+        The state preparation fiducial operation sequences, specified either directly
+        or by the filename of a operation sequence list file (text format).
+
+    effectStrsListOrFilename : (list of Circuits) or string or None
+        The measurement fiducial operation sequences, specified either directly or by
+        the filename of a operation sequence list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    germsListOrFilename : (list of Circuits) or string
+        The germ operation sequences, specified either directly or by the filename of a
+        operation sequence list file (text format).
+
+    maxLengths : list of ints
+        List of integers, one per LSGST iteration, which set truncation lengths
+        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        iteration includes the repeated germs truncated to the L-values *up to*
+        and including the i-th one.
+
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `model`
+        argument, which is specified internally.  The `targetModel` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  The allowed keys
+        and values include:
+        - objective = {'chi2', 'logl'}
+        - opLabels = list of strings
+        - circuitWeights = dict or None
+        - starting point = "LGST" (default) or  "target" or Model
+        - depolarizeStart = float (default == 0)
+        - randomizeStart = float (default == 0)
+        - contractStartToCPTP = True / False (default)
+        - cptpPenaltyFactor = float (default = 0)
+        - tolerance = float or dict w/'relx','relf','f','jac','maxdx' keys
+        - maxIterations = int
+        - fdIterations = int
+        - minProbClip = float
+        - minProbClipForWeighting = float (default == 1e-4)
+        - probClipInterval = tuple (default == (-1e6,1e6)
+        - radius = float (default == 1e-4)
+        - useFreqWeightedChiSq = True / False (default)
+        - XX nestedCircuitLists = True (default) / False
+        - XX includeLGST = True / False (default is True)
+        - distributeMethod = "default", "circuits" or "deriv"
+        - profile = int (default == 1)
+        - check = True / False (default)
+        - XX opLabelAliases = dict (default = None)
+        - alwaysPerformMLE = bool (default = False)
+        - onlyPerformMLE = bool (default = False)
+        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers"
+                          or "length as exponent"
+        - appendTo = Results (default = None)
+        - estimateLabel = str (default = "default")
+        - XX missingDataAction = {'drop','raise'} (default = 'drop')
+        - XX stringManipRules = list of (find,replace) tuples
+        - germLengthLimits = dict of form {germ: maxlength}
+        - recordOutput = bool (default = True)
+        - timeDependent = bool (default = False)
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+       - 0 -- prints nothing
+       - 1 -- shows progress bar for entire iterative GST
+       - 2 -- show summary details about each individual iteration
+       - 3 -- also shows outer iterations of LM algorithm
+       - 4 -- also shows inner iterations of LM algorithm
+       - 5 -- also shows detailed info from within jacobian
+              and objective function calls.
+
+    Returns
+    -------
+    Results
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if advancedOptions is None: advancedOptions = {}
+    exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
+                                          prepStrsListOrFilename, effectStrsListOrFilename,
+                                          germsListOrFilename, maxLengths,
+                                          advancedOptions.get('germLengthLimits', None),
+                                          verbosity=printer)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    data = _proto.ProtocolData(exp_design, ds)
+
+    if gaugeOptParams is None:
+        gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+    gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
+                                     comm, memLimit, output_pkl, printer)
+    return proto.run(data)
+
+
+def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
+                              lsgstLists, gaugeOptParams=None,
+                              advancedOptions=None, comm=None, memLimit=None,
+                              output_pkl=None, verbosity=2):
+    """
+    A more fundamental interface for performing end-to-end GST.
+
+    Similar to :func:`do_long_sequence_gst` except this function takes
+    `lsgstLists`, a list of either raw operation sequence lists or of `LsGermsStruct`
+    gate-string-structure objects to define which gate seqences are used on
+    each GST iteration.
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetModelFilenameOrObj : Model or string
+        The target model, specified either directly or by the filename of a
+        model file (text format).
+
+    lsgstLists : list of lists or LsGermsStruct(s)
+        An explicit list of either the raw operation sequence lists to be used in
+        the analysis or of LsGermsStruct objects, which additionally contain
+        the max-L, germ, and fiducial pair structure of a set of operation sequences.
+        A single LsGermsStruct object can also be given, which is equivalent
+        to passing a list of successive L-value truncations of this object
+        (e.g. if the object has `Ls = [1,2,4]` then this is like passing
+         a list of three LsGermsStructs w/truncations `[1]`, `[1,2]`, and
+         `[1,2,4]`).
+
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `model`
+        argument, which is specified internally.  The `targetModel` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  See
+        :func:`do_long_sequence_gst` for a list of the allowed keys, with the
+        exception  "nestedCircuitLists", "opLabelAliases",
+        "includeLGST", and "truncScheme".
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+       - 0 -- prints nothing
+       - 1 -- shows progress bar for entire iterative GST
+       - 2 -- show summary details about each individual iteration
+       - 3 -- also shows outer iterations of LM algorithm
+       - 4 -- also shows inner iterations of LM algorithm
+       - 5 -- also shows detailed info from within jacobian
+              and objective function calls.
+
+    Returns
+    -------
+    Results
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+
+    validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+    if isinstance(lsgstLists, validStructTypes) or isinstance(lsgstLists[0], validStructTypes):
+        exp_design = _proto.StructuredGSTDesign(targetModelFilenameOrObj, lsgstLists)
+    else:
+        exp_design = _proto.GateSetTomographyDesign(targetModelFilenameOrObj, lsgstLists)
+
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    data = _proto.ProtocolData(exp_design, ds)
+
+    if gaugeOptParams is None:
+        gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+    gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
+                                     comm, memLimit, output_pkl, printer)
+    return proto.run(data)
+
+
+def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
+                       prepStrsListOrFilename, effectStrsListOrFilename,
+                       germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
+                       gaugeOptSuite='stdgaugeopt',
+                       gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
+                       advancedOptions=None, output_pkl=None, verbosity=2):
+    """
+    Perform end-to-end GST analysis using standard practices.
+
+    This routines is an even higher-level driver than
+    :func:`do_long_sequence_gst`.  It performs bottled, typically-useful,
+    runs of long sequence GST on a dataset.  This essentially boils down
+    to running :func:`do_long_sequence_gst` one or more times using different
+    model parameterizations, and performing commonly-useful gauge
+    optimizations, based only on the high-level `modes` argument.
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetModelFilenameOrObj : Model or string
+        The target model, specified either directly or by the filename of a
+        model file (text format).
+
+    prepStrsListOrFilename : (list of Circuits) or string
+        The state preparation fiducial operation sequences, specified either directly
+        or by the filename of a operation sequence list file (text format).
+
+    effectStrsListOrFilename : (list of Circuits) or string or None
+        The measurement fiducial operation sequences, specified either directly or by
+        the filename of a operation sequence list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    germsListOrFilename : (list of Circuits) or string
+        The germ operation sequences, specified either directly or by the filename of a
+        operation sequence list file (text format).
+
+    maxLengths : list of ints
+        List of integers, one per LSGST iteration, which set truncation lengths
+        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        iteration includes the repeated germs truncated to the L-values *up to*
+        and including the i-th one.
+
+    modes : str, optional
+        A comma-separated list of modes which dictate what types of analyses
+        are performed.  Currently, these correspond to different types of
+        parameterizations/constraints to apply to the estimated model.
+        The default value is usually fine.  Allowed values are:
+
+        - "full" : full (completely unconstrained)
+        - "TP"   : TP-constrained
+        - "CPTP" : Lindbladian CPTP-constrained
+        - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
+        - "S"    : Only Stochastic errors allowed (CPTP)
+        - "Target" : use the target (ideal) gates as the estimate
+        - <model> : any key in the `modelsToTest` argument
+
+    gaugeOptSuite : str or list or dict, optional
+        Specifies which gauge optimizations to perform on each estimate.  A
+        string or list of strings (see below) specifies built-in sets of gauge
+        optimizations, otherwise `gaugeOptSuite` should be a dictionary of
+        gauge-optimization parameter dictionaries, as specified by the
+        `gaugeOptParams` argument of :func:`do_long_sequence_gst`.  The key
+        names of `gaugeOptSuite` then label the gauge optimizations within
+        the resuling `Estimate` objects.  The built-in suites are:
+
+          - "single" : performs only a single "best guess" gauge optimization.
+          - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).
+          - "varySpamWt" : varies spam weight but no SPAM penalty.
+          - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
+          - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
+          - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
+          - "none" : no gauge optimizations are performed.
+
+    gaugeOptTarget : Model, optional
+        If not None, a model to be used as the "target" for gauge-
+        optimization (only).  This argument is useful when you want to
+        gauge optimize toward something other than the *ideal* target gates
+        given by `targetModelFilenameOrObj`, which are used as the default when
+        `gaugeOptTarget` is None.
+
+    modelsToTest : dict, optional
+        A dictionary of Model objects representing (gate-set) models to
+        test against the data.  These Models are essentially hypotheses for
+        which (if any) model generated the data.  The keys of this dictionary
+        can (and must, to actually test the models) be used within the comma-
+        separate list given by the `modes` argument.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  Keys of this
+        dictionary can be any of the modes being computed (see the `modes`
+        argument) or 'all', which applies to all modes.  Values are
+        dictionaries of advanced arguements - see :func:`do_long_sequence_gst`
+        for a list of the allowed keys for each such dictionary.
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+
+    Returns
+    -------
+    Results
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
+                                          prepStrsListOrFilename, effectStrsListOrFilename,
+                                          germsListOrFilename, maxLengths, verbosity=printer)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    data = _proto.ProtocolData(exp_design, ds)
+    proto = _proto.StandardGST(modes, gaugeOptSuite, gaugeOptTarget, modelsToTest,
+                               comm, memLimit, advancedOptions, output_pkl, printer)
+    return proto.run(data)
+
+
+# --- Helper functions ---
+
+def _load_model(modelFilenameOrObj):
+    if isinstance(modelFilenameOrObj, str):
+        return _io.load_model(modelFilenameOrObj)
+    else:
+        return modelFilenameOrObj  # assume a Model object
+
+
+def _load_dataset(dataFilenameOrSet, comm, verbosity):
+    """Loads a DataSet from the dataFilenameOrSet argument of functions in this module."""
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if isinstance(dataFilenameOrSet, str):
+        if comm is None or comm.Get_rank() == 0:
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet, 'rb') as pklfile:
+                    ds = _pickle.load(pklfile)
+            else:
+                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
+            if comm is not None: comm.bcast(ds, root=0)
+        else:
+            ds = comm.bcast(None, root=0)
+    else:
+        ds = dataFilenameOrSet  # assume a Dataset object
+
+    return ds
+
+
+# --------------------------------------------------------------------------------------------------
+# --- BELOW HERE ARE OLD "LEGACY" FUNCTIONS THAT ARE SOLELY FOR LIMITED BACKWARD COMPATIBILITY -----
+# --------------------------------------------------------------------------------------------------
+
+def legacy_do_model_test(modelFilenameOrObj,
+                         dataFilenameOrSet, targetModelFilenameOrObj,
+                         prepStrsListOrFilename, effectStrsListOrFilename,
+                         germsListOrFilename, maxLengths, gaugeOptParams=None,
+                         advancedOptions=None, comm=None, memLimit=None,
+                         output_pkl=None, verbosity=2):
     """
     Tests a Model model against a DataSet using a specific set of structured
     operation sequences (given by fiducials, maxLengths and germs).
@@ -188,10 +776,10 @@ def do_model_test(modelFilenameOrObj,
                                  output_pkl, verbosity, profiler)
 
 
-def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
-                  prepStrsListOrFilename, effectStrsListOrFilename,
-                  gaugeOptParams=None, advancedOptions=None, comm=None,
-                  memLimit=None, output_pkl=None, verbosity=2):
+def legacy_do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
+                         prepStrsListOrFilename, effectStrsListOrFilename,
+                         gaugeOptParams=None, advancedOptions=None, comm=None,
+                         memLimit=None, output_pkl=None, verbosity=2):
     """
     Perform Linear Gate Set Tomography (LGST).
 
@@ -269,18 +857,18 @@ def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     advancedOptions.update(defAdvOptions)
     advancedOptions['objective'] = 'lgst'  # not override-able
 
-    return do_long_sequence_gst(dataFilenameOrSet, target_model,
+    return legacy_do_long_sequence_gst(dataFilenameOrSet, target_model,
+                                       prepStrsListOrFilename, effectStrsListOrFilename,
+                                       germs, maxLengths, gaugeOptParams,
+                                       advancedOptions, comm, memLimit,
+                                       output_pkl, verbosity)
+
+
+def legacy_do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
                                 prepStrsListOrFilename, effectStrsListOrFilename,
-                                germs, maxLengths, gaugeOptParams,
-                                advancedOptions, comm, memLimit,
-                                output_pkl, verbosity)
-
-
-def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
-                         prepStrsListOrFilename, effectStrsListOrFilename,
-                         germsListOrFilename, maxLengths, gaugeOptParams=None,
-                         advancedOptions=None, comm=None, memLimit=None,
-                         output_pkl=None, verbosity=2):
+                                germsListOrFilename, maxLengths, gaugeOptParams=None,
+                                advancedOptions=None, comm=None, memLimit=None,
+                                output_pkl=None, verbosity=2):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
     length.
@@ -470,15 +1058,15 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     lsgstLists = _get_lsgst_lists(ds, target_model, prepStrs, effectStrs, germs,
                                   maxLengths, advancedOptions, printer)
 
-    return do_long_sequence_gst_base(ds, target_model, lsgstLists, gaugeOptParams,
-                                     advancedOptions, comm, memLimit,
-                                     output_pkl, printer)
+    return legacy_do_long_sequence_gst_base(ds, target_model, lsgstLists, gaugeOptParams,
+                                            advancedOptions, comm, memLimit,
+                                            output_pkl, printer)
 
 
-def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
-                              lsgstLists, gaugeOptParams=None,
-                              advancedOptions=None, comm=None, memLimit=None,
-                              output_pkl=None, verbosity=2):
+def legacy_do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
+                                     lsgstLists, gaugeOptParams=None,
+                                     advancedOptions=None, comm=None, memLimit=None,
+                                     output_pkl=None, verbosity=2):
     """
     A more fundamental interface for performing end-to-end GST.
 
@@ -769,12 +1357,12 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
                                  output_pkl, printer, profiler, args['evaltree_cache'])
 
 
-def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
-                       prepStrsListOrFilename, effectStrsListOrFilename,
-                       germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       gaugeOptSuite=('single', 'unreliable2Q'),
-                       gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
-                       advancedOptions=None, output_pkl=None, verbosity=2):
+def legacy_do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
+                              prepStrsListOrFilename, effectStrsListOrFilename,
+                              germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
+                              gaugeOptSuite=('single', 'unreliable2Q'),
+                              gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
+                              advancedOptions=None, output_pkl=None, verbosity=2):
     """
     Perform end-to-end GST analysis using standard practices.
 
@@ -921,25 +1509,25 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
                 tgt.default_gauge_group = _objs.TrivialGaugeGroup(tgt.dim)  # so no gauge opt is done
                 advanced.update({'appendTo': ret, 'estimateLabel': est_label,
                                  'onBadFit': []})
-                ret = do_model_test(target_model, ds, tgt, prepStrs,
-                                    effectStrs, germs, maxLengths, False, advanced,
-                                    comm, memLimit, None, printer - 1)
+                ret = legacy_do_model_test(target_model, ds, tgt, prepStrs,
+                                           effectStrs, germs, maxLengths, False, advanced,
+                                           comm, memLimit, None, printer - 1)
 
             elif mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode is a parameterization
                 est_label = parameterization = mode  # for now, 1-1 correspondence
                 tgt = target_model.copy(); tgt.set_all_parameterizations(parameterization)
                 advanced.update({'appendTo': ret, 'estimateLabel': est_label})
-                ret = do_long_sequence_gst(ds, tgt, prepStrs, effectStrs, germs,
-                                           maxLengths, False, advanced, comm, memLimit,
-                                           None, printer - 1)
+                ret = legacy_do_long_sequence_gst(ds, tgt, prepStrs, effectStrs, germs,
+                                                  maxLengths, False, advanced, comm, memLimit,
+                                                  None, printer - 1)
             elif mode in modelsToTest:
                 est_label = mode
                 tgt = target_model.copy()  # no parameterization change
                 tgt.default_gauge_group = _objs.TrivialGaugeGroup(tgt.dim)  # so no gauge opt is done
                 advanced.update({'appendTo': ret, 'estimateLabel': est_label})
-                ret = do_model_test(modelsToTest[mode], ds, tgt, prepStrs,
-                                    effectStrs, germs, maxLengths, False, advanced,
-                                    comm, memLimit, None, printer - 1)
+                ret = legacy_do_model_test(modelsToTest[mode], ds, tgt, prepStrs,
+                                           effectStrs, germs, maxLengths, False, advanced,
+                                           comm, memLimit, None, printer - 1)
             else:
                 raise ValueError("Invalid item in 'modes' argument: %s" % mode)
 
@@ -1196,12 +1784,6 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, target_model, advancedOptions=No
 
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
-def _load_model(modelFilenameOrObj):
-    if isinstance(modelFilenameOrObj, str):
-        return _io.load_model(modelFilenameOrObj)
-    else:
-        return modelFilenameOrObj  # assume a Model object
-
 
 def _load_fiducials_and_germs(prepStrsListOrFilename,
                               effectStrsListOrFilename,
@@ -1224,25 +1806,6 @@ def _load_fiducials_and_germs(prepStrsListOrFilename,
     else: germs = germsListOrFilename
 
     return prepStrs, effectStrs, germs
-
-
-def _load_dataset(dataFilenameOrSet, comm, verbosity):
-    """Loads a DataSet from the dataFilenameOrSet argument of functions in this module."""
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    if isinstance(dataFilenameOrSet, str):
-        if comm is None or comm.Get_rank() == 0:
-            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
-                with open(dataFilenameOrSet, 'rb') as pklfile:
-                    ds = _pickle.load(pklfile)
-            else:
-                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
-            if comm is not None: comm.bcast(ds, root=0)
-        else:
-            ds = comm.bcast(None, root=0)
-    else:
-        ds = dataFilenameOrSet  # assume a Dataset object
-
-    return ds
 
 
 def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
@@ -1579,11 +2142,13 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
         loglFn = _objfns.LogLFunction.simple_init(model, ds, circuitsToUse, min_p, pci, a,
                                                   poissonPicture=True, evaltree_cache=evaltree_cache,
                                                   comm=comm)
+        sqrt_dlogl_elements = loglFn.fn(model.to_vector())  # must evaluate loglFn before using it to init loglWCFn
         loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)
+
         nCircuits = len(circuitsToUse)
         dlogl_terms = _np.empty(nCircuits, 'd')
         # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
-        dlogl_elements = loglFn.fn(model.to_vector())**2
+        dlogl_elements = sqrt_dlogl_elements**2
         for i in range(nCircuits):
             dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
         print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
@@ -1643,8 +2208,9 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
             printer.log("  Trying eta = %g" % eta)
             nIters += 1
 
-    #print("Wildcard budget found for Wvec = ",Wvec)
     budget.from_vector(Wvec)
+    #print("Wildcard budget found for Wvec = ",Wvec)
+    #print("FINAL Wildcard budget = ", str(budget))
     printer.log(str(budget))
     return budget
 

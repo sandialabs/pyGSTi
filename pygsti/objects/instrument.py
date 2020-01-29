@@ -12,6 +12,7 @@ import numpy as _np
 import warnings as _warnings
 
 from ..tools import matrixtools as _mt
+from .label import Label as _Label
 
 #from . import labeldicts as _ld
 from . import modelmember as _gm
@@ -188,13 +189,20 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         OrderedDict of Gates
         """
         #Create a "simplified" (Model-referencing) set of element gates
-        if prefix: prefix += "_"
         simplified = _collections.OrderedDict()
-        for k, g in self.items():
-            comp = g.copy()
-            comp.set_gpindices(_gm._compose_gpindices(self.gpindices,
-                                                      g.gpindices), self.parent)
-            simplified[prefix + k] = comp
+        if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
+            for k, g in self.items():
+                comp = g.copy()
+                comp.set_gpindices(_gm._compose_gpindices(self.gpindices,
+                                                          g.gpindices), self.parent)
+                simplified[_Label(prefix.name + "_" + k, prefix.sslbls)] = comp
+        else:
+            if prefix: prefix += "_"
+            for k, g in self.items():
+                comp = g.copy()
+                comp.set_gpindices(_gm._compose_gpindices(self.gpindices,
+                                                          g.gpindices), self.parent)
+                simplified[prefix + k] = comp
         return simplified
 
     def num_elements(self):
@@ -491,10 +499,15 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
 
         # Create "simplified" elements, which infer their parent and
         # gpindices from the set of "param-gates" they're constructed with.
-        if prefix: prefix += "_"
-        simplified = _collections.OrderedDict(
-            [(prefix + k, _op.TPInstrumentOp(param_simplified, i))
-             for i, k in enumerate(self.keys())])
+        if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
+            simplified = _collections.OrderedDict(
+                [(_Label(prefix.name + "_" + k, prefix.sslbls), _op.TPInstrumentOp(param_simplified, i))
+                 for i, k in enumerate(self.keys())])
+        else:
+            if prefix: prefix += "_"
+            simplified = _collections.OrderedDict(
+                [(prefix + k, _op.TPInstrumentOp(param_simplified, i))
+                 for i, k in enumerate(self.keys())])
         return simplified
 
     def num_elements(self):
