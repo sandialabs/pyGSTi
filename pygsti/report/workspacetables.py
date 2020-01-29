@@ -987,6 +987,12 @@ class GatesVsTargetTable(WorkspaceTable):
             #Note: could move this to a reportables function in future for easier
             # confidence region support - for now, no CI support:
             for disp in display:
+                if disp == "unmodeled":  # a special case for now
+                    if wildcard:
+                        row_data.append(_objs.reportableqty.ReportableQty(
+                            wildcard.get_op_budget(il)))
+                    continue  # Note: don't append anything if 'not wildcard'
+
                 if disp == "inf":
                     sqrt_component_fidelities = [_np.sqrt(_reportables.entanglement_fidelity(inst[l], tinst[l], basis))
                                                  for l in inst.keys()]

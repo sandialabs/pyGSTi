@@ -827,6 +827,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         logl = _tools.logl(model, dataset, gstrs, opLabelAliases=gss.aliases,
                            comm=comm, smartc=smartc, wildcard=wildcard)
         fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
+
         if(logL_upperbound < logl):
             if _np.isclose(logL_upperbound, logl):
                 logl = logL_upperbound; fitQty = 0.0
@@ -835,7 +836,10 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
 
     ds_gstrs = _tools.apply_aliases_to_circuit_list(gstrs, gss.aliases)
 
-    if Np is None: Np = model.num_nongauge_params()
+    if hasattr(model, 'num_nongauge_params'):
+        Np = model.num_nongauge_params()
+    else:
+        Np = model.num_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
     k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitQty - k) / _np.sqrt(2 * k)

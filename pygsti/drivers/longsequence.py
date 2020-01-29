@@ -1962,7 +1962,7 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
     if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
 
     if badFitThreshold is not None and \
-       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) <= badFitThreshold:
+       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, use_accurate_Np=True, comm=comm) <= badFitThreshold:
         return  # fit is good enough - no need to add any estimates
 
     objective = parameters.get('objective', 'logl')

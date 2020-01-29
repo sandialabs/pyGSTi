@@ -532,7 +532,10 @@ class Estimate(object):
 
         ds_allstrs = _tools.apply_aliases_to_circuit_list(gss.allstrs, gss.aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
-        Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
+        if hasattr(mdl, 'num_nongauge_params'):
+            Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
+        else:
+            Np = mdl.num_params()
         k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
         return (fitQty - k) / _np.sqrt(2 * k)

@@ -76,7 +76,7 @@ class StandardGSTDesign(StructuredGSTDesign):
 
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, qubit_labels=None, verbosity=0, add_default_protocol=False):
+                 keepSeed=None, includeLGST=True, nest=True, qubit_labels=None, verbosity=0, add_default_protocol=False):
 
         #Get/load fiducials and germs
         prep, meas, germs = _load_fiducials_and_germs(
@@ -88,10 +88,11 @@ class StandardGSTDesign(StructuredGSTDesign):
         self.germs = germs
         self.maxlengths = maxLengths
         self.germ_length_limits = germLengthLimits
+        self.includeLGST = includeLGST
 
         #Hardcoded for now... - include so gets written when serialized
         self.truncation_method = "whole germ powers"
-        self.nested = True
+        self.nested = nest
 
         #FPR support
         self.fiducial_pairs = fidPairs
@@ -103,12 +104,10 @@ class StandardGSTDesign(StructuredGSTDesign):
         structs = _construction.make_lsgst_structs(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
-            self.fpr_keep_fraction, self.fpr_keep_seed, germLengthLimits=self.germ_length_limits,
-            verbosity=verbosity)
+            self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
+            germLengthLimits=self.germ_length_limits, verbosity=verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # actionIfMissing = advancedOptions.get('missingDataAction', 'drop')
-        # nest=advancedOptions.get('nestedCircuitLists', True),
-        # includeLGST=advancedOptions.get('includeLGST', True),
         # opLabelAliases=advancedOptions.get('opLabelAliases', None),
         # sequenceRules=advancedOptions.get('stringManipRules', None),
         # truncScheme=advancedOptions.get('truncScheme', "whole germ powers")
@@ -790,7 +789,7 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
     badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
     onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, opt_args, evaltree_cache, comm, memLimit, printer - 1)
+    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, opt_args, evaltree_cache, comm, memLimit, printer)
     profiler.add_time('%s: add badfit estimates' % callerName, tRef); tRef = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
@@ -884,7 +883,7 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
     if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
 
     if badFitThreshold is not None and \
-       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) <= badFitThreshold:
+       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, use_accurate_Np=True, comm=comm) <= badFitThreshold:
         return  # fit is good enough - no need to add any estimates
 
     objective = parameters.get('objective', 'logl')
@@ -1055,7 +1054,7 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
     if twoDeltaLogL <= twoDeltaLogL_threshold \
        and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
         printer.log("No need to add budget!")
-        Wvec = _np.zeros(len(model.get_primitive_op_labels()) + len(model.get_primitive_instrument_labels()), 'd')
+        Wvec = _np.zeros(len(budget.to_vector()), 'd')
     else:
         pci = parameters.get('probClipInterval', (-1e6, 1e6))
         min_p = parameters.get('minProbClip', 1e-4)
@@ -1072,8 +1071,8 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
         dlogl_elements = sqrt_dlogl_elements**2
         for i in range(nCircuits):
             dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
-        print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
-        print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold, nBoxes)
+        #print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
+        #print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold, nBoxes)
 
         def _wildcard_objective_firstTerms(Wv):
             dlogl_elements = loglWCFn.fn(Wv)**2  # b/c loglWCFn gives sqrt of terms (for use in leastsq optimizer)
@@ -1087,7 +1086,7 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
 
         nIters = 0
         Wvec_init = budget.to_vector()
-        print("INITIAL Wildcard budget = ", str(budget))
+        #print("INITIAL Wildcard budget = ", str(budget))
 
         # Find a value of eta that is small enough that the "first terms" are 0.
         while nIters < 10:
