@@ -185,7 +185,8 @@ class GaugeVariantsDecompSection(_Section):
     @_Section.figure_factory(4)
     def bestGatesetChoiEvalTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.ChoiTable(
-            switchboard.gsFinal, None, _cri(1, switchboard, confidence_level, ci_brevity), display=('boxplot', 'barplot')
+            switchboard.gsFinal, None, _cri(1, switchboard, confidence_level, ci_brevity),
+            display=('boxplot', 'barplot')
         )
 
     @_Section.figure_factory(4)
