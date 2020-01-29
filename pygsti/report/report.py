@@ -31,14 +31,16 @@ class Report:
     `pygsti.report.factory`.
 
     """
-    def __init__(self, results, sections, flags, global_qtys, report_params):
+    def __init__(self, templates, results, sections, flags, global_qtys, report_params, workspace=None):
+        self._templates = templates
         self._results = results
         self._sections = sections
         self._flags = flags
         self._global_qtys = global_qtys
         self._report_params = report_params
+        self._workspace = workspace or _ws.Workspace()
 
-    def _build(self, workspace, build_params=None):
+    def _build(self, build_params=None):
         """ Render all sections to a map of report elements for templating """
         build_params = build_params or {}
         full_params = {
@@ -48,21 +50,16 @@ class Report:
         }
         qtys = self._global_qtys.copy()
         for section in self._sections:
-            qtys.update(section.render(workspace, **full_params))
-
-        pdfInfo = [('Author', 'pyGSTi'), ('Title', qtys.get('title', 'untitled')),
-                   ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
-        qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
+            qtys.update(section.render(self._workspace, **full_params))
 
         return qtys
 
-    def write_html(self, path, template_dir='~standard_html_report',
-                   template_name='main.html', auto_open=False,
-                   link_to=None, connected=False, brevity=0,
-                   errgen_type='logGTi', ci_brevity=1,
-                   bgcolor='white', precision=None, resizable=True,
-                   autosize='initial', embed_figures=True,
-                   single_file=False, workspace=None, verbosity=0):
+    def write_html(self, path, auto_open=False, link_to=None,
+                   connected=False, brevity=0, errgen_type='logGTi',
+                   ci_brevity=1, bgcolor='white', precision=None,
+                   resizable=True, autosize='initial',
+                   embed_figures=True, single_file=False,
+                   verbosity=0):
         """ Write this report to the disk as a collection of HTML documents.
 
         Parameters
@@ -71,12 +68,6 @@ class Report:
             The filesystem path of a directory to write the report
             to. If the specified directory does not exist, it will be
             created automatically
-
-        templateDir : str, optional
-            Path to look for templates, relative to pyGSTi's `templates` directory.
-
-        templateName : str, optional
-            The entry-point template filename, relative to pyGSTi's `templates` directory.
 
         auto_open : bool, optional
             Whether the output file should be automatically opened in a web browser.
@@ -157,17 +148,9 @@ class Report:
             can grow large enough that major web browsers may struggle
             to render it.
 
-        workspace : Workspace, optional
-            The workspace used as a scratch space for performing the calculations
-            and visualizations required for this report.  If you're creating
-            multiple reports with similar tables, plots, etc., it may boost
-            performance to use a single Workspace for all the report generation.
-
         verbosity : int, optional
             Amount of detail to print to stdout.
         """
-
-        workspace = workspace or _ws.Workspace()
 
         toggles = _defaultdict(lambda: False)
         toggles.update(
@@ -178,7 +161,7 @@ class Report:
 
 
         # Render sections
-        qtys = self._build(workspace, build_params=dict(
+        qtys = self._build(build_params=dict(
             brevity=brevity,
             errgen_type=errgen_type,
             ci_brevity=ci_brevity,
@@ -189,22 +172,23 @@ class Report:
         # TODO refactor all rendering into this method and section rendering methods
         if single_file:
             _merge.merge_jinja_template(
-                qtys, path, templateDir=template_dir,
-                templateName=template_name, auto_open=auto_open,
-                precision=precision, link_to=link_to, connected=connected,
-                toggles=toggles, renderMath=True, resizable=resizable,
+                qtys, path, templateDir=self._templates['html'],
+                auto_open=auto_open, precision=precision,
+                link_to=link_to, connected=connected, toggles=toggles,
+                renderMath=True, resizable=resizable,
                 autosize=autosize, verbosity=verbosity
             )
         else:
             _merge.merge_jinja_template_dir(
-                qtys, path, templateDir=template_dir,
-                templateName=template_name, auto_open=auto_open,
-                precision=precision, link_to=link_to, connected=connected,
-                toggles=toggles, renderMath=True, resizable=resizable,
-                autosize=autosize, embed_figures=embed_figures, verbosity=verbosity
+                qtys, path, templateDir=self._templates['html'],
+                auto_open=auto_open, precision=precision,
+                link_to=link_to, connected=connected, toggles=toggles,
+                renderMath=True, resizable=resizable,
+                autosize=autosize, embed_figures=embed_figures,
+                verbosity=verbosity
             )
 
-    def write_notebook(self, path, template_file=None):
+    def write_notebook(self, path):
         """ Write this report to the disk as an IPython notebook
 
         Parameters
@@ -213,14 +197,12 @@ class Report:
             The filesystem path to write the report to. By convention,
             this should use the `.ipynb` file extension.
         """
-        self.prepare_notebook()
-        # TODO
+        pass  # TODO
 
-    def write_pdf(self, path, template="standard_pdf_report.tex",
-                  latex_cmd='pdflatex', latex_flags=None, brevity=0,
-                  errgen_type='logGTi', ci_brevity=1, bgcolor='white',
-                  precision=None, auto_open=False, comm=None,
-                  workspace=None, verbosity=0):
+    def write_pdf(self, path, latex_cmd='pdflatex', latex_flags=None,
+                  brevity=0, errgen_type='logGTi', ci_brevity=1,
+                  bgcolor='white', precision=None, auto_open=False,
+                  comm=None, verbosity=0):
         """ Write this report to the disk as a PDF document.
 
         Parameters
@@ -228,10 +210,6 @@ class Report:
         path : str or path-like object
             The filesystem path to write the report to. By convention,
             this should use the `.pdf` file extension.
-
-        template : str or path-like object, optional
-            The filesystem path of the LaTeX template to
-            fill. Relative to the pygsti template directoy.
 
         latex_cmd : str, optional
             Shell command to run to compile a PDF document from the
@@ -282,20 +260,12 @@ class Report:
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        workspace : Workspace, optional
-            The workspace used as a scratch space for performing the calculations
-            and visualizations required for this report.  If you're creating
-            multiple reports with similar tables, plots, etc., it may boost
-            performance to use a single Workspace for all the report generation.
-
         verbosity : int, optional
             Amount of detail to print to stdout.
         """
 
         if len(self._results) > 1:
             raise ValueError("PDF reports cannot be generated for multiple result objects")
-
-        workspace = workspace or _ws.Workspace()
 
         toggles = _defaultdict(lambda: False)
         toggles.update(
@@ -309,7 +279,7 @@ class Report:
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 
         # Render sections
-        qtys = self._build(workspace, build_params=dict(
+        qtys = self._build(build_params=dict(
             brevity=brevity,
             errgen_type=errgen_type,
             ci_brevity=ci_brevity,
@@ -321,7 +291,7 @@ class Report:
 
         printer.log("Generating LaTeX source...")
         _merge.merge_latex_template(
-            qtys, template, str(path.with_suffix('.tex')),
+            qtys, self._templates['pdf'], str(path.with_suffix('.tex')),
             toggles, precision, printer
         )
 

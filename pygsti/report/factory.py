@@ -1180,14 +1180,13 @@ def find_std_clifford_compilation(model, verbosity=0):
     return None
 
 
+# TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
                               confidenceLevel=None, comm=None, ws=None,
-                              brevity=0, advancedOptions=None, verbosity=1):
+                              advancedOptions=None, verbosity=1):
     """
     Create a "standard" GST report, containing details about each estimate
     in `results` individually.
-
-    TODO docstring
 
     Parameters
     ----------
@@ -1262,6 +1261,7 @@ def construct_standard_report(results, title="auto",
     """
 
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+    ws = ws or _ws.Workspace()
 
     advancedOptions = advancedOptions or {}
     linlogPercentile = advancedOptions.get('linlog percentile', 5)
@@ -1285,12 +1285,8 @@ def construct_standard_report(results, title="auto",
                         "Since you didn't, pyGSTi has generated a random one"
                         " for you: '{}'.").format(autoname))
 
-    global_qtys = {
-        'title': title,
-        'date': _time.strftime("%B %d, %Y"),
-        'linlg_pcntle': "%d" % round(linlogPercentile),  # to nearest %
-        'linlg_pcntle_inv': "%d" % (100 - int(round(linlogPercentile)))
-    }
+    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1329,6 +1325,7 @@ def construct_standard_report(results, title="auto",
 
     # Perform idle tomography on datasets if desired (need to do
     #  this before creating main switchboard)
+    printer.log("Running idle tomography")
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
@@ -1348,50 +1345,53 @@ def construct_standard_report(results, title="auto",
         else:
             _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
 
+    printer.log("Computing switchable properties")
+    switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
+        _create_master_switchboard(ws, results, confidenceLevel,
+                                   nmthreshold, printer, None,
+                                   combine_robust, idt_results, embed_figures)
+
+    if len(Ls) > 0 and Ls[0] == 0:
+        _warnings.warn(("Setting the first 'max-length' to zero, e.g. using"
+                        " [0,1,2,4] instead of [1,2,4], is deprecated and"
+                        " may cause 'no data to plot' errors when creating"
+                        " this report.  Please remove this leading zero."))
+
+    global_qtys = {
+        'title': title,
+        'date': _time.strftime("%B %d, %Y"),
+        'pdfinfo': _merge.to_pdfinfo(pdfInfo),
+        'linlg_pcntle': "%d" % round(linlogPercentile),  # to nearest %
+        'linlg_pcntle_inv': "%d" % (100 - int(round(linlogPercentile))),
+        'topSwitchboard': switchBd,
+        'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prepStrs, switchBd.effectStrs),
+        'bestGatesetGaugeOptParamsTable': ws.GaugeOptParamsTable(switchBd.goparams)
+    }
+
     report_params = {
         'linlog_percentile': linlogPercentile,
+        'confidence_level': confidenceLevel,
         'nm_threshold': nmthreshold,
         'embed_figures': embed_figures,
-        'combine_robust': combine_robust
+        'combine_robust': combine_robust,
+        'switchboard': switchBd,
+        'dataset_labels': tuple(dataset_labels),
+        'est_labels': tuple(est_labels),
+        'gauge_opt_labels': tuple(gauge_opt_labels),
+        'Ls': tuple(Ls),
+        'swLs': tuple(swLs)
     }
-    report = _Report(results, sections, flags, global_qtys, report_params)
 
-    # Generate master switchboard before building quantities
-    base_build = report._build
-
-    def build(workspace, build_params=None):
-        switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-            _create_master_switchboard(workspace, results, confidenceLevel,
-                                       nmthreshold, printer, None,
-                                       combine_robust, idt_results, embed_figures)
-
-        if len(Ls) > 0 and Ls[0] == 0:
-            _warnings.warn(("Setting the first 'max-length' to zero, e.g. using"
-                            " [0,1,2,4] instead of [1,2,4], is deprecated and"
-                            " may cause 'no data to plot' errors when creating"
-                            " this report.  Please remove this leading zero."))
-
-        return {
-            **base_build(workspace, {
-                **build_params,
-                'switchboard': switchBd,
-                'dataset_labels': dataset_labels,
-                'est_labels': est_labels,
-                'gauge_opt_labels': gauge_opt_labels,
-                'Ls': Ls,
-                'swLs': swLs
-            }),
-            'topSwitchboard': switchBd,
-            'colorBoxPlotKeyPlot': workspace.BoxKeyPlot(switchBd.prepStrs, switchBd.effectStrs),
-            'bestGatesetGaugeOptParamsTable': workspace.GaugeOptParamsTable(switchBd.goparams),
-        }
-    report._build = build
-    return report
+    templates = dict(
+        html='~standard_html_report',
+        pdf='standard_pdf_report.tex'
+    )
+    return _Report(templates, results, sections, flags, global_qtys, report_params, workspace=ws)
 
 
 def construct_nqnoise_report(results, title="auto",
                              confidenceLevel=None, comm=None, ws=None,
-                             brevity=0, advancedOptions=None, verbosity=1):
+                             advancedOptions=None, verbosity=1):
     """
     Creates a report designed to display results containing for n-qubit noisy
     model estimates.
@@ -1431,22 +1431,9 @@ def construct_nqnoise_report(results, title="auto",
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
 
-    brevity : int, optional
-        Amount of detail to include in the report.  Larger values mean smaller
-        "more briefr" reports, which reduce generation time, load time, and
-        disk space consumption.  In particular:
-
-        - 1: Plots showing per-sequences quantities disappear at brevity=1
-        - 2: Reference sections disappear at brevity=2
-        - 3: Germ-level estimate tables disappear at brevity=3
-        - 4: Everything but summary figures disappears at brevity=4
-
     advancedOptions : dict, optional
         A dictionary of advanced options for which the default values are usually
         are fine.  Here are the possible keys of `advancedOptions`:
-
-        - cachefile : str, optional
-            filename with cached workspace results
 
         - linlogPercentile : float, optional
             Specifies the colorscale transition point for any logL or chi2 color
@@ -1470,10 +1457,6 @@ def construct_nqnoise_report(results, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
-        - colorboxplot_bgcolor : str, optional
-            Background color for the color box plots in this report.  Can be common
-            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
-
         - embed_figures: bool, optional
             Whether figures should be embedded in the generated report.
 
@@ -1486,6 +1469,7 @@ def construct_nqnoise_report(results, title="auto",
     """
 
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+    ws = ws or _ws.Workspace()
 
     advancedOptions = advancedOptions or {}
     linlogPercentile = advancedOptions.get('linlog percentile', 5)
@@ -1509,12 +1493,8 @@ def construct_nqnoise_report(results, title="auto",
                         "Since you didn't, pyGSTi has generated a random one"
                         " for you: '{}'.").format(autoname))
 
-    global_qtys = {
-        'title': title,
-        'date': _time.strftime("%B %d, %Y"),
-        'linlg_pcntle': "%d" % round(linlogPercentile),  # to nearest %
-        'linlg_pcntle_inv': "%d" % (100 - int(round(linlogPercentile)))
-    }
+    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1546,6 +1526,7 @@ def construct_nqnoise_report(results, title="auto",
 
     # Perform idle tomography on datasets if desired (need to do
     #  this before creating main switchboard)
+    printer.log("Running idle tomography")
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
@@ -1565,51 +1546,52 @@ def construct_nqnoise_report(results, title="auto",
         else:
             _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
 
+    printer.log("Computing switchable properties")
+    switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
+        _create_master_switchboard(ws, results, confidenceLevel,
+                                   nmthreshold, printer, None,
+                                   combine_robust, idt_results, embed_figures)
+
+    if len(Ls) > 0 and Ls[0] == 0:
+        _warnings.warn(("Setting the first 'max-length' to zero, e.g. using"
+                        " [0,1,2,4] instead of [1,2,4], is deprecated and"
+                        " may cause 'no data to plot' errors when creating"
+                        " this report.  Please remove this leading zero."))
+
+    global_qtys = {
+        'title': title,
+        'date': _time.strftime("%B %d, %Y"),
+        'pdfinfo': _merge.to_pdfinfo(pdfInfo),
+        'linlg_pcntle': "%d" % round(linlogPercentile),  # to nearest %
+        'linlg_pcntle_inv': "%d" % (100 - int(round(linlogPercentile))),
+        'topSwitchboard': switchBd,
+        'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prepStrs, switchBd.effectStrs),
+        'bestGatesetGaugeOptParamsTable': ws.GaugeOptParamsTable(switchBd.goparams),
+        'gramBarPlot': ws.GramMatrixBarPlot(switchBd.ds, switchBd.gsTarget, 10, switchBd.strs)
+    }
+
     report_params = {
         'linlog_percentile': linlogPercentile,
+        'confidence_level': confidenceLevel,
         'nm_threshold': nmthreshold,
         'embed_figures': embed_figures,
-        'combine_robust': combine_robust
+        'combine_robust': combine_robust,
+        'switchboard': switchBd,
+        'dataset_labels': tuple(dataset_labels),
+        'est_labels': tuple(est_labels),
+        'gauge_opt_labels': tuple(gauge_opt_labels),
+        'Ls': tuple(Ls),
+        'swLs': tuple(swLs)
     }
-    report = _Report(results, sections, flags, global_qtys, report_params)
 
-    # Generate master switchboard before building quantities
-    base_build = report._build
-
-    def build(workspace, build_params=None):
-        switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-            _create_master_switchboard(workspace, results, confidenceLevel,
-                                       nmthreshold, printer, None,
-                                       combine_robust, idt_results, embed_figures)
-
-        if len(Ls) > 0 and Ls[0] == 0:
-            _warnings.warn(("Setting the first 'max-length' to zero, e.g. using"
-                            " [0,1,2,4] instead of [1,2,4], is deprecated and"
-                            " may cause 'no data to plot' errors when creating"
-                            " this report.  Please remove this leading zero."))
-
-        return {
-            **base_build(workspace, {
-                **build_params,
-                'switchboard': switchBd,
-                'dataset_labels': dataset_labels,
-                'est_labels': est_labels,
-                'gauge_opt_labels': gauge_opt_labels,
-                'Ls': Ls,
-                'swLs': swLs
-            }),
-            'topSwitchboard': switchBd,
-            'colorBoxPlotKeyPlot': workspace.BoxKeyPlot(switchBd.prepStrs, switchBd.effectStrs),
-            'bestGatesetGaugeOptParamsTable': workspace.GaugeOptParamsTable(switchBd.goparams),
-            'gramBarPlot': workspace.GramMatrixBarPlot(switchBd.ds, switchBd.gsTarget, 10, switchBd.strs)
-        }
-    report._build = build
-    return report
+    templates = dict(
+        html='~standard_html_report',
+        pdf='standard_pdf_report.tex'
+    )
+    return _Report(templates, results, sections, flags, global_qtys, report_params, workspace=ws)
 
 
-def construct_drift_report(results, gss, title='auto', ws=None,
-                           brevity=0, advancedOptions=None,
-                           verbosity=1):
+def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
     """
     Creates a Drift report.
 
@@ -1619,21 +1601,15 @@ def construct_drift_report(results, gss, title='auto', ws=None,
     -------
     :class:`Report` : A constructed report object
     """
-    # TODO refactor to actually work as an abstract factory using report.Report
     from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
     from ..extras.drift import driftreport
     assert(isinstance(results, StabilityAnalyzer)), "Support for multiple results as a Dict is not yet included!"
     singleresults = results
 
-    tStart = _time.time()
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
 
-    if advancedOptions is None: advancedOptions = {}
-    cachefile = advancedOptions.get('cachefile', None)
-    connected = advancedOptions.get('connected', False)
-
     printer.log('*** Creating workspace ***')
-    if ws is None: ws = _ws.Workspace(cachefile)
+    ws = ws or _ws.Workspace()
 
     if title is None or title == "auto":
         autoname = _autotitle.generate_name()
@@ -1643,11 +1619,12 @@ def construct_drift_report(results, gss, title='auto', ws=None,
                         "Since you didn't, pyGSTi has generated a random one"
                         " for you: '{}'.").format(autoname))
 
+    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
     drift_switchBd = driftreport._create_drift_switchboard(ws, results, gss)
-
-    report = _Report()
 
     # Sets whether or not the dataset key is a switchboard or not.
     if len(results.data.keys()) > 1:
@@ -1657,63 +1634,38 @@ def construct_drift_report(results, gss, title='auto', ws=None,
         dskey = list(singleresults.data.keys())[0]
         arb_dskey = dskey
 
-    # TODO remove
-    def addqty(b, name, fn, *args, **kwargs):
-        """Adds an item to the qtys dict within a timed block"""
-        if b is None or brevity < b:
-            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
-                report.qtys[name] = fn(*args, **kwargs)
-
-    report.qtys['title'] = title
-    report.qtys['date'] = _time.strftime("%B %d, %Y")
-
-    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
-    report.qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
-
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
     #Create master switchboard
-    switchBd, dataset_labels = \
+    switchBd, _dataset_labels = \
         driftreport._create_switchboard(ws, results_dict)
 
-    # Generate Tables
-    printer.log("*** Generating tables ***")
+    global_qtys = {
+        'title': title,
+        'date': _time.strftime("%B %d, %Y"),
+        'pdfinfo': _merge.to_pdfinfo(pdfInfo),
+        'drift_switchBd': drift_switchBd,
+        'topSwitchboard': switchBd
+    }
 
-    report.qtys['drift_switchBd'] = drift_switchBd
-    report.qtys['topSwitchboard'] = switchBd
+    report_params = {
+        'results': switchBd.results,
+        'gss': gss,
+        'dskey': dskey,
+        'switchboard': drift_switchBd
+    }
 
-    results = switchBd.results
-    A = None  # no brevity restriction: always display
+    averaging_allowed = singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1)
+    sections = [
+        _section.DriftSection(GlobalPowerSpectraPlot=averaging_allowed)
+    ]
 
-    addqty(A, 'driftSummaryTable', ws.DriftSummaryTable, results, dskey)
-    addqty(A, 'driftDetailsTable', ws.DriftDetailsTable, results)
-
-    # Generate plots
-    printer.log("*** Generating plots ***")
-    # If we are allowed to average power spectra, because they have the same frequencies.
-    if singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1):
-        # The power spectrum averaged over circuits and outcomes, but not datasets
-        addqty(A, 'GlobalPowerSpectraPlot', ws.PowerSpectraPlot, results, {'dataset': dskey})
-    # The power spectrum for each length with a germ-fiducial pairing (averaged over outcomes).
-    addqty(A, 'GermFiducialPowerSpectraPlot', ws.GermFiducialPowerSpectraPlot, results, gss,
-           drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, dskey,
-           None, True,)
-    # The estimated probability trajectoris for each length with a germ-fiducial pairing.
-    addqty(A, 'GermFiducialProbTrajectoriesPlot', ws.GermFiducialProbTrajectoriesPlot, results, gss,
-           drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, drift_switchBd.outcomes, 1, None,
-           dskey, None, None, True)
-    # The boxplot summarizing the evidence for drift in each circuit.
-    addqty(A, 'driftdetectorColorBoxPlot', ws.ColorBoxPlot, 'driftdetector', gss, None, None, False, False, True, False,
-           'compact', .05, 1e-4, None, None, results)
-    # The boxplot summarizing the size of any detected drift in each circuit.
-    addqty(A, 'driftsizeColorBoxPlot', ws.ColorBoxPlot, 'driftsize', gss, None, None, False, False, True, False,
-           'compact', .05, 1e-4, None, None, results)
-
-    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart))
-    return report
-
+    templates = dict(
+        html='~drift_html_report',
+        pdf='drift_pdf_report.tex'
+    )
+    return _Report(templates, results, sections, set(), global_qtys, report_params, ws)
 
 
 # # XXX this needs to be revised into a script
