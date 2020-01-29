@@ -20,7 +20,7 @@ class DriftSection(_Section):
 
     @_Section.figure_factory()
     def driftDetailsTable(workspace, results=None, **kwargs):
-        return workspace.driftDetailsTable(results)
+        return workspace.DriftDetailsTable(results)
 
     @_Section.figure_factory()
     def GlobalPowerSpectraPlot(workspace, results=None, dskey=None, **kwargs):
@@ -37,7 +37,8 @@ class DriftSection(_Section):
     def GermFiducialProbTrajectoriesPlot(workspace, results=None, gss=None, switchboard=None, dskey=None, **kwargs):
         return workspace.GermFiducialProbTrajectoriesPlot(
             results, gss, switchboard.prepStrs, switchboard.germs,
-            switchboard.effectStrs, dskey, None, True
+            switchboard.effectStrs, switchboard.outcomes, 1, None,
+            dskey, None, None, True
         )
 
     @_Section.figure_factory()
