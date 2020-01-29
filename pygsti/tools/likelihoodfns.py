@@ -199,20 +199,28 @@ def logl_terms(model, dataset, circuit_list=None,
         firsts = None
 
     smart(model.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm, _filledarrays=(0,))
+    freqVec = countVecMx / totalCntVec
+    freqVec_nozeros = _np.where(countVecMx == 0, 1.0, freqVec)
     if wildcard:
         probs_in = probs.copy()
-        wildcard.update_probs(probs_in, probs, countVecMx / totalCntVec, circuit_list, lookup)
-    pos_probs = _np.where(probs < min_p, min_p, probs)
+        wildcard.update_probs(probs_in, probs, freqVec, circuit_list, lookup)
+    x0 = min_p
+    x = probs / freqVec_nozeros
+    pos_x = _np.where(x < x0, x0, x)
+    #print("P min/max = ",_np.min(probs),_np.max(probs))
+    #print("X min/max = ",_np.min(x),_np.max(x), x0)
 
     # XXX: aren't the next blocks duplicated elsewhere?
     if poissonPicture:
-        S = countVecMx / min_p - totalCntVec  # slope term that is derivative of logl at min_p
-        S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) - totalCntVec * pos_probs  # dim KM (K = nSpamLabels, M = nCircuits)
+        S = countVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
+        S2 = -0.5 * countVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
+        v = countVecMx * (_np.log(pos_x) + _np.log(freqVec_nozeros) - pos_x)  # Nf*(log(x)+log(f) - x)
+        #print("V min/max = ",_np.min(v), _np.max(v))
+
         # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
         v = _np.minimum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where(probs < min_p, v + S * (probs - min_p) + S2 * (probs - min_p)**2, v)
+        v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
         v = _np.where(countVecMx == 0,
                       -totalCntVec * _np.where(probs >= a, probs,
                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
@@ -221,13 +229,15 @@ def logl_terms(model, dataset, circuit_list=None,
         #max(0,(a-p))^2/(2a) + p
 
         if firsts is not None:
-            omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]])
+            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[lookup[i]] * freqVec_nozeros[lookup[i]])
                                              for i in indicesOfCircuitsWithOmittedData])
             v[firsts] -= totalCntVec[firsts] * \
                 _np.where(omitted_probs >= a, omitted_probs,
                           (-1.0 / (3 * a**2)) * omitted_probs**3 + omitted_probs**2 / a + a / 3.0)
 
     else:
+        pos_probs = _np.where(probs < min_p, min_p, probs)
+
         # (the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
         # to sum to 1)
         S = countVecMx / min_p               # slope term that is derivative of logl at min_p
