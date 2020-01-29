@@ -1297,7 +1297,20 @@ def construct_standard_report(results, title="auto",
         ci_brevity=1,
         bgcolor='white'
     )
-    return _Report(templates, results, sections, flags, global_qtys, report_params, build_defaults, workspace=ws)
+
+    pdf_available = True
+    if len(results) > 1:
+        _warnings.warn("PDF output is not available for reports with multiple datasets")
+        pdf_available = False
+    else:
+        for est in next(iter(results.values())).estimates.values():
+            if len(est.goparameters) > 1:
+                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
+                pdf_available = False
+
+    return _Report(templates, results, sections, flags, global_qtys,
+                   report_params, build_defaults, pdf_available=pdf_available,
+                   workspace=ws)
 
 
 def construct_nqnoise_report(results, title="auto",
@@ -1499,7 +1512,26 @@ def construct_nqnoise_report(results, title="auto",
         html='~standard_html_report',
         pdf='standard_pdf_report.tex'
     )
-    return _Report(templates, results, sections, flags, global_qtys, report_params, workspace=ws)
+
+    build_defaults = dict(
+        errgen_type='logGTi',
+        ci_brevity=1,
+        bgcolor='white'
+    )
+
+    pdf_available = True
+    if len(results) > 1:
+        _warnings.warn("PDF output is not available for reports with multiple datasets")
+        pdf_available = False
+    else:
+        for est in next(iter(results.values())).estimates.values():
+            if len(est.goparameters) > 1:
+                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
+                pdf_available = False
+
+    return _Report(templates, results, sections, flags, global_qtys,
+                   report_params, build_defaults, pdf_available=pdf_available,
+                   workspace=ws)
 
 
 def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):

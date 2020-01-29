@@ -34,7 +34,7 @@ class Report:
     """
     def __init__(self, templates, results, sections, flags,
                  global_qtys, report_params, build_defaults=None,
-                 workspace=None):
+                 pdf_available=True, workspace=None):
         self._templates = templates
         self._results = results
         self._sections = sections
@@ -43,6 +43,7 @@ class Report:
         self._report_params = report_params
         self._workspace = workspace or _ws.Workspace()
         self._build_defaults = build_defaults or {}
+        self._pdf_available = pdf_available
 
     def _build(self, build_options=None):
         """ Render all sections to a map of report elements for templating """
@@ -382,8 +383,8 @@ class Report:
             Amount of detail to print to stdout.
         """
 
-        if len(self._results) > 1:
-            raise ValueError("PDF reports cannot be generated for multiple result objects")
+        if not self._pdf_available:
+            raise ValueError("PDF output unavailable")
 
         toggles = _defaultdict(lambda: False)
         toggles.update(
