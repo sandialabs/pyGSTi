@@ -579,30 +579,33 @@ def create_drift_report(results, gss, filename, title="auto",
     """
     from pygsti.report.factory import construct_drift_report
     # Wrap a call to the new factory method
-    advancedOptions = advancedOptions or {}
     ws = ws or _ws.Workspace(advancedOptions.get('cachefile', None))
 
     report = construct_drift_report(
         results, gss, title, ws, verbosity
     )
 
+    advancedOptions = advancedOptions or {}
     precision = advancedOptions.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
-            report.write_pdf(filename, brevity=brevity, precision=precision, auto_open=auto_open, verbosity=verbosity)
+            report.write_pdf(
+                filename, build_options=advancedOptions,
+                brevity=brevity, precision=precision, auto_open=auto_open,
+                verbosity=verbosity
+            )
         else:
             resizable = advancedOptions.get('resizable', True)
             autosize = advancedOptions.get('autosize', 'initial')
             connected = advancedOptions.get('connected', False)
-            embed_figures = advancedOptions.get('embed_figures', True)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, brevity=brevity,
-                precision=precision, resizable=resizable,
-                autosize=autosize, embed_figures=embed_figures,
+                connected=connected, build_options=advancedOptions,
+                brevity=brevity, precision=precision,
+                resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity
             )
 

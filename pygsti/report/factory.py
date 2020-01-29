@@ -553,7 +553,7 @@ def create_general_report(results, filename, title="auto",
          '  pygsti.report.create_standard_report(...)\n'))
 
 
-# TODO deprecate in favor of `construct_standard_report`
+@_deprecated_fn('construct_standard_report')
 def create_standard_report(results, filename, title="auto",
                            confidenceLevel=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
@@ -725,32 +725,39 @@ def create_standard_report(results, filename, title="auto",
 
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
+
     report = construct_standard_report(
-        results, title, confidenceLevel, comm, ws, brevity, advancedOptions, verbosity
+        results, title, confidenceLevel, comm, ws, advancedOptions, verbosity
     )
 
+    advancedOptions = advancedOptions or {}
     precision = advancedOptions.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
-            report.write_pdf(filename, precision=precision, auto_open=auto_open, verbosity=verbosity)
+            report.write_pdf(
+                filename, build_options=advancedOptions,
+                brevity=brevity, precision=precision,
+                auto_open=auto_open, verbosity=verbosity
+            )
         else:
             resizable = advancedOptions.get('resizable', True)
             autosize = advancedOptions.get('autosize', 'initial')
             connected = advancedOptions.get('connected', False)
-            embed_figures = advancedOptions.get('embed_figures', True)
             single_file = filename.endswith(".html")
 
             report.write_html(
-                filename, auto_open=auto_open, link_to=link_to, connected=connected, precision=precision,
-                resizable=resizable, autosize=autosize, embed_figures=embed_figures, single_file=single_file,
-                verbosity=verbosity
+                filename, auto_open=auto_open, link_to=link_to,
+                connected=connected, build_options=advancedOptions,
+                brevity=brevity, precision=precision,
+                resizable=resizable, autosize=autosize,
+                single_file=single_file, verbosity=verbosity
             )
 
     return ws
 
 
-# TODO deprecate in favor of `construct_nqnoise_report`
+@_deprecated_fn('construct_nqnoise_report')
 def create_nqnoise_report(results, filename, title="auto",
                           confidenceLevel=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
@@ -895,25 +902,31 @@ def create_nqnoise_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
     report = construct_nqnoise_report(
-        results, title, confidenceLevel, comm, ws, brevity, advancedOptions, verbosity
+        results, title, confidenceLevel, comm, ws, advancedOptions, verbosity
     )
 
+    advancedOptions = advancedOptions or {}
     precision = advancedOptions.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
-            report.write_pdf(filename, precision=precision, auto_open=auto_open, verbosity=verbosity)
+            report.write_pdf(
+                filename, build_options=advancedOptions,
+                brevity=brevity, precision=precision,
+                auto_open=auto_open, verbosity=verbosity
+            )
         else:
             resizable = advancedOptions.get('resizable', True)
             autosize = advancedOptions.get('autosize', 'initial')
             connected = advancedOptions.get('connected', False)
-            embed_figures = advancedOptions.get('embed_figures', True)
             single_file = filename.endswith(".html")
 
             report.write_html(
-                filename, auto_open=auto_open, link_to=link_to, connected=connected, precision=precision,
-                resizable=resizable, autosize=autosize, embed_figures=embed_figures, single_file=single_file,
-                verbosity=verbosity
+                filename, auto_open=auto_open, link_to=link_to,
+                connected=connected, build_options=advancedOptions,
+                brevity=brevity, precision=precision,
+                resizable=resizable, autosize=autosize,
+                single_file=single_file, verbosity=verbosity
             )
 
     return ws
@@ -1278,7 +1291,13 @@ def construct_standard_report(results, title="auto",
         pdf='standard_pdf_report.tex',
         notebook='report_notebook'
     )
-    return _Report(templates, results, sections, flags, global_qtys, report_params, workspace=ws)
+
+    build_defaults = dict(
+        errgen_type='logGTi',
+        ci_brevity=1,
+        bgcolor='white'
+    )
+    return _Report(templates, results, sections, flags, global_qtys, report_params, build_defaults, workspace=ws)
 
 
 def construct_nqnoise_report(results, title="auto",

@@ -32,7 +32,9 @@ class Report:
     `pygsti.report.factory`.
 
     """
-    def __init__(self, templates, results, sections, flags, global_qtys, report_params, workspace=None):
+    def __init__(self, templates, results, sections, flags,
+                 global_qtys, report_params, build_defaults=None,
+                 workspace=None):
         self._templates = templates
         self._results = results
         self._sections = sections
@@ -40,15 +42,16 @@ class Report:
         self._global_qtys = global_qtys
         self._report_params = report_params
         self._workspace = workspace or _ws.Workspace()
+        self._build_defaults = build_defaults or {}
 
-    def _build(self, build_params=None):
+    def _build(self, build_options=None):
         """ Render all sections to a map of report elements for templating """
-        build_params = build_params or {}
         full_params = {
             'results': self._results,
-            **self._report_params,
-            **build_params,
+            **self._report_params
         }
+        full_params.update(self._build_defaults)
+        full_params.update(build_options or {})
         qtys = self._global_qtys.copy()
         for section in self._sections:
             qtys.update(section.render(self._workspace, **full_params))
@@ -56,11 +59,9 @@ class Report:
         return qtys
 
     def write_html(self, path, auto_open=False, link_to=None,
-                   connected=False, brevity=0, errgen_type='logGTi',
-                   ci_brevity=1, bgcolor='white', precision=None,
-                   resizable=True, autosize='initial',
-                   embed_figures=True, single_file=False,
-                   verbosity=0):
+                   connected=False, build_options=None, brevity=0,
+                   precision=None, resizable=True, autosize='initial',
+                   single_file=False, verbosity=0):
         """ Write this report to the disk as a collection of HTML documents.
 
         Parameters
@@ -85,6 +86,10 @@ class Report:
             will link to web resources (e.g. CDN libraries) instead of embedding
             them.
 
+        build_options : dict
+           Dict of options for building plots. Expected values are
+           defined during construction of this report object.
+
         brevity : int, optional
             Amount of detail to include in the report.  Larger values mean smaller
             "more briefr" reports, which reduce generation time, load time, and
@@ -94,23 +99,6 @@ class Report:
             - 2: Reference sections disappear at brevity=2
             - 3: Germ-level estimate tables disappear at brevity=3
             - 4: Everything but summary figures disappears at brevity=4
-
-        errgen_type: {"logG-logT", "logTiG", "logGTi"}, optional
-            The type of error generator to compute.  Allowed values are:
-
-            - "logG-logT" : errgen = log(gate) - log(target_op)
-            - "logTiG" : errgen = log( dot(inv(target_op), gate) )
-            - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
-
-        ci_brevity : int, optional
-            Roughly specifies how many figures will have confidence intervals
-            (when applicable). Defaults to '1'.  Smaller values mean more
-            tables will get confidence intervals (and reports will take longer
-            to generate).
-
-        bgcolor : str, optional
-            Background color for the color box plots in this report.  Can be common
-            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
         precision : int or dict, optional
             The amount of precision to display.  A dictionary with keys
@@ -129,19 +117,6 @@ class Report:
             i.e. just upon first rendering (`"initial"`) -- or whenever
             the browser window is resized (`"continual"`).
 
-        embed_figures : bool, optional
-            Whether figures should be embedded in the generated report. If
-            False, figures will be written to a 'figures' directory in the
-            output directory, and will be loaded dynamically via
-            AJAX. This may be useful for reducing the size of the
-            generated report if the report includes relatively many
-            figures.
-            Note that all major web browsers will block AJAX requests from
-            an HTML document loaded from the filesystem. If this option is
-            set to False, the generated report will fail to load from the
-            filesystem, and must be served up by a webserver. Python's
-            `http.server` module works fine.
-
         single_file : bool, optional
             If true, the report will be written to a single HTML
             document, with external dependencies baked-in. This mode
@@ -153,6 +128,8 @@ class Report:
             Amount of detail to print to stdout.
         """
 
+        build_options = build_options or {}
+
         toggles = _defaultdict(lambda: False)
         toggles.update(
             {k: True for k in self._flags}
@@ -161,13 +138,10 @@ class Report:
             toggles['BrevityLT' + str(k + 1)] = True
 
         # Render sections
-        qtys = self._build(build_params=dict(
-            brevity=brevity,
-            errgen_type=errgen_type,
-            ci_brevity=ci_brevity,
-            bgcolor=bgcolor,
-            embed_figures=embed_figures
-        ))
+        qtys = self._build(build_options)
+
+        # TODO this really should be a parameter of this method
+        embed_figures = self._report_params.get('embed_figures', True)
 
         if single_file:
             assert(embed_figures), \
@@ -357,8 +331,8 @@ class Report:
             nb.save_to(str(path))
 
     def write_pdf(self, path, latex_cmd='pdflatex', latex_flags=None,
-                  brevity=0, errgen_type='logGTi', ci_brevity=1,
-                  bgcolor='white', precision=None, auto_open=False,
+                  build_options=None,
+                  brevity=0, precision=None, auto_open=False,
                   comm=None, verbosity=0):
         """ Write this report to the disk as a PDF document.
 
@@ -375,6 +349,10 @@ class Report:
         latex_flags : [str], optional
             List of flags to pass when calling `latex_cmd`.
 
+        build_options : dict
+           Dict of options for building plots. Expected values are
+           defined during construction of this report object.
+
         brevity : int, optional
             Amount of detail to include in the report.  Larger values mean smaller
             "more briefr" reports, which reduce generation time, load time, and
@@ -384,23 +362,6 @@ class Report:
             - 2: Reference sections disappear at brevity=2
             - 3: Germ-level estimate tables disappear at brevity=3
             - 4: Everything but summary figures disappears at brevity=4
-
-        errgen_type: {"logG-logT", "logTiG", "logGTi"}, optional
-            The type of error generator to compute.  Allowed values are:
-
-            - "logG-logT" : errgen = log(gate) - log(target_op)
-            - "logTiG" : errgen = log( dot(inv(target_op), gate) )
-            - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
-
-        ci_brevity : int, optional
-            Roughly specifies how many figures will have confidence intervals
-            (when applicable). Defaults to '1'.  Smaller values mean more
-            tables will get confidence intervals (and reports will take longer
-            to generate).
-
-        bgcolor : str, optional
-            Background color for the color box plots in this report.  Can be common
-            color names, e.g. `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
         precision : int or dict, optional
             The amount of precision to display.  A dictionary with keys
@@ -436,12 +397,7 @@ class Report:
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 
         # Render sections
-        qtys = self._build(build_params=dict(
-            brevity=brevity,
-            errgen_type=errgen_type,
-            ci_brevity=ci_brevity,
-            bgcolor=bgcolor
-        ))
+        qtys = self._build(build_options)
         # TODO: filter while generating plots to remove need for sanitization
         qtys = {k: v for k, v in qtys.items()
                 if not(isinstance(v, _ws.Switchboard) or isinstance(v, _ws.SwitchboardView))}
