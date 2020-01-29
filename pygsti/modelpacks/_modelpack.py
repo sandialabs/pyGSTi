@@ -220,6 +220,8 @@ class GSTModelPack(ModelPack):
             fidpairs,
             kwargs.get('keepFraction', 1),
             kwargs.get('keepSeed', None),
+            kwargs.get('includeLGST', True),
+            kwargs.get('nest', True),
             qubit_labels,
             kwargs.get('verbosity', 0),
             kwargs.get('add_default_protocol', False),

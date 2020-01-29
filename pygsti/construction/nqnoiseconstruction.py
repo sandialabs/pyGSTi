@@ -2093,6 +2093,22 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
                                        idtPauliDicts, algorithm, comm=comm)
 
 
+def create_standard_localnoise_sequences(nQubits, maxLengths, singleQfiducials,
+                                         gate_names, nonstd_gate_unitaries=None,
+                                         availability=None, geometry="line",
+                                         paramroot="H+S", sparse=False, verbosity=0, cache=None, idleOnly=False,
+                                         idtPauliDicts=None, algorithm="greedy", idleOpStr=((),), comm=None):
+    """ Docstring: TODO """
+    #Same as cloudnoise but no hopping. -- should maxIdleWeight == 0?
+    return create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
+                                                gate_names, nonstd_gate_unitaries,
+                                                availability, geometry,
+                                                maxIdleWeight=1, maxhops=0, extraWeight1Hops=0, extraGateWeight=0,
+                                                paramroot=paramroot, sparse=sparse, verbosity=verbosity,
+                                                cache=cache, idleOnly=idleOnly,
+                                                idtPauliDicts=idtPauliDicts, algorithm=algorithm,
+                                                idleOpStr=idleOpStr, comm=comm)
+
 def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                          gate_names, nonstd_gate_unitaries=None,
                                          availability=None, geometry="line",
