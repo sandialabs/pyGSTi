@@ -2109,6 +2109,7 @@ def create_standard_localnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                                 idtPauliDicts=idtPauliDicts, algorithm=algorithm,
                                                 idleOpStr=idleOpStr, comm=comm)
 
+
 def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                          gate_names, nonstd_gate_unitaries=None,
                                          availability=None, geometry="line",

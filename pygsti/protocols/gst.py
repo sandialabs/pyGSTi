@@ -76,7 +76,8 @@ class StandardGSTDesign(StructuredGSTDesign):
 
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, includeLGST=True, nest=True, qubit_labels=None, verbosity=0, add_default_protocol=False):
+                 keepSeed=None, includeLGST=True, nest=True, qubit_labels=None, verbosity=0,
+                 add_default_protocol=False):
 
         #Get/load fiducials and germs
         prep, meas, germs = _load_fiducials_and_germs(

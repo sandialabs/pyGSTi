@@ -305,7 +305,7 @@ class ProcessorSpec(object):
                 self.nonstd_gate_unitaries, None, self.availability,
                 self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
-            
+
         return model
 
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
