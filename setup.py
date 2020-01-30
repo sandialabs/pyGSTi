@@ -113,7 +113,8 @@ extras = {
         'pandas',
         'psutil',
         'rednose',
-        'zmq'
+        'zmq',
+        'jinja2'
     ]
 }
 
