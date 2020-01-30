@@ -219,8 +219,8 @@ class GaugeVariantsErrGenNQubitSection(GaugeVariantsErrGenSection):
                                   errgen_type='logGTi', **kwargs):
         return workspace.NQubitErrgenTable(
             switchboard.gsGIRep, _cri(1, switchboard, confidence_level, ci_brevity),
-            ('errgen', 'H', 'S'), 'boxes'
-        )
+            ('H', 'S'), 'boxes'
+        )  # 'errgen' not allowed - 'A'?
 
 
 class GaugeVariantsRawSection(_Section):
