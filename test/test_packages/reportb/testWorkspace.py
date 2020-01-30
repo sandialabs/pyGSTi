@@ -194,7 +194,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.GaugeRobustErrgenTable(self.mdl, self.tgt) )
 
         prepStrs = self.results.circuit_lists['prep fiducials']
-        effectStrs = self.results.circuit_lists['effect fiducials']
+        effectStrs = self.results.circuit_lists['meas fiducials']
         tbls.append( w.CircuitTable((prepStrs,effectStrs),
                                     ["Prep.","Measure"], commonTitle="Fiducials"))
 
@@ -277,7 +277,7 @@ class TestWorkspace(ReportBaseCase):
     def test_plot_creation(self):
         w = pygsti.report.Workspace()
         prepStrs = self.results.circuit_lists['prep fiducials']
-        effectStrs = self.results.circuit_lists['effect fiducials']
+        effectStrs = self.results.circuit_lists['meas fiducials']
         non_gatestring_strs = [ 'GxString', 'GyString' ]
 
         plts = []
