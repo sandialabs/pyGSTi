@@ -296,7 +296,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
         return std.parse_stringfile(filename, line_labels, num_lines)
 
 
-def load_protocol_from_dir(dirname):
+def load_protocol_from_dir(dirname, comm=None):
     """
     Load a :class:`Protocol` from a directory on disk.
 
@@ -304,6 +304,9 @@ def load_protocol_from_dir(dirname):
     ----------
     dirname : string
         Directory name.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
 
     Returns
     -------
@@ -313,7 +316,7 @@ def load_protocol_from_dir(dirname):
     return _metadir.cls_from_meta_json(dirname).from_dir(dirname)
 
 
-def load_edesign_from_dir(dirname):
+def load_edesign_from_dir(dirname, comm=None):
     """
     Load a :class:`ExperimentDesign` from a directory on disk.
 
@@ -321,6 +324,9 @@ def load_edesign_from_dir(dirname):
     ----------
     dirname : string
         Directory name.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
 
     Returns
     -------
@@ -330,7 +336,7 @@ def load_edesign_from_dir(dirname):
     return _metadir.cls_from_meta_json(dirname / 'edesign').from_dir(dirname)
 
 
-def load_data_from_dir(dirname):
+def load_data_from_dir(dirname, comm=None):
     """
     Load a :class:`ProtocolData` from a directory on disk.
 
@@ -338,6 +344,9 @@ def load_data_from_dir(dirname):
     ----------
     dirname : string
         Directory name.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
 
     Returns
     -------
@@ -347,7 +356,7 @@ def load_data_from_dir(dirname):
     return _metadir.cls_from_meta_json(dirname / 'data').from_dir(dirname)
 
 
-def load_results_from_dir(dirname, name=None, preloaded_data=None):
+def load_results_from_dir(dirname, name=None, preloaded_data=None, comm=None):
     """
     Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a
     directory on disk (depending on whether `name` is given).
@@ -358,12 +367,19 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None):
         Directory name.  This should be a "base" directory, containing
         subdirectories like "edesign", "data", and "results"
 
-
     name : string or None
         The 'name' of a particular :class:`ProtocolResults` object, which
         is a sub-directory beneath `dirname/results/`.  If None, then *all*
         the results (all names) at the given base-directory are loaded and
         returned as a :class:`ProtocolResultsDir` object.
+
+    preloaded_data : ProtocolData, optional
+        The data object belonging to the to-be-loaded results, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
 
     Returns
     -------

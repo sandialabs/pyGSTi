@@ -71,7 +71,7 @@ class Protocol(object):
         self.name = name if name else self.__class__.__name__
         self.auxfile_types = {}
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         """
         Run this protocol on `data`.
 
@@ -79,6 +79,13 @@ class Protocol(object):
         ----------
         data : ProtocolData
             The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
 
         Returns
         -------
@@ -144,7 +151,7 @@ class MultiPassProtocol(Protocol):
         self.protocol = protocol
         self.auxfile_types['protocol'] = 'protocolobj'
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         """
         Run this protocol on `data`.
 
@@ -153,6 +160,13 @@ class MultiPassProtocol(Protocol):
         data : ProtocolData
             The input data.
 
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
+
         Returns
         -------
         MultiPassResults
@@ -160,7 +174,7 @@ class MultiPassProtocol(Protocol):
         results = MultiPassResults(data, self)
         for pass_name, sub_data in data.passes.items():  # a multipass DataProtocol object contains per-pass datas
             #TODO: print progress: pass X of Y, etc
-            sub_results = self.protocol.run(sub_data)
+            sub_results = self.protocol.run(sub_data, memlimit, comm)
             # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?
             #  or call as_dict?
             results.passes[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
@@ -177,7 +191,7 @@ class ProtocolRunner(object):
     objects within it.
     """
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -185,6 +199,13 @@ class ProtocolRunner(object):
         ----------
         data : ProtocolData
             The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this
+            protocol-runner in parallel.
 
         Returns
         -------
@@ -216,7 +237,7 @@ class TreeRunner(ProtocolRunner):
         """
         self.protocols = protocol_dict
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -224,6 +245,13 @@ class TreeRunner(ProtocolRunner):
         ----------
         data : ProtocolData
             The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this
+            protocol-runner in parallel.
 
         Returns
         -------
@@ -272,7 +300,7 @@ class SimpleRunner(ProtocolRunner):
         self.edesign_type = edesign_type
         self.do_passes_separately = not protocol_can_handle_multipass_data
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -280,6 +308,13 @@ class SimpleRunner(ProtocolRunner):
         ----------
         data : ProtocolData
             The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this
+            protocol-runner in parallel.
 
         Returns
         -------
@@ -320,7 +355,7 @@ class DefaultRunner(ProtocolRunner):
         """
         pass
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -328,6 +363,13 @@ class DefaultRunner(ProtocolRunner):
         ----------
         data : ProtocolData
             The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this
+            protocol-runner in parallel.
 
         Returns
         -------
@@ -1402,7 +1444,7 @@ class ProtocolResultsDir(_TreeNode):
         return P.pformat(self.as_nameddict())
 
 
-def run_default_protocols(data):
+def run_default_protocols(data, memlimit=None, comm=None):
     """
     Run the default protocols for the data-tree rooted at `data`.
 
@@ -1410,6 +1452,13 @@ def run_default_protocols(data):
     ----------
     data : ProtocolData
         the data to run default protocols on.
+
+    memlimit : int, optional
+        A rough per-processor memory limit in bytes.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to run the protocols
+        in parallel.
 
     Returns
     -------
@@ -1466,7 +1515,7 @@ class ProtocolPostProcessor(object):
     def _init_unserialized_attributes(self):
         pass
 
-    def run(self, results):
+    def run(self, results, memlimit=None, comm=None):
         """
         Run this post-processor on `results`.
 
@@ -1474,6 +1523,13 @@ class ProtocolPostProcessor(object):
         ----------
         results : ProtocolResults
             The input results.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this
+            post-processor in parallel.
 
         Returns
         -------

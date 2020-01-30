@@ -494,7 +494,8 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
 
     Returns
     -------
-    None
+    DataSet
+        The generated data set (also written in place of the template file).
     """
     from ..construction import generate_fake_data as _generate_fake_data
     ds_template = _loaders.load_dataset(dataset_filename, ignoreZeroCountLines=False, verbosity=0)
@@ -505,3 +506,4 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
     if fixedColumnMode == "auto":
         fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8)
     write_dataset(dataset_filename, ds, fixedColumnMode=fixedColumnMode)
+    return ds

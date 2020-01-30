@@ -219,7 +219,7 @@ class StabilityAnalysis(_proto.Protocol):
         # ...
         #self.auxfile_types['big_thing'] = 'pickle'
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         #design = data.edesign  # experiment design (specifies circuits)
         ds = data.dataset  # dataset
 

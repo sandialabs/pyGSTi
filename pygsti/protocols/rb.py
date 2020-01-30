@@ -682,7 +682,7 @@ class VolumetricBenchmarkGrid(Benchmark):
         self.auxfile_types['dscomparator'] = 'pickle'
         self.auxfile_types['rescaler'] = 'reset'  # punt for now - fix later
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         #Since we know that VolumetricBenchmark protocol objects Create a single results just fill
         # in data under the result object's 'volumetric_benchmarks' and 'failure_counts'
         # keys, and these are indexed by width and depth (even though each VolumetricBenchmark
@@ -719,7 +719,7 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
         self.statistic = statistic
         self.aggregate = aggregate
 
-    def run(self, results):
+    def run(self, results, memlimit=None, comm=None):
         data = results.data
         paths = results.get_tree_paths() if self.paths == 'all' else self.paths
         #Note: above won't work if given just a results object - needs a dir
@@ -894,7 +894,7 @@ class VolumetricBenchmark(Benchmark):
             rescale_function = rescaler
         self.rescale_function = rescale_function
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
 
         design = data.edesign
 
@@ -1051,7 +1051,7 @@ class RandomizedBenchmarking(Benchmark):
         self.datatype = datatype
         self.defaultfit = defaultfit
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
 
         design = data.edesign
 

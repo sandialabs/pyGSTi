@@ -33,8 +33,8 @@ class ModelTest(_proto.Protocol):
     """A protocol that tests how well a model agrees with a given set of data."""
 
     def __init__(self, model_to_test, target_model=None, gaugeopt_suite=None,
-                 gaugeopt_target=None, advancedOptions=None, comm=None,
-                 memLimit=None, output_pkl=None, verbosity=2, name=None):
+                 gaugeopt_target=None, advancedOptions=None, output_pkl=None,
+                 verbosity=2, name=None):
 
         if advancedOptions is None: advancedOptions = {}
         if advancedOptions.get('set trivial gauge group', True):
@@ -47,8 +47,6 @@ class ModelTest(_proto.Protocol):
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
-        self.comm = comm
-        self.memLimit = memLimit
         self.output_pkl = output_pkl
         self.verbosity = verbosity
 
@@ -57,18 +55,16 @@ class ModelTest(_proto.Protocol):
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['advancedOptions'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['comm'] = 'reset'
 
-    def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
-                                      meas_fiducials, germs, maxLengths):
-        from .gst import StandardGSTDesign as _StandardGSTDesign
-        design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-        return self.run(_proto.ProtocolData(design, dataset))
+    #def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
+    #                                  meas_fiducials, germs, maxLengths):
+    #    from .gst import StandardGSTDesign as _StandardGSTDesign
+    #    design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #    return self.run(_proto.ProtocolData(design, dataset))
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         the_model = self.model_to_test
         advancedOptions = self.advancedOptions
-        comm = self.comm
 
         if isinstance(data.edesign, _proto.CircuitListsDesign):
             lsgstLists = data.edesign.circuit_lists
@@ -115,4 +111,4 @@ class ModelTest(_proto.Protocol):
         return _package_into_results(self, data, target_model, the_model,
                                      lsgstLists, parameters, None, mdl_lsgst_list,
                                      self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm,
-                                     self.memLimit, self.output_pkl, self.verbosity, profiler)
+                                     memlimit, self.output_pkl, self.verbosity, profiler)

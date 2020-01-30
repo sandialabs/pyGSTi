@@ -141,7 +141,7 @@ class RobustPhaseEstimation(_proto.Protocol):
 
         return angles
 
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
         meas = self.parse_dataset(data.edesign, data.dataset)
         angles = self.raw_angles(meas)
 

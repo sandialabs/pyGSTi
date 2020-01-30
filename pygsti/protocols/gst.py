@@ -116,6 +116,8 @@ class StandardGSTDesign(StructuredGSTDesign):
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
         self.auxfile_types['meas_fiducials'] = 'text-circuit-list'
         self.auxfile_types['germs'] = 'text-circuit-list'
+        self.auxfile_types['germ_length_limits'] = 'pickle'
+        self.auxfile_types['fiducial_pairs'] = 'pickle'
         if add_default_protocol:
             self.add_default_protocol(StandardGST(name='StdGST'))
 
@@ -124,8 +126,8 @@ class GateSetTomography(_proto.Protocol):
     """ The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set."""
 
     def __init__(self, initialModelFilenameOrObj=None, gaugeopt_suite='stdgaugeopt',
-                 gaugeopt_target=None, advancedOptions=None, comm=None,
-                 memLimit=None, output_pkl=None, verbosity=2, name=None):
+                 gaugeopt_target=None, advancedOptions=None, output_pkl=None,
+                 verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
         # because they are mutable objects
@@ -136,8 +138,6 @@ class GateSetTomography(_proto.Protocol):
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
-        self.comm = comm
-        self.memLimit = memLimit
         self.output_pkl = output_pkl
         self.verbosity = verbosity
 
@@ -145,27 +145,23 @@ class GateSetTomography(_proto.Protocol):
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['advancedOptions'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['comm'] = 'reset'
 
     #TODO: Maybe make methods like this separate functions??
+    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
+    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #    return self.run(_proto.ProtocolData(design, dataset))
+    #
+    #def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
+    #    design = StructuredGSTDesign(target_model, circuit_structs)
+    #    return self.run(_proto.ProtocolData(design, dataset))
+    #
+    #def run_using_circuit_lists(self, target_model, circuit_lists, dataset):
+    #    design = GateSetTomographyDesign(target_model, circuit_lists)
+    #    return self.run(_proto.ProtocolData(design, dataset))
 
-    def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-        design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-        return self.run(_proto.ProtocolData(design, dataset))
-
-    def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
-        design = StructuredGSTDesign(target_model, circuit_structs)
-        return self.run(_proto.ProtocolData(design, dataset))
-
-    def run_using_circuit_lists(self, target_model, circuit_lists, dataset):
-        design = GateSetTomographyDesign(target_model, circuit_lists)
-        return self.run(_proto.ProtocolData(design, dataset))
-
-    def run(self, data):
+    def run(self, data, memlimit=None, comm=None):
 
         tRef = _time.time()
-        comm = self.comm
-        memLimit = self.memLimit
         advancedOptions = self.advancedOptions
 
         profile = advancedOptions.get('profile', 1)
@@ -296,7 +292,7 @@ class GateSetTomography(_proto.Protocol):
             circuitWeightsDict=advancedOptions.get('circuitWeights', None),
             opLabelAliases=aliases,
             verbosity=printer,
-            memLimit=memLimit,
+            memLimit=memlimit,
             profiler=profiler,
             comm=comm, distributeMethod=advancedOptions.get(
                 'distributeMethod', "default"),
@@ -332,7 +328,7 @@ class GateSetTomography(_proto.Protocol):
         #set parameters
         parameters = _collections.OrderedDict()
         parameters['objective'] = objective
-        parameters['memLimit'] = memLimit
+        parameters['memLimit'] = memlimit
         parameters['starting point'] = startingPt
         parameters['profiler'] = profiler
 
@@ -363,7 +359,7 @@ class GateSetTomography(_proto.Protocol):
 
         return _package_into_results(self, data, data.edesign.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
-                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm, memLimit,
+                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm, memlimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
 
 
@@ -372,7 +368,7 @@ class StandardGST(_proto.Protocol):
 
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeopt_suite='stdgaugeopt',
-                 gaugeopt_target=None, modelsToTest=None, comm=None, memLimit=None,
+                 gaugeopt_target=None, modelsToTest=None,
                  advancedOptions=None, output_pkl=None, verbosity=2, name=None):
 
         #Note: *don't* specify default dictionary arguments, as this is dangerous
@@ -385,8 +381,6 @@ class StandardGST(_proto.Protocol):
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
-        self.comm = comm
-        self.memLimit = memLimit
         self.output_pkl = output_pkl
         self.verbosity = verbosity
 
@@ -396,13 +390,13 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['advancedOptions'] = 'pickle'
         self.auxfile_types['comm'] = 'reset'
 
-    def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-        design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-        data = _proto.ProtocolData(design, dataset)
-        return self.run(data)
+    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
+    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #    data = _proto.ProtocolData(design, dataset)
+    #    return self.run(data)
 
-    def run(self, data):
-        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, self.comm)
+    def run(self, data, memlimit=None, comm=None):
+        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
 
         modes = self.modes
         modelsToTest = self.models_to_test
@@ -423,8 +417,8 @@ class StandardGST(_proto.Protocol):
                     model_to_test = data.edesign.target_model.copy()  # no parameterization change
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label, 'onBadFit': []})
                     mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite, self.gaugeopt_target, advanced,
-                                         self.comm, self.memLimit, verbosity=printer - 1)
-                    ret = mdltest.run(data)
+                                         verbosity=printer - 1)
+                    ret = mdltest.run(data, memlimit, comm)
 
                 elif mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode is a parameterization
                     est_label = parameterization = mode  # for now, 1-1 correspondence
@@ -433,20 +427,20 @@ class StandardGST(_proto.Protocol):
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
 
                     gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target,
-                              advanced, self.comm, self.memLimit, verbosity=printer - 1)
-                    ret = gst.run(data)
+                              advanced, verbosity=printer - 1)
+                    ret = gst.run(data, memlimit, comm)
 
                 elif mode in modelsToTest:
                     est_label = mode
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
                     mdltest = _ModelTest(modelsToTest[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
-                                         advanced, self.comm, self.memLimit, verbosity=printer - 1)
+                                         advanced, comm, memlimit, verbosity=printer - 1)
                     ret = mdltest.run(data)
                 else:
                     raise ValueError("Invalid item in 'modes' argument: %s" % mode)
 
         #Write results to a pickle file if desired
-        if self.output_pkl and (self.comm is None or self.comm.Get_rank() == 0):
+        if self.output_pkl and (comm is None or comm.Get_rank() == 0):
             if isinstance(self.output_pkl, str):
                 with open(self.output_pkl, 'wb') as pklfile:
                     _pickle.dump(ret, pklfile)
