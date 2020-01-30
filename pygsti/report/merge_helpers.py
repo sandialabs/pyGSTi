@@ -140,14 +140,14 @@ def rsync_offline_dir(outputDir):
     Copy the pyGSTi 'offline' directory into `outputDir` by creating or updating
     any outdated files as needed.
     """
-    destDir = _os.path.join(outputDir, "offline")
+    destDir = _os.path.join(str(outputDir), "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                "templates", "offline")  # TODO package resources?
     if not _os.path.exists(destDir):
         _shutil.copytree(offlineDir, destDir)
 
     else:
-        for dirpath, _, filenames in _os.walk(offlineDir):
+        for dirpath, _, filenames in _os.walk(str(offlineDir)):
             for nm in filenames:
                 srcnm = _os.path.join(dirpath, nm)
                 relnm = _os.path.relpath(srcnm, offlineDir)
@@ -245,7 +245,7 @@ def clearDir(path):
     """ If `path` is a directory, remove all the files within it """
     if not _os.path.isdir(path): return
     for fn in _os.listdir(path):
-        full_fn = _os.path.join(path, fn)
+        full_fn = _os.path.join(str(path), fn)
         if _os.path.isdir(full_fn):
             clearDir(full_fn)
             _os.rmdir(full_fn)
