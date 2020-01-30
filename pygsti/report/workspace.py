@@ -1686,7 +1686,7 @@ class WorkspaceOutput(object):
 
             #Create separate files with div contents
             for divContent, divFilenm in zip(div_contents, div_filenames):
-                with open(_os.path.join(link_to_files_dir, divFilenm), 'w') as f:
+                with open(_os.path.join(str(link_to_files_dir), divFilenm), 'w') as f:
                     f.write(divContent)
         html += "\n</div>\n"  # ends pygsti-wsoutput-group div
 
@@ -1795,7 +1795,7 @@ class WorkspaceOutput(object):
 
         if link_to:
             # Add download links for all divs at once since they're all ready
-            rel_figure_dir = _os.path.basename(link_to_files_dir)
+            rel_figure_dir = _os.path.basename(str(link_to_files_dir))
             if 'tex' in link_to:
                 for div_id in div_ids:
                     js += "  $('#%s').append('<a class=\"dlLink\" href=\"%s/" % (div_id, rel_figure_dir)
@@ -2045,7 +2045,7 @@ class WorkspaceTable(WorkspaceOutput):
                     if render_includes or leave_src:
                         d = {'toLatex': table_dict['latex']}
                         _merge.merge_latex_template(d, "standalone.tex",
-                                                    _os.path.join(output_dir, "%s.tex" % tableDivID))
+                                                    _os.path.join(str(output_dir), "%s.tex" % tableDivID))
 
                     if render_includes:
                         assert('latex_cmd' in self.options and self.options['latex_cmd']), \
@@ -2072,9 +2072,9 @@ class WorkspaceTable(WorkspaceOutput):
                             _os.chdir(cwd)
 
                         latex_list.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
-                                          (W, H, _os.path.join(output_dir, "%s.pdf" % tableDivID)))
+                                          (W, H, _os.path.join(str(output_dir), "%s.pdf" % tableDivID)))
                     elif leave_src:
-                        latex_list.append("\\input{%s}" % _os.path.join(output_dir, "%s.tex" % tableDivID))
+                        latex_list.append("\\input{%s}" % _os.path.join(str(output_dir), "%s.tex" % tableDivID))
                     else:
                         latex_list.append("%% Didn't generated anything for tableID=%s" % tableDivID)
                 else:
@@ -2099,7 +2099,7 @@ class WorkspaceTable(WorkspaceOutput):
                     table_dict = table.render("python", output_dir=None)
                     tables_python[tableDivID] = table_dict['python']
                 elif switched_item_mode == "separate files":
-                    outputFilename = _os.path.join(output_dir, "%s.pkl" % tableDivID)
+                    outputFilename = _os.path.join(str(output_dir), "%s.pkl" % tableDivID)
                     table_dict = table.render("python", output_dir=output_dir)
                     #( setting output_dir generates separate files for plots in table )
                     table_dict['python'].to_pickle(outputFilename)  # a DataFrame
@@ -2165,7 +2165,7 @@ class WorkspaceTable(WorkspaceOutput):
             self.sbSwitchIndices = []
             self.switchpos_map = {(): index}
 
-            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+            qtys = {'title': _os.path.splitext(_os.path.basename(str(filename)))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                         verbosity=verbosity)
@@ -2196,10 +2196,10 @@ class WorkspaceTable(WorkspaceOutput):
                 else:
                     raise ValueError("Must supply `index` argument for a non-trivially-switched WorkspaceTable")
 
-            output_dir = _os.path.dirname(filename)
-            filebase, ext = _os.path.splitext(_os.path.basename(filename))
+            output_dir = _os.path.dirname(str(filename))
+            filebase, ext = _os.path.splitext(_os.path.basename(str(filename)))
 
-            tempDir = _os.path.join(output_dir, "%s_temp" % filebase)
+            tempDir = _os.path.join(str(output_dir), "%s_temp" % filebase)
             if not _os.path.exists(tempDir): _os.mkdir(tempDir)
 
             self.set_render_options(switched_item_mode="separate files",
@@ -2216,8 +2216,8 @@ class WorkspaceTable(WorkspaceOutput):
                 raise ValueError("Unknown file type for %s" % filename)
 
             self.render("latex")  # renders everything in temp dir
-            _os.rename(_os.path.join(tempDir, "%s%s" % (filebase, ext)),
-                       _os.path.join(output_dir, "%s%s" % (filebase, ext)))
+            _os.rename(_os.path.join(str(tempDir), "%s%s" % (filebase, ext)),
+                       _os.path.join(str(output_dir), "%s%s" % (filebase, ext)))
 
             #remove all other files
             _shutil.rmtree(tempDir)
@@ -2383,7 +2383,7 @@ class WorkspacePlot(WorkspaceOutput):
                         lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
-                        rel_figure_dir=_os.path.basename(output_dir) if not (output_dir in (None, False)) else None)
+                        rel_figure_dir=_os.path.basename(str(output_dir)) if not (output_dir in (None, False)) else None)
 
                 if switched_item_mode == 'separate files':
                     assert(handlersOnly is False)  # doesn't make sense to put only handlers in a separate file
@@ -2435,7 +2435,7 @@ class WorkspacePlot(WorkspaceOutput):
                 if i in overrideIDs: plotDivID = overrideIDs[i]
 
                 if self.options.get('render_includes', True):
-                    filename = _os.path.join(output_dir, plotDivID + ".pdf")
+                    filename = _os.path.join(str(output_dir), plotDivID + ".pdf")
                     _plotly_to_matplotlib(fig, filename)
 
                     W, H = maxW, maxH
@@ -2473,7 +2473,7 @@ class WorkspacePlot(WorkspaceOutput):
                 if switched_item_mode == "inline":
                     plots_python[plotDivID] = data
                 elif switched_item_mode == "separate files":
-                    outputFilename = _os.path.join(output_dir, "%s.pkl" % plotDivID)
+                    outputFilename = _os.path.join(str(output_dir), "%s.pkl" % plotDivID)
                     with open(outputFilename, "wb") as fPkl:
                         _pickle.dump(data, fPkl)
                     plots_python[plotDivID] = "data_%s = pickle.load(open('%s','rb'))" \
@@ -2537,7 +2537,7 @@ class WorkspacePlot(WorkspaceOutput):
             self.sbSwitchIndices = []
             self.switchpos_map = {(): index}
 
-            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+            qtys = {'title': _os.path.splitext(_os.path.basename(str(filename)))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                         verbosity=verbosity)
@@ -2730,7 +2730,7 @@ class WorkspaceText(WorkspaceOutput):
                     if render_includes or leave_src:
                         d = {'toLatex': text_dict['latex']}
                         _merge.merge_latex_template(d, "standalone.tex",
-                                                    _os.path.join(output_dir, "%s.tex" % textDivID))
+                                                    _os.path.join(str(output_dir), "%s.tex" % textDivID))
 
                     if render_includes:
                         render_dir = output_dir
@@ -2758,9 +2758,9 @@ class WorkspaceText(WorkspaceOutput):
                             _os.chdir(cwd)
 
                         latex_list.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
-                                          (W, H, _os.path.join(output_dir, "%s.pdf" % textDivID)))
+                                          (W, H, _os.path.join(str(output_dir), "%s.pdf" % textDivID)))
                     elif leave_src:
-                        latex_list.append("\\input{%s}" % _os.path.join(output_dir, "%s.tex" % textDivID))
+                        latex_list.append("\\input{%s}" % _os.path.join(str(output_dir), "%s.tex" % textDivID))
                     else:
                         latex_list.append("%% Didn't generated anything for textID=%s" % textDivID)
                 else:
@@ -2786,7 +2786,7 @@ class WorkspaceText(WorkspaceOutput):
                 if switched_item_mode == "inline":
                     texts_python[textDivID] = text_dict['python']
                 elif switched_item_mode == "separate files":
-                    outputFilename = _os.path.join(output_dir, "%s.pkl" % textDivID)
+                    outputFilename = _os.path.join(str(output_dir), "%s.pkl" % textDivID)
                     with open(outputFilename, 'wb') as f:
                         _pickle.dump(text_dict['python'], f)
                     texts_python[textDivID] = "text_%s = pickle.load(open('%s','rb'))" \
@@ -2851,7 +2851,7 @@ class WorkspaceText(WorkspaceOutput):
             self.sbSwitchIndices = []
             self.switchpos_map = {(): index}
 
-            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+            qtys = {'title': _os.path.splitext(_os.path.basename(str(filename)))[0],
                     'singleItem': self}
             _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
                                         verbosity=verbosity)
@@ -2885,7 +2885,7 @@ class WorkspaceText(WorkspaceOutput):
             output_dir = _os.path.dirname(filename)
             filebase, ext = _os.path.splitext(_os.path.basename(filename))
 
-            tempDir = _os.path.join(output_dir, "%s_temp" % filebase)
+            tempDir = _os.path.join(str(output_dir), "%s_temp" % filebase)
             if not _os.path.exists(tempDir): _os.mkdir(tempDir)
 
             self.set_render_options(switched_item_mode="separate files",
@@ -2902,8 +2902,8 @@ class WorkspaceText(WorkspaceOutput):
                 raise ValueError("Unknown file type for %s" % filename)
 
             self.render("latex")  # renders everything in temp dir
-            _os.rename(_os.path.join(tempDir, "%s%s" % (filebase, ext)),
-                       _os.path.join(output_dir, "%s%s" % (filebase, ext)))
+            _os.rename(_os.path.join(str(tempDir), "%s%s" % (filebase, ext)),
+                       _os.path.join(str(output_dir), "%s%s" % (filebase, ext)))
 
             #remove all other files
             _shutil.rmtree(tempDir)
