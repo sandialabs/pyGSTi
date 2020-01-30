@@ -2461,24 +2461,25 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         maxSyntheticIdleWt = (gateWt + extraGateWeight) + (gateWt - 1)  # gate-error-wt + spreading potential
         maxSyntheticIdleWt = min(maxSyntheticIdleWt, nQubits)
 
-        if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
-            printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
-            printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-            sidle_model = _CloudNoiseModel.build_from_hops_and_weights(
-                maxSyntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
-                maxIdleWeight, 0, maxhops, extraWeight1Hops,
-                extraGateWeight, sparse, verbosity=printer - 5,
-                sim_type="termorder", parameterization=ptermstype, errcomp_type="gates")
-            sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
-            # these are the params we want to amplify...
-            idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
+        for syntheticIdleWt in range(1, maxSyntheticIdleWt + 1):
+            if syntheticIdleWt not in cache['Idle gatename fidpair lists']:
+                printer.log("Getting sequences needed for max-weight=%d errors" % syntheticIdleWt)
+                printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
+                sidle_model = _CloudNoiseModel.build_from_hops_and_weights(
+                    syntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
+                    maxIdleWeight, 0, maxhops, extraWeight1Hops,
+                    extraGateWeight, sparse, verbosity=printer - 5,
+                    sim_type="termorder", parameterization=ptermstype, errcomp_type="gates")
+                sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
+                # these are the params we want to amplify...
+                idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
 
-            _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
-                list(range(maxSyntheticIdleWt)), idleOpStr, sidle_model,
-                singleQfiducials, prepLbl, None, wrtParams=idle_params,
-                algorithm=algorithm, comm=comm, verbosity=printer - 1)
-            #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
-            cache['Idle gatename fidpair lists'][maxSyntheticIdleWt] = idle_gatename_fidpair_lists
+                _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
+                    list(range(syntheticIdleWt)), idleOpStr, sidle_model,
+                    singleQfiducials, prepLbl, None, wrtParams=idle_params,
+                    algorithm=algorithm, comm=comm, verbosity=printer - 1)
+                #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
+                cache['Idle gatename fidpair lists'][syntheticIdleWt] = idle_gatename_fidpair_lists
 
     #Look for and add additional germs to amplify the *rest* of the model's parameters
     Gi_nparams = model.operation_blks['layers']['globalIdle'].num_params()  # assumes nqnoise (Implicit) model
