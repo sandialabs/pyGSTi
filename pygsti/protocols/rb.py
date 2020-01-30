@@ -699,8 +699,8 @@ class VolumetricBenchmarkGrid(Benchmark):
         # with "top level" dicts correpsonding to different paths
         VB = VolumetricBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
                                  self.rescaler, self.dscomparator, name=self.name)
-        separate_results = _proto.SimpleRunner(VB).run(trimmed_data)
-        pp_results = self.postproc.run(separate_results)
+        separate_results = _proto.SimpleRunner(VB).run(trimmed_data, memlimit, comm)
+        pp_results = self.postproc.run(separate_results, memlimit, comm)
         pp_results.protocol = self
         return pp_results
 

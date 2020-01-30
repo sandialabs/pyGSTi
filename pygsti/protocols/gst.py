@@ -434,8 +434,8 @@ class StandardGST(_proto.Protocol):
                     est_label = mode
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
                     mdltest = _ModelTest(modelsToTest[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
-                                         advanced, comm, memlimit, verbosity=printer - 1)
-                    ret = mdltest.run(data)
+                                         advanced, verbosity=printer - 1)
+                    ret = mdltest.run(data, memlimit, comm)
                 else:
                     raise ValueError("Invalid item in 'modes' argument: %s" % mode)
 

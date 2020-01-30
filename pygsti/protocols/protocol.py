@@ -263,7 +263,7 @@ class TreeRunner(ProtocolRunner):
             root = ret
             for el in path:  # traverse path
                 root = root[el]
-            root.for_protocol[protocol.name] = protocol.run(root.data)  # run the protocol
+            root.for_protocol[protocol.name] = protocol.run(root.data, memlimit, comm)  # run the protocol
 
         return ret
 
@@ -328,9 +328,10 @@ class SimpleRunner(ProtocolRunner):
                     visit_node(subnode)
             elif node.data.is_multipass() and self.do_passes_separately:
                 implicit_multipassprotocol = MultiPassProtocol(self.protocol)
-                node.for_protocol[implicit_multipassprotocol.name] = implicit_multipassprotocol.run(node.data)
+                node.for_protocol[implicit_multipassprotocol.name] = \
+                    implicit_multipassprotocol.run(node.data, memlimit, comm)
             elif self.edesign_type == 'all' or isinstance(node.data.edesign, self.edesign_type):
-                node.for_protocol[self.protocol.name] = self.protocol.run(node.data)
+                node.for_protocol[self.protocol.name] = self.protocol.run(node.data, memlimit, comm)
             else:
                 pass  # don't run on this node, since the experiment design has the wrong type
         visit_node(ret)
@@ -381,7 +382,7 @@ class DefaultRunner(ProtocolRunner):
             for name, protocol in node.data.edesign.default_protocols.items():
                 assert(name == protocol.name), "Protocol name inconsistency"
                 print("Running protocol %s at %s" % (name, breadcrumb))
-                node.for_protocol[name] = protocol.run(node.data)
+                node.for_protocol[name] = protocol.run(node.data, memlimit, comm)
 
             for subname, subnode in node.items():
                 visit_node(subnode, breadcrumb + '/' + str(subname))
@@ -1464,7 +1465,7 @@ def run_default_protocols(data, memlimit=None, comm=None):
     -------
     ProtocolResultsDir
     """
-    return DefaultRunner().run(data)
+    return DefaultRunner().run(data, memlimit, comm)
 
 
 class ProtocolPostProcessor(object):

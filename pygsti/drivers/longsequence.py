@@ -131,8 +131,8 @@ def do_model_test(modelFilenameOrObj,
 
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
     proto = _proto.ModelTest(_load_model(modelFilenameOrObj), None, gopt_suite, None,
-                             advancedOptions, comm, memLimit, output_pkl, printer)
-    return proto.run(data)
+                             advancedOptions, output_pkl, printer)
+    return proto.run(data, memLimit, comm)
 
 
 def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -356,8 +356,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
     proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
-                                     comm, memLimit, output_pkl, printer)
-    return proto.run(data)
+                                     output_pkl, printer)
+    return proto.run(data, memLimit, comm)
 
 
 def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -452,8 +452,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
     proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
-                                     comm, memLimit, output_pkl, printer)
-    return proto.run(data)
+                                     output_pkl, printer)
+    return proto.run(data, memLimit, comm)
 
 
 def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -582,8 +582,8 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
     proto = _proto.StandardGST(modes, gaugeOptSuite, gaugeOptTarget, modelsToTest,
-                               comm, memLimit, advancedOptions, output_pkl, printer)
-    return proto.run(data)
+                               advancedOptions, output_pkl, printer)
+    return proto.run(data, memLimit, comm)
 
 
 # --- Helper functions ---
