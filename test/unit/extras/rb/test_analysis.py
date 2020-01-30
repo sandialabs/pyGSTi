@@ -2,7 +2,7 @@ import numpy as np
 
 from ...util import BaseCase
 
-from pygsti.construction import std1Q_Cliffords as stdC
+from pygsti.modelpacks.legacy import std1Q_Cliffords as stdC
 from pygsti.tools import average_gate_infidelity, entanglement_infidelity
 
 #from pygsti.extras.rb import analysis #SKIP until RB gets fixed

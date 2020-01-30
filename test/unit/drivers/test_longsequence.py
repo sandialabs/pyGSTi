@@ -4,8 +4,8 @@ from . import fixtures as pkg
 from io import BytesIO
 from pygsti import io
 import pygsti.construction as pc
-from pygsti.construction import std1Q_XYI as std
-from pygsti.construction import std2Q_XYICNOT as std2Q
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
 from pygsti.objects import DataSet, operation, UnitaryGaugeGroup, TrivialGaugeGroup, mapforwardsim
 from pygsti.drivers import longsequence as ls
 
@@ -323,8 +323,9 @@ class TruncatedGermPowersTester(LongSequenceGSTWithChi2):
         )
 
     def setUp(self):
-        super(TruncatedGermPowersTester, self).setUp()
-        self.options = {'truncScheme': "truncated germ powers"}
+        self.skipTest("Deprecated functionality that isn't supported anymore")
+        #super(TruncatedGermPowersTester, self).setUp()
+        #self.options = {'truncScheme': "truncated germ powers"}
 
 
 class LengthAsExponentTester(LongSequenceGSTWithChi2):

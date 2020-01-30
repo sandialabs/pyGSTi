@@ -4,7 +4,7 @@ import pickle
 import copy
 import pygsti
 from pygsti.extras import drift
-from pygsti.construction import stdQT_XYIMS
+from pygsti.modelpacks.legacy import stdQT_XYIMS
 
 from ..testutils import compare_files, temp_files
 
@@ -530,7 +530,7 @@ class TestWorkspace(ReportBaseCase):
             raw_wo.saveas("doesntmatter.html")
 
         raw_wo.set_render_options(global_requirejs=True)
-        raw_wo._create_onready_handler("myJavascriptCode;")
+        raw_wo._create_onready_handler("myJavascriptCode;", "MyID")
 
         try:
             raw_wo.display()

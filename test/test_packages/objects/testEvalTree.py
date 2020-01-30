@@ -5,8 +5,8 @@ import numpy as np
 import pygsti
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-from pygsti.construction import std1Q_XY
-from pygsti.construction import std2Q_XYCNOT
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYCNOT
 from pygsti.objects.mapforwardsim import MapForwardSimulator
 
 class EvalTreeTestCase(BaseTestCase):

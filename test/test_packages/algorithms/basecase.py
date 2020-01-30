@@ -1,6 +1,6 @@
 import unittest
 import pygsti
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects import Basis
 
 import numpy as np

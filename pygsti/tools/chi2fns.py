@@ -84,8 +84,7 @@ def chi2_terms(model, dataset, circuits=None,
     f = _np.empty(nEls, 'd')
     probs = _np.empty(nEls, 'd')
 
-    dsCircuits = _lt.find_replace_tuple_list(
-        circuits, opLabelAliases)
+    dsCircuits = _lt.apply_aliases_to_circuit_list(circuits, opLabelAliases)
     for (i, opStr) in enumerate(dsCircuits):
         N[lookup[i]] = dataset[opStr].total
         f[lookup[i]] = [dataset[opStr].fraction(x) for x in outcomes_lookup[i]]
@@ -303,11 +302,7 @@ def chi2(model, dataset, circuits=None,
     #        print "Chi2 mem limit has imposed a division of evaluation tree:"
     #  evTree.print_analysis()
 
-    if opLabelAliases is not None:
-        dsCircuits = _lt.find_replace_tuple_list(
-            circuits, opLabelAliases)
-    else:
-        dsCircuits = circuits
+    dsCircuits = _lt.apply_aliases_to_circuit_list(circuits, opLabelAliases)
 
     for (i, opStr) in enumerate(dsCircuits):
         N[lookup[i]] = dataset[opStr].total

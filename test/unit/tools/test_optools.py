@@ -5,7 +5,7 @@ from unittest import mock
 
 from ..util import BaseCase, needs_cvxpy
 
-from pygsti.construction import std2Q_XXYYII
+from pygsti.modelpacks.legacy import std2Q_XXYYII
 import pygsti.tools.optools as ot
 import pygsti.tools.basistools as bt
 from pygsti.objects.basis import Basis

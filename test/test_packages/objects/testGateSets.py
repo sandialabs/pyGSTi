@@ -17,7 +17,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 #Note: calcs expect tuples (or Circuits) of *Labels*
 from pygsti.objects import Label as L
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.io import enable_old_object_unpickling
 from pygsti.tools.compattools import patched_UUID
 

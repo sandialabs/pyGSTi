@@ -122,7 +122,7 @@ GST's primary output is an estimated \emph{gate set} that predictively models th
   \begin{center}
     \begin{adjustbox}{max width=\textwidth}
       \putfield{bestGatesVsTargetTable_sum}{}
-    \end{adjustbox}    
+    \end{adjustbox}
     \caption{\textbf{Comparison of estimated gates to targets} This table is about gate error metrics (fidelity). The metrics in this table compare the estimated gates to their ideal counterparts, and can generally be interpreted as some kind of error rate (per gate use).  Entanglement (process) fidelity and 1/2-diamond norm are the best known of these; they are the same for purely stochastic errors, but coherent errors contribute much more to diamond norm.  1/2-trace-distance is a proxy for diamond norm that doesn't require cvxPy to be installed.  The Eigenvalue metrics are gauge-invariant versions of fidelity and diamond-norm that only depend on the gate itself (not its relationship to other gates).  Hovering the pointer over a heading will pop up a description.}
   \end{center}
 \end{table}
@@ -142,13 +142,13 @@ where $N$ is the total number of counts. In \emph{this} analysis, $\log(\mathcal
 \begin{equation}
 \log(\mathcal{L})_s = N f_s \log(p_s) + N (1-f_s) \log(1-p_s),\label{eqGateStringLogL}
 \end{equation}
-where $N$ is the number of times the experiment $s$ was performed, $p_s$ is the probability of a ``plus'' outcome as predicted by the gate set, and $f_s$ is the observed frequency of ``plus''.  The total log-likelihood for an entire dataset is just the sum 
+where $N$ is the number of times the experiment $s$ was performed, $p_s$ is the probability of a ``plus'' outcome as predicted by the gate set, and $f_s$ is the observed frequency of ``plus''.  The total log-likelihood for an entire dataset is just the sum
 \begin{equation}
 \log(\mathcal{L}) = \sum_{s\in\mathcal{S}}{ \log(\mathcal{L})_s}.\label{eqDatasetLogL}
 \end{equation}
 A theoretical upper bound on the log-likelihood can be found by replacing $p_s$ with $f_s$ in Eq.~\ref{eqGateStringLogL} and evaluating Eq.~\ref{eqDatasetLogL}.  We will refer to this quantity as $\log(\mathcal{L})_{ub}$.
 
-Statistical theory has quite a lot to say about the likelihood function (see any of the major textbooks).  Using some of these results, we can predict that if there are $N_p$ free parameters in the gate set that GST is fitting, and GST fits a dataset containing $N_s > N_p$ distinct experiments (gate sequences), then \emph{if the gate set model is correct}, then two times the difference between $\log(\mathcal{L})_{ub}$ and the maximum $\log(\mathcal{L})$ obtained is a random variable with a $\chi^2_{k}$ distribution, where 
+Statistical theory has quite a lot to say about the likelihood function (see any of the major textbooks).  Using some of these results, we can predict that if there are $N_p$ free parameters in the gate set that GST is fitting, and GST fits a dataset containing $N_s > N_p$ distinct experiments (gate sequences), then \emph{if the gate set model is correct}, then two times the difference between $\log(\mathcal{L})_{ub}$ and the maximum $\log(\mathcal{L})$ obtained is a random variable with a $\chi^2_{k}$ distribution, where
 $$k \equiv N_s - N_p.$$
 Its expected value is $\expec{\chi^2}=k$, and its standard deviation is $\sqrt{2k}$.  Thus, if the fit is ``good'', then twice $\Delta\log(\mathcal{L}) \equiv \log(\mathcal{L})_{ub} - \max(\log(\mathcal{L}))$ should lie roughly within the interval $[k-\sqrt{2k},k+\sqrt{2k}]$.
 Thus, by comparing the difference $2\Delta\log(\mathcal{L}) - k$ to $\sqrt{2k}$, one can determine how well the GST estimate was able to fit the data.
@@ -319,7 +319,7 @@ GST can estimate gates \emph{up to an overall gauge}.  PyGSTi tries to find a go
   \end{center}
 \end{table}
 
-        
+
 \begin{figure}[h]
   \begin{center}
     \begin{adjustbox}{max width=\textwidth}
@@ -339,7 +339,7 @@ GST can estimate gates \emph{up to an overall gauge}.  PyGSTi tries to find a go
   \end{center}
 \end{table}
 
-        
+
 \begin{table}[h]
   \begin{center}
     \begin{adjustbox}{max width=\textwidth}
@@ -463,7 +463,7 @@ This section presents several ``decompositions'' of the process matrices shown i
 
 %Finally, Table \ref{bestGatesetChoiTable} presents the spectrum of each estimated gate's \emph{Choi matrix}.  The Choi matrix (sometimes ambiguously referred to as the ``process matrix'') is an alternative way to describe a process.  We usually prefer the ``superoperator representation'', which has the very useful property that the process matrix corresponding to applying $G_a$ and then $G_b$ is simply $G_bG_a$.  This is completely false for the Choi representation.  Nonetheless, the Choi representation is often useful, so we present it here -- but without a detailed discussion of its properties (see, e.g. the textbook by Nielsen and Chuang).
 
-%The Choi matrix $\chi(G)$ for a gate $G$ can be simply understood in either of two ways.  First, it is equivalent (up to choice of basis) to the \emph{Jamiolkowski state} defined by applying $G$ to one half of a maximally entangled bipartite state.  Second, it is the general (non-diagonal) form of the well-known Kraus representation, $G[\rho] = \sum_i{K_i\rho K_i^\dagger}$.  The Choi matrix behaves in many ways like a quantum state, and appears naturally in expressions for the process fidelity and Jamiolkowsi trace distance just as density matrices would enter these expressions when computing differences between states.  
+%The Choi matrix $\chi(G)$ for a gate $G$ can be simply understood in either of two ways.  First, it is equivalent (up to choice of basis) to the \emph{Jamiolkowski state} defined by applying $G$ to one half of a maximally entangled bipartite state.  Second, it is the general (non-diagonal) form of the well-known Kraus representation, $G[\rho] = \sum_i{K_i\rho K_i^\dagger}$.  The Choi matrix behaves in many ways like a quantum state, and appears naturally in expressions for the process fidelity and Jamiolkowsi trace distance just as density matrices would enter these expressions when computing differences between states.
 
 %Additionally, the condition of \emph{complete positivity} or CP (which all real quantum processes must satisfy) is simply the positivity of the Choi matrix.  Thus, negative eigenvalues in Table \ref{bestGatesetChoiTable} indicate that the estimate violates complete positivity.  If they are very small, they may simply indicate statistical fluctuations (unitary gates have $\chi$ matrices with zero eigenvalues, so any small fluctuation is likely to violate CP).  If they are large, they serve as a warning that (1) the model of CPTP maps is probably violated (usually because of non-Markovian behavior), and (2) this estimate may produce negative or greater-than-unity probabilities.  GST does \emph{not} generally impose complete positivity, precisely because violation of CP is a warning flag for non-Markovian behavior (which is very common in experimental qubits).
 
@@ -476,25 +476,42 @@ This section presents several ``decompositions'' of the process matrices shown i
   \end{center}
 \end{table}
 
+\def \logTiG {logTiG}
+\def \logGTi {logGTi}
+\def \logdiff {logG-logT}
+\def \errorgentype {\putfield{errorgenType}{error-gen-type}}
+\ifx \errorgentype \logTiG
+\def \errorgenformula {$G = G_0 e^{\mathbb{L}}$}
+\def \errorgendescription {\emph{pre-gate} generator, so it answers the question "If all the noise occurred \emph{before} the ideal gate, what Lindbladian would generate it?"}
+\else \ifx \errorgentype \logGTi
+\def \errorgenformula {$G = e^{\mathbb{L}} G_0$}
+\def \errorgendescription {\emph{post-gate} generator, so it answers the question "If all the noise occurred \emph{after} the ideal gate, what Lindbladian would generate it?"}
+\else \ifx \errorgentype \logdiff
+\def \errorgenformula {$G = e^{\mathbb{L} + \log G_0}$}
+\def \errorgendescription {\emph{during-gate} generator, so it answers the question "What Lindblad-type generate would produce this noise if it acted continuously \emph{during} the gate?"  Note that this does \emph{not necessarily} give insight into physics producing the noise.}
+\else
+\def \errorgenformula {???}
+\def \errorgendescription {???}
+\fi
+\fi
+\fi
 
 \subsection{Gate Error Generators}
-This section presents the \emph{error generators} for each of the estimated gates.  Although these are not especially well-known in the literature, they are (in the pyGSTi authors' opinion) the most useful detailed diagnostic for gate errors.  The error generator $\mathbb{L}$ for a noisy gate $G$ with ideal target $G_0$ is defined by writing \putfield{errorgenformula}{err-gen-formula}.  It can be thought of, more or less, as a Lindbladian superoperator that generates the error in the gate \textendash with two caveats.  First, it is not necessarily of strict Lindblad form, because the GST-estimated gates may not be CP, and because even if they are, not every CP map is "divisible" (and nondivisible maps are not generated by Lindblad evolution).  Second, the generator reported here is a \putfield{errorgendescription}{err-gen-desc}  Finally:  the error generators are very definitely gauge-dependent, so \emph{caveat emptor} (cross-validating any inferences drawn from these generators with some sort of gauge-invariant diagnostic is highly recommended).
-
-%It's also useful to know \emph{how} the real gates (or, more precisely, GST's estimates of the real gates) differ from the targets.  There are several ways we could represent this, but the most useful involves an \emph{error generator}.  These are given in Table \ref{bestGatesetErrGenTable}.  The table displays, in heat map form for compactness, a Lindbladian superoperator $\mathbb{L}$ for each gate.  It is defined by the equation \putfield{errorgenformula}{??}, where $\hat{G}$ is the estimate and $G_{\mathrm{target}}$ is the ideal gate.  This Lindbladian would be zero if the gates were perfect, and its overall magnitude is approximately equal to the diamond distance (or Jamiolkowski trace distance) between the target gate and the estimate.
+This section presents the \emph{error generators} for each of the estimated gates.  Although these are not especially well-known in the literature, they are (in the pyGSTi authors' opinion) the most useful detailed diagnostic for gate errors.  The error generator $\mathbb{L}$ for a noisy gate $G$ with ideal target $G_0$ is defined by writing \errorgenformula.  It can be thought of, more or less, as a Lindbladian superoperator that generates the error in the gate \textendash with two caveats.  First, it is not necessarily of strict Lindblad form, because the GST-estimated gates may not be CP, and because even if they are, not every CP map is "divisible" (and nondivisible maps are not generated by Lindblad evolution).  Second, the generator reported here is a \errorgendescription  Finally:  the error generators are very definitely gauge-dependent, so \emph{caveat emptor} (cross-validating any inferences drawn from these generators with some sort of gauge-invariant diagnostic is highly recommended).
 
 \begin{table}[h]
   \begin{center}
     \begin{adjustbox}{max width=\textwidth}
       \putfield{bestGatesetErrGenBoxTable}{Best gate set error generator table will be placed here}
     \end{adjustbox}
-    \caption{\textbf{Logic gate error generators.} The \textbf{first column} displays a heat map of the estimated ``error generator'' for each gate.  This is (more or less) the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation \putfield{errorgenformula}{err-gen-formula}. If it is zero, the estimated gate matches the corresponding ideal target gate.  Note that the range of the \textcolor{red}{color} \textcolor{blue}{scale} is dynamically adjusted. \textbf{Subsequent columns} show the result of projecting each generator onto some subspaces of the error generator space.  Each corresponds to a different classes of well-known errors:  Hamiltonian (coherent) errors, Pauli-stochastic errors, and affine (aka non-unital) errors.  The Hamiltonian generators act by commutation with each Pauli basis element $B_i$, that is $\rho \rightarrow -i[B_i, \rho]$.  Stochastic generators act by conjugation with each basis element, $\rho \rightarrow B_i \rho B_i^\dagger$.  Affine generators act by projecting everything onto a particular basis element, $\rho \rightarrow \mathrm{Tr}(\rho) B_i$.  Roughly speaking, the Hamiltonian projection corresponds precisely to the Hamiltonian that would produce the coherent part of the error, while the Pauli-stochastic generators correspond to the rates of all the Pauli errors (e.g., X errors, Z errors, their 2-qubit counterparts, or whatever is appropriate for the system being analyzed).\label{bestGatesetErrGenTable}}
+    \caption{\textbf{Logic gate error generators.} The \textbf{first column} displays a heat map of the estimated ``error generator'' for each gate.  This is (more or less) the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation \errorgenformula. If it is zero, the estimated gate matches the corresponding ideal target gate.  Note that the range of the \textcolor{red}{color} \textcolor{blue}{scale} is dynamically adjusted. \textbf{Subsequent columns} show the result of projecting each generator onto some subspaces of the error generator space.  Each corresponds to a different classes of well-known errors:  Hamiltonian (coherent) errors, Pauli-stochastic errors, and affine (aka non-unital) errors.  The Hamiltonian generators act by commutation with each Pauli basis element $B_i$, that is $\rho \rightarrow -i[B_i, \rho]$.  Stochastic generators act by conjugation with each basis element, $\rho \rightarrow B_i \rho B_i^\dagger$.  Affine generators act by projecting everything onto a particular basis element, $\rho \rightarrow \mathrm{Tr}(\rho) B_i$.  Roughly speaking, the Hamiltonian projection corresponds precisely to the Hamiltonian that would produce the coherent part of the error, while the Pauli-stochastic generators correspond to the rates of all the Pauli errors (e.g., X errors, Z errors, their 2-qubit counterparts, or whatever is appropriate for the system being analyzed).\label{bestGatesetErrGenTable}}
   \end{center}
 \end{table}
 
-}{} %end iftoggle{BrevityLT4}                                                                                                       
+}{} %end iftoggle{BrevityLT4}
 
 \iftoggleverb{BrevityLT2} % usual iftoggle won't work b/c of enclosed verbatims
-% ends at \fi below       
+% ends at \fi below
 
 \section{Input Reference}
 This section presents a grab bag of potentially-useful information about the target gate set and the data set(s), and is primarily useful to verify that the inputs were correct.

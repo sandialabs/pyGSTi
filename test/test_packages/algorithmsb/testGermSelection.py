@@ -1,4 +1,4 @@
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti
 import pygsti.algorithms.germselection as germsel
 import pygsti.algorithms.scoring as scoring

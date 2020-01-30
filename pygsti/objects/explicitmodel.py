@@ -131,8 +131,8 @@ class ExplicitOpModel(_mdl.OpModel):
             basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
                 else "sv"  # ( if evotype in ("statevec","stabilizer") )
 
-        chelper = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments)
-        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, chelper, sim_type)
+        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, None, sim_type)
+        self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
 
     def get_primitive_prep_labels(self):
         """ Return the primitive state preparation labels of this model"""
@@ -182,20 +182,7 @@ class ExplicitOpModel(_mdl.OpModel):
     def _layer_lizard(self):
         """ Return a layer lizard for this model """
         self._clean_paramvec()  # just to be safe
-
-        simplified_effects = _collections.OrderedDict()
-        for povm_lbl, povm in self.povms.items():
-            for k, e in povm.simplify_effects(povm_lbl).items():
-                simplified_effects[k] = e
-
-        simplified_ops = _collections.OrderedDict()
-        for k, g in self.operations.items(): simplified_ops[k] = g
-        for inst_lbl, inst in self.instruments.items():
-            for k, g in inst.simplify_operations(inst_lbl).items():
-                simplified_ops[k] = g
-        simplified_preps = self.preps
-
-        return _ll.ExplicitLayerLizard(simplified_preps, simplified_ops, simplified_effects, self)
+        return _ll.ExplicitLayerLizard(self.preps, self.operations, self.povms, self.instruments, self)
 
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """
@@ -320,7 +307,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if not isinstance(label, _Label): label = _Label(label)
 
-        if label.has_prefix(self.preps._prefix):
+        if label == _Label(()):  # special case
+            self.operations[label] = value
+        elif label.has_prefix(self.preps._prefix):
             self.preps[label] = value
         elif label.has_prefix(self.povms._prefix):
             self.povms[label] = value
@@ -345,7 +334,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if not isinstance(label, _Label): label = _Label(label)
 
-        if label.has_prefix(self.preps._prefix):
+        if label == _Label(()):  # special case
+            return self.operations[label]
+        elif label.has_prefix(self.preps._prefix):
             return self.preps[label]
         elif label.has_prefix(self.povms._prefix):
             return self.povms[label]
@@ -422,7 +413,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     self.set_simtype("matrix" if self.dim <= 16 else "map")
             elif evotype in ("svterm", "cterm"):
                 if self._sim_type != "termorder":
-                    self.set_simtype("termorder:1")
+                    self.set_simtype("termorder", max_order=1)
 
         else:  # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"
@@ -472,7 +463,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self._state_space_labels = stateDict['stateSpaceLabels']
             self._paramlbls = None
             self._shlp = _sh.MemberDictSimplifierHelper(
-                stateDict['preps'], stateDict['povms'], stateDict['instruments'])
+                stateDict['preps'], stateDict['povms'], stateDict['instruments'], self._state_space_labels)
             del stateDict['gates']
             del stateDict['_autogator']
             del stateDict['auto_idle_gatename']
@@ -1141,11 +1132,11 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.preps[lbl].todense() - otherModel.preps[lbl].todense()))
+                (str(lbl), _np.linalg.norm(self.preps[lbl].todense() - otherModel.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl, povm in self.povms.items():
-            s += "  %s: " % povm_lbl
+            s += "  %s: " % str(povm_lbl)
             for lbl in povm:
                 s += "    %s = %g\n" % \
                      (lbl, _np.linalg.norm(povm[lbl].todense() - otherModel.povms[povm_lbl][lbl].todense()))
@@ -1153,15 +1144,15 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.operations[lbl].todense() - otherModel.operations[lbl].todense()))
+                (str(lbl), _np.linalg.norm(self.operations[lbl].todense() - otherModel.operations[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
             for inst_lbl, inst in self.instruments.items():
-                s += "  %s: " % inst_lbl
+                s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
-                    s += "    %s = %g\n" % \
-                         (lbl, _np.linalg.norm(inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
+                    s += "    %s = %g\n" % (str(lbl), _np.linalg.norm(
+                        inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
 
         return s
 
@@ -1179,7 +1170,8 @@ class ExplicitOpModel(_mdl.OpModel):
         copyInto.povms = self.povms.copy(copyInto)
         copyInto.operations = self.operations.copy(copyInto)
         copyInto.instruments = self.instruments.copy(copyInto)
-        copyInto._shlp = _sh.MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments)
+        copyInto._shlp = _sh.MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments,
+                                                        self.state_space_labels)
 
         copyInto._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 

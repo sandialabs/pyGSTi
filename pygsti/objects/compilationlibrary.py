@@ -79,6 +79,11 @@ class CompilationLibrary(_collections.OrderedDict):
         self.templates = _collections.defaultdict(list)  # keys=gate names (strs); vals=tuples of Labels
         self.connectivity = {}  # QubitGraphs for gates currently compiled in library (key=gate_name)
         super(CompilationLibrary, self).__init__(items)
+        #** Note: if change __init__ signature, update __reduce__ below
+
+    def __reduce__(self):
+        return (CompilationLibrary,
+                (self.model, self.ctype, list(self.items())), None)
 
     def construct_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, verbosity=1):
         """

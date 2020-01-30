@@ -258,8 +258,9 @@ class WildcardBudget(object):
             fvec = freqs[elInds]
             W = self.circuit_budget(circ)
 
+            tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
             initialTVD = 0.5 * sum(_np.abs(qvec - fvec))
-            if initialTVD <= W:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
+            if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 _tools.matrixtools._fas(probs_out, (elInds,), fvec)
                 continue
 
@@ -291,7 +292,6 @@ class WildcardBudget(object):
 
                 if debug: print("break: j=", j, " alpha=", alpha0, " beta=",
                                 beta0, " A?=", AorBorC, " TVD = ", TVD_at_breakpt)
-                tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
                 if TVD_at_breakpt <= W + tol:
                     break  # exit loop
 
@@ -419,8 +419,12 @@ class WildcardBudget(object):
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
 
+            if _np.min(qvec) < 0:
+                raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts *negative* "
+                                           "probabilities! (and %s predicts p=%.3g)" % (circ.str, _np.min(qvec))))
+
             initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
-            if initialTVD <= W:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
+            if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 probs_out[elInds] = fvec  # _tools.matrixtools._fas(probs_out, (elInds,), fvec)
                 continue
 

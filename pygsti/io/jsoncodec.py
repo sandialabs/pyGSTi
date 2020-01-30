@@ -12,7 +12,6 @@
 
 import types as _types
 import importlib as _importlib
-# import json as _json
 import base64 as _base64
 import numpy as _np
 import uuid as _uuid
@@ -105,6 +104,7 @@ def encode_obj(py_obj, binary):
         d = {k: encode_obj(v, binary) for k, v in state.items()}
 
         #DEBUG (instead of above line)
+        #import json as _json
         #d = {}
         #print("DB: Encoding state for pyGSTi %s object:" % type(py_obj))
         #for k,v in state.items():

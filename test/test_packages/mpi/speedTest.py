@@ -64,7 +64,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 
 
 def runOneQubit(comm=None):
-    from pygsti.construction import std1Q_XYI as std
+    from pygsti.modelpacks.legacy import std1Q_XYI as std
 
     maxLengths = [1,2,4,8,16,32,64,128,256,512] #still need to define this manually
     specs = pygsti.construction.build_spam_specs(

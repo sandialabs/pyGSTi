@@ -1,6 +1,6 @@
 from ...util import BaseCase
 
-from pygsti.construction import std1Q_XYI as std, std1Q_XYI as stdXY
+from pygsti.modelpacks.legacy import std1Q_XYI as std, std1Q_XYI as stdXY
 import pygsti.construction as pc
 from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_GxPi2_GyPi2_UpDn
 from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_GxPi2_GyPi2_00

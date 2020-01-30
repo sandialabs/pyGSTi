@@ -39,7 +39,7 @@ FLOATSIZE = 8  # TODO: better way?
 ###################################################################################
 
 
-def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases={},
+def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases=None,
             guessModelForGauge=None, svdTruncateTo=None, verbosity=0):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
@@ -224,7 +224,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         for effectLabel in targetModel.povms[povmLabel]:
             EVec = _np.zeros((1, nRhoSpecs))
             for i, rhostr in enumerate(prepStrs):
-                circuit = rhostr + _objs.Circuit((povmLabel,))
+                circuit = rhostr + _objs.Circuit((povmLabel,), line_labels=rhostr.line_labels)
                 if circuit not in dataset and len(targetModel.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
@@ -240,7 +240,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     for prepLabel in rhoLabelsToEstimate:
         rhoVec = _np.zeros((nESpecs, 1)); eoff = 0
         for i, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
-            circuit = _objs.Circuit((prepLabel,)) + estr  # ; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
+            circuit = _objs.Circuit((prepLabel,), line_labels=estr.line_labels) + estr
             if circuit not in dataset and len(targetModel.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
@@ -376,7 +376,7 @@ def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = _tools.find_replace_tuple(opLabelString, opLabelAliases)
+            dsStr = opLabelString.replace_layers_with_aliases(opLabelAliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
@@ -403,8 +403,8 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
     eoff = 0  # effect-dimension offset
     for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
         for j, rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = _tools.find_replace_tuple(tuple(opLabelString), opLabelAliases)
+            opLabelString = rhostr + _objs.Circuit(opLabelTuple, line_labels=rhostr.line_labels) + estr
+            dsStr = opLabelString.replace_layers_with_aliases(opLabelAliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
@@ -436,7 +436,7 @@ def _constructA(effectStrs, mdl):
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
             mdl.preps['rho_LGST_tmp'] = basis_st
-            probs = mdl.probs(_objs.Circuit(('rho_LGST_tmp',)) + estr)
+            probs = mdl.probs(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in mdl.povms[povmLbl]]  # CHECK will this work?
             del mdl.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
@@ -463,7 +463,7 @@ def _constructB(prepStrs, mdl):
     for k, rhostr in enumerate(prepStrs):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',)))
+        probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del mdl.povms['M_LGST_tmp_povm']
@@ -648,7 +648,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
 
     opLabelAliases = {}
     for i, opStrTuple in enumerate(circuitsToUseInEstimation):
-        opLabelAliases["Gestimator%d" % i] = opStrTuple
+        opLabelAliases["Gestimator%d" % i] = _objs.Circuit(opStrTuple)  # Note: line labels don't matter in aliases
 
     lgstEstimates = do_lgst(dataset, prepStrs, effectStrs, targetModel, list(opLabelAliases.keys()),
                             opLabelAliases, guessModelForGauge, svdTruncateTo,
@@ -1147,11 +1147,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     profiler.add_time("do_mc2gst: pre-opt treegen", tStart)
 
     #Expand operation label aliases used in DataSet lookups
-    if opLabelAliases is not None:
-        dsCircuitsToUse = _tools.find_replace_tuple_list(
-            circuitsToUse, opLabelAliases)
-    else:
-        dsCircuitsToUse = circuitsToUse
+    dsCircuitsToUse = _tools.apply_aliases_to_circuit_list(circuitsToUse, opLabelAliases)
 
     #  Allocate peristent memory
     #  (must be AFTER possible operation sequence permutation by
@@ -1337,15 +1333,19 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
 
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
     maxTermStages = fwdsim.max_term_stages
-    pathFractionThreshold = fwdsim.path_fraction_threshold
+    pathFractionThreshold = fwdsim.path_fraction_threshold  # 0 when not using path-sets
     oob_check_interval = fwdsim.oob_check_interval
+    if extra_lm_opts is None: extra_lm_opts = {}
 
     #assume a path set has already been chosen, as one should have been chosen
     # when evTree was created.
     pathSet = fwdsim.get_current_pathset(evTree, comm)
-    pathFraction = pathSet.get_allowed_path_fraction()
-    printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
-                (pathSet.num_failures, 100 * pathFraction))
+    if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
+        pathFraction = pathSet.get_allowed_path_fraction()
+        printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
+                    (pathSet.num_failures, 100 * pathFraction))
+    else:
+        pathFraction = 1.0  # b/c "all" paths are used, and > pathFractionThreshold, which should be 0
 
     minErrVec = None
     for sub_iter in range(maxTermStages):
@@ -1504,9 +1504,9 @@ def do_mc2gst_with_model_selection(
     #convert list of Circuits to list of raw tuples since that's all we'll need
     #if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0], _objs.Circuit):
     #    circuitsToUse = [opstr.tup for opstr in circuitsToUse]
-
+    extra_lm_opts = {}  # FUTURE: make these accessible to caller?
     minErr, mdl = do_mc2gst(dataset, startModel, circuitsToUse, maxiter,
-                            maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                            maxfev, 0, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor,
                             minProbClipForWeighting, probClipInterval,
                             useFreqWeightedChiSq, regularizeFactor, printer - 1,
                             check, check_jacobian, circuitWeights, opLabelAliases,
@@ -1535,7 +1535,7 @@ def do_mc2gst_with_model_selection(
         nParams = curStartModel.num_params()
 
         minErr, mdl = do_mc2gst(dataset, curStartModel, circuitsToUse, maxiter,
-                                maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                                maxfev, 0, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor,
                                 minProbClipForWeighting, probClipInterval,
                                 useFreqWeightedChiSq, regularizeFactor, printer - 1,
                                 check, check_jacobian, circuitWeights, opLabelAliases,
@@ -1574,7 +1574,7 @@ def do_mc2gst_with_model_selection(
             continue
 
         minErr, mdl = do_mc2gst(dataset, curStartModel, circuitsToUse, maxiter,
-                                maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
+                                maxfev, 0, tol, extra_lm_opts, cptp_penalty_factor, spam_penalty_factor,
                                 minProbClipForWeighting, probClipInterval,
                                 useFreqWeightedChiSq, regularizeFactor, printer - 1,
                                 check, check_jacobian, circuitWeights, opLabelAliases,
@@ -2234,11 +2234,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
     #Expand operation label aliases used in DataSet lookups
-    if opLabelAliases is not None:
-        dsCircuitsToUse = _tools.find_replace_tuple_list(
-            circuitsToUse, opLabelAliases)
-    else:
-        dsCircuitsToUse = circuitsToUse
+    dsCircuitsToUse = _tools.apply_aliases_to_circuit_list(circuitsToUse, opLabelAliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         cntVecMx = evaltree_cache['cntVecMx']

@@ -3065,7 +3065,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         Parameters
         ----------
-        rbR : RBResults
+        rbR : RandomizedBenchmarkingResults
             The RB results object containing all the relevant RB data.
 
         fitkey : dict key, optional
@@ -3117,8 +3117,14 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                 raise ValueError(("There are multiple fits and none have the "
                                   "key 'full'. Please specify the fit to plot!"))
 
-        xdata = _np.asarray(rbR.data.lengths)
-        ydata = _np.asarray(rbR.data.ASPs)
+        ASPs = []  # (avg success probs)
+        data_per_depth = rbR.data.cache[rbR.protocol.datatype]
+        for depth in rbR.depths:
+            percircuitdata = data_per_depth[depth]
+            ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+
+        xdata = _np.asarray(rbR.depths)
+        ydata = _np.asarray(ASPs)
 
         data = []  # list of traces
         data.append(go.Scatter(
@@ -3133,7 +3139,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         ))
 
         if decay:
-            lengths = _np.linspace(0, max(rbR.data.lengths), 200)
+            lengths = _np.linspace(0, max(rbR.depths), 200)
             A = rbR.fits[fitkey].estimates['A']
             B = rbR.fits[fitkey].estimates['B']
             p = rbR.fits[fitkey].estimates['p']
@@ -3149,15 +3155,16 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             ))
 
         if success_probabilities:
-            for length, prob_dist in zip(rbR.data.lengths, rbR.data.success_probabilities):
+            all_success_probs_by_depth = [data_per_depth[depth] for depth in rbR.depths]
+            for depth, prob_dist in zip(rbR.depths, all_success_probs_by_depth):
                 data.append(go.Box(
-                    x0=length, y=prob_dist,
+                    x0=depth, y=prob_dist,
                     whiskerwidth=0.2, opacity=0.7, showlegend=False,
                     boxpoints='all' if showpts else False,
                     pointpos=0, jitter=0.5,
                     boxmean=False,  # or True or 'sd'
                     hoveron="boxes", hoverinfo="all",
-                    name='m=%d' % length))
+                    name='m=%d' % depth))
 
         #pad by 10%
         ymin = min(ydata)

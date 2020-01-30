@@ -2938,7 +2938,7 @@ class LindbladOp(LinearOperator):
                 else:
                     upost = self.unitary_postfactor
 
-                dense = _np.dot(exp_errgen, upost)
+                dense = _mt.safedot(exp_errgen, upost)
             else:
                 dense = exp_errgen
             return dense
@@ -7015,21 +7015,21 @@ class LindbladErrorgen(LinearOperator):
             ctape = _np.empty(0, complex)
         coeffs_as_compact_polys = (vtape, ctape)
 
-        #DEBUG TODO REMOVE - check norm of rank-1 terms:
+        #DEBUG TODO REMOVE (and make into test) - check norm of rank-1 terms
+        # (Note: doesn't work for Clifford terms, which have no .base):
         # rho =OP=> coeff * A rho B
         # want to bound | coeff * Tr(E Op rho) | = | coeff | * | <e|A|psi><psi|B|e> |
         # so A and B should be unitary so that | <e|A|psi><psi|B|e> | <= 1
         # but typically these are unitaries / (sqrt(2)*nqubits)
         #import bpdb; bpdb.set_trace()
-        scale = 1.0
-        for t in Lterms:
-            for op in t._rep.pre_ops:
-                test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-                assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
-            for op in t._rep.post_ops:
-                test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-                if not (_np.allclose(test, _np.identity(test.shape[0], 'd'))):
-                    import bpdb; bpdb.set_trace()
+        #scale = 1.0
+        #for t in Lterms:
+        #    for op in t._rep.pre_ops:
+        #        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
+        #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
+        #    for op in t._rep.post_ops:
+        #        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
+        #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
 
         return Lterms, coeffs_as_compact_polys
 
@@ -7668,11 +7668,11 @@ class LindbladErrorgen(LinearOperator):
             if self.param_mode == "depol":  # all coeffs same & == param^2
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
                 #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
-                dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams[0]
+                dOdp = _np.sum(_np.transpose(self.otherGens, (1, 2, 0)), axis=2)[:, :, None] * 2 * otherParams[0]
             elif self.param_mode == "reldepol":  # all coeffs same & == param
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'reldepol' case!"
                 #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
-                dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams[0]
+                dOdp = _np.sum(_np.transpose(self.otherGens, (1, 2, 0)), axis=2)[:, :, None] * 2 * otherParams[0]
             elif self.param_mode == "cptp":  # (coeffs = params^2)
                 #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
                 dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams  # just a broadcast
@@ -7692,13 +7692,13 @@ class LindbladErrorgen(LinearOperator):
                 dOdp = _np.empty((d2, d2, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-                dOdp[:, :, 0] = _np.squeeze(self.otherGens[0], 0) * 2 * diag_params[0]  # single diagonal term
+                dOdp[:, :, 0] = _np.sum(self.otherGens[0], axis=0) * 2 * diag_params[0]  # single diagonal term
                 dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
             elif self.param_mode == "reldepol":  # all coeffs same & == param^2
                 dOdp = _np.empty((d2, d2, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
-                dOdp[:, :, 0] = _np.squeeze(self.otherGens[0], 0)  # single diagonal term
+                dOdp[:, :, 0] = _np.sum(self.otherGens[0], axis=0)  # single diagonal term
                 dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # affine part: each gen has own param
             elif self.param_mode == "cptp":  # (coeffs = params^2)
                 diag_params = otherParams[0:bsO - 1]
@@ -7764,7 +7764,7 @@ class LindbladErrorgen(LinearOperator):
             if self.param_mode == "depol":
                 assert(nP == 1)
                 #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
-                d2Odp2 = _np.squeeze(self.otherGens, 0)[:, :, None, None] * 2
+                d2Odp2 = _np.sum(self.otherGens, axis=0)[:, :, None, None] * 2
             elif self.param_mode == "cptp":
                 assert(nP == bsO - 1)
                 #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
@@ -7782,7 +7782,7 @@ class LindbladErrorgen(LinearOperator):
                 assert(nP == bsO)  # 1 diag param + (bsO-1) affine params
                 d2Odp2 = _np.empty((d2, d2, nP, nP), 'complex')
                 #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
-                d2Odp2[:, :, 0, 0] = _np.squeeze(self.otherGens[0], 0) * 2  # single diagonal term
+                d2Odp2[:, :, 0, 0] = _np.sum(self.otherGens[0], axis=0) * 2  # single diagonal term
                 d2Odp2[:, :, 1:, 1:] = 0  # 2nd deriv wrt. all affine params == 0
             elif self.param_mode == "cptp":
                 assert(nP == 2 * (bsO - 1)); hnP = bsO - 1  # half nP

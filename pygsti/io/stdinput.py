@@ -363,15 +363,17 @@ class StdInputParser(object):
                 countDict = _objs.labeldicts.OutcomeLabelDict()
                 self._fillDataCountDict(countDict, fillInfo, valueList)
                 if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
-                    if ignoreZeroCountLines:
+                    if ignoreZeroCountLines is True:
                         if not bBad:
                             s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
                             warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                         continue  # skip lines in dataset file with zero counts (no experiments done)
                     else:
-                        if not bBad:
-                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
-                            warnings.append("Dataline for circuit '%s' has zero counts." % s)
+                        #if not bBad:
+                        #    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                        #    warnings.append("Dataline for circuit '%s' has zero counts." % s)
+                        # don't make a fuss if we don't ignore the lines (see fill_in_empty_dataset_with_fake_data)
+                        pass
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                 circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,

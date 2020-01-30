@@ -1739,7 +1739,8 @@ class TensorProdSPAMVec(SPAMVec):
                                                     len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "densitymx":
             if typ == "prep":
-                rep = replib.DMStateRep(_np.ascontiguousarray(_np.zeros(dim, 'd')))
+                vec = _np.require(_np.zeros(dim, 'd'), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+                rep = replib.DMStateRep(vec)
                 #sometimes: return replib.DMEffectRep_Dense(self.todense()) ???
             else:  # "effect"
                 rep = replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
@@ -1812,7 +1813,7 @@ class TensorProdSPAMVec(SPAMVec):
     def _update_rep(self):
         if self._evotype in ("statevec", "densitymx"):
             if self._prep_or_effect == "prep":
-                self._rep.base = self.todense()
+                self._rep.base[:] = self.todense()
             else:
                 self._fill_fast_kron()  # updates effect reps
         elif self._evotype == "stabilizer":
@@ -3436,7 +3437,8 @@ class ComputationalSPAMVec(SPAMVec):
             if evotype == "statevec":
                 rep = replib.SVStateRep(self.todense())
             elif evotype == "densitymx":
-                rep = replib.DMStateRep(self.todense())
+                vec = _np.require(self.todense(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+                rep = replib.DMStateRep(vec)
             elif evotype == "stabilizer":
                 sframe = _stabilizer.StabilizerFrame.from_zvals(len(self._zvals), self._zvals)
                 rep = sframe.torep()

@@ -457,8 +457,8 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6, 1e6),
 
     if wildcard:
         freqs = _np.empty(evt.num_final_elements(), 'd')
-        ds_circuit_list = _tools.find_replace_tuple_list(
-            circuitList, opLabelAliases)
+        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, opLabelAliases)
+        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, opLabelAliases)
         for (i, opStr) in enumerate(ds_circuit_list):
             cnts = dataset[opStr].counts; total = sum(cnts.values())
             freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
@@ -827,15 +827,19 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         logl = _tools.logl(model, dataset, gstrs, opLabelAliases=gss.aliases,
                            comm=comm, smartc=smartc, wildcard=wildcard)
         fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
+
         if(logL_upperbound < logl):
             if _np.isclose(logL_upperbound, logl):
                 logl = logL_upperbound; fitQty = 0.0
             else:
                 raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
-    ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
+    ds_gstrs = _tools.apply_aliases_to_circuit_list(gstrs, gss.aliases)
 
-    if Np is None: Np = model.num_nongauge_params()
+    if hasattr(model, 'num_nongauge_params'):
+        Np = model.num_nongauge_params()
+    else:
+        Np = model.num_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
     k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitQty - k) / _np.sqrt(2 * k)

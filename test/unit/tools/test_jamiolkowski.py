@@ -4,7 +4,8 @@ import numpy as np
 from ..util import BaseCase
 
 
-from pygsti.construction import std1Q_XYI as std1Q, build_operation
+from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
+from pygsti.construction import build_operation
 import pygsti.tools.basistools as bt
 from pygsti.objects import ExplicitOpModel, Basis
 

@@ -809,9 +809,12 @@ class DataSet(object):
             if len(self.cirIndex) > 0:
                 maxOlIndex = self.olIndex_max
                 if bStatic:
-                    assert(_np.amax(self.oliData) <= maxOlIndex)
+                    assert(max([_np.amax(self.oliData[i]) if (len(self.oliData[i]) > 0) else 0
+                                for i in self.cirIndex.values()]) <= maxOlIndex)
                     # self.oliData.shape[0] > maxIndex doesn't make sense since cirIndex holds slices
                 else:
+                    #Note: for non-static datasets, assume *all* data in self.oliData is "in" this data set, i.e.,
+                    # it can't be that this is a truncated dataset with pointers to more data than it actually owns.
                     maxIndex = max(self.cirIndex.values())
                     assert(len(self.oliData) > maxIndex)
                     if len(self.oliData) > 0:
@@ -894,7 +897,13 @@ class DataSet(object):
         return self.get_row(circuit)
 
     def __setitem__(self, circuit, outcomeDictOrSeries):
-        return self.set_row(circuit, outcomeDictOrSeries)
+        ca = self.collisionAction
+        self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems mose natural)
+        try:
+            ret = self.set_row(circuit, outcomeDictOrSeries)
+        finally:
+            self.collisionAction = ca
+        return ret
 
     def __delitem__(self, circuit):
         if not isinstance(circuit, _cir.Circuit):
@@ -1685,6 +1694,7 @@ class DataSet(object):
         if self.bStatic:
             circuitIndices = []
             circuits = []
+            used_oli = set()
             for opstr in listOfCircuitsToKeep:
                 circuit = opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
 
@@ -1703,16 +1713,19 @@ class DataSet(object):
 
                 #only keep track of circuits if they could be different from listOfCircuitsToKeep
                 if missingAction != "raise": circuits.append(circuit)
-                circuitIndices.append(self.cirIndex[circuit])
+                i = self.cirIndex[circuit]
+                circuitIndices.append(i)
+                used_oli.update(self.oliData[i])
 
             if missingAction == "raise": circuits = listOfCircuitsToKeep
             trunc_cirIndex = _OrderedDict(zip(circuits, circuitIndices))
+            trunc_olIndex = _OrderedDict([(self.ol[i], i) for i in sorted(used_oli)])
             trunc_dataset = DataSet(self.oliData, self.timeData, self.repData,
                                     circuitIndices=trunc_cirIndex,
-                                    outcomeLabelIndices=self.olIndex, bStatic=True)  # don't copy counts, just reference
+                                    outcomeLabelIndices=trunc_olIndex, bStatic=True)  # reference (don't copy) counts
 
         else:
-            trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
+            trunc_dataset = DataSet(outcomeLabels=[])  # let outcome labels be added automatically
             for opstr in _lt.remove_duplicates(listOfCircuitsToKeep):
                 circuit = opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
                 if circuit in self.cirIndex:
@@ -1721,7 +1734,7 @@ class DataSet(object):
                     trunc_dataset.add_raw_series_data(circuit,
                                                       [self.ol[i] for i in self.oliData[circuitIndx]],
                                                       self.timeData[circuitIndx].copy(),
-                                                      repData)  # Copy operation so truncated dataset can be modified
+                                                      repData, unsafe=True)  # copy so truncated dataset can be modified
                 elif missingAction == "raise":
                     raise KeyError(("Circuit %s was not found in "
                                     "dataset being truncated and "

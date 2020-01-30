@@ -4,7 +4,7 @@ from unittest import mock
 from ..util import BaseCase
 from . import fixtures as pkg
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects.dataset import DataSet
 from pygsti.tools import chi2fns
 
