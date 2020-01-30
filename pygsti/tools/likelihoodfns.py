@@ -1218,6 +1218,18 @@ def logl_max_terms(model, dataset, circuit_list=None,
     return terms
 
 
+def two_delta_logl_nsigma(model, dataset, circuit_list=None,
+                          minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
+                          poissonPicture=True, opLabelAliases=None,
+                          dof_calc_method='nongauge', wildcard=None):
+    """See docstring for :function:`pygsti.tools.two_delta_logl` """
+    assert(dof_calc_method is not None)
+    return two_delta_logl(model, dataset, circuit_list,
+                          minProbClip, probClipInterval, radius,
+                          poissonPicture, False, opLabelAliases,
+                          None, None, dof_calc_method, None, wildcard)[1]
+
+
 def two_delta_logl(model, dataset, circuit_list=None,
                    minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                    poissonPicture=True, check=False, opLabelAliases=None,
@@ -1324,9 +1336,15 @@ def two_delta_logl(model, dataset, circuit_list=None,
                                poissonPicture, check, opLabelAliases,
                                evaltree_cache, comm, smartc, wildcard))
 
-    if dof_calc_method is None: return twoDeltaLogL
-    elif dof_calc_method == "all": mdl_dof = model.num_params()
-    elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params()
+    if dof_calc_method is None:
+        return twoDeltaLogL
+    elif dof_calc_method == "nongauge":
+        if hasattr(model, 'num_nongauge_params'):
+            mdl_dof = model.num_nongauge_params()
+        else:
+            mdl_dof = model.num_params()
+    elif dof_calc_method == "all":
+        mdl_dof = model.num_params()
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
