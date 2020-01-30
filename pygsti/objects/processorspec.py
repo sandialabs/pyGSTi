@@ -259,12 +259,16 @@ class ProcessorSpec(object):
 
         return edgelist
 
-    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+    def get_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         # Erik future : improve docstring.
         """
-        Adds a standard model for the gates. For example, "target" process matrices are added
+        Builds a standard model for the gates. For example, "target" process matrices are added
         if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n
         symplectic form, are added if model_name = 'clifford'.
+
+        Returns
+        -------
+        Model
         """
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
@@ -301,8 +305,17 @@ class ProcessorSpec(object):
                 self.nonstd_gate_unitaries, None, self.availability,
                 self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
+            
+        return model
 
-        self.models[model_name] = model
+    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        # Erik future : improve docstring.
+        """
+        Adds a standard model for the gates. For example, "target" process matrices are added
+        if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n
+        symplectic form, are added if model_name = 'clifford'.
+        """
+        self.models[model_name] = self.get_std_model(model_name, parameterization, sim_type)
 
     def add_std_compilations(self, compile_type, oneQgates, twoQgates, add_nonlocal_twoQgates=False, verbosity=0):
         """
