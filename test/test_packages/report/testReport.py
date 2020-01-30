@@ -251,12 +251,6 @@ class TestReport(ReportBaseCase):
         with self.assertRaises(ValueError):
             latex(rank3Tensor, specs)
 
-    def test_factory_helpers(self):
-        pygsti.report.factory._errgen_formula("logTiG", "latex")
-        pygsti.report.factory._errgen_formula("logGTi", "latex")
-        pygsti.report.factory._errgen_formula("logG-logT", "latex")
-        pygsti.report.factory._errgen_formula("foobar", "latex")
-
     def test_merge_helpers(self):
         """ Tests boundary cases for merge_helpers.py functinos """
         import pygsti.report.merge_helpers as mh

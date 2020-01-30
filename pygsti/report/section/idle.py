@@ -1,4 +1,4 @@
-""" pyGSTi Reporting Python Package """
+""" Idle Tomography section """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,10 +8,19 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
-# the package namespace
-from .report import Report
-from .reportables import *
-from .factory import *
-from .workspace import Workspace
-from .notebook import Notebook
+from . import Section as _Section
+
+
+class IdleTomographySection(_Section):
+    _HTML_TEMPLATE = 'tabs/IdleTomography.html'
+
+    @_Section.figure_factory()
+    def idtIntrinsicErrorsTable(workspace, switchboard=None, **kwargs):
+        return workspace.IdleTomographyIntrinsicErrorsTable(switchboard.idtresults)
+
+    @_Section.figure_factory(3)
+    def idtObservedRatesTable(workspace, switchboard=None, **kwargs):
+        # HARDCODED - show only top 20 rates
+        return workspace.IdleTomographyObservedRatesTable(
+            switchboard.idtresults, 20, switchboard.gsGIRep
+        )
