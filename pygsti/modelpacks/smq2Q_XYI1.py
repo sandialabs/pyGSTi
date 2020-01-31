@@ -22,13 +22,13 @@ class _Module(GSTModelPack, RBModelPack):
 
     gates = [(), ('Gxpi2', 0), ('Gypi2', 0)]
 
-    _sslbls = (0,)
+    _sslbls = (0, 1)
 
     _germs = [((), ), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gypi2', 0)), (('Gxpi2', 0), ('Gypi2', 0), ()), (('Gxpi2', 0), (), ('Gypi2', 0)),
               (('Gxpi2', 0), (), ()), (('Gypi2', 0), (), ()), (('Gxpi2', 0), ('Gxpi2', 0), (), ('Gypi2', 0)), (('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0), ()),
               (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0))]
 
-    _germs_lite = None
+    _germs_lite = [((), ), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gypi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0))]
 
     _fiducials = [(), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 0))]
 
@@ -76,9 +76,16 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0)): [(0, 0), (0, 1), (0, 2), (1, 2)]
     }
 
-    global_fidPairs_lite = None
+    global_fidPairs_lite = [(0, 4), (0, 5), (1, 0), (2, 0), (2, 4), (2, 5), (3, 0), (4, 2), (4, 4), (5, 1), (5, 2),
+                            (5, 3)]
 
-    _pergerm_fidPairsDict_lite = None
+    _pergerm_fidPairsDict_lite = {
+        (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
+        ((), ): [(0, 3), (1, 1), (5, 5)],
+        (('Gypi2', 0), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
+        (('Gxpi2', 0), ('Gypi2', 0)): [(0, 0), (0, 4), (2, 5), (5, 4)],
+        (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0)): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)]
+    }
 
     def _target_model(self, sslbls):
         return self._build_explicit_target_model(
