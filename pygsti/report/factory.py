@@ -1534,7 +1534,7 @@ def construct_nqnoise_report(results, title="auto",
                    workspace=ws)
 
 
-def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
+def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     """
     Creates a Drift report.
 
@@ -1544,10 +1544,12 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
     -------
     :class:`Report` : A constructed report object
     """
+    from ..protocols import StabilityAnalysisResults as _StabilityAnalysisResults
     from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
     from ..extras.drift import driftreport
-    assert(isinstance(results, StabilityAnalyzer)), "Support for multiple results as a Dict is not yet included!"
-    singleresults = results
+    assert(isinstance(results, _StabilityAnalysisResults)), "Support for multiple results as a Dict is not yet included!"
+    gss = results.data.edesign.circuit_structs[-1]
+    singleresults = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
 
@@ -1567,10 +1569,10 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    drift_switchBd = driftreport._create_drift_switchboard(ws, results, gss)
+    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, gss)
 
     # Sets whether or not the dataset key is a switchboard or not.
-    if len(results.data.keys()) > 1:
+    if len(singleresults.data.keys()) > 1:
         dskey = drift_switchBd.dataset
         arb_dskey = list(singleresults.data.keys())[0]
     else:
@@ -1581,8 +1583,9 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
     printer.log("*** Generating switchboard ***")
 
     #Create master switchboard
+    stabilityanalyzer_dict = {k: res.stabilityanalyzer for k, res in results_dict.items()}
     switchBd, _dataset_labels = \
-        driftreport._create_switchboard(ws, results_dict)
+        driftreport._create_switchboard(ws, stabilityanalyzer_dict)
 
     global_qtys = {
         'title': title,
@@ -1608,7 +1611,7 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
         html='~drift_html_report',
         pdf='drift_pdf_report.tex'
     )
-    return _Report(templates, results, sections, set(), global_qtys, report_params, ws)
+    return _Report(templates, singleresults, sections, set(), global_qtys, report_params, workspace=ws)
 
 
 # # XXX this needs to be revised into a script
