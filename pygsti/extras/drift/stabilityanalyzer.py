@@ -556,6 +556,7 @@ class StabilityAnalyzer(object):
         assert(_np.var(_np.array(counts)) == 0), "An equal number of counts at every time-step " \
             "in every circuit is currently required!"
         counts = counts[0]
+        self.counts = counts
 
         for i, dskey in enumerate(dskeys):
             ds = self.data[dskey]
@@ -1786,6 +1787,8 @@ class StabilityAnalyzer(object):
                         times, clickstreams = self.data[dskey][circuit].get_timeseries_for_outcomes()
                         parameters = _sig.amplitudes_at_frequencies(freqs, clickstreams, transform=self.transform)
                         del parameters[outcomes[-1]]
+                        # Divide by the counts
+                        parameters = {key: list(_np.array(x) / self.counts) for key, x in parameters.items()}
                         # future: maybe these could be chosen in a better way for non-equally spaced data.
                         starttime = times[0]
                         timestep = _np.mean(_np.diff(times))
