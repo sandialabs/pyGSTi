@@ -4,7 +4,7 @@ import time
 import sys
 import pickle
 import numpy as np
-from .mpinoseutils import *
+from mpinoseutils import *
 
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
