@@ -361,7 +361,7 @@ class StdInputParser(object):
                             self.parse_dataline(dataline, lookupDict, nDataCols,
                                                 create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
-                        commentDict = parse_comment(comment)
+                        commentDict = parse_comment(comment, filename, iLine)
 
                     except ValueError as e:
                         raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
@@ -413,7 +413,7 @@ class StdInputParser(object):
                         elif parts[0] == 'repetitions:':
                             current_item['repetitions'] = [int(x) for x in parts[1:]]
                         elif parts[0] == 'aux:':
-                            current_item['aux'] = parse_comment(" ".join(parts[1:]))
+                            current_item['aux'] = parse_comment(" ".join(parts[1:]), filename, iLine)
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 
