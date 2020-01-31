@@ -53,7 +53,7 @@ class Notebook(object):
         '''
         templateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                          'templates', templateFilename)
-        with open(templateFilename, 'r') as infile:
+        with open(str(templateFilename), 'r') as infile:
             notebookDict = _json.load(infile)
         notebookDict['cells'].extend([c.to_json_dict() for c in self.cells])
         return notebookDict
@@ -71,7 +71,7 @@ class Notebook(object):
             Name of an existing notebook file to build from
         '''
         jsonDict = self.to_json_dict(templateFilename)
-        with open(outputFilename, 'w') as outfile:
+        with open(str(outputFilename), 'w') as outfile:
             _json.dump(jsonDict, outfile)
 
     def add(self, cell):
@@ -109,7 +109,7 @@ class Notebook(object):
         cellType : str
             tag for the cell. Either 'code' or 'markdown'
         '''
-        with open(filename, 'r') as infile:
+        with open(str(filename), 'r') as infile:
             block = infile.read()
         self.add_block(block, cellType)
 
@@ -203,7 +203,7 @@ class Notebook(object):
         filename : str
             name of file containing notebook formatted text
         '''
-        with open(filename, 'r') as infile:
+        with open(str(filename), 'r') as infile:
             self.add_notebook_text(infile.read())
 
     def add_notebook_text_files(self, filenames):
@@ -227,7 +227,7 @@ class Notebook(object):
         filename : str
             ipynb file to append
         '''
-        with open(filename, 'r') as infile:
+        with open(str(filename), 'r') as infile:
             notebookDict = _json.load(infile)
         for cell in notebookDict['cells']:
             self.add(NotebookCell(cell['cell_type'], cell['source']))

@@ -285,7 +285,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
     """
     if readRawStrings:
         rawList = []
-        with open(filename, 'r') as circuitlist:
+        with open(str(filename), 'r') as circuitlist:
             for line in circuitlist:
                 if len(line.strip()) == 0: continue
                 if len(line) == 0 or line[0] == '#': continue

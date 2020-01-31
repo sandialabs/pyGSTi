@@ -55,7 +55,7 @@ def write_empty_dataset(filename, circuit_list,
         else:
             raise ValueError("Must specify numZeroCols since I can't figure it out from the header string")
 
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         zeroCols = "  ".join(['0'] * numZeroCols)
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
@@ -124,7 +124,7 @@ def write_dataset(filename, dataset, circuit_list=None,
     if fixedColumnMode:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         output.write(headerString)
         for circuit in circuit_list:  # circuit should be a Circuit object here
             dataRow = dataset[circuit]
@@ -202,7 +202,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
 
     # strip_occurence_tags = any([ca == "keepseparate" for ca in multidataset.collisionActions.values()])
     datasets = [multidataset[dsl] for dsl in dsLabels]
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
             # circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
@@ -236,7 +236,7 @@ def write_circuit_list(filename, circuit_list, header=None):
     if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
         raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         if header is not None:
             output.write("# %s" % header + '\n')
 
@@ -276,7 +276,7 @@ def write_model(mdl, filename, title=None):
         else:
             f.write("%s = %s\n" % (lbl, repr(val)))
 
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
 
         if title is not None:
             output.write("# %s" % title + '\n')
