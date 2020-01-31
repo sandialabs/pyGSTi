@@ -526,6 +526,6 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
                              collisionAction, recordZeroCnts, comm,
                              memLimit, times)
     if fixedColumnMode == "auto":
-        fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8)
+        fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixedColumnMode=fixedColumnMode)
     return ds
