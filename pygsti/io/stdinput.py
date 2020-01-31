@@ -324,6 +324,24 @@ class StdInputParser(object):
 
         display_progress = get_display_progress_fn(showProgress)
         warnings = []  # to display *after* display progress
+        looking_for = "circuit_line"; current_item = {}
+
+        def parse_comment(comment, filename, iLine):
+            commentDict = {}
+            comment = comment.strip()
+            if len(comment) == 0: return {}
+            try:
+                if comment.startswith("{") and comment.endswith("}"):
+                    commentDict = _ast.literal_eval(comment)
+                else:  # put brackets around it
+                    commentDict = _ast.literal_eval("{ " + comment + " }")
+                #commentDict = _json.loads("{ " + comment + " }")
+                #Alt: safer(?) & faster, but need quotes around all keys & vals
+            except:
+                commentDict = {}
+                warnings.append("%s Line %d: Could not parse comment '%s'"
+                                % (filename, iLine, comment))
+            return commentDict
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -336,51 +354,75 @@ class StdInputParser(object):
                 else:
                     dataline, comment = line, ""
 
-                if len(dataline) == 0: continue
-                try:
-                    circuitTuple, circuitStr, circuitLbls, valueList = \
-                        self.parse_dataline(dataline, lookupDict, nDataCols,
-                                            create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                if looking_for == "circuit_line":
+                    if len(dataline) == 0: continue
+                    try:
+                        circuitTuple, circuitStr, circuitLbls, valueList = \
+                            self.parse_dataline(dataline, lookupDict, nDataCols,
+                                                create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
-                    commentDict = {}
-                    comment = comment.strip()
-                    if len(comment) > 0:
-                        try:
-                            if comment.startswith("{") and comment.endswith("}"):
-                                commentDict = _ast.literal_eval(comment)
-                            else:  # put brackets around it
-                                commentDict = _ast.literal_eval("{ " + comment + " }")
-                            #commentDict = _json.loads("{ " + comment + " }")
-                            #Alt: safer(?) & faster, but need quotes around all keys & vals
-                        except:
-                            warnings.append("%s Line %d: Could not parse comment '%s'"
-                                            % (filename, iLine, comment))
+                        commentDict = parse_comment(comment)
 
-                except ValueError as e:
-                    raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
+                    except ValueError as e:
+                        raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                bBad = ('BAD' in valueList)  # supresses warnings
-                countDict = _objs.labeldicts.OutcomeLabelDict()
-                self._fillDataCountDict(countDict, fillInfo, valueList)
-                if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
-                    if ignoreZeroCountLines is True:
-                        if not bBad:
-                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
-                            warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
-                        continue  # skip lines in dataset file with zero counts (no experiments done)
+                    if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
+                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
+                                            line_labels=circuitLbls, expand_subcircuits=False, check=False)
+                    #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
+
+                    if len(valueList) > 0:
+                        bBad = ('BAD' in valueList)  # supresses warnings
+                        countDict = _objs.labeldicts.OutcomeLabelDict()
+                        self._fillDataCountDict(countDict, fillInfo, valueList)
+                        if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
+                            if ignoreZeroCountLines is True:
+                                if not bBad:
+                                    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                                    warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
+                                continue  # skip lines in dataset file with zero counts (no experiments done)
+                            else:
+                                #if not bBad:
+                                #    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                                #    warnings.append("Dataline for circuit '%s' has zero counts." % s)
+                                # don't make a fuss if we don't ignore the lines (needed for
+                                # fill_in_empty_dataset_with_fake_data).
+                                pass
+
+                        dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts,
+                                               update_ol=False)  # for performance - to this once at the end.
                     else:
-                        #if not bBad:
-                        #    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
-                        #    warnings.append("Dataline for circuit '%s' has zero counts." % s)
-                        # don't make a fuss if we don't ignore the lines (see fill_in_empty_dataset_with_fake_data)
-                        pass
+                        current_item['circuit'] = circuit
+                        looking_for = "circuit_data"
 
-                if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
-                circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
-                                        line_labels=circuitLbls, expand_subcircuits=False, check=False)
-                #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
-                dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts,
-                                       update_ol=False)  # for performance - to this once at the end.
+                elif looking_for == "circuit_data":
+                    if len(line) == 0:
+                        #add current item & look for next one
+                        dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
+                                                    current_item['times'], current_item.get('repetitions', None),
+                                                    recordZeroCnts=recordZeroCnts, aux=current_item.get('aux', None),
+                                                    update_ol=False)  # for performance - to this once at the end.
+                        current_item.clear()
+                        looking_for = "circuit_line"
+                    else:
+                        parts = dataline.split()
+                        if parts[0] == 'times:':
+                            current_item['times'] = [float(x) for x in parts[1:]]
+                        elif parts[0] == 'outcomes:':
+                            current_item['outcomes'] = parts[1:]  # no conversion needed
+                        elif parts[0] == 'repetitions:':
+                            current_item['repetitions'] = [int(x) for x in parts[1:]]
+                        elif parts[0] == 'aux:':
+                            current_item['aux'] = parse_comment(" ".join(parts[1:]))
+                        else:
+                            raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
+
+        if looking_for == "circuit_data" and current_item:
+            #add final circuit info (no blank line at end of file)
+            dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
+                                        current_item['times'], current_item.get('repetitions', None),
+                                        recordZeroCnts=recordZeroCnts, aux=current_item.get('aux', None),
+                                        update_ol=False)  # for performance - to this once at the end.
 
         dataset.update_ol()  # because we set update_ol=False above, we need to do this
         if warnings:

@@ -1631,6 +1631,12 @@ class DataSet(object):
 
         return fixedtotalcounts
 
+    def has_trivial_timedependence(self):
+        """
+        Returns `True` if all the data in this DataSet occurs at time 0.
+        """
+        return all([_np.all(self.timeData[gsi] == 0) for gsi in self.cirIndex.values()])
+
     def __str__(self):
         return self.to_str()
 
@@ -1652,9 +1658,7 @@ class DataSet(object):
         str
         """
         if mode == "auto":
-            if all([_np.all(self.timeData[gsi] == 0) for gsi in self.cirIndex.values()]):
-                mode = "time-independent"
-            else: mode = "time-dependent"
+            mode = "time-independent" if self.has_trivial_timedependence() else "time-dependent"
 
         assert(mode in ('time-dependent', 'time-independent')), "Invalid `mode` argument: %s" % mode
 

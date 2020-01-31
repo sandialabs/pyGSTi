@@ -69,7 +69,7 @@ def _outcome_to_str(x):
 
 
 def write_dataset(filename, dataset, circuit_list=None,
-                  outcomeLabelOrder=None, fixedColumnMode=True):
+                  outcomeLabelOrder=None, fixedColumnMode=True, withTimes="auto"):
     """
     Write a text-formatted dataset file.
 
@@ -95,6 +95,12 @@ def write_dataset(filename, dataset, circuit_list=None,
         any counts for an outcome, `'--'` is used in its place.  When `False`,
         each row's counts are written in an expanded form that includes the
         outcome labels (each "count" has the format <outcomeLabel>:<count>).
+
+    withTimes : bool or "auto", optional
+        Whether to include (save) time-stamp information in output.  This
+        can only be True when `fixedColumnMode=False`.  `"auto"` will set
+        this to True if `fixedColumnMode=False` and `dataset` has data at
+        non-trivial (non-zero) times.
     """
     if circuit_list is not None:
         if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
@@ -121,9 +127,15 @@ def write_dataset(filename, dataset, circuit_list=None,
             else:
                 headerString += "# " + commentLine + '\n'
 
-    if fixedColumnMode:
+    if fixedColumnMode is True:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
+        assert(not (withTimes is True)), "Cannot set `witTimes=True` when `fixedColumnMode=True`"
+    elif withTimes == "auto":
+        trivial_times = dataset.has_trivial_timedependence()
+    else:
+        trivial_times = not withTimes
+
     with open(str(filename), 'w') as output:
         output.write(headerString)
         for circuit in circuit_list:  # circuit should be a Circuit object here
@@ -137,15 +149,25 @@ def write_dataset(filename, dataset, circuit_list=None,
                 output.write(circuit_to_write.str + "  "
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
                                           for ol in outcomeLabels]))
-            else:  # use expanded label:count format
+                if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
+                output.write('\n')  # finish the line
+
+            elif trivial_times:  # use expanded label:count format
                 output.write(circuit_to_write.str + "  "
                              + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
                                           for ol in outcomeLabels if ol in counts]))
+                if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
+                output.write('\n')  # finish the line
 
-            #write aux info
-            if dataRow.aux:
-                output.write(" # %s" % str(repr(dataRow.aux)))
-            output.write('\n')  # finish the line
+            else:
+                output.write(circuit_to_write.str + "\n"
+                             + "times: " + "  ".join(["%g" % tm for tm in dataRow.time]) + "\n"
+                             + "outcomes: " + "  ".join([_outcome_to_str(ol) for ol in dataRow.outcomes]) + "\n")
+                if dataRow.reps is not None:
+                    output.write("repetitions: " + "  ".join(["%d" % rep for rep in dataRow.reps]) + "\n")
+                if dataRow.aux:
+                    output.write("aux: " + str(repr(dataRow.aux)) + "\n")
+                output.write('\n')  # blank line between circuits
 
 
 def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOrder=None):
