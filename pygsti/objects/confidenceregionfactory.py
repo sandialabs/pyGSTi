@@ -897,6 +897,7 @@ class ConfidenceRegionFactoryView(object):
         mlgst_args['forcefn_grad'] = gradF
         mlgst_args['shiftFctr'] = 100.0
         mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
+        mlgst_args['maxiter'] = 100  # don't let this run for too long
         _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(gradF[i], gradF[i]) for i in range(gradF.shape[0])])
