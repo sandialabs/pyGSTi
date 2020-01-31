@@ -9,6 +9,9 @@
 #***************************************************************************************************
 
 from .devcore import *
+from . import ibmq_burlington
+from . import ibmq_essex
+from . import ibmq_london
 from . import ibmq_melbourne
 from . import ibmq_ourense
 from . import ibmq_rueschlikon
@@ -18,3 +21,4 @@ from . import ibmq_yorktown
 from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
+from . import rigetti_aspen7

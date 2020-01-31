@@ -1,4 +1,4 @@
-""" Functions for interfacing pyGSTi with IBM Q Tenerife (ibmqx4) """
+""" Specification of IBM Q Vigo """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -7,10 +7,6 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-# import numpy as _np
-# from ...objects import processorspec as _pspec
-# from .ibmq_ourense import *
 
 qubits = ['Q' + str(x) for x in range(5)]
 

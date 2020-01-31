@@ -1,5 +1,4 @@
-""" Functions for interfacing pyGSTi with RQC Aspen-4 and Aspen-6 """
-from __future__ import division, print_function, absolute_import, unicode_literals
+""" Specification of Rigetti Aspen 7 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
