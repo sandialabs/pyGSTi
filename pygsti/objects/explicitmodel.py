@@ -582,6 +582,8 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of gauge model parameters.
         """
+        if self._evotype not in ("densitymx", "statevec"):
+            return 0  # punt on computing number of gauge parameters for other evotypes
         dPG = self._excalc()._buildup_dPG()
         gaugeDirs = _mt.nullspace_qr(dPG)  # cols are gauge directions
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(), :])
