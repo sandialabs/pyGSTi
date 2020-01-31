@@ -22,13 +22,13 @@ class _Module(GSTModelPack, RBModelPack):
 
     gates = [(), ('Gxpi2', 1), ('Gypi2', 1)]
 
-    _sslbls = (0,)
+    _sslbls = (0, 1)
 
     _germs = [((), ), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gypi2', 1)), (('Gxpi2', 1), ('Gypi2', 1), ()), (('Gxpi2', 1), (), ('Gypi2', 1)),
               (('Gxpi2', 1), (), ()), (('Gypi2', 1), (), ()), (('Gxpi2', 1), ('Gxpi2', 1), (), ('Gypi2', 1)), (('Gxpi2', 1), ('Gypi2', 1), ('Gypi2', 1), ()),
               (('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gypi2', 1))]
 
-    _germs_lite = None
+    _germs_lite = [((), ), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gypi2', 1)), (('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1))]
 
     _fiducials = [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1))]
 
@@ -77,13 +77,20 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gypi2', 1)): [(0, 0), (0, 1), (0, 2), (1, 2)]
     }
 
-    global_fidPairs_lite = None
+    global_fidPairs_lite = [(0, 4), (0, 5), (1, 0), (2, 0), (2, 4), (2, 5), (3, 0), (4, 2), (4, 4), (5, 1), (5, 2),
+                            (5, 3)]
 
-    _pergerm_fidPairsDict_lite = None
+    _pergerm_fidPairsDict_lite = {
+        (('Gxpi2', 1), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
+        ((), ): [(0, 3), (1, 1), (5, 5)],
+        (('Gypi2', 1), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
+        (('Gxpi2', 1), ('Gypi2', 1)): [(0, 0), (0, 4), (2, 5), (5, 4)],
+        (('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1)): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)]
+    }
 
     def _target_model(self, sslbls):  # Note: same as smq2Q_XYI1 -- (this entire module may be redundant)
         return self._build_explicit_target_model(
-            sslbls, [(), ('Gxpi2', 0), ('Gypi2', 0)],
+            sslbls, [(), ('Gxpi2', 1), ('Gypi2', 1)],
             ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})'],
             effectLabels=['0', '1'], effectExpressions=['0', '1'])
 
