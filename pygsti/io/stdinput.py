@@ -127,7 +127,9 @@ class StdInputParser(object):
 
         counts = []
         if expectedCounts == -1:  # then we expect to be given <outcomeLabel>:<count> items
-            if len(parts) < 2 or parts[1] == "BAD":
+            if len(parts) == 1:  # only a circuit, no counts on line
+                pass  # just leave counts empty
+            elif parts[1] == "BAD":
                 counts.append("BAD")
             else:
                 for p in parts[1:]:
