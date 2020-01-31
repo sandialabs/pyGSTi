@@ -209,7 +209,7 @@ class Report:
         basename = path.stem
         results_file_base = basename + '_results.pkl'
         results_file = outputDir / results_file_base
-        with open(results_file, 'wb') as f:
+        with open(str(results_file), 'wb') as f:
             _pickle.dump(self._results, f)
 
         nb = _Notebook()
