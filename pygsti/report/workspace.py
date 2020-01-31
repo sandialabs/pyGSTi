@@ -2186,7 +2186,7 @@ class WorkspaceTable(WorkspaceOutput):
             else:  # pickle dictionary of all indices
                 to_pickle = render_out['python']
 
-            with open(filename, 'wb') as f:
+            with open(str(filename), 'wb') as f:
                 _pickle.dump(to_pickle, f)
 
         else:

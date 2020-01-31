@@ -41,10 +41,10 @@ def read_contents(filename):
     """
     contents = None
     try:  # on Windows using python3 open can fail when trying to read text files. encoding fixes this
-        f = open(filename)
+        f = open(str(filename))
         contents = f.read()
     except UnicodeDecodeError:
-        f = open(filename, encoding='utf-8')  # try this, but not available in python 2.7!
+        f = open(str(filename), encoding='utf-8')  # try this, but not available in python 2.7!
         contents = f.read()
 
     f.close()
@@ -489,7 +489,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
 
     # Render main page template to output path
     template = env.get_template(templateName)
-    with open(outputFilename, 'w') as outfile:
+    with open(str(outputFilename), 'w') as outfile:
         outfile.write(template.render(render_params))
 
 
@@ -583,7 +583,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
         figDir.mkdir(exist_ok=True)
 
         if embed_figures is False:
-            with open(figDir / 'test.html', 'w') as f:
+            with open(str(figDir / 'test.html'), 'w') as f:
                 f.write("<div>Dummy to test ajax loading</div>")
     else:
         figDir = None
@@ -613,15 +613,8 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
 
     # Render main page template to output path
     template = env.get_template(templateName)
-    try:
-        with open(out_path / templateName, 'w') as outfile:
-            outfile.write(template.render(render_params))
-    except Exception as e:
-        print("DEBUG: ", str(out_path / templateName))
-        print(out_path.is_dir())
-        print(out_path.exists())
-        print((out_path / templateName).exists())
-        raise e
+    with open(str(out_path / templateName), 'w') as outfile:
+        outfile.write(template.render(render_params))
 
 
 def process_call(call):
