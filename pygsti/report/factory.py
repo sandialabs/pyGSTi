@@ -1547,7 +1547,8 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     from ..protocols import StabilityAnalysisResults as _StabilityAnalysisResults
     from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
     from ..extras.drift import driftreport
-    assert(isinstance(results, _StabilityAnalysisResults)), "Support for multiple results as a Dict is not yet included!"
+    assert(isinstance(results, _StabilityAnalysisResults)), \
+        "Support for multiple results as a Dict is not yet included!"
     gss = results.data.edesign.circuit_structs[-1]
     singleresults = results.stabilityanalyzer
 
