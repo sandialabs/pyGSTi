@@ -571,6 +571,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     # Create output directory if it does not already exist
     out_path = Path(outputDir).absolute()
     out_path.mkdir(parents=True, exist_ok=True)
+    assert(out_path.is_dir()), "failed to create output directory!"
     static_path = out_path / 'offline'
 
     #Copy offline directory into position
@@ -612,8 +613,15 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
 
     # Render main page template to output path
     template = env.get_template(templateName)
-    with open(out_path / templateName, 'w') as outfile:
-        outfile.write(template.render(render_params))
+    try:
+        with open(out_path / templateName, 'w') as outfile:
+            outfile.write(template.render(render_params))
+    except Exception as e:
+        print("DEBUG: ", str(out_path / templateName))
+        print(out_path.is_dir())
+        print(out_path.exists())
+        print((out_path / templateName).exists())
+        raise e
 
 
 def process_call(call):
