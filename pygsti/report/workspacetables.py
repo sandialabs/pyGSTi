@@ -1509,7 +1509,10 @@ class NQubitErrgenTable(WorkspaceTable):
         if isinstance(model, _objs.ExplicitOpModel):
             for gl in opLabels:
                 process_gate(gl, model.operations[gl], (), None)
-        elif isinstance(model, _objs.ImplicitOpModel):  # process primitive op error
+        elif isinstance(model, _objs.LocalNoiseModel):  # process primitive op error
+            for gl in opLabels:
+                process_gate(gl, model.operation_blks['layers'][gl], (), None)
+        elif isinstance(model, _objs.CloudNoiseModel):  # process primitive op error
             for gl in opLabels:
                 process_gate(gl, model.operation_blks['cloudnoise'][gl], (), None)
         else:
