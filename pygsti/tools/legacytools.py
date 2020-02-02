@@ -9,6 +9,8 @@
 #***************************************************************************************************
 
 import warnings as _warnings
+import sys as _sys
+import types as _types
 
 
 def warn_deprecated(name, replacement=None):
@@ -48,3 +50,46 @@ def deprecated_fn(replacement=None):
             return fn(*args, **kwargs)
         return _inner
     return decorator
+
+
+def deprecate_imports(module_name, replacement_map, warning_msg):
+    """
+    Utility to deprecate imports from a module.
+
+    This works by swapping the underlying module in the import
+    mechanisms with a `ModuleType` object that overrides attribute
+    lookup to check against the replacement map.
+
+    Note that this will slow down module attribute lookup
+    substantially. If you need to deprecate multiple names, DO NOT
+    call this method more than once on a given module! Instead, use
+    the replacement map to batch multiple deprecations into one
+    call. When using this method, plan to remove the deprecated paths
+    altogether sooner rather than later.
+
+    Parameters
+    ----------
+    module_name : str
+        The fully-qualified name of the module whose names have been deprecated.
+
+    replacement_map : {name: function}
+        A map of each deprecated name to a factory which will be
+        called with no arguments when importing the name.
+
+    warning_msg : str
+        A message to be displayed as a warning when importing a
+        deprecated name. Optionally, this may include the format
+        string `name`, which will be formatted with the deprecated
+        name.
+    """
+    module = _sys.modules[module_name]
+
+    class ModuleLookupWrapper(_types.ModuleType):
+        def __getattribute__(self, name):
+            if name in replacement_map:
+                _warnings.warn(warning_msg.format(name=name))
+                return replacement_map[name]()
+            else:
+                return module.__getattribute__(name)
+
+    _sys.modules[module_name] = ModuleLookupWrapper(module_name)
