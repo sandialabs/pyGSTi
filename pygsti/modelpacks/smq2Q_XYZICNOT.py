@@ -425,7 +425,7 @@ class _Module(GSTModelPack):
                                                                    (12, 10), (13, 0), (13, 4), (14, 5)]
     }
 
-    pergerm_fidPairsDict_lite = {
+    _pergerm_fidPairsDict_lite = {
       ((),): [
             (0, 3), (0, 4), (0, 6), (0, 7), (0, 8), (0, 9), (1, 1), 
             (1, 4), (1, 5), (1, 9), (2, 1), (2, 3), (2, 4), (2, 6), 
