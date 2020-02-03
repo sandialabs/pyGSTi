@@ -64,11 +64,10 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         e.g. ['Gi','Gx','Gy','Gx2']
 
     opLabelAliases : dictionary, optional
-        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
-        the dataset.
-        Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     guessModelForGauge : Model, optional
         A model used to compute a gauge transformation that is applied to
@@ -1038,10 +1037,10 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         The default is no weight scaling at all.
 
     opLabelAliases : dictionary, optional
-        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
@@ -1468,10 +1467,10 @@ def do_mc2gst_with_model_selection(
         The default is no weight scaling at all.
 
     opLabelAliases : dictionary, optional
-        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
@@ -1706,10 +1705,10 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         factor for the corresponding operation sequence. The default is no weight scaling at all.
 
     opLabelAliases : dictionary, optional
-        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
@@ -1918,10 +1917,10 @@ def do_iterative_mc2gst_with_model_selection(
         factor for the corresponding operation sequence. The default is no weight scaling at all.
 
     opLabelAliases : dictionary, optional
-        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
@@ -2077,10 +2076,10 @@ def do_mlgst(dataset, startModel, circuitsToUse,
       The default is no weight scaling at all.
 
     opLabelAliases : dictionary, optional
-      Dictionary whose keys are operation label "aliases" and whose values are tuples
-      corresponding to what that operation label should be expanded into before querying
-      the dataset. Defaults to the empty dictionary (no aliases defined)
-      e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
+        corresponding to what that operation label should be expanded into before querying
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     memLimit : int, optional
       A rough memory limit in bytes which restricts the amount of intermediate
@@ -2432,10 +2431,10 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         factor for the corresponding operation sequence. The default is no weight scaling at all.
 
     opLabelAliases : dictionary, optional
-        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        the dataset.  Defaults to the empty dictionary (no aliases defined)
+        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate

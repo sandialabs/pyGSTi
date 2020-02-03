@@ -185,6 +185,11 @@ class GateSetTomography(_proto.Protocol):
             lsgstLists = data.edesign.circuit_lists
         ds = data.dataset
 
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        aliases = lsgstLists[-1].aliases if isinstance(
+            lsgstLists[-1], validStructTypes) else None
+        aliases = advancedOptions.get('opLabelAliases', aliases)
+
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
         if self.initial_model is not None:  # then use user-supplied model
@@ -201,7 +206,6 @@ class GateSetTomography(_proto.Protocol):
                 LGSTcompatibleOps = False
 
             #Get default target-starting-point postprocessing
-            validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
             if isinstance(lsgstLists[0], validStructTypes) and LGSTcompatibleOps:
                 startingPt = advancedOptions.get('starting point', "LGST")
             else:
@@ -215,7 +219,7 @@ class GateSetTomography(_proto.Protocol):
                                                + list(target_model.instruments.keys()))
                 mdl_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, target_model,
                                          opLabels, svdTruncateTo=target_model.get_dimension(),
-                                         opLabelAliases=lsgstLists[0].aliases,
+                                         opLabelAliases=aliases,
                                          verbosity=printer)  # returns a model with the *same*
                 # parameterizations as target_model
 
@@ -269,10 +273,6 @@ class GateSetTomography(_proto.Protocol):
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         rawLists = [l.allstrs if isinstance(l, validStructTypes) else l
                     for l in lsgstLists]
-
-        aliases = lsgstLists[-1].aliases if isinstance(
-            lsgstLists[-1], validStructTypes) else None
-        aliases = advancedOptions.get('opLabelAliases', aliases)
 
         #Run Long-sequence GST on data
         objective = advancedOptions.get('objective', 'logl')
