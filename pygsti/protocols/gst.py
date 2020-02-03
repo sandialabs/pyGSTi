@@ -364,6 +364,74 @@ class GateSetTomography(_proto.Protocol):
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
 
 
+class LinearGateSetTomography(_proto.Protocol):
+    """ The linear gate set tomography protocol."""
+
+    def __init__(self, gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
+                 advancedOptions=None, output_pkl=None, verbosity=2, name=None):
+        super().__init__(name)
+        self.gaugeopt_suite = gaugeopt_suite
+        self.gaugeopt_target = gaugeopt_target
+        self.advancedOptions = advancedOptions
+        self.output_pkl = output_pkl
+        self.verbosity = verbosity
+
+    def run(self, data, memlimit=None, comm=None):
+        edesign = data.edesign
+        advancedOptions = self.advancedOptions or {}
+
+        profile = advancedOptions.get('profile', 1)
+
+        if profile == 0: profiler = _DummyProfiler()
+        elif profile == 1: profiler = _objs.Profiler(comm, False)
+        elif profile == 2: profiler = _objs.Profiler(comm, True)
+        else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
+
+        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
+        if advancedOptions.get('recordOutput', True) and not printer.is_recording():
+            printer.start_recording()
+
+        target_model = data.edesign.target_model
+        if isinstance(target_model, _objs.ExplicitOpModel):
+            if not all([(isinstance(g, _objs.FullDenseOp)
+                         or isinstance(g, _objs.TPDenseOp))
+                        for g in target_model.operations.values()]):
+                raise ValueError("LGST can only be applied to explicit models with dense operators")
+        else:
+            raise ValueError("LGST can only be applied to explicit models with dense operators")
+
+        if not isinstance(edesign, _proto.CircuitStructuresDesign):
+            raise ValueError("LGST must be given an experiment design with fiducials!")
+        assert(len(edesign.circuit_structs) == 1), "There should only be one circuit structure in the input exp-design!"
+        circuit_struct = edesign.circuit_structs[0]
+
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        if not isinstance(circuit_struct, validStructTypes):
+            raise ValueError("Cannot run LGST: fiducials not specified in input experiment design!")
+
+        ds = data.dataset
+        aliases = advancedOptions.get('opLabelAliases', circuit_struct.aliases)
+        opLabels = advancedOptions.get('opLabels',
+                                       list(target_model.operations.keys())
+                                       + list(target_model.instruments.keys()))
+
+        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
+                                opLabels, svdTruncateTo=target_model.get_dimension(),
+                                opLabelAliases=aliases,
+                                verbosity=printer)  # returns a model with the *same*
+        # parameterizations as target_model
+
+        parameters = _collections.OrderedDict()
+        parameters['objective'] = 'lgst'
+        parameters['profiler'] = profiler
+        args = dict()
+
+        return _package_into_results(self, data, edesign.target_model, mdl_lgst,
+                                     [circuit_struct], parameters, args, [mdl_lgst],
+                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions,
+                                     comm, memlimit, self.output_pkl, printer, profiler, None)
+
+
 class StandardGST(_proto.Protocol):
     """The standard-practice GST protocol."""
 
@@ -1551,3 +1619,4 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
 GSTDesign = GateSetTomographyDesign
 GST = GateSetTomography
+LGST = LinearGateSetTomography
