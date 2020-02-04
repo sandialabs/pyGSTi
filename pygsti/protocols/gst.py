@@ -76,7 +76,8 @@ class StandardGSTDesign(StructuredGSTDesign):
 
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, includeLGST=True, nest=True, qubit_labels=None, verbosity=0,
+                 keepSeed=None, includeLGST=True, nest=True, sequenceRules=None, opLabelAliases=None,
+                 dscheck=None, actionIfMissing="raise", qubit_labels=None, verbosity=0,
                  add_default_protocol=False):
 
         #Get/load fiducials and germs
@@ -90,6 +91,8 @@ class StandardGSTDesign(StructuredGSTDesign):
         self.maxlengths = maxLengths
         self.germ_length_limits = germLengthLimits
         self.includeLGST = includeLGST
+        self.aliases = opLabelAliases
+        self.sequence_rules = sequenceRules
 
         #Hardcoded for now... - include so gets written when serialized
         self.truncation_method = "whole germ powers"
@@ -106,11 +109,9 @@ class StandardGSTDesign(StructuredGSTDesign):
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
-            germLengthLimits=self.germ_length_limits, verbosity=verbosity)
+            self.aliases, self.sequence_rules, dscheck, actionIfMissing,
+            self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
-        # actionIfMissing = advancedOptions.get('missingDataAction', 'drop')
-        # opLabelAliases=advancedOptions.get('opLabelAliases', None),
-        # sequenceRules=advancedOptions.get('stringManipRules', None),
         # truncScheme=advancedOptions.get('truncScheme', "whole germ powers")
 
         super().__init__(target_model, structs, qubit_labels, self.nested)

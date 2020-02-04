@@ -123,10 +123,20 @@ def do_model_test(modelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    advancedOptions = advancedOptions or {}
+
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
-                                          germsListOrFilename, maxLengths, verbosity=printer)
-    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+                                          germsListOrFilename, maxLengths,
+                                          advancedOptions.get('germLengthLimits', None),
+                                          None, 1, None,  # fidPairs, keepFraction, keepSeed
+                                          advancedOptions.get('includeLGST', True),
+                                          advancedOptions.get('nestedCircuitLists', True),
+                                          advancedOptions.get('stringManipRules', None),
+                                          advancedOptions.get('opLabelAliases', None),
+                                          ds, 'drop', verbosity=printer)
+
     data = _proto.ProtocolData(exp_design, ds)
 
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
@@ -343,13 +353,20 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    if advancedOptions is None: advancedOptions = {}
+    advancedOptions = advancedOptions or {}
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
                                           germsListOrFilename, maxLengths,
                                           advancedOptions.get('germLengthLimits', None),
-                                          verbosity=printer)
-    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+                                          None, 1, None,  # fidPairs, keepFraction, keepSeed
+                                          advancedOptions.get('includeLGST', True),
+                                          advancedOptions.get('nestedCircuitLists', True),
+                                          advancedOptions.get('stringManipRules', None),
+                                          advancedOptions.get('opLabelAliases', None),
+                                          ds, 'drop', verbosity=printer)
+
     data = _proto.ProtocolData(exp_design, ds)
 
     if gaugeOptParams is None:
@@ -576,9 +593,20 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    all_advanced = advancedOptions.get('all', {})
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
-                                          germsListOrFilename, maxLengths, verbosity=printer)
+                                          germsListOrFilename, maxLengths,
+                                          all_advanced.get('germLengthLimits', None),
+                                          None, 1, None,  # fidPairs, keepFraction, keepSeed
+                                          all_advanced.get('includeLGST', True),
+                                          all_advanced.get('nestedCircuitLists', True),
+                                          all_advanced.get('stringManipRules', None),
+                                          all_advanced.get('opLabelAliases', None),
+                                          ds, 'drop', verbosity=printer)
+
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
     proto = _proto.StandardGST(modes, gaugeOptSuite, gaugeOptTarget, modelsToTest,
