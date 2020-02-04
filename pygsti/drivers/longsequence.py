@@ -217,7 +217,28 @@ def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     -------
     Results
     """
-    raise NotImplementedError("The LGST protocol has not been updated yet - please use `legacy_do_linear_gst` for now.")
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    advancedOptions = advancedOptions or {}
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+
+    target_model = _load_model(targetModelFilenameOrObj)
+    germs = _construction.circuit_list([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
+    maxLengths = [1]  # we only need maxLength == 1 when doing LGST
+
+    exp_design = _proto.StandardGSTDesign(target_model, prepStrsListOrFilename, effectStrsListOrFilename,
+                                          germs, maxLengths,
+                                          sequenceRules=advancedOptions.get('stringManipRules', None),
+                                          opLabelAliases=advancedOptions.get('opLabelAliases', None),
+                                          dscheck=ds, actionIfMissing='raise', verbosity=printer)
+
+    data = _proto.ProtocolData(exp_design, ds)
+
+    if gaugeOptParams is None:
+        gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+    gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None, advancedOptions,
+                                           output_pkl, printer)
+    return proto.run(data, memLimit, comm)
 
 
 def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -372,6 +393,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     if gaugeOptParams is None:
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    if advancedOptions.get("starting point", None) is None:
+        advancedOptions["starting point"] = "LGST-if-possible"  # to keep backward compatibility
     proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
                                      output_pkl, printer)
     return proto.run(data, memLimit, comm)
