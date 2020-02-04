@@ -492,6 +492,10 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     with open(str(outputFilename), 'w') as outfile:
         outfile.write(template.render(render_params))
 
+    if auto_open:
+        url = 'file://' + _os.path.abspath(outputFilename)
+        _webbrowser.open(url)
+
 
 def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html',
                              auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
@@ -613,8 +617,13 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
 
     # Render main page template to output path
     template = env.get_template(templateName)
-    with open(str(out_path / templateName), 'w') as outfile:
+    outputFilename = str(out_path / templateName)
+    with open(outputFilename, 'w') as outfile:
         outfile.write(template.render(render_params))
+
+    if auto_open:
+        url = 'file://' + _os.path.abspath(outputFilename)
+        _webbrowser.open(url)
 
 
 def process_call(call):
