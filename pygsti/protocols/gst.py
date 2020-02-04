@@ -76,7 +76,8 @@ class StandardGSTDesign(StructuredGSTDesign):
 
     def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
                  germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, includeLGST=True, nest=True, qubit_labels=None, verbosity=0,
+                 keepSeed=None, includeLGST=True, nest=True, sequenceRules=None, opLabelAliases=None,
+                 dscheck=None, actionIfMissing="raise", qubit_labels=None, verbosity=0,
                  add_default_protocol=False):
 
         #Get/load fiducials and germs
@@ -90,6 +91,8 @@ class StandardGSTDesign(StructuredGSTDesign):
         self.maxlengths = maxLengths
         self.germ_length_limits = germLengthLimits
         self.includeLGST = includeLGST
+        self.aliases = opLabelAliases
+        self.sequence_rules = sequenceRules
 
         #Hardcoded for now... - include so gets written when serialized
         self.truncation_method = "whole germ powers"
@@ -106,11 +109,9 @@ class StandardGSTDesign(StructuredGSTDesign):
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
-            germLengthLimits=self.germ_length_limits, verbosity=verbosity)
+            self.aliases, self.sequence_rules, dscheck, actionIfMissing,
+            self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
-        # actionIfMissing = advancedOptions.get('missingDataAction', 'drop')
-        # opLabelAliases=advancedOptions.get('opLabelAliases', None),
-        # sequenceRules=advancedOptions.get('stringManipRules', None),
         # truncScheme=advancedOptions.get('truncScheme', "whole germ powers")
 
         super().__init__(target_model, structs, qubit_labels, self.nested)
@@ -185,6 +186,11 @@ class GateSetTomography(_proto.Protocol):
             lsgstLists = data.edesign.circuit_lists
         ds = data.dataset
 
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        aliases = lsgstLists[-1].aliases if isinstance(
+            lsgstLists[-1], validStructTypes) else None
+        aliases = advancedOptions.get('opLabelAliases', aliases)
+
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
         if self.initial_model is not None:  # then use user-supplied model
@@ -201,7 +207,6 @@ class GateSetTomography(_proto.Protocol):
                 LGSTcompatibleOps = False
 
             #Get default target-starting-point postprocessing
-            validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
             if isinstance(lsgstLists[0], validStructTypes) and LGSTcompatibleOps:
                 startingPt = advancedOptions.get('starting point', "LGST")
             else:
@@ -215,7 +220,7 @@ class GateSetTomography(_proto.Protocol):
                                                + list(target_model.instruments.keys()))
                 mdl_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, target_model,
                                          opLabels, svdTruncateTo=target_model.get_dimension(),
-                                         opLabelAliases=lsgstLists[0].aliases,
+                                         opLabelAliases=aliases,
                                          verbosity=printer)  # returns a model with the *same*
                 # parameterizations as target_model
 
@@ -269,10 +274,6 @@ class GateSetTomography(_proto.Protocol):
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         rawLists = [l.allstrs if isinstance(l, validStructTypes) else l
                     for l in lsgstLists]
-
-        aliases = lsgstLists[-1].aliases if isinstance(
-            lsgstLists[-1], validStructTypes) else None
-        aliases = advancedOptions.get('opLabelAliases', aliases)
 
         #Run Long-sequence GST on data
         objective = advancedOptions.get('objective', 'logl')
@@ -362,6 +363,74 @@ class GateSetTomography(_proto.Protocol):
                                      lsgstLists, parameters, args, mdl_lsgst_list,
                                      self.gaugeopt_suite, self.gaugeopt_target, advancedOptions, comm, memlimit,
                                      self.output_pkl, printer, profiler, args['evaltree_cache'])
+
+
+class LinearGateSetTomography(_proto.Protocol):
+    """ The linear gate set tomography protocol."""
+
+    def __init__(self, gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
+                 advancedOptions=None, output_pkl=None, verbosity=2, name=None):
+        super().__init__(name)
+        self.gaugeopt_suite = gaugeopt_suite
+        self.gaugeopt_target = gaugeopt_target
+        self.advancedOptions = advancedOptions
+        self.output_pkl = output_pkl
+        self.verbosity = verbosity
+
+    def run(self, data, memlimit=None, comm=None):
+        edesign = data.edesign
+        advancedOptions = self.advancedOptions or {}
+
+        profile = advancedOptions.get('profile', 1)
+
+        if profile == 0: profiler = _DummyProfiler()
+        elif profile == 1: profiler = _objs.Profiler(comm, False)
+        elif profile == 2: profiler = _objs.Profiler(comm, True)
+        else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
+
+        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
+        if advancedOptions.get('recordOutput', True) and not printer.is_recording():
+            printer.start_recording()
+
+        target_model = data.edesign.target_model
+        if isinstance(target_model, _objs.ExplicitOpModel):
+            if not all([(isinstance(g, _objs.FullDenseOp)
+                         or isinstance(g, _objs.TPDenseOp))
+                        for g in target_model.operations.values()]):
+                raise ValueError("LGST can only be applied to explicit models with dense operators")
+        else:
+            raise ValueError("LGST can only be applied to explicit models with dense operators")
+
+        if not isinstance(edesign, _proto.CircuitStructuresDesign):
+            raise ValueError("LGST must be given an experiment design with fiducials!")
+        assert(len(edesign.circuit_structs) == 1), "There should only be one circuit structure in the input exp-design!"
+        circuit_struct = edesign.circuit_structs[0]
+
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        if not isinstance(circuit_struct, validStructTypes):
+            raise ValueError("Cannot run LGST: fiducials not specified in input experiment design!")
+
+        ds = data.dataset
+        aliases = advancedOptions.get('opLabelAliases', circuit_struct.aliases)
+        opLabels = advancedOptions.get('opLabels',
+                                       list(target_model.operations.keys())
+                                       + list(target_model.instruments.keys()))
+
+        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
+                                opLabels, svdTruncateTo=target_model.get_dimension(),
+                                opLabelAliases=aliases,
+                                verbosity=printer)  # returns a model with the *same*
+        # parameterizations as target_model
+
+        parameters = _collections.OrderedDict()
+        parameters['objective'] = 'lgst'
+        parameters['profiler'] = profiler
+        args = dict()
+
+        return _package_into_results(self, data, edesign.target_model, mdl_lgst,
+                                     [circuit_struct], parameters, args, [mdl_lgst],
+                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions,
+                                     comm, memlimit, self.output_pkl, printer, profiler, None)
 
 
 class StandardGST(_proto.Protocol):
@@ -1551,3 +1620,4 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
 GSTDesign = GateSetTomographyDesign
 GST = GateSetTomography
+LGST = LinearGateSetTomography

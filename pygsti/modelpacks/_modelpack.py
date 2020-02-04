@@ -195,8 +195,9 @@ class GSTModelPack(ModelPack):
         :class:`StandardGSTDesign`
         """
         for k in kwargs.keys():
-            if k not in ('germLengthLimits', 'keepFraction', 'keepSeed', 'verbosity', 'add_default_protocol'):
-                raise ValueError("Cannot pass '%s' to StandardGSTDesign" % k)
+            if k not in ('germLengthLimits', 'keepFraction', 'keepSeed', 'includeLGST', 'nest', 'sequenceRules',
+                         'opLabelAliases', 'dscheck', 'actionIfMissing', 'verbosity', 'add_default_protocol'):
+                raise ValueError("Invalid argument '%s' to StandardGSTDesign constructor" % k)
 
         if qubit_labels is None: qubit_labels = self._sslbls
         assert(len(qubit_labels) == len(self._sslbls)), \
@@ -222,6 +223,10 @@ class GSTModelPack(ModelPack):
             kwargs.get('keepSeed', None),
             kwargs.get('includeLGST', True),
             kwargs.get('nest', True),
+            kwargs.get('sequenceRules', None),
+            kwargs.get('opLabelAliases', None),
+            kwargs.get('dscheck', None),
+            kwargs.get('actionIfMissing', None),
             qubit_labels,
             kwargs.get('verbosity', 0),
             kwargs.get('add_default_protocol', False),

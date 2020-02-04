@@ -486,7 +486,8 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
 
     pth = data_dir / 'dataset.txt'
     if pth.exists() and clobber_ok is False:
-        raise ValueError("Template data file would clobber %s, which already exists!" % pth)
+        raise ValueError(("Template data file would clobber %s, which already exists!  Set `clobber_ok=True`"
+                          " to allow overwriting." % pth))
     data_dir.mkdir(parents=True, exist_ok=True)
 
     from ..protocols import ProtocolData as _ProtocolData
@@ -520,7 +521,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
         The generated data set (also written in place of the template file).
     """
     from ..construction import generate_fake_data as _generate_fake_data
-    ds_template = _loaders.load_dataset(dataset_filename, ignoreZeroCountLines=False, verbosity=0)
+    ds_template = _loaders.load_dataset(dataset_filename, ignoreZeroCountLines=False, withTimes=False, verbosity=0)
     ds = _generate_fake_data(model, list(ds_template.keys()), nSamples,
                              sampleError, seed, randState, aliasDict,
                              collisionAction, recordZeroCnts, comm,

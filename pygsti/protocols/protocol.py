@@ -507,9 +507,14 @@ class ExperimentDesign(_TreeNode):
         else:
             self.qubit_labels = tuple(qubit_labels)
 
+        def auto_dirname(child_key):
+            if isinstance(child_key, (list, tuple)):
+                child_key = '_'.join(map(str, child_key))
+            return child_key.replace(' ', '_')
+
         if children is None: children = {}
         children_dirs = children_dirs.copy() if (children_dirs is not None) else \
-            {subname.replace(' ', '_'): subname for subname in children}
+            {subname: auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
         super().__init__(children_dirs, children, child_category)

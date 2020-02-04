@@ -17,7 +17,8 @@ from . import metadir as _metadir
 
 
 def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 recordZeroCnts=True, ignoreZeroCountLines=True, verbosity=1):
+                 recordZeroCnts=True, ignoreZeroCountLines=True,
+                 withTimes="auto", verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -51,6 +52,12 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
     ignoreZeroCountLines : bool, optional
         Whether circuits for which there are no counts should be ignored
         (i.e. omitted from the DataSet) or not.
+
+    withTimes : bool or "auto", optional
+        Whether to the time-stamped data format should be read in.  If
+        "auto", then the time-stamped format is allowed but not required on a
+        per-circuit basis (so the dataset can contain both formats).  Typically
+        you only need to set this to False when reading in a template file.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -90,7 +97,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             ds = parser.parse_datafile(filename, bToStdout,
                                        collisionAction=collisionAction,
                                        recordZeroCnts=recordZeroCnts,
-                                       ignoreZeroCountLines=ignoreZeroCountLines)
+                                       ignoreZeroCountLines=ignoreZeroCountLines,
+                                       withTimes=withTimes)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -101,7 +109,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             ds = parser.parse_datafile(filename, bToStdout,
                                        collisionAction=collisionAction,
                                        recordZeroCnts=recordZeroCnts,
-                                       ignoreZeroCountLines=ignoreZeroCountLines)
+                                       ignoreZeroCountLines=ignoreZeroCountLines,
+                                       withTimes=withTimes)
         return ds
 
 

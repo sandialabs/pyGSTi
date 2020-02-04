@@ -303,7 +303,7 @@ class _Module(GSTModelPack):
 
     global_fidPairs_lite = None
 
-    pergerm_fidPairsDict_lite = {
+    _pergerm_fidPairsDict_lite = {
       ((),): [
             (0, 3), (0, 4), (0, 6), (0, 7), (0, 8), (0, 9), (1, 1), 
             (1, 4), (1, 5), (1, 9), (2, 1), (2, 3), (2, 4), (2, 6), 

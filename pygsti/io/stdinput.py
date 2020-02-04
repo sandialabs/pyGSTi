@@ -250,7 +250,7 @@ class StdInputParser(object):
 
     def parse_datafile(self, filename, showProgress=True,
                        collisionAction="aggregate", recordZeroCnts=True,
-                       ignoreZeroCountLines=True):
+                       ignoreZeroCountLines=True, withTimes="auto"):
         """
         Parse a data set file into a DataSet object.
 
@@ -276,6 +276,11 @@ class StdInputParser(object):
         ignoreZeroCountLines : bool, optional
             Whether circuits for which there are no counts should be ignored
             (i.e. omitted from the DataSet) or not.
+
+        withTimes : bool or "auto", optional
+            Whether to the time-stamped data format should be read in.  If
+            "auto", then this format is allowed but not required.  Typically
+            you only need to set this to False when reading in a template file.
 
         Returns
         -------
@@ -373,7 +378,11 @@ class StdInputParser(object):
                                             line_labels=circuitLbls, expand_subcircuits=False, check=False)
                     #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
 
-                    if len(valueList) > 0:
+                    if withTimes is True and len(valueList) > 0:
+                        raise ValueError(("%s Line %d: Circuit line cannot contain count information when "
+                                          "'withTimes=True'") % (filename, iLine))
+
+                    if withTimes is False or len(valueList) > 0:
                         bBad = ('BAD' in valueList)  # supresses warnings
                         countDict = _objs.labeldicts.OutcomeLabelDict()
                         self._fillDataCountDict(countDict, fillInfo, valueList)
