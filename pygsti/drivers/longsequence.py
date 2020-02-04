@@ -355,7 +355,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     advancedOptions = advancedOptions or {}
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
-    
+
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
                                           germsListOrFilename, maxLengths,
@@ -593,9 +593,10 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    advancedOptions = advancedOptions or {}
     all_advanced = advancedOptions.get('all', {})
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
-    
+
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
                                           germsListOrFilename, maxLengths,
