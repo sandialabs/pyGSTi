@@ -315,7 +315,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - objective = {'chi2', 'logl'}
         - opLabels = list of strings
         - circuitWeights = dict or None
-        - starting point = "LGST" (default) or  "target" or Model
+        - starting point = "LGST-if-possible" (default), "LGST", or "target"
         - depolarizeStart = float (default == 0)
         - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
@@ -990,7 +990,7 @@ def legacy_do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - objective = {'chi2', 'logl'}
         - opLabels = list of strings
         - circuitWeights = dict or None
-        - starting point = "LGST" (default) or  "target" or Model
+        - starting point = "LGST-if-possible" (default), "LGST", or "target"
         - depolarizeStart = float (default == 0)
         - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)

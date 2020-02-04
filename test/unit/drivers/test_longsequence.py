@@ -245,7 +245,7 @@ class LongSequenceGSTTester(LongSequenceGSTWithChi2):
     def test_long_sequence_gst_advanced_options(self):
         # TODO what exactly is being tested?
         self.options.update({
-            'starting point': self.model,
+            #'starting point': self.model,  #this is deprecated now - need to use protocol objects
             'depolarizeStart': 0.05,
             'cptpPenaltyFactor': 1.0
         })
