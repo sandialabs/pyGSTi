@@ -28,9 +28,9 @@ def run_notebook(path, workdir=None, timeout=_DEFAULT_TIMEOUT):
 
 
 def notebooks_in_path(root_path, ignore_checkpoints=True):
-    for path, _, files in os.walk(root_path):
+    for path, _, files in os.walk(root_path, topdown=True, followlinks=False):
         if '.ipynb_checkpoints' not in path:
-            for ipynb in filter(lambda s: s.endswith('.ipynb'), files):
+            for ipynb in filter(lambda s: s.endswith('.ipynb'), sorted(files)):
                 yield Path(path) / ipynb
 
 
