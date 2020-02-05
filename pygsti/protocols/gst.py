@@ -191,53 +191,40 @@ class GateSetTomography(_proto.Protocol):
             lsgstLists[-1], validStructTypes) else None
         aliases = advancedOptions.get('opLabelAliases', aliases)
 
+        if self.initial_model is not None:
+            mdl_start = self.initial_model
+            auto_starting_pt = "User-supplied-Model"
+        else:
+            mdl_start = data.edesign.target_model
+            auto_starting_pt = "target"
+
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
-        if self.initial_model is not None:  # then use user-supplied model
-            mdl_start = self.initial_model
-            startingPt = "User-supplied-Model"  # for profiler log below
-        else:
-            #Use the target model, with optional post-processing
-            target_model = data.edesign.target_model
-            if isinstance(target_model, _objs.ExplicitOpModel):
-                LGSTcompatibleOps = all([(isinstance(g, _objs.FullDenseOp)
-                                          or isinstance(g, _objs.TPDenseOp))
-                                         for g in target_model.operations.values()])
-            else:
-                LGSTcompatibleOps = False
+        startingPt = advancedOptions.get('starting point', "auto")  # should be called "preprocessing"?
+        if startingPt == "auto":
+            startingPt = auto_starting_pt
 
-            #Get default target-starting-point postprocessing
-            if isinstance(lsgstLists[0], validStructTypes) and LGSTcompatibleOps:
-                startingPt = advancedOptions.get('starting point', "LGST")
-            else:
-                startingPt = advancedOptions.get('starting point', "target")
+        elif startingPt in ("LGST", "LGST-if-possible"):
+            lgst_advanced = advancedOptions.copy(); lgst_advanced['estimateLabel'] = "LGST"
+            lgst = LGST(mdl_start,
+                        gaugeopt_suite={'lgst_gaugeopt': {'tol': lgst_advanced.get('lgst_gaugeopt_tol', 1e-8)}},
+                        gaugeopt_target=self.gaugeopt_target, advancedOptions=lgst_advanced)
+
+            try:  # see if LGST can be run on this data
+                lgst.check_if_runnable(data)
+                startingPt = "LGST"
+            except ValueError as e:
+                if startingPt == "LGST": raise e  # error if we *can't* run LGST
+                startingPt = auto_starting_pt
 
             if startingPt == "LGST":
-                assert(isinstance(lsgstLists[0], validStructTypes)), \
-                    "Cannot run LGST: fiducials not specified!"
-                opLabels = advancedOptions.get('opLabels',
-                                               list(target_model.operations.keys())
-                                               + list(target_model.instruments.keys()))
-                mdl_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, target_model,
-                                         opLabels, svdTruncateTo=target_model.get_dimension(),
-                                         opLabelAliases=aliases,
-                                         verbosity=printer)  # returns a model with the *same*
-                # parameterizations as target_model
+                lgst_results = lgst.run(data)
+                mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
-                #In LGST case, gauge optimimize starting point to the target
-                # (historical; sometimes seems to help in practice, since it's gauge
-                # optimizing to physical gates (e.g. something in CPTP)
-                tol = advancedOptions.get('lgst_gaugeopt_tol', 1e-8)
-                mdl_start = _alg.gaugeopt_to_target(mdl_start, target_model, tol=tol, comm=comm)
-                #Note: use *default* gauge-opt params when optimizing
-
-            elif startingPt == "target":
-                mdl_start = target_model.copy()
-            elif isinstance(startingPt, _objs.Model):  # TODO: REMOVE THIS OPTION since we have an initial-model arg now
-                mdl_start = startingPt
-                startingPt = "User-supplied-Model"  # for profiler log below
-            else:
-                raise ValueError("Invalid starting point: %s" % startingPt)
+        elif startingPt == "target":
+            assert(self.initial_model is None), "Cannot specify initial model when startingPt='target'"
+        else:
+            raise ValueError("Invalid starting point: %s" % startingPt)
 
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: Starting Point (%s)' % startingPt, tRef); tRef = tNxt
@@ -368,17 +355,46 @@ class GateSetTomography(_proto.Protocol):
 class LinearGateSetTomography(_proto.Protocol):
     """ The linear gate set tomography protocol."""
 
-    def __init__(self, gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
+    def __init__(self, target_model=None, gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
                  advancedOptions=None, output_pkl=None, verbosity=2, name=None):
         super().__init__(name)
+        self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
         self.advancedOptions = advancedOptions
         self.output_pkl = output_pkl
         self.verbosity = verbosity
 
-    def run(self, data, memlimit=None, comm=None):
+    def check_if_runnable(self, data):
+        """Raises a ValueError if LGST cannot be run on data"""
         edesign = data.edesign
+
+        target_model = self.target_model if (self.target_model is not None) else edesign.target_model
+        if isinstance(target_model, _objs.ExplicitOpModel):
+            if not all([(isinstance(g, _objs.FullDenseOp)
+                         or isinstance(g, _objs.TPDenseOp))
+                        for g in target_model.operations.values()]):
+                raise ValueError("LGST can only be applied to explicit models with dense operators")
+        else:
+            raise ValueError("LGST can only be applied to explicit models with dense operators")
+
+        if not isinstance(edesign, _proto.CircuitStructuresDesign):
+            raise ValueError("LGST must be given an experiment design with fiducials!")
+        if len(edesign.circuit_structs) != 1:
+            raise ValueError("There should only be one circuit structure in the input exp-design!")
+        circuit_struct = edesign.circuit_structs[0]
+
+        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        if not isinstance(circuit_struct, validStructTypes):
+            raise ValueError("Cannot run LGST: fiducials not specified in input experiment design!")
+
+    def run(self, data, memlimit=None, comm=None):
+
+        self.check_if_runnable(data)
+
+        edesign = data.edesign
+        target_model = self.target_model if (self.target_model is not None) else edesign.target_model
+        circuit_struct = edesign.circuit_structs[0]
         advancedOptions = self.advancedOptions or {}
 
         profile = advancedOptions.get('profile', 1)
@@ -392,40 +408,24 @@ class LinearGateSetTomography(_proto.Protocol):
         if advancedOptions.get('recordOutput', True) and not printer.is_recording():
             printer.start_recording()
 
-        target_model = data.edesign.target_model
-        if isinstance(target_model, _objs.ExplicitOpModel):
-            if not all([(isinstance(g, _objs.FullDenseOp)
-                         or isinstance(g, _objs.TPDenseOp))
-                        for g in target_model.operations.values()]):
-                raise ValueError("LGST can only be applied to explicit models with dense operators")
-        else:
-            raise ValueError("LGST can only be applied to explicit models with dense operators")
-
-        if not isinstance(edesign, _proto.CircuitStructuresDesign):
-            raise ValueError("LGST must be given an experiment design with fiducials!")
-        assert(len(edesign.circuit_structs) == 1), "There should only be one circuit structure in the input exp-design!"
-        circuit_struct = edesign.circuit_structs[0]
-
-        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if not isinstance(circuit_struct, validStructTypes):
-            raise ValueError("Cannot run LGST: fiducials not specified in input experiment design!")
-
         ds = data.dataset
         aliases = advancedOptions.get('opLabelAliases', circuit_struct.aliases)
         opLabels = advancedOptions.get('opLabels',
                                        list(target_model.operations.keys())
                                        + list(target_model.instruments.keys()))
 
+        # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
                                 opLabels, svdTruncateTo=target_model.get_dimension(),
                                 opLabelAliases=aliases,
-                                verbosity=printer)  # returns a model with the *same*
-        # parameterizations as target_model
+                                verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['objective'] = 'lgst'
         parameters['profiler'] = profiler
         args = dict()
+        if not advancedOptions.get('estimateLabel', None):
+            advancedOptions['estimateLabel'] = "LGST"
 
         return _package_into_results(self, data, edesign.target_model, mdl_lgst,
                                      [circuit_struct], parameters, args, [mdl_lgst],
@@ -495,6 +495,8 @@ class StandardGST(_proto.Protocol):
                     initial_model = data.edesign.target_model.copy()
                     initial_model.set_all_parameterizations(parameterization)
                     advanced.update({'appendTo': ret, 'estimateLabel': est_label})
+                    if not advanced.get('starting point', None):
+                        advanced['starting point'] = "LGST-if-possible"
 
                     gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target,
                               advanced, verbosity=printer - 1)

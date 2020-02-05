@@ -3919,14 +3919,14 @@ class TPInstrumentOp(DenseOperator):
 
         off = 0
         if self.index < Nels - 1:  # matrix = Di + MT = param_ops[index+1] + param_ops[0]
-            for i in [self.index + 1, 0]:
+            for i in [0, self.index + 1]:
                 Np = self.param_ops[i].num_params()
                 derivMx[:, off:off + Np] = self.param_ops[i].deriv_wrt_params()
                 off += Np
 
-        else:  # matrix = -(nEls-1)*MT-sum(Di)
+        else:  # matrix = -(nEls-2)*MT-sum(Di)
             Np = self.param_ops[0].num_params()
-            derivMx[:, off:off + Np] = -(Nels - 1) * self.param_ops[0].deriv_wrt_params()
+            derivMx[:, off:off + Np] = -(Nels - 2) * self.param_ops[0].deriv_wrt_params()
             off += Np
 
             for i in range(1, Nels):
