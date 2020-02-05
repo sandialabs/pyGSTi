@@ -783,11 +783,18 @@ def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
                         else:
                             texts.append(str(subMxs[iy][ix][iiy][iix]))
 
-    trace = go.Scattergl(x=xs, y=ys, mode="markers",
-                         marker=dict(size=8,
-                                     color=[colormap.get_color(y) for y in ys],
-                                     #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly
-                                     line=dict(width=1)))
+    #This GL version works, but behaves badly, sometimes failing to render...
+    #trace = go.Scattergl(x=xs, y=ys, mode="markers",
+    #                     marker=dict(size=8,
+    #                                 color=[colormap.get_color(y) for y in ys],
+    #                                 #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly in GL?
+    #                                 line=dict(width=1)))
+    trace = go.Scatter(x=xs, y=ys, mode="markers",
+                       marker=dict(size=8,
+                                   color=[colormap.get_color(y) for y in ys],
+                                   colorscale=colormap.get_colorscale(),
+                                   line=dict(width=1)))
+
     if hoverInfo:
         trace['hoverinfo'] = 'text'
         trace['text'] = texts
@@ -1763,7 +1770,10 @@ class ColorBoxPlot(WorkspacePlot):
                     _warnings.warn("No dataset specified: using DOF-per-element == 1")
                     element_dof = 1
                 else:
-                    element_dof = len(dataset.get_outcome_labels()) - 1
+                    #element_dof = len(dataset.get_outcome_labels()) - 1
+                    #Instead of the above, which doesn't work well when there are circuits with different
+                    # outcomes, the line below just takes the average degrees of freedom per circuit
+                    element_dof = dataset.get_degrees_of_freedom(gss.allstrs) / len(gss.allstrs)
 
                 n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp, element_dof)
                 # NOTE: currently dof_per_box is constant, and takes the total
