@@ -1205,9 +1205,9 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     if title: tmargin += 30
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
-    max_xl = max([len(xl) for xl in xlabels])
+    max_xl = max([len(str(xl)) for xl in xlabels])
     if max_xl > 0: tmargin += max_xl * 7
-    max_yl = max([len(yl) for yl in ylabels])
+    max_yl = max([len(str(yl)) for yl in ylabels])
     if max_yl > 0: lmargin += max_yl * 5
     if colorbar: rmargin = 100
 
@@ -1257,7 +1257,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             mirror=True,
             ticks="",
             linewidth=2,
-            ticktext=xlabels,
+            ticktext=[str(xl) for xl in xlabels],
             tickvals=[i for i in range(len(xlabels))],
             tickangle=-90,
             range=[-0.5, len(xlabels) - 0.5]
@@ -1273,7 +1273,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             mirror=True,
             ticks="",
             linewidth=2,
-            ticktext=ylabels,
+            ticktext=[str(yl) for yl in ylabels],
             tickvals=[i for i in range(len(ylabels))],
             range=[-0.5, len(ylabels) - 0.5],
         ),
