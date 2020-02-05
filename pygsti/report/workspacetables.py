@@ -2265,7 +2265,7 @@ class FitComparisonTable(WorkspaceTable):
     """ Table showing how the goodness-of-fit evolved over GST iterations """
 
     def __init__(self, ws, Xs, gssByX, modelByX, dataset, objective="logl",
-                 Xlabel='L', NpByX=None, comm=None, wildcard=None):
+                 Xlabel='L', NpByX=None, comm=None, wildcard=None, minProbClip=1e-4):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -2307,14 +2307,21 @@ class FitComparisonTable(WorkspaceTable):
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
 
+        minProbClip : float, optional
+            The minimum probability treated normally in the evaluation of the log-likelihood.
+            A penalty function replaces the true log-likelihood for probabilities that lie
+            below this threshold so that the log-likelihood never becomes undefined (which improves
+            optimizer performance).
+
         Returns
         -------
         ReportTable
         """
         super(FitComparisonTable, self).__init__(ws, self._create, Xs, gssByX, modelByX,
-                                                 dataset, objective, Xlabel, NpByX, comm, wildcard)
+                                                 dataset, objective, Xlabel, NpByX, comm,
+                                                 wildcard, minProbClip)
 
-    def _create(self, Xs, gssByX, modelByX, dataset, objective, Xlabel, NpByX, comm, wildcard):
+    def _create(self, Xs, gssByX, modelByX, dataset, objective, Xlabel, NpByX, comm, wildcard, minProbClip):
 
         if objective == "chi2":
             colHeadings = {
@@ -2362,7 +2369,7 @@ class FitComparisonTable(WorkspaceTable):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute(
                 _ph.ratedNsigma, dataset, mdl, gss,
                 objective, Np, wildcard, returnAll=True,
-                comm=comm, smartc=self.ws.smartCache)
+                comm=comm, smartc=self.ws.smartCache, minProbClip=minProbClip)
             table.addrow((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
                          (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
 

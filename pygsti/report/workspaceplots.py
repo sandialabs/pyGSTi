@@ -2578,7 +2578,8 @@ class FitComparisonBarPlot(WorkspacePlot):
         (along one dimension)"""
 
     def __init__(self, ws, Xs, gssByX, modelByX, datasetByX,
-                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None, wildcard=None):
+                 objective="logl", Xlabel='L', NpByX=None, scale=1.0,
+                 comm=None, wildcard=None, minProbClip=1e-4):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to corresponding data sets.
@@ -2623,14 +2624,20 @@ class FitComparisonBarPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
+
+        minProbClip : float, optional
+            The minimum probability treated normally in the evaluation of the log-likelihood.
+            A penalty function replaces the true log-likelihood for probabilities that lie
+            below this threshold so that the log-likelihood never becomes undefined (which improves
+            optimizer performance).
         """
         super(FitComparisonBarPlot, self).__init__(ws, self._create,
                                                    Xs, gssByX, modelByX, datasetByX,
                                                    objective, Xlabel, NpByX, scale,
-                                                   comm, wildcard)
+                                                   comm, wildcard, minProbClip)
 
     def _create(self, Xs, gssByX, modelByX, datasetByX, objective, Xlabel,
-                NpByX, scale, comm, wildcard):
+                NpByX, scale, comm, wildcard, minProbClip):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts = []
@@ -2655,7 +2662,7 @@ class FitComparisonBarPlot(WorkspacePlot):
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.ratedNsigma, dataset, mdl,
                                                           gss, objective, Np, returnAll=True,
                                                           comm=comm, smartc=self.ws.smartCache,
-                                                          wildcard=wildcard)
+                                                          wildcard=wildcard, minProbClip=minProbClip)
                 #Note: don't really need returnAll=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
@@ -2732,7 +2739,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
     def __init__(self, ws, Xs, Ys, gssByYthenX, modelByYthenX, datasetByYthenX,
                  objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None,
-                 wildcard=None):
+                 wildcard=None, minProbClip=1e-4):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to their respective  data sets.
@@ -2774,13 +2781,20 @@ class FitComparisonBoxPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
+
+        minProbClip : float, optional
+            The minimum probability treated normally in the evaluation of the log-likelihood.
+            A penalty function replaces the true log-likelihood for probabilities that lie
+            below this threshold so that the log-likelihood never becomes undefined (which improves
+            optimizer performance).
         """
         super(FitComparisonBoxPlot, self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,
-            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm, wildcard)
+            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm,
+            wildcard, minProbClip)
 
     def _create(self, Xs, Ys, gssByYX, modelByYX, datasetByYX, objective,
-                Xlabel, Ylabel, scale, comm, wildcard):
+                Xlabel, Ylabel, scale, comm, wildcard, minProbClip):
 
         xlabels = list(map(str, Xs))
         ylabels = list(map(str, Ys))
@@ -2806,7 +2820,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
                 Nsig, rating, _, _, _, _ = self._ccompute(
                     _ph.ratedNsigma, dataset, mdl, gss, objective,
                     returnAll=True, comm=comm, smartc=self.ws.smartCache,
-                    wildcard=wildcard)
+                    wildcard=wildcard, minProbClip=minProbClip)
                 NsigMx[iY][iX] = Nsig
 
         return matrix_color_boxplot(
