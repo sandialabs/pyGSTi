@@ -33,7 +33,7 @@ class ModelFunction(object):
             :func:`evaluate`.
 
         dependencies : list
-            A list of *type:label* strings, or the special strings `"all"` and
+            A list of (*type*,*label*) tuples, or the special strings `"all"` and
             `"spam"`, indicating which Model parameters the function depends
             upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or
             `"instrument"`, and  *label* can be any of the corresponding labels
@@ -64,10 +64,10 @@ class ModelFunction(object):
         Returns
         -------
         list
-            A list of *type:label* strings, or the special strings `"all"` and
+            A list of (*type*,*label*) tuples, or the special strings `"all"` and
             `"spam"`, indicating which Model parameters the function depends
             upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or
-            `"instrument"` and *label* can be any of the corresponding labels
+            `"instrument"`, and  *label* can be any of the corresponding labels
             found in the models being evaluated.
         """
         return self.dependencies
@@ -143,7 +143,7 @@ def opfn_factory(fn):
             self.gl = gl
             self.args = args
             self.kwargs = kwargs
-            ModelFunction.__init__(self, model, ["gate:" + str(gl)])
+            ModelFunction.__init__(self, model, [("gate", gl)])
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
@@ -185,7 +185,7 @@ def opsfn_factory(fn):
             self.gl = gl
             self.args = args
             self.kwargs = kwargs
-            ModelFunction.__init__(self, model1, ["gate:" + str(gl)])
+            ModelFunction.__init__(self, model1, [("gate", gl)])
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
@@ -230,7 +230,7 @@ def vecfn_factory(fn):
                 typ = "povm"
                 lbl, _ = lbl.split(":")  # for "effect"-mode, lbl must == "povmLbl:ELbl"
                 # and ModelFunction depends on entire POVM
-            ModelFunction.__init__(self, model, [typ + ":" + str(lbl)])
+            ModelFunction.__init__(self, model, [(typ, lbl)])
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
@@ -284,7 +284,7 @@ def vecsfn_factory(fn):
                 # and ModelFunction depends on entire POVM
             self.other_vecsrc = self.other_model.preps if self.typ == "prep" \
                 else self.other_model.povms
-            ModelFunction.__init__(self, model1, [typ + ":" + str(lbl)])
+            ModelFunction.__init__(self, model1, [(typ, lbl)])
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
@@ -329,7 +329,7 @@ def povmfn_factory(fn):
             """
             self.args = args
             self.kwargs = kwargs
-            dps = ["povm:%s" % l for l in model.povms]
+            dps = [("povm", l) for l in model.povms]
             ModelFunction.__init__(self, model, dps)
 
         def evaluate(self, model):

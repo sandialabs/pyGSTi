@@ -182,8 +182,10 @@ class GateSetTomography(_proto.Protocol):
 
         try:  # take structs if available
             lsgstLists = data.edesign.circuit_structs
+            first_struct = data.edesign.circuit_structs[0]  # for LGST
         except:
             lsgstLists = data.edesign.circuit_lists
+            first_struct = None  # for LGST
         ds = data.dataset
 
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
@@ -205,20 +207,26 @@ class GateSetTomography(_proto.Protocol):
             startingPt = auto_starting_pt
 
         elif startingPt in ("LGST", "LGST-if-possible"):
-            lgst_advanced = advancedOptions.copy(); lgst_advanced['estimateLabel'] = "LGST"
+            lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
             lgst = LGST(mdl_start,
                         gaugeopt_suite={'lgst_gaugeopt': {'tol': lgst_advanced.get('lgst_gaugeopt_tol', 1e-8)}},
                         gaugeopt_target=self.gaugeopt_target, advancedOptions=lgst_advanced)
 
             try:  # see if LGST can be run on this data
-                lgst.check_if_runnable(data)
-                startingPt = "LGST"
+                if first_struct:
+                    lgst_data = _proto.ProtocolData(
+                        StructuredGSTDesign(data.edesign.target_model, [first_struct], data.edesign.qubit_labels),
+                        data.dataset)
+                    lgst.check_if_runnable(lgst_data)
+                    startingPt = "LGST"
+                else:
+                    raise ValueError("Experiment design must contain circuit structures in order to run LGST")
             except ValueError as e:
                 if startingPt == "LGST": raise e  # error if we *can't* run LGST
                 startingPt = auto_starting_pt
 
             if startingPt == "LGST":
-                lgst_results = lgst.run(data)
+                lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
         elif startingPt == "target":

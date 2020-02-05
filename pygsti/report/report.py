@@ -384,7 +384,8 @@ class Report:
         """
 
         if not self._pdf_available:
-            raise ValueError("PDF output unavailable")
+            raise ValueError(("PDF output unavailable.  (Usually this is because this report"
+                              " has multiple gauge optimizations and/or datasets.)"))
 
         toggles = _defaultdict(lambda: False)
         toggles.update(

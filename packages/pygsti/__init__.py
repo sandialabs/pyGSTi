@@ -29,7 +29,11 @@ Open a shell and run the following commands:
 3. `python -c "import pygsti"`
 
 After following these instructions, if you still see this message,
-leave a bug report for the pyGSTi developers at
+check to make sure that you don't have a GST.pth file located in
+your local site-packages directory (try running `find ~ -name GST.pth`).
+
+After removing any GST.pth files, if you're still seeing this
+message, leave a bug report for the pyGSTi developers at
 https://github.com/pyGSTio/pyGSTi/issues
 """.format(pygsti_root=pygsti_root)
 

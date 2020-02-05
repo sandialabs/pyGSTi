@@ -531,7 +531,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     return metric_switchBd
 
 
-@_deprecated_fn('pygsti.report.construct_standard_report')
+@_deprecated_fn('pygsti.report.construct_standard_report(...).write_html(...)')
 def create_general_report(results, filename, title="auto",
                           confidenceLevel=None,
                           linlogPercentile=5, errgen_type="logGTi",
@@ -550,10 +550,10 @@ def create_general_report(results, filename, title="auto",
         ('create_general_report(...) will be removed from pyGSTi.\n'
          '  This function only ever existed in beta versions and will\n'
          '  be removed completely soon.  Please update this call with:\n'
-         '  pygsti.report.create_standard_report(...)\n'))
+         '  pygsti.report.create_standard_report(...).write_html(...)\n'))
 
 
-@_deprecated_fn('construct_standard_report')
+@_deprecated_fn('construct_standard_report(...).write_html(...)')
 def create_standard_report(results, filename, title="auto",
                            confidenceLevel=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
@@ -757,7 +757,7 @@ def create_standard_report(results, filename, title="auto",
     return ws
 
 
-@_deprecated_fn('construct_nqnoise_report')
+@_deprecated_fn('construct_nqnoise_report(...).write_html(...)')
 def create_nqnoise_report(results, filename, title="auto",
                           confidenceLevel=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
@@ -932,7 +932,7 @@ def create_nqnoise_report(results, filename, title="auto",
     return ws
 
 
-@_deprecated_fn('Report.write_notebook')
+@_deprecated_fn('construct_standard_report(...).write_notebook(...)')
 def create_report_notebook(results, filename, title="auto",
                            confidenceLevel=None,
                            auto_open=False, connected=False, verbosity=0):
@@ -1300,12 +1300,10 @@ def construct_standard_report(results, title="auto",
 
     pdf_available = True
     if len(results) > 1:
-        _warnings.warn("PDF output is not available for reports with multiple datasets")
         pdf_available = False
     else:
         for est in next(iter(results.values())).estimates.values():
             if len(est.goparameters) > 1:
-                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
                 pdf_available = False
 
     return _Report(templates, results, sections, flags, global_qtys,
@@ -1521,12 +1519,10 @@ def construct_nqnoise_report(results, title="auto",
 
     pdf_available = True
     if len(results) > 1:
-        _warnings.warn("PDF output is not available for reports with multiple datasets")
         pdf_available = False
     else:
         for est in next(iter(results.values())).estimates.values():
             if len(est.goparameters) > 1:
-                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
                 pdf_available = False
 
     return _Report(templates, results, sections, flags, global_qtys,
