@@ -1300,12 +1300,10 @@ def construct_standard_report(results, title="auto",
 
     pdf_available = True
     if len(results) > 1:
-        _warnings.warn("PDF output is not available for reports with multiple datasets")
         pdf_available = False
     else:
         for est in next(iter(results.values())).estimates.values():
             if len(est.goparameters) > 1:
-                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
                 pdf_available = False
 
     return _Report(templates, results, sections, flags, global_qtys,
@@ -1521,12 +1519,10 @@ def construct_nqnoise_report(results, title="auto",
 
     pdf_available = True
     if len(results) > 1:
-        _warnings.warn("PDF output is not available for reports with multiple datasets")
         pdf_available = False
     else:
         for est in next(iter(results.values())).estimates.values():
             if len(est.goparameters) > 1:
-                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
                 pdf_available = False
 
     return _Report(templates, results, sections, flags, global_qtys,
