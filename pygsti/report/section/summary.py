@@ -30,7 +30,7 @@ class SummarySection(_Section):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
-            linlog_percentile / 100,
+            linlg_pcntle=linlog_percentile / 100,
             minProbClipForWeighting=switchboard.mpc_modvi,
             typ='histogram', comm=comm, bgcolor=bgcolor
         )
