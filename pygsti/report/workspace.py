@@ -30,6 +30,7 @@ from . import merge_helpers as _merge
 from pprint import pprint as _pprint
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
+DEFAULT_PLOTLY_TEMPLATE = 'none'
 
 
 def in_ipython_notebook():
@@ -122,7 +123,7 @@ def ws_custom_digest(md5, v):
 
 def randomID():
     """ Returns a random DOM ID """
-    return str(int(10000 * _random.random()))
+    return str(int(1000000 * _random.random()))
     #return str(_uuid.uuid4().hex) #alternative
 
 
@@ -2378,6 +2379,7 @@ class WorkspacePlot(WorkspaceOutput):
                     fig_dict = fig.render(typ, plotDivID)
                 else:
                     #use auto-sizing (fluid layout)
+                    fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)
                     fig_dict = _plotly_ex.plot_ex(
                         fig.plotlyfig, show_link=False, resizable=resizable,
                         lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
