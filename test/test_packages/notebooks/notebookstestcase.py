@@ -7,7 +7,7 @@ from nose.plugins.attrib import attr
 
 
 _DEFAULT_IPYNB_VERSION = 4
-_DEFAULT_TIMEOUT = 60 * 10  # 10 minutes
+_DEFAULT_TIMEOUT = 60 * 20  # 20 minutes
 
 # hardcoded path to pyGSTi root
 # XXX change if refactoring
@@ -24,7 +24,16 @@ def run_notebook(path, workdir=None, timeout=_DEFAULT_TIMEOUT):
     with open(path, 'r') as f:
         nb = nbformat.read(f, as_version=_DEFAULT_IPYNB_VERSION)
     ep = ExecutePreprocessor(timeout=timeout)
+
+    # Some notebooks may generate and automatically open reports in a web browser.
+    # This is inconvenient in an automated test suite, so let's disable it.
+    # Overwriting $BROWSER with a dummy command will keep the notebook
+    # kernel from being able to open a web browser on Linux.
+    # TODO find platform-neutral solution to suppress webbrowser.open
+    browser = os.environ.get('BROWSER', None)
+    os.environ['BROWSER'] = 'echo %s'
     ep.preprocess(nb, resources=resources)
+    os.environ['BROWSER'] = browser
 
 
 def notebooks_in_path(root_path, ignore_checkpoints=True):
