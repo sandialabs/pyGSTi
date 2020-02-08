@@ -587,7 +587,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         """
         wildcardDict = {}
         for lbl, index in self.primOpLookup.items():
-            wildcardDict[lbl] = ('budget per each instance %s' % lbl, pos(self.wildcard_vector[index]))
+            wildcardDict[lbl] = ('budget per each instance %s' % str(lbl), pos(self.wildcard_vector[index]))
         if self.spam_index is not None:
             wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
         return wildcardDict
