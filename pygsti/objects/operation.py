@@ -253,7 +253,7 @@ def convert(gate, toType, basis, extra=None):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
-def finite_difference_deriv_wrt_params(gate, eps=1e-7):
+def finite_difference_deriv_wrt_params(gate, wrtFilter, eps=1e-7):
     """
     Computes a finite-difference Jacobian for a LinearOperator object.
 
@@ -288,10 +288,13 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
         fd_deriv[:, :, i] = (op2 - gate) / eps
 
     fd_deriv.shape = [dim**2, gate.num_params()]
-    return fd_deriv
+    if wrtFilter is None:
+        return fd_deriv
+    else:
+        return _np.take(fd_deriv, wrtFilter, axis=1)
 
 
-def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
+def check_deriv_wrt_params(gate, deriv_to_check=None, wrtFilter=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a LinearOperator object.
 
@@ -318,7 +321,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(gate, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(gate, wrtFilter, eps)
     if deriv_to_check is None:
         deriv_to_check = gate.deriv_wrt_params()
 
@@ -1003,7 +1006,7 @@ class DenseOperatorInterface(object):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        return finite_difference_deriv_wrt_params(self, eps=1e-7)
+        return finite_difference_deriv_wrt_params(self, wrtFilter, eps=1e-7)
 
     def todense(self):
         """
@@ -3036,7 +3039,7 @@ class LindbladOp(LinearOperator):
             self.base_deriv = derivMx
 
             #check_deriv_wrt_params(self, derivMx, eps=1e-7)
-            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
+            #fd_deriv = finite_difference_deriv_wrt_params(self, wrtFilter, eps=1e-7)
             #derivMx = fd_deriv
 
         if wrtFilter is None:
@@ -5189,18 +5192,14 @@ class EmbeddedOp(LinearOperator):
         """
         # Note: this function exploits knowledge of EmbeddedOp internals!!
         embedded_deriv = self.embedded_op.deriv_wrt_params(wrtFilter)
-        derivMx = _np.zeros((self.dim**2, self.num_params()), embedded_deriv.dtype)
+        derivMx = _np.zeros((self.dim**2, embedded_deriv.shape[1]), embedded_deriv.dtype)
         M = self.embedded_op.dim
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
         for i, j, gi, gj in self._iter_matrix_elements():
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
-
-        if wrtFilter is None:
-            return derivMx
-        else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+        return derivMx  # Note: wrtFilter has already been applied above
 
     def transform(self, S):
         """
