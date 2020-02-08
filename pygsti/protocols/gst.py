@@ -983,8 +983,15 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
                 new_final_model = mdl_reopt
 
         elif badfit_typ == "wildcard":
-            new_params['unmodeled_error'] = get_wildcard_budget(mdl, ds, circuitList, parameters,
-                                                                evaltree_cache, comm, memLimit, printer - 1)
+            try:
+                new_params['unmodeled_error'] = get_wildcard_budget(mdl, ds, circuitList, parameters,
+                                                                    evaltree_cache, comm, memLimit, printer - 1)
+            except NotImplementedError as e:
+                printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                new_params['unmodeled_error'] = None
+            except AssertionError as e:
+                printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                new_params['unmodeled_error'] = None
 
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
