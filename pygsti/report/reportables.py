@@ -138,7 +138,7 @@ class Gate_eigenvalues(_modf.ModelFunction):
 
     def __init__(self, model, oplabel):
         self.oplabel = oplabel
-        _modf.ModelFunction.__init__(self, model, ["gate:" + str(oplabel)])
+        _modf.ModelFunction.__init__(self, model, [("gate", oplabel)])
 
     def evaluate(self, model):
         """Evaluate at `model`"""
@@ -616,7 +616,7 @@ if _CVXPY_AVAILABLE:
             self.oplabel = oplabel
             self.B = modelB.operations[oplabel].todense()
             self.d = int(round(_np.sqrt(modelA.dim)))
-            _modf.ModelFunction.__init__(self, modelA, ["gate:" + str(oplabel)])
+            _modf.ModelFunction.__init__(self, modelA, [("gate", oplabel)])
 
         def evaluate(self, model):
             """Evaluate at `modelA = model` """

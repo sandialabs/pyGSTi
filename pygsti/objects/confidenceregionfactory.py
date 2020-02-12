@@ -811,8 +811,8 @@ class ConfidenceRegionFactoryView(object):
         if 'all' in fn_dependencies:
             fn_dependencies = ['all']  # no need to do anything else
         if 'spam' in fn_dependencies:
-            fn_dependencies = ["prep:%s" % l for l in self.model.preps.keys()] + \
-                              ["povm:%s" % l for l in self.model.povms.keys()]
+            fn_dependencies = [("prep", l) for l in self.model.preps.keys()] + \
+                              [("povm", l) for l in self.model.povms.keys()]
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
@@ -824,7 +824,7 @@ class ConfidenceRegionFactoryView(object):
                 all_gpindices.extend(range(mdl.num_params()))
             else:
                 # copy objects because we add eps to them below
-                typ, lbl = dependency.split(":")
+                typ, lbl = dependency
                 if typ == "gate": modelObj = mdl.operations[lbl]
                 elif typ == "prep": modelObj = mdl.preps[lbl]
                 elif typ == "povm": modelObj = mdl.povms[lbl]

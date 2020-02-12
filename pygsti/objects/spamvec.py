@@ -217,7 +217,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
                      (str(type(vec)), vec._evotype, new_evotype))
 
 
-def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
+def finite_difference_deriv_wrt_params(spamvec, wrtFilter=None, eps=1e-7):
     """
     Computes a finite-difference Jacobian for a SPAMVec object.
 
@@ -252,10 +252,13 @@ def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
         fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
 
     fd_deriv.shape = [dim, spamvec.num_params()]
-    return fd_deriv
+    if wrtFilter is None:
+        return fd_deriv
+    else:
+        return _np.take(fd_deriv, wrtFilter, axis=1)
 
 
-def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
+def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrtFilter=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a SPAMVec object.
 
@@ -282,7 +285,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(spamvec, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(spamvec, wrtFilter, eps)
     if deriv_to_check is None:
         deriv_to_check = spamvec.deriv_wrt_params()
 

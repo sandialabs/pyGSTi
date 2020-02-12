@@ -123,10 +123,20 @@ def do_model_test(modelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+    advancedOptions = advancedOptions or {}
+
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
-                                          germsListOrFilename, maxLengths, verbosity=printer)
-    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+                                          germsListOrFilename, maxLengths,
+                                          advancedOptions.get('germLengthLimits', None),
+                                          None, 1, None,  # fidPairs, keepFraction, keepSeed
+                                          advancedOptions.get('includeLGST', True),
+                                          advancedOptions.get('nestedCircuitLists', True),
+                                          advancedOptions.get('stringManipRules', None),
+                                          advancedOptions.get('opLabelAliases', None),
+                                          ds, 'drop', verbosity=printer)
+
     data = _proto.ProtocolData(exp_design, ds)
 
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
@@ -207,7 +217,28 @@ def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     -------
     Results
     """
-    raise NotImplementedError("The LGST protocol has not been updated yet - please use `legacy_do_linear_gst` for now.")
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    advancedOptions = advancedOptions or {}
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+
+    target_model = _load_model(targetModelFilenameOrObj)
+    germs = _construction.circuit_list([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
+    maxLengths = [1]  # we only need maxLength == 1 when doing LGST
+
+    exp_design = _proto.StandardGSTDesign(target_model, prepStrsListOrFilename, effectStrsListOrFilename,
+                                          germs, maxLengths,
+                                          sequenceRules=advancedOptions.get('stringManipRules', None),
+                                          opLabelAliases=advancedOptions.get('opLabelAliases', None),
+                                          dscheck=ds, actionIfMissing='raise', verbosity=printer)
+
+    data = _proto.ProtocolData(exp_design, ds)
+
+    if gaugeOptParams is None:
+        gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+    gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None, advancedOptions,
+                                           output_pkl, printer)
+    return proto.run(data, memLimit, comm)
 
 
 def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -284,7 +315,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - objective = {'chi2', 'logl'}
         - opLabels = list of strings
         - circuitWeights = dict or None
-        - starting point = "LGST" (default) or  "target" or Model
+        - starting point = "LGST-if-possible" (default), "LGST", or "target"
         - depolarizeStart = float (default == 0)
         - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
@@ -343,18 +374,27 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    if advancedOptions is None: advancedOptions = {}
+    advancedOptions = advancedOptions or {}
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
                                           germsListOrFilename, maxLengths,
                                           advancedOptions.get('germLengthLimits', None),
-                                          verbosity=printer)
-    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+                                          None, 1, None,  # fidPairs, keepFraction, keepSeed
+                                          advancedOptions.get('includeLGST', True),
+                                          advancedOptions.get('nestedCircuitLists', True),
+                                          advancedOptions.get('stringManipRules', None),
+                                          advancedOptions.get('opLabelAliases', None),
+                                          ds, 'drop', verbosity=printer)
+
     data = _proto.ProtocolData(exp_design, ds)
 
     if gaugeOptParams is None:
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    if advancedOptions.get("starting point", None) is None:
+        advancedOptions["starting point"] = "LGST-if-possible"  # to keep backward compatibility
     proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
                                      output_pkl, printer)
     return proto.run(data, memLimit, comm)
@@ -576,9 +616,21 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    advancedOptions = advancedOptions or {}
+    all_advanced = advancedOptions.get('all', {})
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
+
     exp_design = _proto.StandardGSTDesign(targetModelFilenameOrObj,
                                           prepStrsListOrFilename, effectStrsListOrFilename,
-                                          germsListOrFilename, maxLengths, verbosity=printer)
+                                          germsListOrFilename, maxLengths,
+                                          all_advanced.get('germLengthLimits', None),
+                                          None, 1, None,  # fidPairs, keepFraction, keepSeed
+                                          all_advanced.get('includeLGST', True),
+                                          all_advanced.get('nestedCircuitLists', True),
+                                          all_advanced.get('stringManipRules', None),
+                                          all_advanced.get('opLabelAliases', None),
+                                          ds, 'drop', verbosity=printer)
+
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
     proto = _proto.StandardGST(modes, gaugeOptSuite, gaugeOptTarget, modelsToTest,
@@ -938,7 +990,7 @@ def legacy_do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - objective = {'chi2', 'logl'}
         - opLabels = list of strings
         - circuitWeights = dict or None
-        - starting point = "LGST" (default) or  "target" or Model
+        - starting point = "LGST-if-possible" (default), "LGST", or "target"
         - depolarizeStart = float (default == 0)
         - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)

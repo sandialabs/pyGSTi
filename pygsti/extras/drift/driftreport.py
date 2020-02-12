@@ -579,6 +579,7 @@ def create_drift_report(results, gss, filename, title="auto",
     """
     from pygsti.report.factory import construct_drift_report
     # Wrap a call to the new factory method
+    advancedOptions = advancedOptions or {}
     ws = ws or _ws.Workspace(advancedOptions.get('cachefile', None))
 
     report = construct_drift_report(

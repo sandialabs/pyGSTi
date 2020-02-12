@@ -127,7 +127,9 @@ class StdInputParser(object):
 
         counts = []
         if expectedCounts == -1:  # then we expect to be given <outcomeLabel>:<count> items
-            if len(parts) < 2 or parts[1] == "BAD":
+            if len(parts) == 1:  # only a circuit, no counts on line
+                pass  # just leave counts empty
+            elif parts[1] == "BAD":
                 counts.append("BAD")
             else:
                 for p in parts[1:]:
@@ -248,7 +250,7 @@ class StdInputParser(object):
 
     def parse_datafile(self, filename, showProgress=True,
                        collisionAction="aggregate", recordZeroCnts=True,
-                       ignoreZeroCountLines=True):
+                       ignoreZeroCountLines=True, withTimes="auto"):
         """
         Parse a data set file into a DataSet object.
 
@@ -274,6 +276,11 @@ class StdInputParser(object):
         ignoreZeroCountLines : bool, optional
             Whether circuits for which there are no counts should be ignored
             (i.e. omitted from the DataSet) or not.
+
+        withTimes : bool or "auto", optional
+            Whether to the time-stamped data format should be read in.  If
+            "auto", then this format is allowed but not required.  Typically
+            you only need to set this to False when reading in a template file.
 
         Returns
         -------
@@ -361,7 +368,7 @@ class StdInputParser(object):
                             self.parse_dataline(dataline, lookupDict, nDataCols,
                                                 create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
-                        commentDict = parse_comment(comment)
+                        commentDict = parse_comment(comment, filename, iLine)
 
                     except ValueError as e:
                         raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
@@ -371,7 +378,11 @@ class StdInputParser(object):
                                             line_labels=circuitLbls, expand_subcircuits=False, check=False)
                     #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
 
-                    if len(valueList) > 0:
+                    if withTimes is True and len(valueList) > 0:
+                        raise ValueError(("%s Line %d: Circuit line cannot contain count information when "
+                                          "'withTimes=True'") % (filename, iLine))
+
+                    if withTimes is False or len(valueList) > 0:
                         bBad = ('BAD' in valueList)  # supresses warnings
                         countDict = _objs.labeldicts.OutcomeLabelDict()
                         self._fillDataCountDict(countDict, fillInfo, valueList)
@@ -413,7 +424,7 @@ class StdInputParser(object):
                         elif parts[0] == 'repetitions:':
                             current_item['repetitions'] = [int(x) for x in parts[1:]]
                         elif parts[0] == 'aux:':
-                            current_item['aux'] = parse_comment(" ".join(parts[1:]))
+                            current_item['aux'] = parse_comment(" ".join(parts[1:]), filename, iLine)
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 

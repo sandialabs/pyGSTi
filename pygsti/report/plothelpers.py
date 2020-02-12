@@ -745,7 +745,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 
 
 def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAll=False,
-                comm=None, smartc=None):  # TODO: pipe down minprobclip, radius, probclipinterval?
+                comm=None, smartc=None, minProbClip=1e-4):  # TODO: pipe down minprobclip, radius, probclipinterval?
     """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `model` model at the "points" (sequences)
@@ -791,6 +791,11 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         A cache object to cache & use previously cached values inside this
         function.
 
+    minProbClip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
 
     Returns
     -------
@@ -818,14 +823,15 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     if objective == "chi2":
         assert(wildcard is None), "Can only use wildcard budget with 'logl' objective!"
         fitQty = _tools.chi2(model, dataset, gstrs,
-                             minProbClipForWeighting=1e-4,
+                             minProbClipForWeighting=minProbClip,
                              opLabelAliases=gss.aliases,
                              comm=comm, smartc=smartc)
     elif objective == "logl":
         logL_upperbound = _tools.logl_max(model, dataset, gstrs, opLabelAliases=gss.aliases,
                                           smartc=smartc)
         logl = _tools.logl(model, dataset, gstrs, opLabelAliases=gss.aliases,
-                           comm=comm, smartc=smartc, wildcard=wildcard)
+                           minProbClip=minProbClip, comm=comm, smartc=smartc,
+                           wildcard=wildcard)
         fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
         if(logL_upperbound < logl):

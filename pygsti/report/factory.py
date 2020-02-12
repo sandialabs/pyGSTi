@@ -531,7 +531,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     return metric_switchBd
 
 
-@_deprecated_fn('pygsti.report.construct_standard_report')
+@_deprecated_fn('pygsti.report.construct_standard_report(...).write_html(...)')
 def create_general_report(results, filename, title="auto",
                           confidenceLevel=None,
                           linlogPercentile=5, errgen_type="logGTi",
@@ -550,10 +550,10 @@ def create_general_report(results, filename, title="auto",
         ('create_general_report(...) will be removed from pyGSTi.\n'
          '  This function only ever existed in beta versions and will\n'
          '  be removed completely soon.  Please update this call with:\n'
-         '  pygsti.report.create_standard_report(...)\n'))
+         '  pygsti.report.create_standard_report(...).write_html(...)\n'))
 
 
-@_deprecated_fn('construct_standard_report')
+@_deprecated_fn('construct_standard_report(...).write_html(...)')
 def create_standard_report(results, filename, title="auto",
                            confidenceLevel=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
@@ -757,7 +757,7 @@ def create_standard_report(results, filename, title="auto",
     return ws
 
 
-@_deprecated_fn('construct_nqnoise_report')
+@_deprecated_fn('construct_nqnoise_report(...).write_html(...)')
 def create_nqnoise_report(results, filename, title="auto",
                           confidenceLevel=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
@@ -932,7 +932,7 @@ def create_nqnoise_report(results, filename, title="auto",
     return ws
 
 
-@_deprecated_fn('Report.write_notebook')
+@_deprecated_fn('construct_standard_report(...).write_notebook(...)')
 def create_report_notebook(results, filename, title="auto",
                            confidenceLevel=None,
                            auto_open=False, connected=False, verbosity=0):
@@ -1300,12 +1300,10 @@ def construct_standard_report(results, title="auto",
 
     pdf_available = True
     if len(results) > 1:
-        _warnings.warn("PDF output is not available for reports with multiple datasets")
         pdf_available = False
     else:
         for est in next(iter(results.values())).estimates.values():
             if len(est.goparameters) > 1:
-                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
                 pdf_available = False
 
     return _Report(templates, results, sections, flags, global_qtys,
@@ -1521,12 +1519,10 @@ def construct_nqnoise_report(results, title="auto",
 
     pdf_available = True
     if len(results) > 1:
-        _warnings.warn("PDF output is not available for reports with multiple datasets")
         pdf_available = False
     else:
         for est in next(iter(results.values())).estimates.values():
             if len(est.goparameters) > 1:
-                _warnings.warn("PDF output is not available for reports with multiple gauge opts")
                 pdf_available = False
 
     return _Report(templates, results, sections, flags, global_qtys,
@@ -1534,7 +1530,7 @@ def construct_nqnoise_report(results, title="auto",
                    workspace=ws)
 
 
-def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
+def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     """
     Creates a Drift report.
 
@@ -1544,10 +1540,13 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
     -------
     :class:`Report` : A constructed report object
     """
+    from ..protocols import StabilityAnalysisResults as _StabilityAnalysisResults
     from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
     from ..extras.drift import driftreport
-    assert(isinstance(results, StabilityAnalyzer)), "Support for multiple results as a Dict is not yet included!"
-    singleresults = results
+    assert(isinstance(results, _StabilityAnalysisResults)), \
+        "Support for multiple results as a Dict is not yet included!"
+    gss = results.data.edesign.circuit_structs[-1]
+    singleresults = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
 
@@ -1567,10 +1566,10 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    drift_switchBd = driftreport._create_drift_switchboard(ws, results, gss)
+    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, gss)
 
     # Sets whether or not the dataset key is a switchboard or not.
-    if len(results.data.keys()) > 1:
+    if len(singleresults.data.keys()) > 1:
         dskey = drift_switchBd.dataset
         arb_dskey = list(singleresults.data.keys())[0]
     else:
@@ -1581,8 +1580,9 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
     printer.log("*** Generating switchboard ***")
 
     #Create master switchboard
+    stabilityanalyzer_dict = {k: res.stabilityanalyzer for k, res in results_dict.items()}
     switchBd, _dataset_labels = \
-        driftreport._create_switchboard(ws, results_dict)
+        driftreport._create_switchboard(ws, stabilityanalyzer_dict)
 
     global_qtys = {
         'title': title,
@@ -1608,7 +1608,7 @@ def construct_drift_report(results, gss, title='auto', ws=None, verbosity=1):
         html='~drift_html_report',
         pdf='drift_pdf_report.tex'
     )
-    return _Report(templates, results, sections, set(), global_qtys, report_params, ws)
+    return _Report(templates, singleresults, sections, set(), global_qtys, report_params, workspace=ws)
 
 
 # # XXX this needs to be revised into a script

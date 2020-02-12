@@ -167,8 +167,11 @@ class Estimate(object):
         for gop in goparams_list:
             if gop.get('comm', None) is not None:
                 printer_comm = gop['comm']; break
-        max_vb = verbosity if (verbosity is not None) else \
-            max([gop.get('verbosity', 0) for gop in goparams_list])
+        if verbosity is not None:
+            max_vb = verbosity
+        else:
+            verbosities = [gop.get('verbosity', 0) for gop in goparams_list]
+            max_vb = max([v.verbosity if isinstance(v, _VerbosityPrinter) else v for v in verbosities])
         printer = _VerbosityPrinter.build_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
 
@@ -516,21 +519,22 @@ class Estimate(object):
         mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
         gss = p.circuit_structs['final']  # FUTURE: overrideable?
         mpc = self.parameters.get('minProbClipForWeighting', 1e-4)
+        aliases = self.parameters.get('opLabelAliases', gss.aliases)
         ds = self.get_effective_dataset()
 
         if obj == "chi2":
             fitQty = _tools.chi2(mdl, ds, gss.allstrs,
                                  minProbClipForWeighting=mpc,
-                                 opLabelAliases=gss.aliases,
+                                 opLabelAliases=aliases,
                                  evaltree_cache=evaltree_cache, comm=comm)
         elif obj in ("logl", "lgst"):
-            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
+            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=aliases,
                                               evaltree_cache=evaltree_cache)
-            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
+            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=aliases,
                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
-        ds_allstrs = _tools.apply_aliases_to_circuit_list(gss.allstrs, gss.aliases)
+        ds_allstrs = _tools.apply_aliases_to_circuit_list(gss.allstrs, aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         if hasattr(mdl, 'num_nongauge_params'):
             Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()

@@ -136,7 +136,8 @@ class Basis(object):
             #then just check to make sure consistent with `dim` & `sparse`
             basis = nameOrBasisOrMatrices
             if dim is not None:
-                assert(dim == basis.dim), "Basis object has unexpected dimension: %d vs %d" % (dim, basis.dim)
+                assert(dim == basis.dim or dim == basis.elsize), \
+                    "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
             if sparse is not None:
                 assert(sparse == basis.sparse), "Basis object has unexpected sparsity: %s" % (basis.sparse)
             return basis
