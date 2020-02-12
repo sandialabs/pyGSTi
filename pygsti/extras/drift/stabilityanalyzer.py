@@ -377,10 +377,16 @@ class StabilityAnalyzer(object):
         if marginalize:
 
             n = len(ds.get_outcome_labels()[0][0])
-            for i in range(n):
-                margds = _dsconst.filter_dataset(tempds, (i,), filtercircuits=False)
-                margds.done_adding_data()
-                multids.add_dataset(str(i), margds)
+            if n > 1:
+                for i in range(n):
+                    margds = _dsconst.filter_dataset(tempds, (i,), filtercircuits=False)
+                    margds.done_adding_data()
+                    multids.add_dataset(str(i), margds)
+            else:
+                multids.add_dataset('0', tempds)
+
+        if not mergeoutcomes and not marginalize:
+            multids.add_dataset('0', tempds)
 
         # Data formatting complete, so write it into object.
         self.data = multids
