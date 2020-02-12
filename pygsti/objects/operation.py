@@ -1528,13 +1528,14 @@ class LinearlyParamDenseOp(DenseOperator):
         self.leftTrans = leftTransform if (leftTransform is not None) else I
         self.rightTrans = rightTransform if (rightTransform is not None) else I
         self.enforceReal = real
-        mx.flags.writeable = False  # only _construct_matrix can change array
 
         if evotype == "auto": evotype = "densitymx" if real else "statevec"
         assert(evotype in ("densitymx", "statevec")), \
             "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
 
+        #Note: dense op reps *always* own their own data so setting writeable flag is OK
         DenseOperator.__init__(self, mx, evotype)
+        self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
     def _construct_matrix(self):
@@ -1554,6 +1555,7 @@ class LinearlyParamDenseOp(DenseOperator):
                                  "imaginary part (%g)!" % _np.linalg.norm(_np.imag(matrix)))
             matrix = _np.real(matrix)
 
+        #Note: dense op reps *always* own their own data so setting writeable flag is OK
         assert(matrix.shape == (self.dim, self.dim))
         self.base.flags.writeable = True
         self.base[:, :] = matrix
@@ -1985,8 +1987,8 @@ class EigenvalueParamDenseOp(DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        mx.flags.writeable = False  # only _construct_matrix can change array
         DenseOperator.__init__(self, mx, "densitymx")
+        self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
     def _construct_matrix(self):
@@ -4063,12 +4065,14 @@ class ComposedOp(LinearOperator):
         factor_op_reps = [op._rep for op in self.factorops]
         if evotype == "densitymx":
             if dense_rep:
-                rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.identity(dim, 'd')))
+                rep = replib.DMOpRep_Dense(_np.require(_np.identity(dim, 'd'),
+                                                       requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 rep = replib.DMOpRep_Composed(factor_op_reps, dim)
         elif evotype == "statevec":
             if dense_rep:
-                rep = replib.SVOpRep_Dense(_np.ascontiguousarray(_np.identity(dim, complex)))
+                rep = replib.SVOpRep_Dense(_np.require(_np.identity(dim, complex),
+                                                       requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 rep = replib.SVOpRep_Composed(factor_op_reps, dim)
         elif evotype == "stabilizer":
@@ -4808,9 +4812,11 @@ class EmbeddedOp(LinearOperator):
             if self.dense_rep:
                 #maybe cache items to speed up _iter_matrix_elements in FUTURE here?
                 if evotype == "statevec":
-                    rep = replib.SVOpRep_Dense(_np.ascontiguousarray(_np.identity(opDim, complex)))
+                    rep = replib.SVOpRep_Dense(_np.require(_np.identity(opDim, complex),
+                                                           requirements=['OWNDATA', 'C_CONTIGUOUS']))
                 else:  # "densitymx"
-                    rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.identity(opDim, 'd')))
+                    rep = replib.DMOpRep_Dense(_np.require(_np.identity(opDim, 'd'),
+                                                           requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 nBlocks = self.state_space_labels.num_tensor_prod_blocks()
                 iActiveBlock = iTensorProdBlk
