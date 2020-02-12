@@ -400,16 +400,23 @@ cdef class DMStateRep: #(StateRep):
     cdef public np.ndarray base
     #cdef double [:] data_view # alt way to hold a reference
 
-    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data, int reducefix=0):
         #print("PYX state constructed w/dim ",data.shape[0])
         #cdef np.ndarray[double, ndim=1, mode='c'] np_cbuf = np.ascontiguousarray(data, dtype='d') # would allow non-contig arrays
         #cdef double [:] view = data;  self.data_view = view # ALT: holds reference...
-        self.base = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+        if reducefix == 0:
+            self.base = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         #self.c_state = new DMStateCRep(<double*>np_cbuf.data,<INT>np_cbuf.shape[0],<bool>0)
         self.c_state = new DMStateCRep(<double*>data.data,<INT>data.shape[0],<bool>0)
 
     def __reduce__(self):
-        return (DMStateRep, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMStateRep, (self.base, reducefix))
 
     def todense(self):
         return self.base
@@ -450,13 +457,20 @@ cdef class DMEffectRep:
 cdef class DMEffectRep_Dense(DMEffectRep):
     cdef public np.ndarray base
 
-    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
-        self.base = data # holds reference to data
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data, int reducefix=0):
+        if reducefix == 0:
+            self.base = data  # holds reference to data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         self.c_effect = new DMEffectCRep_Dense(<double*>data.data,
                                                <INT>data.shape[0])
 
     def __reduce__(self):
-        return (DMEffectRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMEffectRep_Dense, (self.base, reducefix))
 
 
 cdef class DMEffectRep_TensorProd(DMEffectRep):
@@ -564,14 +578,22 @@ cdef class DMOpRep:
 cdef class DMOpRep_Dense(DMOpRep):
     cdef public np.ndarray base
 
-    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] data):
-        self.base = data
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] data, int reducefix=0):
+        if reducefix == 0:
+            self.base = data  # the usual case - just take data ptr
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
+
         #print("PYX dense gate constructed w/dim ",data.shape[0])
         self.c_gate = new DMOpCRep_Dense(<double*>data.data,
                                            <INT>data.shape[0])
 
     def __reduce__(self):
-        return (DMOpRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMOpRep_Dense, (self.base, reducefix))
 
     def __str__(self):
         s = ""
@@ -784,12 +806,19 @@ cdef class SVStateRep: #(StateRep):
     cdef SVStateCRep* c_state
     cdef public np.ndarray base
 
-    def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data):
-        self.base = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+    def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data, int reducefix=0):
+        if reducefix == 0:
+            self.base = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         self.c_state = new SVStateCRep(<double complex*>data.data,<INT>data.shape[0],<bool>0)
 
     def __reduce__(self):
-        return (SVStateRep, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (SVStateRep, (self.base, reducefix))
 
     @property
     def dim(self):
@@ -832,13 +861,20 @@ cdef class SVEffectRep:
 cdef class SVEffectRep_Dense(SVEffectRep):
     cdef public np.ndarray base
 
-    def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data):
-        self.base = data # holds reference to data
+    def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data, int reducefix=0):
+        if reducefix == 0:
+            self.base = data # holds reference to data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         self.c_effect = new SVEffectCRep_Dense(<double complex*>data.data,
                                                <INT>data.shape[0])
 
     def __reduce__(self):
-        return (SVEffectRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (SVEffectRep_Dense, (self.base, reducefix))
 
 
 cdef class SVEffectRep_TensorProd(SVEffectRep):
@@ -909,14 +945,21 @@ cdef class SVOpRep:
 cdef class SVOpRep_Dense(SVOpRep):
     cdef public np.ndarray base
 
-    def __cinit__(self, np.ndarray[np.complex128_t, ndim=2, mode='c'] data):
-        self.base = data
+    def __cinit__(self, np.ndarray[np.complex128_t, ndim=2, mode='c'] data, int reducefix=0):
+        if reducefix == 0:
+            self.base = data  # the usual case - just take data ptr
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         #print("PYX dense gate constructed w/dim ",data.shape[0])
         self.c_gate = new SVOpCRep_Dense(<double complex*>data.data,
                                            <INT>data.shape[0])
 
     def __reduce__(self):
-        return (SVOpRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (SVOpRep_Dense, (self.base, reducefix))
 
     def __str__(self):
         s = ""
