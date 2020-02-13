@@ -19,8 +19,8 @@ class XRotationOp(pygsti.obj.DenseOperator):
     def __init__(self, target_angle, initial_params=(0,0)):
         #initialize with no noise
         self.target_angle = target_angle
+        super(XRotationOp,self).__init__(np.identity(4, 'd'), "densitymx") # this is *super*-operator, so "densitymx"
         self.from_vector(np.array(initial_params,'d')) 
-        super(XRotationOp,self).__init__(self.base, "densitymx") # this is *super*-operator, so "densitymx"
         
     def num_params(self): 
         return 2 # we have two parameters
@@ -40,10 +40,10 @@ class XRotationOp(pygsti.obj.DenseOperator):
         
         # .base is a member of DenseOperator and is a numpy array that is 
         # the dense Pauli transfer matrix of this operator
-        self.base = np.array([[1,   0,   0,   0],
-                              [0,   a,   0,   0],
-                              [0,   0,   c,  -b],
-                              [0,   0,   b,   c]],'d')
+        self.base[:] = np.array([[1,   0,   0,   0],
+                                 [0,   a,   0,   0],
+                                 [0,   0,   c,  -b],
+                                 [0,   0,   b,   c]],'d')
 
         
 class ParamXRotationOpFactory(pygsti.obj.OpFactory):
