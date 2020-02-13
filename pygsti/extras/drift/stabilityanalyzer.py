@@ -1771,7 +1771,7 @@ class StabilityAnalyzer(object):
                 # The most likely null hypothesis model, i.e., constant probabilities that are the observed frequencies.
                 counts = self.data[dskey][circuit].counts
                 total = self.data[dskey][circuit].total
-                means = {o: counts[o] / total for o in outcomes}
+                means = {o: counts.get(o, 0) / total for o in outcomes}
                 nullptraj = _ptraj.ConstantProbTrajectory(outcomes, means)
                 self._probtrajectories[i, j]['null'] = nullptraj
 
