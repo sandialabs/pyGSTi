@@ -871,10 +871,7 @@ class DenseSPAMVec(SPAMVec):
             raise ValueError("Invalid `prep_or_effect` argument: %s" % prep_or_effect)
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
-
-        assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
-        self.base1D = vec
-        assert(self.base1D.flags.owndata)
+        assert(self.base1D.flags['C_CONTIGUOUS'] and self.base1D.flags['OWNDATA'])
 
     def todense(self, scratch=None):
         """
@@ -883,6 +880,10 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return self.base1D  # *must* be a numpy array for Cython arg conversion
+
+    @property
+    def base1D(self):
+        return self._rep.base
 
     @property
     def base(self):
@@ -927,7 +928,7 @@ class DenseSPAMVec(SPAMVec):
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        if 'base1D' in self.__dict__:
+        if '_rep' in self.__dict__:  # sometimes in loading __getattr__ gets called before the instance is loaded
             ret = getattr(self.base, attr)
         else:
             raise AttributeError("No attribute:", attr)
