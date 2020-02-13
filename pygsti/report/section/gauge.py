@@ -59,7 +59,7 @@ class GaugeInvariantsGatesSection(_Section):
     @_Section.figure_factory(4)
     def bestGatesVsTargetTable_gi(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
-            switchboard.gsGIRep, switchboard.gsGIRepEP, _criGI(0, switchboard, confidence_level, ci_brevity),
+            switchboard.gsGIRep, switchboard.gsTarget, _criGI(0, switchboard, confidence_level, ci_brevity),
             display=('evinf', 'evagi', 'evnuinf', 'evnuagi', 'evdiamond', 'evnudiamond')
         )
 
