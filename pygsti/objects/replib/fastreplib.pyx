@@ -412,7 +412,7 @@ cdef class DMStateRep: #(StateRep):
             self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
         #self.c_state = new DMStateCRep(<double*>np_cbuf.data,<INT>np_cbuf.shape[0],<bool>0)
-        self.c_state = new DMStateCRep(<double*>data.data,<INT>data.shape[0],<bool>0)
+        self.c_state = new DMStateCRep(<double*>self.base.data,<INT>self.base.shape[0],<bool>0)
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
@@ -465,8 +465,11 @@ cdef class DMEffectRep_Dense(DMEffectRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        self.c_effect = new DMEffectCRep_Dense(<double*>data.data,
-                                               <INT>data.shape[0])
+        self.c_effect = new DMEffectCRep_Dense(<double*>self.base.data,
+                                               <INT>self.base.shape[0])
+
+    def __str__(self):
+        return str([ (<DMEffectCRep_Dense*>self.c_effect)._dataptr[i] for i in range(self.c_effect._dim)])
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
@@ -588,8 +591,8 @@ cdef class DMOpRep_Dense(DMOpRep):
             self.base.flags.writeable = True if reducefix == 1 else False
 
         #print("PYX dense gate constructed w/dim ",data.shape[0])
-        self.c_gate = new DMOpCRep_Dense(<double*>data.data,
-                                           <INT>data.shape[0])
+        self.c_gate = new DMOpCRep_Dense(<double*>self.base.data,
+                                           <INT>self.base.shape[0])
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
@@ -814,7 +817,7 @@ cdef class SVStateRep: #(StateRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        self.c_state = new SVStateCRep(<double complex*>data.data,<INT>data.shape[0],<bool>0)
+        self.c_state = new SVStateCRep(<double complex*>self.base.data,<INT>self.base.shape[0],<bool>0)
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
@@ -869,8 +872,8 @@ cdef class SVEffectRep_Dense(SVEffectRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        self.c_effect = new SVEffectCRep_Dense(<double complex*>data.data,
-                                               <INT>data.shape[0])
+        self.c_effect = new SVEffectCRep_Dense(<double complex*>self.base.data,
+                                               <INT>self.base.shape[0])
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
@@ -954,8 +957,8 @@ cdef class SVOpRep_Dense(SVOpRep):
             self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
         #print("PYX dense gate constructed w/dim ",data.shape[0])
-        self.c_gate = new SVOpCRep_Dense(<double complex*>data.data,
-                                           <INT>data.shape[0])
+        self.c_gate = new SVOpCRep_Dense(<double complex*>self.base.data,
+                                           <INT>self.base.shape[0])
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
