@@ -1103,7 +1103,7 @@ class BasedDenseOperatorInterface(DenseOperatorInterface):
         return self.base
 
 
-class DenseOperator(DenseOperatorInterface, LinearOperator):
+class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
     """
     Excapulates a parameterization of a operation matrix.  This class is the
     common base class for all specific parameterizations of a gate.
