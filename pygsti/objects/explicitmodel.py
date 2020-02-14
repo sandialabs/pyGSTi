@@ -1114,10 +1114,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _np.sqrt(penalty)
 
-    def strdiff(self, otherModel):
+    def strdiff(self, otherModel, metric='frobenius'):
         """
         Return a string describing
-        the frobenius distances between
+        the distances between
         each corresponding gate, state prep,
         and POVM effect.
 
@@ -1126,35 +1126,51 @@ class ExplicitOpModel(_mdl.OpModel):
         otherModel : Model
             the other model to difference against.
 
+        metric : {'frobenius', 'infidelity', 'diamond'}
+            Which distance metric to use.
+
         Returns
         -------
         str
         """
+
+        if metric == 'frobenius':
+            def dist(A, B): return _np.linalg.norm(A - B)
+            def vecdist(A, B): return _np.linalg.norm(A - B)
+        elif metric == 'infidelity':
+            def dist(A, B): return _gt.entanglement_infidelity(A, B, self.basis)
+            def vecdist(A, B): return _np.linalg.norm(A - B)
+        elif metric == 'diamond':
+            def dist(A, B): return 0.5 * _gt.diamondist(A, B, self.basis)
+            def vecdist(A, B): return _np.linalg.norm(A - B)
+        else:
+            raise ValueError("Invalid `metric` argument: %s" % metric)
+
         s = "Model Difference:\n"
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (str(lbl), _np.linalg.norm(self.preps[lbl].todense() - otherModel.preps[lbl].todense()))
+                (str(lbl), vecdist(self.preps[lbl].todense(), otherModel.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl, povm in self.povms.items():
             s += "  %s: " % str(povm_lbl)
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, _np.linalg.norm(povm[lbl].todense() - otherModel.povms[povm_lbl][lbl].todense()))
+                     (lbl, vecdist(povm[lbl].todense(), otherModel.povms[povm_lbl][lbl].todense()))
 
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (str(lbl), _np.linalg.norm(self.operations[lbl].todense() - otherModel.operations[lbl].todense()))
+                (str(lbl), dist(self.operations[lbl].todense(), otherModel.operations[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
             for inst_lbl, inst in self.instruments.items():
                 s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
-                    s += "    %s = %g\n" % (str(lbl), _np.linalg.norm(
-                        inst[lbl].todense() - otherModel.instruments[inst_lbl][lbl].todense()))
+                    s += "    %s = %g\n" % (str(lbl), dist(
+                        inst[lbl].todense(), otherModel.instruments[inst_lbl][lbl].todense()))
 
         return s
 

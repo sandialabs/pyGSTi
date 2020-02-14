@@ -748,6 +748,13 @@ class GaugeRobustMetricTable(WorkspaceTable):
         orig_target = target_model.copy()
         orig_target.set_all_parameterizations("full")  # so we can freely gauge transform this
 
+        if metric in ("inf", "agi", "nuinf", "nuagi", "evinf", "evagi", "evnuinf", "evnuagi"):
+            gmetric = "fidelity"
+        elif metric in ("trace", "diamond", "evdiamond", "evnudiamond"):
+            gmetric = "tracedist"
+        else:
+            gmetric = "frobenius"
+
         mdl_in_best_gauge = []
         target_mdl_in_best_gauge = []
         for lbl in opLabels:
@@ -758,9 +765,24 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
             mdl = orig_model.copy()
             mdl.transform(Ugg)
-            _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target,
-                                                        itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
-                                                        returnAll=True)  # ADDITIONAL GOPT
+
+            #DEBUG statements for trying to figure out why we get negative off-diagonals so often.
+            #print("----- ",lbl,"--------")
+            #print("PT1:\n",mdl.strdiff(target_model))
+            #print("PT1b:\n",mdl.strdiff(target_model, 'inf'))
+            try:
+                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gatesMetric=gmetric,
+                                                            itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
+                                                            returnAll=True)  # ADDITIONAL GOPT
+            except Exception as e:
+                _warnings.warn(("GaugeRobustMetricTable gauge opt failed for %s label - "
+                                "falling back to frobenius metric! Error was:\n%s") % (lbl, str(e)))
+                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gatesMetric="frobenius",
+                                                            itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
+                                                            returnAll=True)  # ADDITIONAL GOPT
+
+            #print("PT2:\n",mdl.strdiff(target_model))
+            #print("PT2b:\n",mdl.strdiff(target_model, 'inf'))
             mdl_in_best_gauge.append(mdl)
 
             target_mdl = orig_target.copy()
@@ -786,8 +808,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
                 else:  # off-diagonal element
                     try:
                         el1 = _reportables.evaluate_opfn_by_name(
-                            metric, target_mdl_in_best_gauge[i],
-                            target_mdl_in_best_gauge[j], lbl2,
+                            metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2,
                             confidenceRegionInfo)
                         el2 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidenceRegionInfo)
