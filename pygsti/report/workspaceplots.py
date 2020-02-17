@@ -1215,7 +1215,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     max_xl = max([len(str(xl)) for xl in xlabels])
     if max_xl > 0: tmargin += max_xl * 7
     max_yl = max([len(str(yl)) for yl in ylabels])
-    if max_yl > 0: lmargin += max_yl * 5
+    if max_yl > 0: lmargin += max_yl * 7
     if colorbar: rmargin = 100
 
     boxSizeX = boxSizeY = 15
