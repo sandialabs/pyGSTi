@@ -863,7 +863,10 @@ def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLi
     #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
     badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
     onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, opt_args, evaltree_cache, comm, memLimit, printer)
+    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
+                                                        'wildcard_smart_init': True})
+    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
+                         comm, memLimit, printer)
     profiler.add_time('%s: add badfit estimates' % callerName, tRef); tRef = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
@@ -940,7 +943,7 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
 
 
 def add_badfit_estimates(results, base_estimate_label="default", estimate_types=('wildcard',),
-                         badFitThreshold=None, opt_args=None, evaltree_cache=None,
+                         badFitThreshold=None, badfit_opts=None, opt_args=None, evaltree_cache=None,
                          comm=None, memLimit=None, verbosity=0):
     """
     Add any and all "bad fit" estimates to `results`.
@@ -984,14 +987,17 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
 
         elif badfit_typ == "wildcard":
             try:
-                new_params['unmodeled_error'] = get_wildcard_budget(mdl, ds, circuitList, parameters,
-                                                                    evaltree_cache, comm, memLimit, printer - 1)
+                unmodeled = get_wildcard_budget(mdl, ds, circuitList, parameters, badfit_opts,
+                                                evaltree_cache, comm, memLimit, printer - 1)
+                base_estimate.parameters['unmodeled_error'] = unmodeled
+                # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
             except NotImplementedError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 new_params['unmodeled_error'] = None
             except AssertionError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 new_params['unmodeled_error'] = None
+            continue  # no need to add a new estimate - we just update the base estimate
 
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
@@ -1088,9 +1094,10 @@ def get_robust_scaling(scale_typ, model, ds, circuitList, parameters, evaltree_c
     return circuitWeights
 
 
-def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, comm, memLimit, verbosity):
+def get_wildcard_budget(model, ds, circuitsToUse, parameters, badfit_opts, evaltree_cache, comm, memLimit, verbosity):
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     fitQty = _get_fit_qty(model, ds, circuitsToUse, parameters, evaltree_cache, comm, memLimit)
+    badfit_opts = badfit_opts or {}
 
     printer.log("******************* Adding Wildcard Budget **************************")
 
@@ -1130,7 +1137,8 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
     twoDeltaLogL = sum(twoDeltaLogL_terms)
 
     budget = _wild.PrimitiveOpsWildcardBudget(model.get_primitive_op_labels() + model.get_primitive_instrument_labels(),
-                                              add_spam=True, start_budget=0.0)
+                                              add_spam=badfit_opts.get('wildcard_budget_includes_spam', True),
+                                              start_budget=0.0)
 
     if twoDeltaLogL <= twoDeltaLogL_threshold \
        and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
@@ -1167,7 +1175,30 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, evaltree_cache, co
 
         nIters = 0
         Wvec_init = budget.to_vector()
-        #print("INITIAL Wildcard budget = ", str(budget))
+
+        # Optional: set initial wildcard budget by pushing on each Wvec component individually
+        if badfit_opts.get('wildcard_smart_init', True):
+            probe = Wvec_init.copy(); MULT = 2
+            for i in range(len(Wvec_init)):
+                #print("-------- Index ----------", i)
+                Wv = Wvec_init.copy()
+                #See how big Wv[i] needs to get before penalty stops decreasing
+                last_penalty = 1e100; penalty = 0.9e100
+                delta = 1e-6
+                while penalty < last_penalty:
+                    Wv[i] = delta
+                    last_penalty = penalty
+                    penalty = _wildcard_objective_firstTerms(Wv)
+                    #print("  delta=%g  => penalty = %g" % (delta, penalty))
+                    delta *= MULT
+                probe[i] = delta / MULT**2
+                #print(" ==> Probe[%d] = %g" % (i, probe[i]))
+
+            probe /= len(Wvec_init)  # heuristic: set as new init point
+            budget.from_vector(probe)
+            Wvec_init = budget.to_vector()
+
+        printer.log("INITIAL Wildcard budget = %s" % str(budget))
 
         # Find a value of eta that is small enough that the "first terms" are 0.
         while nIters < 10:

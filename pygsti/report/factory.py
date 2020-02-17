@@ -38,7 +38,7 @@ from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
 
 #maybe import these from drivers.longsequence so they stay synced?
-ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]
+ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
