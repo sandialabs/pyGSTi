@@ -112,7 +112,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.optimize',
             'pygsti.protocols',
             'pygsti.report',
-            'pygsti.report.sections',
+            'pygsti.report.section',
             'pygsti.tools'
         ],
         package_dir={'': '.'},
