@@ -33,9 +33,9 @@ before_install:
 
 install:
   # Install base dependencies
-  - pip install -e .
+  - pip install .
   # Install test dependencies
-  - pip install -e .[testing]
+  - pip install .[testing]
   # Show pip environment, for diagnostics
   - pip freeze
 
