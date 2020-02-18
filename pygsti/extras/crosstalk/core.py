@@ -60,8 +60,9 @@ def flatten(l):
         else:
             yield el
 
+
 def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
-        # This converts a DataSet to an array since the code below uses arrays 
+    # This converts a DataSet to an array since the code below uses arrays
     if type(ds) == _pygobjs.dataset.DataSet:
 
         opstr = ds.keys()[0]
@@ -70,20 +71,20 @@ def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
 
         settings_shape = _np.shape(settings)
         # Check that settings is a list of length number_of_regions
-        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
         "settings should be a list of the same length as number_of_regions."
 
         dscopy = ds.copy_nonstatic()
         # filter out lengths not in filter_lengths
-        if len(filter_lengths)>0:
+        if len(filter_lengths) > 0:
             for k in dscopy.keys():
                 if len(k) not in filter_lengths:
-                    dscopy.remove( [k] )
+                    dscopy.remove([k])
 
         dscopy.done_adding_data()
 
         # num columns = number of settings + number of regions (b/c we assume one outcome per region)
-        num_columns = num_settings+number_of_regions
+        #num_columns = num_settings + number_of_regions
 
         num_data = len(dscopy.keys())
 
@@ -92,20 +93,20 @@ def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
         for row in range(num_data):
             opstr = dscopy.keys()[row]
 
-            templine_set = [0]*num_settings
+            templine_set = [0] * num_settings
             settings_row = dscopy.auxInfo[opstr]['settings']
 
             for key in settings_row:
-                if len(key)==1: # single region/qubit gate
-                    templine_set[key[0]]=settings_row[key]
+                if len(key) == 1:  # single region/qubit gate
+                    templine_set[key[0]] = settings_row[key]
                     collect_settings[key[0]].append(settings_row[key])
-                else: # two-region/two-qubit gate
-                    print("Two qubit gate, not sure what to do!!")  #TODO
+                else:  # two-region/two-qubit gate
+                    print("Two qubit gate, not sure what to do!!")  # TODO
                     return
-            
+
             outcomes_row = dscopy[opstr]
             for outcome in outcomes_row:
-                templine_out = [0]*number_of_regions
+                templine_out = [0] * number_of_regions
 
                 if len(outcome[0]) == 1:
                     # outcomes labeled by bitstrings
@@ -127,8 +128,7 @@ def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
                 for r in range(num_rep):
                     data.append(flattened_line)
 
-
-        num_seqs = [len(set(collect_settings[i])) for i in range(num_settings)]
+        #num_seqs = [len(set(collect_settings[i])) for i in range(num_settings)]
 
         data = _np.asarray(data)
 
@@ -139,44 +139,45 @@ def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
 
         data_shape = _np.shape(data)
         settings_shape = _np.shape(settings)
-    
+
         # Check that the input data is a 2D array
-        assert(len(data_shape) == 2) 
+        assert(len(data_shape) == 2)
         "Input data format is incorrect!If the input is a numpy array it must be 2-dimensional."
-        
+
         # Check that settings is a list of length number_of_regions
-        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
         "settings should be a list of the same length as number_of_regions."
-        
+
         # The number of columns in the data must be consistent with the number of settings
-        assert( data_shape[1] == (sum(settings) + number_of_regions) )
+        assert(data_shape[1] == (sum(settings) + number_of_regions))
         "Mismatch between the number of settings specified for each region and the number of columns in data"
-        
+
         num_data = data_shape[0]
-        num_columns = data_shape[1]
-   
+        #num_columns = data_shape[1]
+
     # if neither a pygsti data set or string, assume a numpy array was passed in
     else:
         data_shape = _np.shape(ds)
         settings_shape = _np.shape(settings)
-    
+
         # Check that the input data is a 2D array
         assert(len(data_shape) == 2)
         "Input data format is incorrect!If the input is a numpy array it must be 2-dimensional."
-        
+
         # Check that settings is a list of length number_of_regions
-        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
         "settings should be a list of the same length as number_of_regions."
-        
+
         # The number of columns in the data must be consistent with the number of settings
-        assert( data_shape[1] == (sum(settings) + number_of_regions) )
+        assert(data_shape[1] == (sum(settings) + number_of_regions))
         "Mismatch between the number of settings specified for each region and the number of columns in data"
-        
+
         data = ds
-    
+
     data_shape = _np.shape(data)
-   
+
     return data, data_shape
+
 
 def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.95, verbosity=1, name=None,
                                  assume_independent_settings=True, filter_lengths=[]):
@@ -201,13 +202,10 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
     name : str, optional
 
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
     filter_lengths : list of lengths. If this is not empty the dataset will be filtered and the analysis will only be
         done on the sequences of lengths specified in this list. This argument is only used if the dataset is passed in
         as a pyGSTi DataSet
-    
-=======
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
+
     Returns
     -------
     results : CrosstalkResults object
@@ -217,11 +215,9 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     """
     # -------------------------- #
     # Format and check the input #
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
-    # -------------------------- #    
-       
-    # This converts a DataSet to an array since the code below uses arrays 
-=======
+    # -------------------------- #
+
+    # This converts a DataSet to an array since the code below uses arrays
     # -------------------------- #
 
     if type(ds) != _pygobjs.dataset.DataSet:
@@ -246,7 +242,6 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
         num_columns = data_shape[1]
 
     # This converts a DataSet to an array, as the code below uses arrays
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
     if type(ds) == _pygobjs.dataset.DataSet:
 
         opstr = ds.keys()[0]
@@ -258,18 +253,15 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
         assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
         "settings should be a list of the same length as number_of_regions."
 
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
         dscopy = ds.copy_nonstatic()
         # filter out lengths not in filter_lengths
-        if len(filter_lengths)>0:
+        if len(filter_lengths) > 0:
             for k in dscopy.keys():
                 if len(k) not in filter_lengths:
-                    dscopy.remove( [k] )
+                    dscopy.remove([k])
 
         dscopy.done_adding_data()
 
-=======
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
         # num columns = number of settings + number of regions (b/c we assume one outcome per region)
         num_columns = num_settings + number_of_regions
 
@@ -280,13 +272,8 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
         for row in range(num_data):
             opstr = dscopy.keys()[row]
 
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
-            templine_set = [0]*num_settings
-            settings_row = dscopy.auxInfo[opstr]['settings']
-=======
             templine_set = [0] * num_settings
-            settings_row = ds.auxInfo[opstr]['settings']
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
+            settings_row = dscopy.auxInfo[opstr]['settings']
 
             for key in settings_row:
                 if len(key) == 1:  # single region/qubit gate
@@ -295,37 +282,25 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                 else:  # two-region/two-qubit gate
                     print("Two qubit gate, not sure what to do!!")  # TODO
                     return
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
-            
             outcomes_row = dscopy[opstr]
 
-=======
-
-            outcomes_row = ds[opstr]
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
             for outcome in outcomes_row:
                 templine_out = [0] * number_of_regions
 
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
                 if len(outcome[0]) == 1:
                     # outcomes labeled by bitstrings
                     for r in range(number_of_regions):
                         templine_out[r] = int(outcome[0][0][r])
-=======
-                for r in range(number_of_regions):
-                    templine_out[r] = int(outcome[0][r])
-                num_rep = int(outcome[2])
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
 
                     num_rep = int(outcome[2])
 
                     templine_out.append(templine_set)
                     flattened_line = list(flatten(templine_out))
                 else:
-                	# outcomes labeled by tuples of bits
+                    # outcomes labeled by tuples of bits
                     for r in range(number_of_regions):
-                        templine_out[r] = int(outcome[0][1][0][r])  #   templine_out[r] = int(outcome[0][r])
-                       # print(templine_out[r])
+                        templine_out[r] = int(outcome[0][1][0][r])  # templine_out[r] = int(outcome[0][r])
+                        # print(templine_out[r])
                     num_rep = int(outcome[2])
 
                     templine_out.append(templine_set)
@@ -343,45 +318,45 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
         data_shape = _np.shape(data)
         settings_shape = _np.shape(settings)
-    
+
         # Check that the input data is a 2D array
-        assert(len(data_shape) == 2) 
+        assert(len(data_shape) == 2)
         "Input data format is incorrect!If the input is a numpy array it must be 2-dimensional."
-        
+
         # Check that settings is a list of length number_of_regions
-        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
         "settings should be a list of the same length as number_of_regions."
-        
+
         # The number of columns in the data must be consistent with the number of settings
-        assert( data_shape[1] == (sum(settings) + number_of_regions) )
+        assert(data_shape[1] == (sum(settings) + number_of_regions))
         "Mismatch between the number of settings specified for each region and the number of columns in data"
-        
+
         num_data = data_shape[0]
         num_columns = data_shape[1]
-   
+
     # if neither a pygsti data set or string, assume a numpy array was passed in
     else:
         data_shape = _np.shape(ds)
         settings_shape = _np.shape(settings)
-    
+
         # Check that the input data is a 2D array
         assert(len(data_shape) == 2)
         "Input data format is incorrect!If the input is a numpy array it must be 2-dimensional."
-        
+
         # Check that settings is a list of length number_of_regions
-        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
         "settings should be a list of the same length as number_of_regions."
-        
+
         # The number of columns in the data must be consistent with the number of settings
-        assert( data_shape[1] == (sum(settings) + number_of_regions) )
+        assert(data_shape[1] == (sum(settings) + number_of_regions))
         "Mismatch between the number of settings specified for each region and the number of columns in data"
-        
+
         data = ds
-    
+
     data_shape = _np.shape(data)
     num_data = data_shape[0]
     num_columns = data_shape[1]
-   
+
     # dump the array form of the dataset into a file for diagnostics
     _np.savetxt('dataset_dump.txt', data, fmt='%d')
 
@@ -480,49 +455,38 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
         #   Crosstalk is:
         #       (1) an edge between outcomes on different regions
         #       (2) an edge between a region's outcome and a setting of another region
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
 
         # source and destination are results
-        if source < number_of_regions and dest < number_of_regions :    
-            cmatrix[source, dest] = 1
-            is_edge_ct[idx] = 1
-            print("Crosstalk detected. Regions " + str(source) + " and " + str(dest))
-        
-        # source is a result, destination is a setting
-        if source < number_of_regions and dest >= number_of_regions :   
-            if dest not in range(setting_indices[source], (setting_indices[(source+1)] if source<(number_of_regions-1) else num_columns)) :  # make sure destination is not a setting for that region
-                for region in range(number_of_regions) :  # search among regions to find the one that this destination setting belongs to
-                    if dest in range(setting_indices[region], (setting_indices[(region+1)] if region<(number_of_regions-1) else num_columns)) :
-                        break    
-                cmatrix[source, region] = 1
-                is_edge_ct[idx] = 1
-                print("Crosstalk detected. Regions " + str(source) + " and " + str(region))
-         
-        # source is a setting, destination is a result       
-        if source >= number_of_regions and dest < number_of_regions :  
-            if source not in range(setting_indices[dest], (setting_indices[(dest+1)] if dest<(number_of_regions-1) else num_columns)) :  # make sure source is not a setting for that region
-                for region in range(number_of_regions) :  # search among regions to find the one that this source setting belongs to
-                    if source in range(setting_indices[region], (setting_indices[(region+1)] if region<(number_of_regions-1) else num_columns)) :
-=======
         if source < number_of_regions and dest < number_of_regions:
             cmatrix[source, dest] = 1
             is_edge_ct[idx] = 1
             print("Crosstalk detected. Regions " + str(source) + " and " + str(dest))
 
+        # source is a result, destination is a setting
         if source < number_of_regions and dest >= number_of_regions:
-            if dest not in _setting_range(source):
+            if dest not in range(setting_indices[source],
+                                 (setting_indices[(source + 1)] if source < (number_of_regions - 1) else num_columns)):
+                # make sure destination is not a setting for that region
                 for region in range(number_of_regions):
-                    if dest in _setting_range(region):
+                    # search among regions to find the one that this destination setting belongs to
+                    if dest in range(setting_indices[region],
+                                     (setting_indices[(region + 1)] if region < (number_of_regions - 1)
+                                      else num_columns)):
                         break
                 cmatrix[source, region] = 1
                 is_edge_ct[idx] = 1
                 print("Crosstalk detected. Regions " + str(source) + " and " + str(region))
 
+        # source is a setting, destination is a result
         if source >= number_of_regions and dest < number_of_regions:
-            if source not in _setting_range(dest):
+            if source not in range(setting_indices[dest],
+                                   (setting_indices[(dest + 1)] if dest < (number_of_regions - 1) else num_columns)):
+                # make sure source is not a setting for that region
                 for region in range(number_of_regions):
-                    if source in _setting_range(region):
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
+                    # search among regions to find the one that this source setting belongs to
+                    if source in range(setting_indices[region],
+                                       (setting_indices[(region + 1)] if region < (number_of_regions - 1)
+                                        else num_columns)):
                         break
                 cmatrix[region, dest] = 1
                 is_edge_ct[idx] = 1
@@ -536,19 +500,21 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
             # the TVD calculation depends on what kind of crosstalk it is.
 
             # source and destination are results OR source is a result, destination is a setting
-            if (source < number_of_regions and dest < number_of_regions) or (source < number_of_regions and dest >= number_of_regions): 
+            if (source < number_of_regions and dest < number_of_regions) or \
+               (source < number_of_regions and dest >= number_of_regions):
                 source_levels, level_cnts = _np.unique(data[:, source], return_counts=True)
                 num_levels = len(source_levels)
 
-                if any(level_cnts<10) :
-                    print( " ***   Warning: n<10 data points for some levels. TVD calculations may have large error bars.")
+                if any(level_cnts < 10):
+                    print((" ***   Warning: n<10 data points for some levels. "
+                           "TVD calculations may have large error bars."))
 
                 tvds = _np.zeros((num_levels, num_levels))
                 calculated_tvds = []
-                for i in range(num_levels) :
-                    for j in range(i) :
+                for i in range(num_levels):
+                    for j in range(i):
 
-                        marg1 = data[data[:, source]==source_levels[i], dest]
+                        marg1 = data[data[:, source] == source_levels[i], dest]
                         marg2 = data[data[:, source] == source_levels[j], dest]
                         n1, n2 = len(marg1), len(marg2)
 
@@ -558,42 +524,43 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         #print(marg1_levels, marg1_level_cnts)
                         #print(marg2_levels, marg2_level_cnts)
 
-
                         tvd_sum = 0.0
-                        for lidx, level in enumerate(marg1_levels) :
-                            temp = _np.where(marg2_levels==level)
-                            if len(temp[0]) == 0 :
-                                tvd_sum += marg1_level_cnts[lidx]/n1
-                            else :
-                                tvd_sum += _np.fabs(marg1_level_cnts[lidx]/n1 - marg2_level_cnts[temp[0][0]]/n2)
+                        for lidx, level in enumerate(marg1_levels):
+                            temp = _np.where(marg2_levels == level)
+                            if len(temp[0]) == 0:
+                                tvd_sum += marg1_level_cnts[lidx] / n1
+                            else:
+                                tvd_sum += _np.fabs(marg1_level_cnts[lidx] / n1 - marg2_level_cnts[temp[0][0]] / n2)
 
-                        tvds[i,j] = tvds[j,i] = tvd_sum/2.0
-                        calculated_tvds.append(tvds[i,j])
+                        tvds[i, j] = tvds[j, i] = tvd_sum / 2.0
+                        calculated_tvds.append(tvds[i, j])
 
                 edge_tvds[idx] = tvds
                 source_levels_dict[idx] = source_levels
-                max_tvds[idx] = _np.max(calculated_tvds)    
-                median_tvds[idx] = _np.median(calculated_tvds) 
+                max_tvds[idx] = _np.max(calculated_tvds)
+                median_tvds[idx] = _np.median(calculated_tvds)
 
-            # source is a setting, destination is a result       
+            # source is a setting, destination is a result
             else:
                 source_levels, level_cnts = _np.unique(data[:, source], return_counts=True)
                 num_levels = len(source_levels)
 
-                if any(level_cnts<10) :
-                    print( " ***   Warning: n<10 data points for some levels. TVD calculations may have large error bars.")
+                if any(level_cnts < 10):
+                    print((" ***   Warning: n<10 data points for some levels. "
+                           "TVD calculations may have large error bars."))
 
                 tvds = _np.zeros((num_levels, num_levels))
                 max_dest_levels = _np.zeros((num_levels, num_levels))
                 calculated_tvds = []
-                for i in range(num_levels) :
-                    for j in range(i) :
+                for i in range(num_levels):
+                    for j in range(i):
 
-                        marg1 = data[data[:, source]==source_levels[i], ]
+                        marg1 = data[data[:, source] == source_levels[i], ]
                         marg2 = data[data[:, source] == source_levels[j], ]
 
-                        if(settings[dest]>1):
-                            print('Region {} has more than one setting -- TVD code not implemented yet for this case'.format(dest))
+                        if(settings[dest] > 1):
+                            print(('Region {} has more than one setting -- '
+                                   'TVD code not implemented yet for this case').format(dest))
                             edge_tvds[idx] = tvds
                             source_levels_dict[idx] = source_levels
                         else:
@@ -603,17 +570,18 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
                             common_dest_levels = list(set(dest_levels_i).intersection(dest_levels_j))
 
-                            if common_dest_levels==[]:
-                                # No common settings on the destination regions for this combination of settings for the source region
+                            if common_dest_levels == []:
+                                # No common settings on the destination regions for this combination of settings
+                                # for the source region
                                 # No sensible TVD here
-                                tvds[i,j] = tvds[j,i] = -1
+                                tvds[i, j] = tvds[j, i] = -1
                             else:
-                                max_tvd=0
+                                max_tvd = 0
                                 max_dest_level = 0
                                 for dest_level in common_dest_levels:
-                                    marg1d = marg1[marg1[:, dest_setting]==dest_level, dest]
-                                    marg2d = marg2[marg2[:, dest_setting]==dest_level, dest]
-                                    
+                                    marg1d = marg1[marg1[:, dest_setting] == dest_level, dest]
+                                    marg2d = marg2[marg2[:, dest_setting] == dest_level, dest]
+
                                     n1, n2 = len(marg1d), len(marg2d)
 
                                     marg1d_levels, marg1d_level_cnts = _np.unique(marg1d, return_counts=True)
@@ -622,43 +590,45 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                                     #print(marg1_levels, marg1_level_cnts)
                                     #print(marg2_levels, marg2_level_cnts)
 
-
                                     tvd_sum = 0.0
-                                    for lidx, level in enumerate(marg1d_levels) :
-                                        temp = _np.where(marg2d_levels==level)
-                                        if len(temp[0]) == 0 :
-                                            tvd_sum += marg1d_level_cnts[lidx]/n1
-                                        else :
-                                            tvd_sum += _np.fabs(marg1d_level_cnts[lidx]/n1 - marg2d_level_cnts[temp[0][0]]/n2)
+                                    for lidx, level in enumerate(marg1d_levels):
+                                        temp = _np.where(marg2d_levels == level)
+                                        if len(temp[0]) == 0:
+                                            tvd_sum += marg1d_level_cnts[lidx] / n1
+                                        else:
+                                            tvd_sum += _np.fabs(marg1d_level_cnts[lidx] / n1
+                                                                - marg2d_level_cnts[temp[0][0]] / n2)
 
                                     if tvd_sum > max_tvd:
                                         max_tvd = tvd_sum
                                         max_dest_level = dest_level
 
-                                tvds[i,j] = tvds[j,i] = max_tvd/2.0
-                                calculated_tvds.append(tvds[i,j])
-                                max_dest_levels[i,j] = max_dest_levels[j,i] = max_dest_level
+                                tvds[i, j] = tvds[j, i] = max_tvd / 2.0
+                                calculated_tvds.append(tvds[i, j])
+                                max_dest_levels[i, j] = max_dest_levels[j, i] = max_dest_level
 
                 edge_tvds[idx] = tvds
                 source_levels_dict[idx] = source_levels
-                max_tvds[idx] = _np.max(calculated_tvds)    
-                median_tvds[idx] = _np.median(calculated_tvds) # take median over the calculated TVDs vector instead of
-                                                                # tvds matrix since that might have -1 elements that will skew median
-                
+                max_tvds[idx] = _np.max(calculated_tvds)
+                median_tvds[idx] = _np.median(calculated_tvds)  # take median over the calculated TVDs vector instead of
+                # tvds matrix since that might have -1 elements that will skew median
+
                 if max_tvds[idx] > 0:
                     i = _np.floor_divide(_np.argmax(tvds), num_levels)
                     j = _np.mod(_np.argmax(tvds), num_levels)
 
                     source_setting1 = source_levels[i]
                     source_setting2 = source_levels[j]
-                    dest_setting = max_dest_levels[i,j]
+                    dest_setting = max_dest_levels[i, j]
 
                     # The following assumes each region is a single qubit -- need to generalize # TODO
                     source_qubit = source - results.number_of_regions
                     dest_qubit = dest
 
-                    if results.pygsti_ds == None:
-                        max_tvd_explanations[idx] = "Max TVD = {}. Settings on source qubit: {}, {}. Setting on destination qubit: {}".format(max_tvds[idx], source_setting1, source_setting2, dest_setting)
+                    if results.pygsti_ds is None:
+                        max_tvd_explanations[idx] = ("Max TVD = {}. Settings on source qubit: {}, {}. Setting on "
+                                                     "destination qubit: {}").format(max_tvds[idx], source_setting1,
+                                                                                     source_setting2, dest_setting)
                     else:
                         source_setting1_seq = 0
                         for key in results.pygsti_ds.keys():
@@ -669,7 +639,6 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                                 source_setting1_seq = key_copy
                                 break
 
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
                         source_setting2_seq = 0
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting2:
@@ -684,7 +653,31 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                             if results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting:
                                 key_copy = key.copy(editable=True)
                                 key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != dest_qubit])
-=======
+                                dest_seq = key_copy
+                                break
+
+                        for key in results.pygsti_ds.keys():
+                            if (results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting1) and \
+                               (results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting):
+                                res1 = results.pygsti_ds[key]
+
+                            if (results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting2) and \
+                               (results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting):
+                                res2 = results.pygsti_ds[key]
+
+                        max_tvd_explanations[idx] = \
+                            ("Max TVD = {}. Settings on source qubit: {}, {}. Setting on destination qubit: {}\n"
+                             "    Sequences on source (qubit {})\n {}\n {}\n    Sequence on destination (qubit {})\n"
+                             " {}\n"
+                             "    Results when source={}, destination={}:\n"
+                             " {}\n"
+                             "    Results when source={}, destination={}:\n {}\n").format(
+                                 max_tvds[idx], source_setting1, source_setting2, dest_setting, source_qubit,
+                                 source_setting1_seq, source_setting2_seq, dest_qubit, dest_seq, source_setting1,
+                                 dest_setting, res1, source_setting2, dest_setting, res2)
+                else:
+                    max_tvd_explanations[idx] = "Max TVD = 0. Experiment not rich enough to calculate TVD."
+
             if any(level_cnts < 10):
                 print(" ***   Warning: n<10 data points for some levels. TVD calculations may have large error bars.")
 
@@ -695,19 +688,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                     marg1 = data[data[:, source] == source_levels[i], dest]
                     marg2 = data[data[:, source] == source_levels[j], dest]
                     n1, n2 = len(marg1), len(marg2)
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
 
-                                dest_seq = key_copy
-                                break
-
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
-                        for key in results.pygsti_ds.keys():
-                            if (results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting1) and (results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting) :
-                                res1 = results.pygsti_ds[key]
-
-                            if (results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting2) and (results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting) :
-                                res2 = results.pygsti_ds[key]
-=======
                     tvd_sum = 0.0
                     for lidx, level in enumerate(marg1_levels):
                         temp = _np.where(marg2_levels == level)
@@ -717,17 +698,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                             tvd_sum += _np.fabs(marg1_level_cnts[lidx] / n1 - marg2_level_cnts[temp[0][0]] / n2)
 
                     tvds[i, j] = tvds[j, i] = tvd_sum / 2.0
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
 
-
-<<<<<<< HEAD:packages/pygsti/extras/crosstalk/core.py
-                        max_tvd_explanations[idx] = "Max TVD = {}. Settings on source qubit: {}, {}. Setting on destination qubit: {}\n   Sequences on source (qubit {})\n {}\n {}\n    Sequence on destination (qubit {})\n {}\n    Results when source={}, destination={}:\n {}\n    Results when source={}, destination={}:\n {}\n".format(max_tvds[idx], source_setting1, source_setting2, dest_setting, source_qubit, source_setting1_seq, source_setting2_seq, dest_qubit, dest_seq, source_setting1, dest_setting, res1, source_setting2, dest_setting, res2)
-                else:
-                    max_tvd_explanations[idx] = "Max TVD = 0. Experiment not rich enough to calculate TVD."
-                 
-
-=======
->>>>>>> 40b7397c902cf4bed667e4fc2dcf53aa96672fec:pygsti/extras/crosstalk/core.py
     results.cmatrix = cmatrix
     results.is_edge_ct = is_edge_ct
     results.crosstalk_detected = _np.sum(is_edge_ct) > 0
@@ -738,11 +709,12 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     results.max_tvd_explanations = max_tvd_explanations
 
     return results
-                
+
+
 """
 
-def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_population_sz, idle_prob=0.1, structure='1Q', 
-                         descriptor='A set of crosstalk detections experiments', verbosity=1):
+def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_population_sz, idle_prob=0.1,
+ structure='1Q', descriptor='A set of crosstalk detections experiments', verbosity=1):
 
 # This is the original experiment design (Sampling from exhaustive experiment). This is deprecated.
 
@@ -760,16 +732,19 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
         structure = tuple([(q,) for q in pspec.qubit_labels])
         n = pspec.number_of_qubits
     else:
-        assert(isinstance(structure,list) or isinstance(structure,tuple)), "If not a string, `structure` must be a list or tuple."
+        assert(isinstance(structure,list) or isinstance(structure,tuple)), \
+            "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for subsetQs in structure:
             assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(subsetQs)
-            assert(len(set(qubits_used)) == len(qubits_used)), "The qubits in the tuples/lists of `structure must all be unique!"
+            assert(len(set(qubits_used)) == len(qubits_used)), \
+                "The qubits in the tuples/lists of `structure must all be unique!"
 
-        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
         n = len(qubits_used)
-  
+
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
@@ -780,17 +755,18 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
         for q in range(0,n):
             if gates_available[i].qubits == (q,):
                 gates_by_qubit[q].append(gates_available[i])
-   
+
     for lnum, l in enumerate(lengths):
-        
+
         # generate menu of circuits for each qubit
         circuit_menu = [[] for _ in range(0,n)]
         for q in range(0,n):
             d = len(gates_by_qubit[q])
-            
+
             if d**l < circuit_population_sz:
-                print('- Warning: circuit population specified too large for qubit {} -- there will be redundant circuits'.format(q))
-            
+                print(('- Warning: circuit population specified too large for qubit {} -- '
+                       'there will be redundant circuits').format(q))
+
             for rep in range(0,circuit_population_sz):
                 singleQcirc = []
                 for j in range(0,l):
@@ -799,25 +775,26 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
                 circuit_menu[q].append(singleQcirc)
 
         if verbosity > 0:
-            print('- Sampling {} random circuits at length {} ({} of {} lengths)'.format(circuits_per_length,l,lnum+1,len(lengths)))
+            print('- Sampling {} random circuits at length {} ({} of {} lengths)'.format(
+                  circuits_per_length,l,lnum+1,len(lengths)))
             print('  - Number of circuits sampled = ',end='')
 
         # sample from this menu
-        for j in range(circuits_per_length):            
+        for j in range(circuits_per_length):
             circuit = _pygobjs.circuit.Circuit(num_lines=0, editable=True)
-            
+
             settings = {}
-            for q in range(0,n):            
+            for q in range(0,n):
                 r = _np.random.randint(0,circuit_population_sz)
                 settings[(q,)] = lnum*(circuit_population_sz+1) + r + 1
-                                
+
                 singleQcircuit = _pygobjs.circuit.Circuit(num_lines=1,line_labels=[q],editable=True)
                 for layer in range(0,l):
                     singleQcircuit.insert_layer(circuit_menu[q][r][layer],layer)
                 singleQcircuit.done_editing()
-                                
+
                 circuit.tensor_circuit(singleQcircuit)
-            
+
             # add sampled circuit to experiment dictionary, and the corresponding qubit settings
             experiment_dict['settings'][l,j] = settings
 
@@ -832,7 +809,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
 #       11 (idle of length 20), 12, ..., 21  [all length 20 circuits]
 #       22 (idle of length 30), 23, ..., 32  [all length 30 circuits]
 #
-                
+
             # for each line, replace sequence with an idle independently according to idle_prob
             if idle_prob>0:
                 for q in range(0,n):
@@ -842,20 +819,22 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
                         # Update the setting on that qubit to the idling setting (denoted by the length index)
                         experiment_dict['settings'][l,j][(q,)] = lnum*(circuit_population_sz+1)
                         if verbosity > 0: print('Idled {}'.format(q))
- 
+
             circuit.done_editing()
             experiment_dict['circuits'][l,j] = circuit
-    
+
             #print(circuit)
-        
+
             if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')
 
     return experiment_dict
 """
 
-def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit_population_sz, multiplier=3, idle_prob=0.1, structure='1Q', 
-                         descriptor='A set of crosstalk detections experiments', verbosity=1):
+
+def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit_population_sz, multiplier=3,
+                                    idle_prob=0.1, structure='1Q',
+                                    descriptor='A set of crosstalk detections experiments', verbosity=1):
 
     experiment_dict = {}
     experiment_dict['spec'] = {}
@@ -866,107 +845,116 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
     experiment_dict['spec']['descriptor'] = descriptor
     experiment_dict['spec']['createdby'] = 'extras.crosstalk.crosstalk_detection_experiment2'
 
-    if isinstance(structure,str):
+    if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
         n = pspec.number_of_qubits
     else:
-        assert(isinstance(structure,list) or isinstance(structure,tuple)), "If not a string, `structure` must be a list or tuple."
+        assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+            "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for subsetQs in structure:
             assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(subsetQs)
-            assert(len(set(qubits_used)) == len(qubits_used)), "The qubits in the tuples/lists of `structure must all be unique!"
+            assert(len(set(qubits_used)) == len(qubits_used)), \
+                "The qubits in the tuples/lists of `structure must all be unique!"
 
-        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
         n = len(qubits_used)
-  
-    experiment_dict['spec']['circuits_per_length'] = circuits_per_length*multiplier*n
+
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length * multiplier * n
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
     gates_available = list(pspec.models['target'].get_primitive_op_labels())
-    gates_by_qubit = [[] for _ in range(0,n)]
-    for i in range(0,len(gates_available)):
-        for q in range(0,n):
+    gates_by_qubit = [[] for _ in range(0, n)]
+    for i in range(0, len(gates_available)):
+        for q in range(0, n):
             if gates_available[i].qubits == (q,):
                 gates_by_qubit[q].append(gates_available[i])
-   
+
     for lnum, l in enumerate(lengths):
-        
+
         # generate menu of circuits for each qubit
-        circuit_menu = [[] for _ in range(0,n)]
-        for q in range(0,n):
+        circuit_menu = [[] for _ in range(0, n)]
+        for q in range(0, n):
             d = len(gates_by_qubit[q])
-            
+
             if d**l < circuit_population_sz:
-                print('- Warning: circuit population specified too large for qubit {} -- there will be redundant circuits'.format(q))
-            
-            for rep in range(0,circuit_population_sz):
+                print(('- Warning: circuit population specified too large for qubit {}'
+                       ' -- there will be redundant circuits').format(q))
+
+            for rep in range(0, circuit_population_sz):
                 singleQcirc = []
-                for j in range(0,l):
-                    r = _np.random.randint(0,d)
+                for j in range(0, l):
+                    r = _np.random.randint(0, d)
                     singleQcirc.append(gates_by_qubit[q][r])
                 circuit_menu[q].append(singleQcirc)
 
         if verbosity > 0:
-            print('- Sampling {} random circuits per qubit at length {} ({} of {} lengths)'.format(circuits_per_length,l,lnum+1,len(lengths)))
+            print('- Sampling {} random circuits per qubit at length {} ({} of {} lengths)'.format(
+                circuits_per_length, l, lnum + 1, len(lengths)))
 
         # loop over qubits (should generalize this to regions)
         cnt = 0
-        for q in range(0,n):
+        for q in range(0, n):
             print('  - Qubit {} = '.format(q))
 
             # need circuits_per_length number of settings for this qubit
-            for j in range(circuits_per_length): 
-                if verbosity > 0: print('     Circuit {}: ('.format(j),end='')
+            for j in range(circuits_per_length):
+                if verbosity > 0: print('     Circuit {}: ('.format(j), end='')
 
                 # draw a setting for the central qubit (q)
                 #qr = _np.random.randint(0,circuit_population_sz)
 
-                # instead of randomly drawing a setting for the central qubit, iteratively choose each of the circuits in the menu
+                # instead of randomly drawing a setting for the central qubit,
+                #  iteratively choose each of the circuits in the menu
                 qr = j
 
-                # generate "multiplier" number of random circuits on the other qubits with qr setting on the central qubit
-                for m in range(0,multiplier):
+                # generate "multiplier" number of random circuits on the other qubits with qr setting
+                #  on the central qubit
+                for m in range(0, multiplier):
                     circuit = _pygobjs.circuit.Circuit(num_lines=0, editable=True)
                     settings = {}
 
-                    for q1 in range(0,n):
+                    for q1 in range(0, n):
 
-                        if q1==q:
+                        if q1 == q:
                             # the setting for the central qubit is fixed
                             r = qr
                         else:
-                            # draw a setting 
-                            r = _np.random.randint(0,circuit_population_sz)
+                            # draw a setting
+                            r = _np.random.randint(0, circuit_population_sz)
 
-                        settings[(q1,)] = lnum*(circuit_population_sz+1) + r + 1
-                            
-                        singleQcircuit = _pygobjs.circuit.Circuit(num_lines=1,line_labels=[q1],editable=True)
-                        for layer in range(0,l):
-                            singleQcircuit.insert_layer(circuit_menu[q1][r][layer],layer)
+                        settings[(q1,)] = lnum * (circuit_population_sz + 1) + r + 1
+
+                        singleQcircuit = _pygobjs.circuit.Circuit(num_lines=1, line_labels=[q1], editable=True)
+                        for layer in range(0, l):
+                            singleQcircuit.insert_layer(circuit_menu[q1][r][layer], layer)
                         singleQcircuit.done_editing()
-                                
+
                         circuit.tensor_circuit(singleQcircuit)
 
-                    experiment_dict['settings'][l,cnt] = settings
+                    experiment_dict['settings'][l, cnt] = settings
 
-                    # for each line, except the central qubit, replace sequence with an idle independently according to idle_prob
-                    if idle_prob>0:
-                        for q1 in range(0,n):
+                    # for each line, except the central qubit, replace sequence with an idle
+                    #  independently according to idle_prob
+                    if idle_prob > 0:
+                        for q1 in range(0, n):
                             if q1 != q:
-                                idle = bool(_np.random.binomial(1,idle_prob))
+                                idle = bool(_np.random.binomial(1, idle_prob))
                                 if idle:
                                     circuit.replace_with_idling_line(q1)
-                                    # Update the setting on that qubit to the idling setting (denoted by the length index)
-                                    experiment_dict['settings'][l,cnt][(q1,)] = lnum*(circuit_population_sz+1)
-                                    if verbosity > 0: print('(Idled {}) '.format(q1),end='')
-                        
+                                    # Update the setting on that qubit to the idling setting
+                                    #  (denoted by the length index)
+                                    experiment_dict['settings'][l, cnt][(q1,)] = lnum * (circuit_population_sz + 1)
+                                    if verbosity > 0: print('(Idled {}) '.format(q1), end='')
+
                     circuit.done_editing()
-                    experiment_dict['circuits'][l,cnt] = circuit
+                    experiment_dict['circuits'][l, cnt] = circuit
                     cnt += 1
 
                     if verbosity > 0: print('{}, '.format(m), end='')
@@ -987,6 +975,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
 
     return experiment_dict
 
+
 """
 def pairwise_indep_expts(q):
     vals = _np.zeros([q**2,q],dtype='int')
@@ -994,14 +983,14 @@ def pairwise_indep_expts(q):
         for a in range(q):
             for b in range(q):
                 vals[a*q+b,i] = _np.int(_np.mod(a*i+b,q))
-    
+
     length = _np.shape(vals)[0]
     return length, vals
 
-def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, include_idle=False, structure='1Q', 
+def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, include_idle=False, structure='1Q',
                          descriptor='A set of crosstalk detection experiments', verbosity=1):
 
-# Pairwise independent experiment design. This is deprecated. 
+# Pairwise independent experiment design. This is deprecated.
 
     experiment_dict = {}
     experiment_dict['spec'] = {}
@@ -1016,16 +1005,19 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
         structure = tuple([(q,) for q in pspec.qubit_labels])
         n = pspec.number_of_qubits
     else:
-        assert(isinstance(structure,list) or isinstance(structure,tuple)), "If not a string, `structure` must be a list or tuple."
+        assert(isinstance(structure,list) or isinstance(structure,tuple)), \
+            "If not a string, `structure` must be a list or tuple."
         qubits_used = []
         for subsetQs in structure:
             assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
             qubits_used = qubits_used + list(subsetQs)
-            assert(len(set(qubits_used)) == len(qubits_used)), "The qubits in the tuples/lists of `structure must all be unique!"
+            assert(len(set(qubits_used)) == len(qubits_used)), \
+                "The qubits in the tuples/lists of `structure must all be unique!"
 
-        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
         n = len(qubits_used)
-  
+
     assert(isprime(circuit_population_sz)), "circuit_population_sz must be prime"
 
     experiment_dict['spec']['circuits_per_length'] = circuit_population_sz**2
@@ -1040,17 +1032,18 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
         for q in range(0,n):
             if gates_available[i].qubits == (q,):
                 gates_by_qubit[q].append(gates_available[i])
-   
+
     for lnum, l in enumerate(lengths):
-        
+
         # generate menu of circuits for each qubit
         circuit_menu = [[] for _ in range(0,n)]
         for q in range(0,n):
             d = len(gates_by_qubit[q])
-            
+
             if d**l < circuit_population_sz:
-                print('- Warning: circuit population specified too large for qubit {} -- there will be redundant circuits'.format(q))
-            
+                print(('- Warning: circuit population specified too large for qubit {} -- '
+                       'there will be redundant circuits').format(q))
+
             for rep in range(0,circuit_population_sz):
                 singleQcirc = []
                 for j in range(0,l):
@@ -1059,7 +1052,8 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
                 circuit_menu[q].append(singleQcirc)
 
         if verbosity > 0:
-            print('- Sampling {} random circuits per qubit at length {} ({} of {} lengths)'.format(circuit_population_sz**2,l,lnum+1,len(lengths)))
+            print('- Sampling {} random circuits per qubit at length {} ({} of {} lengths)'.format(
+                  circuit_population_sz**2,l,lnum+1,len(lengths)))
             print('( ')
 
         nexp, expt_idx = pairwise_indep_expts(circuit_population_sz)
@@ -1071,23 +1065,24 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
             settings = {}
             for q in range(0,n):
                 settings[(q,)] = lnum*(circuit_population_sz+1) + expt_idx[exp,q] + 1
-                            
+
                 singleQcircuit = _pygobjs.circuit.Circuit(num_lines=1,line_labels=[q],editable=True)
                 for layer in range(0,l):
                     singleQcircuit.insert_layer(circuit_menu[q][expt_idx[exp,q]][layer],layer)
-                
+
                 # if the idle should be included, replace the expt_idx==0 circuit with the idle
                 if include_idle:
                     if expt_idx[exp,q]==0:
                         singleQcircuit.replace_with_idling_line(q)
 
                 singleQcircuit.done_editing()
-                                
+
                 circuit.tensor_circuit(singleQcircuit)
 
             experiment_dict['settings'][l,cnt] = settings
 
-#            # for each line, except the central qubit, replace sequence with an idle independently according to idle_prob
+#            # for each line, except the central qubit, replace sequence with an idle independently
+#            # according to idle_prob
 #            if idle_prob>0:
 #                for q in range(0,n):
 #                    idle = bool(_np.random.binomial(1,idle_prob))
@@ -1096,7 +1091,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
 #                        # Update the setting on that qubit to the idling setting (denoted by the length index)
 #                        experiment_dict['settings'][l,cnt][(q,)] = lnum*(circuit_population_sz+1)
 #                        if verbosity > 0: print('(Idled {}) '.format(q),end='')
-                        
+
             circuit.done_editing()
             experiment_dict['circuits'][l,cnt] = circuit
             cnt += 1
