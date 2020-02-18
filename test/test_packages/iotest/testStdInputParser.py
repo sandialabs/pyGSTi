@@ -27,28 +27,27 @@ class TestStdInputParser(BaseTestCase):
                          ("G1^02", ('G1', 'G1')),
                          ("G1*((G2G3)^2G4G5)^2G7", ('G1', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G7')),
                          ("G1(G2^2(G3G4)^2)^2", ('G1', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4')),
-                         ("G1 * G2", ('G1','G2')),
-                         ("S<1>",('G1',)),
-                         ("S<2>",('G1','G2')),
-                         ("G1S<2>^2G3", ('G1', 'G1', 'G2', 'G1', 'G2', 'G3')),
-                         ("G1S<1>G3",('G1','G1','G3')),
-                         ("S<3>[0:4]",('G1', 'G2', 'G3', 'G4')),
+                         ("G1*G2", ('G1','G2')),
+                         #("S<1>",('G1',)),
+                         #("S<2>",('G1','G2')),
+                         #("G1S<2>^2G3", ('G1', 'G1', 'G2', 'G1', 'G2', 'G3')),
+                         #("G1S<1>G3",('G1','G1','G3')),
+                         #("S<3>[0:4]",('G1', 'G2', 'G3', 'G4')),
                          ("G_my_xG_my_y", ('G_my_x', 'G_my_y')),
                          ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
-                         ("G_my_x G_my_y", ('G_my_x', 'G_my_y')),
                          ("GsG___", ('Gs', 'G___')),
-                         ("S < 2 >G3", ('G1', 'G2', 'G3')),
-                         ("S<G12>", ('G1', 'G2')),
-                         ("S<S23>", ('G2', 'G3')),
-                         ("G1\tG2", ('G1', 'G2')),
-                         ("rho0 Gx", ('rho0','Gx')),
-                         ("rho0 Gx Mdefault", ('rho0','Gx','Mdefault'))]
+                         #("S<2>G3", ('G1', 'G2', 'G3')),
+                         #("S<G12>", ('G1', 'G2')),
+                         #("S<S23>", ('G2', 'G3')),
+                         ("G1G2", ('G1', 'G2')),
+                         ("rho0*Gx", ('rho0','Gx')),
+                         ("rho0*Gx*Mdefault", ('rho0','Gx','Mdefault'))]
 
         std = pygsti.io.StdInputParser()
 
         #print "String Tests:"
         for s,expected in string_tests:
-            #print "%s ==> " % s, result
+            #print("%s ==> " % s, expected)
             result,line_labels = std.parse_circuit(s, lookup=lkup)
             self.assertEqual(line_labels, None)
             circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)
@@ -65,6 +64,32 @@ class TestStdInputParser(BaseTestCase):
         with self.assertRaises(ValueError):
             std.parse_circuit("(G1")
 
+    def test_parse_circuit_with_time_and_args(self):
+        std = pygsti.io.StdInputParser()
+        
+        cstr = "Gx;pi/1.2:0:2!1.0"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.0)
+        self.assertEqual(firstLbl.args, ('pi/1.2',))
+        self.assertEqual(firstLbl.sslbls, (0, 2))
+        self.assertEqual(firstLbl.name, 'Gx')
+        self.assertEqual(tuple(firstLbl), ('Gx', 3, 'pi/1.2', 0, 2))
+
+        cstr = "rho0!1.21{}"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.21)
+        self.assertEqual(firstLbl.args, ())
+        self.assertEqual(firstLbl.sslbls, None)
+        self.assertEqual(firstLbl.name, 'rho0')
+        self.assertEqual(str(firstLbl), 'rho0!1.21')
+
+        cstr = "{}M0!1.22"
+        firstLbl = std.parse_circuit(cstr)[0][0]
+        self.assertEqual(firstLbl.time, 1.22)
+        self.assertEqual(firstLbl.args, ())
+        self.assertEqual(firstLbl.sslbls, None)
+        self.assertEqual(firstLbl.name, 'M0')
+        self.assertEqual(str(firstLbl), 'M0!1.22')
 
     def test_string_exception(self):
         """Test lookup failure and Syntax error"""
@@ -77,8 +102,8 @@ class TestStdInputParser(BaseTestCase):
 
     def test_lines(self):
         dataline_tests = [ "G1G2G3           0.1 100",
-                           "G1 G2 G3         0.798 100",
-                           "G1 (G2 G3)^2 G4  1.0 100" ]
+                           "G1*G2*G3         0.798 100",
+                           "G1*(G2*G3)^2*G4  1.0 100" ]
 
         dictline_tests = [ "1  G1G2G3",
                            "MyFav (G1G2)^3" ]
@@ -87,12 +112,12 @@ class TestStdInputParser(BaseTestCase):
 
         from pygsti.objects import Label as L
         from pygsti.objects import CircuitLabel as CL
-        
-        self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', None, [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', CL('',('G2', 'G3'),None,2), 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
+
+        self.assertEqual( std.parse_dataline(dataline_tests[0],expectedCounts=2), (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[1],expectedCounts=2), (['G1', 'G2', 'G3'], 'G1*G2*G3', None, [0.798, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2],expectedCounts=2), (['G1', CL('',('G2', 'G3'),None,2), 'G4'], 'G1*(G2*G3)^2*G4', None, [1.0, 100.0]))
         self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
-                          (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
+                          (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
 
         with self.assertRaises(ValueError):
             std.parse_dataline("G1G2G3  1.0", expectedCounts=2) #too few cols == error
@@ -100,8 +125,8 @@ class TestStdInputParser(BaseTestCase):
             std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 
 
-        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None))
+        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ['G1', 'G2', 'G3'], 'G1G2G3', None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', [CL('',('G1', 'G2'),None,3),] , '(G1G2)^3', None))
           # OLD (before subcircuit parsing) the above result should have been: ('G1', 'G2', 'G1', 'G2', 'G1', 'G2')
 
         #print "Dataline Tests:"
@@ -133,7 +158,7 @@ G1(G2G3)^2
 MyFav1 G1G1G1
 MyFav2 G2^3
 this1  G3*G3*G3
-thatOne G1 G2 * G3
+thatOne G1G2*G3
 """
         f = open(temp_files + "/sip_test.dict","w")
         f.write(dictfile_test)
@@ -151,20 +176,20 @@ thatOne G1 G2 * G3
 
 #simple sequences
 G1G2          0.098  100
-G2 G3         0.2    100
+G2G3          0.2    100
 (G1)^4        0.1   1000
 
 #using lookups
-G1 S<1>       0.9999 100
-S<MyFav1>G2   0.23   100
-G1S<2>^2      0.5     20
-S<3>[0:4]     0.2      5
+#G1 S<1>       0.9999 100
+#S<MyFav1>G2   0.23   100
+#G1S<2>^2      0.5     20
+#S<3>[0:4]     0.2      5
 G1G2G3G4      0.2      5
 
 #different ways to concatenate gates
 G_my_xG_my_y  0.5 24.0
 G_my_x*G_my_y 0.5 24.0
-G_my_x G_my_y 0.5 24.0
+G_my_xG_my_y 0.5 24.0
 """
         f = open(temp_files + "/sip_test.data","w")
         f.write(datafile_test)
@@ -784,11 +809,22 @@ BASIS: pp
         self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
         self.assertArraysAlmostEqual(gs2.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
 
+    def test_parse_complicated_circuits(self):
+        #Test that a bunch of weird nested single layers can be parsed in,
+        # and that this matches what is parsed in when a circuit object is
+        # given to Circuit.__init__ and the parsing just checks for consistency:
 
-
-
-
-
+        for expand in [False, True]:
+            print("Expand = ",expand)
+            for s in ["(Gx:0)Gy:1", "(Gx:0)^4Gy:1", "[Gx:0Gy:1]","[Gx:0Gy:1]^2","[Gx:0[Gz:2Gy:1]]Gz:0",
+                      "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[Gz:2Gy:1]^2]", "[Gx:0([Gz:2Gy:1]^2)]"]:
+                print("FROM ",s,":")
+                c = pygsti.obj.Circuit(None,stringrep=s, expand_subcircuits=expand)
+                print(c)
+                # c._print_labelinfo() #DEBUG - TODO: could check this structure as part of this test
+                c2 = pygsti.obj.Circuit(c, stringrep=c.str, expand_subcircuits=expand)
+                self.assertEqual(c, c2)
+                print("\n\n")
 
 
 if __name__ == "__main__":

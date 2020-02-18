@@ -16,7 +16,7 @@ if __name__ == '__main__':
     if numChanged == 0:
         # Reindent
         try:
-            subprocess.call(['reindent', '-r', '-n', 'packages', 'test'])
+            subprocess.call(['reindent', '-r', '-n', 'pygsti', 'test'])
             # Check if anything changed during our reindent
             numChanged = len(get_output(['git', 'diff', '--name-only']).splitlines())
             if numChanged > 0:
@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     if branchname in updates_git_pages:
         print('Updating github pages!')
-        subprocess.call(['bash', '.git/hooks/create_git_html']) 
+        subprocess.call(['bash', '.git/hooks/create_git_html'])
         subprocess.call(['git', 'checkout', 'gh-pages'])
         os.system('cp temp_html/*.html tutorials/')
         subprocess.call(['git', 'add', 'tutorials/*.html'])
@@ -61,9 +61,6 @@ if __name__ == '__main__':
             subprocess.call(['git', 'push']) # Will prompt user
 
         os.system('rm -rf temp_html') # yikes!
-        subprocess.call(['git', 'checkout', branchname]) 
+        subprocess.call(['git', 'checkout', branchname])
 
     sys.exit(0)
-
-
-

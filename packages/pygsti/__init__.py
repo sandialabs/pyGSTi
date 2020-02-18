@@ -1,45 +1,41 @@
-# *****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
-#*****************************************************************
-""" A Python implementation of LinearOperator Set Tomography """
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+""" This is a placeholder script to warn pyGSTi users of a change in project structure.
 
-#Import the most important/useful routines of each module/sub-package
-# into the package namespace
-from ._version import __version__
+As of pyGSTi v0.9.9, the pyGSTi source directory has been moved from
+`/packages/pygsti` to `/pygsti`. For most users, this change should be
+completely imperceptible. However, if you have installed pyGSTi from
+source in development mode, i.e. using `pip install -e .`, your pyGSTi
+installation may now be broken.
+"""
 
-#TEMPORARY WARNING B/C OF BACKCOMPAT BREAKING
-import os as _os
-import logging as _logging
-val = _os.environ.get('PYGSTI_BACKCOMPAT_WARNING',None)
+from pathlib import Path
+import warnings
 
-if val not in ("0","False","FALSE","false","No","no","NO"):
-    _logging.warning(("\n"
-                 "Welcome to pygsti version 0.9.7!\nThere have been some major changes between this "
-                 "version and 0.9.6 - ones that break backward compatibility.  If you're trying "
-                 "to run an old script and nothing works, DON'T PANIC; we've tried to make the transition "
-                 "easy.  More often then not, you can just run `pyGSTi/scripts/upgrade2v0.9.7.py` on your old "
-                 "script or notebook files and you'll be up and running again.  For more information, see "
-                 "the pyGSTi FAQ.ipynb.\n\nIf this warning annoys you run:\n"
-                 "  `export PYGSTI_BACKCOMPAT_WARNING=0` from the command line or\n"
-                 "  `import os; os.environ['PYGSTI_BACKCOMPAT_WARNING'] = '0'` in a script or\n"
-                 "     notebook *before* importing pygsti and the the madness will stop."))
+pygsti_root = Path(__file__).absolute().parent.parent.parent
 
-from . import algorithms as alg
-from . import construction as cst
-from . import objects as obj
-from . import report as rpt
+instructions = """
+\u001b[31m\u001b[1mIf you are seeing this message, you need to reinstall pyGSTi!\u001b[0m
+Open a shell and run the following commands:
 
-from .algorithms.core import *
-from .algorithms.gaugeopt import *
-from .algorithms.contract import *
-from .algorithms.grammatrix import *
-from .construction.gateconstruction import * # *_qubit_gate fns
-from .objects import Basis
-from .tools import *
-from .drivers import *
+1. `cd {pygsti_root}`
+2. `pip install -e .[complete]`
+3. `python -c "import pygsti"`
 
-#NUMPY BUG FIX (imported from tools)
-from .tools.compattools import _numpy14einsumfix
-_numpy14einsumfix()
+After following these instructions, if you still see this message,
+check to make sure that you don't have a GST.pth file located in
+your local site-packages directory (try running `find ~ -name GST.pth`).
+
+After removing any GST.pth files, if you're still seeing this
+message, leave a bug report for the pyGSTi developers at
+https://github.com/pyGSTio/pyGSTi/issues
+""".format(pygsti_root=pygsti_root)
+
+warnings.warn(__doc__ + instructions)
+raise NotImplementedError()

@@ -1,11 +1,10 @@
-from __future__ import print_function
 import unittest
 import numpy as np
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.construction import std2Q_XYCNOT as std
-from pygsti.construction import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
+from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L
 from pygsti.io import json
 import sys, os
@@ -16,7 +15,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     @classmethod
     def setUpClass(cls):
-        """ 
+        """
         Handle all once-per-class (slow) computation and loading,
          to avoid calling it for each test (like setUp).  Store
          results in class variable for use within setUp.
@@ -39,9 +38,9 @@ class CalcMethods2QTestCase(BaseTestCase):
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
         #ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
         #                                            nSamples=1000, sampleError="multinomial", seed=1234)
-        #ds.save(compare_files + "/calcMethods2Q.dataset%s" % cls.versionsuffix)
-        
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q.dataset%s" % cls.versionsuffix)
+        #ds.save(compare_files + "/calcMethods2Q.dataset")
+
+        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q.dataset")
         cls.advOpts = {'tolerance': 1e-2 }
 
         #Reduced model GST dataset
@@ -57,8 +56,8 @@ class CalcMethods2QTestCase(BaseTestCase):
         for i in range(cls.nQubits):
             cls.redmod_fiducials.extend( pygsti.construction.manipulate_circuit_list(
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
-        #print(redmod_fiducials, "Fiducials")     
-        
+        #print(redmod_fiducials, "Fiducials")
+
         cls.redmod_germs = pygsti.construction.circuit_list([ (gl,) for gl in opLabels ])
         cls.redmod_maxLs = [1]
         expList = pygsti.construction.make_lsgst_experiment_list(
@@ -67,9 +66,9 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
         #redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
-        #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset%s" % cls.versionsuffix)
-        
-        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q_redmod.dataset%s" % cls.versionsuffix)
+        #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset")
+
+        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q_redmod.dataset")
 
         #print(len(expList)," reduced model sequences")
 
@@ -80,12 +79,12 @@ class CalcMethods2QTestCase(BaseTestCase):
         cls.rand_start228 = np.random.random(228)*1e-6
 
         os.chdir(origDir) # return to original directory
-        
+
 
     ## GST using "full" (non-embedded/composed) gates
     # All of these calcs use dense matrices; While sparse operation matrices (as Maps) could be used,
     # they'd need to enter as a sparse basis to a LindbladDenseOp (maybe add this later?)
-    
+
     def test_stdgst_matrix(self):
         # Using matrix-based calculations
         target_model = std.target_model().copy()
@@ -101,10 +100,10 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         #Note: expected nSigma of 143 is so high b/c we use very high tol of 1e-2 => result isn't very good
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
-        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 143, delta=2.0) 
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 143, delta=2.0)
         mdl_compare = pygsti.io.load_model(compare_files + "/test2Qcalc_std_exact.model")
         self.assertAlmostEqual( results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
-        
+
 
     def test_stdgst_map(self):
         # Using map-based calculation
@@ -124,7 +123,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
-        # This performs a map-based unitary evolution along each path. 
+        # This performs a map-based unitary evolution along each path.
         target_model = std.target_model().copy()
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termorder:1') # this is the default set by set_all_parameterizations above
@@ -205,7 +204,7 @@ class CalcMethods2QTestCase(BaseTestCase):
           # how to optimizize over exactly - so this is a very loose test...
 
 
-        
+
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
         target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -225,7 +224,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         mdl_compare = pygsti.io.json.load( open(compare_files + "/test2Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
-        
+
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
@@ -243,10 +242,10 @@ class CalcMethods2QTestCase(BaseTestCase):
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
-    def test_circuitsim_stabilizer_2Qcheck(self): 
+    def test_circuitsim_stabilizer_2Qcheck(self):
         #Test 2Q circuits
-        #from pygsti.construction import std2Q_XYICNOT as stdChk
-        from pygsti.construction import std2Q_XYICPHASE as stdChk
+        #from pygsti.modelpacks.legacy import std2Q_XYICNOT as stdChk
+        from pygsti.modelpacks.legacy import std2Q_XYICPHASE as stdChk
 
         maxLengths = [1,2,4]
         listOfExperiments = pygsti.construction.make_lsgst_experiment_list(

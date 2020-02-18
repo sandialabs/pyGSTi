@@ -1,16 +1,16 @@
 import unittest
 import pygsti
-from pygsti.construction import std1Q_XYI as std
-from pygsti.baseobjs import Basis
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.objects import Basis
 
 import numpy as np
 from scipy import polyfit
-import sys, os
+import sys
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 class AlgorithmsBase(BaseTestCase):
-    def setUp(self):        
+    def setUp(self):
         super(AlgorithmsBase, self).setUp()
 
         self.model = std.target_model()
@@ -32,19 +32,19 @@ class AlgorithmsBase(BaseTestCase):
             self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
         ## RUN BELOW LINES to create analysis dataset (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        if regenerate_references():
             expList = pygsti.construction.make_lsgst_experiment_list(
                 self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
             ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
                                                         nSamples=10000, sampleError='binomial', seed=100)
-            ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
+            ds.save(compare_files + "/analysis.dataset")
 
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
 
         ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        if regenerate_references():
             ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
                                                              nSamples=10000,sampleError='binomial', seed=100)
-            ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
-        
-        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
+            ds_lgst.save(compare_files + "/analysis_lgst.dataset")
+
+        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset")
