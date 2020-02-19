@@ -19,7 +19,7 @@ env:
     - NOSE_PROCESSES=-1
     - NOSE_PROCESS_TIMEOUT=2400 # timeout after 40 minutes (travis job timeout is 50 minutes)
   matrix:
-    - NOSE_WHERE="test/unit/"
+    - NOSE_WHERE="unit/"
 
 # Install native package dependencies & initialize build environment
 before_install:
@@ -34,7 +34,6 @@ before_install:
 install:
   # Install cython ahead of time b/c pip runs setup.py *before* installing dependencies (??)
   - pip install cython
-  # python3 setup.py build_ext
   # Install base dependencies
   - pip install .
   # Install test dependencies
@@ -44,6 +43,7 @@ install:
 
 # Default `test' stage script
 script:
+  - cd "test"
   - echo "nosetests $NOSETESTS"
   - nosetests $NOSETESTS
 
@@ -87,16 +87,16 @@ jobs:
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithms algorithmsb"
+      env: NOSE_WHERE="test_packages/" NOSETESTS="algorithms algorithmsb"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="report reportb"
+      env: NOSE_WHERE="test_packages/" NOSETESTS="report reportb"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects tools iotest optimize construction extras"
+      env: NOSE_WHERE="test_packages/" NOSETESTS="drivers objects tools iotest optimize construction extras"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="mpi"
+      env: NOSE_WHERE="test_packages/" NOSETESTS="mpi"
 
     - stage: push
       env: PUSH_BRANCH="beta"
