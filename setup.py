@@ -179,7 +179,7 @@ def setup_with_extensions(extensions=None):
     )
 
 
-if 1: #try:
+try:
     # Try to compile extensions first
 
     import numpy as np
@@ -224,12 +224,12 @@ if 1: #try:
             extra_link_args=["-std=c++11"]
         )
     ]
-    setup_with_extensions(cythonize(ext_modules)) # , exclude_failures=True
-#except ImportError:
-#    # Cython or numpy is not available
-#    warn("Extensions build tools are not available. Installing without Cython extensions...")
-#    setup_with_extensions()
-#except SystemExit:
-#    # Extension compilation failed
-#    warn("Error in extension compilation. Installing without Cython extensions...")
-#    setup_with_extensions()
+    setup_with_extensions(cythonize(ext_modules, exclude_failures=True))
+except ImportError:
+    # Cython or numpy is not available
+    warn("Extensions build tools are not available. Installing without Cython extensions...")
+    setup_with_extensions()
+except SystemExit:
+    # Extension compilation failed
+    warn("Error in extension compilation. Installing without Cython extensions...")
+    setup_with_extensions()
