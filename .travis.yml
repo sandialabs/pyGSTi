@@ -43,6 +43,8 @@ install:
 
 # Default `test' stage script
 script:
+  - pwd
+  - mv "pygsti" "do-not-import-this-pygsti"
   - cd "test"
   - echo "nosetests $NOSETESTS"
   - nosetests $NOSETESTS
