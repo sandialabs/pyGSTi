@@ -32,15 +32,18 @@ before_install:
   - gcc --version
 
 install:
+  # Install cython ahead of time b/c pip runs setup.py *before* installing dependencies (??)
+  - pip install cython
   # Install base dependencies
-  - pip install -e .
+  - pip install .
   # Install test dependencies
-  - pip install -e .[testing]
+  - pip install .[testing]
   # Show pip environment, for diagnostics
   - pip freeze
 
 # Default `test' stage script
 script:
+  - mv "pygsti" "do-not-import-this-pygsti"
   - echo "nosetests $NOSETESTS"
   - nosetests $NOSETESTS
 

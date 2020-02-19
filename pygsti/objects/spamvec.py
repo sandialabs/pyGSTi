@@ -217,7 +217,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
                      (str(type(vec)), vec._evotype, new_evotype))
 
 
-def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
+def finite_difference_deriv_wrt_params(spamvec, wrtFilter=None, eps=1e-7):
     """
     Computes a finite-difference Jacobian for a SPAMVec object.
 
@@ -252,10 +252,13 @@ def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
         fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
 
     fd_deriv.shape = [dim, spamvec.num_params()]
-    return fd_deriv
+    if wrtFilter is None:
+        return fd_deriv
+    else:
+        return _np.take(fd_deriv, wrtFilter, axis=1)
 
 
-def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
+def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrtFilter=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a SPAMVec object.
 
@@ -282,7 +285,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(spamvec, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(spamvec, wrtFilter, eps)
     if deriv_to_check is None:
         deriv_to_check = spamvec.deriv_wrt_params()
 
@@ -868,10 +871,7 @@ class DenseSPAMVec(SPAMVec):
             raise ValueError("Invalid `prep_or_effect` argument: %s" % prep_or_effect)
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
-
-        assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
-        self.base1D = vec
-        assert(self.base1D.flags.owndata)
+        assert(self.base1D.flags['C_CONTIGUOUS'] and self.base1D.flags['OWNDATA'])
 
     def todense(self, scratch=None):
         """
@@ -880,6 +880,10 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return self.base1D  # *must* be a numpy array for Cython arg conversion
+
+    @property
+    def base1D(self):
+        return self._rep.base
 
     @property
     def base(self):
@@ -924,7 +928,7 @@ class DenseSPAMVec(SPAMVec):
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        if 'base1D' in self.__dict__:
+        if '_rep' in self.__dict__:  # sometimes in loading __getattr__ gets called before the instance is loaded
             ret = getattr(self.base, attr)
         else:
             raise AttributeError("No attribute:", attr)

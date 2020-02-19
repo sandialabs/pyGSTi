@@ -253,7 +253,7 @@ def convert(gate, toType, basis, extra=None):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
-def finite_difference_deriv_wrt_params(gate, eps=1e-7):
+def finite_difference_deriv_wrt_params(gate, wrtFilter, eps=1e-7):
     """
     Computes a finite-difference Jacobian for a LinearOperator object.
 
@@ -288,10 +288,13 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
         fd_deriv[:, :, i] = (op2 - gate) / eps
 
     fd_deriv.shape = [dim**2, gate.num_params()]
-    return fd_deriv
+    if wrtFilter is None:
+        return fd_deriv
+    else:
+        return _np.take(fd_deriv, wrtFilter, axis=1)
 
 
-def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
+def check_deriv_wrt_params(gate, deriv_to_check=None, wrtFilter=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a LinearOperator object.
 
@@ -318,7 +321,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(gate, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(gate, wrtFilter, eps)
     if deriv_to_check is None:
         deriv_to_check = gate.deriv_wrt_params()
 
@@ -972,7 +975,6 @@ class LinearOperator(_modelmember.ModelMember):
 #    #Maybe add an as_sparse_mx function and compute
 #    # metrics using this?
 #    #And perhaps a sparse-mode finite-difference deriv_wrt_params?
-
 class DenseOperatorInterface(object):
     """
     Adds a numpy-array-mimicing interface onto an object whose ._rep
@@ -987,8 +989,12 @@ class DenseOperatorInterface(object):
     this is a standalone operator with it's own (dense) ._rep, etc.
     """
 
-    def __init__(self, base_ptr):
-        self._ptr = base_ptr
+    def __init__(self):
+        pass
+
+    @property
+    def _ptr(self):
+        return self._rep.base
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -1003,11 +1009,14 @@ class DenseOperatorInterface(object):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        return finite_difference_deriv_wrt_params(self, eps=1e-7)
+        return finite_difference_deriv_wrt_params(self, wrtFilter, eps=1e-7)
 
     def todense(self):
         """
         Return this operation as a dense matrix.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
         """
         return _np.asarray(self._ptr)
         # *must* be a numpy array for Cython arg conversion
@@ -1082,7 +1091,19 @@ class DenseOperatorInterface(object):
     def __complex__(self): return complex(self._ptr)
 
 
-class DenseOperator(DenseOperatorInterface, LinearOperator):
+class BasedDenseOperatorInterface(DenseOperatorInterface):
+    """
+    A DenseOperatorInterface that uses self.base instead of
+    self._rep.base as the "base pointer" to data.  This is
+    used by the TPDenseOp class, for example, which has a .base
+    that is different from its ._rep.base.
+    """
+    @property
+    def _ptr(self):
+        return self.base
+
+
+class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
     """
     Excapulates a parameterization of a operation matrix.  This class is the
     common base class for all specific parameterizations of a gate.
@@ -1091,16 +1112,8 @@ class DenseOperator(DenseOperatorInterface, LinearOperator):
     def __init__(self, mx, evotype):
         """ Initialize a new LinearOperator """
         dtype = complex if evotype == "statevec" else 'd'
-        if isinstance(mx, _ProtectedArray):
-            protected = mx
-            mx = mx.base
-            assert(mx.flags['C_CONTIGUOUS'] and mx.flags['OWNDATA']), \
-                "ProtectedArrays given to initialize a DenseOperator must hold their own contiguous data!"
-            assert(mx.dtype == _np.dtype(dtype)), "ProtectedArray has wrong dtype! (expected %s)" % str(dtype)
-        else:
-            protected = None
-            mx = _np.ascontiguousarray(mx, dtype)  # may not give mx it's own data
-            mx = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        mx = _np.ascontiguousarray(mx, dtype)  # may not give mx it's own data
+        mx = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
         if evotype == "statevec":
             rep = replib.SVOpRep_Dense(mx)
@@ -1110,14 +1123,14 @@ class DenseOperator(DenseOperatorInterface, LinearOperator):
             raise ValueError("Invalid evotype for a DenseOperator: %s" % evotype)
 
         LinearOperator.__init__(self, rep, evotype)
+        BasedDenseOperatorInterface.__init__(self)
+        # "Based" interface requires this and derived classes to have a .base attribute
+        # or property that points to the data to interface with.  This gives derived classes
+        # flexibility in defining something other than self._rep.base to be used (see TPDenseOp).
 
-        if protected is not None:
-            assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(protected.base)), "Internal memory referencing error"
-            self.base = protected
-        else:
-            self.base = rep.base
-
-        DenseOperatorInterface.__init__(self, self.base)  # so we use the protected array
+    @property
+    def base(self):
+        return self._rep.base
 
     def __str__(self):
         s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
@@ -1327,10 +1340,15 @@ class TPDenseOp(DenseOperator):
                 and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create TPDenseOp: "
                              "invalid form for 1st row!")
-        pa = _ProtectedArray(_np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS']),
-                             indicesToProtect=(0, slice(None, None, None)))
-        DenseOperator.__init__(self, pa, "densitymx")  # this will set self.base to array(pa)
+        raw = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
+
+        DenseOperator.__init__(self, raw, "densitymx")
+        assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self.base, _ProtectedArray))
+
+    @property
+    def base(self):
+        return _ProtectedArray(self._rep.base, indicesToProtect=(0, slice(None, None, None)))
 
     def set_value(self, M):
         """
@@ -1525,13 +1543,14 @@ class LinearlyParamDenseOp(DenseOperator):
         self.leftTrans = leftTransform if (leftTransform is not None) else I
         self.rightTrans = rightTransform if (rightTransform is not None) else I
         self.enforceReal = real
-        mx.flags.writeable = False  # only _construct_matrix can change array
 
         if evotype == "auto": evotype = "densitymx" if real else "statevec"
         assert(evotype in ("densitymx", "statevec")), \
             "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
 
+        #Note: dense op reps *always* own their own data so setting writeable flag is OK
         DenseOperator.__init__(self, mx, evotype)
+        self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
     def _construct_matrix(self):
@@ -1551,6 +1570,7 @@ class LinearlyParamDenseOp(DenseOperator):
                                  "imaginary part (%g)!" % _np.linalg.norm(_np.imag(matrix)))
             matrix = _np.real(matrix)
 
+        #Note: dense op reps *always* own their own data so setting writeable flag is OK
         assert(matrix.shape == (self.dim, self.dim))
         self.base.flags.writeable = True
         self.base[:, :] = matrix
@@ -1982,8 +2002,8 @@ class EigenvalueParamDenseOp(DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        mx.flags.writeable = False  # only _construct_matrix can change array
         DenseOperator.__init__(self, mx, "densitymx")
+        self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
     def _construct_matrix(self):
@@ -3036,7 +3056,7 @@ class LindbladOp(LinearOperator):
             self.base_deriv = derivMx
 
             #check_deriv_wrt_params(self, derivMx, eps=1e-7)
-            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
+            #fd_deriv = finite_difference_deriv_wrt_params(self, wrtFilter, eps=1e-7)
             #derivMx = fd_deriv
 
         if wrtFilter is None:
@@ -3701,7 +3721,7 @@ class LindbladDenseOp(LindbladOp, DenseOperatorInterface):
 
         #Start with base class construction
         LindbladOp.__init__(self, unitaryPostfactor, errorgen, dense_rep=True)
-        DenseOperatorInterface.__init__(self, self._rep.base)
+        DenseOperatorInterface.__init__(self)
 
 
 def _dexpSeries(X, dX):
@@ -4060,12 +4080,14 @@ class ComposedOp(LinearOperator):
         factor_op_reps = [op._rep for op in self.factorops]
         if evotype == "densitymx":
             if dense_rep:
-                rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.identity(dim, 'd')))
+                rep = replib.DMOpRep_Dense(_np.require(_np.identity(dim, 'd'),
+                                                       requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 rep = replib.DMOpRep_Composed(factor_op_reps, dim)
         elif evotype == "statevec":
             if dense_rep:
-                rep = replib.SVOpRep_Dense(_np.ascontiguousarray(_np.identity(dim, complex)))
+                rep = replib.SVOpRep_Dense(_np.require(_np.identity(dim, complex),
+                                                       requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 rep = replib.SVOpRep_Composed(factor_op_reps, dim)
         elif evotype == "stabilizer":
@@ -4551,7 +4573,7 @@ class ComposedDenseOp(ComposedOp, DenseOperatorInterface):
             one gate being composed.
         """
         ComposedOp.__init__(self, ops_to_compose, dim, evotype, dense_rep=True)
-        DenseOperatorInterface.__init__(self, self._rep.base)
+        DenseOperatorInterface.__init__(self)
 
 
 class ExponentiatedOp(LinearOperator):
@@ -4805,9 +4827,11 @@ class EmbeddedOp(LinearOperator):
             if self.dense_rep:
                 #maybe cache items to speed up _iter_matrix_elements in FUTURE here?
                 if evotype == "statevec":
-                    rep = replib.SVOpRep_Dense(_np.ascontiguousarray(_np.identity(opDim, complex)))
+                    rep = replib.SVOpRep_Dense(_np.require(_np.identity(opDim, complex),
+                                                           requirements=['OWNDATA', 'C_CONTIGUOUS']))
                 else:  # "densitymx"
-                    rep = replib.DMOpRep_Dense(_np.ascontiguousarray(_np.identity(opDim, 'd')))
+                    rep = replib.DMOpRep_Dense(_np.require(_np.identity(opDim, 'd'),
+                                                           requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 nBlocks = self.state_space_labels.num_tensor_prod_blocks()
                 iActiveBlock = iTensorProdBlk
@@ -5189,18 +5213,14 @@ class EmbeddedOp(LinearOperator):
         """
         # Note: this function exploits knowledge of EmbeddedOp internals!!
         embedded_deriv = self.embedded_op.deriv_wrt_params(wrtFilter)
-        derivMx = _np.zeros((self.dim**2, self.num_params()), embedded_deriv.dtype)
+        derivMx = _np.zeros((self.dim**2, embedded_deriv.shape[1]), embedded_deriv.dtype)
         M = self.embedded_op.dim
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
         for i, j, gi, gj in self._iter_matrix_elements():
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
-
-        if wrtFilter is None:
-            return derivMx
-        else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+        return derivMx  # Note: wrtFilter has already been applied above
 
     def transform(self, S):
         """
@@ -5358,7 +5378,7 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperatorInterface):
         """
         EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels,
                             gate_to_embed, dense_rep=True)
-        DenseOperatorInterface.__init__(self, self._rep.base)
+        DenseOperatorInterface.__init__(self)
 
 
 class CliffordOp(LinearOperator):

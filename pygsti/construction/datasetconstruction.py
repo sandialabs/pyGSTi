@@ -271,7 +271,7 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-        to use :function:`filter_qubits` which also updates the operation sequences.
+        to use :function:`filter_dataset` which also updates the operation sequences.
 
     recordZeroCnts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned

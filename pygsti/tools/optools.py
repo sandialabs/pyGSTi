@@ -2810,7 +2810,7 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, returnAll=False):
     -------
     U : numpy.ndarray
         A gauge transformation such that if `epgate = U * gate_mx * U_inv`,
-        then `epgate` (which has the same eigenalues as `gate_mx`, can be
+        then `epgate` (which has the same eigenalues as `gate_mx`), can be
         diagonalized with a set of eigenvectors that also diagonalize
         `target_gate_mx`.  Furthermore, `U` is real.
 
