@@ -33,8 +33,8 @@ before_install:
 
 install:
   # Install cython ahead of time b/c pip runs setup.py *before* installing dependencies (??)
-  - pip install cython
-  - python3 setup.py build_ext
+  # pip install cython
+  # python3 setup.py build_ext
   # Install base dependencies
   - pip install .
   # Install test dependencies
