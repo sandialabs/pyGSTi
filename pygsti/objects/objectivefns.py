@@ -135,13 +135,20 @@ class Chi2Function(ObjectiveFunction):
         dw[_np.logical_or(p < self.minProbClipForWeighting, p > (1 - self.minProbClipForWeighting))] = 0.0
         return dw
 
+    def zero_freq_chi2(self, N, probs):
+        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
+        return N * probs**2 / clipped_probs
+
+    def zero_freq_dchi2(self, N, probs):
+        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
+        return _np.where(probs == clipped_probs, N, 2 * N * probs / clipped_probs)
+
     def update_v_for_omitted_probs(self, v, probs):
         # if i-th circuit has omitted probs, have sqrt( N*(p_i-f_i)^2/p_i + sum_k(N*p_k) )
         # so we need to take sqrt( v_i^2 + N*sum_k(p_k) )
         omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
                                          for i in self.indicesOfCircuitsWithOmittedData])
-        clipped_oprobs = _np.clip(omitted_probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
-        v[self.firsts] = _np.sqrt(v[self.firsts]**2 + self.N[self.firsts] * omitted_probs**2 / clipped_oprobs)
+        v[self.firsts] = _np.sqrt(v[self.firsts]**2 + self.zero_freq_chi2(self.N[self.firsts], omitted_probs))
 
     def update_dprobs_for_omitted_probs(self, dprobs, probs, weights, dprobs_omitted_rowsum):
         # with omitted terms, new_obj = sqrt( obj^2 + corr ) where corr = N*omitted_p^2/clipped_omitted_p
@@ -150,10 +157,9 @@ class Chi2Function(ObjectiveFunction):
         v = (probs - self.f) * weights
         omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
                                          for i in self.indicesOfCircuitsWithOmittedData])
-        clipped_oprobs = _np.clip(omitted_probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
-        dprobs_factor_omitted = _np.where(omitted_probs == clipped_oprobs, self.N[self.firsts],
-                                          2 * self.N[self.firsts] * omitted_probs / clipped_oprobs)
-        fullv = _np.sqrt(v[self.firsts]**2 + self.N[self.firsts] * omitted_probs**2 / clipped_oprobs)
+        dprobs_factor_omitted = self.zero_freq_dchi2(self.N[self.firsts], omitted_probs)
+        fullv = _np.sqrt(v[self.firsts]**2 + self.zero_freq_chi2(self.N[self.firsts], omitted_probs))
+
         # avoid NaNs when both fullv and v[firsts] are zero - result should be *zero* in this case
         fullv[v[self.firsts] == 0.0] = 1.0
         dprobs[self.firsts, :] = (0.5 / fullv[:, None]) * (
@@ -473,14 +479,27 @@ class FreqWeightedChi2Function(Chi2Function):
         Chi2Function.__init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor,
                               cptp_penalty_factor, spam_penalty_factor, cntVecMx, N, minProbClipForWeighting,
                               probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, verbosity=0)
-        self.fweights = fweights
+        if fweights is not None:
+            self.fweights = fweights
+        else:
+            self.fweights = _np.sqrt(self.N / _np.clip(self.f, 1e-7, None))
         self.z = _np.zeros(self.KM, 'd')
+        self.a = 1e-6  # HARDCODED radius - todo: make an argument later?
 
-    def _get_weights(self, p):
+    def get_weights(self, p):
         return self.fweights
 
-    def _get_dweights(self, p, wts):
+    def get_dweights(self, p, wts):
         return self.z
+
+    def zero_freq_chi2(self, N, probs):
+        a = self.a
+        return N * _np.where(probs >= a, probs,
+                             (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
+
+    def zero_freq_dchi2(self, N, probs):
+        a = self.a
+        return N * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
 
 class TimeDependentChi2Function(ObjectiveFunction):
@@ -593,6 +612,224 @@ class TimeDependentChi2Function(ObjectiveFunction):
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
         self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
+        return self.jac
+
+
+
+
+class ChiAlphaFunction(ObjectiveFunction):
+
+    def __init__(self, alpha, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cntVecMx, N,
+                 pfratio_stitchpt, probClipInterval, radius, wrtBlkSize, gthrMem, check=False,
+                 check_jacobian=False, comm=None, profiler=None, verbosity=0):
+
+        from ..tools import slicetools as _slct
+
+        self.alpha = alpha
+        self.mdl = mdl
+        self.evTree = evTree
+        self.lookup = lookup
+        self.circuitsToUse = circuitsToUse
+        self.comm = comm
+        self.profiler = profiler
+        self.check = check
+        self.check_jacobian = check_jacobian
+
+        KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        vec_gs_len = mdl.num_params()
+        self.printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        self.opBasis = mdl.basis
+
+
+        self.KM = KM
+        self.vec_gs_len = vec_gs_len
+        self.x0 = pfratio_stitchpt
+        self.a = radius  # parameterizes "roundness" of f == 0 terms
+        self.probClipInterval = probClipInterval
+        self.wrtBlkSize = wrtBlkSize
+        self.gthrMem = gthrMem
+
+        #  Allocate peristent memory
+        #  (must be AFTER possible operation sequence permutation by
+        #   tree and initialization of dsCircuitsToUse)
+        self.ex = 0  # needed for interface with core.py
+        self.probs = _np.empty(KM, 'd')
+        self.jac = _np.empty((KM + self.ex, vec_gs_len), 'd')
+
+        #Detect omitted frequences (assumed to be 0) so we can compute chi2 correctly
+        self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
+        for i, c in enumerate(circuitsToUse):
+            lklen = _slct.length(lookup[i])
+            if 0 < lklen < mdl.get_num_outcomes(c):
+                self.firsts.append(_slct.as_array(lookup[i])[0])
+                self.indicesOfCircuitsWithOmittedData.append(i)
+        if len(self.firsts) > 0:
+            self.firsts = _np.array(self.firsts, 'i')
+            self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
+            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), vec_gs_len), 'd')
+            self.printer.log("SPARSE DATA: %d of %d rows have sparse data" % (len(self.firsts), len(circuitsToUse)))
+        else:
+            self.firsts = None  # no omitted probs
+
+        self.cntVecMx = cntVecMx
+        self.totalCntVec = N
+        self.freqs = cntVecMx / N
+        # set zero freqs to 1.0 so we don't get divide-by-zero errors
+        self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
+
+        self.maxCircuitLength = max([len(x) for x in circuitsToUse])
+
+        if mdl.get_simtype() != "termgap":
+            # Fast un-regularized version
+            self.fn = self.simple_chi_alpha
+            self.jfn = self.simple_jac
+
+        else:
+            raise NotImplementedError("Still need to add termgap support to chi-alpha!")
+            self.fn = self.termgap_chi_alph
+            self.jfn = self.simple_jac
+
+    def zero_freq_chialpha(self, N, probs):
+        a = self.a
+        return N * _np.where(probs >= a, probs,
+                             (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
+
+    def zero_freq_dchialpha(self, N, probs):
+        a = self.a
+        return N * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
+
+    def _chialpha_from_probs(self, tm, extra=False, debug=False):
+        x0 = self.x0
+        x = self.probs / self.freqs_nozeros
+        xt = x.copy()
+        itaylor = x < x0  # indices where we patch objective function with taylor series
+        itaylorB = x > 1/x0
+        xt[itaylor] = x0  # so we evaluate function at x0 (first taylor term) at itaylor indices
+        xt[itaylorB] = 1/x0
+        v = self.cntVecMx * (xt + 1.0/(self.alpha * xt**self.alpha) - (1.0 + 1.0/self.alpha))
+
+        S = 1. - 1./(x0**(1 + self.alpha))
+        S2 = 0.5 * (1. + self.alpha) / x0**(2 + self.alpha)
+        SB = 1. - 1./((1/x0)**(1 + self.alpha))
+        S2B = 0.5 * (1. + self.alpha) / (1/x0)**(2 + self.alpha)
+        v = _np.where(itaylor, v + S * self.cntVecMx * (x - x0) + S2 * self.cntVecMx * (x - x0)**2, v)
+        v = _np.where(itaylorB, v + SB * self.cntVecMx * (x - 1/x0) + S2B * self.cntVecMx * (x - 1/x0)**2, v)
+        v = _np.where(self.cntVecMx == 0, self.zero_freq_chialpha(self.totalCntVec, self.probs), v)
+
+        #DEBUG TODO REMOVE
+        #if debug and (self.comm is None or self.comm.Get_rank() == 0):
+        #    print("ALPHA OBJECTIVE: ",S,S2,SB,S2B)
+        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor)+_np.count_nonzero(itaylorB), " nZero=",_np.count_nonzero(self.cntVecMx==0))
+        #    print(" xrange = ",_np.min(x),_np.max(x))
+        #    print(" vrange = ",_np.min(v),_np.max(v))
+
+        if self.firsts is not None:
+            #self.update_v_for_omitted_probs(v, self.probs)
+            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.lookup[i]])
+                                             for i in self.indicesOfCircuitsWithOmittedData])
+            #omitted_probs = _np.maximum(omitted_probs, 0.0)  # don't let other probs adding to > 1 reduce penalty
+            v[self.firsts] += self.zero_freq_chialpha(self.totalCntVec[self.firsts], omitted_probs)
+
+            if debug and (self.comm is None or self.comm.Get_rank() == 0):
+                print(" vrange2 = ",_np.min(v),_np.max(v))
+                print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
+                print(" nSparse = ",len(self.firsts), " nOmitted > radius=", _np.count_nonzero(omitted_probs >= self.a))
+        else:
+            omitted_probs = None  # b/c we might return this
+
+        v = _np.sqrt(v)
+        self.profiler.add_time("chi-alpha: OBJECTIVE", tm)
+        assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
+
+        if extra:
+            return v, (x, itaylor, itaylorB, S, S2, SB, S2B, omitted_probs) 
+        else:
+            return v
+
+    #Objective Function
+    def simple_chi_alpha(self, vectorGS):
+        tm = _time.time()
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+        return self._chialpha_from_probs(tm, debug=True)
+
+    #def termgap_chi_alpha(self, vectorGS, oob_check=False):
+    #    TODO: this need to be updated - this is just the chi2 version:
+    #    tm = _time.time()
+    #    self.mdl.from_vector(vectorGS)
+    #    self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)
+    #
+    #    if oob_check:
+    #        if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree,
+    #                                                        self.probs,
+    #                                                        self.comm,
+    #                                                        memLimit=None,
+    #                                                        verbosity=1):
+    #            raise ValueError("Out of bounds!")  # signals LM optimizer
+    #
+    #    v = (self.probs - self.f) * self.get_weights(self.probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+    #
+    #    if self.firsts is not None:
+    #        self.update_v_for_omitted_probs(v, self.probs)
+    #
+    #    self.profiler.add_time("do_mc2gst: OBJECTIVE", tm)
+    #    assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
+    #    return v
+
+    # Jacobian function
+    def simple_jac(self, vectorGS):
+        tm = _time.time()
+        dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.KM, self.vec_gs_len)
+        self.mdl.from_vector(vectorGS)
+        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
+                                  check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
+                                  profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        if self.firsts is not None:
+            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+
+        #objective is sqrt(Nf * (x + 1/(alpha*x^alpha) + C))
+        # deriv is 0.5/objective * Nf * (1 - 1/x^(1+alpha)) * dx/dprobs , where dx/dprobs = 1/f * dp/dprobs
+        # so deriv = 0.5/objective * N * (1 - 1/x^(1+alpha)) * dp/dprobs
+        v, (x, itaylor, itaylorB, S, S2, SB, S2B, omitted_probs) = self._chialpha_from_probs(tm, extra=True)
+
+        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to
+        # avoid divide by zero below
+        v = _np.maximum(v, 1e-100)
+
+        # compute jacobian = 0.5/v * N * (1 - 1/x^(1+alpha)) * dp/dprobs
+        x0 = self.x0
+        dprobs_factor = (0.5 / v) * self.totalCntVec * (1 - 1. / x**(1.+self.alpha))
+        dprobs_factor_taylor = (0.5 / v) * self.totalCntVec * (S + 2 * S2 * (x - x0))
+        dprobs_factor_taylorB = (0.5 / v) * self.totalCntVec * (SB + 2 * S2B * (x - 1/x0))
+        dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(
+            self.probs >= self.a, 1.0, (-1.0 / self.a**2) * self.probs**2 + 2 * self.probs / self.a)
+        dprobs_factor[itaylor] = dprobs_factor_taylor[itaylor]
+        dprobs_factor[itaylorB] = dprobs_factor_taylor[itaylorB]
+        dprobs_factor = _np.where(self.cntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
+        
+        if self.firsts is not None:
+            dprobs_factor_omitted = (-0.5 / v[self.firsts]) * self.zero_freq_dchialpha(
+                self.totalCntVec[self.firsts], omitted_probs)
+
+            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+
+        dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+
+        # need to multipy dprobs_factor_omitted[i] * dprobs[k] for k in lookup[i] and
+        # add to dprobs[firsts[i]] for i in indicesOfCircuitsWithOmittedData
+        if self.firsts is not None:
+            dprobs[self.firsts, :] += dprobs_factor_omitted[:, None] * self.dprobs_omitted_rowsum
+            # nCircuitsWithOmittedData x N
+
+        if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi_alpha(
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+
+        self.profiler.add_time("chi-alpha: JACOBIAN", tm)
         return self.jac
 
 
@@ -796,14 +1033,40 @@ class LogLFunction(ObjectiveFunction):
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
                                  self.check, self.comm)
-        return self._poisson_picture_v_from_probs(tm)
+        return self._poisson_picture_v_from_probs(tm, debug=True)
 
-    def _poisson_picture_v_from_probs(self, tm_start):
+    def zero_freq_poisson_logl(self, N, probs):
+        a = self.a
+        return N * _np.where(probs >= a, probs,
+                             (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
+
+    def zero_freq_poisson_dlogl(self, N, probs):
+        a = self.a
+        return N * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
+
+    def _poisson_picture_v_from_probs(self, tm_start, extra=False, debug=False):
         x0 = self.min_p
         x = self.probs / self.freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
+        #DEBUG TODO REMOVE
+        #if self.comm.Get_rank() == 0 and debug:
+        #    print(">>>> DEBUG ----------------------------------")
+        #    print("x range = ",_np.min(x), _np.max(x))
+        #    print("p range = ",_np.min(self.probs), _np.max(self.probs))
+        #    print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
+        #    print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
+        #    print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
+        #    for i,el in enumerate(x):
+        #        if el < 0.1 or el > 10.0:
+        #            print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i], self.freqs[i], self.freqs_nozeros[i]))
+        #    print("<<<<< DEBUG ----------------------------------")
         pos_x = _np.where(x < x0, x0, x)
         S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
         S2 = -0.5 * self.minusCntVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
+        
+        pos_x = _np.where(x > 1 / x0, 1 / x0, pos_x)
+        #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
+        #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
+        
         v = self.minusCntVecMx * (_np.log(pos_x) + 1.0 - pos_x)
 
         # omit = 1-p1-p2  => 1/2-p1 + 1/2-p2
@@ -812,21 +1075,18 @@ class LogLFunction(ObjectiveFunction):
         v = _np.maximum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
         v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
-        v = _np.where(self.minusCntVecMx == 0,
-                      self.totalCntVec * _np.where(self.probs >= self.a,
-                                                   self.probs,
-                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a
-                                                   + self.a / 3.0),
-                      v)
+        #v = _np.where(x > 1 / x0, v + T * (x - x0) + T2 * (x - x0)**2, v)
+        v = _np.where(self.minusCntVecMx == 0, self.zero_freq_poisson_logl(self.totalCntVec, self.probs), v)
         # special handling for f == 0 terms
-        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+        # using cubit rounding of function that smooths N*p for p>0:
+        #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
 
         if self.firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nozeros[self.lookup[i]])
                                              for i in self.indicesOfCircuitsWithOmittedData])
-            v[self.firsts] += self.totalCntVec[self.firsts] * \
-                _np.where(omitted_probs >= self.a, omitted_probs,
-                          (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
+            v[self.firsts] += self.zero_freq_poisson_logl(self.totalCntVec[self.firsts], omitted_probs)
+        else:
+            omitted_probs = None  # b/c we might return this
 
         #CHECK OBJECTIVE FN
         #logL_terms = _tools.logl_terms(mdl, dataset, circuitsToUse,
@@ -837,6 +1097,9 @@ class LogLFunction(ObjectiveFunction):
 
         v = _np.sqrt(v)
         v.shape = [self.KM]  # reshape ensuring no copy is needed
+        if extra:  # then used for jacobian where penalty terms are added later, so return now
+            return v, (x, pos_x, S, S2, omitted_probs)
+
         if self.cptp_penalty_factor != 0:
             cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
         else: cpPenaltyVec = []
@@ -888,7 +1151,8 @@ class LogLFunction(ObjectiveFunction):
                                                    + self.a / 3.0),
                       v)
         # special handling for f == 0 terms
-        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+        # using cubit rounding of function that smooths N*p for p>0:
+        #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
 
         if self.firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
@@ -944,48 +1208,25 @@ class LogLFunction(ObjectiveFunction):
                                   prMxToFill=self.probs, clipTo=self.probClipInterval,
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
+        v, (x, pos_x, S, S2, omitted_probs) = self._poisson_picture_v_from_probs(tm, extra=True)
 
-        x0 = self.min_p
-        x = self.probs / self.freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
-        pos_x = _np.where(x < x0, x0, x)
-        S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
-        S2 = -0.5 * self.minusCntVecMx / (x0**2)  # 0.5 * 2nd deriv at x0
-        v = self.minusCntVecMx * (_np.log(pos_x) + 1.0 - pos_x)
-
-        # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-        v = _np.maximum(v, 0)
-        # quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
-        v = _np.where(self.minusCntVecMx == 0,
-                      self.totalCntVec * _np.where(self.probs >= self.a,
-                                                   self.probs,
-                                                   (-1.0 / (3 * self.a**2)) * self.probs**3 + self.probs**2 / self.a
-                                                   + self.a / 3.0),
-                      v)
-
-        if self.firsts is not None:
-            omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nozeros[self.lookup[i]])
-                                             for i in self.indicesOfCircuitsWithOmittedData])
-            v[self.firsts] += self.totalCntVec[self.firsts] * \
-                _np.where(omitted_probs >= self.a, omitted_probs,
-                          (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
-
-        v = _np.sqrt(v)
-        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
-        # below
+        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to
+        # avoid divide by zero below
         v = _np.maximum(v, 1e-100)
+
+        # compute jacobian
+        x0 = self.min_p
         dprobs_factor_pos = (0.5 / v) * (self.totalCntVec * (-1 / pos_x + 1))
         dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (x - x0)) / self.freqs_nozeros
-        dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(self.probs >= self.a,
-                                                                          1.0, (-1.0 / self.a**2) * self.probs**2
-                                                                          + 2 * self.probs / self.a)
+        #dprobs_factor_neg2 = (0.5 / v) * (T + 2 * T2 * (x - x0)) / self.freqs_nozeros
+        dprobs_factor_zerofreq = (0.5 / v) * self.zero_freq_poisson_dlogl(self.totalCntVec, self.probs)
         dprobs_factor = _np.where(x < x0, dprobs_factor_neg, dprobs_factor_pos)
+        #dprobs_factor = _np.where(x > 1 / x0, dprobs_factor_neg2, dprobs_factor)
         dprobs_factor = _np.where(self.minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
 
         if self.firsts is not None:
-            dprobs_factor_omitted = (-0.5 / v[self.firsts]) * self.totalCntVec[self.firsts] \
-                * _np.where(omitted_probs >= self.a,
-                            1.0, (-1.0 / self.a**2) * omitted_probs**2 + 2 * omitted_probs / self.a)
+            dprobs_factor_omitted = (-0.5 / v[self.firsts]) * self.zero_freq_poisson_dlogl(
+                self.totalCntVec[self.firsts], omitted_probs)
 
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
@@ -1023,21 +1264,15 @@ class LogLFunction(ObjectiveFunction):
 
         # quadratic extrapolation of logl at min_p for probabilities < min_p
         v = _np.where(probs < self.min_p, v + S * (probs - self.min_p) + S2 * (probs - self.min_p)**2, v)
-        v = _np.where(self.minusCntVecMx == 0,
-                      self.totalCntVec * _np.where(probs >= self.a,
-                                                   probs,
-                                                   (-1.0 / (3 * self.a**2)) * probs**3 + probs**2 / self.a
-                                                   + self.a / 3.0),
-                      v)
+        v = _np.where(self.minusCntVecMx == 0, self.zero_freq_poisson_logl(self.totalCntVec, probs), v)
         # special handling for f == 0 terms
-        # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+        # using cubit rounding of function that smooths N*p for p>0:
+        #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
 
         if self.firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
                                              for i in self.indicesOfCircuitsWithOmittedData])
-            v[self.firsts] += self.totalCntVec[self.firsts] * \
-                _np.where(omitted_probs >= self.a, omitted_probs,
-                          (-1.0 / (3 * self.a**2)) * omitted_probs**3 + omitted_probs**2 / self.a + self.a / 3.0)
+            v[self.firsts] += self.zero_freq_poisson_logl(self.totalCntVec[self.firsts], omitted_probs)
 
         v.shape = [self.KM]  # reshape ensuring no copy is needed
         return v
