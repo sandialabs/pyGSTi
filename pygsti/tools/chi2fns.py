@@ -125,6 +125,64 @@ def chi2_terms(model, dataset, circuits=None,
     return terms
 
 
+def chialpha(alpha, model, dataset, circuits=None,
+             pfratio_stitchpt=1e-4, radius=1e-6,
+             check=False, memLimit=None, opLabelAliases=None,
+             evaltree_cache=None, comm=None):
+    """
+    TODO: docstring
+    """
+    from ..objects import objectivefns as _objfns
+    from ..objects.profiler import DummyProfiler as _DummyProfiler
+
+    if circuits is None:
+        circuits = list(dataset.keys())
+
+    if evaltree_cache and 'evTree' in evaltree_cache:
+        evTree = evaltree_cache['evTree']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
+    else:
+        #OLD: evTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuits)
+        evTree, wrtBlkSize, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
+            circuits, comm, dataset=dataset)
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+
+    #Expand operation label aliases used in DataSet lookups
+    if opLabelAliases is not None:
+        dsCircuitsToUse = _tools.find_replace_tuple_list(
+            circuits, opLabelAliases)
+    else:
+        dsCircuitsToUse = circuits
+
+    if evaltree_cache and 'cntVecMx' in evaltree_cache:
+        cntVecMx = evaltree_cache['cntVecMx']
+        totalCntVec = evaltree_cache['totalCntVec']
+    else:
+        KM = evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        cntVecMx = _np.empty(KM, 'd')
+        totalCntVec = _np.empty(KM, 'd')
+        for i, opStr in enumerate(dsCircuitsToUse):
+            cnts = dataset[opStr].counts
+            totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+            cntVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
+
+    gthrMem = memLimit
+    probClipInterval = (-1000,1000)
+    profiler = _DummyProfiler()
+
+    fn = _objfns.ChiAlphaFunction(alpha, model, evTree, lookup, circuits, opLabelAliases, cntVecMx, totalCntVec,
+                 pfratio_stitchpt, probClipInterval, radius, wrtBlkSize, gthrMem, check,
+                 check, comm, profiler, verbosity=0)
+    v = fn.fn(model.to_vector())
+    return _np.sum(v**2) # I think...
+
+
 def chi2(model, dataset, circuits=None,
          returnGradient=False, returnHessian=False,
          minProbClipForWeighting=1e-4, clipTo=None,
