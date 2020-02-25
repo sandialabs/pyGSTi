@@ -686,7 +686,7 @@ class ChiAlphaFunction(ObjectiveFunction):
 
         else:
             raise NotImplementedError("Still need to add termgap support to chi-alpha!")
-            self.fn = self.termgap_chi_alph
+            self.fn = self.termgap_chi_alpha
             self.jfn = self.simple_jac
 
     def zero_freq_chialpha(self, N, probs):
@@ -730,10 +730,11 @@ class ChiAlphaFunction(ObjectiveFunction):
             #omitted_probs = _np.maximum(omitted_probs, 0.0)  # don't let other probs adding to > 1 reduce penalty
             v[self.firsts] += self.zero_freq_chialpha(self.totalCntVec[self.firsts], omitted_probs)
 
-            if debug and (self.comm is None or self.comm.Get_rank() == 0):
-                print(" vrange2 = ",_np.min(v),_np.max(v))
-                print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
-                print(" nSparse = ",len(self.firsts), " nOmitted > radius=", _np.count_nonzero(omitted_probs >= self.a))
+            #DEBUG TODO REMOVE
+            #if debug and (self.comm is None or self.comm.Get_rank() == 0):
+            #    print(" vrange2 = ",_np.min(v),_np.max(v))
+            #    print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
+            #    print(" nSparse = ",len(self.firsts), " nOmitted > radius=", _np.count_nonzero(omitted_probs >= self.a))
         else:
             omitted_probs = None  # b/c we might return this
 
@@ -1052,12 +1053,13 @@ class LogLFunction(ObjectiveFunction):
         #    print(">>>> DEBUG ----------------------------------")
         #    print("x range = ",_np.min(x), _np.max(x))
         #    print("p range = ",_np.min(self.probs), _np.max(self.probs))
-        #    print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
-        #    print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
-        #    print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
-        #    for i,el in enumerate(x):
-        #        if el < 0.1 or el > 10.0:
-        #            print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i], self.freqs[i], self.freqs_nozeros[i]))
+        #    #print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
+        #    #print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
+        #    #print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
+        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
+        #    #for i,el in enumerate(x):
+        #    #    if el < 0.1 or el > 10.0:
+        #    #        print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i], self.freqs[i], self.freqs_nozeros[i]))
         #    print("<<<<< DEBUG ----------------------------------")
         pos_x = _np.where(x < x0, x0, x)
         S = self.minusCntVecMx * (1 / x0 - 1)  # deriv wrt x at x == x0 (=min_p)
