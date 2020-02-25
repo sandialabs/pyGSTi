@@ -953,7 +953,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
               check_jacobian=False, circuitWeights=None,
               opLabelAliases=None, memLimit=None, comm=None,
               distributeMethod="deriv", profiler=None,
-              evaltree_cache=None, time_dependent=False):
+              evaltree_cache=None, time_dependent=False, alpha=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -1198,21 +1198,28 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
             evaltree_cache['totalCntVec'] = N
 
     if useFreqWeightedChiSq:
+        assert(alpha is None), "Cannot use Chi-alpha function with frequency weighting"
         assert(not time_dependent), "Cannot use frequency-weighted chi2 with `time_dependent` == True!"
         objective = _objfns.FreqWeightedChi2Function(
             mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-            spam_penalty_factor, cntVecMx, N, fweights, minProbClipForWeighting,
-            probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
+            spam_penalty_factor, cntVecMx, N, None, minProbClipForWeighting,
+            probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)  # HACK - 'fweights' => 'None' so computes on own (for DEBUG)
     else:
         if time_dependent:
+            assert(alpha is None), "Cannot use Chi-alpha function with `time_dependent` == True (not implemented)"
             objective = _objfns.TimeDependentChi2Function(
                 mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
                 spam_penalty_factor, dataset, dsCircuitsToUse, minProbClipForWeighting,
                 probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
-        else:
+        elif alpha is None:
             objective = _objfns.Chi2Function(
                 mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
                 spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval,
+                wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
+        else:
+            objective = _objfns.ChiAlphaFunction(
+                alpha, mdl, evTree, lookup, circuitsToUse, opLabelAliases, 
+                cntVecMx, N, minProbClipForWeighting, probClipInterval, 1e-6, #radius harcoded for now
                 wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
 
     #Get number of maximal-model parameter ("dataset params") if needed for print messages
@@ -1267,6 +1274,7 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
             comm=comm, verbosity=printer - 1, profiler=profiler, **extra_lm_opts)
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
+        #DEBUG TODO REMOVE extra_lm_opts['post_munu'] = (mu, nu)
         opt_state = (msg, mu, nu)
     else:
         opt_x, _, _, msg, flag = \
@@ -2533,6 +2541,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 
             evt_cache = {}  # get the eval tree that's created so we can reuse it
             if not onlyPerformMLE:
+                #extra_lm_opts['damping_mode'] = "invJTJ"
                 _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
                                         maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
                                         spam_penalty_factor, minProbClip,
@@ -2541,14 +2550,90 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                                         memLimit, comm, distributeMethod, profiler, evt_cache,
                                         time_dependent)
 
+                #extra_lm_opts['damping_mode'] = "JTJ"
+                #extra_lm_opts['init_munu'] = extra_lm_opts.get('post_munu', 'auto')
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - extra chi2 opt with JTJ mode (minProbClip=%g)" % minProbClip)
+                #_, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                #                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, minProbClip,
+                #                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent)
+
+                ##extra_lm_opts['damping_mode'] = "invJTJ"
+                #test_minProbClip = minProbClip / 1000.0
+                #test_useFreqWeightedChiSq = False # True
+                #test_round2 = mleModel.copy()
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - extra chi2 opt with invJTJ mode and minProbClip=",test_minProbClip)
+                #_, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                #                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, test_minProbClip,
+                #                        probClipInterval, test_useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent)
+
+                #alpha = 1.0
+                #test_minProbClip = 1.0 #minProbClip
+                ##extra_lm_opts['damping_mode'] = "invJTJ"
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - extra chi-alpha opt with alpha=",alpha, " and x0=", test_minProbClip)
+                #_, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                #                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, test_minProbClip,
+                #                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent, alpha=alpha)
+
+                #extra_lm_opts['damping_mode'] = "JTJ"
+                #extra_lm_opts['init_munu'] = extra_lm_opts.get('post_munu', 'auto')
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - extra chi2 opt with JTJ mode (minProbClip=%g)" % test_minProbClip)
+                #_, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                #                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, test_minProbClip,
+                #                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent)
+
+                #test_minProbClip = test_minProbClip / 100.0
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - extra chi2 opt with minProbClip=",test_minProbClip)
+                #_, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                #                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, test_minProbClip,
+                #                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent)
+
+
             if alwaysPerformMLE:
+                #extra_lm_opts['damping_mode'] = "invJTJ"
+                minRatio = minProbClip * 1000 # so 1e-4 => 0.1 DEBUG
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
                                        maxiter, maxfev, num_fd, tol, extra_lm_opts,
                                        cptp_penalty_factor, spam_penalty_factor,
-                                       minProbClip, probClipInterval, radius,
+                                       minRatio, probClipInterval, radius,
                                        poissonPicture, printer - 1, check, circuitWeights,
                                        opLabelAliases, memLimit, comm, distributeMethod, profiler,
                                        evt_cache, time_dependent)
+
+                #extra_lm_opts['damping_mode'] = "JTJ"
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - extra logl opt with JTJ")
+                #_, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
+                #                       maxiter, maxfev, num_fd, tol, extra_lm_opts,
+                #                       cptp_penalty_factor, spam_penalty_factor,
+                #                       minProbClip, probClipInterval, radius,
+                #                       poissonPicture, printer - 1, check, circuitWeights,
+                #                       opLabelAliases, memLimit, comm, distributeMethod, profiler,
+                #                       evt_cache, time_dependent)
 
             tNxt = _time.time()
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt' % (i + 1), tRef)

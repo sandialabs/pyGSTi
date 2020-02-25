@@ -28,9 +28,10 @@ MACH_PRECISION = 1e-12
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
-                   max_dx_scale=1.0, damping_clip=None, use_acceleration=False,
-                   uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
-                   oob_action="reject", comm=None, verbosity=0, profiler=None):
+                   max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
+                   damping_clip=None, use_acceleration=False, uphill_step_threshold=0.0,
+                   init_munu="auto", oob_check_interval=0, oob_action="reject", comm=None,
+                   verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization
     algorithm customized for use within pyGSTi.  This general purpose routine
@@ -81,13 +82,27 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
         roughly, less than `max_dx_scale`).
 
-    damping_clip : tuple or None, optional
-        If None, then damping is additive (damping coefficient mu multiplies
-        the identity).  Otherwise, this should be a 2-tuple giving the
-        clipping that is applied to the diagonal terms of the approximate
-        Hessian (J^T*J) before they are scaled by mu.  For example, the value
-        is (1, 1e10) would allow for 10 orders of magnitude in Hessian
-        amplitudes, while (1, 1) would give additive damping (just like `None`).
+    damping_mode : {'identity', 'JTJ', 'invJTJ', 'adaptive'}
+        How damping is applied.  `'identity'` means that the damping parameter mu
+        multiplies the identity matrix.  `'JTJ'` means that mu multiplies the
+        diagonal or singular values (depending on `scaling_mode`) of the JTJ
+        (Fischer information and approx. hessaian) matrix, whereas `'invJTJ'`
+        means mu multiplies the reciprocals of these values instead.  The
+        `'adaptive'` mode adaptively chooses a damping strategy.
+
+    damping_clip : tuple, optional
+        A 2-tuple giving upper and lower bounds for the values that mu multiplies.
+        If `damping_mode == "identity"` then this argument is ignored, as mu always
+        multiplies a 1.0 on the diagonal if the identity matrix.  If None, then no
+        clipping is applied.
+
+    damping_basis : {'diagonal_values', 'singular_values'}
+        Whether the the diagonal or singular values of the JTJ matrix are used
+        during damping.  If `'singular_values'` is selected, then a SVD of the
+        Jacobian (J) matrix is performed and damping is performed in the basis
+        of (right) singular vectors.  If `'diagonal_values'` is selected, the
+        diagonal values of relevant matrices are used as a proxy for the the
+        singular values (saving the cost of performing a SVD).
 
     use_acceleration : bool, optional
         Whether to include a geodesic acceleration term as suggested in
@@ -166,15 +181,24 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-    # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
+    #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     dx = None; last_accepted_dx = None
     min_norm_f = 1e100  # sentinel
     best_x = x.copy()  # the x-value corresponding to min_norm_f
 
+    spow = 0.0  # for damping_mode == 'adaptive'
+    if damping_clip is not None:
+        def dclip(ar): return _np.clip(ar, damping_clip[0], damping_clip[1])
+    else:
+        def dclip(ar): return ar
+
     if init_munu != "auto":
         mu, nu = init_munu
     best_x_state = (mu, nu, norm_f, f)
+
+    f_norm2_tol = 1e-6  #DEBUG!!!
+    rel_xtol = 1e-14  #DEBUG!!!
 
     try:
 
@@ -255,6 +279,23 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #max_JTJ_diag = JTJ.diagonal().copy()
             #printer.log("PT6: %.3fs" % (_time.time()-t0)) # REMOVE
 
+            if damping_basis == "singular_values":
+                Jac_U, Jac_s, Jac_Vh = _np.linalg.svd(Jac)
+                Jac_V = _np.conjugate(Jac_Vh.T)
+
+                #DEBUG
+                #num_large_svals = _np.count_nonzero(Jac_s > _np.max(Jac_s) / 1e2)
+                #Jac_Uproj = Jac_U[:,0:num_large_svals]
+                #JTJ_evals, JTJ_U = _np.linalg.eig(JTJ)
+                #printer.log("JTJ (dim=%d) eval min/max=%g, %g; %d large svals (of %d)" % (
+                #    JTJ.shape[0], _np.min(_np.abs(JTJ_evals)), _np.max(_np.abs(JTJ_evals)), num_large_svals, len(Jac_s)))
+
+                #TODO REMOVE
+                #JTJ_U, JTJ_s, JTJ_Vh = _np.linalg.svd(JTJ)
+                #JTJ_s = _np.linalg.svd(JTJ, compute_uv=False)
+                # JTJ = U * diag(JTJ_s) * Vh
+                # (JTJ + mu*D) => U * (JTJ_s + mu*dvec) * Vh
+
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
                     msg = "norm(jacobian) is at most %g" % jac_norm_tol
@@ -269,7 +310,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
             if k == 0:
                 if init_munu == "auto":
-                    if damping_clip is None:
+                    if damping_mode == 'identity':
                         mu = tau * _np.max(undamped_JTJ_diag)  # initial damping element
                         #mu = min(mu, MU_TOL1)
                     else:
@@ -286,13 +327,54 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                 if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
                 #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
-                if damping_clip is None:
-                    JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
+
+                if damping_mode == 'identity':
+                    assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
+                    if damping_basis == "singular_values":
+                        reg_Jac_s = Jac_s + mu
+                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1/reg_Jac_s**2), Jac_V.T))
+                    else:
+                        JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
+
+                elif damping_mode == 'JTJ':
+                    if damping_basis == "singular_values":
+                        reg_Jac_s = Jac_s + mu * dclip(Jac_s)
+                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1/reg_Jac_s**2), Jac_V.T))
+                    else:
+                        add_to_diag = mu * dclip(undamped_JTJ_diag)
+                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag
+
+                elif damping_mode == 'invJTJ':
+                    if damping_basis == "singular_values":
+                        reg_Jac_s = Jac_s + mu * dclip(1.0 / Jac_s)
+                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1/reg_Jac_s**2), Jac_V.T))
+                    else:
+                        add_to_diag = mu * dclip(1.0 / undamped_JTJ_diag)
+                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag
+
+                elif damping_mode == 'adaptive':
+                    if damping_basis == "singular_values":
+                        reg_Jac_s_lst = [Jac_s + mu * dclip(Jac_s**(spow+0.1)),
+                                         Jac_s + mu * dclip(Jac_s**spow),
+                                         Jac_s + mu * dclip(Jac_s**(spow-0.1))]
+                        inv_JTJ_lst = [_np.dot(Jac_V, _np.dot(_np.diag(1/s**2), Jac_V.T)) for s in reg_Jac_s_lst]
+
+                        #DEBUG TODO REMOVE
+                        #JTJ_lst = [_np.dot(Jac_V.T, _np.dot(_np.diag(s**2), Jac_V)) for s in reg_Jac_s_lst]
+                        #JTJ_evals2_lst = [_np.linalg.eigvals(jtj) for jtj in JTJ_lst]
+                        #for ii,jtje in enumerate(JTJ_evals2_lst):
+                        #    printer.log("%d: JTJ POST-damping (spow=%g) eval min/max=%g, %g" % (ii, spow, _np.min(_np.abs(jtje)), _np.max(_np.abs(jtje))))
+                    else:
+                        add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow+0.1)),
+                                           mu * dclip(undamped_JTJ_diag**spow),
+                                           mu * dclip(undamped_JTJ_diag**(spow-0.1))]
                 else:
-                    add_to_diag = mu * _np.clip(undamped_JTJ_diag.copy(), damping_clip[0], damping_clip[1])
-                    JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                    # augment normal equations - without clipping this is just *= (1.0 + mu), if entirely clipped this
-                    # would be += CLIP*mu
+                    raise ValueError("Invalid damping mode: %s" % damping_mode)
+
+                #TODO REMOVE (DEBUG)
+                #printer.log("JTJ (dim=%d, mu=%g) diag vals=" % (JTJ.shape[0], mu))
+                #for ii,(ud,atd,dd) in enumerate(zip(undamped_JTJ_diag, add_to_diag, JTJ[idiag])):
+                #    printer.log("%d: %g \t%g \t%g" % (ii,ud,atd,dd))
                 #print("DB: Post-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
@@ -302,22 +384,43 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     if profiler: profiler.mem_check("custom_leastsq: before linsolve")
                     tm = _time.time()
                     success = True
-                    #dx = _np.linalg.solve(JTJ, -JTf)
-                    #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym'
-                    dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+
+                    if damping_basis == 'diagonal_values':
+                        if damping_mode == 'adaptive':
+                            dx_lst = []
+                            for add_to_diag in add_to_diag_lst:
+                                JTJ[idiag] = undamped_JTJ_diag + add_to_diag
+                                dx_lst.append(_scipy.linalg.solve(JTJ, -JTf, sym_pos=True))
+                        else:
+                            #dx = _np.linalg.solve(JTJ, -JTf)
+                            #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym'
+                            dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+
+                    elif damping_basis == 'singular_values':
+                        #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
+                        # but: J = U*s*Vh => JTJ = (VhT*s*UT)(U*s*Vh) = VhT*s^2*Vh, and inv_Vh = V b/c V is unitary
+                        # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K) * (K,K) * (K,N) if use psuedoinv
+                        if damping_mode == 'adaptive':
+                            dx_lst = [_np.dot(ijtj, -JTf) for ijtj in inv_JTJ_lst]  # special case
+                        else:
+                            dx = _np.dot(inv_JTJ, -JTf)
+                    else:
+                        raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
+
                     if profiler: profiler.add_time("custom_leastsq: linsolve", tm)
                 #except _np.linalg.LinAlgError:
                 except _scipy.linalg.LinAlgError:
                     success = False
 
                 if success and use_acceleration:  # Find acceleration term:
+                    assert(damping_mode != 'adaptive'), "Cannot use acceleration in adaptive mode (yet)"
                     df2_eps = 1.0
                     df2_dx = df2_eps * dx
                     try:
                         df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / \
                             df2_eps**2  # 2nd deriv of f along dx direction
                         JTdf2 = _np.dot(Jac.T, df2)
-                        dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)
+                        dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)  # Note: JTJ not init w/'adaptive'
                         dx1 = dx.copy()
                         dx += dx2  # add acceleration term to dx
                     except _scipy.linalg.LinAlgError:
@@ -331,22 +434,34 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if success:  # linear solve succeeded
                     #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
 
-                    new_x = x + dx
-                    norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
-                    #import bpdb; bpdb.set_trace()
-
-                    #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                    if max_norm_dx and norm_dx > max_norm_dx:
-                        dx *= _np.sqrt(max_norm_dx / norm_dx)
+                    if damping_mode != 'adaptive':
                         new_x = x + dx
                         norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
+
+                        #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                        if max_norm_dx and norm_dx > max_norm_dx:
+                            dx *= _np.sqrt(max_norm_dx / norm_dx)
+                            new_x = x + dx
+                            norm_dx = _np.dot(dx, dx)  # _np.linalg.norm(dx)**2
+                    else:
+                        new_x_lst = [x + dx for dx in dx_lst]
+                        norm_dx_lst = [_np.dot(dx, dx) for dx in dx_lst]
+                        norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
+
+                        #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                        if max_norm_dx:
+                            for i, norm_dx in enumerate(norm_dx_lst):
+                                if norm_dx > max_norm_dx:
+                                    dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
+                                    new_x_lst[i] = x + dx
+                                    norm_dx_lst[i] = _np.dot(dx_lst[i], dx_lst[i])
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
                     #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
                         if oob_check_interval <= 1:
-                            msg = "Relative change in |x| is at most %g" % rel_xtol
+                            msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
                             converged = True; break
                         else:
                             printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
@@ -360,6 +475,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         msg = "(near-)singular linear system"; break
 
                     if oob_check_interval > 0:
+                        assert(damping_mode != 'adaptive'), "Cannot use adaptive mode with OOB support yet"
                         if k % oob_check_interval == 0:
                             #Check to see if objective function is out of bounds
                             try:
@@ -391,19 +507,51 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             new_x_is_known_inbounds = False
                     else:
                         #Just evaluate objective function normally; never check for in-bounds condition
-                        new_f = obj_fn(new_x)
+                        if damping_mode == 'adaptive':
+                            new_f_lst = [obj_fn(new_x) for new_x in new_x_lst]
+                        else:
+                            new_f = obj_fn(new_x)
+
                         new_x_is_allowed = True
                         new_x_is_known_inbounds = True  # always considered "in bounds" when not checking
 
                     if new_x_is_allowed:
 
                         if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
-                        norm_new_f = _np.dot(new_f, new_f)  # _np.linalg.norm(new_f)**2
-                        if not _np.isfinite(norm_new_f):  # avoid infinite loop...
-                            msg = "Infinite norm of objective function!"; break
+                        if damping_mode == 'adaptive':
+                            norm_new_f_lst = [_np.dot(new_f, new_f) for new_f in new_f_lst]
+                            if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid infinite loop...
+                                msg = "Infinite norm of objective function!"; break
+
+                            #iMin = _np.argmin(norm_new_f_lst)  # pick lowest (best) objective
+                            gain_ratio_lst = [ (norm_f - nnf) / _np.dot(dx, mu * dx - JTf) for (nnf,dx) in zip(norm_new_f_lst, dx_lst) ]
+                            iMin = _np.argmax(gain_ratio_lst) # pick highest (best) gain ratio
+                            # but expected decrease is |f|^2 = grad(fTf) * dx = (grad(fT)*f + fT*grad(f)) * dx = (JT*f + fT*J) * dx
+                            # <<more explanation>>
+                            norm_new_f = norm_new_f_lst[iMin]
+                            new_f = new_f_lst[iMin]
+                            new_x = new_x_lst[iMin]
+                            dx = dx_lst[iMin]
+                            if iMin == 0: spow = min(1.0, spow + 0.1)
+                            elif iMin == 2: spow = max(-1.0, spow - 0.1)
+                            printer.log("ADAPTIVE damping => i=%d b/c fs=%s gains=%s => spow=%g" % (
+                                iMin, str(norm_new_f_lst), str(gain_ratio_lst), spow))
+
+                        else:
+                            norm_new_f = _np.dot(new_f, new_f)  # _np.linalg.norm(new_f)**2
+                            if not _np.isfinite(norm_new_f):  # avoid infinite loop...
+                                msg = "Infinite norm of objective function!"; break
 
                         dL = _np.dot(dx, mu * dx - JTf)  # expected decrease in ||F||^2 from linear model
                         dF = norm_f - norm_new_f      # actual decrease in ||F||^2
+
+                        #DEBUG - see if cos_phi < 0.001, say, might work as a convergence criterion
+                        #if damping_basis == 'singular_values':
+                        #    new_f_proj = _np.dot(Jac_Uproj, _np.dot(Jac_Uproj.T, new_f))  # projection of new_f onto solution tangent plane
+                        #    cos_phi = _np.sqrt(_np.dot(new_f_proj, new_f_proj) / norm_new_f)  # angle between residual vec and tangent plane
+                        #    #grad_f_norm = _np.linalg.norm(mu * dx - JTf)
+                        #else:
+                        #    cos_phi = 0
 
                         if dF <= 0 and uphill_step_threshold > 0:
                             beta = 0 if last_accepted_dx is None else \
