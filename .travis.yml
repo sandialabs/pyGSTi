@@ -38,6 +38,8 @@ install:
   - pip install .
   # Install test dependencies
   - pip install .[testing]
+  # HACK - upgrade numpy manually b/c built into TravisCI build and doesn't install the latest version
+  - pip install numpy --upgrade 
   # Show pip environment, for diagnostics
   - pip freeze
 
