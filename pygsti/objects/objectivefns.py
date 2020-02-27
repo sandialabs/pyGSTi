@@ -620,9 +620,11 @@ class TimeDependentChi2Function(ObjectiveFunction):
 class ChiAlphaFunction(ObjectiveFunction):
 
     def __init__(self, alpha, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cntVecMx, N,
-                 pfratio_stitchpt, probClipInterval, radius, wrtBlkSize, gthrMem, check=False,
-                 check_jacobian=False, comm=None, profiler=None, verbosity=0):
-
+                 pfratio_stitchpt, pfratio_derivpt, probClipInterval, radius, wrtBlkSize, gthrMem,
+                 check=False, check_jacobian=False, comm=None, profiler=None, verbosity=0):
+        """ TODO: docstring - note: if radius is None, then the "relaxed" zero-f-term mode is used
+            whereas a radius > 0 implies that the "harsh" zero-f-term mode is used.
+        """
         from ..tools import slicetools as _slct
 
         self.alpha = alpha
@@ -640,14 +642,26 @@ class ChiAlphaFunction(ObjectiveFunction):
         self.printer = _VerbosityPrinter.build_printer(verbosity, comm)
         self.opBasis = mdl.basis
 
-
         self.KM = KM
         self.vec_gs_len = vec_gs_len
         self.x0 = pfratio_stitchpt
-        self.a = radius  # parameterizes "roundness" of f == 0 terms
+        self.x1 = pfratio_derivpt
         self.probClipInterval = probClipInterval
         self.wrtBlkSize = wrtBlkSize
         self.gthrMem = gthrMem
+
+        if radius is None:
+            #Infer the curvature of the regularized zero-f-term functions from
+            # the largest curvature we use at the stitch-points of nonzero-f terms.
+            self.a = None
+            self.zero_freq_chialpha = self._zero_freq_chialpha_relaxed
+            self.zero_freq_dchialpha = self._zero_freq_dchialpha_relaxed
+        else:
+            #Use radius to specify the curvature/"roundness" of f == 0 terms,
+            # though this uses a more aggressive p^3 function to penalize negative probs.
+            self.a = radius
+            self.zero_freq_chialpha = self._zero_freq_chialpha_harsh
+            self.zero_freq_dchialpha = self._zero_freq_dchialpha_harsh
 
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
@@ -676,6 +690,8 @@ class ChiAlphaFunction(ObjectiveFunction):
         self.freqs = cntVecMx / N
         # set zero freqs to 1.0 so we don't get divide-by-zero errors
         self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
+        self.fmin = max(1e-7, _np.min(freqs_nozeros))  # lowest non-zero frequency
+        # (can only be as low as 1e-7 b/c freqs can be arbitarily small in no-sample-error case)
 
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
 
@@ -689,17 +705,28 @@ class ChiAlphaFunction(ObjectiveFunction):
             self.fn = self.termgap_chi_alpha
             self.jfn = self.simple_jac
 
-    def zero_freq_chialpha(self, N, probs):
+    def _zero_freq_chialpha_harsh(self, N, probs):
         a = self.a
         return N * _np.where(probs >= a, probs,
                              (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
 
-    def zero_freq_dchialpha(self, N, probs):
+    def _zero_freq_dchialpha_harsh(self, N, probs):
         a = self.a
         return N * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
+    def _zero_freq_chialpha_relaxed(self, N, probs):
+        C0 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
+        p0 = 1.0 / C0
+        return N * _np.where(probs > p0, probs, C0*probs**2)
+
+    def _zero_freq_dchialpha_relaxed(self, N, probs):
+        C0 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
+        p0 = 1.0 / C0
+        return N * _np.where(probs > p0, 1.0, 2*C0*probs)
+
     def _chialpha_from_probs(self, tm, extra=False, debug=False):
         x0 = self.x0
+        x1 = self.x1
         x = self.probs / self.freqs_nozeros
         xt = x.copy()
         itaylor = x < x0  # indices where we patch objective function with taylor series
@@ -708,20 +735,25 @@ class ChiAlphaFunction(ObjectiveFunction):
         xt[itaylorB] = 1/x0
         v = self.cntVecMx * (xt + 1.0/(self.alpha * xt**self.alpha) - (1.0 + 1.0/self.alpha))
 
-        S = 1. - 1./(x0**(1 + self.alpha))
-        S2 = 0.5 * (1. + self.alpha) / x0**(2 + self.alpha)
-        SB = 1. - 1./((1/x0)**(1 + self.alpha))
-        S2B = 0.5 * (1. + self.alpha) / (1/x0)**(2 + self.alpha)
+        S = 1. - 1./(x1**(1 + self.alpha))
+        S2 = 0.5 * (1. + self.alpha) / x1**(2 + self.alpha)
+        SB = 1. - 1./((1/x1)**(1 + self.alpha))
+        S2B = 0.5 * (1. + self.alpha) / (1/x1)**(2 + self.alpha)
         v = _np.where(itaylor, v + S * self.cntVecMx * (x - x0) + S2 * self.cntVecMx * (x - x0)**2, v)
         v = _np.where(itaylorB, v + SB * self.cntVecMx * (x - 1/x0) + S2B * self.cntVecMx * (x - 1/x0)**2, v)
         v = _np.where(self.cntVecMx == 0, self.zero_freq_chialpha(self.totalCntVec, self.probs), v)
 
         #DEBUG TODO REMOVE
-        #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-        #    print("ALPHA OBJECTIVE: ",S,S2,SB,S2B)
-        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor)+_np.count_nonzero(itaylorB), " nZero=",_np.count_nonzero(self.cntVecMx==0))
-        #    print(" xrange = ",_np.min(x),_np.max(x))
-        #    print(" vrange = ",_np.min(v),_np.max(v))
+        if debug and (self.comm is None or self.comm.Get_rank() == 0):
+            print("ALPHA OBJECTIVE: ",S,S2,SB,S2B)
+            print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor)+_np.count_nonzero(itaylorB), " nZero=",_np.count_nonzero(self.cntVecMx==0))
+            print(" xrange = ",_np.min(x),_np.max(x))
+            print(" vrange = ",_np.min(v),_np.max(v))
+            print(" |v|^2 = ",_np.sum(v))
+            print(" |v(normal)|^2 = ",_np.sum(v[x >= x0]))
+            print(" |v(taylor)|^2 = ",_np.sum(v[x < x0]))
+            imax = _np.argmax(v)
+            print(" MAX: v=",v[imax]," x=",x[imax]," p=",self.probs[imax]," f=",self.freqs[imax])
 
         if self.firsts is not None:
             #self.update_v_for_omitted_probs(v, self.probs)
@@ -731,10 +763,16 @@ class ChiAlphaFunction(ObjectiveFunction):
             v[self.firsts] += self.zero_freq_chialpha(self.totalCntVec[self.firsts], omitted_probs)
 
             #DEBUG TODO REMOVE
-            #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-            #    print(" vrange2 = ",_np.min(v),_np.max(v))
-            #    print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
-            #    print(" nSparse = ",len(self.firsts), " nOmitted > radius=", _np.count_nonzero(omitted_probs >= self.a))
+            if debug and (self.comm is None or self.comm.Get_rank() == 0):
+                print(" vrange2 = ",_np.min(v),_np.max(v))
+                print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
+                #print(" nSparse = ",len(self.firsts), " nOmitted >radius=", _np.count_nonzero(omitted_probs >= self.a),
+                #      " <0=", _np.count_nonzero(omitted_probs < 0))
+                fmin = 1e-4
+                p0 = 1.0 / (0.5 * (1. + self.alpha) / (self.x1**(2 + self.alpha) * fmin))
+                print(" nSparse = ",len(self.firsts), " nOmitted >p0=", _np.count_nonzero(omitted_probs >= p0),
+                      " <0=", _np.count_nonzero(omitted_probs < 0))
+                print(" |v(post-sparse)|^2 = ",_np.sum(v))
         else:
             omitted_probs = None  # b/c we might return this
 
