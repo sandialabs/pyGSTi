@@ -3600,9 +3600,6 @@ class LindbladOp(LinearOperator):
            isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
-
-            #DEBUG TODO REMOVE
-            #chk = self.todense().copy()
             #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
             #just conjugate postfactor and Lindbladian exponent by U:
@@ -3615,10 +3612,6 @@ class LindbladOp(LinearOperator):
             ## modify eigenvalues to be negative beyond the tolerances
             ## checked when truncate == False.  I'm not sure why this occurs,
             ## since a true unitary should map CPTP -> CPTP...
-
-            #DEBUG TODO REMOVE
-            #print("DIFF op = ", _np.linalg.norm(self.todense() - _np.dot(Uinv, _np.dot(chk, U))))
-            #assert(_np.allclose(self.todense(), _np.dot(Uinv, _np.dot(chk, U))))
 
             #CHECK WITH OLD (passes) TODO move to unit tests?
             #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
@@ -3661,48 +3654,6 @@ class LindbladOp(LinearOperator):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
 
-            #DEBUG TODO REMOVE - check that U is unitary
-            #std_U = _bt.change_basis(U, 'pp', 'std')
-            #u = _gt.process_mx_to_unitary(std_U)
-            #assert(_np.allclose(_np.dot(u,u.T.conjugate()), _np.identity(u.shape[0],'d')))
-            #print("UNITARY u = \n",u)
-            #import pickle
-            #pickle.dump(u, open("debug_u.pkl","wb"))
-            #std_U2 = _gt.unitary_to_process_mx(u)
-            #U2 = _bt.change_basis(std_U2, 'std', 'pp')
-            #assert(_np.allclose(U, U2))
-
-            #chk = self.todense().copy()  # REMOVE
-            #print(typ, "chk= \n", chk)   # REMOVE
-            
-            ## DEBUG TODO REMOVE - debugging gauge-opt failure due to negative eval truncation
-            ## This block updates the errorgen of self directly without taking a matrix log
-            ## to see if this fixed the issues, but it didn't - so the matrix log isn't the culprit
-            #U_errgen_mx = S.gate.errorgen.todense().copy()
-            #self_errgen_mx = self.errorgen.todense().copy()
-            #
-            #def commut(A, B):
-            #    return _np.dot(A, B) - _np.dot(B, A)
-            #
-            #def ncommut(*args):
-            #    n = len(args)
-            #    if n == 2: return commut(args[0], args[1])
-            #    return ncommut(*(args[0:n - 2] + (commut(args[n - 2], args[n - 1]),)))
-            #
-            #def BCH(A, B):
-            #    return A + B + commut(A, B) / 2.0 + (ncommut(A, A, B) + ncommut(B, B, A)) / 12.0 \
-            #        - ncommut(B, A, A, B) / 24.0 # MORE?
-            #
-            #if typ == "prep":
-            #    new_errgen_mx = BCH(-U_errgen_mx, self_errgen_mx)
-            #else:
-            #    new_errgen_mx = BCH(self_errgen_mx, U_errgen_mx)
-            #terrgen = LindbladErrorgen.from_error_generator(new_errgen_mx, self.errorgen.ham_basis,
-            #                                                self.errorgen.other_basis, self.errorgen.param_mode,
-            #                                                self.errorgen.nonham_mode, self.errorgen.matrix_basis,
-            #                                                False, self._evotype)
-            #self.from_vector(terrgen.to_vector())
-
             #Note: this code may need to be tweaked to work with sparse matrices
             if typ == "prep":
                 tMx = _mt.safedot(Uinv, self.todense())
@@ -3731,17 +3682,6 @@ class LindbladOp(LinearOperator):
             #self.errorgen.spam_transform(S, typ)
             #self._update_rep()  # needed to rebuild exponentiated error gen
             #self.dirty = True
-
-            #DEBUG TODO REMOVE
-            #if typ == 'prep':
-            #    print("DIFF prep = ", _np.linalg.norm(self.todense() - _np.dot(Uinv, chk)))
-            #    print("prep = \n",self.todense())
-            #    #assert(_np.allclose(self.todense(), _np.dot(Uinv, chk)))
-            #else:
-            #    print("DIFF effect = ", _np.linalg.norm(self.todense() - _np.dot(chk, U)))
-            #    print("effect = \n",self.todense())
-            #    #assert(_np.allclose(self.todense(), _np.dot(chk, U)))
-
         else:
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
@@ -7135,17 +7075,6 @@ class LindbladErrorgen(LinearOperator):
                 return_generators=False, other_mode=self.nonham_mode,
                 sparse=self.sparse)  # in std basis
 
-        #DEBUG: CHECK that projections reproduce errgen correctly (TODO REMOVE)
-        #hamC, otherC, hamGens, otherGens = \
-        #    _gt.lindblad_errgen_projections(
-        #        errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
-        #        return_generators=True, other_mode=self.nonham_mode,
-        #        sparse=self.sparse)  # in std basis
-        #
-        #chk_full = _np.einsum('a,acd->cd',hamC,hamGens)
-        #chk_full += _np.einsum('ab,abcd->cd',otherC,otherGens)
-        #assert(not _np.allclose(_bt.change_basis(errgen, "pp", "std"), chk_full))
-
         self.paramvals = _gt.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
         if self._evotype == "densitymx": self._update_rep()
@@ -7737,7 +7666,6 @@ class LindbladErrorgen(LinearOperator):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
             err_gen_mx = self.tosparse() if self.sparse else self.todense()
-            #chk = self.todense()  #REMOVE
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
@@ -7750,15 +7678,6 @@ class LindbladErrorgen(LinearOperator):
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
             ## checked when truncate == False.
-
-            #DEBUG TODO REMOVE
-            #if typ == 'prep':
-            #    if not (_np.allclose(self.todense(), err_gen_mx)):
-            #        import bpdb; bpdb.set_trace()
-            #        pass
-            #    assert(_np.allclose(self.todense(), _np.dot(Uinv, chk)))
-            #else:
-            #    assert(_np.allclose(self.todense(), _np.dot(chk, U)))
         else:
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))

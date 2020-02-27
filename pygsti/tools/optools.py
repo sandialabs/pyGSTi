@@ -2394,11 +2394,10 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
                 #push any slightly negative evals of otherProjs positive so that
                 # the Cholesky decomp will work.
                 #assert(_np.allclose(otherProjs, otherProjs.T.conjugate()))
-                #evals, U = _np.linalg.eigh(otherProjs)  # works too
+                #evals, U = _np.linalg.eigh(otherProjs)  # works too (assert hermiticity above)
                 evals, U = _np.linalg.eig(otherProjs)
                 Ui = _np.linalg.inv(U)
 
-                #print("DEBUG: evals = ",sorted(evals))  # DEBUG TODO REMOVE
                 assert(truncate or all([ev >= -1e-12 for ev in evals])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
 
