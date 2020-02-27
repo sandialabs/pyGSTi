@@ -3608,10 +3608,6 @@ class LindbladOp(LinearOperator):
             self.errorgen.transform(S)
             self._update_rep()  # needed to rebuild exponentiated error gen
             self.dirty = True
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
 
             #CHECK WITH OLD (passes) TODO move to unit tests?
             #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
@@ -3659,15 +3655,17 @@ class LindbladOp(LinearOperator):
                 tMx = _mt.safedot(Uinv, self.todense())
             else:
                 tMx = _mt.safedot(self.todense(), U)
+            trunc = bool(isinstance(S, _gaugegroup.UnitaryGaugeGroupElement))
             tOp = LindbladOp.from_operation_matrix(tMx, self.unitary_postfactor,
                                                    self.errorgen.ham_basis, self.errorgen.other_basis,
                                                    self.errorgen.param_mode, self.errorgen.nonham_mode,
-                                                   True, self.errorgen.matrix_basis)
+                                                   trunc, self.errorgen.matrix_basis)
             self.from_vector(tOp.to_vector())
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
+            #Note: truncate=True above for unitary transformations because
+            # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
+            # sometimes a unitary transform can modify eigenvalues to be negative beyond
+            # the tight tolerances checked when truncate == False. Maybe we should be able
+            # to give a tolerance as `truncate` in the future?
 
             #NOTE: This *doesn't* work as it does in the 'gate' case b/c this isn't a
             # similarity transformation!
@@ -7625,12 +7623,14 @@ class LindbladErrorgen(LinearOperator):
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.tosparse() if self.sparse else self.todense()
             err_gen_mx = _mt.safedot(Uinv, _mt.safedot(err_gen_mx, U))
-            self._set_params_from_matrix(err_gen_mx, truncate=False)
+            trunc = bool(isinstance(S, _gaugegroup.UnitaryGaugeGroupElement))
+            self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
+            #Note: truncate=True above for unitary transformations because
+            # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
+            # sometimes a unitary transform can modify eigenvalues to be negative beyond
+            # the tight tolerances checked when truncate == False. Maybe we should be able
+            # to give a tolerance as `truncate` in the future?
 
         else:
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"

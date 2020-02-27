@@ -662,6 +662,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
                     'itemWeights': {'gates': 0.0, 'spam': 1.0},
                     'spam_penalty_factor': 1.0,
                     'gauge_group': s3gg(model.dim),
+                    'oob_check_interval': 1,
                     'verbosity': printer
                 })
 
