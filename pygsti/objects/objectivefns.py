@@ -690,7 +690,7 @@ class ChiAlphaFunction(ObjectiveFunction):
         self.freqs = cntVecMx / N
         # set zero freqs to 1.0 so we don't get divide-by-zero errors
         self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
-        self.fmin = max(1e-7, _np.min(freqs_nozeros))  # lowest non-zero frequency
+        self.fmin = max(1e-7, _np.min(self.freqs_nozeros))  # lowest non-zero frequency
         # (can only be as low as 1e-7 b/c freqs can be arbitarily small in no-sample-error case)
 
         self.maxCircuitLength = max([len(x) for x in circuitsToUse])
@@ -838,8 +838,7 @@ class ChiAlphaFunction(ObjectiveFunction):
         x0 = self.x0
         dprobs_factor = (0.5 / v) * self.totalCntVec * (1 - 1. / x**(1.+self.alpha))
         dprobs_factor_taylor = (0.5 / v) * self.totalCntVec * (S + 2 * S2 * (x - x0))
-        dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(
-            self.probs >= self.a, 1.0, (-1.0 / self.a**2) * self.probs**2 + 2 * self.probs / self.a)
+        dprobs_factor_zerofreq = (0.5 / v) * self.zero_freq_dchialpha(self.totalCntVec, self.probs)
         dprobs_factor[itaylor] = dprobs_factor_taylor[itaylor]
         dprobs_factor = _np.where(self.cntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
         
@@ -1010,7 +1009,7 @@ class LogLFunction(ObjectiveFunction):
         self.freqs = cntVecMx / totalCntVec
         # set zero freqs to 1.0 so np.log doesn't complain
         self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
-        self.fmin = max(1e-7, _np.min(freqs_nozeros))  # lowest non-zero frequency
+        self.fmin = max(1e-7, _np.min(self.freqs_nozeros))  # lowest non-zero frequency
         # (can only be as low as 1e-7 b/c freqs can be arbitarily small in no-sample-error case)
 
         if poissonPicture:
@@ -1037,13 +1036,13 @@ class LogLFunction(ObjectiveFunction):
             # the largest curvature we use at the stitch-points of nonzero-f terms.
             self.a = None
             self.zero_freq_poisson_logl = self._zero_freq_poisson_logl_relaxed
-            self.zero_freq_dpoisson_logl = self._zero_freq_poisson_dlogl_relaxed
+            self.zero_freq_poisson_dlogl = self._zero_freq_poisson_dlogl_relaxed
         else:
             #Use radius to specify the curvature/"roundness" of f == 0 terms,
             # though this uses a more aggressive p^3 function to penalize negative probs.
             self.a = radius
             self.zero_freq_poisson_logl = self._zero_freq_poisson_logl_harsh
-            self.zero_freq_dpoisson_logl = self._zero_freq_poisson_dlogl_harsh
+            self.zero_freq_poisson_dlogl = self._zero_freq_poisson_dlogl_harsh
 
         if forcefn_grad is not None:
             ffg_norm = _np.linalg.norm(forcefn_grad)
