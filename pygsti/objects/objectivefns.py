@@ -730,9 +730,7 @@ class ChiAlphaFunction(ObjectiveFunction):
         x = self.probs / self.freqs_nozeros
         xt = x.copy()
         itaylor = x < x0  # indices where we patch objective function with taylor series
-        itaylorB = x > 1/x0
         xt[itaylor] = x0  # so we evaluate function at x0 (first taylor term) at itaylor indices
-        xt[itaylorB] = 1/x0
         v = self.cntVecMx * (xt + 1.0/(self.alpha * xt**self.alpha) - (1.0 + 1.0/self.alpha))
 
         S = 1. - 1./(x1**(1 + self.alpha))
@@ -740,13 +738,12 @@ class ChiAlphaFunction(ObjectiveFunction):
         SB = 1. - 1./((1/x1)**(1 + self.alpha))
         S2B = 0.5 * (1. + self.alpha) / (1/x1)**(2 + self.alpha)
         v = _np.where(itaylor, v + S * self.cntVecMx * (x - x0) + S2 * self.cntVecMx * (x - x0)**2, v)
-        v = _np.where(itaylorB, v + SB * self.cntVecMx * (x - 1/x0) + S2B * self.cntVecMx * (x - 1/x0)**2, v)
         v = _np.where(self.cntVecMx == 0, self.zero_freq_chialpha(self.totalCntVec, self.probs), v)
 
         #DEBUG TODO REMOVE
         if debug and (self.comm is None or self.comm.Get_rank() == 0):
             print("ALPHA OBJECTIVE: ",S,S2,SB,S2B)
-            print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor)+_np.count_nonzero(itaylorB), " nZero=",_np.count_nonzero(self.cntVecMx==0))
+            print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor), " nZero=",_np.count_nonzero(self.cntVecMx==0))
             print(" xrange = ",_np.min(x),_np.max(x))
             print(" vrange = ",_np.min(v),_np.max(v))
             print(" |v|^2 = ",_np.sum(v))
@@ -781,7 +778,7 @@ class ChiAlphaFunction(ObjectiveFunction):
         assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
 
         if extra:
-            return v, (x, itaylor, itaylorB, S, S2, SB, S2B, omitted_probs) 
+            return v, (x, itaylor, S, S2, SB, S2B, omitted_probs) 
         else:
             return v
 
@@ -833,7 +830,7 @@ class ChiAlphaFunction(ObjectiveFunction):
         #objective is sqrt(Nf * (x + 1/(alpha*x^alpha) + C))
         # deriv is 0.5/objective * Nf * (1 - 1/x^(1+alpha)) * dx/dprobs , where dx/dprobs = 1/f * dp/dprobs
         # so deriv = 0.5/objective * N * (1 - 1/x^(1+alpha)) * dp/dprobs
-        v, (x, itaylor, itaylorB, S, S2, SB, S2B, omitted_probs) = self._chialpha_from_probs(tm, extra=True)
+        v, (x, itaylor, S, S2, SB, S2B, omitted_probs) = self._chialpha_from_probs(tm, extra=True)
 
         # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to
         # avoid divide by zero below
@@ -843,11 +840,9 @@ class ChiAlphaFunction(ObjectiveFunction):
         x0 = self.x0
         dprobs_factor = (0.5 / v) * self.totalCntVec * (1 - 1. / x**(1.+self.alpha))
         dprobs_factor_taylor = (0.5 / v) * self.totalCntVec * (S + 2 * S2 * (x - x0))
-        dprobs_factor_taylorB = (0.5 / v) * self.totalCntVec * (SB + 2 * S2B * (x - 1/x0))
         dprobs_factor_zerofreq = (0.5 / v) * self.totalCntVec * _np.where(
             self.probs >= self.a, 1.0, (-1.0 / self.a**2) * self.probs**2 + 2 * self.probs / self.a)
         dprobs_factor[itaylor] = dprobs_factor_taylor[itaylor]
-        dprobs_factor[itaylorB] = dprobs_factor_taylor[itaylorB]
         dprobs_factor = _np.where(self.cntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
         
         if self.firsts is not None:
