@@ -146,7 +146,7 @@ def setup_with_extensions(extensions=None):
         },
         setup_requires=['setuptools_scm'],
         install_requires=[
-            'numpy>=1.15.0',
+            'numpy',
             'scipy',
             'plotly',
             'ply'
