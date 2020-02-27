@@ -1218,8 +1218,10 @@ class LindbladPOVM(POVM):
             A gauge group element which specifies the "S" matrix
             (and it's inverse) used in the above similarity transform.
         """
+        self.error_map.spam_transform(S, 'effect')  # only do this *once*
         for lbl, effect in self.items():
-            effect.transform(S, 'effect')
+            effect._update_rep()  # these two lines mimic the bookeepging in
+            effect.dirty = True   # a "effect.transform(S, 'effect')" call.
         self.dirty = True
 
     def __str__(self):

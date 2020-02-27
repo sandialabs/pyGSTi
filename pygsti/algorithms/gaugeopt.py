@@ -251,7 +251,9 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     x0 = gauge_group.get_initial_params()  # gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0)  # re-used element for evals
 
-    def _call_objective_fn(gaugeGroupElVec):
+    def _call_objective_fn(gaugeGroupElVec, oob_check=False):
+        # Note: could raise ValueError for out-of-bounds condition if oob_check_interval>=1
+        #  is given to the custom_leastsq below
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         mdl = model.copy()
         mdl.transform(gaugeGroupEl)
