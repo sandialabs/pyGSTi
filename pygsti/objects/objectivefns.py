@@ -763,8 +763,7 @@ class ChiAlphaFunction(ObjectiveFunction):
                 print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
                 #print(" nSparse = ",len(self.firsts), " nOmitted >radius=", _np.count_nonzero(omitted_probs >= self.a),
                 #      " <0=", _np.count_nonzero(omitted_probs < 0))
-                fmin = 1e-4
-                p0 = 1.0 / (0.5 * (1. + self.alpha) / (self.x1**(2 + self.alpha) * fmin))
+                p0 = 1.0 / (0.5 * (1. + self.alpha) / (self.x1**(2 + self.alpha) * self.fmin))
                 print(" nSparse = ",len(self.firsts), " nOmitted >p0=", _np.count_nonzero(omitted_probs >= p0),
                       " <0=", _np.count_nonzero(omitted_probs < 0))
                 print(" |v(post-sparse)|^2 = ",_np.sum(v))
@@ -1139,10 +1138,30 @@ class LogLFunction(ObjectiveFunction):
         # using cubit rounding of function that smooths N*p for p>0:
         #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
 
+        #DEBUG TODO REMOVE
+        if debug and (self.comm is None or self.comm.Get_rank() == 0):
+            print("LOGL OBJECTIVE: ")
+            print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
+            print(" xrange = ",_np.min(x),_np.max(x))
+            print(" prange = ",_np.min(self.probs),_np.max(self.probs))
+            print(" vrange = ",_np.min(v),_np.max(v))
+            print(" |v|^2 = ",_np.sum(v))
+            print(" |v(normal)|^2 = ",_np.sum(v[x >= x0]))
+            print(" |v(taylor)|^2 = ",_np.sum(v[x < x0]))
+
         if self.firsts is not None:
             omitted_probs = 1.0 - _np.array([_np.sum(pos_x[self.lookup[i]] * self.freqs_nozeros[self.lookup[i]])
                                              for i in self.indicesOfCircuitsWithOmittedData])
             v[self.firsts] += self.zero_freq_poisson_logl(self.totalCntVec[self.firsts], omitted_probs)
+
+            #DEBUG TODO REMOVE
+            if debug and (self.comm is None or self.comm.Get_rank() == 0):
+                print(" vrange2 = ",_np.min(v),_np.max(v))
+                print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
+                p0 = 1.0 / ((0.5 / self.fmin) * 1.0 / self.x1**2)
+                print(" nSparse = ",len(self.firsts), " nOmitted >p0=", _np.count_nonzero(omitted_probs >= p0),
+                      " <0=", _np.count_nonzero(omitted_probs < 0))
+                print(" |v(post-sparse)|^2 = ",_np.sum(v))
         else:
             omitted_probs = None  # b/c we might return this
 
@@ -1292,11 +1311,21 @@ class LogLFunction(ObjectiveFunction):
         dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
         #Note: this also sets jac[0:KM,:]
 
+        if (self.comm is None or self.comm.Get_rank() == 0):
+            print("LOGL JACOBIAN: ")
+            print(" vrange = ",_np.min(v**2),_np.max(v**2))  # v**2 to match OBJECTIVE print stmts
+            print(" |v|^2 = ",_np.sum(v**2))
+            print(" |jac|^2 = ",_np.linalg.norm(dprobs))
+
         # need to multipy dprobs_factor_omitted[i] * dprobs[k] for k in lookup[i] and
         # add to dprobs[firsts[i]] for i in indicesOfCircuitsWithOmittedData
         if self.firsts is not None:
             dprobs[self.firsts, :] += dprobs_factor_omitted[:, None] * self.dprobs_omitted_rowsum
             # nCircuitsWithOmittedData x N
+            if (self.comm is None or self.comm.Get_rank() == 0):
+                print(" |dprobs_omitted_rowsum| = ",_np.linalg.norm(self.dprobs_omitted_rowsum))
+                print(" |dprobs_factor_omitted| = ",_np.linalg.norm(dprobs_factor_omitted))
+                print(" |jac(post-sparse)| = ",_np.linalg.norm(dprobs))
 
         off = 0
         if self.cptp_penalty_factor != 0:
