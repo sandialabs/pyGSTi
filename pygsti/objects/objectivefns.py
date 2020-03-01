@@ -1124,7 +1124,10 @@ class LogLFunction(ObjectiveFunction):
         #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
         #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
         
-        v = self.minusCntVecMx * (_np.log(pos_x) + 1.0 - pos_x)
+        v = self.minusCntVecMx * (1.0 - pos_x + _np.log(pos_x))
+        #Note: order of +/- terms above is important to avoid roundoff errors when x is near 1.0
+        # (see patching line below).  For example, using log(x) + 1 - x causes significant loss
+        # of precision because log(x) is tiny and so is |1-x| but log(x) + 1 == 1.0.
 
         # omit = 1-p1-p2  => 1/2-p1 + 1/2-p2
 
@@ -1173,6 +1176,8 @@ class LogLFunction(ObjectiveFunction):
         #      + _np.sum(v)-_np.sum(freqTerm)))
 
         v = _np.sqrt(v)
+        v = _np.where(_np.abs(x-1) < 1e-6, _np.sqrt(-self.minusCntVecMx) * _np.abs(x-1)/_np.sqrt(2), v)  # 1st order taylor patch for x near 1.0 TEST
+
         v.shape = [self.KM]  # reshape ensuring no copy is needed
         if extra:  # then used for jacobian where penalty terms are added later, so return now
             return v, (x, pos_x, S, S2, omitted_probs)
@@ -1316,6 +1321,13 @@ class LogLFunction(ObjectiveFunction):
             print(" vrange = ",_np.min(v**2),_np.max(v**2))  # v**2 to match OBJECTIVE print stmts
             print(" |v|^2 = ",_np.sum(v**2))
             print(" |jac|^2 = ",_np.linalg.norm(dprobs))
+            print(" |dprobs_factor_pos| = ",_np.linalg.norm(dprobs_factor_pos[_np.logical_and(x >= x0, self.minusCntVecMx != 0)]))
+            print(" |dprobs_factor_neg| = ",_np.linalg.norm(dprobs_factor_neg[_np.logical_and(x < x0, self.minusCntVecMx != 0)]))
+            print(" |dprobs_factor_zero| = ",_np.linalg.norm(dprobs_factor_zerofreq[self.minusCntVecMx == 0]))
+            chk = dprobs_factor_pos.copy()
+            chk[_np.logical_or(x < x0, self.minusCntVecMx == 0)] = 0
+            imax = _np.argmax(chk)
+            print(" MAX: chk=",chk[imax]," v=",v[imax]," x=",x[imax]," pos_x=",pos_x[imax]," p=",self.probs[imax]," f=",self.freqs[imax])
 
         # need to multipy dprobs_factor_omitted[i] * dprobs[k] for k in lookup[i] and
         # add to dprobs[firsts[i]] for i in indicesOfCircuitsWithOmittedData
