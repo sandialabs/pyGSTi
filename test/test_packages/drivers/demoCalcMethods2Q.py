@@ -3,8 +3,8 @@ import numpy as np
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.construction import std2Q_XYCNOT as std
-from pygsti.construction import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
+from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L
 from pygsti.io import json
 import sys, os
@@ -244,8 +244,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_circuitsim_stabilizer_2Qcheck(self):
         #Test 2Q circuits
-        #from pygsti.construction import std2Q_XYICNOT as stdChk
-        from pygsti.construction import std2Q_XYICPHASE as stdChk
+        #from pygsti.modelpacks.legacy import std2Q_XYICNOT as stdChk
+        from pygsti.modelpacks.legacy import std2Q_XYICPHASE as stdChk
 
         maxLengths = [1,2,4]
         listOfExperiments = pygsti.construction.make_lsgst_experiment_list(

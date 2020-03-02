@@ -160,6 +160,28 @@ def find_replace_tuple_list(list_of_tuples, aliasDict):
     return [find_replace_tuple(t, aliasDict) for t in list_of_tuples]
 
 
+def apply_aliases_to_circuit_list(list_of_circuits, alias_dict):
+    """
+    Applies `alias_dict` to the circuits in `list_of_circuits`.
+
+    Parameters
+    ----------
+    list_of_circuits : list
+        A list of circuits to make replacements in.
+
+    alias_dict : dict
+        A dictionary whose keys are layer Labels (or equivalent tuples or
+        strings), and whose values are Circuits or tuples of labels.
+
+    Returns
+    -------
+    list
+    """
+    if len(list_of_circuits) == 0 or not alias_dict:
+        return list_of_circuits
+    return [c.replace_layers_with_aliases(alias_dict) for c in list_of_circuits]
+
+
 def sorted_partitions(n):
     """
     Iterate over all sorted (decreasing) partitions of integer `n`.

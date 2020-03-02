@@ -45,7 +45,11 @@ class ProtectedArray(object):
 
         if len(self.indicesToProtect) == 0:
             self.indicesToProtect = None
-        self.base.flags.writeable = True
+
+        #Note: no need to set self.base.flags.writeable = True anymore,
+        # since this flag can only apply to a data owner as of numpy 1.16 or so.
+        # Instead, we just copy the data whenever we return a readonly array.
+        #Here, we just leave the writeable flag of self.base alone (either value is ok)
 
     #Mimic array behavior
     def __pos__(self): return self.base
@@ -91,7 +95,8 @@ class ProtectedArray(object):
         # set references to our memory as (entirely) read-only
         ret = getattr(self.__dict__['base'], attr)
         if isinstance(ret, _np.ndarray) and ret.base is self.base:
-            ret.flags.writeable = False
+            ret = _np.require(ret.copy(), requirements=['OWNDATA'])  # copy to a new read-only array
+            ret.flags.writeable = False  # as of numpy 1.16, this can only be set by OWNER
         return ret
 
     def __getslice__(self, i, j):
@@ -172,9 +177,14 @@ class ProtectedArray(object):
         ret = _np.ndarray.__getitem__(self.base, key)
 
         if not _np.isscalar(ret):
-            ret = ProtectedArray(ret)
-            ret.base.flags.writeable = writeable
-            ret.indicesToProtect = new_indicesToProtect
+            if writeable:  # then some of the indices are writeable
+                ret = ProtectedArray(ret)
+                ret.indicesToProtect = new_indicesToProtect
+            else:
+                ret = _np.require(ret.copy(), requirements=['OWNDATA'])  # copy to a new read-only array
+                ret.flags.writeable = False  # a read-only array
+                ret = ProtectedArray(ret)  # return a ProtectedArray that is read-only
+
             #print "   writeable = ",ret.flags.writeable
             #print "   new_toProtect = ",ret.indicesToProtect
             #print "<< END getitem"

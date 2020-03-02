@@ -1,5 +1,5 @@
 import pygsti
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 import pickle
 import os
 

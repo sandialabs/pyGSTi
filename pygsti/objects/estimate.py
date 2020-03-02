@@ -17,6 +17,7 @@ from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from .circuit import Circuit as _Circuit
+from .explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -166,8 +167,11 @@ class Estimate(object):
         for gop in goparams_list:
             if gop.get('comm', None) is not None:
                 printer_comm = gop['comm']; break
-        max_vb = verbosity if (verbosity is not None) else \
-            max([gop.get('verbosity', 0) for gop in goparams_list])
+        if verbosity is not None:
+            max_vb = verbosity
+        else:
+            verbosities = [gop.get('verbosity', 0) for gop in goparams_list]
+            max_vb = max([v.verbosity if isinstance(v, _VerbosityPrinter) else v for v in verbosities])
         printer = _VerbosityPrinter.build_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
 
@@ -178,6 +182,7 @@ class Estimate(object):
             else:
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
                 gop = gop.copy()  # so we don't change the caller's dict
+                if '_gaugeGroupEl' in gop: del gop['_gaugeGroupEl']
 
                 printer.log("Stage %d:" % i, 2)
                 if verbosity is not None:
@@ -202,7 +207,13 @@ class Estimate(object):
                     gop["maxiter"] = 100
 
                 gop['returnAll'] = True
-                _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                if isinstance(gop['model'], _ExplicitOpModel):
+                    #only explicit models can be gauge optimized
+                    _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                else:
+                    #but still fill in results for other models (?)
+                    gaugeGroupEl, last_gs = None, gop['model'].copy()
+
                 gop['_gaugeGroupEl'] = gaugeGroupEl  # an output stored here for convenience
 
             #sort the parameters by name for consistency
@@ -351,15 +362,15 @@ class Estimate(object):
 
         ref_model = self.models[from_model_label]
         goparams = self.goparameters[to_model_label]
-        start_model = goparams['model'].copy()
+        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+        start_model = goparams_list[0]['model'].copy()
         final_model = self.models[to_model_label].copy()
 
-        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
         gaugeGroupEls = []
         for gop in goparams_list:
             assert('_gaugeGroupEl' in gop), "To propagate a confidence " + \
                 "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
-            gaugeGroupEls.append(goparams['_gaugeGroupEl'])
+            gaugeGroupEls.append(gop['_gaugeGroupEl'])
 
         assert(start_model.frobeniusdist(ref_model) < 1e-6), \
             "Gauge-opt starting point must be the 'from' (reference) Model"
@@ -508,27 +519,27 @@ class Estimate(object):
         mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
         gss = p.circuit_structs['final']  # FUTURE: overrideable?
         mpc = self.parameters.get('minProbClipForWeighting', 1e-4)
+        aliases = self.parameters.get('opLabelAliases', gss.aliases)
         ds = self.get_effective_dataset()
 
         if obj == "chi2":
             fitQty = _tools.chi2(mdl, ds, gss.allstrs,
                                  minProbClipForWeighting=mpc,
-                                 opLabelAliases=gss.aliases,
+                                 opLabelAliases=aliases,
                                  evaltree_cache=evaltree_cache, comm=comm)
         elif obj in ("logl", "lgst"):
-            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
+            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=aliases,
                                               evaltree_cache=evaltree_cache)
-            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=gss.aliases,
+            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=aliases,
                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
-        if len(gss.allstrs) > 0 and isinstance(gss.allstrs[0], _Circuit):
-            allstrs_as_tups = [s.tup for s in gss.allstrs]
-        else:
-            allstrs_as_tups = gss.allstrs
-        ds_allstrs = _tools.find_replace_tuple_list(allstrs_as_tups, gss.aliases)
+        ds_allstrs = _tools.apply_aliases_to_circuit_list(gss.allstrs, aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
-        Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
+        if hasattr(mdl, 'num_nongauge_params'):
+            Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
+        else:
+            Np = mdl.num_params()
         k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
         return (fitQty - k) / _np.sqrt(2 * k)

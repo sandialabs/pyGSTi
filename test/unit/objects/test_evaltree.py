@@ -2,8 +2,8 @@ import numpy as np
 
 from ..util import BaseCase
 
-from pygsti.construction import std1Q_XY
-from pygsti.construction import std2Q_XYCNOT
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYCNOT
 import pygsti.construction as pc
 from pygsti import tools
 import pygsti.objects.evaltree as et

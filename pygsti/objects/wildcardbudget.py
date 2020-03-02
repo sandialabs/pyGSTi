@@ -258,8 +258,9 @@ class WildcardBudget(object):
             fvec = freqs[elInds]
             W = self.circuit_budget(circ)
 
+            tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
             initialTVD = 0.5 * sum(_np.abs(qvec - fvec))
-            if initialTVD <= W:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
+            if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 _tools.matrixtools._fas(probs_out, (elInds,), fvec)
                 continue
 
@@ -291,7 +292,6 @@ class WildcardBudget(object):
 
                 if debug: print("break: j=", j, " alpha=", alpha0, " beta=",
                                 beta0, " A?=", AorBorC, " TVD = ", TVD_at_breakpt)
-                tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
                 if TVD_at_breakpt <= W + tol:
                     break  # exit loop
 
@@ -419,8 +419,32 @@ class WildcardBudget(object):
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
 
+            if _np.min(qvec) < 0:
+                #Stopgap solution when a probability is negative: use wcbudget to move as
+                # much negative prob to zero as possible, while reducing all the positive
+                # probs.  This seems reasonable but isn't provably the right thing to do!
+                qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
+                neg_inds = _np.where(qvec < 0)[0]; neg_sum = sum(qvec[neg_inds])
+                pos_inds = _np.where(qvec > 0)[0]; pos_sum = sum(qvec[pos_inds])  # note: NOT >= (leave zeros alone)
+                if -neg_sum > pos_sum:
+                    raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts more "
+                                               "*negative* then positive probability! (%s predicts neg_sum=%.3g, "
+                                               "pos_sum=%.3g)") % (circ.str, neg_sum, pos_sum))
+
+                if -neg_sum < W:  # then there's enough budget to pay for all of negatives
+                    alpha = -neg_sum / len(neg_inds) * 1.0 / qvec[pos_inds]  # sum(qvec[pos])*alpha=-neg_sum*sum(ones/N)
+                    qvec[pos_inds] *= 1.0 - alpha
+                    qvec[neg_inds] = 0.0
+                    W -= (-neg_sum)
+                else:
+                    alpha = W / len(neg_inds) * 1.0 / qvec[pos_inds]  # sum(qvec[pos])*alpha = W * sum(ones/N)
+                    beta = -W / len(neg_inds) * 1.0 / qvec[neg_inds]  # sum(beta*qvec[neg]) = -W * sum(ones/N)
+                    qvec[pos_inds] *= 1.0 - alpha
+                    qvec[neg_inds] *= 1.0 - beta
+                    W = 0
+
             initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
-            if initialTVD <= W:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
+            if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 probs_out[elInds] = fvec  # _tools.matrixtools._fas(probs_out, (elInds,), fvec)
                 continue
 
@@ -583,7 +607,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         """
         wildcardDict = {}
         for lbl, index in self.primOpLookup.items():
-            wildcardDict[lbl] = ('budget per each instance %s' % lbl, pos(self.wildcard_vector[index]))
+            wildcardDict[lbl] = ('budget per each instance %s' % str(lbl), pos(self.wildcard_vector[index]))
         if self.spam_index is not None:
             wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
         return wildcardDict

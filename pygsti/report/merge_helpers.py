@@ -21,6 +21,11 @@ from pathlib import Path
 from ..tools import timed_block as _timed_block
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
+try:
+    from jinja2.runtime import Undefined as _jinja_undefined
+except ImportError:
+    _jinja_undefined = ()
+
 
 def read_contents(filename):
     """
@@ -36,10 +41,10 @@ def read_contents(filename):
     """
     contents = None
     try:  # on Windows using python3 open can fail when trying to read text files. encoding fixes this
-        f = open(filename)
+        f = open(str(filename))
         contents = f.read()
     except UnicodeDecodeError:
-        f = open(filename, encoding='utf-8')  # try this, but not available in python 2.7!
+        f = open(str(filename), encoding='utf-8')  # try this, but not available in python 2.7!
         contents = f.read()
 
     f.close()
@@ -135,14 +140,14 @@ def rsync_offline_dir(outputDir):
     Copy the pyGSTi 'offline' directory into `outputDir` by creating or updating
     any outdated files as needed.
     """
-    destDir = _os.path.join(outputDir, "offline")
+    destDir = _os.path.join(str(outputDir), "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                "templates", "offline")  # TODO package resources?
     if not _os.path.exists(destDir):
         _shutil.copytree(offlineDir, destDir)
 
     else:
-        for dirpath, _, filenames in _os.walk(offlineDir):
+        for dirpath, _, filenames in _os.walk(str(offlineDir)):
             for nm in filenames:
                 srcnm = _os.path.join(dirpath, nm)
                 relnm = _os.path.relpath(srcnm, offlineDir)
@@ -240,7 +245,7 @@ def clearDir(path):
     """ If `path` is a directory, remove all the files within it """
     if not _os.path.isdir(path): return
     for fn in _os.listdir(path):
-        full_fn = _os.path.join(path, fn)
+        full_fn = _os.path.join(str(path), fn)
         if _os.path.isdir(full_fn):
             clearDir(full_fn)
             _os.rmdir(full_fn)
@@ -267,6 +272,8 @@ def _render_as_html(value, render_options, link_to):
     """
     if isinstance(value, str):
         html = value
+    elif isinstance(value, _jinja_undefined):
+        html = "OMITTED"
     else:
         if hasattr(value, 'set_render_options'):
             value.set_render_options(**render_options)
@@ -482,8 +489,12 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
 
     # Render main page template to output path
     template = env.get_template(templateName)
-    with open(outputFilename, 'w') as outfile:
+    with open(str(outputFilename), 'w') as outfile:
         outfile.write(template.render(render_params))
+
+    if auto_open:
+        url = 'file://' + _os.path.abspath(outputFilename)
+        _webbrowser.open(url)
 
 
 def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html',
@@ -564,6 +575,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     # Create output directory if it does not already exist
     out_path = Path(outputDir).absolute()
     out_path.mkdir(parents=True, exist_ok=True)
+    assert(out_path.is_dir()), "failed to create output directory!"
     static_path = out_path / 'offline'
 
     #Copy offline directory into position
@@ -575,7 +587,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
         figDir.mkdir(exist_ok=True)
 
         if embed_figures is False:
-            with open(figDir / 'test.html', 'w') as f:
+            with open(str(figDir / 'test.html'), 'w') as f:
                 f.write("<div>Dummy to test ajax loading</div>")
     else:
         figDir = None
@@ -605,8 +617,13 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
 
     # Render main page template to output path
     template = env.get_template(templateName)
-    with open(out_path / templateName, 'w') as outfile:
+    outputFilename = str(out_path / templateName)
+    with open(outputFilename, 'w') as outfile:
         outfile.write(template.render(render_params))
+
+    if auto_open:
+        url = 'file://' + _os.path.abspath(outputFilename)
+        _webbrowser.open(url)
 
 
 def process_call(call):

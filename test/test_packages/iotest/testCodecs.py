@@ -11,7 +11,7 @@ import pickle
 import collections
 
 import pygsti
-from pygsti.construction import std1Q_XY as std
+from pygsti.modelpacks.legacy import std1Q_XY as std
 import pygsti.io.json as json
 import pygsti.io.msgpack as msgpack
 from pygsti.objects.label import CircuitLabel
@@ -124,6 +124,8 @@ class TestCodecs(CodecsTestCase):
         std.target_model()._check_paramvec()
         print("target_model = ",id(std.target_model()))
         print("rho0 parent = ",id(std.target_model().preps['rho0'].parent))
+
+        #import bpdb; bpdb.set_trace()
         with open(temp_files + "/results.json",'w') as f:
             json.dump(self.results, f)
         print("mdl_target2 = ",id(std.target_model()))
@@ -330,7 +332,7 @@ class TestCodecs(CodecsTestCase):
     #def test_labels(self):
     #    strLabel = pygsti.obj.Label("Gi")
     #    #strLabel = ("Gi",)
-    #    from pygsti.construction import std1Q_XYI as std
+    #    from pygsti.modelpacks.legacy import std1Q_XYI as std
     #
     #    s = json.dumps(strLabel)
     #    print("s = ",str(s))

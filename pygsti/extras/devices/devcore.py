@@ -1,4 +1,4 @@
-""" ... """
+""" Functions for interfacing pyGSTi with external devices, including IBM Q and Rigetti """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,7 +9,6 @@
 #***************************************************************************************************
 
 from ..rb import analysis as _anl
-#from ..rb import errorratesmodel as _erm
 from ...objects import oplessmodel as _oplessmodel
 from ...objects import processorspec as _pspec
 from ...objects import povm as _povm
@@ -27,6 +26,7 @@ from . import ibmq_yorktown
 from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
+from . import rigetti_aspen7
 
 import numpy as _np
 
@@ -49,6 +49,7 @@ def _get_dev_specs(devname):
     elif devname == 'rigetti_agave': dev = rigetti_agave
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
     elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
+    elif devname == 'rigetti_aspen7': dev = rigetti_aspen7
     else:
         raise ValueError("This device name is not known!")
 

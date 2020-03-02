@@ -16,6 +16,46 @@ from contextlib import contextmanager as _contextmanager
 
 from .. import objects as _objs
 from ..objects import circuit as _circuit
+from ..objects.replib import slowreplib as _slow
+
+
+@_contextmanager
+def enable_no_cython_unpickling():
+    """
+    A context manager enabling the un-pickling of pyGSTi objects that
+    were constructed on a system *with* pyGSTi's C-extensions, when the
+    current system's pyGSTi does not have these extensions.
+    """
+
+    class dummy_DMStateRep(object):
+        def __new__(cls, data, reducefix):
+            #replacement_obj = _slow.DMStateRep.__new__(_slow.DMStateRep)
+            replacement_obj = _slow.DMStateRep(data, reducefix)
+            return replacement_obj
+
+    class dummy_DMEffectRep_Dense(object):
+        def __new__(cls, data, reducefix):
+            #replacement_obj = _slow.DMEffectRep_Dense.__new__(_slow.DMEffectRep_Dense)
+            replacement_obj = _slow.DMEffectRep_Dense(data, reducefix)
+            return replacement_obj
+
+    class dummy_DMOpRep_Dense(object):
+        def __new__(cls, data, reducefix):
+            #replacement_obj = _slow.DMOpRep_Dense.__new__(_slow.DMEffectRep_Dense)
+            replacement_obj = _slow.DMOpRep_Dense(data, reducefix)
+            return replacement_obj
+
+    assert(_sys.modules.get('pygsti.objects.replib.fastreplib', None) is None), \
+        "You should only use this function when they Cython extensions are *not* built!"
+    fastreplib = _ModuleType("fastreplib")
+    fastreplib.DMStateRep = dummy_DMStateRep
+    fastreplib.DMEffectRep_Dense = dummy_DMEffectRep_Dense
+    fastreplib.DMOpRep_Dense = dummy_DMOpRep_Dense
+    _sys.modules['pygsti.objects.replib.fastreplib'] = fastreplib
+
+    yield
+
+    del _sys.modules['pygsti.objects.replib.fastreplib']
 
 
 @_contextmanager
@@ -228,7 +268,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
 
         def SPAMVec_setstate(self, state):
             #Note: include "dirty"
-            if old_version >= totup("0.9.7.1"):  # b/c this clobbers older-version upgrade
+            if old_version <= totup("0.9.7.1"):  # b/c this clobbers older-version upgrade
                 if "dirty" in state:  # backward compat: .dirty was replaced with ._dirty in ModelMember
                     state['_dirty'] = state['dirty']; del state['dirty']
             if "_prep_or_effect" not in state:
@@ -251,6 +291,33 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         _sys.modules['pygsti.baseobjs.objectivefns'] = _objs.objectivefns
         _sys.modules['pygsti.baseobjs.basis'] = _objs.basis
         _sys.modules['pygsti.baseobjs.label'] = _objs.label
+
+    if old_version < totup("0.9.9.1"):
+
+        def DenseOperator_setstate(self, state):
+            if "base" in state:
+                del state['base']
+            self.__dict__.update(state)
+
+        def DenseSPAMVec_setstate(self, state):
+            if old_version <= totup("0.9.9"):  # b/c this clobbers (or shadows) older-version upgrade
+                if old_version <= totup("0.9.7.1"):  # b/c this clobbers older-version upgrade
+                    if "dirty" in state:  # backward compat: .dirty was replaced with ._dirty in ModelMember
+                        state['_dirty'] = state['dirty']; del state['dirty']
+                if "_prep_or_effect" not in state:
+                    state['_prep_or_effect'] = "unknown"
+                if "base1D" not in state and 'base' in state:
+                    state['base1D'] = state['base'].flatten()
+                    del state['base']
+
+            if "base" in state:
+                del state['base']
+            if "base1D" in state:
+                del state['base1D']
+            self.__dict__.update(state)
+
+        _objs.spamvec.DenseSPAMVec.__setstate__ = DenseSPAMVec_setstate
+        _objs.operation.DenseOperator.__setstate__ = DenseOperator_setstate
 
     yield  # body of context-manager block
 
@@ -294,3 +361,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         del _sys.modules['pygsti.baseobjs.objectivefns']
         del _sys.modules['pygsti.baseobjs.basis']
         del _sys.modules['pygsti.baseobjs.label']
+
+    if old_version < totup("0.9.9.1"):
+        delattr(_objs.spamvec.DenseSPAMVec, '__setstate__')
+        delattr(_objs.operation.DenseOperator, '__setstate__')

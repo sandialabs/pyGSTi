@@ -23,8 +23,8 @@ def gaugeopt_to_target(model, targetModel, itemWeights=None,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
                        gatesMetric="frobenius", spamMetric="frobenius",
                        gauge_group=None, method='auto', maxiter=100000,
-                       maxfev=None, tol=1e-8, returnAll=False, comm=None,
-                       verbosity=0, checkJac=False):
+                       maxfev=None, tol=1e-8, oob_check_interval=0,
+                       returnAll=False, comm=None, verbosity=0, checkJac=False):
     """
     Optimize the gauge degrees of freedom of a model to that of a target.
 
@@ -98,6 +98,12 @@ def gaugeopt_to_target(model, targetModel, itemWeights=None,
     tol : float, optional
         The tolerance for the gauge optimization.
 
+    oob_check_interval : int, optional
+        If greater than zero, gauge transformations are allowed to fail (by raising
+        any exception) to indicate an out-of-bounds condition that the gauge optimizer
+        will avoid.  If zero, then any gauge-transform failures just terminate the
+        optimization.
+
     returnAll : bool, optional
         When True, return best "goodness" value and gauge matrix in addition to the
         gauge optimized model.
@@ -143,8 +149,8 @@ def gaugeopt_to_target(model, targetModel, itemWeights=None,
         gatesMetric, spamMetric, method, comm, checkJac)
 
     result = gaugeopt_custom(model, objective_fn, gauge_group, method,
-                             maxiter, maxfev, tol, returnAll, jacobian_fn,
-                             comm, verbosity)
+                             maxiter, maxfev, tol, oob_check_interval,
+                             returnAll, jacobian_fn, comm, verbosity)
 
     #If we've gauge optimized to a target model, declare that the
     # resulting model is now in the same basis as the target.
@@ -157,7 +163,8 @@ def gaugeopt_to_target(model, targetModel, itemWeights=None,
 
 def gaugeopt_custom(model, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, jacobian_fn=None, comm=None, verbosity=0):
+                    oob_check_interval=0, returnAll=False, jacobian_fn=None,
+                    comm=None, verbosity=0):
     """
     Optimize the gauge of a model using a custom objective function.
 
@@ -195,6 +202,12 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     tol : float, optional
         The tolerance for the gauge optimization.
+
+    oob_check_interval : int, optional
+        If greater than zero, gauge transformations are allowed to fail (by raising
+        any exception) to indicate an out-of-bounds condition that the gauge optimizer
+        will avoid.  If zero, then any gauge-transform failures just terminate the
+        optimization.
 
     returnAll : bool, optional
         When True, return best "goodness" value and gauge matrix in addition to the
@@ -251,10 +264,16 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     x0 = gauge_group.get_initial_params()  # gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0)  # re-used element for evals
 
-    def _call_objective_fn(gaugeGroupElVec):
+    def _call_objective_fn(gaugeGroupElVec, oob_check=False):
+        # Note: oob_check can be True if oob_check_interval>=1 is given to the custom_leastsq below
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         mdl = model.copy()
-        mdl.transform(gaugeGroupEl)
+        if oob_check:
+            try: mdl.transform(gaugeGroupEl)
+            except Exception as e:
+                raise ValueError("Out of bounds: %s" % str(e))  # signals OOB condition
+        else:
+            mdl.transform(gaugeGroupEl)
         return objective_fn(mdl)
 
     if jacobian_fn:
@@ -275,7 +294,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         solnX, converged, msg, _, _ = _opt.custom_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
-            max_iter=maxiter, comm=comm,
+            max_iter=maxiter, comm=comm, oob_check_interval=oob_check_interval,
             verbosity=printer.verbosity - 2)
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged)

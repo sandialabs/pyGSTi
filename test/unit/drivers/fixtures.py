@@ -1,6 +1,6 @@
 """Shared test fixtures for pygsti.drivers unit tests"""
 from ..util import Namespace
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti.construction as pc
 
 ns = Namespace()

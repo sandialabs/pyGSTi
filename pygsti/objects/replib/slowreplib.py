@@ -41,12 +41,19 @@ DEBUG_FCOUNT = 0
 
 
 class DMStateRep(object):
-    def __init__(self, data):
+    def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype('d'))
-        self.base = data
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
 
     def __reduce__(self):
-        return (DMStateRep, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMStateRep, (self.base, reducefix))
 
     def copy_from(self, other):
         self.base = other.base.copy()
@@ -71,13 +78,20 @@ class DMEffectRep(object):
 
 
 class DMEffectRep_Dense(DMEffectRep):
-    def __init__(self, data):
+    def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype('d'))
-        self.base = data
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         super(DMEffectRep_Dense, self).__init__(len(self.base))
 
     def __reduce__(self):
-        return (DMEffectRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMEffectRep_Dense, (self.base, reducefix))
 
     def probability(self, state):
         # can assume state is a DMStateRep
@@ -256,12 +270,19 @@ class DMOpRep(object):
 
 
 class DMOpRep_Dense(DMOpRep):
-    def __init__(self, data):
-        self.base = data
+    def __init__(self, data, reducefix=0):
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         super(DMOpRep_Dense, self).__init__(self.base.shape[0])
 
     def __reduce__(self):
-        return (DMOpRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMOpRep_Dense, (self.base, reducefix))
 
     def acton(self, state):
         return DMStateRep(_np.dot(self.base, state.base))
@@ -521,12 +542,19 @@ class DMOpRep_Sparse(DMOpRep):
 
 # State vector (SV) propagation wrapper classes
 class SVStateRep(object):
-    def __init__(self, data):
+    def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype(complex))
-        self.base = data
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
 
     def __reduce__(self):
-        return (SVStateRep, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (SVStateRep, (self.base, reducefix))
 
     def copy_from(self, other):
         self.base = other.base.copy()
@@ -554,13 +582,20 @@ class SVEffectRep(object):
 
 
 class SVEffectRep_Dense(SVEffectRep):
-    def __init__(self, data):
+    def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype(complex))
-        self.base = data
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         super(SVEffectRep_Dense, self).__init__(len(self.base))
 
     def __reduce__(self):
-        return (SVEffectRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (SVEffectRep_Dense, (self.base, reducefix))
 
     def amplitude(self, state):
         # can assume state is a SVStateRep
@@ -674,12 +709,19 @@ class SVOpRep(object):
 
 
 class SVOpRep_Dense(SVOpRep):
-    def __init__(self, data):
-        self.base = data
+    def __init__(self, data, reducefix=0):
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         super(SVOpRep_Dense, self).__init__(self.base.shape[0])
 
     def __reduce__(self):
-        return (SVOpRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (SVOpRep_Dense, (self.base, reducefix))
 
     def acton(self, state):
         return SVStateRep(_np.dot(self.base, state.base))

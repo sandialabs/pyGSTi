@@ -1,7 +1,7 @@
 """IO test reference generation"""
 import functools
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti
 
 from pathlib import Path
@@ -96,7 +96,7 @@ GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100
 """
 
-        with open(path, 'w') as f:
+        with open(str(path), 'w') as f:
             f.write(content)
 
     @_memo
@@ -182,7 +182,7 @@ BASIS: pp 4
 GAUGEGROUP: Full
 """
 
-        with open(path, 'w') as f:
+        with open(str(path), 'w') as f:
             f.write(content)
 
     @_write('gatestringdict_loadwrite.txt')
@@ -192,7 +192,7 @@ F1 GxGx
 F2 GxGy
 """
 
-        with open(path, 'w') as f:
+        with open(str(path), 'w') as f:
             f.write(content)
 
     def write(self, file_path):

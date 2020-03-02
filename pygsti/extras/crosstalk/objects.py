@@ -21,6 +21,7 @@ class CrosstalkResults(object):
 
         self.name = None
         self.data = None
+        self.pygsti_ds = None
         self.number_of_regions = None
         self.settings = None
         self.number_of_datapoints = None
@@ -41,6 +42,9 @@ class CrosstalkResults(object):
         self.is_edge_ct = None
         self.edge_weights = None
         self.edge_tvds = None
+        self.max_tvds = None
+        self.median_tvds = None
+        self.max_tvd_explanations = None
 
     def any_crosstalk_detect(self):
 
@@ -85,19 +89,23 @@ class CrosstalkResults(object):
 
             # edge between two outcomes
             if source < self.number_of_regions and dest < self.number_of_regions:
-                regions_and_regions[source, dest] = _np.max(self.edge_tvds[idx])
+                regions_and_regions[source, dest] = self.max_tvds[idx]
 
             # edge between an outcome and a setting
             if source < self.number_of_regions and dest >= self.number_of_regions:
-                if dest not in _setting_range(source):
-                    settings_and_regions[dest - self.number_of_regions, source] = _np.max(self.edge_tvds[idx])
+                if dest not in range(self.setting_indices[source],
+                                     (self.setting_indices[(source + 1)] if source < (self.number_of_regions - 1)
+                                      else self.number_of_columns)):
+                    settings_and_regions[dest - self.number_of_regions, source] = self.max_tvds[idx]
 
             # edge between an outcome and a setting
             if source >= self.number_of_regions and dest < self.number_of_regions:
-                if source not in _setting_range(dest):
-                    settings_and_regions[source - self.number_of_regions, dest] = _np.max(self.edge_tvds[idx])
+                if source not in range(self.setting_indices[dest],
+                                       (self.setting_indices[(dest + 1)] if dest < (self.number_of_regions - 1)
+                                        else self.number_of_columns)):
+                    settings_and_regions[source - self.number_of_regions, dest] = self.max_tvds[idx]
 
-        ax1.imshow(settings_and_regions, **kwargs)
+        ax1.imshow(_np.transpose(settings_and_regions), **kwargs)
         _plt.setp(ax1, xticks=_np.arange(0, sum(self.settings), 1),
                   xticklabels=[self.node_labels[k] for k in range(self.number_of_regions, self.number_of_columns)],
                   yticks=_np.arange(0, self.number_of_regions, 1),
@@ -125,7 +133,7 @@ class CrosstalkResults(object):
         fig.colorbar(im, cax=cax, orientation='vertical')
 
         if savepath is not None:
-            _plt.savefig(savepath)
+            _plt.savefig(savepath, bbox_inches='tight')
         else:
             _plt.show()
 
@@ -289,7 +297,92 @@ class CrosstalkResults(object):
         _plt.axis('off')
 
         if savepath is not None:
-            _plt.savefig(savepath)
+            _plt.savefig(savepath, bbox_inches='tight')
+        else:
+            _plt.show()
+
+    def show_crosstalk_table(self, precision=5, savepath=None):
+        """
+
+        """
+
+        try:
+            import matplotlib.pyplot as _plt
+        except ImportError:
+            raise ValueError("show_crosstalk_table(...) requires you to install matplotlib")
+        #fig = _plt.figure(facecolor='white')
+        #ax = fig.add_subplot(1, 1, 1)
+
+        if self.name is not None:
+            title = 'Crosstalk table for dataset ' + self.name + '. Confidence level ' + str(self.confidence) + '\n'
+        else:
+            title = 'Crosstalk table for dataset. Confidence level ' + str(self.confidence) + '\n'
+
+        columns = ('Node 1', 'Node 2', 'Max TVD', 'Median TVD')
+
+        cell_text = []
+        for idx, edge in enumerate(self.graph.edges()):
+            if self.is_edge_ct[idx]:
+                source = edge[0]
+                dest = edge[1]
+
+                print(idx)
+                print(self.max_tvds)
+
+                # edge between two outcomes
+                if source < self.number_of_regions and dest < self.number_of_regions:
+                    cell_text.append([r'R$_{%d}$' % source,
+                                      r'R$_{%d}$' % dest,
+                                      _np.around(self.max_tvds[idx], decimals=precision),
+                                      _np.around(self.median_tvds[idx], decimals=precision)])
+
+                # edge between an outcome and a setting (source is outcome, dest is setting)
+                if source < self.number_of_regions and dest >= self.number_of_regions:
+                    if dest not in range(self.setting_indices[source],
+                                         (self.setting_indices[(source + 1)] if source < (self.number_of_regions - 1)
+                                          else self.number_of_columns)):
+
+                        region, setting_number = self.get_setting_region_and_number(dest)
+
+                        cell_text.append([r'R$_{%d}$' % source,
+                                          r'S$_{%d}^{(%d)}$' % (region, setting_number),
+                                          _np.around(self.max_tvds[idx], decimals=precision),
+                                          _np.around(self.median_tvds[idx], decimals=precision)])
+                        # (dest-self.setting_indices[region])),
+
+                # edge between an outcome and a setting (source is setting, dest is outcome)
+                if source >= self.number_of_regions and dest < self.number_of_regions:
+                    if source not in range(self.setting_indices[dest],
+                                           (self.setting_indices[(dest + 1)] if dest < (self.number_of_regions - 1)
+                                            else self.number_of_columns)):
+
+                        region, setting_number = self.get_setting_region_and_number(source)
+
+                        cell_text.append([r'S$_{%d}^{(%d)}$' % (region, setting_number),
+                                          r'R$_{%d}$' % dest,
+                                          _np.around(self.max_tvds[idx], decimals=precision),
+                                          _np.around(self.median_tvds[idx], decimals=precision)])
+                        #(source-self.setting_indices[region])),
+
+        thetable = _plt.table(cellText=cell_text, colLabels=columns, loc='center')
+
+        thetable.auto_set_font_size(False)
+        thetable.set_fontsize(14)
+        thetable.scale(1.7, 1.7)
+        # insert plot title
+        _plt.title(title, fontsize=17)
+
+        # expand axis limits to make sure node labels are visible
+#        ylims = ax.get_ylim()
+#        ax.set_ylim((ylims[0]-0.2, ylims[1]+0.2))
+#        xlims = ax.get_xlim()
+#        ax.set_xlim((xlims[0]-0.2, xlims[1]+0.2))
+
+        # don't display axis
+        _plt.axis('off')
+
+        if savepath is not None:
+            _plt.savefig(savepath, bbox_inches='tight')
         else:
             _plt.show()
 
@@ -328,3 +421,45 @@ class CrosstalkResults(object):
             pos_labels[aNode] = (x + slopeX * label_ratio, y + slopeY * label_ratio)
 
         return pos_labels
+
+    def get_setting_region_and_number(self, idx):
+        """
+            For a graph node with index idx that is a setting, work out the region it belongs to, and its number
+            as a setting in that region
+        """
+        if idx < self.number_of_regions:
+            # this is a result, not a setting, so the region is just idx
+            region = idx
+            setting_number = 0
+            print("Warning: Idx corresponds to a result node index")
+        else:
+
+            # compute the region number and setting number for idx node
+            for region in range(self.number_of_regions):
+                if idx in range(self.setting_indices[region],
+                                (self.setting_indices[(region + 1)] if region < (self.number_of_regions - 1)
+                                 else self.number_of_columns)):
+                    break
+                setting_number = idx - self.setting_indices[region]
+
+        return region, setting_number
+
+    def show_tvd_explanations(self):
+
+        g = self.graph
+
+        for idx, edge in enumerate(g.edges()):
+
+            source = edge[0]
+            dest = edge[1]
+
+            if self.is_edge_ct[idx] == 1:
+                if idx in self.max_tvd_explanations.keys():
+                    if (source >= self.number_of_regions) and (dest < self.number_of_regions):
+                        region, setting_number = self.get_setting_region_and_number(source)
+
+                        print("------ Edge (S_{}^({}) to R_{}) ------".format(region, setting_number, dest))
+                        print(self.max_tvd_explanations[idx])
+                    else:
+                        print(("Source is not setting and destination is not results. "
+                               "Not sure why there is a TVD explanation here"))

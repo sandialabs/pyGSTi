@@ -570,158 +570,44 @@ def _create_drift_switchboard(ws, results, gss):
     return drift_switchBd
 
 
+# TODO deprecate in favor of `report.factory.construct_drift_report`
 def create_drift_report(results, gss, filename, title="auto",
                         ws=None, auto_open=False, link_to=None,
                         brevity=0, advancedOptions=None, verbosity=1):
     """
     Creates a Drift report.
     """
-    assert(isinstance(results, _sa.StabilityAnalyzer)), "Support for multiple results as a Dict is not yet included!"
-    singleresults = results
+    from pygsti.report.factory import construct_drift_report
+    # Wrap a call to the new factory method
+    advancedOptions = advancedOptions or {}
+    ws = ws or _ws.Workspace(advancedOptions.get('cachefile', None))
 
-    tStart = _time.time()
-    printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
+    report = construct_drift_report(
+        results, gss, title, ws, verbosity
+    )
 
-    if advancedOptions is None: advancedOptions = {}
+    advancedOptions = advancedOptions or {}
     precision = advancedOptions.get('precision', None)
-    cachefile = advancedOptions.get('cachefile', None)
-    connected = advancedOptions.get('connected', False)
-    resizable = advancedOptions.get('resizable', True)
-    autosize = advancedOptions.get('autosize', 'initial')
-    #mdl_sim = advancedOptions.get('simulator', None)  # a model
-
-    if filename and filename.endswith(".pdf"):
-        fmt = "latex"
-    else:
-        fmt = "html"
-
-    printer.log('*** Creating workspace ***')
-    if ws is None: ws = _ws.Workspace(cachefile)
-
-    if title is None or title == "auto":
-        if filename is not None:
-            autoname = _autotitle.generate_name()
-            title = "Drift Report for " + autoname
-            _warnings.warn(("You should really specify `title=` when generating reports,"
-                            " as this makes it much easier to identify them later on.  "
-                            "Since you didn't, pyGSTi has generated a random one"
-                            " for you: '{}'.").format(autoname))
-        else:
-            title = "N/A"  # No title - but it doesn't matter since filename is None
-
-    results_dict = results if isinstance(results, dict) else {"unique": results}
-
-    renderMath = True
-
-    drift_switchBd = _create_drift_switchboard(ws, results, gss)
-    qtys = {}  # stores strings to be inserted into report template
-    qtys['drift_switchBd'] = drift_switchBd
-
-    # Sets whether or not the dataset key is a switchboard or not.
-    if len(results.data.keys()) > 1:
-        dskey = drift_switchBd.dataset
-        arb_dskey = list(singleresults.data.keys())[0]
-    else:
-        dskey = list(singleresults.data.keys())[0]
-        arb_dskey = dskey
-
-    def addqty(b, name, fn, *args, **kwargs):
-        """Adds an item to the qtys dict within a timed block"""
-        if b is None or brevity < b:
-            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
-                qtys[name] = fn(*args, **kwargs)
-
-    qtys['title'] = title
-    qtys['date'] = _time.strftime("%B %d, %Y")
-
-    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
-    qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
-
-    # Generate Switchboard
-    printer.log("*** Generating switchboard ***")
-
-    #Create master switchboard
-    switchBd, dataset_labels = \
-        _create_switchboard(ws, results_dict)
-    if fmt == "latex" and (len(dataset_labels) > 1):
-        raise ValueError("PDF reports can only show a *single* dataset,"
-                         " estimate, and gauge optimization.")
-
-    # Generate Tables
-    printer.log("*** Generating tables ***")
-
-    if fmt == "html":
-        qtys['topSwitchboard'] = switchBd
-
-    results = switchBd.results
-    A = None  # no brevity restriction: always display
-
-    addqty(A, 'driftSummaryTable', ws.DriftSummaryTable, results, dskey)
-    addqty(A, 'driftDetailsTable', ws.DriftDetailsTable, results)
-
-    # Generate plots
-    printer.log("*** Generating plots ***")
-    # If we are allowed to average power spectra, because they have the same frequencies.
-    if singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1):
-        # The power spectrum averaged over circuits and outcomes, but not datasets
-        addqty(A, 'GlobalPowerSpectraPlot', ws.PowerSpectraPlot, results, {'dataset': dskey})
-    # The power spectrum for each length with a germ-fiducial pairing (averaged over outcomes).
-    addqty(A, 'GermFiducialPowerSpectraPlot', ws.GermFiducialPowerSpectraPlot, results, gss,
-           drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, dskey,
-           None, True,)
-    # The estimated probability trajectoris for each length with a germ-fiducial pairing.
-    addqty(A, 'GermFiducialProbTrajectoriesPlot', ws.GermFiducialProbTrajectoriesPlot, results, gss,
-           drift_switchBd.prepStrs, drift_switchBd.germs, drift_switchBd.effectStrs, drift_switchBd.outcomes, 1, None,
-           dskey, None, None, True)
-    # The boxplot summarizing the evidence for drift in each circuit.
-    addqty(A, 'driftdetectorColorBoxPlot', ws.ColorBoxPlot, 'driftdetector', gss, None, None, False, False, True, False,
-           'compact', .05, 1e-4, None, None, results)
-    # The boxplot summarizing the size of any detected drift in each circuit.
-    addqty(A, 'driftsizeColorBoxPlot', ws.ColorBoxPlot, 'driftsize', gss, None, None, False, False, True, False,
-           'compact', .05, 1e-4, None, None, results)
-
-    toggles = {}
-    toggles['CompareDatasets'] = False  # not comparable by default
 
     if filename is not None:
-        if True:  # comm is None or comm.Get_rank() == 0:
-            # 3) populate template file => report file
-            printer.log("*** Merging into template file ***")
+        if filename.endswith(".pdf"):
+            report.write_pdf(
+                filename, build_options=advancedOptions,
+                brevity=brevity, precision=precision, auto_open=auto_open,
+                verbosity=verbosity
+            )
+        else:
+            resizable = advancedOptions.get('resizable', True)
+            autosize = advancedOptions.get('autosize', 'initial')
+            connected = advancedOptions.get('connected', False)
+            single_file = filename.endswith(".html")
 
-            if fmt == "html":
-                if filename.endswith(".html"):
-                    _merge.merge_jinja_template(
-                        qtys, filename, templateDir='~drift_html_report',
-                        auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, renderMath=renderMath,
-                        resizable=resizable, autosize=autosize, verbosity=printer
-                    )
-                else:
-                    _merge.merge_jinja_template_dir(
-                        qtys, filename, templateDir='~drift_html_report',
-                        auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, renderMath=renderMath,
-                        resizable=resizable, autosize=autosize, verbosity=printer
-                    )
-
-            elif fmt == "latex":
-                raise NotImplementedError("No PDF version of this report is available yet.")
-                templateFile = "drift_pdf_report.tex"
-                base = _os.path.splitext(filename)[0]  # no extension
-                _merge.merge_latex_template(qtys, templateFile, base + ".tex", toggles,
-                                            precision, printer)
-
-                # compile report latex file into PDF
-                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd', None)
-                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags', [])
-                assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
-                printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
-                _merge.compile_latex_report(base, [cmd] + flags, printer, auto_open)
-            else:
-                raise ValueError("Unrecognized format: %s" % fmt)
-    else:
-        printer.log("*** NOT Merging into template file (filename is None) ***")
-    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart))
+            report.write_html(
+                filename, auto_open=auto_open, link_to=link_to,
+                connected=connected, build_options=advancedOptions,
+                brevity=brevity, precision=precision,
+                resizable=resizable, autosize=autosize,
+                single_file=single_file, verbosity=verbosity
+            )
 
     return ws

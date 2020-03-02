@@ -217,7 +217,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
                      (str(type(vec)), vec._evotype, new_evotype))
 
 
-def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
+def finite_difference_deriv_wrt_params(spamvec, wrtFilter=None, eps=1e-7):
     """
     Computes a finite-difference Jacobian for a SPAMVec object.
 
@@ -252,10 +252,13 @@ def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
         fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
 
     fd_deriv.shape = [dim, spamvec.num_params()]
-    return fd_deriv
+    if wrtFilter is None:
+        return fd_deriv
+    else:
+        return _np.take(fd_deriv, wrtFilter, axis=1)
 
 
-def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
+def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrtFilter=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a SPAMVec object.
 
@@ -282,7 +285,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(spamvec, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(spamvec, wrtFilter, eps)
     if deriv_to_check is None:
         deriv_to_check = spamvec.deriv_wrt_params()
 
@@ -868,10 +871,7 @@ class DenseSPAMVec(SPAMVec):
             raise ValueError("Invalid `prep_or_effect` argument: %s" % prep_or_effect)
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
-
-        assert(_mt.ndarray_base(rep.base) is _mt.ndarray_base(vec)), "Internal memory referencing error"
-        self.base1D = vec
-        assert(self.base1D.flags.owndata)
+        assert(self.base1D.flags['C_CONTIGUOUS'] and self.base1D.flags['OWNDATA'])
 
     def todense(self, scratch=None):
         """
@@ -880,6 +880,10 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return self.base1D  # *must* be a numpy array for Cython arg conversion
+
+    @property
+    def base1D(self):
+        return self._rep.base
 
     @property
     def base(self):
@@ -924,7 +928,7 @@ class DenseSPAMVec(SPAMVec):
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        if 'base1D' in self.__dict__:
+        if '_rep' in self.__dict__:  # sometimes in loading __getattr__ gets called before the instance is loaded
             ret = getattr(self.base, attr)
         else:
             raise AttributeError("No attribute:", attr)
@@ -1739,7 +1743,8 @@ class TensorProdSPAMVec(SPAMVec):
                                                     len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "densitymx":
             if typ == "prep":
-                rep = replib.DMStateRep(_np.ascontiguousarray(_np.zeros(dim, 'd')))
+                vec = _np.require(_np.zeros(dim, 'd'), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+                rep = replib.DMStateRep(vec)
                 #sometimes: return replib.DMEffectRep_Dense(self.todense()) ???
             else:  # "effect"
                 rep = replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
@@ -1812,7 +1817,7 @@ class TensorProdSPAMVec(SPAMVec):
     def _update_rep(self):
         if self._evotype in ("statevec", "densitymx"):
             if self._prep_or_effect == "prep":
-                self._rep.base = self.todense()
+                self._rep.base[:] = self.todense()
             else:
                 self._fill_fast_kron()  # updates effect reps
         elif self._evotype == "stabilizer":
@@ -3436,7 +3441,8 @@ class ComputationalSPAMVec(SPAMVec):
             if evotype == "statevec":
                 rep = replib.SVStateRep(self.todense())
             elif evotype == "densitymx":
-                rep = replib.DMStateRep(self.todense())
+                vec = _np.require(self.todense(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+                rep = replib.DMStateRep(vec)
             elif evotype == "stabilizer":
                 sframe = _stabilizer.StabilizerFrame.from_zvals(len(self._zvals), self._zvals)
                 rep = sframe.torep()

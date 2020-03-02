@@ -113,7 +113,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
 
     """
     NTOL = 10
-    TOL = 1 / (10**-NTOL)
+    TOL = 10**-NTOL
 
     if isinstance(modelOrDataset, _ds.DataSet):
         dsGen = modelOrDataset
@@ -130,8 +130,11 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                      for ky, val in aliasDict.items()}  # convert to use Labels
 
     if gsGen and times is None:
-        trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
-                              for s in circuit_list]
+        if aliasDict is not None:
+            trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
+                                  for s in circuit_list]
+        else:
+            trans_circuit_list = circuit_list
         all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 
@@ -173,25 +176,21 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                 if gsGen and sampleError in ("binomial", "multinomial"):
                     #Check that sum ~= 1 (and nudge if needed) since binomial and
                     #  multinomial random calls assume this.
-                    psum = sum(ps.values())
-                    adjusted = False
-                    if psum > 1 + TOL:
-                        adjusted = True
-                        _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                    if psum < 1 - TOL:
-                        adjusted = True
-                        _warnings.warn("Adjusting sum(probs) < 1 to 1")
-
-                    # A cleaner probability cleanup.. lol
                     OVERTOL = 1.0 + TOL
                     UNDERTOL = 1.0 - TOL
-                    def normalized(): return UNDERTOL <= sum(ps.values()) <= OVERTOL
-                    if not normalized():
-                        m = max(ps.values())
-                        ps = {lbl: round(p / m, NTOL) for lbl, p in ps.items()}
-                        print(sum(ps.values()))
+                    psum = sum(ps.values())
+                    adjusted = False
+                    if psum > OVERTOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) = %g > 1 to 1" % psum)
+                    if psum < UNDERTOL:
+                        adjusted = True
+                        _warnings.warn("Adjusting sum(probs) = %g < 1 to 1" % psum)
 
-                    assert normalized(), 'psum={}'.format(sum(ps.values()))
+                    if not UNDERTOL <= psum <= OVERTOL:
+                        ps = {lbl: p / psum for lbl, p in ps.items()}
+                    assert(UNDERTOL <= sum(ps.values()) <= OVERTOL), 'psum={}'.format(sum(ps.values()))
+
                     if adjusted:
                         _warnings.warn('Adjustment finished')
 
@@ -272,7 +271,7 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-        to use :function:`filter_qubits` which also updates the operation sequences.
+        to use :function:`filter_dataset` which also updates the operation sequences.
 
     recordZeroCnts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned

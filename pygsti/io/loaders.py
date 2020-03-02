@@ -9,13 +9,16 @@
 #***************************************************************************************************
 
 import os as _os
+import pathlib as _pathlib
 
 from . import stdinput as _stdinput
 from .. import objects as _objs
+from . import metadir as _metadir
 
 
 def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 recordZeroCnts=True, ignoreZeroCountLines=True, verbosity=1):
+                 recordZeroCnts=True, ignoreZeroCountLines=True,
+                 withTimes="auto", verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -49,6 +52,12 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
     ignoreZeroCountLines : bool, optional
         Whether circuits for which there are no counts should be ignored
         (i.e. omitted from the DataSet) or not.
+
+    withTimes : bool or "auto", optional
+        Whether to the time-stamped data format should be read in.  If
+        "auto", then the time-stamped format is allowed but not required on a
+        per-circuit basis (so the dataset can contain both formats).  Typically
+        you only need to set this to False when reading in a template file.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -88,7 +97,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             ds = parser.parse_datafile(filename, bToStdout,
                                        collisionAction=collisionAction,
                                        recordZeroCnts=recordZeroCnts,
-                                       ignoreZeroCountLines=ignoreZeroCountLines)
+                                       ignoreZeroCountLines=ignoreZeroCountLines,
+                                       withTimes=withTimes)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -99,7 +109,8 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             ds = parser.parse_datafile(filename, bToStdout,
                                        collisionAction=collisionAction,
                                        recordZeroCnts=recordZeroCnts,
-                                       ignoreZeroCountLines=ignoreZeroCountLines)
+                                       ignoreZeroCountLines=ignoreZeroCountLines,
+                                       withTimes=withTimes)
         return ds
 
 
@@ -283,7 +294,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
     """
     if readRawStrings:
         rawList = []
-        with open(filename, 'r') as circuitlist:
+        with open(str(filename), 'r') as circuitlist:
             for line in circuitlist:
                 if len(line.strip()) == 0: continue
                 if len(line) == 0 or line[0] == '#': continue
@@ -292,3 +303,103 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
     else:
         std = _stdinput.StdInputParser()
         return std.parse_stringfile(filename, line_labels, num_lines)
+
+
+def load_protocol_from_dir(dirname, comm=None):
+    """
+    Load a :class:`Protocol` from a directory on disk.
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
+
+    Returns
+    -------
+    Protocol
+    """
+    dirname = _pathlib.Path(dirname)
+    return _metadir.cls_from_meta_json(dirname).from_dir(dirname)
+
+
+def load_edesign_from_dir(dirname, comm=None):
+    """
+    Load a :class:`ExperimentDesign` from a directory on disk.
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
+
+    Returns
+    -------
+    ExperimentDesign
+    """
+    dirname = _pathlib.Path(dirname)
+    return _metadir.cls_from_meta_json(dirname / 'edesign').from_dir(dirname)
+
+
+def load_data_from_dir(dirname, comm=None):
+    """
+    Load a :class:`ProtocolData` from a directory on disk.
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
+
+    Returns
+    -------
+    ProtocolData
+    """
+    dirname = _pathlib.Path(dirname)
+    return _metadir.cls_from_meta_json(dirname / 'data').from_dir(dirname)
+
+
+def load_results_from_dir(dirname, name=None, preloaded_data=None, comm=None):
+    """
+    Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a
+    directory on disk (depending on whether `name` is given).
+
+    Parameters
+    ----------
+    dirname : string
+        Directory name.  This should be a "base" directory, containing
+        subdirectories like "edesign", "data", and "results"
+
+    name : string or None
+        The 'name' of a particular :class:`ProtocolResults` object, which
+        is a sub-directory beneath `dirname/results/`.  If None, then *all*
+        the results (all names) at the given base-directory are loaded and
+        returned as a :class:`ProtocolResultsDir` object.
+
+    preloaded_data : ProtocolData, optional
+        The data object belonging to the to-be-loaded results, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
+
+    Returns
+    -------
+    ProtocolResults or ProtocolResultsDir
+    """
+    from ..protocols import ProtocolResultsDir as _ProtocolResultsDir
+    dirname = _pathlib.Path(dirname)
+    results_dir = dirname / 'results'
+    if name is None:  # then it's a directory object
+        cls = _metadir.cls_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
+            else _ProtocolResultsDir  # default if no meta.json (if only a results obj has been written inside dir)
+        return cls.from_dir(dirname)
+    else:  # it's a ProtocolResults object
+        return _metadir.cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data)

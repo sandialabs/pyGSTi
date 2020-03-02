@@ -223,8 +223,7 @@ class ConfidenceRegionFactory(object):
         assert(useFreqWt is False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
         #Expand operation label aliases used in DataSet lookups
-        ds_circuit_list = _tools.find_replace_tuple_list(
-            circuit_list, aliases)
+        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
 
         nModelParams = model.num_nongauge_params()
         nDataParams = dataset.get_degrees_of_freedom(ds_circuit_list)
@@ -812,8 +811,8 @@ class ConfidenceRegionFactoryView(object):
         if 'all' in fn_dependencies:
             fn_dependencies = ['all']  # no need to do anything else
         if 'spam' in fn_dependencies:
-            fn_dependencies = ["prep:%s" % l for l in self.model.preps.keys()] + \
-                              ["povm:%s" % l for l in self.model.povms.keys()]
+            fn_dependencies = [("prep", l) for l in self.model.preps.keys()] + \
+                              [("povm", l) for l in self.model.povms.keys()]
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
@@ -825,7 +824,7 @@ class ConfidenceRegionFactoryView(object):
                 all_gpindices.extend(range(mdl.num_params()))
             else:
                 # copy objects because we add eps to them below
-                typ, lbl = dependency.split(":")
+                typ, lbl = dependency
                 if typ == "gate": modelObj = mdl.operations[lbl]
                 elif typ == "prep": modelObj = mdl.preps[lbl]
                 elif typ == "povm": modelObj = mdl.povms[lbl]
@@ -898,6 +897,7 @@ class ConfidenceRegionFactoryView(object):
         mlgst_args['forcefn_grad'] = gradF
         mlgst_args['shiftFctr'] = 100.0
         mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
+        mlgst_args['maxiter'] = 100  # don't let this run for too long
         _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(gradF[i], gradF[i]) for i in range(gradF.shape[0])])

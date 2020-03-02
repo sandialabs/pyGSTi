@@ -377,10 +377,16 @@ class StabilityAnalyzer(object):
         if marginalize:
 
             n = len(ds.get_outcome_labels()[0][0])
-            for i in range(n):
-                margds = _dsconst.filter_dataset(tempds, (i,), filtercircuits=False)
-                margds.done_adding_data()
-                multids.add_dataset(str(i), margds)
+            if n > 1:
+                for i in range(n):
+                    margds = _dsconst.filter_dataset(tempds, (i,), filtercircuits=False)
+                    margds.done_adding_data()
+                    multids.add_dataset(str(i), margds)
+            else:
+                multids.add_dataset('0', tempds)
+
+        if not mergeoutcomes and not marginalize:
+            multids.add_dataset('0', tempds)
 
         # Data formatting complete, so write it into object.
         self.data = multids
@@ -556,6 +562,7 @@ class StabilityAnalyzer(object):
         assert(_np.var(_np.array(counts)) == 0), "An equal number of counts at every time-step " \
             "in every circuit is currently required!"
         counts = counts[0]
+        self.counts = counts
 
         for i, dskey in enumerate(dskeys):
             ds = self.data[dskey]
@@ -1764,7 +1771,7 @@ class StabilityAnalyzer(object):
                 # The most likely null hypothesis model, i.e., constant probabilities that are the observed frequencies.
                 counts = self.data[dskey][circuit].counts
                 total = self.data[dskey][circuit].total
-                means = {o: counts[o] / total for o in outcomes}
+                means = {o: counts.get(o, 0) / total for o in outcomes}
                 nullptraj = _ptraj.ConstantProbTrajectory(outcomes, means)
                 self._probtrajectories[i, j]['null'] = nullptraj
 
@@ -1786,6 +1793,8 @@ class StabilityAnalyzer(object):
                         times, clickstreams = self.data[dskey][circuit].get_timeseries_for_outcomes()
                         parameters = _sig.amplitudes_at_frequencies(freqs, clickstreams, transform=self.transform)
                         del parameters[outcomes[-1]]
+                        # Divide by the counts
+                        parameters = {key: list(_np.array(x) / self.counts) for key, x in parameters.items()}
                         # future: maybe these could be chosen in a better way for non-equally spaced data.
                         starttime = times[0]
                         timestep = _np.mean(_np.diff(times))

@@ -135,7 +135,10 @@ def _accumulate_explicit_sslbls(obj):
 
 def _opSeqToStr(seq, line_labels):
     """ Used for creating default string representations. """
-    if len(seq) == 0: return "{}"  # special case of empty operation sequence
+    if len(seq) == 0:  # special case of empty operation sequence (for speed)
+        if line_labels is None or line_labels == ('*',): return "{}"
+        else: return "{}@(" + ','.join(map(str, line_labels)) + ")"
+
     def process_lists(el): return el if not isinstance(el, list) else \
         ('[%s]' % ''.join(map(str, el)) if (len(el) != 1) else str(el[0]))
 
@@ -311,10 +314,10 @@ class Circuit(object):
                     if len(layer_labels) > 0:
                         assert(num_lines > 0), "`num_lines` must be > 0!"
                     self._line_labels = tuple(range(num_lines))
-                elif len(layer_labels) > 0:
+                elif len(layer_labels) > 0 or not editable:
                     self._line_labels = ('*',)  # special single line-label when no line labels are given
                 else:
-                    self._line_labels = ()  # empty circuit can have zero line labels
+                    self._line_labels = ()  # empty *editable* circuits begin with zero line labels (this is ok)
             else:
                 self._line_labels = tuple(sorted(explicit_lbls))
         else:
@@ -355,6 +358,7 @@ class Circuit(object):
         self._str = stringrep if self._static else None  # can be None (lazy generation)
         self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
 
         # # Special case: layer_labels can be a single CircuitLabel or Circuit
         # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
@@ -1686,7 +1690,7 @@ class Circuit(object):
         Parameters
         ----------
         old_layer, new_layer : string or Label
-            The layer to find and the to replace.
+            The layer to find and to replace found layers with, respectively.
 
         Returns
         -------
@@ -1702,6 +1706,43 @@ class Circuit(object):
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit([new_layer if lbl == old_layer else lbl
                             for lbl in self._labels], self.line_labels)
+
+    def replace_layers_with_aliases(self, alias_dict):
+        """
+        Returns a copy of this Circuit except that it's layers that match
+        keys of `alias_dict` are replaced with the corresponding values.
+
+        Parameters
+        ----------
+        alias_dict : dict
+            A dictionary whose keys are layer Labels (or equivalent tuples or
+            strings), and whose values are Circuits.
+
+        Returns
+        -------
+        Circuit
+        """
+        if not self._static:
+            #Could to this in both cases, but is slow for large static circuits
+            cpy = self.copy(editable=False)  # convert our layers to Labels
+            if not alias_dict: return cpy
+            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+            layers = cpy._labels
+            for label, c in alias_dict.items():
+                while label in layers:
+                    i = layers.index(label)
+                    layers = layers[:i] + c._labels + layers[i + 1:]
+            return Circuit(layers, self.line_labels)
+
+        else:  # static case: so self._labels is a tuple of Labels
+            if not alias_dict: return self  # no copy needed b/c static
+            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+            layers = self._labels  # a *tuple*
+            for label, c in alias_dict.items():
+                while label in layers:
+                    i = layers.index(label)
+                    layers = layers[:i] + c._labels + layers[i + 1:]
+            return Circuit(layers, self.line_labels)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """

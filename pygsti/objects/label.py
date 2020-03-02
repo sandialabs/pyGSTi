@@ -544,6 +544,7 @@ class LabelTupTup(Label, tuple):
     def sslbls(self):
         # Note: if any component has sslbls == None, which signifies operating
         # on *all* qubits, then this label is on *all* qubites
+        if len(self) == 0: return None  # "idle" label containing no gates - *all* qubits idle
         s = set()
         for lbl in self:
             if lbl.sslbls is None: return None

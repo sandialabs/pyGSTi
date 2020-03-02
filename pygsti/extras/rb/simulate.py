@@ -15,7 +15,6 @@ from ...tools import symplectic as _symp
 from ...objects.label import Label as _Lbl
 from ... import objects as _obj
 from . import sample as _samp
-from . import results as _res
 
 
 def random_paulierror_in_chp(q):
@@ -753,6 +752,7 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
         if verbosity > 0: print('')
     if returndata:
 
+        from . import results as _res
         data = _res.RBSummaryDataset(n, lengthslist, success_counts=scounts, total_counts=counts,
                                      circuit_depths=cdepths, circuit_twoQgate_counts=c2Qgcounts)
         return data

@@ -103,6 +103,7 @@ class TermForwardSimulator(ForwardSimulator):
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
+        assert(perr_heuristic in ("none", "scaled", "meanscaled")), "Invalid perr_heuristic: %s" % perr_heuristic
         self.mode = mode
         self.max_order = max_order
         self.cache = cache
@@ -130,9 +131,9 @@ class TermForwardSimulator(ForwardSimulator):
                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0}
 
         # not used except by _do_term_runopt in core.py -- maybe these should move to advancedoptions?
-        self.max_term_stages = max_term_stages
-        self.path_fraction_threshold = path_fraction_threshold
-        self.oob_check_interval = oob_check_interval
+        self.max_term_stages = max_term_stages if mode == "pruned" else 1
+        self.path_fraction_threshold = path_fraction_threshold if mode == "pruned" else 0.0
+        self.oob_check_interval = oob_check_interval if mode == "pruned" else 0
 
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
@@ -1002,10 +1003,13 @@ class TermForwardSimulator(ForwardSimulator):
 
     def get_current_pathset(self, evalTree, comm):
         """ TODO: docstring """
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-        local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
-        return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+        if self.mode == "pruned":
+            subtrees = evalTree.get_sub_trees()
+            mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+            local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
+            return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+        else:
+            return None
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
     def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):

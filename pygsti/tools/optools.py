@@ -20,6 +20,7 @@ from . import matrixtools as _mt
 from . import lindbladtools as _lt
 from . import basistools as _bt
 from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from ..objects.label import Label as _Label
 
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -523,6 +524,76 @@ def entanglement_infidelity(A, B, mxBasis='pp'):
         The EI of A to B.
     """
     return 1 - float(entanglement_fidelity(A, B, mxBasis))
+
+
+def gateset_infidelity(mdl, target_model, itype='EI',
+                       weights=None, mxBasis=None):
+    """
+    Computes the average-over-gates of the infidelity between  gates in `mdl`
+    and the gates in `target_model`. If `itype` is 'EI' then the "infidelity"
+    is the entanglement infidelity; if `itype` is 'AGI' then the "infidelity"
+    is the average gate infidelity (AGI and EI are related by a dimension
+    dependent constant).
+
+    This is the quantity that RB error rates are sometimes claimed to be
+    related to directly related.
+
+    Parameters
+    ----------
+    mdl : Model
+        The model to calculate the average infidelity, to `target_model`, of.
+
+    target_model : Model
+        The model to calculate the average infidelity, to `mdl`, of.
+
+    itype : str, optional
+        The infidelity type. Either 'EI', corresponding to entanglement
+        infidelity, or 'AGI', corresponding to average gate infidelity.
+
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates
+        in `mdl` and the values are, possibly unnormalized, probabilities.
+        These probabilities corresponding to the weighting in the average,
+        so if the model contains gates A and B and weights[A] = 2 and
+        weights[B] = 1 then the output is Inf(A)*2/3  + Inf(B)/3 where
+        Inf(X) is the infidelity (to the corresponding element in the other
+        model) of X. If None, a uniform-average is taken, equivalent to
+        setting all the weights to 1.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the models. If None, the basis is obtained from
+        the model.
+
+    Returns
+    -------
+    float
+        The weighted average-over-gates infidelity between the two models.
+
+    """
+    assert(itype == 'AGI' or itype == 'EI'), \
+        "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
+
+    if mxBasis is None: mxBasis = mdl.basis
+
+    sum_of_weights = 0
+    I_list = []
+    for gate in list(target_model.operations.keys()):
+        if itype == 'AGI':
+            I = average_gate_infidelity(mdl.operations[gate], target_model.operations[gate], mxBasis=mxBasis)
+        if itype == 'EI':
+            I = entanglement_infidelity(mdl.operations[gate], target_model.operations[gate], mxBasis=mxBasis)
+        if weights is None:
+            w = 1
+        else:
+            w = weights[gate]
+
+        I_list.append(w * I)
+        sum_of_weights += w
+
+    assert(sum_of_weights > 0), "The sum of the weights should be positive!"
+    AI = _np.sum(I_list) / sum_of_weights
+
+    return AI
 
 
 def unitarity(A, mxBasis="gm"):
@@ -1795,6 +1866,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             Hdag = H.T.conjugate()
 
             #Do linear least squares: this is what takes the bulk of the time
+            #hamProjs = _spl.solve(_np.dot(Hdag, H), _np.dot(Hdag, errgen_std_flat), assume_a='her')  # works too
             hamProjs = _np.linalg.solve(_np.dot(Hdag, H), _np.dot(Hdag, errgen_std_flat))
             hamProjs.shape = (hamGens.shape[0],)
         else:
@@ -1823,6 +1895,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             Odag = O.T.conjugate()
 
             #Do linear least squares: this is what takes the bulk of the time
+            #otherProjs = _spl.solve(_np.dot(Odag, O), _np.dot(Odag, errgen_std_flat), assume_a='her')  # works too
             otherProjs = _np.linalg.solve(_np.dot(Odag, O), _np.dot(Odag, errgen_std_flat))
 
             if other_mode == "diagonal":
@@ -2320,13 +2393,15 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
 
                 #push any slightly negative evals of otherProjs positive so that
                 # the Cholesky decomp will work.
+                #assert(_np.allclose(otherProjs, otherProjs.T.conjugate()))
+                #evals, U = _np.linalg.eigh(otherProjs)  # works too (assert hermiticity above)
                 evals, U = _np.linalg.eig(otherProjs)
                 Ui = _np.linalg.inv(U)
 
                 assert(truncate or all([ev >= -1e-12 for ev in evals])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
 
-                pos_evals = evals.clip(1e-16, 1e100)
+                pos_evals = evals.clip(1e-16, None)
                 otherProjs = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
                 try:
                     Lmx = _np.linalg.cholesky(otherProjs)
@@ -2739,7 +2814,7 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, returnAll=False):
     -------
     U : numpy.ndarray
         A gauge transformation such that if `epgate = U * gate_mx * U_inv`,
-        then `epgate` (which has the same eigenalues as `gate_mx`, can be
+        then `epgate` (which has the same eigenalues as `gate_mx`), can be
         diagonalized with a set of eigenvectors that also diagonalize
         `target_gate_mx`.  Furthermore, `U` is real.
 
@@ -2811,8 +2886,8 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, returnAll=False):
                     raise ValueError("Expected to find %s as an espace-pair representative in %s"
                                      % (str(ev_pos), str(espace_pairs.keys())))
 
-            if not (_np.allclose(mx, _np.dot(U, _np.dot(_np.diag(evals), _np.linalg.inv(U))))):
-                import bpdb; bpdb.set_trace()
+            #if not (_np.allclose(mx, _np.dot(U, _np.dot(_np.diag(evals), _np.linalg.inv(U))))):
+            #    import bpdb; bpdb.set_trace()
             return evals, U, espace_pairs
 
         def standard_diag(mx, TOL=1e-6):
@@ -3086,10 +3161,29 @@ def split_lindblad_paramtype(typ):
 
 def eLabelToOutcome(povm_and_effect_lbl):
     """TODO: Docstring """
-    # Helper fn: POVM_ELbl -> Elbl mapping
+    # Helper fn: POVM_ELbl:sslbls -> Elbl mapping
     if povm_and_effect_lbl is None:
         return "NONE"  # Dummy label for placeholding
     else:
-        last_underscore = povm_and_effect_lbl.rindex('_')
-        effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
+        if isinstance(povm_and_effect_lbl, _Label):
+            last_underscore = povm_and_effect_lbl.name.rindex('_')
+            effect_lbl = povm_and_effect_lbl.name[last_underscore + 1:]
+        else:
+            last_underscore = povm_and_effect_lbl.rindex('_')
+            effect_lbl = povm_and_effect_lbl[last_underscore + 1:]
         return effect_lbl  # effect label alone *is* the outcome
+
+
+def eLabelToPOVM(povm_and_effect_lbl):
+    """TODO: Docstring """
+    # Helper fn: POVM_ELbl:sslbls -> POVM mapping
+    if povm_and_effect_lbl is None:
+        return "NONE"  # Dummy label for placeholding
+    else:
+        if isinstance(povm_and_effect_lbl, _Label):
+            last_underscore = povm_and_effect_lbl.name.rindex('_')
+            povm_name = povm_and_effect_lbl.name[:last_underscore]
+        else:
+            last_underscore = povm_and_effect_lbl.rindex('_')
+            povm_name = povm_and_effect_lbl[:last_underscore]
+        return povm_name

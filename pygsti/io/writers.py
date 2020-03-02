@@ -10,10 +10,12 @@
 
 import warnings as _warnings
 import numpy as _np
+import pathlib as _pathlib
 
 # from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
+from . import loaders as _loaders
 
 
 def write_empty_dataset(filename, circuit_list,
@@ -53,7 +55,7 @@ def write_empty_dataset(filename, circuit_list,
         else:
             raise ValueError("Must specify numZeroCols since I can't figure it out from the header string")
 
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         zeroCols = "  ".join(['0'] * numZeroCols)
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
@@ -67,7 +69,7 @@ def _outcome_to_str(x):
 
 
 def write_dataset(filename, dataset, circuit_list=None,
-                  outcomeLabelOrder=None, fixedColumnMode=True):
+                  outcomeLabelOrder=None, fixedColumnMode=True, withTimes="auto"):
     """
     Write a text-formatted dataset file.
 
@@ -93,6 +95,12 @@ def write_dataset(filename, dataset, circuit_list=None,
         any counts for an outcome, `'--'` is used in its place.  When `False`,
         each row's counts are written in an expanded form that includes the
         outcome labels (each "count" has the format <outcomeLabel>:<count>).
+
+    withTimes : bool or "auto", optional
+        Whether to include (save) time-stamp information in output.  This
+        can only be True when `fixedColumnMode=False`.  `"auto"` will set
+        this to True if `fixedColumnMode=False` and `dataset` has data at
+        non-trivial (non-zero) times.
     """
     if circuit_list is not None:
         if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
@@ -119,10 +127,16 @@ def write_dataset(filename, dataset, circuit_list=None,
             else:
                 headerString += "# " + commentLine + '\n'
 
-    if fixedColumnMode:
+    if fixedColumnMode is True:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
-    with open(filename, 'w') as output:
+        assert(not (withTimes is True)), "Cannot set `witTimes=True` when `fixedColumnMode=True`"
+    elif withTimes == "auto":
+        trivial_times = dataset.has_trivial_timedependence()
+    else:
+        trivial_times = not withTimes
+
+    with open(str(filename), 'w') as output:
         output.write(headerString)
         for circuit in circuit_list:  # circuit should be a Circuit object here
             dataRow = dataset[circuit]
@@ -135,15 +149,25 @@ def write_dataset(filename, dataset, circuit_list=None,
                 output.write(circuit_to_write.str + "  "
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
                                           for ol in outcomeLabels]))
-            else:  # use expanded label:count format
+                if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
+                output.write('\n')  # finish the line
+
+            elif trivial_times:  # use expanded label:count format
                 output.write(circuit_to_write.str + "  "
                              + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
                                           for ol in outcomeLabels if ol in counts]))
+                if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
+                output.write('\n')  # finish the line
 
-            #write aux info
-            if dataRow.aux:
-                output.write(" # %s" % str(repr(dataRow.aux)))
-            output.write('\n')  # finish the line
+            else:
+                output.write(circuit_to_write.str + "\n"
+                             + "times: " + "  ".join(["%g" % tm for tm in dataRow.time]) + "\n"
+                             + "outcomes: " + "  ".join([_outcome_to_str(ol) for ol in dataRow.outcomes]) + "\n")
+                if dataRow.reps is not None:
+                    output.write("repetitions: " + "  ".join(["%d" % rep for rep in dataRow.reps]) + "\n")
+                if dataRow.aux:
+                    output.write("aux: " + str(repr(dataRow.aux)) + "\n")
+                output.write('\n')  # blank line between circuits
 
 
 def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOrder=None):
@@ -200,7 +224,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
 
     # strip_occurence_tags = any([ca == "keepseparate" for ca in multidataset.collisionActions.values()])
     datasets = [multidataset[dsl] for dsl in dsLabels]
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         output.write(headerString + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
             # circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
@@ -234,7 +258,7 @@ def write_circuit_list(filename, circuit_list, header=None):
     if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
         raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
         if header is not None:
             output.write("# %s" % header + '\n')
 
@@ -274,7 +298,7 @@ def write_model(mdl, filename, title=None):
         else:
             f.write("%s = %s\n" % (lbl, repr(val)))
 
-    with open(filename, 'w') as output:
+    with open(str(filename), 'w') as output:
 
         if title is not None:
             output.write("# %s" % title + '\n')
@@ -410,3 +434,99 @@ def write_model(mdl, filename, title=None):
             output.write("GAUGEGROUP: TP\n")
         elif isinstance(mdl.default_gauge_group, _objs.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
+
+
+def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False):
+    """
+    Write to a directory an experimental design (`edesign`) and the dataset
+    template files needed to load in a :class:`ProtocolData` object, e.g.
+    using the :function:`load_data_from_dir` function, after the template
+    files are filled in.
+
+    Parameters
+    ----------
+    edesign : ExperimentDesign
+        The experiment design defining the circuits that need to be performed.
+
+    dirname : str
+        The *root* directory to write into.  This directory will have 'edesign'
+        and 'data' subdirectories created beneath it.
+
+    sparse : bool or "auto", optional
+        If True, then the template data set(s) are written in a sparse-data
+        format, i.e. in a format where not all the outcomes need to be given.
+        If False, then a dense data format is used, where counts for *all*
+        possible bit strings are given.  `"auto"` causes the sparse format
+        to be used when the number of qubits is > 2.
+
+    clobber_ok : bool, optional
+        If True, then a template dataset file will be written even if a file
+        of the same name already exists (this may overwrite existing data
+        with an empty template file, so be careful!).
+
+    Returns
+    -------
+    None
+    """
+
+    dirname = _pathlib.Path(dirname)
+    data_dir = dirname / 'data'
+    circuits = edesign.all_circuits_needing_data
+    nQubits = "multiple" if edesign.qubit_labels == "multiple" else len(edesign.qubit_labels)
+    if sparse == "auto":
+        sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
+
+    if sparse:
+        header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+        nZeroCols = 0
+    else:
+        fstr = '{0:0%db} count' % nQubits
+        nZeroCols = 2**nQubits
+        header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+
+    pth = data_dir / 'dataset.txt'
+    if pth.exists() and clobber_ok is False:
+        raise ValueError(("Template data file would clobber %s, which already exists!  Set `clobber_ok=True`"
+                          " to allow overwriting." % pth))
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    from ..protocols import ProtocolData as _ProtocolData
+    data = _ProtocolData(edesign, None)
+    data.write(dirname)
+    write_empty_dataset(pth, circuits, header_str, nZeroCols)
+
+
+def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
+                                         sampleError="multinomial", seed=None, randState=None,
+                                         aliasDict=None, collisionAction="aggregate",
+                                         recordZeroCnts=True, comm=None, memLimit=None, times=None,
+                                         fixedColumnMode="auto"):
+    """
+    Fills in the text-format data set file `dataset_fileame` with simulated data counts using `model`.
+
+    Parameters
+    ----------
+    model : Model
+        the model to use to simulate the data.
+
+    dataset_filename : strictly
+        the path to the text-formatted data set file.
+
+    rest_of_args : various
+        same as :function:`pygsti.construction.generate_fake_data`.
+
+    Returns
+    -------
+    DataSet
+        The generated data set (also written in place of the template file).
+    """
+    from ..construction import generate_fake_data as _generate_fake_data
+    ds_template = _loaders.load_dataset(dataset_filename, ignoreZeroCountLines=False, withTimes=False, verbosity=0)
+    ds = _generate_fake_data(model, list(ds_template.keys()), nSamples,
+                             sampleError, seed, randState, aliasDict,
+                             collisionAction, recordZeroCnts, comm,
+                             memLimit, times)
+    if fixedColumnMode == "auto":
+        fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
+    write_dataset(dataset_filename, ds, fixedColumnMode=fixedColumnMode)
+    return ds

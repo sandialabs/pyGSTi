@@ -783,11 +783,18 @@ def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
                         else:
                             texts.append(str(subMxs[iy][ix][iiy][iix]))
 
-    trace = go.Scattergl(x=xs, y=ys, mode="markers",
-                         marker=dict(size=8,
-                                     color=[colormap.get_color(y) for y in ys],
-                                     #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly
-                                     line=dict(width=1)))
+    #This GL version works, but behaves badly, sometimes failing to render...
+    #trace = go.Scattergl(x=xs, y=ys, mode="markers",
+    #                     marker=dict(size=8,
+    #                                 color=[colormap.get_color(y) for y in ys],
+    #                                 #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly in GL?
+    #                                 line=dict(width=1)))
+    trace = go.Scatter(x=xs, y=ys, mode="markers",
+                       marker=dict(size=8,
+                                   color=[colormap.get_color(y) for y in ys],
+                                   colorscale=colormap.get_colorscale(),
+                                   line=dict(width=1)))
+
     if hoverInfo:
         trace['hoverinfo'] = 'text'
         trace['text'] = texts
@@ -1205,10 +1212,10 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     if title: tmargin += 30
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
-    max_xl = max([len(xl) for xl in xlabels])
+    max_xl = max([len(str(xl)) for xl in xlabels])
     if max_xl > 0: tmargin += max_xl * 7
-    max_yl = max([len(yl) for yl in ylabels])
-    if max_yl > 0: lmargin += max_yl * 5
+    max_yl = max([len(str(yl)) for yl in ylabels])
+    if max_yl > 0: lmargin += max_yl * 7
     if colorbar: rmargin = 100
 
     boxSizeX = boxSizeY = 15
@@ -1257,7 +1264,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             mirror=True,
             ticks="",
             linewidth=2,
-            ticktext=xlabels,
+            ticktext=[str(xl) for xl in xlabels],
             tickvals=[i for i in range(len(xlabels))],
             tickangle=-90,
             range=[-0.5, len(xlabels) - 0.5]
@@ -1273,7 +1280,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             mirror=True,
             ticks="",
             linewidth=2,
-            ticktext=ylabels,
+            ticktext=[str(yl) for yl in ylabels],
             tickvals=[i for i in range(len(ylabels))],
             range=[-0.5, len(ylabels) - 0.5],
         ),
@@ -1763,7 +1770,10 @@ class ColorBoxPlot(WorkspacePlot):
                     _warnings.warn("No dataset specified: using DOF-per-element == 1")
                     element_dof = 1
                 else:
-                    element_dof = len(dataset.get_outcome_labels()) - 1
+                    #element_dof = len(dataset.get_outcome_labels()) - 1
+                    #Instead of the above, which doesn't work well when there are circuits with different
+                    # outcomes, the line below just takes the average degrees of freedom per circuit
+                    element_dof = dataset.get_degrees_of_freedom(gss.allstrs) / len(gss.allstrs)
 
                 n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp, element_dof)
                 # NOTE: currently dof_per_box is constant, and takes the total
@@ -2578,7 +2588,8 @@ class FitComparisonBarPlot(WorkspacePlot):
         (along one dimension)"""
 
     def __init__(self, ws, Xs, gssByX, modelByX, datasetByX,
-                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None, wildcard=None):
+                 objective="logl", Xlabel='L', NpByX=None, scale=1.0,
+                 comm=None, wildcard=None, minProbClip=1e-4):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to corresponding data sets.
@@ -2623,14 +2634,20 @@ class FitComparisonBarPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
+
+        minProbClip : float, optional
+            The minimum probability treated normally in the evaluation of the log-likelihood.
+            A penalty function replaces the true log-likelihood for probabilities that lie
+            below this threshold so that the log-likelihood never becomes undefined (which improves
+            optimizer performance).
         """
         super(FitComparisonBarPlot, self).__init__(ws, self._create,
                                                    Xs, gssByX, modelByX, datasetByX,
                                                    objective, Xlabel, NpByX, scale,
-                                                   comm, wildcard)
+                                                   comm, wildcard, minProbClip)
 
     def _create(self, Xs, gssByX, modelByX, datasetByX, objective, Xlabel,
-                NpByX, scale, comm, wildcard):
+                NpByX, scale, comm, wildcard, minProbClip):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts = []
@@ -2655,7 +2672,7 @@ class FitComparisonBarPlot(WorkspacePlot):
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.ratedNsigma, dataset, mdl,
                                                           gss, objective, Np, returnAll=True,
                                                           comm=comm, smartc=self.ws.smartCache,
-                                                          wildcard=wildcard)
+                                                          wildcard=wildcard, minProbClip=minProbClip)
                 #Note: don't really need returnAll=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
@@ -2732,7 +2749,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
     def __init__(self, ws, Xs, Ys, gssByYthenX, modelByYthenX, datasetByYthenX,
                  objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None,
-                 wildcard=None):
+                 wildcard=None, minProbClip=1e-4):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to their respective  data sets.
@@ -2774,13 +2791,20 @@ class FitComparisonBoxPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
+
+        minProbClip : float, optional
+            The minimum probability treated normally in the evaluation of the log-likelihood.
+            A penalty function replaces the true log-likelihood for probabilities that lie
+            below this threshold so that the log-likelihood never becomes undefined (which improves
+            optimizer performance).
         """
         super(FitComparisonBoxPlot, self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,
-            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm, wildcard)
+            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm,
+            wildcard, minProbClip)
 
     def _create(self, Xs, Ys, gssByYX, modelByYX, datasetByYX, objective,
-                Xlabel, Ylabel, scale, comm, wildcard):
+                Xlabel, Ylabel, scale, comm, wildcard, minProbClip):
 
         xlabels = list(map(str, Xs))
         ylabels = list(map(str, Ys))
@@ -2806,7 +2830,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
                 Nsig, rating, _, _, _, _ = self._ccompute(
                     _ph.ratedNsigma, dataset, mdl, gss, objective,
                     returnAll=True, comm=comm, smartc=self.ws.smartCache,
-                    wildcard=wildcard)
+                    wildcard=wildcard, minProbClip=minProbClip)
                 NsigMx[iY][iX] = Nsig
 
         return matrix_color_boxplot(
@@ -3065,7 +3089,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         Parameters
         ----------
-        rbR : RBResults
+        rbR : RandomizedBenchmarkingResults
             The RB results object containing all the relevant RB data.
 
         fitkey : dict key, optional
@@ -3117,8 +3141,14 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                 raise ValueError(("There are multiple fits and none have the "
                                   "key 'full'. Please specify the fit to plot!"))
 
-        xdata = _np.asarray(rbR.data.lengths)
-        ydata = _np.asarray(rbR.data.ASPs)
+        ASPs = []  # (avg success probs)
+        data_per_depth = rbR.data.cache[rbR.protocol.datatype]
+        for depth in rbR.depths:
+            percircuitdata = data_per_depth[depth]
+            ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+
+        xdata = _np.asarray(rbR.depths)
+        ydata = _np.asarray(ASPs)
 
         data = []  # list of traces
         data.append(go.Scatter(
@@ -3133,7 +3163,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         ))
 
         if decay:
-            lengths = _np.linspace(0, max(rbR.data.lengths), 200)
+            lengths = _np.linspace(0, max(rbR.depths), 200)
             A = rbR.fits[fitkey].estimates['A']
             B = rbR.fits[fitkey].estimates['B']
             p = rbR.fits[fitkey].estimates['p']
@@ -3149,15 +3179,16 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             ))
 
         if success_probabilities:
-            for length, prob_dist in zip(rbR.data.lengths, rbR.data.success_probabilities):
+            all_success_probs_by_depth = [data_per_depth[depth] for depth in rbR.depths]
+            for depth, prob_dist in zip(rbR.depths, all_success_probs_by_depth):
                 data.append(go.Box(
-                    x0=length, y=prob_dist,
+                    x0=depth, y=prob_dist,
                     whiskerwidth=0.2, opacity=0.7, showlegend=False,
                     boxpoints='all' if showpts else False,
                     pointpos=0, jitter=0.5,
                     boxmean=False,  # or True or 'sd'
                     hoveron="boxes", hoverinfo="all",
-                    name='m=%d' % length))
+                    name='m=%d' % depth))
 
         #pad by 10%
         ymin = min(ydata)

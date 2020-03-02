@@ -6,7 +6,7 @@ import pickle
 import os
 import copy
 
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 

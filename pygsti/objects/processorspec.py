@@ -259,12 +259,16 @@ class ProcessorSpec(object):
 
         return edgelist
 
-    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+    def get_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         # Erik future : improve docstring.
         """
-        Adds a standard model for the gates. For example, "target" process matrices are added
+        Builds a standard model for the gates. For example, "target" process matrices are added
         if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n
         symplectic form, are added if model_name = 'clifford'.
+
+        Returns
+        -------
+        Model
         """
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
@@ -302,7 +306,16 @@ class ProcessorSpec(object):
                 self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
 
-        self.models[model_name] = model
+        return model
+
+    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        # Erik future : improve docstring.
+        """
+        Adds a standard model for the gates. For example, "target" process matrices are added
+        if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n
+        symplectic form, are added if model_name = 'clifford'.
+        """
+        self.models[model_name] = self.get_std_model(model_name, parameterization, sim_type)
 
     def add_std_compilations(self, compile_type, oneQgates, twoQgates, add_nonlocal_twoQgates=False, verbosity=0):
         """
@@ -563,6 +576,55 @@ class ProcessorSpec(object):
                 connectedqubits.append(combo)
 
         return connectedqubits
+
+    #Note:  Below method gets all subgraphs up to full graph size.
+    def get_all_connected_sets_new(self):
+        """
+        todo
+        """
+        def F(neighbor_dict, k_max, X, Y, output_set):
+            vertices = neighbor_dict.keys()
+            if len(X) == k_max:
+                return output_set
+            if X:
+                T = set(a for x in X for a in neighbor_dict[x] if a not in Y and a not in X)
+            else:
+                T = vertices
+            Y1 = set(Y)
+            for v in T:
+                X.add(v)
+#                print (X)
+                output_set.add(frozenset(X))
+                F(neighbor_dict, k_max, X, Y1, output_set)
+                X.remove(v)
+                Y1.add(v)
+
+        def addedge(a, b, neighbor_dict):
+            neighbor_dict[a].append(b)
+            neighbor_dict[b].append(a)
+
+        def group_subgraphs(subgraph_list):
+            processed_subgraph_dict = _collections.defaultdict(list)
+            for subgraph in subgraph_list:
+                k = len(subgraph)
+                subgraph_as_list = list(subgraph)
+                subgraph_as_list.sort()
+                subgraph_as_tuple = tuple(subgraph_as_list)
+                processed_subgraph_dict[k].append(subgraph_as_tuple)
+            return processed_subgraph_dict
+
+        neighbor_dict = _collections.defaultdict(list)
+        directed_edge_list = self.qubitgraph.edges()
+        undirected_edge_list = list(set([frozenset(edge) for edge in directed_edge_list]))
+        undirected_edge_list = [list(edge) for edge in undirected_edge_list]
+
+        for edge in undirected_edge_list:
+            addedge(edge[0], edge[1], neighbor_dict)
+        k_max = self.number_of_qubits
+        output_set = set()
+        F(neighbor_dict, k_max, set(), set(), output_set)
+        grouped_subgraphs = group_subgraphs(output_set)
+        return grouped_subgraphs
 
     # Future : replace this with a way to specify how "costly" using different qubits/gates is estimated to be, so that
     # Clifford compilers etc can take this into account by auto-generating a costfunction from this information.

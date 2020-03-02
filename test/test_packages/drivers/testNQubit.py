@@ -5,9 +5,10 @@ mpl_logger.setLevel(logging.WARNING)
 import unittest
 import pygsti
 import numpy as np
-from pygsti.construction import std1Q_XY
-from pygsti.construction import std2Q_XYICNOT
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYICNOT
 from pygsti.objects import Label as L
+from pygsti.objects import Circuit
 import pygsti.construction as pc
 import sys
 import warnings
@@ -187,18 +188,18 @@ class NQubitTestCase(BaseTestCase):
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                  sim_type="termorder:1", parameterization="H+S terms", sparse=False)
+                                                  sim_type="termorder", parameterization="H+S terms", sparse=False)
 
         #RUN to create cache (SAVE)
         if regenerate_references():
             calc_cache = {}
-            mdl_to_optimize.set_simtype("termorder:1",calc_cache)
+            mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
             mdl_to_optimize.bulk_probs(gss.allstrs) #lsgstLists[-1]
             pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
 
         #Just load precomputed cache (we test do_long_sequence_gst_base here, not cache computation)
         calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
-        mdl_to_optimize.set_simtype("termorder:1",calc_cache)
+        mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
 
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
                                                    lsgstLists, gaugeOptParams=False,
@@ -233,19 +234,20 @@ class NQubitTestCase(BaseTestCase):
               (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
         opLabels = target_model.get_primitive_op_labels()
+        line_labels = tuple(range(nQubits))
         fids1Q = std1Q_XY.fiducials
         fiducials = []
         for i in range(nQubits):
             fiducials.extend( pygsti.construction.manipulate_circuit_list(
-                fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
+                fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ], line_labels=line_labels) )
         print(len(fiducials), "Fiducials")
         prep_fiducials = meas_fiducials = fiducials
         #TODO: add fiducials for 2Q pairs (edges on graph)
 
-        germs = pygsti.construction.circuit_list([ (gl,) for gl in opLabels ])
+        germs = pygsti.construction.circuit_list([ (gl,) for gl in opLabels ], line_labels=line_labels)
         maxLs = [1]
         expList = pygsti.construction.make_lsgst_experiment_list(mdl_datagen, prep_fiducials, meas_fiducials, germs, maxLs)
-        self.assertTrue(() in expList)
+        self.assertTrue( Circuit((),line_labels) in expList)
 
         ds = pygsti.construction.generate_fake_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
         print("Created Dataset with %d strings" % len(ds))

@@ -277,8 +277,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                     _sv.convert(_sv.StaticSPAMVec(v0), "TP", basis1Q))
                 povm_factors.append(
                     _povm.convert(_povm.UnconstrainedPOVM(([
-                        ('0', _sv.StaticSPAMVec(v0)),
-                        ('1', _sv.StaticSPAMVec(v1))])), "TP", basis1Q))
+                        ('0', _sv.StaticSPAMVec(v0, typ="effect")),
+                        ('1', _sv.StaticSPAMVec(v1, typ="effect"))])), "TP", basis1Q))
 
             prep_layers['rho0'] = _sv.TensorProdSPAMVec('prep', prep_factors)
             povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
@@ -732,32 +732,50 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
     def get_effect(self, layerlbl):
-        return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        if layerlbl in self.effect_blks['layers']:
+            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        else:
+            # See if this effect label could correspond to a *marginalized* POVM, and
+            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
+            if isinstance(layerlbl, _Lbl):  # this should always be the case...
+                povmName = _gt.eLabelToPOVM(layerlbl)
+                if povmName in self.povm_blks['layers']:
+                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+                    # are not present in the stored POVM's label.
+                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
+                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
+                    return self.effect_blks['layers'][layerlbl]
+        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
     def get_operation(self, layerlbl):
         dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
-        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.op_blks['layers'])
+        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.simpleop_blks['layers'])
 
         # OLD: special case: 'Gi' acts as global idle!
         #if hasGlobalIdle and layerlbl == 'Gi' and \
-        #   'Gi' not in self.op_blks['layers'])):
-        #    return self.op_blks['layers'][_Lbl('globalIdle')]
+        #   'Gi' not in self.simpleop_blks['layers'])):
+        #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
 
         if len(components) == 1 and not bHasGlobalIdle:
             return self.get_layer_component_operation(components[0], dense)
         else:
-            gblIdle = [self.op_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+            gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            return Composed(gblIdle + [self.get_layer_component_operation(l, dense) for l in components],
-                            dim=self.model.dim,
-                            evotype=self.model._evotype)
+            ret = Composed(gblIdle + [self.get_layer_component_operation(l, dense) for l in components],
+                           dim=self.model.dim,
+                           evotype=self.model._evotype)
+            self.model._init_virtual_obj(ret)  # so ret's gpindices get set
+            return ret
 
     def get_layer_component_operation(self, complbl, dense):
         if isinstance(complbl, _CircuitLabel):
             return self.get_circuitlabel_op(complbl, dense)
-        elif complbl in self.op_blks['layers']:
-            return self.op_blks['layers'][complbl]
+        elif complbl in self.simpleop_blks['layers']:
+            return self.simpleop_blks['layers'][complbl]
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)

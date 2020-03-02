@@ -929,11 +929,7 @@ class LogLFunction(ObjectiveFunction):
             countVecMx = evaltree_cache['cntVecMx']
             totalCntVec = evaltree_cache['totalCntVec']
         else:
-            if opLabelAliases is not None:
-                ds_circuit_list = _lt.find_replace_tuple_list(
-                    circuit_list, opLabelAliases)
-            else:
-                ds_circuit_list = circuit_list
+            ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
 
             countVecMx = _np.empty(nEls, 'd')
             totalCntVec = _np.empty(nEls, 'd')
