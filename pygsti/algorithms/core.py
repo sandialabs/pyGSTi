@@ -1219,7 +1219,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         else:
             objective = _objfns.ChiAlphaFunction(
                 alpha, mdl, evTree, lookup, circuitsToUse, opLabelAliases, 
-                cntVecMx, N, minProbClipForWeighting, probClipInterval, 1e-6, #radius harcoded for now
+                cntVecMx, N, minProbClipForWeighting, 1.0, probClipInterval, None, #radius hardcoded to None for now
                 wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
 
     #Get number of maximal-model parameter ("dataset params") if needed for print messages
@@ -2304,10 +2304,13 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     else:
         #Create a termgap-penalizable objective function in termgap case
+        pfratio_stitchpt = minProbClip, 
+        pfratio_derivpt = 1.0 if (radius is None) else minProbClip
+        minProbClip = None  # use pfratio regularization (TESTING)
         objective = _objfns.LogLFunction(mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, radius,
-                                         probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
-                                         shiftFctr, check, comm, profiler, printer)
+                                         spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, pfratio_stitchpt,
+                                         pfratio_derivpt, radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad,
+                                         poissonPicture, shiftFctr, check, comm, profiler, printer)
 
     profiler.add_time("do_mlgst: pre-opt", tStart)
 
@@ -2541,14 +2544,23 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 
             evt_cache = {}  # get the eval tree that's created so we can reuse it
             if not onlyPerformMLE:
-                #extra_lm_opts['damping_mode'] = "invJTJ"
-                _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
-                                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
-                                        spam_penalty_factor, minProbClip,
-                                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
-                                        check, circuitWeights, opLabelAliases,
-                                        memLimit, comm, distributeMethod, profiler, evt_cache,
-                                        time_dependent)
+                #_, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                #                        maxiter, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, minProbClip,
+                #                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent)
+
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("***DEBUG*** - check chi2 opt (minProbClip=%g)" % minProbClip)
+                #_, dont_care = do_mc2gst(dataset, mleModel.copy(), stringsToEstimate,
+                #                        2, maxfev, num_fd, tol, extra_lm_opts, cptp_penalty_factor,
+                #                        spam_penalty_factor, minProbClip,
+                #                        probClipInterval, useFreqWeightedChiSq, 0, printer - 1, check,
+                #                        check, circuitWeights, opLabelAliases,
+                #                        memLimit, comm, distributeMethod, profiler, evt_cache,
+                #                        time_dependent)
 
                 #extra_lm_opts['damping_mode'] = "JTJ"
                 #extra_lm_opts['init_munu'] = extra_lm_opts.get('post_munu', 'auto')
@@ -2577,7 +2589,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                 #                        time_dependent)
 
                 #alpha = 1.0
-                #test_minProbClip = 1.0 #minProbClip
+                #test_minProbClip = minProbClip
                 ##extra_lm_opts['damping_mode'] = "invJTJ"
                 #if comm is None or comm.Get_rank() == 0:
                 #    print("***DEBUG*** - extra chi-alpha opt with alpha=",alpha, " and x0=", test_minProbClip)
@@ -2612,10 +2624,20 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                 #                        memLimit, comm, distributeMethod, profiler, evt_cache,
                 #                        time_dependent)
 
+                if comm is None or comm.Get_rank() == 0:
+                    print("***DEBUG*** - 'lite' logl opt with radius=None and minProbClip=",minProbClip)
+                _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
+                                       maxiter, maxfev, num_fd, tol, extra_lm_opts,
+                                       cptp_penalty_factor, spam_penalty_factor,
+                                       minProbClip, probClipInterval, None,
+                                       poissonPicture, printer - 1, check, circuitWeights,
+                                       opLabelAliases, memLimit, comm, distributeMethod, profiler,
+                                       evt_cache, time_dependent)
+
 
             if alwaysPerformMLE:
                 #extra_lm_opts['damping_mode'] = "invJTJ"
-                minRatio = minProbClip * 1000 # so 1e-4 => 0.1 DEBUG
+                minRatio = minProbClip #* 1000 # so 1e-4 => 0.1 DEBUG
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
                                        maxiter, maxfev, num_fd, tol, extra_lm_opts,
                                        cptp_penalty_factor, spam_penalty_factor,
@@ -2658,6 +2680,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
 
                 mleModel.basis = startModel.basis
 
+                printer.log("DEBUG: set minProbClip=%g and radius=%g!!" % (minProbClip, radius), 2)
                 maxLogL_p, mleModel_p = do_mlgst(
                     dataset, mleModel, stringsToEstimate, maxiter, maxfev, 0, tol, extra_lm_opts,
                     cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
