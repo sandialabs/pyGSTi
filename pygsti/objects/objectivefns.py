@@ -897,7 +897,7 @@ class LogLFunction(ObjectiveFunction):
 
     @classmethod
     def simple_init(cls, model, dataset, circuit_list=None,
-                    pfratio_stitchpt=0.1, pfratio_derivpt=0.1, probClipInterval=(-1e6, 1e6),
+                    minProbClip=1e-6, pfratio_stitchpt=0.1, pfratio_derivpt=0.1, probClipInterval=(-1e6, 1e6),
                     radius=1e-4, poissonPicture=True, check=False, opLabelAliases=None,
                     evaltree_cache=None, comm=None, wildcard=None):
         """
@@ -949,13 +949,14 @@ class LogLFunction(ObjectiveFunction):
             #    evaltree_cache['totalCntVec'] = totalCntVec
 
         return cls(model, evalTree, lookup, circuit_list, opLabelAliases, cptp_penalty_factor=0,
-                   spam_penalty_factor=0, cntVecMx=countVecMx, totalCntVec=totalCntVec, pfratio_stitchpt=pfratio_stitchpt,
-                   pfratio_derivpt=pfratio_stitchpt, radius=radius, probClipInterval=probClipInterval, wrtBlkSize=None,
+                   spam_penalty_factor=0, cntVecMx=countVecMx, totalCntVec=totalCntVec, minProbClip=minProbClip,
+                   pfratio_stitchpt=pfratio_stitchpt, pfratio_derivpt=pfratio_stitchpt, radius=radius,
+                   probClipInterval=probClipInterval, wrtBlkSize=None,
                    gthrMem=None, forcefn_grad=None, poissonPicture=poissonPicture, shiftFctr=100, check=False,
                    comm=comm, profiler=None, verbosity=0)
 
     def __init__(self, mdl, evTree, lookup, circuitsToUse, opLabelAliases, cptp_penalty_factor,
-                 spam_penalty_factor, cntVecMx, totalCntVec, pfratio_stitchpt, pfratio_derivpt,
+                 spam_penalty_factor, cntVecMx, totalCntVec, minProbClip, pfratio_stitchpt, pfratio_derivpt,
                  radius, probClipInterval, wrtBlkSize, gthrMem, forcefn_grad, poissonPicture,
                  shiftFctr=100, check=False, comm=None, profiler=None, verbosity=0):
         from .. import tools as _tools
@@ -1025,14 +1026,23 @@ class LogLFunction(ObjectiveFunction):
         #                                             poissonPicture, opLabelAliases, evaltree_cache)
         #print("DIFF1 = ",abs(_np.sum(max_logL_terms) - _np.sum(freqTerm)))
 
-        self.x0 = pfratio_stitchpt
-        self.x1 = pfratio_derivpt
+        if minProbClip is not None:
+            assert(pfratio_stitchpt is None and pfratio_derivpt is None), \
+                "Cannot specify pfratio and minProbClip arguments as non-None!"
+            self.min_p = minProbClip
+            self.regtype = "minp"
+        else:
+            assert(minProbClip is None), "Cannot specify pfratio and minProbClip arguments as non-None!"
+            self.x0 = pfratio_stitchpt
+            self.x1 = pfratio_derivpt
+            self.regtype = "pfratio"
         self.probClipInterval = probClipInterval
         self.forcefn_grad = forcefn_grad
 
         if radius is None:
             #Infer the curvature of the regularized zero-f-term functions from
             # the largest curvature we use at the stitch-points of nonzero-f terms.
+            assert(self.regtype == 'pfratio'), "Must specify `radius` when %s regularization type" % self.regtype
             self.a = None
             self.zero_freq_poisson_logl = self._zero_freq_poisson_logl_relaxed
             self.zero_freq_poisson_dlogl = self._zero_freq_poisson_dlogl_relaxed
@@ -1056,6 +1066,7 @@ class LogLFunction(ObjectiveFunction):
 
         if poissonPicture:
             if mdl.get_simtype() == "termgap":
+                assert(self.regtype == "minp"), "termgap simtype is only implemented for 'minp' reg-type thus far."
                 assert(cptp_penalty_factor == 0), "Cannot have cptp_penalty_factor != 0 when using the termgap simtype"
                 assert(spam_penalty_factor == 0), "Cannot have spam_penalty_factor != 0 when using the termgap simtype"
                 assert(self.forcefn_grad is None), "Cannot use force functions when using the termgap simtype"
@@ -1100,42 +1111,59 @@ class LogLFunction(ObjectiveFunction):
         return N * _np.where(probs > p0, 1.0, 2*C0*probs)
 
     def _poisson_picture_v_from_probs(self, tm_start, extra=False, debug=False):
-        x0 = self.x0
-        x1 = self.x1
-        x = self.probs / self.freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
-        #DEBUG TODO REMOVE
-        #if self.comm.Get_rank() == 0 and debug:
-        #    print(">>>> DEBUG ----------------------------------")
-        #    print("x range = ",_np.min(x), _np.max(x))
-        #    print("p range = ",_np.min(self.probs), _np.max(self.probs))
-        #    #print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
-        #    #print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
-        #    #print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
-        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
-        #    #for i,el in enumerate(x):
-        #    #    if el < 0.1 or el > 10.0:
-        #    #        print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i], self.freqs[i], self.freqs_nozeros[i]))
-        #    print("<<<<< DEBUG ----------------------------------")
-        pos_x = _np.where(x < x0, x0, x)
-        S = self.minusCntVecMx * (1 / x1 - 1)  # deriv wrt x at x == x0 (=min_p)
-        S2 = -0.5 * self.minusCntVecMx / (x1**2)  # 0.5 * 2nd deriv at x0
-        
-        #pos_x = _np.where(x > 1 / x0, 1 / x0, pos_x)
-        #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
-        #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
-        
-        v = self.minusCntVecMx * (1.0 - pos_x + _np.log(pos_x))
-        #Note: order of +/- terms above is important to avoid roundoff errors when x is near 1.0
-        # (see patching line below).  For example, using log(x) + 1 - x causes significant loss
-        # of precision because log(x) is tiny and so is |1-x| but log(x) + 1 == 1.0.
 
-        # omit = 1-p1-p2  => 1/2-p1 + 1/2-p2
+        if self.regtype == 'pfratio':
+            x0 = self.x0
+            x1 = self.x1
+            x = self.probs / self.freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
+    
+            #DEBUG TODO REMOVE
+            #if self.comm.Get_rank() == 0 and debug:
+            #    print(">>>> DEBUG ----------------------------------")
+            #    print("x range = ",_np.min(x), _np.max(x))
+            #    print("p range = ",_np.min(self.probs), _np.max(self.probs))
+            #    #print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
+            #    #print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
+            #    #print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
+            #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
+            #    #for i,el in enumerate(x):
+            #    #    if el < 0.1 or el > 10.0:
+            #    #        print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i], self.freqs[i], self.freqs_nozeros[i]))
+            #    print("<<<<< DEBUG ----------------------------------")
+            pos_x = _np.where(x < x0, x0, x)
+            S = self.minusCntVecMx * (1 / x1 - 1)  # deriv wrt x at x == x0 (=min_p)
+            S2 = -0.5 * self.minusCntVecMx / (x1**2)  # 0.5 * 2nd deriv at x0
+        
+            #pos_x = _np.where(x > 1 / x0, 1 / x0, pos_x)
+            #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
+            #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
+            
+            v = self.minusCntVecMx * (1.0 - pos_x + _np.log(pos_x))
+            #Note: order of +/- terms above is important to avoid roundoff errors when x is near 1.0
+            # (see patching line below).  For example, using log(x) + 1 - x causes significant loss
+            # of precision because log(x) is tiny and so is |1-x| but log(x) + 1 == 1.0.
 
-        # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-        v = _np.maximum(v, 0)
-        # quadratic extrapolation of logl at x0 for probabilities/frequencies < x0
-        v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
-        #v = _np.where(x > 1 / x0, v + T * (x - x0) + T2 * (x - x0)**2, v)
+            # omit = 1-p1-p2  => 1/2-p1 + 1/2-p2
+            
+            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+            v = _np.maximum(v, 0)
+            # quadratic extrapolation of logl at x0 for probabilities/frequencies < x0
+            v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
+            #v = _np.where(x > 1 / x0, v + T * (x - x0) + T2 * (x - x0)**2, v)
+        elif self.regtype == 'minp':
+            pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
+            S = self.minusCntVecMx / self.min_p + self.totalCntVec
+            S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
+            v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs) + self.totalCntVec * \
+                pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
+
+            # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+            v = _np.maximum(v, 0)
+            # quadratic extrapolation of logl at min_p for probabilities < min_p
+            v = _np.where(self.probs < self.min_p, v + S * (self.probs - self.min_p) + S2 * (self.probs - self.min_p)**2, v)
+        else:
+            raise ValueError("Invalid regularization type: %s" % self.regtype)
+
         v = _np.where(self.minusCntVecMx == 0, self.zero_freq_poisson_logl(self.totalCntVec, self.probs), v)
         # special handling for f == 0 terms
         # using cubit rounding of function that smooths N*p for p>0:
@@ -1175,12 +1203,17 @@ class LogLFunction(ObjectiveFunction):
         #print("DIFF2 = ",_np.sum(logL_terms), _np.sum(v), _np.sum(freqTerm), abs(_np.sum(logL_terms)
         #      + _np.sum(v)-_np.sum(freqTerm)))
 
-        v = _np.sqrt(v)
-        v = _np.where(_np.abs(x-1) < 1e-6, _np.sqrt(-self.minusCntVecMx) * _np.abs(x-1)/_np.sqrt(2), v)  # 1st order taylor patch for x near 1.0 TEST
-
         v.shape = [self.KM]  # reshape ensuring no copy is needed
-        if extra:  # then used for jacobian where penalty terms are added later, so return now
-            return v, (x, pos_x, S, S2, omitted_probs)
+        v = _np.sqrt(v)
+        if self.regtype == "pfratio":
+            # post-sqrt(v) 1st order taylor patch for x near 1.0 - maybe unnecessary
+            v = _np.where(_np.abs(x-1) < 1e-6, _np.sqrt(-self.minusCntVecMx) * _np.abs(x-1)/_np.sqrt(2), v)  
+
+            if extra:  # then used for jacobian where penalty terms are added later, so return now
+                return v, (x, pos_x, S, S2, omitted_probs)
+        elif self.regtype == 'minp':
+            if extra:  # then used for jacobian where penalty terms are added later, so return now
+                return v, (pos_probs, S, S2, omitted_probs)
 
         if self.cptp_penalty_factor != 0:
             cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
@@ -1202,6 +1235,7 @@ class LogLFunction(ObjectiveFunction):
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless probClipInterval is set within [0,1].
     
+    #TODO REMOVE
     #def OLD_poisson_picture_v_from_probs(self, tm_start):
     #    pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
     #    S = self.minusCntVecMx / self.min_p + self.totalCntVec
@@ -1290,20 +1324,31 @@ class LogLFunction(ObjectiveFunction):
                                   prMxToFill=self.probs, clipTo=self.probClipInterval,
                                   check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
-        v, (x, pos_x, S, S2, omitted_probs) = self._poisson_picture_v_from_probs(tm, extra=True)
 
-        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to
-        # avoid divide by zero below
+        if self.regtype == 'pfratio':
+            v, (x, pos_x, S, S2, omitted_probs) = self._poisson_picture_v_from_probs(tm, extra=True)
+            x0 = self.x0
+        elif self.regtype == 'minp':
+            v, (pos_probs, S, S2, omitted_probs) = self._poisson_picture_v_from_probs(tm, extra=True)
+
+        # derivative should not actually diverge as v->0, but clip v (always >= 0) to a small positive
+        # value to avoid divide by zero errors below.
         v = _np.maximum(v, 1e-100)
 
         # compute jacobian
-        x0 = self.x0
-        dprobs_factor_pos = (0.5 / v) * (self.totalCntVec * (-1 / pos_x + 1))
-        dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (x - x0)) / self.freqs_nozeros
-        #dprobs_factor_neg2 = (0.5 / v) * (T + 2 * T2 * (x - x0)) / self.freqs_nozeros
+        if self.regtype == 'pfratio':
+            dprobs_factor_pos = (0.5 / v) * (self.totalCntVec * (-1 / pos_x + 1))
+            dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (x - x0)) / self.freqs_nozeros
+            #dprobs_factor_neg2 = (0.5 / v) * (T + 2 * T2 * (x - x0)) / self.freqs_nozeros
+            dprobs_factor = _np.where(x < x0, dprobs_factor_neg, dprobs_factor_pos)
+            #dprobs_factor = _np.where(x > 1 / x0, dprobs_factor_neg2, dprobs_facto
+
+        elif self.regtype == 'minp':
+            dprobs_factor_pos = (0.5 / v) * (self.minusCntVecMx / pos_probs + self.totalCntVec)
+            dprobs_factor_neg = (0.5 / v) * (S + 2 * S2 * (self.probs - self.min_p))
+            dprobs_factor = _np.where(self.probs < self.min_p, dprobs_factor_neg, dprobs_factor_pos)
+
         dprobs_factor_zerofreq = (0.5 / v) * self.zero_freq_poisson_dlogl(self.totalCntVec, self.probs)
-        dprobs_factor = _np.where(x < x0, dprobs_factor_neg, dprobs_factor_pos)
-        #dprobs_factor = _np.where(x > 1 / x0, dprobs_factor_neg2, dprobs_factor)
         dprobs_factor = _np.where(self.minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor)
 
         if self.firsts is not None:
@@ -1356,7 +1401,7 @@ class LogLFunction(ObjectiveFunction):
         return self.jac
 
     def _termgap_v2_from_probs(self, probs, S, S2):
-        raise NotImplementedError("Need to upgrade this function to use x0 not min_p!")
+        assert(self.regtype == 'minp'), "Only regtype='minp' is supported for termgap calcs so far!"
         pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
         v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs) + self.totalCntVec * \
             pos_probs  # dims K x M (K = nSpamLabels, M = nCircuits)
@@ -1378,7 +1423,7 @@ class LogLFunction(ObjectiveFunction):
         return v
 
     def termgap_poisson_picture_logl(self, vectorGS, oob_check=False):
-        raise NotImplementedError("Need to upgrade this function to use x0 not min_p!")
+        assert(self.regtype == 'minp'), "Only regtype='minp' is supported for termgap calcs so far!"
         tm = _time.time()
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
@@ -1423,7 +1468,6 @@ class TimeDependentLogLFunction(ObjectiveFunction):
                  gthrMem, forcefn_grad, poissonPicture, shiftFctr=100,
                  check=False, comm=None, profiler=None, verbosity=0):
         from .. import tools as _tools
-        raise NotImplementedError("Need to upgrade this class to use x0 not min_p!")
         assert(cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
             "Cannot apply CPTP or SPAM penalization in time-dependent logl case (yet)"
         assert(forcefn_grad is None), "forcing functions not supported with time-dependent logl function yet"
