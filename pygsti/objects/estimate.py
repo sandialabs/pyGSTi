@@ -32,8 +32,8 @@ class Estimate(object):
     final `Model`, and then different gauge optimizations of the final
     set.
     """
-
-    def __init__(self, parent, targetModel=None, seedModel=None,
+    @classmethod
+    def gst_init(cls, parent, targetModel=None, seedModel=None,
                  modelsByIter=None, parameters=None):
         """
         Initialize an empty Estimate object.
@@ -60,6 +60,31 @@ class Estimate(object):
             A dictionary of parameters associated with how these models
             were obtained.
         """
+        models = {}
+        if targetModel: models['target'] = targetModel
+        if seedModel: models['seed'] = seedModel
+        if modelsByIter:
+            models['iteration estimates'] = modelsByIter
+            models['final iteration estimate'] = modelsByIter[-1]
+        return cls(parent, models, parameters)
+
+    def __init__(self, parent, models=None, parameters=None):
+        """
+        Initialize an empty Estimate object.
+
+        Parameters
+        ----------
+        parent : Results
+            The parent Results object containing the dataset and
+            operation sequence structure used for this Estimate.
+
+        models : dict, optional
+            A dictionary of models to included in this estimate
+
+        parameters : dict, optional
+            A dictionary of parameters associated with how these models
+            were obtained.
+        """
         self.parent = parent
         self.parameters = _collections.OrderedDict()
         self.goparameters = _collections.OrderedDict()
@@ -67,11 +92,8 @@ class Estimate(object):
         self.confidence_region_factories = _collections.OrderedDict()
 
         #Set models
-        if targetModel: self.models['target'] = targetModel
-        if seedModel: self.models['seed'] = seedModel
-        if modelsByIter:
-            self.models['iteration estimates'] = modelsByIter
-            self.models['final iteration estimate'] = modelsByIter[-1]
+        if models:
+            self.models.update(models)
 
         #Set parameters
         if isinstance(parameters, _collections.OrderedDict):
@@ -444,7 +466,7 @@ class Estimate(object):
             scale values (see above).
         """
         p = self.parent
-        gss = p.circuit_structs['final']  # FUTURE: overrideable?
+        gss = p.circuit_lists['final'].circuitStructure  # FUTURE: overrideable?
         weights = self.parameters.get("weights", None)
 
         if weights is not None:
@@ -489,7 +511,7 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def misfit_sigma(self, use_accurate_Np=False, evaltree_cache=None, comm=None):
+    def misfit_sigma(self, use_accurate_Np=False, comm=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
 
@@ -500,10 +522,6 @@ class Estimate(object):
             (but more expensive to compute), or just use the total number of
             model parameters.
 
-        evaltree_cache : dict, optional
-            A dictionary which server as a cache for the computed EvalTree used
-            in this computation.
-
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
@@ -513,28 +531,32 @@ class Estimate(object):
         float
         """
         p = self.parent
-        obj = self.parameters.get('objective', None)
-        assert(obj in ('chi2', 'logl', 'lgst')), "Invalid objective!"
 
         mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
-        gss = p.circuit_structs['final']  # FUTURE: overrideable?
-        mpc = self.parameters.get('minProbClipForWeighting', 1e-4)
-        aliases = self.parameters.get('opLabelAliases', gss.aliases)
+        circuit_list = p.circuit_lists['final']  # FUTURE: overrideable?
+        cache = self.parameters.get('final_cache', None)
         ds = self.get_effective_dataset()
+        
+        #mpc = self.parameters.get('minProbClipForWeighting', 1e-4)
+        #aliases = self.parameters.get('opLabelAliases', gss.aliases)
+        mpc = 1e-4  # TEMPORARY TODO FIX THIS
+        aliases = None
+        cache = None # because currently fns below are incompatible with new cache object
+        obj = 'logl'
 
         if obj == "chi2":
-            fitQty = _tools.chi2(mdl, ds, gss.allstrs,
+            fitQty = _tools.chi2(mdl, ds, circuit_list,
                                  minProbClipForWeighting=mpc,
                                  opLabelAliases=aliases,
-                                 evaltree_cache=evaltree_cache, comm=comm)
+                                 evaltree_cache=cache, comm=comm)
         elif obj in ("logl", "lgst"):
-            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=aliases,
-                                              evaltree_cache=evaltree_cache)
-            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=aliases,
-                               evaltree_cache=evaltree_cache, comm=comm)
+            logL_upperbound = _tools.logl_max(mdl, ds, circuit_list, opLabelAliases=aliases,
+                                              evaltree_cache=cache)
+            logl = _tools.logl(mdl, ds, circuit_list, opLabelAliases=aliases,
+                               evaltree_cache=cache, comm=comm)
             fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
-        ds_allstrs = _tools.apply_aliases_to_circuit_list(gss.allstrs, aliases)
+        ds_allstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         if hasattr(mdl, 'num_nongauge_params'):
             Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()

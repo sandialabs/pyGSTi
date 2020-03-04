@@ -26,6 +26,91 @@ MACH_PRECISION = 1e-12
 #MU_TOL2 = 1e3  # ??
 
 
+class OptimizerResult(object):
+    def __init__(self, objective_func, opt_x, opt_f=None, opt_JTJ=None,
+                 opt_unpenalized_f=None, chi2_k_distributed_qty=None,
+                 optimizer_specific_qtys=None):
+        self.objective_func = objective_func
+        self.x = opt_x
+        self.f = opt_f
+        self.JTJ = opt_JTJ
+        self.f_no_penalties = opt_unpenalized_f
+        self.optimizer_specific_qtys = optimizer_specific_qtys
+        self.chi2_k_distributed_qty = chi2_k_distributed_qty
+
+
+class Optimizer(object):
+    @classmethod
+    def build(cls, obj):
+        if isinstance(obj, cls):
+            return obj
+        else:
+            return cls(**obj) if obj else cls()
+
+
+class CustomLMOptimizer(Optimizer):
+    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, damping_mode="identity",
+                 damping_basis="diagonal_values", damping_clip=None, use_acceleration=False,
+                 uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0, oob_action="reject"):
+
+        if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+        self.maxiter = maxiter
+        self.maxfev = maxfev
+        self.tol = tol
+        self.fditer = fditer
+        self.first_fditer = first_fditer
+        self.damping_mode = damping_mode
+        self.damping_basis = damping_basis
+        self.damping_clip = damping_clip
+        self.use_acceleration = use_acceleration
+        self.uphill_step_threshold = uphill_step_threshold
+        self.init_munu = init_munu
+        self.oob_check_interval = oob_check_interval
+        self.oob_action = oob_action
+
+    def run(self, objective, comm, profiler, printer):
+
+        objective_func = objective.ls_fn
+        jacobian = objective.ls_jfn
+        x0 = objective.mdl.to_vector()
+
+        opt_x, converged, msg, mu, nu, norm_f, f, opt_JTJ = custom_leastsq(
+            objective_func, jacobian, x0,
+            max_iter=self.maxiter,
+            num_fd_iters=self.fditer,
+            f_norm2_tol=self.tol.get('f', 1.0),
+            jac_norm_tol=self.tol.get('jac', 1e-6),
+            rel_ftol=self.tol.get('relf', 1e-6),
+            rel_xtol=self.tol.get('relx', 1e-8),
+            max_dx_scale=self.tol.get('maxdx', 1.0),
+            damping_mode=self.damping_mode,
+            damping_basis=self.damping_basis,
+            damping_clip=self.damping_clip,
+            use_acceleration=self.use_acceleration,
+            uphill_step_threshold=self.uphill_step_threshold,
+            init_munu=self.init_munu,
+            oob_check_interval=self.oob_check_interval,
+            oob_action=self.oob_action,
+            comm=comm, verbosity=printer - 1, profiler=profiler)
+
+        printer.log("Least squares message = %s" % msg, 2)
+        assert(converged), "Failed to converge: %s" % msg
+
+        unpenalized_f = f[0:-objective.ex] if (objective.ex > 0) else f
+        unpenalized_normf = sum(unpenalized_f**2)  # objective function without penalty factors
+        chi2k_qty = objective.get_chi2k_distributed_qty(norm_f)
+
+        return OptimizerResult(objective, opt_x, norm_f, opt_JTJ, unpenalized_normf, chi2k_qty,
+                               {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
+
+#Scipy version...
+#            opt_x, _, _, msg, flag = \
+#                _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
+#                             maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
+#            printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
+#            opt_state = (msg,)
+
+
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
@@ -195,10 +280,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     if init_munu != "auto":
         mu, nu = init_munu
-    best_x_state = (mu, nu, norm_f, f)
-
-    f_norm2_tol = 1e-6  #DEBUG!!!
-    rel_xtol = 1e-14  #DEBUG!!!
+    best_x_state = (mu, nu, norm_f, f, None)
+    rawJTJ_scratch = None
 
     try:
 
@@ -218,7 +301,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f = best_x_state
+                    mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
                     continue
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
@@ -305,7 +388,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f = best_x_state
+                    mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
                     continue
 
             if k == 0:
@@ -320,7 +403,15 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         #tries to avoid making mu so large that dx is tiny and we declare victory prematurely
                 else:
                     mu, nu = init_munu
-                best_x_state = mu, nu, norm_f, f  # update mu,nu of initial "best state"
+                rawJTJ_scratch = JTJ.copy() # allocates the memory for a copy of JTJ so only update mem elsewhere
+                best_x_state = mu, nu, norm_f, f, rawJTJ_scratch  # update mu,nu,JTJ of initial "best state"
+            else:
+                #on all other iterations, upate JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
+                # a previously accepted step that was deemed the best we've seen so far
+                if _np.allclose(x, best_x):
+                    rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
+                    rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
+                    best_x_state = best_x_state[0:4] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
             #determing increment using adaptive damping
             while True:  # inner loop
@@ -414,6 +505,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                 if success and use_acceleration:  # Find acceleration term:
                     assert(damping_mode != 'adaptive'), "Cannot use acceleration in adaptive mode (yet)"
+                    assert(damping_basis != 'singular_values'), "Cannot use acceleration w/singular-value basis (yet)"
                     df2_eps = 1.0
                     df2_dx = df2_eps * dx
                     try:
@@ -468,7 +560,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                          "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                             oob_check_interval = 1
                             x[:] = best_x[:]
-                            mu, nu, norm_f, f = best_x_state
+                            mu, nu, norm_f, f, _ = best_x_state
                             break
 
                     if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
@@ -497,7 +589,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                              "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                         oob_check_interval = 1
                                         x[:] = best_x[:]
-                                        mu, nu, norm_f, f = best_x_state
+                                        mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet
                                         break  # restart next outer loop
                                 else:
                                     raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
@@ -583,7 +675,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                              "interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
-                                mu, nu, norm_f, f = best_x_state
+                                mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet
                                 break
 
                         if profiler: profiler.mem_check("custom_leastsq: before success")
@@ -602,7 +694,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             if new_x_is_known_inbounds and norm_f < min_norm_f:
                                 min_norm_f = norm_f
                                 best_x[:] = x[:]
-                                best_x_state = (mu, nu, norm_f, f)
+                                best_x_state = (mu, nu, norm_f, f, None)
+                                #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
+                                # at the *last* x-value -- we need to wait for the next outer loop
+                                # to compute the JTJ for this best_x_state
 
                             #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                             #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
@@ -670,7 +765,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         converged = True
 
     #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    return best_x, converged, msg, mu, nu
+    mu, nu, norm_f, f, rawJTJ = best_x_state
+    return best_x, converged, msg, mu, nu, norm_f, f, rawJTJ
     #solution = _optResult()
     #solution.x = x; solution.fun = f
     #solution.success = converged

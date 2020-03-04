@@ -940,6 +940,155 @@ def do_iterative_exlgst(
 
 
 ###################################################################################
+#                 Generic GST
+##################################################################################
+
+def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function_builder,
+               resource_alloc, cache, verbosity=0):
+    resource_alloc = _objfns.ResourceAllocation.build_resource_allocation(resource_alloc)
+    comm = resource_alloc.comm
+    profiler = resource_alloc.profiler
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+
+    tStart = _time.time()
+    mdl = startModel  # .copy()  # to allow caches in startModel to be retained
+
+    printer.log("--- Generic GST ---", 1)
+
+    if comm is not None:
+        #assume all models at least have same parameters - so just compare vecs
+        v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        if _np.linalg.norm(mdl.to_vector() - v_cmp) > 1e-6:
+            raise ValueError("MPI ERROR: *different* MC2GST start models"
+                             " given to different processors!")                   # pragma: no cover
+
+    objective = objective_function_builder.build(mdl, dataset, circuitsToUse, resource_alloc, cache, printer)
+    profiler.add_time("do_gst_fit: pre-opt", tStart)
+
+    #Step 3: solve least squares minimization problem
+    if mdl.simtype in ("termgap", "termorder"):
+        opt_result = _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer)
+    else:
+        #Normal case of just a single "sub-iteration"
+        opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
+
+    printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
+
+    #if targetModel is not None:
+    #  target_vec = targetModel.to_vector()
+    #  targetErrVec = _objective_func(target_vec)
+    #  return minErrVec, soln_gs, targetErrVec
+    profiler.add_time("do_mc2gst: total time", tStart)
+    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
+    # but maybe best to just remove minErrVec from return value since this isn't very useful
+    # anyway?
+    return opt_result, mdl
+
+
+def do_iterative_gst(dataset, startModel, circuitLists,
+                     optimizer, iteration_objfn_builders, final_objfn_builders,
+                     resource_alloc, verbosity=0):
+    #returnMaxLogL=False, returnAll=False, 
+    # alwaysPerformMLE=False, onlyPerformMLE=False,
+
+    #                 maxiter=100000, maxfev=None, fditer=0, tol=1e-6, extra_lm_opts=None,
+    #                 cptp_penalty_factor=0, spam_penalty_factor=0,
+    #                 minProbClip=1e-4, probClipInterval=(-1e6, 1e6), radius=1e-4,
+    #                 poissonPicture=True, 
+    #                  useFreqWeightedChiSq=False,
+    #                 verbosity=0, check=False, circuitWeightsDict=None,
+    #                 opLabelAliases=None, memLimit=None,
+    #                 profiler=None, comm=None, distributeMethod="deriv",
+    #                 alwaysPerformMLE=False, onlyPerformMLE=False, evaltree_cache=None,
+    #                 time_dependent=False):
+    """
+    Performs Iterative Gate Set Tomography on the dataset.
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The data used to generate MLGST gate estimates
+
+    startModel : Model
+        The Model used as a starting point for the least-squares
+        optimization.
+
+    circuitSetsToUseInEstimation : list of lists of (tuples or Circuits)
+        The i-th element is a list of the operation sequences to be used in the i-th iteration
+        of MLGST.  Each element of these lists is a operation sequence, specifed as
+        either a Circuit object or as a tuple of operation labels (but all must be specified
+        using the same type).
+        e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
+
+    #TODO docstring
+
+    Returns
+    -------
+    models
+        lists whose i-th element is the model corresponding to the results
+        of the i-th iteration.
+    """
+    resource_alloc = _objfns.ResourceAllocation.build_resource_allocation(resource_alloc)
+    comm = resource_alloc.comm
+    profiler = resource_alloc.profiler
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+
+    models = []; optimums = []
+    mdl = startModel.copy(); nIters = len(circuitLists)
+    tStart = _time.time()
+    tRef = tStart
+
+    with printer.progress_logging(1):
+        for (i, circuitsToEstimate) in enumerate(circuitLists):
+            extraMessages = []
+            if isinstance(circuitsToEstimate, _objfns.BulkCircuitList) and circuitsToEstimate.name:
+                extraMessages.append("(%s) " % circuitsToEstimate.name)
+
+            printer.show_progress(i, nIters, verboseMessages=extraMessages,
+                                  prefix="--- Iterative GST:", suffix=" %d circuits ---" % len(circuitsToEstimate))
+
+            if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
+
+            mdl.basis = startModel.basis  # set basis in case of CPTP constraints (needed?)
+            cache = _objfns.ComputationCache()  # store objects for this particular model, dataset, and circuit list
+
+            for j, obj_fn_builder in enumerate(iteration_objfn_builders):
+                tNxt = _time.time()
+                optimizer.fditer = optimizer.first_fditer if (i == 0 and j == 0) else 0
+                opt_result, mdl = do_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
+                                             resource_alloc, cache, printer - 1)
+                profiler.add_time('do_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
+
+            tNxt = _time.time()
+            printer.log("Iteration %d took %.1fs\n" % (i + 1, tNxt - tRef), 2)
+            tRef = tNxt
+
+            if i == len(circuitLists) - 1:  # the last iteration
+                printer.log("Last iteration:", 2)
+
+                for j, obj_fn_builder in enumerate(final_objfn_builders):
+                    tNxt = _time.time()
+                    mdl.basis = startModel.basis
+                    opt_result, mdl = do_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
+                                                 resource_alloc, cache, printer - 1)
+                    profiler.add_time('do_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
+
+                tNxt = _time.time()
+                printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
+                tRef = tNxt
+
+                #send final cache back to caller to facilitate more operations on the final (model, circuits, dataset)
+                final_cache = cache
+
+            models.append(mdl.copy())
+            optimums.append(opt_result)
+
+    printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
+    profiler.add_time('do_iterative_gst: total time', tStart)
+    return models, optimums, final_cache
+
+
+###################################################################################
 #                 Minimum-Chi2 GST (MC2GST)
 ##################################################################################
 
@@ -1207,10 +1356,16 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                 spam_penalty_factor, dataset, dsCircuitsToUse, minProbClipForWeighting,
                 probClipInterval, wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
         elif alpha is None:
-            objective = _objfns.Chi2Function(
-                mdl, evTree, lookup, circuitsToUse, opLabelAliases, regularizeFactor, cptp_penalty_factor,
-                spam_penalty_factor, cntVecMx, N, minProbClipForWeighting, probClipInterval,
-                wrtBlkSize, gthrMem, check, check_jacobian, comm, profiler, printer)
+            bulk_circuit_list = _objfns.BulkCircuitList(circuitsToUse, evTree, lookup, outcomes_lookup,
+                                                        opLabelAliases, circuitWeights)
+            resource_alloc = _objfns.ResourceAllocation(comm, wrtBlkSize, gthrMem, profiler)
+            regularization = {'minProbClipForWeighting': minProbClipForWeighting,
+                              'probClipInterval': probClipInterval}
+            penalties = {'regularizeFactor': regularizeFactor,
+                         'cptp_penalty_factor': cptp_penalty_factor,
+                         'spam_penalty_factor': spam_penalty_factor}
+            objective = _objfns.Chi2Function(mdl, dataset, bulk_circuit_list, resource_alloc,
+                                             penalties, regularization, cache, printer)
         else:
             objective = _objfns.ChiAlphaFunction(
                 alpha, mdl, evTree, lookup, circuitsToUse, opLabelAliases, 
@@ -1250,42 +1405,14 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
     return minErrVec, mdl
 
 
-def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts, comm,
-               printer, profiler, nDataParams, memLimit, logL_upperbound=None):
+def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
 
+    profiler = resource_alloc.profiler
+
+    #Perform actual optimization
     tm = _time.time()
-
-    if extra_lm_opts is None: extra_lm_opts = {}
-    objective_func = objective.fn
-    jacobian = objective.jfn
-
-    x0 = mdl.to_vector()
-    if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
-    if CUSTOMLM:
-        opt_x, converged, msg, mu, nu = _opt.custom_leastsq(
-            objective_func, jacobian, x0, f_norm2_tol=tol['f'],
-            jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
-            max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
-            comm=comm, verbosity=printer - 1, profiler=profiler, **extra_lm_opts)
-        printer.log("Least squares message = %s" % msg, 2)
-        assert(converged), "Failed to converge: %s" % msg
-        #DEBUG TODO REMOVE extra_lm_opts['post_munu'] = (mu, nu)
-        opt_state = (msg, mu, nu)
-    else:
-        opt_x, _, _, msg, flag = \
-            _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
-                         maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
-        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
-        opt_state = (msg,)
-
-    full_minErrVec = objective_func(opt_x)  # note: calls mdl.from_vector(opt_x,...) so don't need to call this again
-    # don't include "extra" regularization terms
-    minErrVec = full_minErrVec[0:-objective.ex] if (objective.ex > 0) else full_minErrVec
-    sum_minErrVec = sum(minErrVec**2)  # total chi2 or (upperBoundLogL - logl), depending on objective_name
-
-    profiler.add_time("do_mc2gst: leastsq", tm)
-
-    tm = _time.time()
+    opt_result = optimizer.run(objective, resource_alloc.comm, profiler, printer)
+    profiler.add_time("do_gst_fit: optimize", tm)
 
     if printer.verbosity > 0:
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
@@ -1293,7 +1420,7 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
             memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
                 * FLOATSIZE  # see Model._buildup_dPG (this is mem for dPG)
 
-            if memLimit is None or 0.1 * memLimit < memForNumGaugeParams:
+            if resource_alloc.memLimit is None or 0.1 * resource_alloc.memLimit < memForNumGaugeParams:
                 try:
                     nModelParams = mdl.num_nongauge_params()  # len(x0)
                 except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
@@ -1305,35 +1432,23 @@ def _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, ext
         else:
             nModelParams = mdl.num_params()  # just use total number of params
 
-        if objective_name == "chi2":  # could use isinstance(objective, Chi2Function) here?
-            totChi2 = sum_minErrVec
-            # reject GST model if p-value < threshold (~0.05?)
-            pvalue = 1.0 - _stats.chi2.cdf(totChi2, nDataParams - nModelParams)
-            printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
-                        (totChi2, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
-        else:
-            assert(objective_name == "logl")  # assume only options are "chi2" or "logl"
-            # reject GST if p-value < threshold (~0.05?)
-            deltaLogL = sum_minErrVec
+        #Get number of maximal-model parameter ("dataset params") if needed for print messages
+        # -> number of independent parameters in dataset (max. model # of params)
+        tm = _time.time()
+        nDataParams = objective.get_num_data_params()  #TODO - cache this somehow in term-based calcs...
+        profiler.add_time("do_gst_fit: num data params", tm)
 
-            if _np.isfinite(deltaLogL):
-                pvalue = 1.0 - _stats.chi2.cdf(2 * deltaLogL, nDataParams - nModelParams)
-                printer.log("  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound), 1)
-                printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; "
-                            "p-value = %g)" %
-                            (2 * deltaLogL, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
-            else:
-                printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)  # pragma: no cover
+        chi2_k_qty = opt_result.chi2_k_distributed_qty  # total chi2 or 2*deltaLogL
+        desc = "Sum of Chi^2"  # OR 2*Delta(log(L)) -- get from objective?
+        # reject GST model if p-value < threshold (~0.05?)
+        pvalue = 1.0 - _stats.chi2.cdf(chi2_k_qty, nDataParams - nModelParams)
+        printer.log("%s = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
+                    (desc, chi2_k_qty, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
 
-    if objective_name == "logl":
-        deltaLogL = sum_minErrVec
-        return (logL_upperbound - deltaLogL), opt_state
-    else:
-        return minErrVec, opt_state
+    return opt_result
 
 
-def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol, fditer,
-                    extra_lm_opts, comm, printer, profiler, nDataParams, memLimit, logL_upperbound=None):
+def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
     """ TODO: docstring """
 
     fwdsim = mdl._fwdsim()
@@ -1342,10 +1457,11 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     maxTermStages = fwdsim.max_term_stages
     pathFractionThreshold = fwdsim.path_fraction_threshold  # 0 when not using path-sets
     oob_check_interval = fwdsim.oob_check_interval
-    if extra_lm_opts is None: extra_lm_opts = {}
 
     #assume a path set has already been chosen, as one should have been chosen
     # when evTree was created.
+    evTree = objective.evTree
+    comm, memLimit = resource_alloc.comm, resource_alloc.memLimit
     pathSet = fwdsim.get_current_pathset(evTree, comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
         pathFraction = pathSet.get_allowed_path_fraction()
@@ -1354,17 +1470,16 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
     else:
         pathFraction = 1.0  # b/c "all" paths are used, and > pathFractionThreshold, which should be 0
 
-    minErrVec = None
+    opt_result = None
     for sub_iter in range(maxTermStages):
 
         bFinalIter = (sub_iter == maxTermStages - 1) or (pathFraction > pathFractionThreshold)
-        extra_lm_opts['oob_check_interval'] = oob_check_interval
+        optimizer.oob_check_interval = oob_check_interval
         # don't stop early on last iter - do as much as possible.
-        extra_lm_opts['oob_action'] = "reject" if bFinalIter else "stop"
-        minErrVec, opt_state = _do_runopt(mdl, objective, objective_name, maxiter, maxfev, tol, fditer, extra_lm_opts,
-                                          comm, printer, profiler, nDataParams, memLimit, logL_upperbound)
+        optimizer.oob_action = "reject" if bFinalIter else "stop"
+        opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
 
-        if not opt_state[0] == "Objective function out-of-bounds! STOP":
+        if not opt_result.msg == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
                 printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             elif pathFraction > pathFractionThreshold:
@@ -1379,11 +1494,11 @@ def _do_term_runopt(evTree, mdl, objective, objective_name, maxiter, maxfev, tol
             pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
             mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
             pathFraction = pathSet.get_allowed_path_fraction()
-            extra_lm_opts['init_munu'] = (opt_state[1], opt_state[2])
+            optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
             printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
                         (pathSet.num_failures, 100 * pathFraction))
 
-    return minErrVec
+    return opt_result
 
 
 def do_mc2gst_with_model_selection(

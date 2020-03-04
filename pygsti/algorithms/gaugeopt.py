@@ -291,7 +291,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         #                            max_nfev=maxfev, ftol=tol)
         #solnX = minSol.x
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
-        solnX, converged, msg, _, _ = _opt.custom_leastsq(
+        solnX, converged, msg, _, _, _, _, _ = _opt.custom_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=comm, oob_check_interval=oob_check_interval,
