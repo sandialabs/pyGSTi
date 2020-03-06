@@ -477,12 +477,11 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     if sindices_to_keep is None:
         sindices_to_keep = sectors_to_keep
 
-    #ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
-    #                                                      dataset.get_outcome_labels()),
-    #                           recordZeroCnts=recordZeroCnts)
-    ds_merged = dataset.merge_outcomes(create_merge_dict(sindices_to_keep,
-                                                         dataset.get_outcome_labels()),
-                                       recordZeroCnts=recordZeroCnts)
+    #ds_merged = dataset.merge_outcomes(create_merge_dict(sindices_to_keep,
+    #                                                     dataset.get_outcome_labels()),
+    #                                   recordZeroCnts=recordZeroCnts)
+    ds_merged = dataset.merge_std_nqubit_outcomes(sindices_to_keep, recordZeroCnts)
+
     ds_merged = ds_merged.copy_nonstatic()
     if filtercircuits:
         ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(

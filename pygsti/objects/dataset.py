@@ -1533,6 +1533,124 @@ class DataSet(object):
                                  outcomeLabelIndices=new_outcome_indices, bStatic=True)
         return merged_dataset
 
+    def merge_std_nqubit_outcomes(self, qubit_indices_to_keep, recordZeroCnts=True):
+        """
+        Creates a DataSet which merges certain outcomes in this DataSet;
+        used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+        DataSet.  This assumes that outcome labels are in the standard format
+        whereby each qubit corresponds to a single '0' or '1' character.
+
+        Parameters
+        ----------
+        nQubits : int
+            The total number of qubits
+
+        qubit_indices_to_keep : list
+            A list of integers specifying which qubits should be kept, that is,
+            *not* aggregated.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            (merged) DataSet.  If False, then zero counts are ignored, except for
+            potentially registering new outcome labels.
+
+        Returns
+        -------
+        merged_dataset : DataSet object
+            The DataSet with outcomes merged.
+        """
+
+        label_merge_dict = _DefaultDict(list)
+        for ol, i in self.olIndex.items():
+            assert(len(ol) == 1), "Cannot merge non-simple outcomes!"  # should be a 1-tuple
+            reduced = (''.join([ol[0][i] for i in qubit_indices_to_keep]),)  # a tuple
+            label_merge_dict[reduced].append(ol)
+        label_merge_dict = dict(label_merge_dict)  # return a *normal* dict
+
+        new_outcomes = sorted(list(label_merge_dict.keys()))
+        new_outcome_indices = _OrderedDict([(ol, i) for i, ol in enumerate(new_outcomes)])
+        nNewOutcomes = len(new_outcomes)
+
+        #Count the number of time steps so we allocate enough space
+        nSteps = 0
+        for dsrow in self.values():
+            cur_t = None
+            for t in dsrow.time:
+                if t != cur_t:
+                    nSteps += 1
+                    cur_t = t
+
+        #idea is that we create oliData, timeData, repData, and circuitIndices for the
+        # merged dataset rather than looping over insertion, as this is faster
+        oliData = _np.empty(nSteps * nNewOutcomes, self.oliType)
+        repData = _np.empty(nSteps * nNewOutcomes, self.repType)
+        timeData = _np.empty(nSteps * nNewOutcomes, self.timeType)
+
+        oli_map = {}  # maps old outcome label indices to new ones
+        for new_outcome, old_outcome_list in label_merge_dict.items():
+            new_index = new_outcome_indices[new_outcome]
+            for old_outcome in old_outcome_list:
+                oli_map[self.olIndex[old_outcome]] = new_index
+
+        #Future - when recordZeroCnts=False these may not need to be so large
+        new_olis = _np.array(range(nNewOutcomes), _np.int64)
+        new_cnts = _np.zeros(nNewOutcomes, self.repType)
+
+        if recordZeroCnts:
+            def add_cnts(t, cnts, offset):  # cnts is an array here
+                new_cnts[:] = 0
+                for nonzero_oli, cnt in cnts.items():
+                    new_cnts[nonzero_oli] = cnt
+                timeData[offset:offset + nNewOutcomes] = t
+                oliData[offset:offset + nNewOutcomes] = new_olis
+                repData[offset:offset + nNewOutcomes] = new_cnts  # a length-nNewOutcomes array
+                return nNewOutcomes
+
+        else:
+            def add_cnts(t, cnts, offset):  # cnts is a dict here
+                nNewCnts = len(cnts)
+                #new_olis = _np.empty(nNewCnts, _np.int64)
+                #new_cnts = _np.empty(nNewCnts, self.repType)
+                for ii, (nonzero_oli, cnt) in enumerate(cnts.items()):
+                    new_olis[ii] = nonzero_oli
+                    new_cnts[ii] = cnt
+                timeData[offset:offset + nNewCnts] = t
+                oliData[offset:offset + nNewCnts] = new_olis[0:nNewCnts]
+                repData[offset:offset + nNewCnts] = new_cnts[0:nNewCnts]
+                return nNewCnts  # return the number of added counts
+
+        k = 0  # beginning of current circuit data in 1D arrays: oliData, timeData, repData
+        circuitIndices = _OrderedDict()
+        for key, dsrow in self.items():
+
+            last_t = dsrow.time[0]
+
+            if len(dsrow.oli) < len(oli_map):
+                mapped_oli = _np.array([oli_map[x] for x in dsrow.oli])
+            else:
+                mapped_oli = dsrow.oli.copy()
+                for from_oli, to_oli in oli_map.items():
+                    mapped_oli[dsrow.oli == from_oli] = to_oli
+
+            reps = _np.ones(len(dsrow.time), self.timeType) if (self.repData is None) else dsrow.reps
+            cnts = _DefaultDict(lambda: 0)
+
+            i = 0  # offset to current timeslice
+            for oli, t, reps in zip(mapped_oli, dsrow.time, reps):
+                if t != last_t:
+                    i += add_cnts(last_t, cnts, k + i)
+                    last_t = t; cnts.clear()
+                cnts[oli] += reps
+            if len(cnts) > 0:
+                i += add_cnts(last_t, cnts, k + i)
+
+            circuitIndices[key] = slice(k, k + i)
+            k += i
+
+        merged_dataset = DataSet(oliData[0:k], timeData[0:k], repData[0:k], circuitIndices=circuitIndices,
+                                 outcomeLabelIndices=new_outcome_indices, bStatic=True)
+        return merged_dataset
+
     def add_auxiliary_info(self, circuit, aux):
         """
         Add auxiliary meta information to `circuit`.
