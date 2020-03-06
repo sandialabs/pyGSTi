@@ -37,6 +37,12 @@ from .polynomial import Polynomial as _Polynomial
 from . import replib
 from .opcalc import bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
 
+try:
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
+
+
 IMAG_TOL = 1e-8  # tolerance for imaginary part being considered zero
 
 
@@ -3469,9 +3475,11 @@ class ComputationalSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         if self._evotype == "densitymx":
+            factor_dim = 4
             v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
             v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
         elif self._evotype in ("statevec", "stabilizer"):
+            factor_dim = 2
             v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
             v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
         elif self._evotype in ("svterm", "cterm"):
@@ -3480,7 +3488,19 @@ class ComputationalSPAMVec(SPAMVec):
         else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
 
         v = (v0, v1)
-        return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
+
+        if _fastcalc is None:  # do it the slow way using numpy
+            return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
+        else:
+            typ = 'd' if self._evotype == "densitymx" else complex
+            fast_kron_array = _np.ascontiguousarray(
+                _np.empty((len(self._zvals), factor_dim), typ))
+            fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(self._zvals), _np.int64))
+            for i, zi in enumerate(self._zvals):
+                fast_kron_array[i, :] = v[zi]
+            ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), typ))
+            _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+            return ret
 
     #def torep(self, typ, outvec=None):
     #    if typ == "prep":

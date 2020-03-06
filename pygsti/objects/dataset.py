@@ -20,6 +20,7 @@ import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 import bisect as _bisect
+import itertools as _itertools
 
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
@@ -453,15 +454,29 @@ class DataSetRow(object):
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
 
-        if self.reps is None:
-            for ol, i in self.dataset.olIndex.items():
-                cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
-                if all_outcomes or cnt > 0: cntDict[ol] = cnt
+        nOutcomes = len(self.dataset.olIndex)
+        nIndices = len(self.oli[tslc])
+        if nOutcomes <= nIndices or all_outcomes:
+            if self.reps is None:
+                for ol, i in self.dataset.olIndex.items():
+                    cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
+                    if all_outcomes or cnt > 0:
+                        cntDict.set_unsafe(ol, cnt)
+            else:
+                for ol, i in self.dataset.olIndex.items():
+                    inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
+                    if all_outcomes or len(inds) > 0:
+                        cntDict.set_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
-            for ol, i in self.dataset.olIndex.items():
-                inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
-                if all_outcomes or len(inds) > 0:
-                    cntDict[ol] = float(sum(self.reps[tslc][inds]))
+            if self.reps is None:
+                for ol_index in self.oli[tslc]:
+                    ol = self.dataset.ol[ol_index]
+                    cntDict.set_unsafe(ol, 1.0 + cntDict.get_unsafe(ol, 0.0))
+            else:
+                for ol_index, reps in zip(self.oli[tslc], self.reps[tslc]):
+                    ol = self.dataset.ol[ol_index]
+                    cntDict.set_unsafe(ol, reps + cntDict.get_unsafe(ol, 0.0))
+
         return cntDict
 
     @property
@@ -688,11 +703,12 @@ class DataSet(object):
             integer indices associating a row/element of counts with the circuit.  Only
             specify this argument OR circuits, not both.
 
-        outcomeLabels : list of strings
+        outcomeLabels : list of strings or int
             Specifies the set of spam labels for the DataSet.  Indices for the spam labels
             are assumed to ascend from 0, starting with the first element of this list.  These
             indices will associate each elememtn of `timeseries` with a spam label.  Only
-            specify this argument OR outcomeLabelIndices, not both.
+            specify this argument OR outcomeLabelIndices, not both.  If an int, specifies that
+            the outcome labels should be those for a standard set of this many qubits.
 
         outcomeLabelIndices : ordered dictionary
             An OrderedDict with keys equal to spam labels (strings) and value equal to
@@ -768,8 +784,12 @@ class DataSet(object):
             self.olIndex = outcomeLabelIndices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcomeLabels is not None:
-            tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
-                                 for ol in outcomeLabels]  # strings -> tuple outcome labels
+            if isinstance(outcomeLabels, int):
+                nqubits = outcomeLabels
+                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
+            else:
+                tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
+                                     for ol in outcomeLabels]  # strings -> tuple outcome labels
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
             self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
@@ -1279,15 +1299,7 @@ class DataSet(object):
                                     for ol in outcomeLabelList]
 
         #Add any new outcome labels
-        added = False
-        iNext = self.olIndex_max
-        for ol in tup_outcomeLabelList:
-            if ol not in self.olIndex:
-                iNext += 1
-                self.olIndex[ol] = iNext; added = True
-        if added and update_ol:  # rebuild self.ol because olIndex has changed
-            self.update_ol()
-        self.olIndex_max = iNext
+        self.add_outcome_labels(tup_outcomeLabelList, update_ol)
 
         oliArray = _np.array([self.olIndex[ol] for ol in tup_outcomeLabelList], self.oliType)
         timeArray = _np.array(timeStampList, self.timeType)
@@ -1501,6 +1513,124 @@ class DataSet(object):
             mapped_oli = dsrow.oli.copy()
             for from_oli, to_oli in oli_map.items():
                 mapped_oli[dsrow.oli == from_oli] = to_oli
+
+            reps = _np.ones(len(dsrow.time), self.timeType) if (self.repData is None) else dsrow.reps
+            cnts = _DefaultDict(lambda: 0)
+
+            i = 0  # offset to current timeslice
+            for oli, t, reps in zip(mapped_oli, dsrow.time, reps):
+                if t != last_t:
+                    i += add_cnts(last_t, cnts, k + i)
+                    last_t = t; cnts.clear()
+                cnts[oli] += reps
+            if len(cnts) > 0:
+                i += add_cnts(last_t, cnts, k + i)
+
+            circuitIndices[key] = slice(k, k + i)
+            k += i
+
+        merged_dataset = DataSet(oliData[0:k], timeData[0:k], repData[0:k], circuitIndices=circuitIndices,
+                                 outcomeLabelIndices=new_outcome_indices, bStatic=True)
+        return merged_dataset
+
+    def merge_std_nqubit_outcomes(self, qubit_indices_to_keep, recordZeroCnts=True):
+        """
+        Creates a DataSet which merges certain outcomes in this DataSet;
+        used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+        DataSet.  This assumes that outcome labels are in the standard format
+        whereby each qubit corresponds to a single '0' or '1' character.
+
+        Parameters
+        ----------
+        nQubits : int
+            The total number of qubits
+
+        qubit_indices_to_keep : list
+            A list of integers specifying which qubits should be kept, that is,
+            *not* aggregated.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the returned
+            (merged) DataSet.  If False, then zero counts are ignored, except for
+            potentially registering new outcome labels.
+
+        Returns
+        -------
+        merged_dataset : DataSet object
+            The DataSet with outcomes merged.
+        """
+
+        label_merge_dict = _DefaultDict(list)
+        for ol, i in self.olIndex.items():
+            assert(len(ol) == 1), "Cannot merge non-simple outcomes!"  # should be a 1-tuple
+            reduced = (''.join([ol[0][i] for i in qubit_indices_to_keep]),)  # a tuple
+            label_merge_dict[reduced].append(ol)
+        label_merge_dict = dict(label_merge_dict)  # return a *normal* dict
+
+        new_outcomes = sorted(list(label_merge_dict.keys()))
+        new_outcome_indices = _OrderedDict([(ol, i) for i, ol in enumerate(new_outcomes)])
+        nNewOutcomes = len(new_outcomes)
+
+        #Count the number of time steps so we allocate enough space
+        nSteps = 0
+        for dsrow in self.values():
+            cur_t = None
+            for t in dsrow.time:
+                if t != cur_t:
+                    nSteps += 1
+                    cur_t = t
+
+        #idea is that we create oliData, timeData, repData, and circuitIndices for the
+        # merged dataset rather than looping over insertion, as this is faster
+        oliData = _np.empty(nSteps * nNewOutcomes, self.oliType)
+        repData = _np.empty(nSteps * nNewOutcomes, self.repType)
+        timeData = _np.empty(nSteps * nNewOutcomes, self.timeType)
+
+        oli_map = {}  # maps old outcome label indices to new ones
+        for new_outcome, old_outcome_list in label_merge_dict.items():
+            new_index = new_outcome_indices[new_outcome]
+            for old_outcome in old_outcome_list:
+                oli_map[self.olIndex[old_outcome]] = new_index
+
+        #Future - when recordZeroCnts=False these may not need to be so large
+        new_olis = _np.array(range(nNewOutcomes), _np.int64)
+        new_cnts = _np.zeros(nNewOutcomes, self.repType)
+
+        if recordZeroCnts:
+            def add_cnts(t, cnts, offset):  # cnts is an array here
+                new_cnts[:] = 0
+                for nonzero_oli, cnt in cnts.items():
+                    new_cnts[nonzero_oli] = cnt
+                timeData[offset:offset + nNewOutcomes] = t
+                oliData[offset:offset + nNewOutcomes] = new_olis
+                repData[offset:offset + nNewOutcomes] = new_cnts  # a length-nNewOutcomes array
+                return nNewOutcomes
+
+        else:
+            def add_cnts(t, cnts, offset):  # cnts is a dict here
+                nNewCnts = len(cnts)
+                #new_olis = _np.empty(nNewCnts, _np.int64)
+                #new_cnts = _np.empty(nNewCnts, self.repType)
+                for ii, (nonzero_oli, cnt) in enumerate(cnts.items()):
+                    new_olis[ii] = nonzero_oli
+                    new_cnts[ii] = cnt
+                timeData[offset:offset + nNewCnts] = t
+                oliData[offset:offset + nNewCnts] = new_olis[0:nNewCnts]
+                repData[offset:offset + nNewCnts] = new_cnts[0:nNewCnts]
+                return nNewCnts  # return the number of added counts
+
+        k = 0  # beginning of current circuit data in 1D arrays: oliData, timeData, repData
+        circuitIndices = _OrderedDict()
+        for key, dsrow in self.items():
+
+            last_t = dsrow.time[0]
+
+            if len(dsrow.oli) < len(oli_map):
+                mapped_oli = _np.array([oli_map[x] for x in dsrow.oli])
+            else:
+                mapped_oli = dsrow.oli.copy()
+                for from_oli, to_oli in oli_map.items():
+                    mapped_oli[dsrow.oli == from_oli] = to_oli
 
             reps = _np.ones(len(dsrow.time), self.timeType) if (self.repData is None) else dsrow.reps
             cnts = _DefaultDict(lambda: 0)
@@ -2309,3 +2439,55 @@ class DataSet(object):
         #Note: rebuild reverse-dict self.ol:
         self.olIndex = new_olIndex
         self.ol = _OrderedDict([(i, ol) for (ol, i) in self.olIndex.items()])
+
+    def add_std_nqubit_outcome_labels(self, nqubits):
+        """
+        Adds all the "standard" outcome labels (e.g. '0010') on `nqubits` qubits.
+
+        This is useful to ensure that, even if not all outcomes appear in the
+        data, that all are recognized as being potentially valid outcomes (and
+        so attempts to get counts for these outcomes will be 0 rather than
+        raising an error).
+
+        Parameters
+        ----------
+        nqubits : int
+            The number of qubits.  For example, if equal to 3 the outcome labels
+            '000', '001', ... '111' are added.
+
+        Returns
+        -------
+        None
+        """
+        self.add_outcome_labels((("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))))
+
+    def add_outcome_labels(self, outcome_labels, update_ol=True):
+        """
+        Adds new valid outcome labels.
+
+        Ensures that all the elements of `outcome_labels` are stored as
+        valid outcomes for circuits in this DataSet, adding new outcomes
+        as necessary.
+
+        Parameters
+        ----------
+        outcome_labels : list or generator
+            A list or generator of string- or tuple-valued outcome labels.
+
+        update_ol : bool, optional
+            Whether to update internal mappings to reflect the new outcome labels.
+            Leave this as True unless you really know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        added = False
+        iNext = self.olIndex_max
+        for ol in outcome_labels:
+            if ol not in self.olIndex:
+                iNext += 1
+                self.olIndex[ol] = iNext; added = True
+        if added and update_ol:  # rebuild self.ol because olIndex has changed
+            self.update_ol()
+        self.olIndex_max = iNext
