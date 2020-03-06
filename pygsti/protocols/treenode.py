@@ -35,7 +35,6 @@ class TreeNode(object):
         self._dirs = possible_child_name_dirs  # maps possible child keys -> subdir name
         self._vals = child_values if child_values else {}
         self._childcategory = child_category
-        self._loaded_from = None
 
     @property
     def child_category(self):
