@@ -36,10 +36,10 @@ from ..algorithms import rbfit as _rbfit
 class ByDepthDesign(_proto.CircuitListsDesign):
     """ Experiment design that holds circuits organized by depth """
 
-    def __init__(self, depths, circuit_lists, qubit_labels=None):
+    def __init__(self, depths, circuit_lists, qubit_labels=None, remove_duplicates=True):
         assert(len(depths) == len(circuit_lists)), \
             "Number of depths must equal the number of circuit lists!"
-        super().__init__(circuit_lists, qubit_labels=qubit_labels)
+        super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
         self.depths = depths
 
 
@@ -49,9 +49,9 @@ class BenchmarkingDesign(ByDepthDesign):
     circuits organized by depth along with their corresponding ideal outcomes.
     """
 
-    def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None):
+    def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None, remove_duplicates=False):
         assert(len(depths) == len(ideal_outs))
-        super().__init__(depths, circuit_lists, qubit_labels)
+        super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
         self.idealout_lists = ideal_outs
         self.auxfile_types['idealout_lists'] = 'json'
 
@@ -59,8 +59,21 @@ class BenchmarkingDesign(ByDepthDesign):
 class CliffordRBDesign(BenchmarkingDesign):
     """ Experiment design for Clifford randomized benchmarking """
 
+    @classmethod
+    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
+                               randomizeout=False, citerations=20, compilerargs=(),
+                               descriptor='A Clifford RB experiment', add_default_protocol=False):
+        depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
+        circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
+        ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
+        circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
+        self = cls.__new__(cls)
+        self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              randomizeout, citerations, compilerargs, descriptor, add_default_protocol)
+        return self
+
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
-                 citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
+                 citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
                  add_default_protocol=False, seed=None, verbosity=1):
         """
         Generates a "Clifford randomized benchmarking" (CRB) experiment, which is the RB protocol defined
@@ -168,7 +181,12 @@ class CliffordRBDesign(BenchmarkingDesign):
             ideal_outs.append(idealouts_at_depth)
             if verbosity > 0: print('')
 
-        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels)
+        self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              randomizeout, citerations, compilerargs, descriptor, add_default_protocol)
+
+    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                         randomizeout, citerations, compilerargs, descriptor, add_default_protocol):
+        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
         self.citerations = citerations
@@ -185,9 +203,26 @@ class CliffordRBDesign(BenchmarkingDesign):
 class DirectRBDesign(BenchmarkingDesign):
     """ Experiment design for Direct randomized benchmarking """
 
+    @classmethod
+    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
+                               sampler='Qelimination', samplerargs=[], addlocal=False,
+                               lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
+                               citerations=20, compilerargs=(), partitioned=False,
+                               descriptor='A DRB experiment', add_default_protocol=False):
+        depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
+        circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
+        ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
+        circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
+        self = cls.__new__(cls)
+        self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              sampler, samplerargs, addlocal, lsargs, randomizeout, cliffordtwirl,
+                              conditionaltwirl, citerations, compilerargs, partitioned, descriptor,
+                              add_default_protocol)
+        return self
+
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
-                 addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
-                 citerations=20, compilerargs=[], partitioned=False, descriptor='A DRB experiment',
+                 addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
+                 citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1):
         """
         Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
@@ -340,7 +375,16 @@ class DirectRBDesign(BenchmarkingDesign):
             ideal_outs.append(idealouts_at_depth)
             if verbosity > 0: print('')
 
-        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels)
+        self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              sampler, samplerargs, addlocal, lsargs, randomizeout, cliffordtwirl,
+                              conditionaltwirl, citerations, compilerargs, partitioned, descriptor,
+                              add_default_protocol)
+
+    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                         sampler, samplerargs, addlocal, lsargs, randomizeout, cliffordtwirl,
+                         conditionaltwirl, citerations, compilerargs, partitioned, descriptor,
+                         add_default_protocol):
+        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
         self.citerations = citerations
@@ -365,7 +409,22 @@ class DirectRBDesign(BenchmarkingDesign):
 class MirrorRBDesign(BenchmarkingDesign):
     """ Experiment design for Direct randomized benchmarking """
 
-    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
+    @classmethod
+    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
+                               sampler='Qelimination', samplerargs=(), localclifford=True,
+                               paulirandomize=True, descriptor='A mirror RB experiment',
+                               add_default_protocol=False):
+        depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
+        circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
+        ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
+        circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
+        self = cls.__new__(cls)
+        self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                              add_default_protocol)
+        return self
+
+    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=(),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                  add_default_protocol=False):
         """
@@ -463,7 +522,14 @@ class MirrorRBDesign(BenchmarkingDesign):
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
 
-        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels)
+        self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                              add_default_protocol)
+
+    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                         sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                         add_default_protocol):
+        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
         self.sampler = sampler
@@ -741,7 +807,9 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                 root = results
                 for key in path:
                     root = root[key]
-                root = root.for_protocol[self.name]
+                root = root.for_protocol.get(self.name, None)
+                if root is None: continue
+
                 if passname:  # then we expect final Results are MultiPassResults
                     root = root.passes[passname]  # now root should be a BenchmarkingResults
                 assert(isinstance(root, VolumetricBenchmarkingResults))
