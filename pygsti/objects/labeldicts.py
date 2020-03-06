@@ -349,7 +349,15 @@ class OutcomeLabelDict(_collections.OrderedDict):
             key = OutcomeLabelDict.to_outcome(key)
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
-    def setitem_unsafe(self, key, val):
+    def get_unsafe(self, key, defaultval):
+        """
+        Gets an item without checking that `key` is a properly formatted outcome tuple.
+        Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
+        just a string.
+        """
+        return super(OutcomeLabelDict, self).get(key, defaultval)
+
+    def set_unsafe(self, key, val):
         """
         Sets item without checking that the key is a properly formatted outcome tuple.
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
@@ -361,6 +369,14 @@ class OutcomeLabelDict(_collections.OrderedDict):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)
         return key in super(OutcomeLabelDict, self).keys()
+
+    def contains_unsafe(self, key):
+        """
+        Checks for `key` without ensuring that it is a properly formatted outcome tuple.
+        Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
+        just a string.
+        """
+        return super(OutcomeLabelDict, self).__contains__(key)
 
     def copy(self):
         """ Return a copy of this OutcomeLabelDict. """

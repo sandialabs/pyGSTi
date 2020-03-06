@@ -20,6 +20,7 @@ import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 import bisect as _bisect
+import itertools as _itertools
 
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
@@ -453,15 +454,29 @@ class DataSetRow(object):
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
 
-        if self.reps is None:
-            for ol, i in self.dataset.olIndex.items():
-                cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
-                if all_outcomes or cnt > 0: cntDict[ol] = cnt
+        nOutcomes = len(self.dataset.olIndex)
+        nIndices = len(self.oli[tslc])
+        if nOutcomes <= nIndices or all_outcomes:
+            if self.reps is None:
+                for ol, i in self.dataset.olIndex.items():
+                    cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
+                    if all_outcomes or cnt > 0:
+                        cntDict.set_unsafe(ol, cnt)
+            else:
+                for ol, i in self.dataset.olIndex.items():
+                    inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
+                    if all_outcomes or len(inds) > 0:
+                        cntDict.set_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
-            for ol, i in self.dataset.olIndex.items():
-                inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
-                if all_outcomes or len(inds) > 0:
-                    cntDict[ol] = float(sum(self.reps[tslc][inds]))
+            if self.reps is None:
+                for ol_index in self.oli[tslc]:
+                    ol = self.dataset.ol[ol_index]
+                    cntDict.set_unsafe(ol, 1.0 + cntDict.get_unsafe(ol, 0.0))
+            else:
+                for ol_index, reps in zip(self.oli[tslc], self.reps[tslc]):
+                    ol = self.dataset.ol[ol_index]
+                    cntDict.set_unsafe(ol, reps + cntDict.get_unsafe(ol, 0.0))
+
         return cntDict
 
     @property
@@ -688,11 +703,12 @@ class DataSet(object):
             integer indices associating a row/element of counts with the circuit.  Only
             specify this argument OR circuits, not both.
 
-        outcomeLabels : list of strings
+        outcomeLabels : list of strings or int
             Specifies the set of spam labels for the DataSet.  Indices for the spam labels
             are assumed to ascend from 0, starting with the first element of this list.  These
             indices will associate each elememtn of `timeseries` with a spam label.  Only
-            specify this argument OR outcomeLabelIndices, not both.
+            specify this argument OR outcomeLabelIndices, not both.  If an int, specifies that
+            the outcome labels should be those for a standard set of this many qubits.
 
         outcomeLabelIndices : ordered dictionary
             An OrderedDict with keys equal to spam labels (strings) and value equal to
@@ -768,8 +784,12 @@ class DataSet(object):
             self.olIndex = outcomeLabelIndices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcomeLabels is not None:
-            tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
-                                 for ol in outcomeLabels]  # strings -> tuple outcome labels
+            if isinstance(outcomeLabels, int):
+                nqubits = outcomeLabels
+                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
+            else:
+                tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
+                                     for ol in outcomeLabels]  # strings -> tuple outcome labels
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
             self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
@@ -1279,15 +1299,7 @@ class DataSet(object):
                                     for ol in outcomeLabelList]
 
         #Add any new outcome labels
-        added = False
-        iNext = self.olIndex_max
-        for ol in tup_outcomeLabelList:
-            if ol not in self.olIndex:
-                iNext += 1
-                self.olIndex[ol] = iNext; added = True
-        if added and update_ol:  # rebuild self.ol because olIndex has changed
-            self.update_ol()
-        self.olIndex_max = iNext
+        self.add_outcome_labels(tup_outcomeLabelList, update_ol)
 
         oliArray = _np.array([self.olIndex[ol] for ol in tup_outcomeLabelList], self.oliType)
         timeArray = _np.array(timeStampList, self.timeType)
@@ -2309,3 +2321,55 @@ class DataSet(object):
         #Note: rebuild reverse-dict self.ol:
         self.olIndex = new_olIndex
         self.ol = _OrderedDict([(i, ol) for (ol, i) in self.olIndex.items()])
+
+    def add_std_nqubit_outcome_labels(self, nqubits):
+        """
+        Adds all the "standard" outcome labels (e.g. '0010') on `nqubits` qubits.
+
+        This is useful to ensure that, even if not all outcomes appear in the
+        data, that all are recognized as being potentially valid outcomes (and
+        so attempts to get counts for these outcomes will be 0 rather than
+        raising an error).
+
+        Parameters
+        ----------
+        nqubits : int
+            The number of qubits.  For example, if equal to 3 the outcome labels
+            '000', '001', ... '111' are added.
+
+        Returns
+        -------
+        None
+        """
+        self.add_outcome_labels((("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))))
+
+    def add_outcome_labels(self, outcome_labels, update_ol=True):
+        """
+        Adds new valid outcome labels.
+
+        Ensures that all the elements of `outcome_labels` are stored as
+        valid outcomes for circuits in this DataSet, adding new outcomes
+        as necessary.
+
+        Parameters
+        ----------
+        outcome_labels : list or generator
+            A list or generator of string- or tuple-valued outcome labels.
+
+        update_ol : bool, optional
+            Whether to update internal mappings to reflect the new outcome labels.
+            Leave this as True unless you really know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        added = False
+        iNext = self.olIndex_max
+        for ol in outcome_labels:
+            if ol not in self.olIndex:
+                iNext += 1
+                self.olIndex[ol] = iNext; added = True
+        if added and update_ol:  # rebuild self.ol because olIndex has changed
+            self.update_ol()
+        self.olIndex_max = iNext
