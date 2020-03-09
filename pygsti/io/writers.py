@@ -135,7 +135,7 @@ def write_dataset(filename, dataset, circuit_list=None,
                                                      for ol in outcomeLabels]) + '\n'
         assert(not (withTimes is True)), "Cannot set `witTimes=True` when `fixedColumnMode=True`"
     else:
-        headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels])
+        headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels]) + '\n'
 
         if withTimes == "auto":
             trivial_times = dataset.has_trivial_timedependence()
