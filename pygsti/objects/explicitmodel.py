@@ -586,6 +586,8 @@ class ExplicitOpModel(_mdl.OpModel):
             return 0  # punt on computing number of gauge parameters for other evotypes
         dPG = self._excalc()._buildup_dPG()
         gaugeDirs = _mt.nullspace_qr(dPG)  # cols are gauge directions
+        if gaugeDirs.size == 0:  # if there are *no* gauge directions
+            return 0  # calling matrix_rank on a length-0 array => error
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(), :])
 
     def deriv_wrt_params(self):
