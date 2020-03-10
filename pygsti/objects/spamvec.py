@@ -3499,7 +3499,10 @@ class ComputationalSPAMVec(SPAMVec):
             for i, zi in enumerate(self._zvals):
                 fast_kron_array[i, :] = v[zi]
             ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), typ))
-            _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+            if self._evotype == "densitymx":
+                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+            else:
+                _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
             return ret
 
     #def torep(self, typ, outvec=None):
