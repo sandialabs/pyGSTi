@@ -755,17 +755,11 @@ class VolumetricBenchmarkGrid(Benchmark):
         # only contains data for a single width), we can just "merge" the VB results of all
         # the underlying by-depth datas, so long as they're all for different widths.
 
-        #Run VB protocol on appropriate paths -> separate_results
-        if self.postproc.paths == 'all':
-            trimmed_data = data
-        else:
-            trimmed_data = data.filter_paths(self.postproc.paths)
-
         #Then run resulting data normally, giving a results object
         # with "top level" dicts correpsonding to different paths
         VB = VolumetricBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
                                  self.rescaler, self.dscomparator, name=self.name)
-        separate_results = _proto.SimpleRunner(VB).run(trimmed_data, memlimit, comm)
+        separate_results = _proto.SimpleRunner(VB).run(data, memlimit, comm)
         pp_results = self.postproc.run(separate_results, memlimit, comm)
         pp_results.protocol = self
         return pp_results
