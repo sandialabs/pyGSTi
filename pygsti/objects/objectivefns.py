@@ -316,7 +316,7 @@ class Chi2Function(ObjectiveFunction):
             self.update_dprobs_for_omitted_probs(dprobs, self.probs, weights, self.dprobs_omitted_rowsum)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
-            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, err_type='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
@@ -348,7 +348,7 @@ class Chi2Function(ObjectiveFunction):
         self.jac[self.KM:, :] = gsVecGrad  # jac.shape == (KM+N,N)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.regularized_chi2(
-            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, err_type='abs')
 
         # dpr has shape == (nCircuits, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
         # return shape == (nCircuits+nDerivCols, nDerivCols)
@@ -384,7 +384,7 @@ class Chi2Function(ObjectiveFunction):
                 self.jac[self.KM + off:, :], self.mdl, self.spam_penalty_factor, self.opBasis)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.penalized_chi2(
-            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, err_type='abs')
         self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
         return self.jac
 
@@ -450,7 +450,7 @@ class Chi2Function(ObjectiveFunction):
 
         if self.check_jacobian:
             errSum, errs, fd_jac = _opt.check_jac(lambda v: self.verbose_chi2(
-                v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')
+                v), vectorGS, self.jac, tol=1e-3, eps=1e-6, err_type='abs')
             self.printer.log("Jacobian has error %g and %d of %d indices with error > tol" %
                              (errSum, len(errs), self.jac.shape[0] * self.jac.shape[1]), 4)
             if len(errs) > 0:
@@ -588,7 +588,7 @@ class TimeDependentChi2Function(ObjectiveFunction):
         # with a different shape (jac.shape == [KM,vec_gs_len])
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.simple_chi2(
-            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, err_type='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
@@ -947,7 +947,7 @@ class LogLFunction(ObjectiveFunction):
             self.jac[self.forceOffset:, :] = -self.forcefn_grad
 
         if self.check: _opt.check_jac(lambda v: self.poisson_picture_logl(v), vectorGS, self.jac,
-                                      tol=1e-3, eps=1e-6, errType='abs')
+                                      tol=1e-3, eps=1e-6, err_type='abs')
         self.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
 
@@ -1113,7 +1113,7 @@ class TimeDependentLogLFunction(ObjectiveFunction):
         dlogl *= dlogl_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
 
         if self.check: _opt.check_jac(lambda v: self.poisson_picture_logl(v), vectorGS, self.jac,
-                                      tol=1e-3, eps=1e-6, errType='abs')
+                                      tol=1e-3, eps=1e-6, err_type='abs')
         self.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
 

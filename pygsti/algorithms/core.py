@@ -717,7 +717,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
                 mdl.from_vector(vectorGS)
                 jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
                 # shape == nCircuits*nFlatOp, nDerivCols
-                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, err_type='abs')
                 return jac
         else:
             def _jacobian(vectorGS):
@@ -726,7 +726,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
                 jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
                 # shape == nCircuits*nFlatOp, nDerivCols
                 jac = _np.concatenate((jac, gsVecGrad), axis=0)  # shape == nCircuits*nFlatOp+nDerivCols, nDerivCols
-                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, err_type='abs')
                 return jac
 
     else:
@@ -739,7 +739,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
                 jac = _np.concatenate((jac, gsVecGrad), axis=0)
 
             if check_jacobian:
-                errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, err_type='abs')
                 printer.log("Jacobian has error %g and %d of %d indices with error > tol" %
                             (errSum, len(errs), jac.shape[0]), 3)
                 if len(errs) > 0:

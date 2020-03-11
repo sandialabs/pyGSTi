@@ -496,7 +496,7 @@ def _create_objective_fn(model, targetModel, itemWeights=None,
                     return _objective_fn(mdl)
 
                 vec = gaugeGroupEl.to_vector()
-                _opt.check_jac(_mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-9, errType='abs',
+                _opt.check_jac(_mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-9, err_type='abs',
                                verbosity=1)
 
             return jacMx

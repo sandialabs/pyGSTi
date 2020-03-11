@@ -37,6 +37,6 @@ class OptimizeTester(BaseCase):
             return 2 * x[None, :]
 
         x0 = self.x0
-        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='rel')
-        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='abs')
+        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, err_type='rel')
+        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, err_type='abs')
         # TODO assert correctness
