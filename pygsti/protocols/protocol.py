@@ -70,6 +70,7 @@ class Protocol(object):
         super().__init__()
         self.name = name if name else self.__class__.__name__
         self.auxfile_types = {}
+        self._nameddict_attributes = ()  # (('name', 'Protocol Name', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -109,6 +110,39 @@ class Protocol(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this protocol.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`Protocol` object named within its `self._nameddict_attributes` tuple.
+        The final nested dictionary is set to be `final_dict`, which allows additional result
+        quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        ret = _NamedDict('Protocol Name', 'category'); tail = ret
+        attr_val = self.name
+
+        tail[attr_val] = _NamedDict('Protocol Type', 'category'); tail = tail[attr_val]
+        attr_val = self.__class__.__name__
+
+        for next_attr, *ndargs in self._nameddict_attributes:
+            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
+            attr_val = getattr(self, next_attr)
+
+        tail[attr_val] = final_dict
+        return ret
 
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
@@ -1230,18 +1264,19 @@ class ProtocolResults(object):
         """
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation
-        ret = _NamedDict('Qty', 'category')
+        final = _NamedDict('Qty', 'category')
+        ret = self.protocol.setup_nameddict(final)
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                ret[k] = v.as_nameddict()
+                final[k] = v.as_nameddict()
             elif isinstance(v, _NamedDict):
-                ret[k] = v
+                final[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
             else:  # non-dicts are ok to just store
-                ret[k] = v
+                final[k] = v
         return ret
 
     def as_dataframe(self):
@@ -1438,8 +1473,16 @@ class ProtocolResultsDir(_TreeNode):
         NamedDict
         """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        results_on_this_node = _NamedDict('Protocol Instance', 'category',
-                                          items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
+        nds = [v.as_nameddict() for v in self.for_protocol.values()]
+        if len(nds) > 0:
+            assert(all([nd.name == nds[0].name for nd in nds])), \
+                "All protocols on a given node must return a NamedDict with the *same* root name!"
+            results_on_this_node = nds[0]
+            for nd in nds[1:]:
+                results_on_this_node.update(nd)
+        else:
+            results_on_this_node = None
+
         if sub_results:
             category = self.child_category if self.child_category else 'nocategory'
             ret = _NamedDict(category, 'category')
