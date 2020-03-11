@@ -19,6 +19,7 @@ hooks/etc/permissions.yml
 *.lprof
 *.cache
 /.eggs/
+.ropeproject
 
 # Test Metadata #
 #################
