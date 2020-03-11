@@ -2343,7 +2343,7 @@ class DataSet(object):
         else:
             f = fileOrFilename
 
-        with _compat.patched_UUID():
+        with _compat.patched_uuid():
             state_dict = _pickle.load(f)
 
         if "gsIndexKeys" in state_dict:

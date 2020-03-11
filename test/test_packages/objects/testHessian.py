@@ -89,8 +89,8 @@ class TestHessianMethods(BaseTestCase):
     def test_hessian_projection(self):
 
         chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                                  returnGradient=True,
-                                                  returnHessian=True)
+                                                  return_gradient=True,
+                                                  return_hessian=True)
 
         proj_non_gauge = self.model.get_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
@@ -378,12 +378,12 @@ class TestHessianMethods(BaseTestCase):
 
     def test_mapcalc_hessian(self):
         chi2, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                        returnHessian=True)
+                                        return_hessian=True)
 
         mdl_mapcalc = self.model.copy()
         mdl_mapcalc._calcClass = MapForwardSimulator
         chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds,
-                                        returnHessian=True)
+                                        return_hessian=True)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)
 

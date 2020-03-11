@@ -826,7 +826,7 @@ def create_idletomography_report(results, filename, title="auto",
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
-            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+            with _timed_block(name, format_str='{:45}', printer=printer, verbosity=2):
                 qtys[name] = fn(*args, **kwargs)
 
     qtys['title'] = title

@@ -3388,7 +3388,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 #                 raise ValueError("To plot the exact decay curve a model" +
 #                                  " and the target group are required.")
 #             else:
-#                 mvalues,ASPs = _rbutils.exact_RB_ASPs(mdl,group,max(xdata),m_min=1,m_step=1,
+#                 mvalues,ASPs = _rbutils.exact_rb_asps(mdl,group,max(xdata),m_min=1,m_step=1,
 #                                                       d=rbR.d, group_to_model=group_to_model,
 #                                                       success_outcomelabel=rbR.success_outcomelabel)
 #
@@ -3398,7 +3398,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 #                            " and a target model is required.")
 #             else:
 #                 mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
-#                 _rbutils.L_matrix_ASPs(mdl,target_model,max(xdata),m_min=1,m_step=1,d=rbR.d,
+#                 _rbutils.L_matrix_asps(mdl,target_model,max(xdata),m_min=1,m_step=1,d=rbR.d,
 #                                        success_outcomelabel=rbR.success_outcomelabel, error_bounds=True)
 #
 #         xlabel = 'Sequence length'

@@ -823,14 +823,14 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     if objective == "chi2":
         assert(wildcard is None), "Can only use wildcard budget with 'logl' objective!"
         fitQty = _tools.chi2(model, dataset, gstrs,
-                             minProbClipForWeighting=minProbClip,
-                             opLabelAliases=gss.aliases,
+                             min_prob_clip_for_weighting=minProbClip,
+                             op_label_aliases=gss.aliases,
                              comm=comm, smartc=smartc)
     elif objective == "logl":
-        logL_upperbound = _tools.logl_max(model, dataset, gstrs, opLabelAliases=gss.aliases,
+        logL_upperbound = _tools.logl_max(model, dataset, gstrs, op_label_aliases=gss.aliases,
                                           smartc=smartc)
-        logl = _tools.logl(model, dataset, gstrs, opLabelAliases=gss.aliases,
-                           minProbClip=minProbClip, comm=comm, smartc=smartc,
+        logl = _tools.logl(model, dataset, gstrs, op_label_aliases=gss.aliases,
+                           min_prob_clip=minProbClip, comm=comm, smartc=smartc,
                            wildcard=wildcard)
         fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 

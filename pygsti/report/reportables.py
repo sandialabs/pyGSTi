@@ -1151,7 +1151,7 @@ def predicted_rb_number(modelA, modelB):
     """
     #TEMPORARILY disabled b/c RB analysis is broken
     #from ..extras.rb import theory as _rbtheory
-    return -1.0  # _rbtheory.predicted_RB_number(modelA, modelB)
+    return -1.0  # _rbtheory.predicted_rb_number(modelA, modelB)
 
 
 Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)

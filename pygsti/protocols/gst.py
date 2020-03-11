@@ -1039,7 +1039,7 @@ def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLi
                                    evaltree_cache=evaltree_cache, comm=comm)
     else:  # "logl" or "lgst"
         maxLogL = _tools.logl_max_terms(model, ds, circuitList,
-                                        opLabelAliases=parameters.get(
+                                        op_label_aliases=parameters.get(
                                             'opLabelAliases', None),
                                         evaltree_cache=evaltree_cache)
 
@@ -1047,7 +1047,7 @@ def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLi
                                  parameters.get('minProbClip', 1e-4),
                                  parameters.get('probClipInterval', (-1e6, 1e6)),
                                  parameters.get('radius', 1e-4),
-                                 opLabelAliases=parameters.get('opLabelAliases', None),
+                                 op_label_aliases=parameters.get('opLabelAliases', None),
                                  evaltree_cache=evaltree_cache, comm=comm)
         fitQty = 2 * (maxLogL - logL)
     return fitQty

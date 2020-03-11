@@ -19,7 +19,7 @@ def is_integer(x):
     return bool(isinstance(x, int) or isinstance(x, _np.integer))
 
 
-def construct_1Q_Clifford_group():
+def construct_1q_clifford_group():
     """
     Returns the 1 qubit Clifford group as a MatrixGroup object
     """
@@ -32,22 +32,22 @@ class MatrixGroup(object):
     Encapsulates a group where each element is represented by a matrix.
     """
 
-    def __init__(self, listOfMatrices, labels=None):
+    def __init__(self, list_of_matrices, labels=None):
         """
         Constructs a new MatrixGroup object
 
         Parameters
         ----------
-        listOfMatrices : list
+        list_of_matrices : list
             A list of the group elements (should be 2d numpy arrays), and
             can be mdl.gate.values() for some Model `mdl` that forms a group.
 
         labels : list, optional
             A label corresponding to each group element.
         """
-        self.mxs = list(listOfMatrices)
+        self.mxs = list(list_of_matrices)
         self.labels = list(labels) if (labels is not None) else None
-        assert(labels is None or len(labels) == len(listOfMatrices))
+        assert(labels is None or len(labels) == len(list_of_matrices))
         if labels is not None:
             self.label_indices = {lbl: indx for indx, lbl in enumerate(labels)}
         else:

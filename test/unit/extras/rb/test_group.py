@@ -5,5 +5,5 @@ from ...util import BaseCase
 class RBGroupTester(BaseCase):
     def test_construct_1Q_Clifford_group(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        clifford = group.construct_1Q_Clifford_group()
+        clifford = group.construct_1q_clifford_group()
         # TODO assert correctness

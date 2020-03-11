@@ -236,20 +236,20 @@ class ConfidenceRegionFactory(object):
                 else _tools.logl_hessian
             hessian = hessian_fn(model, dataset, circuit_list,
                                  minProbClip, probClipInterval, radius,
-                                 comm=comm, memLimit=memLimit, verbosity=vb,
-                                 opLabelAliases=aliases)
+                                 comm=comm, mem_limit=memLimit, verbosity=vb,
+                                 op_label_aliases=aliases)
 
             nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset)
                                        - _tools.logl(model, dataset,
-                                                     opLabelAliases=aliases))
+                                                     op_label_aliases=aliases))
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 
         elif obj == 'chi2':
             chi2, hessian = _tools.chi2(model, dataset, circuit_list,
                                         False, True, minProbClipForWeighting,
-                                        probClipInterval, memLimit=memLimit,
-                                        opLabelAliases=aliases,
-                                        approximateHessian=approximate)
+                                        probClipInterval, mem_limit=memLimit,
+                                        op_label_aliases=aliases,
+                                        approximate_hessian=approximate)
 
             nonMarkRadiusSq = max(chi2 - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
         else:

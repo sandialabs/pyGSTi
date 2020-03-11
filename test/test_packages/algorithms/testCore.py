@@ -310,8 +310,8 @@ class TestCoreMethods(AlgorithmsBase):
 
         self.runSilent(pygsti.do_lgst, ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=6, verbosity=4) # test verbose prints
 
-        chiSq4 = pygsti.chi2(mdl_lgst4, ds, self.lgstStrings, minProbClipForWeighting=1e-4)
-        chiSq6 = pygsti.chi2(mdl_lgst6, ds, self.lgstStrings, minProbClipForWeighting=1e-4)
+        chiSq4 = pygsti.chi2(mdl_lgst4, ds, self.lgstStrings, min_prob_clip_for_weighting=1e-4)
+        chiSq6 = pygsti.chi2(mdl_lgst6, ds, self.lgstStrings, min_prob_clip_for_weighting=1e-4)
 
         print("LGST dim=4 chiSq = ",chiSq4)
         print("LGST dim=6 chiSq = ",chiSq6)

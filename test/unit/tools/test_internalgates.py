@@ -15,7 +15,7 @@ class InternalGatesTester(BaseCase):
         std_quil = internalgates.get_standard_gatenames_openqasm_conversions()
 
         # Checks the standard Clifford gate unitaries agree with the Clifford group unitaries.
-        group = rb.group.construct_1Q_Clifford_group()
+        group = rb.group.construct_1q_clifford_group()
         for key in group.labels:
             self.assertLess(np.sum(abs(np.array(group.get_matrix(key))
                                        - ot.unitary_to_pauligate(std_unitaries[key]))), 10**-10)

@@ -2908,7 +2908,7 @@ class LindbladOp(LinearOperator):
                 # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
                 mu, m_star, s, eta = _mt.expop_multiply_prep(
                     self.errorgen._rep.aslinearoperator(),
-                    A_1_norm=self.errorgen.onenorm_upperbound())
+                    a_1_norm=self.errorgen.onenorm_upperbound())
                 self._rep.set_exp_params(mu, eta, m_star, s)
 
     def set_gpindices(self, gpindices, parent, memo=None):

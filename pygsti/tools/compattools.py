@@ -35,7 +35,7 @@ def _numpy14einsumfix():
 
 
 @_contextmanager
-def patched_UUID():
+def patched_uuid():
     """Monkeypatch the uuid module with a fake SafeUUID
 
     `uuid.SafeUUID` is new in Python 3.7. This is a workaround to
@@ -45,7 +45,7 @@ def patched_UUID():
     """
     if 'SafeUUID' not in dir(_uuid):
         class dummy_SafeUUID(object):
-            def __new__(self, *args):
+            def __new__(cls, *args):
                 return _uuid.UUID.__new__(_uuid.UUID, *args)
         _uuid.SafeUUID = dummy_SafeUUID
 

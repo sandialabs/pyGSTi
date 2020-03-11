@@ -19,7 +19,7 @@ from pygsti.objects import Label as L
 
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.io import enable_old_object_unpickling
-from pygsti.tools.compattools import patched_UUID
+from pygsti.tools.compattools import patched_uuid
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -357,7 +357,7 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_load_old_gateset(self):
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        with enable_old_object_unpickling(), patched_UUID():
+        with enable_old_object_unpickling(), patched_uuid():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
@@ -365,7 +365,7 @@ class TestGateSetMethods(GateSetTestCase):
         with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
             pickle.dump(mdl, f)
 
-        with enable_old_object_unpickling("0.9.7"), patched_UUID():
+        with enable_old_object_unpickling("0.9.7"), patched_uuid():
             with open(compare_files + "/pygsti0.9.7.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
         with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:

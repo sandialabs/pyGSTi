@@ -969,13 +969,13 @@ def test_MPI_tools(comm):
         my_array = np.zeros(100,'d')
         my_array[loc_slice] = master[loc_slice] # ~ computation (just copy from "master")
         mpit.gather_slices(slices, owners, my_array,
-                           arToFillInds=[], axes=0, comm=comm,
+                           ar_to_fill_inds=[], axes=0, comm=comm,
                            max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array[slc] - master[slc]) < 1e-6)
 
         my_array2 = np.zeros(100,'d')
         my_array2[loc_slice] = master[loc_slice] # ~ computation (just copy from "master")
-        mpit.gather_slices_by_owner([loc_slice], my_array2, arToFillInds=[],
+        mpit.gather_slices_by_owner([loc_slice], my_array2, ar_to_fill_inds=[],
                                     axes=0, comm=comm, max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array2[slc] - master[slc]) < 1e-6)
 
@@ -983,7 +983,7 @@ def test_MPI_tools(comm):
         loc_indices = pygsti.tools.slicetools.as_array(loc_slice)
         my_array3 = np.zeros(100,'d')
         my_array3[loc_indices] = master[loc_indices] # ~ computation (just copy from "master")
-        mpit.gather_indices(indices, owners, my_array3, arToFillInds=[], axes=0,
+        mpit.gather_indices(indices, owners, my_array3, ar_to_fill_inds=[], axes=0,
                             comm=comm, max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array3[slc] - master[slc]) < 1e-6)
 
@@ -1005,13 +1005,13 @@ def test_MPI_tools(comm):
 
     #Can't do this until distribute_slice gets upgraded to work with multiple dims...
     #     mpit.gather_slices(slices, owners, my_array,
-    #                        arToFillInds=[], axes=0, comm=comm,
+    #                        ar_to_fill_inds=[], axes=0, comm=comm,
     #                        max_buffer_size=maxbuf)
     #     assert(np.linalg.norm(my_array[slc] - master2D[slc]) < 1e-6)
 
         my_array2 = np.zeros((10,10),'d')
         my_array2[loc_slice1,loc_slice2] = master2D[loc_slice1,loc_slice2].copy() # ~ computation (just copy from "master")
-        mpit.gather_slices_by_owner([(loc_slice1,loc_slice2)], my_array2, arToFillInds=[],
+        mpit.gather_slices_by_owner([(loc_slice1,loc_slice2)], my_array2, ar_to_fill_inds=[],
                                     axes=(0,1), comm=comm, max_buffer_size=maxbuf)
         #print("Rank %d: locslc1 = %s, locslc2 = %s, loc_comm1_size=%d" % (rank, str(loc_slice1),str(loc_slice2),
         #                                                                  loc_comm1.Get_size() if loc_comm1 else -1))
@@ -1024,8 +1024,8 @@ def test_MPI_tools(comm):
     test2D(slice(0,10), slice(0,5), maxbuf=20) #with max-buffer
 
     #trivial case with comm = None => nothing to do
-    mpit.gather_slices(None, None, master, arToFillInds=[], axes=0, comm=None)
-    mpit.gather_slices_by_owner(slice(0,100), master, arToFillInds=[], axes=0, comm=None)
+    mpit.gather_slices(None, None, master, ar_to_fill_inds=[], axes=0, comm=None)
+    mpit.gather_slices_by_owner(slice(0,100), master, ar_to_fill_inds=[], axes=0, comm=None)
 
     # ------------------ parallel apply --------------------------------
 

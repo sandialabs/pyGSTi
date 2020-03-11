@@ -110,8 +110,8 @@ TOL = 1e-20
 
 #@smart_cached
 def logl_terms(model, dataset, circuit_list=None,
-               minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-               poissonPicture=True, check=False, opLabelAliases=None,
+               min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+               poisson_picture=True, check=False, op_label_aliases=None,
                evaltree_cache=None, comm=None, smartc=None, wildcard=None):
     """
     The vector of log-likelihood contributions for each operation sequence,
@@ -140,7 +140,7 @@ def logl_terms(model, dataset, circuit_list=None,
         circuit_list = list(dataset.keys())
 
     a = radius  # parameterizes "roundness" of f == 0 terms
-    min_p = minProbClip
+    min_p = min_prob_clip
 
     if evaltree_cache and 'evTree' in evaltree_cache:
         evalTree = evaltree_cache['evTree']
@@ -162,7 +162,7 @@ def logl_terms(model, dataset, circuit_list=None,
     nEls = evalTree.num_final_elements()
     probs = _np.zeros(nEls, 'd')  # _np.empty( nEls, 'd' ) - .zeros b/c of caching
 
-    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
@@ -194,14 +194,14 @@ def logl_terms(model, dataset, circuit_list=None,
     else:
         firsts = None
 
-    smart(model.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm, _filledarrays=(0,))
+    smart(model.bulk_fill_probs, probs, evalTree, prob_clip_interval, check, comm, _filledarrays=(0,))
     if wildcard:
         probs_in = probs.copy()
         wildcard.update_probs(probs_in, probs, countVecMx / totalCntVec, circuit_list, lookup)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     # XXX: aren't the next blocks duplicated elsewhere?
-    if poissonPicture:
+    if poisson_picture:
         S = countVecMx / min_p - totalCntVec  # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
         v = countVecMx * _np.log(pos_probs) - totalCntVec * pos_probs  # dim KM (K = nSpamLabels, M = nCircuits)
@@ -213,7 +213,7 @@ def logl_terms(model, dataset, circuit_list=None,
                       -totalCntVec * _np.where(probs >= a, probs,
                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
                       v)
-        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum:
+        #special handling for f == 0 poisson_picture terms using quadratic rounding of function with minimum:
         #max(0,(a-p))^2/(2a) + p
 
         if firsts is not None:
@@ -255,8 +255,8 @@ def logl_terms(model, dataset, circuit_list=None,
 
 #@smart_cached
 def logl(model, dataset, circuit_list=None,
-         minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-         poissonPicture=True, check=False, opLabelAliases=None,
+         min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+         poisson_picture=True, check=False, op_label_aliases=None,
          evaltree_cache=None, comm=None, smartc=None, wildcard=None):
     """
     The log-likelihood function.
@@ -274,13 +274,13 @@ def logl(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -293,7 +293,7 @@ def logl(model, dataset, circuit_list=None,
       Significantly speeds up evaluation of log-likelihood, even more so
       when accompanied by countVecMx (see below).
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
 
@@ -301,11 +301,11 @@ def logl(model, dataset, circuit_list=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     evaltree_cache : dict, optional
         A dictionary which server as a cache for the computed EvalTree used
@@ -334,16 +334,16 @@ def logl(model, dataset, circuit_list=None,
         The log likelihood
     """
     v = logl_terms(model, dataset, circuit_list,
-                   minProbClip, probClipInterval, radius,
-                   poissonPicture, check, opLabelAliases,
+                   min_prob_clip, prob_clip_interval, radius,
+                   poisson_picture, check, op_label_aliases,
                    evaltree_cache, comm, smartc, wildcard)
     return _np.sum(v)  # sum over *all* dimensions
 
 
 def logl_jacobian(model, dataset, circuit_list=None,
-                  minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                  poissonPicture=True, check=False, comm=None,
-                  memLimit=None, opLabelAliases=None, smartc=None,
+                  min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                  poisson_picture=True, check=False, comm=None,
+                  mem_limit=None, op_label_aliases=None, smartc=None,
                   verbosity=0):
     """
     The jacobian of the log-likelihood function.
@@ -361,13 +361,13 @@ def logl_jacobian(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -380,7 +380,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         Significantly speeds up evaluation of log-likelihood derivatives, even
         more so when accompanied by countVecMx (see below).  Defaults to None.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
     check : boolean, optional
@@ -391,15 +391,15 @@ def logl_jacobian(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     smartc : SmartCache, optional
         A cache object to cache & use previously cached values inside this
@@ -426,22 +426,22 @@ def logl_jacobian(model, dataset, circuit_list=None,
     C = 1.0 / 1024.0**3; nP = model.num_params()
     persistentMem = 8 * nP + 8 * len(circuit_list) * (nP + 1)  # in bytes
 
-    if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C)
+    if mem_limit is not None and mem_limit < persistentMem:
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (mem_limit * C)
                           + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
     #OLD: evalTree,lookup,outcomes_lookup = model.bulk_evaltree(circuit_list)
-    mlim = None if (memLimit is None) else memLimit - persistentMem
+    mlim = None if (mem_limit is None) else mem_limit - persistentMem
     # Note: simplify_circuits doesn't support aliased dataset (yet)
-    dstree = dataset if (opLabelAliases is None) else None
+    dstree = dataset if (op_label_aliases is None) else None
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
               circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
               dstree, verbosity)
 
     a = radius  # parameterizes "roundness" of f == 0 terms
-    min_p = minProbClip
+    min_p = min_prob_clip
 
     #  Allocate persistent memory
     jac = _np.zeros([1, nP])
@@ -449,7 +449,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
     probs = _np.empty(nEls, 'd')
     dprobs = _np.empty((nEls, nP), 'd')
 
-    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
 
     countVecMx = _np.empty(nEls, 'd')
     totalCntVec = _np.empty(nEls, 'd')
@@ -473,12 +473,12 @@ def logl_jacobian(model, dataset, circuit_list=None,
         firsts = None
 
     smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
-          clipTo=probClipInterval, check=check, comm=comm,
+          clipTo=prob_clip_interval, check=check, comm=comm,
           wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
-    if poissonPicture:
+    if poisson_picture:
         S = countVecMx / min_p - totalCntVec         # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
@@ -492,7 +492,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
                       -totalCntVec * _np.where(probs >= a, probs,
                                                (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0),
                       v)
-        #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum:
+        #special handling for f == 0 poisson_picture terms using quadratic rounding of function with minimum:
         #max(0,(a-p))^2/(2a) + p
 
         if firsts is not None:
@@ -541,16 +541,16 @@ def logl_jacobian(model, dataset, circuit_list=None,
         dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
         dprobs_factor = _np.where(countVecMx == 0, 0.0, dprobs_factor)
         jac = dprobs * dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
-        #Note: no correction from omitted probabilities needed in poissonPicture == False case.
+        #Note: no correction from omitted probabilities needed in poisson_picture == False case.
 
     # jac[iSpamLabel,iCircuit,iModelParam] contains all d(logl)/d(modelParam) contributions
     return _np.sum(jac, axis=0)  # sum over spam label and operation sequence dimensions
 
 
-def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
-                 probClipInterval=(-1e6, 1e6), radius=1e-4, poissonPicture=True,
-                 check=False, comm=None, memLimit=None,
-                 opLabelAliases=None, smartc=None, verbosity=0):
+def logl_hessian(model, dataset, circuit_list=None, min_prob_clip=1e-6,
+                 prob_clip_interval=(-1e6, 1e6), radius=1e-4, poisson_picture=True,
+                 check=False, comm=None, mem_limit=None,
+                 op_label_aliases=None, smartc=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
 
@@ -567,13 +567,13 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by
         models during MLEGST's search for an optimal model (if not None).
         if None, no clipping is performed.
@@ -582,7 +582,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
     check : boolean, optional
@@ -593,15 +593,15 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     smartc : SmartCache, optional
         A cache object to cache & use previously cached values inside this
@@ -631,8 +631,8 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     #  Estimate & check persistent memory (from allocs directly below)
     C = 1.0 / 1024.0**3; nP = model.num_params()
     persistentMem = 8 * nP**2  # in bytes
-    if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit * C)
+    if mem_limit is not None and mem_limit < persistentMem:
+        raise MemoryError("HLogL Memory limit (%g GB) is " % (mem_limit * C)
                           + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
@@ -642,9 +642,9 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     #  Estimate & check intermediate memory
     #  - figure out how many row & column partitions are needed
     #    to fit computation within available memory (and use all cpus)
-    mlim = None if (memLimit is None) else memLimit - persistentMem
+    mlim = None if (mem_limit is None) else mem_limit - persistentMem
     # Note: simplify_circuits doesn't support aliased dataset (yet)
-    dstree = dataset if (opLabelAliases is None) else None
+    dstree = dataset if (op_label_aliases is None) else None
     evalTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
               circuit_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
@@ -654,7 +654,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
 
     a = radius  # parameterizes "roundness" of f == 0 terms
-    min_p = minProbClip
+    min_p = min_prob_clip
 
     #Detect omitted frequences (assumed to be 0) so we can compute liklihood correctly
     firsts = []; indicesOfCircuitsWithOmittedData = []
@@ -669,14 +669,14 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     else:
         firsts = None
 
-    if poissonPicture:
+    if poisson_picture:
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
-        def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
+        def hessian_from_hprobs(hprobs, dprobs12, cnt_vec_mx, total_cnt_vec, pos_probs):
             """ Factored-out computation of hessian from raw components """
             # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
-            totCnts = totalCntVec  # shorthand
-            S = cntVecMx / min_p - totCnts  # slope term that is derivative of logl at min_p
-            S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
+            totCnts = total_cnt_vec  # shorthand
+            S = cnt_vec_mx / min_p - totCnts  # slope term that is derivative of logl at min_p
+            S2 = -0.5 * cnt_vec_mx / (min_p**2)          # 2nd derivative of logl term at min_p
 
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
             if firsts is not None:
@@ -684,19 +684,19 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
                 hprobs_omitted_rowsum = _np.empty((len(firsts),) + hprobs.shape[1:], 'd')
 
             # # (K,M,1,1) * (K,M,N,N')
-            # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
+            # hprobs_pos  = (-cnt_vec_mx / pos_probs**2)[:,:,None,None] * dprobs12
             # # (K,M,1,1) * (K,M,N,N')
-            # hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs
+            # hprobs_pos += (cnt_vec_mx / pos_probs - total_cnt_vec[None,:])[:,:,None,None] * hprobs
             # # (K,M,1,1) * (K,M,N,N')
             # hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs
             # hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
-            #                             -totalCntVec[None,:,None,None] * hprobs,
-            #                             (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] \
+            #                             -total_cnt_vec[None,:,None,None] * hprobs,
+            #                             (-total_cnt_vec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] \
             #                              * dprobs12
-            #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] \
+            #                             - (total_cnt_vec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] \
             #                              * hprobs )
             # hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
-            # hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
+            # hessian = _np.where( (cnt_vec_mx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
 
             omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[lookup[i]]) for i in indicesOfCircuitsWithOmittedData])
             for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
@@ -706,16 +706,16 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
-                _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
+                _np.where(probs < min_p, 2 * S2, -cnt_vec_mx / pos_probs**2)
             zfc = _np.where(probs >= a, 0.0, -totCnts * ((-2.0 / a**2) * probs + 2.0 / a))
-            dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
+            dprobs12_coeffs = _np.where(cnt_vec_mx == 0, zfc, dprobs12_coeffs)
 
             hprobs_coeffs = \
                 _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
-                          cntVecMx / pos_probs - totCnts)
+                          cnt_vec_mx / pos_probs - totCnts)
             zfc = _np.where(probs >= a, -totCnts,
                             -totCnts * ((-1.0 / a**2) * probs**2 + 2 * probs / a))
-            hprobs_coeffs = _np.where(cntVecMx == 0, zfc, hprobs_coeffs)
+            hprobs_coeffs = _np.where(cnt_vec_mx == 0, zfc, hprobs_coeffs)
 
             if firsts is not None:
                 dprobs12_omitted_coeffs = totCnts[firsts] * _np.where(
@@ -744,31 +744,31 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
         #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained
         #to sum to 1)
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
-        def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
+        def hessian_from_hprobs(hprobs, dprobs12, cnt_vec_mx, total_cnt_vec, pos_probs):
             """ Factored-out computation of hessian from raw components """
-            S = cntVecMx / min_p  # slope term that is derivative of logl at min_p
-            S2 = -0.5 * cntVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
+            S = cnt_vec_mx / min_p  # slope term that is derivative of logl at min_p
+            S2 = -0.5 * cnt_vec_mx / (min_p**2)  # 2nd derivative of logl term at min_p
 
             # # (K,M,1,1) * (K,M,N,N')
-            # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
+            # hprobs_pos  = (-cnt_vec_mx / pos_probs**2)[:,:,None,None] * dprobs12
             # # (K,M,1,1) * (K,M,N,N')
-            # hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs
+            # hprobs_pos += (cnt_vec_mx / pos_probs)[:,:,None,None] * hprobs
             # # (K,M,1,1) * (K,M,N,N')
             # hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs
             # hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             # # (K,M,N,N')
-            # hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian)
+            # hessian = _np.where( (cnt_vec_mx == 0)[:,:,None,None], 0.0, hessian)
 
             #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
-                _np.where(probs < min_p, 2 * S2, -cntVecMx / pos_probs**2)
-            dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
+                _np.where(probs < min_p, 2 * S2, -cnt_vec_mx / pos_probs**2)
+            dprobs12_coeffs = _np.where(cnt_vec_mx == 0, 0.0, dprobs12_coeffs)
 
             hprobs_coeffs = \
                 _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
-                          cntVecMx / pos_probs)
-            hprobs_coeffs = _np.where(cntVecMx == 0, 0.0, hprobs_coeffs)
+                          cnt_vec_mx / pos_probs)
+            hprobs_coeffs = _np.where(cnt_vec_mx == 0, 0.0, hprobs_coeffs)
 
             # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
             #  but re-using dprobs12 and hprobs memory (which is overwritten!)
@@ -799,7 +799,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     cntVecMx_all = _np.empty(nEls, 'd')
     totalCntVec_all = _np.empty(nEls, 'd')
 
-    ds_subtree_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+    ds_subtree_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
 
     for (i, opStr) in enumerate(ds_subtree_circuit_list):
         cnts = dataset[opStr].counts
@@ -831,7 +831,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
 
         #compute pos_probs separately
         smart(model.bulk_fill_probs, probs, evalSubTree,
-              clipTo=probClipInterval, check=check,
+              clipTo=prob_clip_interval, check=check,
               comm=mySubComm, _filledarrays=(0,))
         pos_probs = _np.where(probs < min_p, min_p, probs)
 
@@ -868,7 +868,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12
 
         #Gather columns from different procs and add to running final hessian
-        #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian,[], (0,1), mySubComm)
+        #_mpit.gather_slices_by_owner(current_slices, subtree_hessian,[], (0,1), mySubComm)
         _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, [], (0, 1), mySubComm)
         final_hessian += subtree_hessian
 
@@ -888,9 +888,9 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
 
 
 def logl_approximate_hessian(model, dataset, circuit_list=None,
-                             minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                             poissonPicture=True, check=False, comm=None,
-                             memLimit=None, opLabelAliases=None, smartc=None,
+                             min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                             poisson_picture=True, check=False, comm=None,
+                             mem_limit=None, op_label_aliases=None, smartc=None,
                              verbosity=0):
     """
     An approximate Hessian of the log-likelihood function.
@@ -921,13 +921,13 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -940,7 +940,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         Significantly speeds up evaluation of log-likelihood derivatives, even
         more so when accompanied by countVecMx (see below).  Defaults to None.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
     check : boolean, optional
@@ -951,15 +951,15 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     smartc : SmartCache, optional
         A cache object to cache & use previously cached values inside this
@@ -986,22 +986,22 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     C = 1.0 / 1024.0**3; nP = model.num_params()
     persistentMem = 8 * nP**2 + 8 * len(circuit_list) * (nP + 1)  # in bytes
 
-    if memLimit is not None and memLimit < persistentMem:
-        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit * C)
+    if mem_limit is not None and mem_limit < persistentMem:
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (mem_limit * C)
                           + "< memory required to hold final results (%g GB)"
                           % (persistentMem * C))
 
     #OLD: evalTree,lookup,outcomes_lookup = model.bulk_evaltree(circuit_list)
-    mlim = None if (memLimit is None) else memLimit - persistentMem
+    mlim = None if (mem_limit is None) else mem_limit - persistentMem
     # Note: simplify_circuits doesn't support aliased dataset (yet)
-    dstree = dataset if (opLabelAliases is None) else None
+    dstree = dataset if (op_label_aliases is None) else None
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
               circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
               dstree, verbosity)
 
     a = radius  # parameterizes "roundness" of f == 0 terms
-    min_p = minProbClip
+    min_p = min_prob_clip
 
     #  Allocate persistent memory
     #hessian = _np.zeros( (nP,nP), 'd') # allocated below by assignment
@@ -1009,7 +1009,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     probs = _np.empty(nEls, 'd')
     dprobs = _np.empty((nEls, nP), 'd')
 
-    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+    ds_circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
 
     cntVecMx = _np.empty(nEls, 'd')
     totalCntVec = _np.empty(nEls, 'd')
@@ -1019,7 +1019,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         cntVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
     smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
-          clipTo=probClipInterval, check=check, comm=comm,
+          clipTo=prob_clip_interval, check=check, comm=comm,
           wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
@@ -1032,7 +1032,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     # functions and "hp==0" (b/c the "params" here are just the probabilities
     # themselves) - so only the X*dp1*dp2 terms survive the general expressions
     # found above.
-    if poissonPicture:
+    if poisson_picture:
         totCnts = totalCntVec  # shorthand
         S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
@@ -1059,8 +1059,8 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
 
 
 #@smart_cached
-def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
-             check=False, opLabelAliases=None, evaltree_cache=None,
+def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
+             check=False, op_label_aliases=None, evaltree_cache=None,
              smartc=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
@@ -1080,18 +1080,18 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
         sum.  Default value of None implies all the operation sequences in dataset should
         be used.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picture maximum log-likelihood should be returned.
 
     check : boolean, optional
         Whether additional check is performed which computes the max logl another
         way an compares to the faster method.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     evaltree_cache : dict, optional
         A dictionary which server as a cache for the computed EvalTree used
@@ -1108,7 +1108,7 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
     float
     """
     maxLogLTerms = logl_max_terms(model, dataset, circuit_list,
-                                  poissonPicture, opLabelAliases,
+                                  poisson_picture, op_label_aliases,
                                   evaltree_cache, smartc)
 
     # maxLogLTerms[iSpamLabel,iCircuit] contains all logl-upper-bound contributions
@@ -1122,7 +1122,7 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
             for n in dsRow.counts.values():
                 f = n / N
                 if f < TOL and n == 0: continue  # 0 * log(0) == 0
-                if poissonPicture:
+                if poisson_picture:
                     L += n * _np.log(f) - N * f
                 else:
                     L += n * _np.log(f)
@@ -1136,7 +1136,7 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
 
 
 def logl_max_terms(model, dataset, circuit_list=None,
-                   poissonPicture=True, opLabelAliases=None,
+                   poisson_picture=True, op_label_aliases=None,
                    evaltree_cache=None, smartc=None):
     """
     The vector of maximum log-likelihood contributions for each operation sequence,
@@ -1176,7 +1176,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
         # won't make one here and so won't fill an empty
         # evaltree_cache.
 
-    circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+    circuit_list = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
 
     if evaltree_cache and 'cntVecMx' in evaltree_cache:
         countVecMx = evaltree_cache['cntVecMx']
@@ -1199,7 +1199,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
     freqs = countVecMx / totalCntVec
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs)  # set zero freqs to 1.0 so np.log doesn't complain
 
-    if poissonPicture:
+    if poisson_picture:
         maxLogLTerms = countVecMx * (_np.log(freqs_nozeros) - 1.0)
     else:
         maxLogLTerms = countVecMx * _np.log(freqs_nozeros)
@@ -1219,20 +1219,20 @@ def logl_max_terms(model, dataset, circuit_list=None,
 
 
 def two_delta_logl_nsigma(model, dataset, circuit_list=None,
-                          minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                          poissonPicture=True, opLabelAliases=None,
+                          min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                          poisson_picture=True, op_label_aliases=None,
                           dof_calc_method='nongauge', wildcard=None):
     """See docstring for :function:`pygsti.tools.two_delta_logl` """
     assert(dof_calc_method is not None)
     return two_delta_logl(model, dataset, circuit_list,
-                          minProbClip, probClipInterval, radius,
-                          poissonPicture, False, opLabelAliases,
+                          min_prob_clip, prob_clip_interval, radius,
+                          poisson_picture, False, op_label_aliases,
                           None, None, dof_calc_method, None, wildcard)[1]
 
 
 def two_delta_logl(model, dataset, circuit_list=None,
-                   minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                   poissonPicture=True, check=False, opLabelAliases=None,
+                   min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                   poisson_picture=True, check=False, op_label_aliases=None,
                    evaltree_cache=None, comm=None, dof_calc_method=None,
                    smartc=None, wildcard=None):
     """
@@ -1260,13 +1260,13 @@ def two_delta_logl(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -1279,7 +1279,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
       Significantly speeds up evaluation of log-likelihood, even more so
       when accompanied by countVecMx (see below).
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the computed log-likelihood values.
 
@@ -1287,11 +1287,11 @@ def two_delta_logl(model, dataset, circuit_list=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     evaltree_cache : dict, optional
         A dictionary which server as a cache for the computed EvalTree used
@@ -1329,11 +1329,11 @@ def two_delta_logl(model, dataset, circuit_list=None,
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
-    twoDeltaLogL = 2 * (logl_max(model, dataset, circuit_list, poissonPicture,
-                                 check, opLabelAliases, evaltree_cache, smartc)
+    twoDeltaLogL = 2 * (logl_max(model, dataset, circuit_list, poisson_picture,
+                                 check, op_label_aliases, evaltree_cache, smartc)
                         - logl(model, dataset, circuit_list,
-                               minProbClip, probClipInterval, radius,
-                               poissonPicture, check, opLabelAliases,
+                               min_prob_clip, prob_clip_interval, radius,
+                               poisson_picture, check, op_label_aliases,
                                evaltree_cache, comm, smartc, wildcard))
 
     if dof_calc_method is None:
@@ -1348,7 +1348,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
     else: ds_strs = None
 
     Ns = dataset.get_degrees_of_freedom(ds_strs)
@@ -1361,8 +1361,8 @@ def two_delta_logl(model, dataset, circuit_list=None,
 
 
 def two_delta_logl_terms(model, dataset, circuit_list=None,
-                         minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                         poissonPicture=True, check=False, opLabelAliases=None,
+                         min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                         poisson_picture=True, check=False, op_label_aliases=None,
                          evaltree_cache=None, comm=None, dof_calc_method=None,
                          smartc=None, wildcard=None):
     """
@@ -1384,11 +1384,11 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """
-    twoDeltaLogL_terms = 2 * (logl_max_terms(model, dataset, circuit_list, poissonPicture,
-                                             opLabelAliases, evaltree_cache, smartc)
+    twoDeltaLogL_terms = 2 * (logl_max_terms(model, dataset, circuit_list, poisson_picture,
+                                             op_label_aliases, evaltree_cache, smartc)
                               - logl_terms(model, dataset, circuit_list,
-                                           minProbClip, probClipInterval, radius,
-                                           poissonPicture, check, opLabelAliases,
+                                           min_prob_clip, prob_clip_interval, radius,
+                                           poisson_picture, check, op_label_aliases,
                                            evaltree_cache, comm, smartc, wildcard))
 
     if dof_calc_method is None: return twoDeltaLogL_terms
@@ -1397,7 +1397,7 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
     else: ds_strs = None
 
     Ns = dataset.get_degrees_of_freedom(ds_strs)
@@ -1448,20 +1448,20 @@ def forbidden_prob(model, dataset):
     return forbidden_prob
 
 
-def prep_penalty(rhoVec, basis):
+def prep_penalty(rho_vec, basis):
     """
-    Penalty assigned to a state preparation (rho) vector rhoVec.  State
+    Penalty assigned to a state preparation (rho) vector rho_vec.  State
       preparation density matrices must be positive semidefinite
       and trace == 1.  A positive return value indicates an
       these criteria are not met and the rho-vector is invalid.
 
     Parameters
     ----------
-    rhoVec : numpy array
+    rho_vec : numpy array
         rho vector array of shape (N,1) for some N.
 
     basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret rhoVec
+        The abbreviation for the basis used to interpret rho_vec
         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
          "qt" = qutrit, or standard).
 
@@ -1469,31 +1469,31 @@ def prep_penalty(rhoVec, basis):
     -------
     float
     """
-    # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec), basis)
+    # rho_vec must be positive semidefinite and trace = 1
+    rhoMx = _bt.vec_to_stdmx(_np.asarray(rho_vec), basis)
     evals = _np.linalg.eigvals(rhoMx)  # could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum([-ev.real for ev in evals if ev.real < 0])
-    tracePenalty = abs(rhoVec[0, 0] - (1.0 / _np.sqrt(rhoMx.shape[0])))
+    tracePenalty = abs(rho_vec[0, 0] - (1.0 / _np.sqrt(rhoMx.shape[0])))
     # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
     #print "Trace Penalty = ",tracePenalty  #DEBUG
     return sumOfNeg + tracePenalty
 
 
-def effect_penalty(EVec, basis):
+def effect_penalty(e_vec, basis):
     """
-    Penalty assigned to a POVM effect vector EVec. Effects
+    Penalty assigned to a POVM effect vector e_vec. Effects
       must have eigenvalues between 0 and 1.  A positive return
       value indicates this criterion is not met and the E-vector
       is invalid.
 
     Parameters
     ----------
-    EVec : numpy array
+    e_vec : numpy array
          effect vector array of shape (N,1) for some N.
 
     basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret EVec
+        The abbreviation for the basis used to interpret e_vec
         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
          "qt" = qutrit, or standard).
 
@@ -1501,8 +1501,8 @@ def effect_penalty(EVec, basis):
     -------
     float
     """
-    # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.vec_to_stdmx(_np.asarray(EVec), basis)
+    # e_vec must have eigenvalues between 0 and 1
+    EMx = _bt.vec_to_stdmx(_np.asarray(e_vec), basis)
     evals = _np.linalg.eigvals(EMx)  # could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
@@ -1545,14 +1545,14 @@ def cptp_penalty(model, include_spam_penalty=True):
 #@smart_cached
 
 
-def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
+def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
      to a single operation sequence and spam label.
 
     Parameters
     ----------
-    N : float or numpy array
+    n : float or numpy array
         Number of samples.
 
     p : float or numpy array
@@ -1561,11 +1561,11 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         Minimum probability clip point to avoid evaluating
         log(number <= zero)
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
 
@@ -1576,7 +1576,7 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     #TODO: change this function to handle nan's in the inputs without warnings, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
-    cp = _np.clip(p, minProbClip, 1e10)  # effectively no upper bound
+    cp = _np.clip(p, min_prob_clip, 1e10)  # effectively no upper bound
 
     nan_indices = _np.isnan(f)  # get indices of invalid entries
     if not _np.isscalar(f): f[nan_indices] = 0.0
@@ -1589,19 +1589,19 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
         zf[nan_indices] = _np.nan  # set nan indices back to nan
         nzf[nan_indices] = _np.nan  # set nan indices back to nan
 
-    if poissonPicture:
-        return 2 * (N * zf * _np.log(nzf / cp) - N * (f - cp))
+    if poisson_picture:
+        return 2 * (n * zf * _np.log(nzf / cp) - n * (f - cp))
     else:
-        return 2 * N * zf * _np.log(nzf / cp)
+        return 2 * n * zf * _np.log(nzf / cp)
 
 
-def _patched_logl_fn(N, p, min_p):
-    """ N * log(p) with min-prob-clip patching """
-    if N == 0: return 0.0
-    S = N / min_p               # slope term that is derivative of logl at min_p
-    S2 = -0.5 * N / (min_p**2)  # 2nd derivative of logl term at min_p
+def _patched_logl_fn(n, p, min_p):
+    """ n * log(p) with min-prob-clip patching """
+    if n == 0: return 0.0
+    S = n / min_p               # slope term that is derivative of logl at min_p
+    S2 = -0.5 * n / (min_p**2)  # 2nd derivative of logl term at min_p
     pos_p = max(min_p, p)
-    v = N * _np.log(pos_p)
+    v = n * _np.log(pos_p)
     if p < min_p:
         v += S * (p - min_p) + S2 * (p - min_p)**2  # quadratic extrapolation of logl at min_p for p < min_p
     return v

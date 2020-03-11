@@ -882,7 +882,7 @@ def compile_symplectic_using_GGE_core(s, check=True):
     circuit.reverse()
     # To do the depth compression, we use the 1-qubit gate relations for the standard set of gates used
     # here.
-    oneQgate_relations = _symp.oneQclifford_symplectic_group_relations()
+    oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
     circuit.compress_depth(oneQgate_relations=oneQgate_relations, verbosity=0)
     # We check that the correct Clifford -- up to Pauli operators -- has been implemented.
     if check:
@@ -1888,7 +1888,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
     if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
 
     #Import the single-qubit Cliffords up-to-Pauli algebra
-    oneQgate_relations = _symp.oneQclifford_symplectic_group_relations()
+    oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
     # The best 2Q gate count so far found.
     mincost = _np.inf
     failcount, i = 0, 0
@@ -2054,7 +2054,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
 
     #Import the single-qubit Cliffords up-to-Pauli algebra
-    oneQgate_relations = _symp.oneQclifford_symplectic_group_relations()
+    oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
     # The best 2Q gate count so far found.
     mincost = _np.inf
     failcount, i = 0, 0

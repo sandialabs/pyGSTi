@@ -524,13 +524,13 @@ class Estimate(object):
 
         if obj == "chi2":
             fitQty = _tools.chi2(mdl, ds, gss.allstrs,
-                                 minProbClipForWeighting=mpc,
-                                 opLabelAliases=aliases,
+                                 min_prob_clip_for_weighting=mpc,
+                                 op_label_aliases=aliases,
                                  evaltree_cache=evaltree_cache, comm=comm)
         elif obj in ("logl", "lgst"):
-            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, opLabelAliases=aliases,
+            logL_upperbound = _tools.logl_max(mdl, ds, gss.allstrs, op_label_aliases=aliases,
                                               evaltree_cache=evaltree_cache)
-            logl = _tools.logl(mdl, ds, gss.allstrs, opLabelAliases=aliases,
+            logl = _tools.logl(mdl, ds, gss.allstrs, op_label_aliases=aliases,
                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 

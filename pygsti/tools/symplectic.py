@@ -1073,7 +1073,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     return s, p
 
 
-def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None):
+def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None):
     """
     Returns the symplectic representation of the n-qubit Clifford implemented by a
     single quantum circuit layer (gates in the layer must act on disjoint sets of qubits;
@@ -1086,9 +1086,9 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
         The Clifford gate(s) to calculate the global action of.
 
     n : int, optional
-        The total number of qubits. Must be specified if `Qlabels` is None.
+        The total number of qubits. Must be specified if `q_labels` is None.
 
-    Qlabels : list, optional
+    q_labels : list, optional
         A list of all the qubit labels. If the layer is over qubits that are not
         labelled by integers 0 to n-1 then it is necessary to specify this list.
         Note that this should contain *all* the qubit labels for the circuit that
@@ -1118,14 +1118,14 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     sreps = get_internal_gate_symplectic_representations()
     if srep_dict is not None: sreps.update(srep_dict)
 
-    if Qlabels is None:
-        assert(n is not None), "The number of qubits must be specified if `Qlabels` is None!"
-        Qlabels = list(range(n))
+    if q_labels is None:
+        assert(n is not None), "The number of qubits must be specified if `q_labels` is None!"
+        q_labels = list(range(n))
     elif n is None:
-        assert(Qlabels is not None), "Cannot have both `n` and `Qlabels` as None!"
-        n = len(Qlabels)
+        assert(q_labels is not None), "Cannot have both `n` and `q_labels` as None!"
+        n = len(q_labels)
     else:
-        assert(len(Qlabels) == n), "`n` and `Qlabels` are inconsistent!"
+        assert(len(q_labels) == n), "`n` and `q_labels` are inconsistent!"
 
     s = _np.identity(2 * n, int)
     p = _np.zeros(2 * n, int)
@@ -1136,11 +1136,11 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     for sub_lbl in layer.components:
         matrix, phase = sreps[sub_lbl.name]
         nforgate = sub_lbl.number_of_qubits
-        sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else Qlabels
+        sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):
-            qindex1 = Qlabels.index(qlabel1)
+            qindex1 = q_labels.index(qlabel1)
             for ind2, qlabel2 in enumerate(sub_lbl_qubits):
-                qindex2 = Qlabels.index(qlabel2)
+                qindex2 = q_labels.index(qlabel2)
                 # Put in the symp matrix elements
                 s[qindex1, qindex2] = matrix[ind1, ind2]
                 s[qindex1, qindex2 + n] = matrix[ind1, ind2 + nforgate]
@@ -1154,7 +1154,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     return s, p
 
 
-def oneQclifford_symplectic_group_relations():
+def one_q_clifford_symplectic_group_relations():
     """
     Returns a dictionary containing the group relationship between
     the 'I', 'H', 'P' 'HP', 'PH', and 'HPH' up-to-Paulis operators.
@@ -1229,7 +1229,7 @@ def unitary_is_a_clifford(unitary):
     else: return True
 
 
-def _unitary_to_symplectic_1Q(u, flagnonclifford=True):
+def _unitary_to_symplectic_1q(u, flagnonclifford=True):
     """
     Returns the symplectic representation of a single qubit Clifford unitary,
     input as a complex matrix in the standard computational basis.
@@ -1299,7 +1299,7 @@ def _unitary_to_symplectic_1Q(u, flagnonclifford=True):
     return s, p
 
 
-def _unitary_to_symplectic_2Q(u, flagnonclifford=True):
+def _unitary_to_symplectic_2q(u, flagnonclifford=True):
     """
     Returns the symplectic representation of a two-qubit Clifford unitary,
     input as a complex matrix in the standard computational basis.
@@ -1412,9 +1412,9 @@ def unitary_to_symplectic(u, flagnonclifford=True):
     assert(_np.shape(u) == (2, 2) or _np.shape(u) == (4, 4)), "Input must be a one or two qubit unitary!"
 
     if _np.shape(u) == (2, 2):
-        s, p = _unitary_to_symplectic_1Q(u, flagnonclifford)
+        s, p = _unitary_to_symplectic_1q(u, flagnonclifford)
     if _np.shape(u) == (4, 4):
-        s, p = _unitary_to_symplectic_2Q(u, flagnonclifford)
+        s, p = _unitary_to_symplectic_2q(u, flagnonclifford)
 
     return s, p
 

@@ -23,19 +23,19 @@ class Chi2LogLTester(BaseCase):
         with mock.patch('pygsti.objects.matrixforwardsim.MatrixForwardSimulator._compute_hproduct_cache') as mock_hproduct_cache:
             mock_hproduct_cache.return_value = np.zeros((868, 60, 60, 4, 4))
 
-            chi2, grad = chi2fns.chi2(std.target_model(), self.dataset, returnGradient=True)
-            chi2fns.chi2(std.target_model(), self.dataset, returnHessian=True)
+            chi2, grad = chi2fns.chi2(std.target_model(), self.dataset, return_gradient=True)
+            chi2fns.chi2(std.target_model(), self.dataset, return_hessian=True)
 
-            chi2fns.chi2fn_2outcome(N=100, p=0.5, f=0.6)
-            chi2fns.chi2fn_2outcome_wfreqs(N=100, p=0.5, f=0.6)
-            chi2fns.chi2fn(N=100, p=0.5, f=0.6)
-            chi2fns.chi2fn_wfreqs(N=100, p=0.5, f=0.6)
-            chi2fns.chi2(std.target_model(), self.dataset, memLimit=100000)
+            chi2fns.chi2fn_2outcome(n=100, p=0.5, f=0.6)
+            chi2fns.chi2fn_2outcome_wfreqs(n=100, p=0.5, f=0.6)
+            chi2fns.chi2fn(n=100, p=0.5, f=0.6)
+            chi2fns.chi2fn_wfreqs(n=100, p=0.5, f=0.6)
+            chi2fns.chi2(std.target_model(), self.dataset, mem_limit=100000)
             # TODO assert correctness
 
             with self.assertRaises(ValueError):
-                chi2fns.chi2(std.target_model(), self.dataset, useFreqWeightedChiSq=True)  # no impl yet
+                chi2fns.chi2(std.target_model(), self.dataset, use_freq_weighted_chi_sq=True)  # no impl yet
 
     def test_chi2_raises_on_out_of_memory(self):
         with self.assertRaises(MemoryError):
-            chi2fns.chi2(std.target_model(), self.dataset, memLimit=0)  # No memory for you
+            chi2fns.chi2(std.target_model(), self.dataset, mem_limit=0)  # No memory for you

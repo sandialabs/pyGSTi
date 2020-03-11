@@ -329,7 +329,7 @@ def render_as_html(qtys, render_options, link_to, verbosity):
     #render quantities as HTML
     qtys_html = _collections.defaultdict(lambda: "OMITTED")
     for key, val in qtys.items():
-        with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
+        with _timed_block(key, format_str='Rendering {:35}', printer=printer, verbosity=2):
             qtys[key] = _render_as_html(val, render_options, link_to)
 
     return qtys_html

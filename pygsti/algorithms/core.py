@@ -2624,7 +2624,7 @@ def find_closest_unitary_opmx(operationMx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso(operationMx, choiMxBasis="std")
+    gate_JMx = _tools.jamiolkowski_iso(operationMx, choi_mx_basis="std")
     # d = _np.sqrt(operationMx.shape[0])
     # I = _np.identity(d)
 
@@ -2647,7 +2647,7 @@ def find_closest_unitary_opmx(operationMx):
 
     def _objective_func(basisVec):
         operationMx = getGateMx(basisVec)
-        JU = _tools.jamiolkowski_iso(operationMx, choiMxBasis="std")
+        JU = _tools.jamiolkowski_iso(operationMx, choi_mx_basis="std")
         # OLD: but computes JU in Pauli basis (I think) -> wrong matrix to fidelity check with gate_JMx
         #U = getU(basisVec)
         #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U

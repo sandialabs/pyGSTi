@@ -121,7 +121,7 @@ class TestWorkspace(ReportBaseCase):
         #Construct confidence regions
         def make_cr(mdl):
             hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss.allstrs,
-                                                minProbClip=1e-4, probClipInterval=(-1e6,1e6),
+                                                min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
             est = pygsti.objects.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(

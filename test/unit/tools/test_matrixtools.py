@@ -62,30 +62,30 @@ class MatrixToolsTester(BaseCase):
 
     def test_matrix_log(self):
         M = np.array([[-1, 0], [0, -1]], 'complex')  # degenerate negative evals
-        mt.real_matrix_log(M, actionIfImaginary="raise", TOL=1e-6)
+        mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
         # TODO assert correctness
 
         M = np.array([[-1, 1e-10], [1e-10, -1]], 'complex')  # degenerate negative evals, but will generate complex evecs
-        mt.real_matrix_log(M, actionIfImaginary="raise", TOL=1e-6)
+        mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
         # TODO assert correctness
 
         M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
-        mt.real_matrix_log(M, actionIfImaginary="ignore", TOL=1e-6)
+        mt.real_matrix_log(M, action_if_imaginary="ignore", tol=1e-6)
         # TODO assert correctness
 
     def test_matrix_log_warns_on_imaginary(self):
         M = np.array([[1, 0], [0, -1]], 'd')
-        self.assertWarns(Warning, mt.real_matrix_log, M, actionIfImaginary="warn", TOL=1e-6)
+        self.assertWarns(Warning, mt.real_matrix_log, M, action_if_imaginary="warn", tol=1e-6)
 
     def test_matrix_log_raises_on_imaginary(self):
         M = np.array([[1, 0], [0, -1]], 'd')
         with self.assertRaises(ValueError):
-            mt.real_matrix_log(M, actionIfImaginary="raise", TOL=1e-6)
+            mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
 
     def test_matrix_log_raises_on_invalid_action(self):
         M = np.array([[1, 0], [0, -1]], 'd')
         with self.assertRaises(AssertionError):
-            mt.real_matrix_log(M, actionIfImaginary="foobar", TOL=1e-6)
+            mt.real_matrix_log(M, action_if_imaginary="foobar", tol=1e-6)
 
     def test_matrix_log_raise_on_no_real_log(self):
         a = np.array([[1, 1], [1, 1]])

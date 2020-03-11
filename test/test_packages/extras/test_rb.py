@@ -59,7 +59,7 @@ class RBTestCase(BaseTestCase):
 
         from pygsti.modelpacks.legacy import std1Q_Cliffords
         target_model = std1Q_Cliffords.target_model()
-        clifford_group = rb.group.construct_1Q_Clifford_group()
+        clifford_group = rb.group.construct_1q_clifford_group()
 
         from pygsti.modelpacks.legacy import std1Q_XY
         target_model = std1Q_XY.target_model()

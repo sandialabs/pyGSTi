@@ -412,7 +412,7 @@ class CircuitMethodTester(BaseCase):
         c.compress_depth(verbosity=0)
         self.assertEqual(c.depth(), 7)
         # Get a dictionary that relates H, P gates etc.
-        oneQrelations = symplectic.oneQclifford_symplectic_group_relations()
+        oneQrelations = symplectic.one_q_clifford_symplectic_group_relations()
         c.compress_depth(oneQgate_relations=oneQrelations)
         self.assertEqual(c.depth(), 3)
 

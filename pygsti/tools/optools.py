@@ -26,34 +26,34 @@ from ..objects.label import Label as _Label
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 
-def _flat_mut_blks(i, j, blockDims):
+def _flat_mut_blks(i, j, block_dims):
     # like _mut(i,j,dim).flatten() but works with basis *blocks*
-    N = sum(blockDims)
+    N = sum(block_dims)
     mx = _np.zeros((N, N), 'd'); mx[i, j] = 1.0
-    ret = _np.zeros(sum([d**2 for d in blockDims]), 'd')
+    ret = _np.zeros(sum([d**2 for d in block_dims]), 'd')
     i = 0; off = 0
-    for d in blockDims:
+    for d in block_dims:
         ret[i:i + d**2] = mx[off:off + d, off:off + d].flatten()
         i += d**2; off += d
     return ret
 
 
-def _hack_sqrtm(A):
-    sqrt, _ = _spl.sqrtm(A, disp=False)  # Travis found this scipy function
+def _hack_sqrtm(a):
+    sqrt, _ = _spl.sqrtm(a, disp=False)  # Travis found this scipy function
     # to be incorrect in certain cases (we need a workaround)
     if _np.any(_np.isnan(sqrt)):  # this is sometimes a good fallback when sqrtm doesn't work.
-        ev, U = _np.linalg.eig(A)
+        ev, U = _np.linalg.eig(a)
         sqrt = _np.dot(U, _np.dot(_np.diag(_np.sqrt(ev)), _np.linalg.inv(U)))
 
     return sqrt
 
 
-def fidelity(A, B):
+def fidelity(a, b):
     """
     Returns the quantum state fidelity between density
-      matrices A and B given by :
+      matrices a and b given by :
 
-      F = Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
+      F = Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
@@ -61,10 +61,10 @@ def fidelity(A, B):
 
     Parameters
     ----------
-    A : numpy array
+    a : numpy array
         First density matrix.
 
-    B : numpy array
+    b : numpy array
         Second density matrix.
 
     Returns
@@ -72,47 +72,47 @@ def fidelity(A, B):
     float
         The resulting fidelity.
     """
-    evals, U = _np.linalg.eig(A)
+    evals, U = _np.linalg.eig(a)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
-        # special case when A is rank 1, A = vec * vec^T and sqrt(A) = A
+        # special case when a is rank 1, a = vec * vec^T and sqrt(a) = a
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(B, vec)).real  # vec^T * B * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(b, vec)).real  # vec^T * b * vec
         return float(F)
 
-    evals, U = _np.linalg.eig(B)
+    evals, U = _np.linalg.eig(b)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
-        # special case when B is rank 1 (recally fidelity is sym in args)
+        # special case when b is rank 1 (recally fidelity is sym in args)
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(A, vec)).real  # vec^T * A * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(a, vec)).real  # vec^T * a * vec
         return float(F)
 
-    #if _np.array_equal(A, B): return 1.0  # HACK - some cases when A and B are perfecty equal sqrtm(A) fails...
-    sqrtA = _hack_sqrtm(A)  # _spl.sqrtm(A)
+    #if _np.array_equal(a, b): return 1.0  # HACK - some cases when a and b are perfecty equal sqrtm(a) fails...
+    sqrtA = _hack_sqrtm(a)  # _spl.sqrtm(a)
     # test the scipy sqrtm function - sometimes fails when rank defficient
-    #assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) < 1e-8)
-    if _np.linalg.norm(_np.dot(sqrtA, sqrtA) - A) > 1e-8:
-        evals = _np.linalg.eigvals(A)
-        _warnings.warn(("sqrtm(A) failure when computing fidelity - beware result. "
-                        "Maybe due to rank defficiency - eigenvalues of A are: %s") % evals)
-    F = (_mt.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(B, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
+    #assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - a) < 1e-8)
+    if _np.linalg.norm(_np.dot(sqrtA, sqrtA) - a) > 1e-8:
+        evals = _np.linalg.eigvals(a)
+        _warnings.warn(("sqrtm(a) failure when computing fidelity - beware result. "
+                        "Maybe due to rank defficiency - eigenvalues of a are: %s") % evals)
+    F = (_mt.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(b, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
     return float(F)
 
 
-def frobeniusdist(A, B):
+def frobeniusdist(a, b):
     """
     Returns the frobenius distance between gate
-      or density matrices A and B given by :
+      or density matrices a and b given by :
 
       sqrt( sum( (A_ij-B_ij)^2 ) )
 
     Parameters
     ----------
-    A : numpy array
+    a : numpy array
         First matrix.
 
-    B : numpy array
+    b : numpy array
         Second matrix.
 
     Returns
@@ -120,22 +120,22 @@ def frobeniusdist(A, B):
     float
         The resulting frobenius distance.
     """
-    return _mt.frobeniusnorm(A - B)
+    return _mt.frobeniusnorm(a - b)
 
 
-def frobeniusdist2(A, B):
+def frobeniusdist2(a, b):
     """
     Returns the square of the frobenius distance between gate
-      or density matrices A and B given by :
+      or density matrices a and b given by :
 
       sum( (A_ij-B_ij)^2 )
 
     Parameters
     ----------
-    A : numpy array
+    a : numpy array
         First matrix.
 
-    B : numpy array
+    b : numpy array
         Second matrix.
 
     Returns
@@ -143,19 +143,19 @@ def frobeniusdist2(A, B):
     float
         The resulting frobenius distance.
     """
-    return _mt.frobeniusnorm2(A - B)
+    return _mt.frobeniusnorm2(a - b)
 
 
-def residuals(A, B):
+def residuals(a, b):
     """
     Calculate residuals between the elements of two matrices
 
     Parameters
     ----------
-    A : numpy array
+    a : numpy array
         First matrix.
 
-    B : numpy array
+    b : numpy array
         Second matrix.
 
     Returns
@@ -163,56 +163,56 @@ def residuals(A, B):
     np.array
         residuals
     """
-    return (A - B).flatten()
+    return (a - b).flatten()
 
 
-def tracenorm(A):
+def tracenorm(a):
     """
-    Compute the trace norm of matrix A given by:
+    Compute the trace norm of matrix a given by:
 
-      Tr( sqrt{ A^dagger * A } )
+      Tr( sqrt{ a^dagger * a } )
 
     Parameters
     ----------
-    A : numpy array
+    a : numpy array
         The matrix to compute the trace norm of.
     """
-    if _np.linalg.norm(A - _np.conjugate(A.T)) < 1e-8:
+    if _np.linalg.norm(a - _np.conjugate(a.T)) < 1e-8:
         #Hermitian, so just sum eigenvalue magnitudes
-        return _np.sum(_np.abs(_np.linalg.eigvals(A)))
+        return _np.sum(_np.abs(_np.linalg.eigvals(a)))
     else:
         #Sum of singular values (positive by construction)
-        return _np.sum(_np.linalg.svd(A, compute_uv=False))
+        return _np.sum(_np.linalg.svd(a, compute_uv=False))
 
 
-def tracedist(A, B):
+def tracedist(a, b):
     """
-    Compute the trace distance between matrices A and B,
+    Compute the trace distance between matrices a and b,
     given by:
 
-      D = 0.5 * Tr( sqrt{ (A-B)^dagger * (A-B) } )
+      D = 0.5 * Tr( sqrt{ (a-b)^dagger * (a-b) } )
 
     Parameters
     ----------
-    A, B : numpy array
+    a, b : numpy array
         The matrices to compute the distance between.
     """
-    return 0.5 * tracenorm(A - B)
+    return 0.5 * tracenorm(a - b)
 
 
-def diamonddist(A, B, mxBasis='pp', return_x=False):
+def diamonddist(a, b, mx_basis='pp', return_x=False):
     """
     Returns the approximate diamond norm describing the difference between gate
-    matrices A and B given by :
+    matrices a and b given by :
 
-      D = ||A - B ||_diamond = sup_rho || AxI(rho) - BxI(rho) ||_1
+      D = ||a - b ||_diamond = sup_rho || AxI(rho) - BxI(rho) ||_1
 
     Parameters
     ----------
-    A, B : numpy array
+    a, b : numpy array
         The *gate* matrices to use when computing the diamond norm.
 
-    mxBasis : Basis object
+    mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -227,9 +227,9 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
        Diamond norm
     W : numpy array
        Only returned if `return_x = True`.  Encodes the state rho, such that
-       `dm = trace( |(J(A)-J(B)).T * W| )`.
+       `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
-    mxBasis = _bt.build_basis_for_matrix(A, mxBasis)
+    mx_basis = _bt.build_basis_for_matrix(a, mx_basis)
 
     #currently cvxpy is only needed for this function, so don't import until here
 
@@ -253,7 +253,7 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
     #Jamiolkowski representation of the process
     #  J(phi) = sum_ij Phi(Eij) otimes Eij
 
-    #< A, B > = Tr(A.dag B)
+    #< a, b > = Tr(a.dag b)
 
     #def vec(matrix_in):
     #    # Stack the columns of a matrix to return a vector
@@ -266,11 +266,11 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
 
     #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by
     # density mx dimension (`smallDim`) below
-    JAstd = _jam.fast_jamiolkowski_iso_std(A, mxBasis)
-    JBstd = _jam.fast_jamiolkowski_iso_std(B, mxBasis)
+    JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
+    JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
 
     #Do this *after* the fast_jamiolkowski_iso calls above because these will convert
-    # A & B to a "single-block" basis representation when mxBasis has multiple blocks.
+    # a & b to a "single-block" basis representation when mx_basis has multiple blocks.
     dim = JAstd.shape[0]
     smallDim = int(_np.sqrt(dim))
     JAstd *= smallDim  # see above comment
@@ -297,10 +297,10 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
     #            #print "contrib =",_np.kron(output, unvec(Ei_vec))
     #            jamiolkowski_matrix += tmp
     #        return jamiolkowski_matrix
-    #JAstd_kev = jamiolkowski(A)
-    #JBstd_kev = jamiolkowski(B)
-    #print "diff A = ",_np.linalg.norm(JAstd_kev/2.0-JAstd)
-    #print "diff B = ",_np.linalg.norm(JBstd_kev/2.0-JBstd)
+    #JAstd_kev = jamiolkowski(a)
+    #JBstd_kev = jamiolkowski(b)
+    #print "diff a = ",_np.linalg.norm(JAstd_kev/2.0-JAstd)
+    #print "diff b = ",_np.linalg.norm(JBstd_kev/2.0-JBstd)
 
     #Kevin's function: def diamondnorm( jamiolkowski_matrix ):
     jamiolkowski_matrix = JBstd - JAstd
@@ -370,64 +370,64 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
         return prob.value
 
 
-def jtracedist(A, B, mxBasis='pp'):  # Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
+def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
     """
-    Compute the Jamiolkowski trace distance between operation matrices A and B,
+    Compute the Jamiolkowski trace distance between operation matrices a and b,
     given by:
 
-      D = 0.5 * Tr( sqrt{ (J(A)-J(B))^2 } )
+      D = 0.5 * Tr( sqrt{ (J(a)-J(b))^2 } )
 
     where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
 
     Parameters
     ----------
-    A, B : numpy array
+    a, b : numpy array
         The matrices to compute the distance between.
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
-    JA = _jam.fast_jamiolkowski_iso_std(A, mxBasis)
-    JB = _jam.fast_jamiolkowski_iso_std(B, mxBasis)
+    JA = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
+    JB = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
     return tracedist(JA, JB)
 
 
-def entanglement_fidelity(A, B, mxBasis='pp'):
+def entanglement_fidelity(a, b, mx_basis='pp'):
     """
     Returns the "entanglement" process fidelity between gate
-    matrices A and B given by :
+    matrices a and b given by :
 
-      F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
+      F = Tr( sqrt{ sqrt(J(a)) * J(b) * sqrt(J(a)) } )^2
 
     where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
 
     Parameters
     ----------
-    A, B : numpy array
+    a, b : numpy array
         The matrices to compute the fidelity between.
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis of the matrices.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
     """
-    d2 = A.shape[0]
+    d2 = a.shape[0]
     def isTP(x): return _np.isclose(x[0, 0], 1.0) and all(
         [_np.isclose(x[0, i], 0) for i in range(d2)])
 
     def isUnitary(x): return _np.allclose(_np.identity(d2, 'd'), _np.dot(x, x.conjugate().T))
 
-    if isTP(A) and isTP(B) and isUnitary(B):  # then assume TP-like gates & use simpler formula
-        TrLambda = _np.trace(_np.dot(A, B.conjugate().T))  # same as using _np.linalg.inv(B)
-        d2 = A.shape[0]
+    if isTP(a) and isTP(b) and isUnitary(b):  # then assume TP-like gates & use simpler formula
+        TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
+        d2 = a.shape[0]
         return TrLambda / d2
 
-    JA = _jam.jamiolkowski_iso(A, mxBasis, mxBasis)
-    JB = _jam.jamiolkowski_iso(B, mxBasis, mxBasis)
+    JA = _jam.jamiolkowski_iso(a, mx_basis, mx_basis)
+    JB = _jam.jamiolkowski_iso(b, mx_basis, mx_basis)
     return fidelity(JA, JB)
 
 
@@ -461,7 +461,7 @@ def average_gate_fidelity(A, B, mxBasis='pp'):
         The AGI of A to B.
     """
     d = int(round(_np.sqrt(A.shape[0])))
-    PF = entanglement_fidelity(A, B, mxBasis=mxBasis)
+    PF = entanglement_fidelity(A, B, mx_basis=mxBasis)
     AGF = (d * PF + 1) / (1 + d)
     return float(AGF)
 
@@ -658,7 +658,7 @@ def fidelity_upper_bound(operationMx):
     float
         The resulting upper bound on fidelity(operationMx, anyUnitaryGateMx)
     """
-    choi = _jam.jamiolkowski_iso(operationMx, choiMxBasis="std")
+    choi = _jam.jamiolkowski_iso(operationMx, choi_mx_basis="std")
     choi_evals, choi_evecs = _np.linalg.eig(choi)
     maxF_direct = max([_np.sqrt(max(ev.real, 0.0)) for ev in choi_evals]) ** 2
 
@@ -679,7 +679,7 @@ def fidelity_upper_bound(operationMx):
         #Uncomment for debugging
         #if abs(maxF - maxF_direct) >= 1e-6:
         #    print "DEBUG: operationMx:\n",operationMx
-        #    print "DEBUG: choiMx:\n",choi
+        #    print "DEBUG: choi_mx:\n",choi
         #    print "DEBUG choi_evals = ",choi_evals, " iMax = ",iMax
         #    #print "DEBUG: J = \n", closestUnitaryJmx
         #    print "DEBUG: eigvals(J) = ", _np.linalg.eigvals(closestJmx)
@@ -690,7 +690,7 @@ def fidelity_upper_bound(operationMx):
     else:
         maxF = maxF_direct  # case when maxF is nan, due to scipy sqrtm function being buggy - just use direct F
 
-    closestOpMx = _jam.jamiolkowski_iso_inv(closestJmx, choiMxBasis="std")
+    closestOpMx = _jam.jamiolkowski_iso_inv(closestJmx, choi_mx_basis="std")
     return maxF, closestOpMx
 
     #closestU_evals, closestU_evecs = _np.linalg.eig(closestUnitaryGateMx)
@@ -1228,7 +1228,7 @@ def error_generator(gate, target_op, mxBasis, typ="logG-logT"):
         if _np.linalg.norm(errgen.imag) > TOL:
             _warnings.warn("Falling back to approximate log for logTiG error generator")
             errgen = _mt.approximate_matrix_log(_np.dot(target_op_inv, gate),
-                                                _np.zeros(gate.shape, 'd'), TOL=TOL)
+                                                _np.zeros(gate.shape, 'd'), tol=TOL)
 
     elif typ == "logGTi":
         target_op_inv = _spl.inv(target_op)
@@ -1242,7 +1242,7 @@ def error_generator(gate, target_op, mxBasis, typ="logG-logT"):
         if _np.linalg.norm(errgen.imag) > TOL:
             _warnings.warn("Falling back to approximate log for logGTi error generator")
             errgen = _mt.approximate_matrix_log(_np.dot(gate, target_op_inv),
-                                                _np.zeros(gate.shape, 'd'), TOL=TOL)
+                                                _np.zeros(gate.shape, 'd'), tol=TOL)
 
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
@@ -1603,13 +1603,13 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
     """
     if dmbasis_ham is not None:
         ham_mxs = dmbasis_ham  # list of basis matrices (assumed to be in std basis)
-        ham_nMxs = len(ham_mxs)  # usually == d2, but not necessary (e.g. w/maxWeight)
+        ham_nMxs = len(ham_mxs)  # usually == d2, but not necessary (e.g. w/max_weight)
     else:
         ham_nMxs = 0
 
     if dmbasis_other is not None:
         other_mxs = dmbasis_other  # list of basis matrices (assumed to be in std basis)
-        other_nMxs = len(other_mxs)  # usually == d2, but not necessary (e.g. w/maxWeight)
+        other_nMxs = len(other_mxs)  # usually == d2, but not necessary (e.g. w/max_weight)
     else:
         other_nMxs = 0
 
@@ -2845,7 +2845,7 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, returnAll=False):
 
     if True:  # NEW approach that gives sorted eigenvectors
         def get_eigenspace_pairs(mx, TOL=1e-6):
-            evals, U = _np.linalg.eig(mx)  # so mx = U * evals * Uinv
+            evals, U = _np.linalg.eig(mx)  # so mx = U * evals * u_inv
             espace_pairs = {}; conj_pair_indices = []
 
             #Pass 1: real evals and positive-imaginary-element-of-conjugate pair evals

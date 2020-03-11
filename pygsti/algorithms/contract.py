@@ -191,7 +191,7 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
         if(TPalso):
             for k in range(new_op.shape[1]): new_op[0, k] = 1.0 if k == 0 else 0.0
 
-        Jmx = _tools.jamiolkowski_iso(new_op, opMxBasis=mdl.basis, choiMxBasis="gm")
+        Jmx = _tools.jamiolkowski_iso(new_op, op_mx_basis=mdl.basis, choi_mx_basis="gm")
         evals, evecs = _np.linalg.eig(Jmx)
 
         if TPalso:
@@ -264,7 +264,7 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
             # Check that trace-trunc above didn't mess up positivity
             assert(min(evals) >= -1e-10 and abs(sum(evals) - 1.0) < 1e-8)
 
-            new_op = _tools.jamiolkowski_iso_inv(new_Jmx, opMxBasis=mdl.basis, choiMxBasis="gm")
+            new_op = _tools.jamiolkowski_iso_inv(new_Jmx, op_mx_basis=mdl.basis, choi_mx_basis="gm")
 
             # # Old way of enforcing TP -- new way should be better since it's not iterative, but keep this around just
             # # in case.
