@@ -17,6 +17,8 @@ from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import loaders as _load
 from . import writers as _write
 
+QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
+
 
 #Class-name utils...
 def full_class_name(x):
@@ -74,7 +76,8 @@ def _get_auxfile_ext(typ):
 
 
 def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
-                        ignore_meta=('type',), separate_auxfiletypes=False):
+                        ignore_meta=('type',), separate_auxfiletypes=False,
+                        quick_load=False):
     """
     Load the contents of a `root_dir` into a dict.
 
@@ -104,6 +107,11 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
         serialized) as a separate return value, instead of placing it
         within the returned dict.
 
+    quick_load : bool, optional
+        Setting this to True skips the loading of members that may take
+        a long time to load, namely those in separate files whose files are
+        large.  When the loading of an attribute is skipped, it is set to `None`.
+
     Returns
     -------
     loaded_qtys : dict
@@ -117,6 +125,11 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     """
     root_dir = _pathlib.Path(root_dir)
     ret = {}
+    max_size = quick_load if isinstance(quick_load, int) else QUICK_LOAD_MAX_SIZE
+
+    def should_skip_loading(path):
+        return quick_load and (path.stat().st_size >= max_size)
+
     with open(root_dir / 'meta.json', 'r') as f:
         meta = _json.load(f)
 
@@ -138,29 +151,33 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
             while True:
                 pth = root_dir / (key + str(i) + ext)
                 if not pth.exists(): break
-                val.append(_load.load_circuit_list(pth)); i += 1
+                if should_skip_loading(pth):
+                    val.append(None)
+                else:
+                    val.append(_load.load_circuit_list(pth))
+                i += 1
 
         elif typ == 'protocolobj':
             protocol_dir = root_dir / (key + ext)
-            val = cls_from_meta_json(protocol_dir).from_dir(protocol_dir)
+            val = cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
 
         elif typ == 'list-of-protocolobjs':
             i = 0; val = []
             while True:
                 pth = root_dir / (key + str(i) + ext)
                 if not pth.exists(): break
-                val.append(cls_from_meta_json(pth).from_dir(pth)); i += 1
+                val.append(cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
 
         elif typ == 'dict-of-protocolobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-            val = {k: cls_from_meta_json(pth).from_dir(pth) for k, pth in zip(keys, paths)}
+            val = {k: cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
 
         else:  # cases with 'standard' expected path
 
             pth = root_dir / (key + ext)
             if pth.is_dir():
                 raise ValueError("Expected path: %s is a dir!" % pth)
-            elif not pth.exists():
+            elif not pth.exists() or should_skip_loading(pth):
                 val = None  # missing files => None values
             elif typ == 'text-circuit-list':
                 val = _load.load_circuit_list(pth)
