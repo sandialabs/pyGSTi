@@ -46,8 +46,8 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
         for dskey in dskeys:
             for passnum in range(numpasses):
                 dsfn = directory + '/datasets/{}/ds{}.txt'.format(dskey, passnum)
-                ds = _io.load_dataset(dsfn, collisionAction='keepseparate', recordZeroCnts=False,
-                                      ignoreZeroCountLines=False, verbosity=verbosity)
+                ds = _io.load_dataset(dsfn, collision_action='keepseparate', record_zero_counts=False,
+                                      ignore_zero_count_lines=False, verbosity=verbosity)
                 multidsdict[dskey].add_dataset(passnum, ds)
     else:
         multidsdict = None
@@ -186,7 +186,7 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
         _os.makedirs(fdir)
         for dsind in benchmarker.multids[dskey].keys():
             fname = fdir + '/ds{}.txt'.format(dsind)
-            _io.write_dataset(fname, benchmarker.multids[dskey][dsind], fixedColumnMode=False)
+            _io.write_dataset(fname, benchmarker.multids[dskey][dsind], fixed_column_mode=False)
 
 
 def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtypes=[], verbosity=1):
@@ -231,9 +231,9 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
             if dsfn[-4:] == '.txt':
                 print(dsfn)
                 mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn,
-                                                           collisionAction='keepseparate',
-                                                           recordZeroCnts=False,
-                                                           ignoreZeroCountLines=False,
+                                                           collision_action='keepseparate',
+                                                           record_zero_counts=False,
+                                                           ignore_zero_count_lines=False,
                                                            verbosity=verbosity))
 
             elif dsfn[-4:] == '.pkl':

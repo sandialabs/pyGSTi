@@ -16,9 +16,9 @@ from .. import objects as _objs
 from . import metadir as _metadir
 
 
-def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 recordZeroCnts=True, ignoreZeroCountLines=True,
-                 withTimes="auto", verbosity=1):
+def load_dataset(filename, cache=False, collision_action="aggregate",
+                 record_zero_counts=True, ignore_zero_count_lines=True,
+                 with_times="auto", verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -35,25 +35,25 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         exists but it is older than filename, a cache file will be
         written after loading from filename.
 
-    collisionAction : {"aggregate", "keepseparate"}
+    collision_action : {"aggregate", "keepseparate"}
         Specifies how duplicate operation sequences should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
 
-    recordZeroCnts : bool, optional
+    record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
         DataSet.  If False, then zero counts are ignored, except for potentially
         registering new outcome labels.  When reading from a cache file
         (using `cache==True`) this argument is ignored: the presence of zero-
-        counts is dictated by the value of `recordZeroCnts` when the cache file
+        counts is dictated by the value of `record_zero_counts` when the cache file
         was created.
 
-    ignoreZeroCountLines : bool, optional
+    ignore_zero_count_lines : bool, optional
         Whether circuits for which there are no counts should be ignored
         (i.e. omitted from the DataSet) or not.
 
-    withTimes : bool or "auto", optional
+    with_times : bool or "auto", optional
         Whether to the time-stamped data format should be read in.  If
         "auto", then the time-stamped format is allowed but not required on a
         per-circuit basis (so the dataset can contain both formats).  Typically
@@ -95,10 +95,10 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction,
-                                       recordZeroCnts=recordZeroCnts,
-                                       ignoreZeroCountLines=ignoreZeroCountLines,
-                                       withTimes=withTimes)
+                                       collision_action=collision_action,
+                                       record_zero_counts=record_zero_counts,
+                                       ignore_zero_count_lines=ignore_zero_count_lines,
+                                       with_times=with_times)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -107,15 +107,15 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction,
-                                       recordZeroCnts=recordZeroCnts,
-                                       ignoreZeroCountLines=ignoreZeroCountLines,
-                                       withTimes=withTimes)
+                                       collision_action=collision_action,
+                                       record_zero_counts=record_zero_counts,
+                                       ignore_zero_count_lines=ignore_zero_count_lines,
+                                       with_times=with_times)
         return ds
 
 
-def load_multidataset(filename, cache=False, collisionAction="aggregate",
-                      recordZeroCnts=True, verbosity=1):
+def load_multidataset(filename, cache=False, collision_action="aggregate",
+                      record_zero_counts=True, verbosity=1):
     """
     Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -132,18 +132,18 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         exists but it is older than filename, a cache file will be
         written after loading from filename.
 
-    collisionAction : {"aggregate", "keepseparate"}
+    collision_action : {"aggregate", "keepseparate"}
         Specifies how duplicate operation sequences should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
 
-    recordZeroCnts : bool, optional
+    record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
         MultiDataSet.  If False, then zero counts are ignored, except for
         potentially registering new outcome labels.  When reading from a cache
         file (using `cache==True`) this argument is ignored: the presence of
-        zero-counts is dictated by the value of `recordZeroCnts` when the cache
+        zero-counts is dictated by the value of `record_zero_counts` when the cache
         file was created.
 
     verbosity : int, optional
@@ -183,8 +183,8 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename, bToStdout,
-                                             collisionAction=collisionAction,
-                                             recordZeroCnts=recordZeroCnts)
+                                             collision_action=collision_action,
+                                             record_zero_counts=record_zero_counts)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -194,12 +194,12 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename, bToStdout,
-                                             collisionAction=collisionAction,
-                                             recordZeroCnts=recordZeroCnts)
+                                             collision_action=collision_action,
+                                             record_zero_counts=record_zero_counts)
     return mds
 
 
-def load_tddataset(filename, cache=False, recordZeroCnts=True):
+def load_tddataset(filename, cache=False, record_zero_counts=True):
     """
     Load time-dependent (time-stamped) data as a DataSet.
 
@@ -212,7 +212,7 @@ def load_tddataset(filename, cache=False, recordZeroCnts=True):
         Reserved to perform caching similar to `load_dataset`.  Currently
         this argument doesn't do anything.
 
-    recordZeroCnts : bool, optional
+    record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
         DataSet.  If False, then zero counts are ignored, except for
         potentially registering new outcome labels.
@@ -222,7 +222,7 @@ def load_tddataset(filename, cache=False, recordZeroCnts=True):
     DataSet
     """
     parser = _stdinput.StdInputParser()
-    tdds = parser.parse_tddatafile(filename, recordZeroCnts=recordZeroCnts)
+    tdds = parser.parse_tddatafile(filename, record_zero_counts=record_zero_counts)
     return tdds
 
 
@@ -262,7 +262,7 @@ def load_circuit_dict(filename):
     return std.parse_dictfile(filename)
 
 
-def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_lines=None):
+def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_lines=None):
     """
     Load a operation sequence list from a file, formatted
     using the standard text-format.
@@ -272,7 +272,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
     filename : string
         The name of the file
 
-    readRawStrings : boolean
+    read_raw_strings : boolean
         If True, operation sequences are not converted
         to tuples of operation labels.
 
@@ -292,7 +292,7 @@ def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_li
     -------
     list of Circuit objects
     """
-    if readRawStrings:
+    if read_raw_strings:
         rawList = []
         with open(str(filename), 'r') as circuitlist:
             for line in circuitlist:

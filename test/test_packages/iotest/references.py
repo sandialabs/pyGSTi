@@ -56,15 +56,15 @@ class IOGen:
     @_write('sparse_dataset1a.txt')
     def sparse_dataset_1a(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=None,
-            fixedColumnMode=True
+            path, self.sparse_ds, outcome_label_order=None,
+            fixed_column_mode=True
         )
 
     @_write('sparse_dataset2a.txt')
     def sparse_dataset_2a(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=None,
-            fixedColumnMode=False
+            path, self.sparse_ds, outcome_label_order=None,
+            fixed_column_mode=False
         )
 
     @_memo
@@ -74,15 +74,15 @@ class IOGen:
     @_write('sparse_dataset1b.txt')
     def sparse_dataset_1b(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=self.ordering,
-            fixedColumnMode=True
+            path, self.sparse_ds, outcome_label_order=self.ordering,
+            fixed_column_mode=True
         )
 
     @_write('sparse_dataset2b.txt')
     def sparse_dataset_2b(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=self.ordering,
-            fixedColumnMode=False
+            path, self.sparse_ds, outcome_label_order=self.ordering,
+            fixed_column_mode=False
         )
 
     @_write('TestMultiDataset.txt')
