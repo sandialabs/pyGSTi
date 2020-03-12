@@ -1034,7 +1034,7 @@ class OpModel(Model):
                     #if action == "add":
                     od = raw_elabels_dict[s]  # ordered dict
                     for elabel in elabels:
-                        outcome_tup = op_outcomes + (_gt.eLabelToOutcome(elabel),)
+                        outcome_tup = op_outcomes + (_gt.e_label_to_outcome(elabel),)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
@@ -1051,7 +1051,7 @@ class OpModel(Model):
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + (_gt.eLabelToOutcome(x),) for x in elabels]
+                    outcome_tuples = [op_outcomes + (_gt.e_label_to_outcome(x),) for x in elabels]
 
                     if observed_outcomes is not None:
                         # only add els of `elabels` corresponding to observed data (w/indexes starting at 0)

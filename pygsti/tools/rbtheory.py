@@ -271,7 +271,7 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenv
     return mdl_in_RB_gauge
 
 
-def L_matrix(mdl, target_model, weights=None):
+def L_matrix(mdl, target_model, weights=None):  # noqa N802
     """
     Constructs a generalization of the 'L-matrix' linear operator on superoperators,
     from Proctor et al Phys. Rev. Lett. 119, 130502 (2017), represented as a
@@ -323,7 +323,7 @@ def L_matrix(mdl, target_model, weights=None):
     return L_matrix
 
 
-def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weights=None):
+def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weights=None):  # noqa N802
     """
     Returns the second largest eigenvalue of a generalization of the 'R-matrix' [see the
     `R_matrix` function] introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
@@ -374,7 +374,7 @@ def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weigh
     return p
 
 
-def R_matrix(mdl, group, group_to_model=None, weights=None):
+def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
     """
     Constructs a generalization of the 'R-matrix' of Proctor et al Phys.
     Rev. Lett. 119, 130502 (2017). This matrix described the exact behaviour
@@ -559,7 +559,7 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
     return m, P_m
 
 
-def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),  # noqa N802
                   compilation=None, group_twirled=False, weights=None, gauge_optimize=True,
                   return_error_bounds=False, norm='diamond'):
     """

@@ -636,12 +636,12 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
         indTup = (indOrIndTup,) if not isinstance(indOrIndTup, tuple) else indOrIndTup
         assert(len(indTup) == len(axes))
 
-        def to_slice_list(indexArrayOrSlice):
+        def to_slice_list(index_array_or_slice):
             """Breaks a slice or index array into a list of slices"""
-            if isinstance(indexArrayOrSlice, slice):
-                return [indexArrayOrSlice]  # easy!
+            if isinstance(index_array_or_slice, slice):
+                return [index_array_or_slice]  # easy!
 
-            lst = indexArrayOrSlice
+            lst = index_array_or_slice
             if len(lst) == 0: return [slice(0, 0)]
 
             slc_lst = []

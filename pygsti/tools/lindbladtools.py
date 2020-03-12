@@ -153,7 +153,7 @@ def affine_lindbladian(q, sparse=False):
     return lindbladian
 
 
-def nonham_lindbladian(Lm, Ln, sparse=False):
+def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
     """
     Construct the Lindbladian corresponding to generalized
     non-Hamiltonian (stochastic) errors.

@@ -24,7 +24,7 @@ import scipy.sparse.linalg as _spsl
 
 import math
 
-from ..tools.basisconstructors import _basisConstructorDict
+from ..tools.basisconstructors import _basis_constructor_dict
 
 
 #Helper functions
@@ -749,13 +749,13 @@ class BuiltinBasis(LazyBasis):
             Whether basis elements should be stored as SciPy CSR sparse matrices
             or dense numpy arrays (the default).
         '''
-        assert(name in _basisConstructorDict), "Unknown builtin basis name '%s'!" % name
+        assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
         self.cargs = {'dim': dim, 'sparse': sparse}
 
-        longname = _basisConstructorDict[name].longname
-        real = _basisConstructorDict[name].real
-        size, dim, elshape = _basisConstructorDict[name].sizes(**self.cargs)
+        longname = _basis_constructor_dict[name].longname
+        real = _basis_constructor_dict[name].real
+        size, dim, elshape = _basis_constructor_dict[name].sizes(**self.cargs)
         super(BuiltinBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
 
         #Check that sparse is True only when elements are *matrices*
@@ -765,12 +765,12 @@ class BuiltinBasis(LazyBasis):
         return hash((self.name, self.dim, self.sparse))
 
     def _lazy_build_elements(self):
-        f = _basisConstructorDict[self.name].constructor
+        f = _basis_constructor_dict[self.name].constructor
         self._elements = _np.array(f(**self.cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
         assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
-        f = _basisConstructorDict[self.name].labeler
+        f = _basis_constructor_dict[self.name].labeler
         self._labels = f(**self.cargs)
 
     def __eq__(self, other):

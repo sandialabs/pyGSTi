@@ -17,7 +17,7 @@ import collections as _collections
 import numpy as _np
 
 from ..objects.basis import Basis, BuiltinBasis, DirectSumBasis
-from .basisconstructors import _basisConstructorDict
+from .basisconstructors import _basis_constructor_dict
 
 
 def basis_matrices(name_or_basis, dim, sparse=False):
@@ -67,7 +67,7 @@ def basis_longname(basis):
     """
     if isinstance(basis, Basis):
         return basis.longname
-    return _basisConstructorDict[basis].longname
+    return _basis_constructor_dict[basis].longname
 
 
 def basis_element_labels(basis, dim):

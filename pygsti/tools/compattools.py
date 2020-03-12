@@ -44,7 +44,7 @@ def patched_uuid():
     TODO: objects should be serialized correctly and this should be deprecated.
     """
     if 'SafeUUID' not in dir(_uuid):
-        class dummy_SafeUUID(object):
+        class dummy_SafeUUID(object):  # noqa N803
             def __new__(cls, *args):
                 return _uuid.UUID.__new__(_uuid.UUID, *args)
         _uuid.SafeUUID = dummy_SafeUUID

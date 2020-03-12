@@ -738,7 +738,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
             if isinstance(layerlbl, _Lbl):  # this should always be the case...
-                povmName = _gt.eLabelToPOVM(layerlbl)
+                povmName = _gt.e_label_to_povm(layerlbl)
                 if povmName in self.povm_blks['layers']:
                     # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                     # are not present in the stored POVM's label.

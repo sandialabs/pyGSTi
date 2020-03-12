@@ -593,8 +593,8 @@ def qt_matrices(matrix_dim, selected_pp_indices=[0, 5, 10, 11, 1, 2, 3, 6, 7]):
                    [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
                    [0, 0, 0, 1]], 'd')  # projector onto symmetric space
 
-    def _to_qutrit_space(inputMat):
-        return _np.dot(A, _np.dot(inputMat, A.transpose()))
+    def _to_qutrit_space(input_matrix):
+        return _np.dot(A, _np.dot(input_matrix, A.transpose()))
 
     qt_mxs = []
     pp_mxs = pp_matrices(4)
@@ -744,15 +744,15 @@ def unknown_labels(dim):
     return []
 
 
-_basisConstructorDict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
-_basisConstructorDict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
-_basisConstructorDict['gm_unnormalized'] = MatrixBasisConstructor(
+_basis_constructor_dict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
+_basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
+_basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
     'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True)
-_basisConstructorDict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
-_basisConstructorDict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
-_basisConstructorDict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
-_basisConstructorDict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
+_basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
+_basis_constructor_dict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
+_basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
+_basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
                                                                   identity_labels, True)
-_basisConstructorDict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
-_basisConstructorDict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
-_basisConstructorDict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)
+_basis_constructor_dict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
+_basis_constructor_dict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
+_basis_constructor_dict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)

@@ -588,7 +588,7 @@ class GaugeRobustModelTable(WorkspaceTable):
             #U0inv = _np.linalg.inv(U0)
             #Uinv = _np.linalg.inv(U)
 
-            _, U, U0, ev0 = _tools.get_a_best_case_gauge_transform(G, G0, returnAll=True)
+            _, U, U0, ev0 = _tools.get_a_best_case_gauge_transform(G, G0, return_all=True)
             U0inv = _np.linalg.inv(U0)
             Uinv = _np.linalg.inv(U)
             kite = _tools.get_kite(ev0)

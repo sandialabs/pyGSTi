@@ -61,7 +61,7 @@ def inv_mod2(m):
     return _np.array(gaussian_elimination_mod2(c)[:, t:])
 
 
-def Axb_mod2(A, b):
+def Axb_mod2(A, b):  # noqa N803
     """
     Solves Ax = b over GF(2)
 
