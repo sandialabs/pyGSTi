@@ -73,6 +73,7 @@ class Protocol(object):
         """
         super().__init__()
         self.name = name if name else self.__class__.__name__
+        self.tags = {}  # string-values (key,val) pairs that serve to label this protocol instance
         self.auxfile_types = {}
         self._nameddict_attributes = ()  # (('name', 'Protocol Name', 'category'),) implied in setup_nameddict
 
@@ -144,6 +145,10 @@ class Protocol(object):
         for next_attr, *ndargs in self._nameddict_attributes:
             tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
             attr_val = getattr(self, next_attr)
+
+        for tag_category, tag_value in self.tags.items():
+            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
+            attr_val = tag_value
 
         tail[attr_val] = final_dict
         return ret
@@ -540,6 +545,8 @@ class ExperimentDesign(_TreeNode):
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
+        self.tags = {}
+        self._nameddict_attributes = ()
         self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
@@ -660,6 +667,39 @@ class ExperimentDesign(_TreeNode):
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
         self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this design.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`ExperimentDesign` object named within its `self._nameddict_attributes`
+        tuple.  The final nested dictionary is set to be `final_dict`, which allows additional
+        result quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        head = tail = {}; attr_val = None
+        for next_attr, *ndargs in self._nameddict_attributes:
+            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
+            attr_val = getattr(self, next_attr)
+
+        for tag_category, tag_value in self.tags.items():
+            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
+            attr_val = tag_value
+
+        tail[attr_val] = final_dict
+        return head[None]
+
 
     def create_subdata(self, subdata_name, dataset):
         """
@@ -1097,6 +1137,7 @@ class ProtocolData(_TreeNode):
         self.edesign = edesign
         self.dataset = dataset  # MultiDataSet allowed for multi-pass data; None also allowed.
         self.cache = cache if (cache is not None) else {}
+        self.tags = {}
 
         if isinstance(self.dataset, (_objs.MultiDataSet, dict)):  # can be a dict of DataSets instead of a multidataset
             for dsname in self.dataset:
@@ -1224,6 +1265,30 @@ class ProtocolData(_TreeNode):
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
         self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this data.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  The final nested dictionary is set to be
+        `final_dict`, which allows additional result quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        head = tail = {}; attr_val = None
+        for tag_category, tag_value in self.tags.items():
+            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
+            attr_val = tag_value
+        tail[attr_val] = final_dict
+        return self.edesign.setup_nameddict(head[None])
 
 
 class ProtocolResults(object):
@@ -1360,7 +1425,7 @@ class ProtocolResults(object):
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation
         final = _NamedDict('Qty', 'category')
-        ret = self.protocol.setup_nameddict(final)
+        ret = self.protocol.setup_nameddict(self.data.setup_nameddict(final))
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
@@ -1408,11 +1473,7 @@ class MultiPassResults(ProtocolResults):
         ret = super(MultiPassResults, cls).from_dir(dirname, name, preloaded_data, quick_load)  # call base class
         for pass_name, partially_loaded_results in ret.passes.items():
             partially_loaded_results.data = ret.data.passes[pass_name]  # assumes data and ret.passes use *same* keys
-            partially_loaded_results.protocol = ret.protocol
-
-        #Also, we need to upgrade ret.passes to a NamedDict, since this doesn't get serialized currently (HACK):
-        ret.passes = _NamedDict('Pass', 'category', items=list(ret.passes.items()))
-
+            partially_loaded_results.protocol = ret.protocol.protocol  # assumes ret.protocol is MultiPassProtocol-like
         return ret
 
     def __init__(self, data, protocol_instance):
@@ -1435,7 +1496,7 @@ class MultiPassResults(ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.passes = _NamedDict('Pass', 'category')
+        self.passes = {}  # _NamedDict('Pass', 'category') - as_nameddict takes care of this
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
 
     def as_nameddict(self):
