@@ -23,26 +23,26 @@ def _vnorm(x, vmin, vmax):
 
 
 @smart_cached
-def as_rgb_array(colorStr):
+def as_rgb_array(color_str):
     """
     Convert a color string, such as `"rgb(0,255,128)"` or `"#00FF88"`
     to a numpy array of length 3.
     """
-    colorStr = colorStr.strip()  # remove any whitespace
-    if colorStr.startswith('#') and len(colorStr) >= 7:
-        r, g, b = colorStr[1:3], colorStr[3:5], colorStr[5:7]
+    color_str = color_str.strip()  # remove any whitespace
+    if color_str.startswith('#') and len(color_str) >= 7:
+        r, g, b = color_str[1:3], color_str[3:5], color_str[5:7]
         r = float(int(r, 16))
         g = float(int(g, 16))
         b = float(int(b, 16))
         rgb = r, g, b
-    elif colorStr.startswith('rgb(') and colorStr.endswith(')'):
-        tupstr = colorStr[len('rgb('):-1]
+    elif color_str.startswith('rgb(') and color_str.endswith(')'):
+        tupstr = color_str[len('rgb('):-1]
         rgb = [float(x) for x in tupstr.split(',')]
-    elif colorStr.startswith('rgba(') and colorStr.endswith(')'):
-        tupstr = colorStr[len('rgba('):-1]
+    elif color_str.startswith('rgba(') and color_str.endswith(')'):
+        tupstr = color_str[len('rgba('):-1]
         rgb = [float(x) for x in tupstr.split(',')[0:3]]  # ignore alpha
     else:
-        raise ValueError("Cannot convert colorStr = ", colorStr)
+        raise ValueError("Cannot convert color_str = ", color_str)
     return _np.array(rgb)
 
 
@@ -123,9 +123,9 @@ class Colormap(object):
         self.hmin = hmin
         self.hmax = hmax
 
-    def _brightness(self, R, G, B):
+    def _brightness(self, r, g, b):
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
-        return _np.sqrt(0.299 * R**2 + 0.587 * G**2 + 0.114 * B**2)
+        return _np.sqrt(0.299 * r**2 + 0.587 * g**2 + 0.114 * b**2)
 
     def normalize(self, value):
         """
@@ -424,7 +424,7 @@ class LinlogColormap(Colormap):
         -------
         norm, cmap
         """
-        from .mpl_colormaps import mpl_LinLogNorm as _mpl_LinLogNorm
+        from .mpl_colormaps import MplLinLogNorm as _mpl_LinLogNorm
         _, cmap = super(LinlogColormap, self).get_matplotlib_norm_and_cmap()
         norm = _mpl_LinLogNorm(self)
         cmap.set_bad('w', 1)

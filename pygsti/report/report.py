@@ -148,10 +148,10 @@ class Report:
             assert(embed_figures), \
                 "Single-file mode requires `embed_figures` to be True"
             _merge.merge_jinja_template(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, verbosity=verbosity
             )
         else:
@@ -159,7 +159,7 @@ class Report:
                 qtys, path, templateDir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, embed_figures=embed_figures,
                 verbosity=verbosity
             )

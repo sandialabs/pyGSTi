@@ -594,7 +594,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")
+                            box_labels=True, prec="compacthp")
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
@@ -606,7 +606,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")
+                            box_labels=True, prec="compacthp")
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
@@ -618,7 +618,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")
+                            box_labels=True, prec="compacthp")
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
@@ -819,7 +819,7 @@ def create_idletomography_report(results, filename, title="auto",
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    renderMath = True
+    render_math = True
 
     qtys = {}  # stores strings to be inserted into report template
 
@@ -936,12 +936,12 @@ def create_idletomography_report(results, filename, title="auto",
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 
             qtys['dscmpSwitchboard'] = dscmp_switchBd
-            addqty(4, 'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
-            #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
-            addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
+            addqty(4, 'ds_comparison_summary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+            #addqty('ds_comparison_histogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
+            addqty(4, 'ds_comparison_histogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram")
-            addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+            addqty(1, 'ds_comparison_box_plot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
             toggles['CompareDatasets'] = True
         else:
@@ -957,16 +957,16 @@ def create_idletomography_report(results, filename, title="auto",
             if fmt == "html":
                 if filename.endswith(".html"):
                     _merge.merge_jinja_template(
-                        qtys, filename, templateDir='~idletomography_html_report',
+                        qtys, filename, template_dir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        connected=connected, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
                     )
                 else:
                     _merge.merge_jinja_template_dir(
                         qtys, filename, templateDir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        connected=connected, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
                     )
 

@@ -76,7 +76,7 @@ class TestNotebook(BaseTestCase):
                                     temp_files+"/nb_example2.txt"])
         nb.save_to(temp_files+'/TestNotebook1.ipynb')
 
-        nb2 = Notebook(notebookTextFiles=
+        nb2 = Notebook(notebook_text_files=
                        [temp_files+"/nb_example.txt",
                         temp_files+"/nb_example2.txt"])
         nb2.add_notebook_files([temp_files+'/TestNotebook1.ipynb'])

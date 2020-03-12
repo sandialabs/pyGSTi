@@ -11,7 +11,6 @@
 
 from collections import OrderedDict as _OrderedDict
 from .row import Row
-from .convert import convertDict as _convertDict
 
 
 class ReportText(object):
@@ -38,7 +37,7 @@ class ReportText(object):
         self._raw = text
         self._format = form
 
-    def render(self, fmt, textID=None):
+    def render(self, fmt, text_id=None):
         '''
         Render this text-block object
 
@@ -46,7 +45,7 @@ class ReportText(object):
         ----------
         fmt : string
             name of format to be used
-        textID : string
+        text_id : string
             an ID to use in formats where it is applicable
 
         Returns

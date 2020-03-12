@@ -17,12 +17,12 @@ class InputSection(_Section):
     @_Section.figure_factory(2)
     def fiducialListTable(workspace, switchboard=None, **kwargs):
         return workspace.CircuitTable(
-            switchboard.strs, ["Prep.", "Measure"], commonTitle="Fiducials"
+            switchboard.strs, ["Prep.", "Measure"], common_title="Fiducials"
         )
 
     @_Section.figure_factory(2)
     def germList2ColTable(workspace, switchboard=None, **kwargs):
-        return workspace.CircuitTable(switchboard.germs, "Germ", nCols=2)
+        return workspace.CircuitTable(switchboard.germs, "Germ", n_cols=2)
 
     @_Section.figure_factory(2)
     def datasetOverviewTable(workspace, switchboard=None, **kwargs):
@@ -35,7 +35,7 @@ class InputSection(_Section):
     @_Section.figure_factory(2)
     def targetSpamBriefTable(workspace, switchboard=None, **kwargs):
         return workspace.SpamTable(
-            switchboard.gsTarget, None, display_as='boxes', includeHSVec=False
+            switchboard.gsTarget, None, display_as='boxes', include_hs_vec=False
         )
 
 

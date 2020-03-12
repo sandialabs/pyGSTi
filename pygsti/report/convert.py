@@ -28,7 +28,7 @@ def functions_in(module):
     return {name: f for name, f in module.__dict__.items() if callable(f)}
 
 
-convertDict = {
+convert_dict = {
     'html': functions_in(html),
     'latex': functions_in(latex),
     'python': functions_in(python)}
@@ -95,8 +95,8 @@ def convert(x, specs, fmt):
     if t == 'reportable':
         return x.render_with(lambda a, specz: convert(a, specz, fmt))
     if t == 'list':
-        return convertDict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
-    return convertDict[fmt][t](x, specs)
+        return convert_dict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
+    return convert_dict[fmt][t](x, specs)
 
 
 def converter(fmt):

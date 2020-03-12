@@ -18,39 +18,39 @@ class Row(object):
     Representation of a table row
     '''
 
-    def __init__(self, rowData=None, formatters=None, labels=None, nonMarkovianEBs=False):
+    def __init__(self, row_data=None, formatters=None, labels=None, non_markovian_ebs=False):
         '''
         Create a row object
 
         Parameters
         ----------
-        rowData : list
+        row_data : list
             raw data for the table
         formatters : optional, list[string]
             formatting options for each cell
         labels : optional list[string]
             labeling options for each cell
-        nonMarkovianEBs : bool
+        non_markovian_ebs : bool
             boolean indicating if non markovian error bars should be used
         '''
-        if rowData is None:
-            rowData = []
+        if row_data is None:
+            row_data = []
         else:
-            rowData = [_ReportableQty.from_val(item, nonMarkovianEBs) for item in rowData]
+            row_data = [_ReportableQty.from_val(item, non_markovian_ebs) for item in row_data]
         if formatters is None:
             formatters = []
         if labels is None:
-            labels = rowData
+            labels = row_data
 
-        lendiff = max(abs(len(formatters) - len(rowData)), 0)
+        lendiff = max(abs(len(formatters) - len(row_data)), 0)
         formatters = list(formatters) + [None] * lendiff
 
-        lendiff = max(abs(len(labels) - len(rowData)), 0)
+        lendiff = max(abs(len(labels) - len(row_data)), 0)
         labels = list(labels) + [None] * lendiff
 
         self.cells = [Cell(item, formatter, label)
                       for item, formatter, label in
-                      zip(rowData, formatters, labels)]
+                      zip(row_data, formatters, labels)]
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()

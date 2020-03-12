@@ -20,15 +20,15 @@ everything else is used in creating formatters in formatters.py
 '''
 
 
-def table(customHeadings, colHeadingsFormatted, rows, spec):
+def table(custom_headings, col_headings_formatted, rows, spec):
     '''
     Create an HTML table
 
     Parameters
     ----------
-    customHeadings : None, dict
+    custom_headings : None, dict
         optional dictionary of custom table headings
-    colHeadingsFormatted : list
+    col_headings_formatted : list
         formatted column headings
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
@@ -39,20 +39,20 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     dict : contains keys 'html' and 'js', which correspond to a html and js strings representing the table
     '''
     tableclass = spec['tableclass']
-    tableID = spec['tableID']
+    tableID = spec['table_id']
     html = ""
     js = ""
 
-    if customHeadings is not None \
-            and "html" in customHeadings:
-        html += customHeadings['html'] % {'tableclass': tableclass,
+    if custom_headings is not None \
+            and "html" in custom_headings:
+        html += custom_headings['html'] % {'tableclass': tableclass,
                                           'tableid': tableID}
     else:
         html += "<table"
         if tableclass: html += ' class="%s"' % tableclass
         if tableID: html += ' id="%s"' % tableID
         html += "><thead><tr><th> %s </th></tr>" % \
-            (" </th><th> ".join(colHeadingsFormatted))
+            (" </th><th> ".join(col_headings_formatted))
         html += "</thead><tbody>"
     for formatted_rowData in rows:
         if len(formatted_rowData) > 0:
@@ -211,7 +211,7 @@ def value(el, specs, mathmode=False):
     precision = specs['precision']
     sciprecision = specs['sciprecision']
     polarprecision = specs['polarprecision']
-    complexAsPolar = specs['complexAsPolar']
+    complexAsPolar = specs['complex_as_polar']
 
     def render(x):
         """Render a single float (can be real or imag part)"""

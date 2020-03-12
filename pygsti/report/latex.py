@@ -20,15 +20,15 @@ everything else is used in creating formatters in formatters.py
 '''
 
 
-def table(customHeadings, colHeadingsFormatted, rows, spec):
+def table(custom_headings, col_headings_formatted, rows, spec):
     '''
     Create a LaTeX table
 
     Parameters
     ----------
-    customHeadings : None, dict
+    custom_headings : None, dict
         optional dictionary of custom table headings
-    colHeadingsFormatted : list
+    col_headings_formatted : list
         formatted column headings
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
@@ -40,14 +40,14 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     '''
     longtables = spec['longtables']
     table = "longtable" if longtables else "tabular"
-    if customHeadings is not None \
-            and "latex" in customHeadings:
-        latex = customHeadings['latex']
+    if custom_headings is not None \
+            and "latex" in custom_headings:
+        latex = custom_headings['latex']
     else:
         latex = "\\begin{%s}[l]{%s}\n\hline\n" % \
-            (table, "|c" * len(colHeadingsFormatted) + "|")
+            (table, "|c" * len(col_headings_formatted) + "|")
         latex += ("%s \\\\ \hline\n"
-                  % (" & ".join(colHeadingsFormatted)))
+                  % (" & ".join(col_headings_formatted)))
 
     for formatted_rowData in rows:
 
@@ -216,7 +216,7 @@ def value(el, specs, mathmode=False):
     precision = specs['precision']
     sciprecision = specs['sciprecision']
     polarprecision = specs['polarprecision']
-    complexAsPolar = specs['complexAsPolar']
+    complexAsPolar = specs['complex_as_polar']
 
     def render(x):
         """Render a single float (can be real or imag part)"""

@@ -41,18 +41,18 @@ def _no_format(x, specs):
 
 # This dictionary is intentionally exported to other modules.
 # Even though it can change at runtime, it never does and should not
-formatDict = dict()
+format_dict = dict()
 
 # 'rho' (state prep) formatting
 # Replace rho with &rho;
 # Numbers following 'rho' -> subscripts
-formatDict['Rho'] = {
+format_dict['Rho'] = {
     'html': _Formatter(regexreplace=('rho([0-9]+)$', '&rho;<sub>%s</sub>')),
     'latex': _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')),
     'python': _no_format}
 
 # 'E' (POVM) effect formatting
-formatDict['Effect'] = {
+format_dict['Effect'] = {
     # If label == 'Ec', return E sub C
     # Otherwise, match regex and replace with subscript
     'html': _Formatter(stringreturn=('Ec', 'E<sub>C</sub>'),
@@ -68,25 +68,25 @@ NormalLatex = _Formatter(latex,
                          ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')  # nmebstring will match
 
 # Normal replacements
-formatDict['Normal'] = {
+format_dict['Normal'] = {
     'html': NormalHTML,
     'latex': NormalLatex,  # nmebstring will match
     'python': _no_format}
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
-formatDict['Rounded'] = {
+format_dict['Rounded'] = {
     'html': NormalHTML.variant(defaults={'precision': 2, 'sciprecision': 0}),
     'latex': NormalLatex.variant(defaults={'precision': 2, 'sciprecision': 0}),
     'python': _no_format}
 
 # 'small' formating - make text smaller
-formatDict['Small'] = {
+format_dict['Small'] = {
     'html': NormalHTML,
     'latex': NormalLatex.variant(formatstring='\\small%s'),
     'python': _no_format}
 
 # 'small' formating - make text smaller
-formatDict['Verbatim'] = {
+format_dict['Verbatim'] = {
     'html': NormalHTML,
     'latex': NormalLatex.variant(formatstring='\\spverb!%s!'),
     'python': _no_format}
@@ -102,7 +102,7 @@ def _pi_python(x, specs):
 PiPython = _Formatter(_pi_python)
 
 # Pi formatters
-formatDict['Pi'] = {
+format_dict['Pi'] = {
     'html': NormalHTML.variant(formatstring='%s&pi;',
                                ebstring='%s&pi; <span class="errorbar">&plusmn; %s</span>&pi;',
                                nmebstring='%s&pi; <span class="nmerrorbar">&plusmn; %s</span>&pi;'),
@@ -111,7 +111,7 @@ formatDict['Pi'] = {
     'python': PiPython}
 
 # BracketFormatters
-formatDict['Brackets'] = {
+format_dict['Brackets'] = {
     'html': NormalHTML.variant(defaults={'brackets': True}),
     'latex': NormalLatex.variant(defaults={'brackets': True}),
     'python': _no_format}
@@ -157,23 +157,23 @@ mathtext_htmlorlatex = _Formatter(
                      ('*', '\\cdot ')],
     formatstring='$%s$')
 
-formatDict['Conversion'] = {
+format_dict['Conversion'] = {
     'html': convert_html,
     'latex': convert_latex,
     'python': _no_format}
 
-formatDict['MathText'] = {
+format_dict['MathText'] = {
     'html': mathtext_htmlorlatex,
     'latex': mathtext_htmlorlatex,
     'python': _no_format}
 
 
-formatDict['Vec'] = {
+format_dict['Vec'] = {
     'html': NormalHTML,
     'latex': _Formatter(latex, ebstring='%s $\pm$ %s'),
     'python': _no_format}
 
-formatDict['Circuit'] = {
+format_dict['Circuit'] = {
     'html': _Formatter(lambda s, specs: '.'.join(map(str, s)) if s is not None else ''),
     'latex': _Formatter(lambda s, specs: '' if s is None else ('$%s$' % '\\cdot'.join([('\\mbox{%s}' % str(gl))
                                                                                        for gl in s]))),
@@ -224,19 +224,19 @@ def python_figure(fig, specs):
                           render_out['python'][plotDivID].get('errorbar', None))
 
 
-formatDict['Figure'] = {
+format_dict['Figure'] = {
     'html': html_figure,
     'latex': latex_figure,
     'python': python_figure}
 
 # Bold formatting
-formatDict['Bold'] = {
+format_dict['Bold'] = {
     'html': _Formatter(html, formatstring='<b>%s</b>'),
     'latex': _Formatter(latex, formatstring='\\textbf{%s}'),
     'python': _no_format}
 
 #Special formatting for Hamiltonian and Stochastic model types
-formatDict['GatesetType'] = {
+format_dict['GatesetType'] = {
     'html': _Formatter(),
     'latex': _Formatter(stringreplacers=[('H', '$\\mathcal{H}$'), ('S', '$\\mathcal{S}$')]),
     'python': _no_format}
@@ -247,19 +247,19 @@ formatDict['GatesetType'] = {
 def _pre_fmt_template(formatname):
     return lambda label : label[formatname]
 
-formatDict['Pre'] = {
+format_dict['Pre'] = {
     'html'   : _pre_fmt_template('html'),
     'latex'  : _pre_fmt_template('latex')}
 
 #Multi-row and multi-column formatting (with "Conversion" type inner formatting)
-formatDict['MultiRow'] = {
+format_dict['MultiRow'] = {
     'html'  : TupleFormatter(convert_html, formatstring='<td rowspan="{l1}">{l0}</td>'),
     'latex' : TupleFormatter(convert_latex, formatstring='\\multirow{{{l1}}}{{*}}{{{l0}}}')}
 
 def _empty_str(l): return ""
 def _return_None(l): return None #signals no <td></td> in HTML
 
-formatDict['SpannedRow'] = {
+format_dict['SpannedRow'] = {
     'html'  : _return_None,
     'latex' : _empty_str}
 
@@ -267,7 +267,7 @@ def _repeatno_format(label_tuple):
     label, reps = label_tuple
     return ["%s" % label]*reps
 
-formatDict['MultiCol'] = {
+format_dict['MultiCol'] = {
     'html'  : TupleFormatter(convert_html, formatstring='<td colspan="{l1}">{l0}</td>'),
     'latex' : TupleFormatter(convert_latex, formatstring='\\multicolumn{{{l1}}}{{c|}}{{{l0}}}')}
 '''

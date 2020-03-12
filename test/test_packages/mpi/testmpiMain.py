@@ -831,7 +831,7 @@ def test_run1Q_end2end(comm):
 
     #Use dummy duplicate of results to trigger MPI data-comparison processing:
     pygsti.report.create_standard_report({"one": results, "two": results}, "mpi_test_report",
-                                         "MPI test report", confidenceLevel=95,
+                                         "MPI test report", confidence_level=95,
                                          verbosity=2, comm=comm)
 
 

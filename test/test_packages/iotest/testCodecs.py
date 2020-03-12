@@ -72,7 +72,7 @@ class CodecsTestCase(BaseTestCase):
         #create a Workspace object
         self.ws = pygsti.report.create_standard_report(self.results, None,
                                                        title="GST Codec TEST Report",
-                                                       confidenceLevel=95)
+                                                       confidence_level=95)
         std.target_model()._check_paramvec()
 
         #create miscellaneous other objects

@@ -228,7 +228,7 @@ class SmartCache(object):
             with _timed_block('hash', times):
                 key = call_key(fn, tuple(argVals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
-                #DB: if "_computeSubMxs" in fn.__name__:
+                #DB: if "_compute_sub_mxs" in fn.__name__:
                 #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
                 #DB: print("Key detail: ",key[0]) # DB
                 #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB

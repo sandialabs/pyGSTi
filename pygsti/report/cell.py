@@ -9,8 +9,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .formatters import formatDict as _formatDict
-from .convert import convertDict as _convertDict
+from .formatters import format_dict as _format_dict
+from .convert import convert_dict as _convert_dict
 
 
 class Cell(object):
@@ -18,7 +18,7 @@ class Cell(object):
     Representation of a table cell, containing formatting and labeling info
     '''
 
-    def __init__(self, data=None, formatterName=None, label=None):
+    def __init__(self, data=None, formatter_name=None, label=None):
         '''
         Creates Cell object
 
@@ -26,13 +26,13 @@ class Cell(object):
         ----------
         data : ReportableQty
             data to be reported
-        formatterName : string
+        formatter_name : string
             name of the formatter to be used (ie 'Effect')
         label : string
             label of the cell
         '''
         self.data = data
-        self.formatterName = formatterName
+        self.formatterName = formatter_name
         self.label = label
 
     def __getstate__(self):
@@ -57,7 +57,7 @@ class Cell(object):
         string
         '''
         if self.formatterName is not None:
-            formatter = _formatDict[self.formatterName]
+            formatter = _format_dict[self.formatterName]
             formatted_item = formatter[fmt](self.data, spec)
             assert formatted_item is not None, ("Formatter " + str(type(formatter[fmt]))
                                                 + " returned None for item = " + str(self.data))
@@ -82,7 +82,7 @@ class Cell(object):
         -------
         string
         '''
-        format_cell = _convertDict[fmt]['cell']  # Function for rendering a cell in the format "fmt"
+        format_cell = _convert_dict[fmt]['cell']  # Function for rendering a cell in the format "fmt"
         formattedData = self._render_data(fmt, spec)
 
         return format_cell(formattedData, self.label, spec)

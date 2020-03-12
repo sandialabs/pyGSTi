@@ -16,7 +16,7 @@ class FormatterTester(BaseCase):
         super(FormatterTester, self).setUp()
 
     def test_none_formatter(self):
-        fmt.formatDict['BadFormat'] = {
+        fmt.format_dict['BadFormat'] = {
             'latex': lambda l, s: None,
             'html': lambda l, s: None,
             'text': lambda l, s: None,
@@ -57,7 +57,7 @@ class FormatterTester(BaseCase):
         self.assertEqual(fmt.convert_latex('x|y', {}), '\\begin{tabular}{c}x\\\\y\end{tabular}')
 
     def test_value_fns(self):
-        specs = {'precision': 2, 'sciprecision': 2, 'polarprecision': 2, 'complexAsPolar': True}
+        specs = {'precision': 2, 'sciprecision': 2, 'polarprecision': 2, 'complex_as_polar': True}
         self.assertEqual(latex_value("Hello", specs), "Hello")
         latex_value({"Weird type": "to get value of!"}, specs)
         #More variants?
