@@ -255,7 +255,7 @@ class IDTTestCase(BaseTestCase):
         start = std.target_model()
         start.set_all_parameterizations("TP")
         result = pygsti.do_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
-                                             std.germs_lite, maxLens, verbosity=3, advancedOptions={'objective': 'chi2'})
+                                             std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
         #result = pygsti.do_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],
         #                              std.effectStrs[0:4], std.germs_lite, maxLens)
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
@@ -345,7 +345,7 @@ class IDTTestCase(BaseTestCase):
 
         #Run GST on the data (set tolerance high so this 2Q-GST run doesn't take long)
         gstresults = pygsti.do_long_sequence_gst_base(ds, target_model, gss,
-                                                      advancedOptions={'tolerance': 1e-1}, verbosity=3)
+                                                      advanced_options={'tolerance': 1e-1}, verbosity=3)
         
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'

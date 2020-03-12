@@ -220,8 +220,8 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_stdpractice_gst,
                                 ds, std.target_model(), std.fiducials, std.fiducials,
                                 std.germs, maxLens, modes="TP,CPTP,Test,Target",
-                                modelsToTest = {"Test": mdl_guess},
-                                comm=None, memLimit=None, verbosity=5)
+                                models_to_test = {"Test": mdl_guess},
+                                comm=None, mem_limit=None, verbosity=5)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_stdpractice",
                                              "Std Practice Test Report", verbosity=2)
 
@@ -242,8 +242,8 @@ class TestDriversMethods(DriversTestCase):
         bootgs_p_defaultMaxLens = \
             pygsti.drivers.make_bootstrap_models(
                 2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
-                std.germs, None, inputModel=mdl,
-                returnData=False) #test when maxLengths == None
+                std.germs, None, input_model=mdl,
+                return_data=False) #test when max_lengths == None
 
 
 if __name__ == "__main__":

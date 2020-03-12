@@ -88,7 +88,7 @@ def test_MPI(comm):
     #compare on root proc
     #if comm.Get_rank() == 0:
     #    for gs1,gs2 in zip(my1ProcResults,myManyProcResults):
-    #        gs2_go = pygsti.optimize_gauge(gs2, "target", targetModel=gs1,
+    #        gs2_go = pygsti.optimize_gauge(gs2, "target", target_model=gs1,
     #                                       opWeight=1.0, spamWeight=1.0)
     #        print "Frobenius distance = ", gs1.frobeniusdist(gs2_go)
     #        assert(gs1.frobeniusdist(gs2_go) < 1e-5)

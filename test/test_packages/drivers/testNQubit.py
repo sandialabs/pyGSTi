@@ -157,8 +157,8 @@ class NQubitTestCase(BaseTestCase):
                                                          extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                          sim_type="map", parameterization="H+S", sparse=True)
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
-                                                   lsgstLists, gaugeOptParams=False,
-                                                   advancedOptions={'tolerance': 1e-1}, verbosity=4)
+                                                   lsgstLists, gauge_opt_params=False,
+                                                   advanced_options={'tolerance': 1e-1}, verbosity=4)
 
     def test_2Q_terms(self):
 
@@ -202,8 +202,8 @@ class NQubitTestCase(BaseTestCase):
         mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
 
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
-                                                   lsgstLists, gaugeOptParams=False,
-                                                   advancedOptions={'tolerance': 1e-3}, verbosity=4)
+                                                   lsgstLists, gauge_opt_params=False,
+                                                   advanced_options={'tolerance': 1e-3}, verbosity=4)
 
 
     def test_3Q(self):
@@ -268,7 +268,7 @@ class NQubitTestCase(BaseTestCase):
         return
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLs, verbosity=5,
-                                              advancedOptions={'maxIterations': 2}) #keep this short; don't care if it doesn't converge.
+                                              advanced_options={'maxIterations': 2}) #keep this short; don't care if it doesn't converge.
         print("DONE!")
 
 

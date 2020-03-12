@@ -27,7 +27,7 @@ def main():
     tpTarget = gs_target.copy()
     tpTarget.set_all_parameterizations("TP")
     results_tp = pygsti.do_long_sequence_gst(ds, tpTarget, fiducials, fiducials, germs,
-                                          maxLengths, gaugeOptParams=False, verbosity=0)
+                                          maxLengths, gauge_opt_params=False, verbosity=0)
     # Gauge optimize
     est = results_tp.estimates['default']
     gsFinal = est.gatesets['final iteration estimate']
@@ -40,7 +40,7 @@ def main():
     fullTarget = gs_target.copy()
     fullTarget.set_all_parameterizations("full")
     results_full = pygsti.do_long_sequence_gst(ds, fullTarget, fiducials, fiducials, germs,
-                                          maxLengths, gaugeOptParams=False, verbosity=0)
+                                          maxLengths, gauge_opt_params=False, verbosity=0)
     #Gauge optimize
     est = results_full.estimates['default']
     gsFinal = est.gatesets['final iteration estimate']

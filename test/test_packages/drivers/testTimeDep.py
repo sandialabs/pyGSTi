@@ -98,18 +98,18 @@ class TimeDependentTestCase(BaseTestCase):
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                               germs, maxLengths, verbosity=3,
-                                              advancedOptions={'timeDependent': True,
+                                              advanced_options={'timeDependent': True,
                                                                'starting point': 'target',
                                                                'alwaysPerformMLE': False,
-                                                               'onlyPerformMLE': False}, gaugeOptParams=False)
+                                                               'onlyPerformMLE': False}, gauge_opt_params=False)
 
         # Normal GST used as a check - should get same answer since data is time-independent
         results2 = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                                germs, maxLengths, verbosity=3,
-                                               advancedOptions={'timeDependent': False,
+                                               advanced_options={'timeDependent': False,
                                                                 'starting point': 'target',
                                                                 'alwaysPerformMLE': False,
-                                                                'onlyPerformMLE': False}, gaugeOptParams=False)
+                                                                'onlyPerformMLE': False}, gauge_opt_params=False)
 
         #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
@@ -146,11 +146,11 @@ class TimeDependentTestCase(BaseTestCase):
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                               germs, maxLengths, verbosity=3,
-                                              advancedOptions={'timeDependent': True,
+                                              advanced_options={'timeDependent': True,
                                                                'starting point': 'target',
                                                                'alwaysPerformMLE': False,
                                                                'tolerance': 1e-4,  # run faster!
-                                                               'onlyPerformMLE': False}, gaugeOptParams=False)
+                                                               'onlyPerformMLE': False}, gauge_opt_params=False)
 
         #we should recover the 1.0 decay we put into mdl_datagen['Gi']:
         final_mdl = results.estimates['default'].models['final iteration estimate']

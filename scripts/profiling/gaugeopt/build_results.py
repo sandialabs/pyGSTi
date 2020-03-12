@@ -111,8 +111,8 @@ results = pygsti.do_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fidu
                                     verbosity=3 )
 '''
 results = pygsti.do_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
-                                    maxLengths, gaugeOptParams=None,
-                                    advancedOptions={ 'depolarizeStart' : 0.1 }, memLimit=3*(1024)**3,
+                                    maxLengths, gauge_opt_params=None,
+                                    advanced_options={ 'depolarizeStart' : 0.1 }, mem_limit=3*(1024)**3,
                                     verbosity=3 )
 end = time.time()
 print("Total time=%f hours" % ((end - start) / 3600.0))

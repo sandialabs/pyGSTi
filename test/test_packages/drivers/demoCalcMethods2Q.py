@@ -91,7 +91,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, advancedOptions=self.advOpts,
+                                              self.germs, self.maxLengths, advanced_options=self.advOpts,
                                               verbosity=4)
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.write_model(results.estimates['default'].models['go0'],
@@ -111,7 +111,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('map')
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, advancedOptions=self.advOpts,
+                                              self.germs, self.maxLengths, advanced_options=self.advOpts,
                                               verbosity=4)
 
         #Note: expected nSigma of 143 is so high b/c we use very high tol of 1e-2 => result isn't very good
@@ -154,7 +154,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -174,7 +174,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
@@ -193,7 +193,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
@@ -213,7 +213,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start228)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -234,7 +234,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start228)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)

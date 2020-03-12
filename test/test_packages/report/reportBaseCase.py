@@ -103,7 +103,7 @@ class ReportBaseCase(BaseTestCase):
 
         cls.results_logL = pygsti.do_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
                                                        std.germs, cls.maxLengthList, verbosity=0,
-                                                       advancedOptions={'tolerance': 1e-6, 'starting point': 'LGST',
+                                                       advanced_options={'tolerance': 1e-6, 'starting point': 'LGST',
                                                                         'onBadFit': ["robust","Robust","robust+","Robust+"],
                                                                         'badFitThreshold': -1.0,
                                                                         'germLengthLimits': {('Gx','Gi','Gi'): 2} })

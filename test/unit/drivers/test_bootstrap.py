@@ -56,8 +56,8 @@ class BootstrapModelTester(BootstrapBase):
         # TODO optimize
         bootgs_p = bs.make_bootstrap_models(
             2, self.ds, 'parametric', self.fiducials, self.fiducials,
-            self.germs, self.maxLengths, inputModel=self.mdl,
-            returnData=False
+            self.germs, self.maxLengths, input_model=self.mdl,
+            return_data=False
         )
         # TODO assert correctness
 
@@ -68,8 +68,8 @@ class BootstrapModelTester(BootstrapBase):
         )
         bootgs_p_custom = bs.make_bootstrap_models(
             2, self.ds, 'parametric', None, None, None, None,
-            lsgstLists=custom_strs, inputModel=self.mdl,
-            returnData=False
+            lsgst_lists=custom_strs, input_model=self.mdl,
+            return_data=False
         )
         # TODO assert correctness
 
@@ -77,8 +77,8 @@ class BootstrapModelTester(BootstrapBase):
         # TODO optimize
         bootgs_np, bootds_np2 = bs.make_bootstrap_models(
             2, self.ds, 'nonparametric', self.fiducials, self.fiducials,
-            self.germs, self.maxLengths, targetModel=self.mdl,
-            returnData=True
+            self.germs, self.maxLengths, target_model=self.mdl,
+            return_data=True
         )
         # TODO assert correctness
 
@@ -86,15 +86,15 @@ class BootstrapModelTester(BootstrapBase):
         with self.assertRaises(ValueError):
             bs.make_bootstrap_models(
                 2, self.ds, 'parametric', self.fiducials, self.fiducials,
-                self.germs, self.maxLengths, returnData=False
+                self.germs, self.maxLengths, return_data=False
             )
 
     def test_make_bootstrap_models_raises_on_conflicting_model_input(self):
         with self.assertRaises(ValueError):
             bs.make_bootstrap_models(
                 2, self.ds, 'parametric', self.fiducials, self.fiducials,
-                self.germs, self.maxLengths, inputModel=self.mdl, targetModel=self.mdl,
-                returnData=False
+                self.germs, self.maxLengths, input_model=self.mdl, target_model=self.mdl,
+                return_data=False
             )
 
 
@@ -105,8 +105,8 @@ class BootstrapUtilityTester(BootstrapBase):
         maxLengths = [0]
         cls.bootgs_p = bs.make_bootstrap_models(
             2, cls.ds, 'parametric', cls.fiducials, cls.fiducials,
-            cls.germs, maxLengths, inputModel=cls.mdl,
-            returnData=False
+            cls.germs, maxLengths, input_model=cls.mdl,
+            return_data=False
         )
 
     def setUp(self):
@@ -115,16 +115,16 @@ class BootstrapUtilityTester(BootstrapBase):
 
     def test_gauge_optimize_model_list(self):
         bs.gauge_optimize_model_list(
-            self.bootgs_p, std.target_model(), gateMetric='frobenius',
-            spamMetric='frobenius', plot=False
+            self.bootgs_p, std.target_model(), gate_metric='frobenius',
+            spam_metric='frobenius', plot=False
         )
         # TODO assert correctness
 
     def test_gauge_optimize_model_list_with_plot(self):
         with self.assertRaises(NotImplementedError):
             bs.gauge_optimize_model_list(
-                self.bootgs_p, std.target_model(), gateMetric='frobenius',
-                spamMetric='frobenius', plot=True)
+                self.bootgs_p, std.target_model(), gate_metric='frobenius',
+                spam_metric='frobenius', plot=True)
 
     def test_bootstrap_utilities(self):
         #Test utility functions -- just make sure they run for now...
