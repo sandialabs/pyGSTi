@@ -315,11 +315,11 @@ class TruncatedGermPowersTester(LongSequenceGSTWithChi2):
         lsgstStrings = pc.make_lsgst_lists(
             cls.opLabels, cls.fiducials, cls.fiducials,
             cls.germs, cls.maxLens,
-            truncScheme="truncated germ powers"
+            trunc_scheme="truncated germ powers"
         )
         cls.ds = pc.generate_fake_data(
-            pkg.datagen_gateset, lsgstStrings[-1], nSamples=1000,
-            sampleError='binomial', seed=100
+            pkg.datagen_gateset, lsgstStrings[-1], n_samples=1000,
+            sample_error='binomial', seed=100
         )
 
     def setUp(self):
@@ -335,11 +335,11 @@ class LengthAsExponentTester(LongSequenceGSTWithChi2):
         lsgstStrings = pc.make_lsgst_lists(
             cls.opLabels, cls.fiducials, cls.fiducials,
             cls.germs, cls.maxLens,
-            truncScheme="length as exponent"
+            trunc_scheme="length as exponent"
         )
         cls.ds = pc.generate_fake_data(
-            pkg.datagen_gateset, lsgstStrings[-1], nSamples=1000,
-            sampleError='binomial', seed=100
+            pkg.datagen_gateset, lsgstStrings[-1], n_samples=1000,
+            sample_error='binomial', seed=100
         )
 
     def setUp(self):
@@ -397,7 +397,7 @@ class RobustDataScalingTester(LongSequenceGSTBase):
         super(RobustDataScalingTester, cls).setUpClass()
         datagen_gateset = cls.model.depolarize(op_noise=0.1, spam_noise=0.03).rotate((0.05, 0.13, 0.02))
         ds2 = pc.generate_fake_data(
-            datagen_gateset, cls.lsgstStrings[-1], nSamples=1000, sampleError='binomial', seed=100
+            datagen_gateset, cls.lsgstStrings[-1], n_samples=1000, sample_error='binomial', seed=100
         ).copy_nonstatic()
         ds2.add_counts_from_dataset(cls.ds)
         ds2.done_adding_data()

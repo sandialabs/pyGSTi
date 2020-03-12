@@ -14,8 +14,8 @@ def main():
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
     gs_datagen = gs_datagen.rotate(rotate=0.04)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(gs_target, fiducials, fiducials, germs, maxLengths)
-    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments, nSamples=1000,
-                                                sampleError="binomial", seed=1234)
+    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments, n_samples=1000,
+                                                sample_error="binomial", seed=1234)
     #Run GST
     gs_target.set_all_parameterizations("TP") #TP-constrained
     results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials, germs,

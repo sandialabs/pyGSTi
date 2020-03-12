@@ -818,7 +818,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
 #    povm = _objs.UnconstrainedPOVM( [('0_cm', target_model.povms['Mdefault']['0']),
 #                                     ('1_cm', target_model.povms['Mdefault']['1'])] )
 #    ave_error_gsl = _cnst.circuit_list([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
-#    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, nSamples=1, sampleError="none")#
+#    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, n_samples=1, sample_error="none")#
 
 #    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
 #    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]

@@ -48,7 +48,7 @@ class CodecsTestCase(BaseTestCase):
         test = self.datagen_gateset.copy()
         self.ds = pygsti.construction.generate_fake_data(
             self.datagen_gateset, self.lsgstStrings[-1],
-            nSamples=1000,sampleError='binomial', seed=100)
+            n_samples=1000,sample_error='binomial', seed=100)
 
         #Make an model with instruments
         E = self.datagen_gateset.povms['Mdefault']['0']

@@ -28,8 +28,8 @@ def expList(self):
 def dataset(self):
     # Was previously written to disk as 'analysis.dataset'
     return pygsti.construction.generate_fake_data(
-        self.datagen_gateset, self.expList, nSamples=10000,
-        sampleError='binomial', seed=100
+        self.datagen_gateset, self.expList, n_samples=10000,
+        sample_error='binomial', seed=100
     )
 
 

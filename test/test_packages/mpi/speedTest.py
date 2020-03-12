@@ -40,7 +40,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 
     mdl_dataGen = gsTarget.depolarize(op_noise=0.1)
     dsFake = pygsti.construction.generate_fake_data(
-        mdl_dataGen, allRequiredStrs, nSamples, sampleError="multinomial",
+        mdl_dataGen, allRequiredStrs, nSamples, sample_error="multinomial",
         seed=seed)
 
     #Run LGST to get starting model

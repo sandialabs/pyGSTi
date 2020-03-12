@@ -351,7 +351,7 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
     print(qubits)
     print(edgelist)
 
-    model = _mconst.build_localnoise_model(nQubits=len(qubits),
+    model = _mconst.build_localnoise_model(n_qubits=len(qubits),
                                            qubit_labels=qubits,
                                            gate_names=[devspecs.twoQgate] + oneQgates,
                                            availability={devspecs.twoQgate: edgelist},

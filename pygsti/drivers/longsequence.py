@@ -1885,13 +1885,13 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
         'opLabels', list(target_model.get_primitive_op_labels()))
     lsgstLists = _construction.stdlists.make_lsgst_structs(
         opLabels, prepStrs, effectStrs, germs, maxLengths,
-        truncScheme=advancedOptions.get('truncScheme', "whole germ powers"),
+        trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers"),
         nest=advancedOptions.get('nestedCircuitLists', True),
-        includeLGST=advancedOptions.get('includeLGST', True),
-        opLabelAliases=advancedOptions.get('opLabelAliases', None),
-        sequenceRules=advancedOptions.get('stringManipRules', None),
-        dscheck=dschk, actionIfMissing=actionIfMissing,
-        germLengthLimits=advancedOptions.get('germLengthLimits', None),
+        include_lgst=advancedOptions.get('includeLGST', True),
+        op_label_aliases=advancedOptions.get('opLabelAliases', None),
+        sequence_rules=advancedOptions.get('stringManipRules', None),
+        dscheck=dschk, action_if_missing=actionIfMissing,
+        germ_length_limits=advancedOptions.get('germLengthLimits', None),
         verbosity=verbosity)
     assert(len(maxLengths) == len(lsgstLists))
 

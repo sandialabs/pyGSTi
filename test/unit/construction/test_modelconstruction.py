@@ -48,7 +48,7 @@ class ModelConstructionTester(BaseCase):
 
         gateset2b = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                            effectLabels=['1', '0'])
+                                            effect_labels=['1', '0'])
 
         std_gateset = mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                               ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
@@ -161,13 +161,13 @@ class ModelConstructionTester(BaseCase):
         with self.assertRaises(ValueError):
             mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                    prepLabels=['rho0'], prepExpressions=["FooBar"],)
+                                    prep_labels=['rho0'], prep_expressions=["FooBar"],)
 
     def test_build_explicit_model_raises_on_bad_effect_expression(self):
         with self.assertRaises(ValueError):
             mc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                     ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                    effectLabels=['0', '1'], effectExpressions=["FooBar", "1"])
+                                    effect_labels=['0', '1'], effect_expressions=["FooBar", "1"])
 
 
 class GateConstructionBase(object):

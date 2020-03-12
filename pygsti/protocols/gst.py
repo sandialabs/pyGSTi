@@ -112,7 +112,7 @@ class StandardGSTDesign(StructuredGSTDesign):
             self.aliases, self.sequence_rules, dscheck, actionIfMissing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
-        # truncScheme=advancedOptions.get('truncScheme', "whole germ powers")
+        # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
 
         super().__init__(target_model, structs, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -149,8 +149,8 @@ class GateSetTomography(_proto.Protocol):
         self.auxfile_types['advancedOptions'] = 'pickle'  # TODO - better later? - json?
 
     #TODO: Maybe make methods like this separate functions??
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
+    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
     #    return self.run(_proto.ProtocolData(design, dataset))
     #
     #def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
@@ -352,7 +352,7 @@ class GateSetTomography(_proto.Protocol):
         parameters['check'] = advancedOptions.get('check', False)
         parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
         parameters['opLabelAliases'] = advancedOptions.get('opLabelAliases', None)
-        parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
+        parameters['include_lgst'] = advancedOptions.get('include_lgst', True)
 
         return _package_into_results(self, data, data.edesign.target_model, mdl_start,
                                      lsgstLists, parameters, args, mdl_lsgst_list,
@@ -468,8 +468,8 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['advancedOptions'] = 'pickle'
         self.auxfile_types['comm'] = 'reset'
 
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
+    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
     #    data = _proto.ProtocolData(design, dataset)
     #    return self.run(data)
 
@@ -809,13 +809,13 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
         'opLabels', list(target_model.get_primitive_op_labels()))
     lsgstLists = _construction.stdlists.make_lsgst_structs(
         opLabels, prepStrs, effectStrs, germs, maxLengths,
-        truncScheme=advancedOptions.get('truncScheme', "whole germ powers"),
+        trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers"),
         nest=advancedOptions.get('nestedCircuitLists', True),
-        includeLGST=advancedOptions.get('includeLGST', True),
-        opLabelAliases=advancedOptions.get('opLabelAliases', None),
-        sequenceRules=advancedOptions.get('stringManipRules', None),
-        dscheck=dschk, actionIfMissing=actionIfMissing,
-        germLengthLimits=advancedOptions.get('germLengthLimits', None),
+        include_lgst=advancedOptions.get('includeLGST', True),
+        op_label_aliases=advancedOptions.get('opLabelAliases', None),
+        sequence_rules=advancedOptions.get('stringManipRules', None),
+        dscheck=dschk, action_if_missing=actionIfMissing,
+        germ_length_limits=advancedOptions.get('germLengthLimits', None),
         verbosity=verbosity)
     assert(len(maxLengths) == len(lsgstLists))
 

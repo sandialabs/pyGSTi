@@ -139,7 +139,7 @@ def generate_germs(target_model, randomize=True, randomizationStrength=1e-2,
     for germLength, count in candidateGermCounts.items():
         if count == "all upto":
             availableGermsList.extend(_constr.list_all_circuits_without_powers_and_cycles(
-                gates, maxLength=germLength))
+                gates, max_length=germLength))
         else:
             seed = None if candidateSeed is None else candidateSeed + germLength
             availableGermsList.extend(_constr.list_random_circuits_onelen(

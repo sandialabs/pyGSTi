@@ -132,11 +132,11 @@ Gx^4 0.2 100
         pygsti.remove_duplicates_in_place(circuits)
 
         ds_none = pygsti.construction.generate_fake_data(depol_gateset, circuits,
-                                                        nSamples=1000, sampleError='none')
+                                                        n_samples=1000, sample_error='none')
         ds_round = pygsti.construction.generate_fake_data(depol_gateset, circuits,
-                                                          nSamples=1000, sampleError='round')
+                                                          n_samples=1000, sample_error='round')
         ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
-                                                             nSamples=None, sampleError='none')
+                                                             n_samples=None, sample_error='none')
 
         # TO SEED SAVED FILE, RUN BELOW LINES:
         if regenerate_references():

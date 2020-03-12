@@ -19,8 +19,8 @@ maxLengths = [1, 2, 4]  # roughly gives the length of the sequences used by GST
 mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
 listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
     target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, nSamples=1000,
-                                            sampleError="binomial", seed=1234)
+ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, n_samples=1000,
+                                            sample_error="binomial", seed=1234)
 
 results = pygsti.do_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                     germs, maxLengths, verbosity=3)

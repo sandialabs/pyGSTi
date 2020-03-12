@@ -22,7 +22,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
         gates        = list(std.target_model().operations.keys())
         superGermSet = [] #OLD: pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
         superGermSet.extend( pygsti.construction.list_all_circuits_without_powers_and_cycles(
-            gates, maxLength=3) )
+            gates, max_length=3) )
         superGermSet.extend( pygsti.construction.list_random_circuits_onelen(
             gates, 4, 10, seed=2017)) # add 10 random candidates of length 4
         superGermSet.extend( pygsti.construction.list_random_circuits_onelen(

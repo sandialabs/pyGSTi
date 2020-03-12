@@ -37,7 +37,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
         #ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
-        #                                            nSamples=1000, sampleError="multinomial", seed=1234)
+        #                                            n_samples=1000, sample_error="multinomial", seed=1234)
         #ds.save(compare_files + "/calcMethods2Q.dataset")
 
         cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q.dataset")
@@ -45,8 +45,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         #Reduced model GST dataset
         cls.nQubits=2
-        cls.mdl_redmod_datagen = pc.build_nqnoise_model(cls.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                                    extraWeight1Hops=0, extraGateWeight=1, sparse=False, sim_type="matrix", verbosity=1,
+        cls.mdl_redmod_datagen = pc.build_nqnoise_model(cls.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                                    extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, sim_type="matrix", verbosity=1,
                                                     gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
 
         #Create a reduced set of fiducials and germs
@@ -148,8 +148,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_matrix(self):
         # Using dense matrices and matrix-based calcs
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=False,
                                              sim_type="matrix", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -168,8 +168,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_map1(self):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=False,
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -187,8 +187,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=True,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=True,
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -207,8 +207,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                      extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, verbosity=1,
                                       sim_type="termorder:1", parameterization="H+S terms")
         target_model.from_vector(self.rand_start228)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -228,8 +228,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, verbosity=1,
                                              sim_type="termorder:1", parameterization="H+S clifford terms")
         target_model.from_vector(self.rand_start228)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,

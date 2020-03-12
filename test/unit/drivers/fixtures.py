@@ -28,5 +28,5 @@ def lsgstStrings(self):
 def dataset(self):
     return pc.generate_fake_data(
         self.datagen_gateset, self.lsgstStrings[-1],
-        nSamples=1000, sampleError='binomial', seed=100
+        n_samples=1000, sample_error='binomial', seed=100
     )

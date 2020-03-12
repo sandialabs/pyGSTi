@@ -17,7 +17,7 @@ class RPEToolsFuncBase(object):
         self.stringListD = rpc.make_rpe_angle_string_list_dict(2, self.config)
         self.mdl_depolXZ = self.target.depolarize(op_noise=0.1, spam_noise=0.1, seed=_SEED)
         self.ds = pc.generate_fake_data(self.mdl_depolXZ, self.stringListD['totalStrList'],
-                                        nSamples=1000, sampleError='binomial', seed=_SEED)
+                                        n_samples=1000, sample_error='binomial', seed=_SEED)
 
     def test_extract_rotation_hat(self):
         xhat = 10  # 1 counts for sin string

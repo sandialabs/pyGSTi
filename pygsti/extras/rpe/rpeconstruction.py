@@ -76,21 +76,21 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
         outputModel = _cnst.build_explicit_model(
             [('Q0',)], ['Gi', loose_axis_gate_label, fixed_axis_gate_label],
             ["I(Q0)", loose_axis_label + "(%s,Q0)" % epsilonTrue, fixed_axis_label + "(%s,Q0)" % alphaTrue],
-            prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=ELabels, effectExpressions=EExpressions)
+            prep_labels=["rho0"], prep_expressions=rhoExpressions,
+            effect_labels=ELabels, effect_expressions=EExpressions)
     else:
         outputModel = _cnst.build_explicit_model(
             [('Q0',)], [loose_axis_gate_label, fixed_axis_gate_label],
             [loose_axis_label + "(%s,Q0)" % epsilonTrue, fixed_axis_label + "(%s,Q0)" % alphaTrue],
-            prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=ELabels, effectExpressions=EExpressions)
+            prep_labels=["rho0"], prep_expressions=rhoExpressions,
+            effect_labels=ELabels, effect_expressions=EExpressions)
 
     if auxRot != 0:
         modelAux1 = _cnst.build_explicit_model(
             [('Q0',)], ['Gi', auxiliary_axis_gate_label, fixed_axis_gate_label],
             ["I(Q0)", auxiliary_axis_label + "(%s,Q0)" % auxRot, fixed_axis_label + "(pi/2,Q0)"],
-            prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=ELabels, effectExpressions=EExpressions)
+            prep_labels=["rho0"], prep_expressions=rhoExpressions,
+            effect_labels=ELabels, effect_expressions=EExpressions)
 
         outputModel.operations[loose_axis_gate_label] = \
             _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label]),
@@ -111,7 +111,7 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
 
     return outputModel
 
-#def make_rpe_alpha_str_lists(kList,angleStr,rpeconfig_inst):
+#def make_rpe_alpha_str_lists(k_list,angleStr,rpeconfig_inst):
 
 
 def make_rpe_angle_str_lists(kList, angleName, rpeconfig_inst):
@@ -315,4 +315,4 @@ def make_rpe_data_set(modelOrDataset, stringListD, nSamples, sampleError='binomi
     """
     return _cnst.generate_fake_data(modelOrDataset,
                                     stringListD['totalStrList'],
-                                    nSamples, sampleError=sampleError, seed=seed)
+                                    nSamples, sample_error=sampleError, seed=seed)

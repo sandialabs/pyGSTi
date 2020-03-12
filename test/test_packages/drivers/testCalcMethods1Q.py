@@ -73,7 +73,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
             ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
-                                                        nSamples=1000, sampleError="multinomial", seed=1234)
+                                                        n_samples=1000, sample_error="multinomial", seed=1234)
             ds.save(compare_files + "/calcMethods1Q.dataset")
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary

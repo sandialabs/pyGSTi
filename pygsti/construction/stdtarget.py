@@ -40,7 +40,7 @@ def _get_cachefile_names(std_module, param_type, sim_type, py_version):
 
 
 # XXX is this used?
-def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False, comm=None):
+def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=False, comm=None):
     """
     A utility routine to for creating the term-based cache files for a standard module
     """
@@ -51,7 +51,7 @@ def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False
 
     x = 1
     maxLengths = []
-    while(x <= maxLength):
+    while(x <= max_length):
         maxLengths.append(x)
         x *= 2
 
@@ -61,7 +61,7 @@ def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False
     mdl_terms = target_model.copy()
     mdl_terms.set_all_parameterizations("H+S terms")  # CPTP terms?
     my_calc_cache = {}
-    mdl_terms.set_simtype("termorder:%d" % termOrder, my_calc_cache)
+    mdl_terms.set_simtype("termorder:%d" % term_order, my_calc_cache)
 
     comm_method = "scheduler"
     if comm is not None and comm.Get_size() > 1 and comm_method == "scheduler":
@@ -133,7 +133,7 @@ def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False
 
     py_version = 3 if (_sys.version_info > (3, 0)) else 2
     key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
-                                          "termorder:%d" % termOrder, py_version)
+                                          "termorder:%d" % term_order, py_version)
     _write_calccache(my_calc_cache, key_fn, val_fn, json_too, comm)
 
     if comm is None or comm.Get_rank() == 0:
@@ -156,11 +156,11 @@ def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False
     #
     #    py_version = 3 if (_sys.version_info > (3, 0)) else 2
     #    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
-    #                                          "termorder:%d" % termOrder,py_version)
+    #                                          "termorder:%d" % term_order,py_version)
     #    _write_calccache(calc_cache, key_fn, val_fn, json_too, comm)
 
 
-# XXX apparently only used from _make_HScache_for_std_model which itself looks unused
+# XXX apparently only used from _make_hs_cache_for_std_model which itself looks unused
 def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
     """
     Write `caclcache`, a dictionary of compact polys, to disk in two files,

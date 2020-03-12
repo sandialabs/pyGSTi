@@ -48,7 +48,7 @@ class TestCoreMethods(AlgorithmsBase):
         oldType = pygsti.objects.dataset.Repcount_type
         pygsti.objects.dataset.Repcount_type = np.float64
         ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                    nSamples=10000, sampleError='none')
+                                                    n_samples=10000, sample_error='none')
         pygsti.objects.dataset.Repcount_type = oldType
 
         mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
@@ -286,7 +286,7 @@ class TestCoreMethods(AlgorithmsBase):
         diffs = []
         for nSamples in nSamplesList:
             ds = pygsti.construction.generate_fake_data(my_datagen_gateset, self.lgstStrings, nSamples,
-                                                        sampleError='binomial', seed=100)
+                                                        sample_error='binomial', seed=100)
             mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
             mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, checkJac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(mdl_lgst_go) )
@@ -301,7 +301,7 @@ class TestCoreMethods(AlgorithmsBase):
 
         ds = self.ds
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
-        #                                            nSamples=1000,sampleError='binomial', seed=100)
+        #                                            n_samples=1000,sample_error='binomial', seed=100)
 
 
         mdl_lgst4 = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)

@@ -92,7 +92,7 @@ class _Module(GSTModelPack, RBModelPack):
         return self._build_explicit_target_model(
             sslbls, [(), ('Gxpi2', 1), ('Gypi2', 1)],
             ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})'],
-            effectLabels=['0', '1'], effectExpressions=['0', '1'])
+            effect_labels=['0', '1'], effect_expressions=['0', '1'])
 
 
 import sys

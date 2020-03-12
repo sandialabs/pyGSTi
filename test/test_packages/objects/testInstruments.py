@@ -167,8 +167,8 @@ class InstrumentTestCase(BaseTestCase):
         model = pygsti.construction.build_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-        #    prepLabels=["rho0"], prepExpressions=["0"],
-        #    effectLabels=["0","1"], effectExpressions=["0","complement"])
+        #    prep_labels=["rho0"], prep_expressions=["0"],
+        #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
         v0 = pygsti.construction.basis_build_vector("0", pygsti.obj.Basis.cast("pp",4))
         v1 = pygsti.construction.basis_build_vector("1", pygsti.obj.Basis.cast("pp",4))

@@ -26,7 +26,7 @@ class DriversTestCase(BaseTestCase):
             datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
             ds = pygsti.construction.generate_fake_data(
                 datagen_gateset, self.lsgstStrings[-1],
-                nSamples=1000,sampleError='binomial', seed=100)
+                n_samples=1000,sample_error='binomial', seed=100)
             ds.save(compare_files + "/drivers.dataset")
 
 class TestDriversMethods(DriversTestCase):
@@ -50,7 +50,7 @@ class TestDriversMethods(DriversTestCase):
 
         gfprStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairs)
+            fid_pairs=fidPairs)
 
         lens = [ len(strct.allstrs) for strct in gfprStructs ]
         #self.assertEqual(lens, [92,100,130]) #,163,196,229]
@@ -59,7 +59,7 @@ class TestDriversMethods(DriversTestCase):
 
         gfprExperiments = pygsti.construction.make_lsgst_experiment_list(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairs)
+            fid_pairs=fidPairs)
 
         result = pygsti.do_long_sequence_gst_base(ds, std.target_model(), gfprStructs, verbosity=0)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_GFPR",
@@ -75,7 +75,7 @@ class TestDriversMethods(DriversTestCase):
 
         pfprStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairsDict) #note: fidPairs arg can be a dict too!
+            fid_pairs=fidPairsDict) #note: fidPairs arg can be a dict too!
 
         lens = [ len(strct.allstrs) for strct in pfprStructs ]
         #self.assertEqual(lens, [92,99,138]) # ,185,233,281]
@@ -85,7 +85,7 @@ class TestDriversMethods(DriversTestCase):
 
         pfprExperiments = pygsti.construction.make_lsgst_experiment_list(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairsDict)
+            fid_pairs=fidPairsDict)
 
         result = pygsti.do_long_sequence_gst_base(ds, std.target_model(), pfprStructs, verbosity=0)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_PFPR",
@@ -102,7 +102,7 @@ class TestDriversMethods(DriversTestCase):
         fidPairs = None
         reducedLists = pygsti.construction.make_lsgst_structs(
             std.target_model().operations.keys(), std.fiducials, std.fiducials, std.germs,
-            maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
+            maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result = self.runSilent(pygsti.do_long_sequence_gst_base,
             ds, std.target_model(), reducedLists,
             advancedOptions={'truncScheme': ts})
@@ -116,7 +116,7 @@ class TestDriversMethods(DriversTestCase):
             std.target_model(), std.fiducials, std.fiducials, std.germs, verbosity=0)
         reducedLists = pygsti.construction.make_lsgst_structs(
             std.target_model().operations.keys(), std.fiducials, std.fiducials, std.germs,
-            maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
+            maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result2 = self.runSilent(pygsti.do_long_sequence_gst_base,
                                  ds, std.target_model(), reducedLists,
                                  advancedOptions={'truncScheme': ts})
@@ -235,9 +235,9 @@ class TestDriversMethods(DriversTestCase):
         default_maxLens = [0]+[2**k for k in range(10)]
         circuits = pygsti.construction.make_lsgst_experiment_list(
             self.opLabels, self.fiducials, self.fiducials, self.germs,
-            default_maxLens, fidPairs=None, truncScheme="whole germ powers")
+            default_maxLens, fid_pairs=None, trunc_scheme="whole germ powers")
         ds_defaultMaxLens = pygsti.construction.generate_fake_data(
-            mdl, circuits, nSamples=10000, sampleError='round')
+            mdl, circuits, n_samples=10000, sample_error='round')
 
         bootgs_p_defaultMaxLens = \
             pygsti.drivers.make_bootstrap_models(

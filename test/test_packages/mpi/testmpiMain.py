@@ -92,7 +92,7 @@ def create_fake_dataset(comm):
     if comm is None or comm.Get_rank() == 0:
         mdl_dataGen = std.target_model().depolarize(op_noise=0.1)
         dsFake = pygsti.construction.generate_fake_data(
-            mdl_dataGen, allRequiredStrs, nSamples, sampleError="multinomial",
+            mdl_dataGen, allRequiredStrs, nSamples, sample_error="multinomial",
             seed=1234)
         dsFake = comm.bcast(dsFake, root=0)
     else:
@@ -763,7 +763,7 @@ def test_MPI_mlgst_forcefn(comm):
     if comm is None or comm.Get_rank() == 0:
         datagen_gateset = target_model.depolarize(op_noise=0.01, spam_noise=0.01)
         ds = pygsti.construction.generate_fake_data(datagen_gateset, lgstStrings,
-                                                    nSamples=10000, sampleError='binomial', seed=100)
+                                                    n_samples=10000, sample_error='binomial', seed=100)
         ds = comm.bcast(ds, root=0)
     else:
         ds = comm.bcast(None, root=0)
@@ -814,8 +814,8 @@ def test_run1Q_end2end(comm):
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
         list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
     ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments,
-                                                nSamples=1000,
-                                                sampleError="binomial",
+                                                n_samples=1000,
+                                                sample_error="binomial",
                                                 seed=1234, comm=comm)
     if comm.Get_rank() == 0:
         pickle.dump(ds, open("mpi_dataset.pkl","wb"))

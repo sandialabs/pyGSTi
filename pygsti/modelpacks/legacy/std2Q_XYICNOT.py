@@ -285,7 +285,7 @@ legacy_germs = _strc.circuit_list(
 _target_model = _setc.build_explicit_model(
     [('Q0', 'Q1')], ['Gii', 'Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
     ["I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
-    effectLabels=['00', '01', '10', '11'], effectExpressions=["0", "1", "2", "3"])
+    effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])
 
 _gscache = {("full", "auto"): _target_model}
 
@@ -316,7 +316,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
 legacy_gs_target = _setc.build_explicit_model(
     [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
     ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"],
-    effectLabels=['00', '01', '10', '11'], effectExpressions=["0", "1", "2", "3"])
+    effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])
 
 global_fidPairs = [
     (2, 0), (2, 1), (2, 2), (2, 10), (3, 10), (4, 2), (4, 9),

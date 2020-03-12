@@ -26,13 +26,13 @@ X = _np.matrix([[0, 1], [1, 0]])
 Y = _np.matrix([[0, -1j], [1j, 0]])
 
 
-def X2qubit(theta):
+def x_2qubit(theta):
     """ Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)"""
     x = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, 1], [1, 0]])))
     return _np.kron(x, x)
 
 
-def Y2qubit(theta):
+def y_2qubit(theta):
     """ Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)"""
     y = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, -1j], [1j, 0]])))
     return _np.kron(y, y)
@@ -77,12 +77,12 @@ def MS3(theta, phi):
 
 def XX3(theta):
     """ Returns Qutrit XX unitary """
-    return to_qutrit_space(X2qubit(theta))
+    return to_qutrit_space(x_2qubit(theta))
 
 
 def YY3(theta):
     """ Returns Qutrit YY unitary """
-    return to_qutrit_space(Y2qubit(theta))
+    return to_qutrit_space(y_2qubit(theta))
 
 
 def _random_rot(scale, arrType=_np.array, seed=None):

@@ -16,7 +16,7 @@ class EvalTreeBase(object):
         opLabels = list(cls.target_model.operations.keys())
         strs = pc.make_lsgst_experiment_list(
             opLabels, cls.prepStrs, cls.measStrs, cls.germs, cls.maxLens,
-            includeLGST=False
+            include_lgst=False
         )
         tools.remove_duplicates_in_place(strs)
         ret = cls.target_model.simplify_circuits(strs)

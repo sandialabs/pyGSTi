@@ -261,7 +261,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
     #mdl = pygsti.construction.build_explicit_model(
     #    [2**nQubits], [Qlbls], [], [], 
-    #    effectLabels=eLbls, effectExpressions=eExprs)
+    #    effect_labels=eLbls, effect_expressions=eExprs)
     printer.log("Created initial model")
 
     qubitGraph = QubitGraph(nQubits, geometry)

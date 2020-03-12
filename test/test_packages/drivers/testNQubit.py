@@ -74,9 +74,9 @@ class NQubitTestCase(BaseTestCase):
                                       roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
-            nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=2, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="sequential")
+        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
+            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list & dataset
@@ -101,9 +101,9 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
-            nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=1, maxhops=0,
-            extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="greedy")
+        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
+            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list
