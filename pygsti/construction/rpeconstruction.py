@@ -407,7 +407,7 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
                                                    epsilonCosStrList, 'epsilon')
         thetaHatList, PhiFunList = _tools.rpe.est_theta_list(simDS, thetaSinStrList,
                                                              thetaCosStrList, epsilonHatList,
-                                                             returnPhiFunList=True)
+                                                             return_phi_fun_list=True)
         for alphaTemp1 in alphaHatList:
             alphaErrorList.append(abs(alpha_true - alphaTemp1))
         for epsilonTemp1 in epsilonHatList:

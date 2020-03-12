@@ -1,4 +1,4 @@
-""" Defines the rpeconfig class and supporting functionality."""
+""" Defines the RPEconfig class and supporting functionality."""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,7 +9,7 @@
 #***************************************************************************************************
 
 
-class rpeconfig:
+class RPEconfig:
     """
     Encapsulates a collection of settings for an RPE run.  Provides full specifications,
     including target gates, SPAM, sine and cosine strings for alpha, epsilon, and theta.
