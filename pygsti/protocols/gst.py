@@ -55,8 +55,8 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
     """ Minimal experiment design needed for GST """
 
     def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None,
-                 qubit_labels=None, nested=False):
-        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested)
+                 qubit_labels=None, nested=False, remove_duplicates=True):
+        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
 
 
@@ -64,8 +64,8 @@ class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesig
     """ GST experiment design where circuits are structured by length and germ (typically). """
 
     def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
-                 nested=False):
-        _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested)
+                 nested=False, remove_duplicates=True):
+        _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested, remove_duplicates)
         HasTargetModel.__init__(self, targetModelFilenameOrObj)
         #Note: we *don't* need to init GateSetTomographyDesign here, only HasTargetModel,
         # GateSetTomographyDesign's non-target-model data is initialized by CircuitStructuresDesign.
@@ -662,6 +662,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
                     'itemWeights': {'gates': 0.0, 'spam': 1.0},
                     'spam_penalty_factor': 1.0,
                     'gauge_group': s3gg(model.dim),
+                    'oob_check_interval': 1,
                     'verbosity': printer
                 })
 

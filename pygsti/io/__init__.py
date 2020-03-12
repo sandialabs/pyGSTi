@@ -17,6 +17,7 @@ from .metadir import *
 from .stdinput import *
 from . import json
 from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
+from .legacyio import enable_no_cython_unpickling
 
 #Users may not have msgpack, which is fine.
 try: from . import msgpack

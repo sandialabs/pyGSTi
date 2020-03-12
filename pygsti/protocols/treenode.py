@@ -35,13 +35,12 @@ class TreeNode(object):
         self._dirs = possible_child_name_dirs  # maps possible child keys -> subdir name
         self._vals = child_values if child_values else {}
         self._childcategory = child_category
-        self._loaded_from = None
 
     @property
     def child_category(self):
         return self._childcategory
 
-    def _init_children(self, dirname, meta_subdir=None):
+    def _init_children(self, dirname, meta_subdir=None, **kwargs):
         dirname = _pathlib.Path(dirname)
         edesign_dir = dirname / 'edesign'  # because subdirs.json is always & only in 'edesign'
         with open(edesign_dir / 'subdirs.json', 'r') as f:
@@ -61,7 +60,8 @@ class TreeNode(object):
             #if meta_subdir:
             submeta_dir = subobj_dir / meta_subdir
             if submeta_dir.exists():  # It's ok if not all possible sub-nodes exist
-                self._vals[nm] = _io.cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self, name=nm)
+                self._vals[nm] = _io.cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self,
+                                                                              name=nm, **kwargs)
             #else:  # if meta_subdir is None, we default to the same class as self
             #    self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
 

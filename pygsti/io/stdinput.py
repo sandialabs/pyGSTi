@@ -304,6 +304,7 @@ class StdInputParser(object):
 
         #Process premble
         orig_cwd = _os.getcwd()
+        outcomeLabels = None
         if len(_os.path.dirname(filename)) > 0: _os.chdir(
             _os.path.dirname(filename))  # allow paths relative to datafile path
         try:
@@ -315,8 +316,12 @@ class StdInputParser(object):
                 outcomeLabels, fillInfo = self._extractLabelsFromColLabels(colLabels)
                 nDataCols = len(colLabels)
             else:
-                outcomeLabels = fillInfo = None
+                fillInfo = None
                 nDataCols = -1  # no column count check
+            if 'Outcomes' in preamble_directives:
+                outcomeLabels = [l.strip().split(':') for l in preamble_directives['Outcomes'].split(",")]
+            if 'StdOutcomeQubits' in preamble_directives:
+                outcomeLabels = int(preamble_directives['Outcomes'])
         finally:
             _os.chdir(orig_cwd)
 
@@ -478,7 +483,7 @@ class StdInputParser(object):
         if 'BAD' in colValues:
             return  # indicates entire row is known to be bad (no counts)
 
-        #Note: can use setitem_unsafe here because countDict is a OutcomeLabelDict and
+        #Note: can use set_unsafe here because countDict is a OutcomeLabelDict and
         # by construction (see str_to_outcome in _extractLabelsFromColLabels) the
         # outcome labels in fillInfo are *always* tuples.
         if fillInfo is not None:
@@ -491,7 +496,7 @@ class StdInputParser(object):
                                    "could this be a frequency?" % iCol)
                 assert(not isinstance(colValues[iCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
-                countDict.setitem_unsafe(outcomeLabel, colValues[iCol])
+                countDict.set_unsafe(outcomeLabel, colValues[iCol])
 
             for outcomeLabel, iCol, iTotCol in freqCols:
                 if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue  # skip blank sentinels
@@ -500,14 +505,14 @@ class StdInputParser(object):
                                    "could this be a count?" % iCol)
                 assert(not isinstance(colValues[iTotCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
-                countDict.setitem_unsafe(outcomeLabel, colValues[iCol] * colValues[iTotCol])
+                countDict.set_unsafe(outcomeLabel, colValues[iCol] * colValues[iTotCol])
 
             if impliedCountTotCol1Q[1] >= 0:
                 impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
                 if impliedOutcomeLabel == ('0',):
-                    countDict.setitem_unsafe(('0',), colValues[impliedCountTotCol] - countDict[('1',)])
+                    countDict.set_unsafe(('0',), colValues[impliedCountTotCol] - countDict[('1',)])
                 else:
-                    countDict.setitem_unsafe(('1',), colValues[impliedCountTotCol] - countDict[('0',)])
+                    countDict.set_unsafe(('1',), colValues[impliedCountTotCol] - countDict[('0',)])
 
         else:  # assume colValues is a list of (outcomeLabel, count) tuples
             for tup in colValues:
@@ -515,7 +520,7 @@ class StdInputParser(object):
                     ("Outcome labels must be specified with"
                      "count data when there's no column-key header")
                 assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
-                countDict.setitem_unsafe(tup[0], tup[1])
+                countDict.set_unsafe(tup[0], tup[1])
         return countDict
 
     def parse_multidatafile(self, filename, showProgress=True,

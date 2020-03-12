@@ -69,7 +69,7 @@ def _outcome_to_str(x):
 
 
 def write_dataset(filename, dataset, circuit_list=None,
-                  outcomeLabelOrder=None, fixedColumnMode=True, withTimes="auto"):
+                  outcomeLabelOrder=None, fixedColumnMode='auto', withTimes="auto"):
     """
     Write a text-formatted dataset file.
 
@@ -89,7 +89,7 @@ def write_dataset(filename, dataset, circuit_list=None,
         A list of the outcome labels in dataset which specifies
         the column order in the output file.
 
-    fixedColumnMode : bool, optional
+    fixedColumnMode : bool or 'auto', optional
         When `True`, a file is written with column headers indicating which
         outcome each column of counts corresponds to.  If a row doesn't have
         any counts for an outcome, `'--'` is used in its place.  When `False`,
@@ -127,14 +127,20 @@ def write_dataset(filename, dataset, circuit_list=None,
             else:
                 headerString += "# " + commentLine + '\n'
 
+    if fixedColumnMode == "auto":
+        fixedColumnMode = bool(len(outcomeLabels) <= 8 and not withTimes)
+
     if fixedColumnMode is True:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
         assert(not (withTimes is True)), "Cannot set `witTimes=True` when `fixedColumnMode=True`"
-    elif withTimes == "auto":
-        trivial_times = dataset.has_trivial_timedependence()
     else:
-        trivial_times = not withTimes
+        headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels]) + '\n'
+
+        if withTimes == "auto":
+            trivial_times = dataset.has_trivial_timedependence()
+        else:
+            trivial_times = not withTimes
 
     with open(str(filename), 'w') as output:
         output.write(headerString)
@@ -154,8 +160,7 @@ def write_dataset(filename, dataset, circuit_list=None,
 
             elif trivial_times:  # use expanded label:count format
                 output.write(circuit_to_write.str + "  "
-                             + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
-                                          for ol in outcomeLabels if ol in counts]))
+                             + "  ".join([("%s:%g" % (_outcome_to_str(ol), cnt)) for ol, cnt in counts.items()]))
                 if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
                 output.write('\n')  # finish the line
 

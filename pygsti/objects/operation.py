@@ -3600,6 +3600,7 @@ class LindbladOp(LinearOperator):
            isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
+            #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
             #just conjugate postfactor and Lindbladian exponent by U:
             if self.unitary_postfactor is not None:
@@ -3607,10 +3608,6 @@ class LindbladOp(LinearOperator):
             self.errorgen.transform(S)
             self._update_rep()  # needed to rebuild exponentiated error gen
             self.dirty = True
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
 
             #CHECK WITH OLD (passes) TODO move to unit tests?
             #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
@@ -3653,21 +3650,36 @@ class LindbladOp(LinearOperator):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
 
-            #just act on postfactor and Lindbladian exponent:
+            #Note: this code may need to be tweaked to work with sparse matrices
             if typ == "prep":
-                if self.unitary_postfactor is not None:
-                    self.unitary_postfactor = _mt.safedot(Uinv, self.unitary_postfactor)
+                tMx = _mt.safedot(Uinv, self.todense())
             else:
-                if self.unitary_postfactor is not None:
-                    self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
+                tMx = _mt.safedot(self.todense(), U)
+            trunc = bool(isinstance(S, _gaugegroup.UnitaryGaugeGroupElement))
+            tOp = LindbladOp.from_operation_matrix(tMx, self.unitary_postfactor,
+                                                   self.errorgen.ham_basis, self.errorgen.other_basis,
+                                                   self.errorgen.param_mode, self.errorgen.nonham_mode,
+                                                   trunc, self.errorgen.matrix_basis)
+            self.from_vector(tOp.to_vector())
+            #Note: truncate=True above for unitary transformations because
+            # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
+            # sometimes a unitary transform can modify eigenvalues to be negative beyond
+            # the tight tolerances checked when truncate == False. Maybe we should be able
+            # to give a tolerance as `truncate` in the future?
 
-            self.errorgen.spam_transform(S, typ)
-            self._update_rep()  # needed to rebuild exponentiated error gen
-            self.dirty = True
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
+            #NOTE: This *doesn't* work as it does in the 'gate' case b/c this isn't a
+            # similarity transformation!
+            ##just act on postfactor and Lindbladian exponent:
+            #if typ == "prep":
+            #    if self.unitary_postfactor is not None:
+            #        self.unitary_postfactor = _mt.safedot(Uinv, self.unitary_postfactor)
+            #else:
+            #    if self.unitary_postfactor is not None:
+            #        self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
+            #
+            #self.errorgen.spam_transform(S, typ)
+            #self._update_rep()  # needed to rebuild exponentiated error gen
+            #self.dirty = True
         else:
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
@@ -7557,7 +7569,7 @@ class LindbladErrorgen(LinearOperator):
         hamC, otherC, _, _ = \
             _gt.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
         pvec = _gt.lindblad_projections_to_paramvals(
-            hamC, otherC, self.param_mode, self.nonham_mode, truncate=False)  # shouldn't need to truncate
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate=True)  # shouldn't need to truncate
         self.from_vector(pvec)
 
     def set_error_rates(self, Ltermdict, action="update"):
@@ -7611,12 +7623,14 @@ class LindbladErrorgen(LinearOperator):
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.tosparse() if self.sparse else self.todense()
             err_gen_mx = _mt.safedot(Uinv, _mt.safedot(err_gen_mx, U))
-            self._set_params_from_matrix(err_gen_mx, truncate=True)
+            trunc = bool(isinstance(S, _gaugegroup.UnitaryGaugeGroupElement))
+            self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
+            #Note: truncate=True above for unitary transformations because
+            # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
+            # sometimes a unitary transform can modify eigenvalues to be negative beyond
+            # the tight tolerances checked when truncate == False. Maybe we should be able
+            # to give a tolerance as `truncate` in the future?
 
         else:
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
@@ -7663,8 +7677,7 @@ class LindbladErrorgen(LinearOperator):
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
+            ## checked when truncate == False.
         else:
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))

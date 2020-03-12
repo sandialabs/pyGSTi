@@ -34,9 +34,13 @@ class Protocol(object):
     """
 
     @classmethod
-    def from_dir(cls, dirname):
+    def from_dir(cls, dirname, quick_load=False):
         """
         Initialize a new Protocol object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
 
         Parameters
         ----------
@@ -48,7 +52,7 @@ class Protocol(object):
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
@@ -70,6 +74,7 @@ class Protocol(object):
         super().__init__()
         self.name = name if name else self.__class__.__name__
         self.auxfile_types = {}
+        self._nameddict_attributes = ()  # (('name', 'Protocol Name', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -109,6 +114,39 @@ class Protocol(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this protocol.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`Protocol` object named within its `self._nameddict_attributes` tuple.
+        The final nested dictionary is set to be `final_dict`, which allows additional result
+        quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        ret = _NamedDict('Protocol Name', 'category'); tail = ret
+        attr_val = self.name
+
+        tail[attr_val] = _NamedDict('Protocol Type', 'category'); tail = tail[attr_val]
+        attr_val = self.__class__.__name__
+
+        for next_attr, *ndargs in self._nameddict_attributes:
+            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
+            attr_val = getattr(self, next_attr)
+
+        tail[attr_val] = final_dict
+        return ret
 
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
@@ -412,7 +450,7 @@ class ExperimentDesign(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ExperimentDesign object from `dirname`.
 
@@ -422,14 +460,29 @@ class ExperimentDesign(_TreeNode):
             The *root* directory name (under which there is a 'edesign'
             subdirectory).
 
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
         Returns
         -------
         ExperimentDesign
         """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
-        ret._init_children(dirname, 'edesign')
+        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
+        ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
         return ret
 
@@ -475,6 +528,7 @@ class ExperimentDesign(_TreeNode):
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
+        self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
         # *isn't* listed in this dict, then it's assumed to be json-able and included
@@ -593,6 +647,7 @@ class ExperimentDesign(_TreeNode):
 
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
+        self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
 
     def create_subdata(self, subdata_name, dataset):
         """
@@ -609,7 +664,8 @@ class CircuitListsDesign(ExperimentDesign):
     Experiment deisgn specification that is comprised of multiple circuit lists.
     """
 
-    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
+    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
+                 nested=False, remove_duplicates=True):
         """
         Create a new CircuitListsDesign object.
 
@@ -635,6 +691,11 @@ class CircuitListsDesign(ExperimentDesign):
             is useful to know because certain operations can be more efficient
             when it is known that the lists are nested.
 
+        remove_duplicates : bool, optional
+            Whether to remove duplicates when automatically creating
+            all the circuits that need data (this argument isn't used
+            when `all_circuits_needing_data` is given).
+
         Returns
         -------
         CircuitListsDesign
@@ -647,7 +708,8 @@ class CircuitListsDesign(ExperimentDesign):
             all_circuits = []
             for lst in circuit_lists:
                 all_circuits.extend(lst)
-            _lt.remove_duplicates_in_place(all_circuits)
+            if remove_duplicates:
+                _lt.remove_duplicates_in_place(all_circuits)
 
         self.circuit_lists = circuit_lists
         self.nested = nested
@@ -662,7 +724,7 @@ class CircuitStructuresDesign(CircuitListsDesign):
     circuit structures (:class:`CircuitStructure` objects).
     """
 
-    def __init__(self, circuit_structs, qubit_labels=None, nested=False):
+    def __init__(self, circuit_structs, qubit_labels=None, nested=False, remove_duplicates=True):
         """
         Create a new CircuitStructuresDesign object.
 
@@ -682,6 +744,11 @@ class CircuitStructuresDesign(CircuitListsDesign):
             lists, e.g. whether `circuit_structs[i].allstrs` is a subset of
             `circuit_structs[i+1].allstrs`.
 
+        remove_duplicates : bool, optional
+            Whether to remove duplicates when automatically creating
+            all the circuits that need data (this argument isn't used
+            when `all_circuits_needing_data` is given).
+
         Returns
         -------
         CircuitStructureDesign
@@ -694,7 +761,7 @@ class CircuitStructuresDesign(CircuitListsDesign):
                                for i in range(len(master.Ls))]
             nested = True  # (by this construction)
 
-        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested)
+        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested, remove_duplicates)
         self.circuit_structs = circuit_structs
         self.auxfile_types['circuit_structs'] = 'pickle'
 
@@ -776,6 +843,8 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         """
         sub_circuits = self[sub_name].all_circuits_needing_data
         truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
+        #truncated_ds.add_outcome_labels(dataset.get_outcome_labels())  # make sure truncated ds has all outcome lbls
+        truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         return ProtocolData(self[sub_name], truncated_ds)
 
 
@@ -888,6 +957,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         sub_design = self[qubit_labels]
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
         filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+        filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcome lbls
 
         if sub_design.alt_actual_circuits_executed:
             actual_to_desired = _collections.defaultdict(lambda: None)
@@ -910,7 +980,7 @@ class ProtocolData(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -920,34 +990,54 @@ class ProtocolData(_TreeNode):
             The *root* directory name (under which there are 'edesign'
             and 'data' subdirectories).
 
+        parent : ProtocolData, optional
+            The parent data object, if there is one.  This is needed for
+            sub-data objects which reference/inherit their parent's dataset.
+            Primarily used internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time, e.g. the actual raw data set(s). This can be useful
+            when loading takes a long time and all the information of interest
+            lies elsewhere, e.g. in an encompassing results object.
+
         Returns
         -------
         ProtocolData
         """
         p = _pathlib.Path(dirname)
         edesign = parent.edesign[name] if parent and name else \
-            _io.load_edesign_from_dir(dirname)
+            _io.load_edesign_from_dir(dirname, quick_load=quick_load)
 
         data_dir = p / 'data'
         #with open(data_dir / 'meta.json', 'r') as f:
         #    meta = _json.load(f)
 
-        #Load dataset or multidataset based on what files exist
-        dataset_files = sorted(list(data_dir.glob('*.txt')))
-        if len(dataset_files) == 0:  # assume same dataset as parent
-            if parent is None: parent = ProtocolData.from_dir(dirname / '..')
-            dataset = parent.dataset
-        elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-            dataset = _io.load_dataset(dataset_files[0], verbosity=0)
+        if quick_load:
+            dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
+            # Note: could also use (path.stat().st_size >= max_size) to condition on size of data files
         else:
-            raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-            dataset = _objs.MultiDataSet.init_from_dict(
-                {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
+            #Load dataset or multidataset based on what files exist
+            dataset_files = sorted(list(data_dir.glob('*.txt')))
+            if len(dataset_files) == 0:  # assume same dataset as parent
+                if parent is None: parent = ProtocolData.from_dir(dirname / '..')
+                dataset = parent.dataset
+            elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
+                dataset = _io.load_dataset(dataset_files[0], verbosity=0)
+            else:
+                raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
+                dataset = _objs.MultiDataSet.init_from_dict(
+                    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
-        ret._init_children(dirname, 'data')  # loads child nodes
+        ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
         return ret
 
     def __init__(self, edesign, dataset=None, cache=None):
@@ -1086,7 +1176,7 @@ class ProtocolData(_TreeNode):
         _io.obj_to_meta_json(self, data_dir)
 
         if parent is None:
-            self.edesign.write(dirname)  # assume parent has already written edesign
+            self.edesign.write(dirname)  # otherwise assume parent has already written edesign
 
         if self.dataset is not None:  # otherwise don't write any dataset
             if parent and (self.dataset is parent.dataset):  # then no need to write any data
@@ -1113,7 +1203,7 @@ class ProtocolResults(object):
     """
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None):
+    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
         """
         Initialize a new ProtocolResults object from `dirname` / results / `name`.
 
@@ -1133,6 +1223,11 @@ class ProtocolResults(object):
             is already loaded, it can be passed in here.  Otherwise leave this
             as None and it will be loaded.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the results object.
+
         Returns
         -------
         ProtocolResults
@@ -1140,8 +1235,8 @@ class ProtocolResults(object):
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
         ret.data = preloaded_data if (preloaded_data is not None) else \
-            _io.load_data_from_dir(dirname)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
+            _io.load_data_from_dir(dirname, quick_load=quick_load)
+        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types', quick_load=quick_load))
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
 
@@ -1213,18 +1308,19 @@ class ProtocolResults(object):
         """
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation
-        ret = _NamedDict('Qty', 'category')
+        final = _NamedDict('Qty', 'category')
+        ret = self.protocol.setup_nameddict(final)
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                ret[k] = v.as_nameddict()
+                final[k] = v.as_nameddict()
             elif isinstance(v, _NamedDict):
-                ret[k] = v
+                final[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
             else:  # non-dicts are ok to just store
-                ret[k] = v
+                final[k] = v
         return ret
 
     def as_dataframe(self):
@@ -1284,7 +1380,7 @@ class ProtocolResultsDir(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ProtocolResultsDir object from `dirname`.
 
@@ -1304,13 +1400,18 @@ class ProtocolResultsDir(_TreeNode):
             The name of this result within `parent`.  This is only
             used when `parent` is not None.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the contained results objects.
+
         Returns
         -------
         ProtcolResultsDir
         """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
-            _io.load_data_from_dir(dirname)
+            _io.load_data_from_dir(dirname, quick_load=quick_load)
 
         #Load results in results_dir
         results = {}
@@ -1319,10 +1420,10 @@ class ProtocolResultsDir(_TreeNode):
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
                     results[pth.name] = _io.cls_from_meta_json(pth).from_dir(
-                        dirname, pth.name, preloaded_data=data)
+                        dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._init_children(dirname, meta_subdir='results')
+        ret._init_children(dirname, meta_subdir='results', quick_load=quick_load)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
@@ -1421,8 +1522,16 @@ class ProtocolResultsDir(_TreeNode):
         NamedDict
         """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        results_on_this_node = _NamedDict('Protocol Instance', 'category',
-                                          items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
+        nds = [v.as_nameddict() for v in self.for_protocol.values()]
+        if len(nds) > 0:
+            assert(all([nd.name == nds[0].name for nd in nds])), \
+                "All protocols on a given node must return a NamedDict with the *same* root name!"
+            results_on_this_node = nds[0]
+            for nd in nds[1:]:
+                results_on_this_node.update(nd)
+        else:
+            results_on_this_node = None
+
         if sub_results:
             category = self.child_category if self.child_category else 'nocategory'
             ret = _NamedDict(category, 'category')
@@ -1483,7 +1592,7 @@ class ProtocolPostProcessor(object):
     # but it's conceptually a different thing...  Should we derive it from Protocol?
 
     @classmethod
-    def from_dir(cls, dirname):  # same I/O pattern as Protocol
+    def from_dir(cls, dirname, quick_load=False):  # same I/O pattern as Protocol
         """
         Initialize a new ProtocolPostProcessor object from `dirname`.
 
@@ -1492,12 +1601,16 @@ class ProtocolPostProcessor(object):
         dirname : str
             The directory name.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
         Returns
         -------
         ProtocolPostProcessor
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 

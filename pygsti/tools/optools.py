@@ -1866,6 +1866,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             Hdag = H.T.conjugate()
 
             #Do linear least squares: this is what takes the bulk of the time
+            #hamProjs = _spl.solve(_np.dot(Hdag, H), _np.dot(Hdag, errgen_std_flat), assume_a='her')  # works too
             hamProjs = _np.linalg.solve(_np.dot(Hdag, H), _np.dot(Hdag, errgen_std_flat))
             hamProjs.shape = (hamGens.shape[0],)
         else:
@@ -1894,6 +1895,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             Odag = O.T.conjugate()
 
             #Do linear least squares: this is what takes the bulk of the time
+            #otherProjs = _spl.solve(_np.dot(Odag, O), _np.dot(Odag, errgen_std_flat), assume_a='her')  # works too
             otherProjs = _np.linalg.solve(_np.dot(Odag, O), _np.dot(Odag, errgen_std_flat))
 
             if other_mode == "diagonal":
@@ -2391,13 +2393,15 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
 
                 #push any slightly negative evals of otherProjs positive so that
                 # the Cholesky decomp will work.
+                #assert(_np.allclose(otherProjs, otherProjs.T.conjugate()))
+                #evals, U = _np.linalg.eigh(otherProjs)  # works too (assert hermiticity above)
                 evals, U = _np.linalg.eig(otherProjs)
                 Ui = _np.linalg.inv(U)
 
                 assert(truncate or all([ev >= -1e-12 for ev in evals])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
 
-                pos_evals = evals.clip(1e-16, 1e100)
+                pos_evals = evals.clip(1e-16, None)
                 otherProjs = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
                 try:
                     Lmx = _np.linalg.cholesky(otherProjs)

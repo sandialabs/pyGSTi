@@ -16,6 +16,46 @@ from contextlib import contextmanager as _contextmanager
 
 from .. import objects as _objs
 from ..objects import circuit as _circuit
+from ..objects.replib import slowreplib as _slow
+
+
+@_contextmanager
+def enable_no_cython_unpickling():
+    """
+    A context manager enabling the un-pickling of pyGSTi objects that
+    were constructed on a system *with* pyGSTi's C-extensions, when the
+    current system's pyGSTi does not have these extensions.
+    """
+
+    class dummy_DMStateRep(object):
+        def __new__(cls, data, reducefix):
+            #replacement_obj = _slow.DMStateRep.__new__(_slow.DMStateRep)
+            replacement_obj = _slow.DMStateRep(data, reducefix)
+            return replacement_obj
+
+    class dummy_DMEffectRep_Dense(object):
+        def __new__(cls, data, reducefix):
+            #replacement_obj = _slow.DMEffectRep_Dense.__new__(_slow.DMEffectRep_Dense)
+            replacement_obj = _slow.DMEffectRep_Dense(data, reducefix)
+            return replacement_obj
+
+    class dummy_DMOpRep_Dense(object):
+        def __new__(cls, data, reducefix):
+            #replacement_obj = _slow.DMOpRep_Dense.__new__(_slow.DMEffectRep_Dense)
+            replacement_obj = _slow.DMOpRep_Dense(data, reducefix)
+            return replacement_obj
+
+    assert(_sys.modules.get('pygsti.objects.replib.fastreplib', None) is None), \
+        "You should only use this function when they Cython extensions are *not* built!"
+    fastreplib = _ModuleType("fastreplib")
+    fastreplib.DMStateRep = dummy_DMStateRep
+    fastreplib.DMEffectRep_Dense = dummy_DMEffectRep_Dense
+    fastreplib.DMOpRep_Dense = dummy_DMOpRep_Dense
+    _sys.modules['pygsti.objects.replib.fastreplib'] = fastreplib
+
+    yield
+
+    del _sys.modules['pygsti.objects.replib.fastreplib']
 
 
 @_contextmanager

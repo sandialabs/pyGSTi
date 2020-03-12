@@ -78,13 +78,20 @@ class DMEffectRep(object):
 
 
 class DMEffectRep_Dense(DMEffectRep):
-    def __init__(self, data):
+    def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype('d'))
-        self.base = data
+        if reducefix == 0:
+            self.base = data
+        else:
+            # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+            # (so self.base *owns* it's data) and manually convey the writeable flag.
+            self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+            self.base.flags.writeable = True if reducefix == 1 else False
         super(DMEffectRep_Dense, self).__init__(len(self.base))
 
     def __reduce__(self):
-        return (DMEffectRep_Dense, (self.base,))
+        reducefix = 1 if self.base.flags.writeable else 2
+        return (DMEffectRep_Dense, (self.base, reducefix))
 
     def probability(self, state):
         # can assume state is a DMStateRep
